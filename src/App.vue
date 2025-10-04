@@ -16,10 +16,14 @@
 </template>
 
 <script setup lang="ts">
+<<<<<<< Updated upstream:src/App.vue
 import { computed } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import { darkTheme } from 'naive-ui'
 import { naiveThemeOverrides } from '@/theme/naive-ui'
+=======
+import { useTheme } from '@juanie/ui'
+>>>>>>> Stashed changes:apps/web/src/App.vue
 
 const themeStore = useThemeStore()
 

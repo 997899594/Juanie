@@ -1,8 +1,7 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-
 // Naive UI
 import naive from 'naive-ui'
+import { createPinia } from 'pinia'
+import { createApp } from 'vue'
 
 // 主题配置已统一到 App.vue 中
 

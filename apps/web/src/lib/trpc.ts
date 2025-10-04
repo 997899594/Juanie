@@ -1,0 +1,27 @@
+import type { AppRouter } from '@juanie/api/shared'
+import { createTRPCProxyClient, httpBatchLink } from '@trpc/client'
+import { devtoolsLink } from 'trpc-client-devtools-link'
+
+const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+/**
+ * tRPC 客户端配置
+ * 集成了DevTools支持，用于开发时调试tRPC请求
+ */
+export const trpc = createTRPCProxyClient<AppRouter>({
+  links: [
+    // 开发环境启用DevTools
+    ...(import.meta.env.DEV ? [devtoolsLink()] : []),
+    httpBatchLink({
+      url: `${baseUrl}/trpc`,
+      // 可以在这里添加认证头
+      // headers() {
+      //   return {
+      //     authorization: getAuthCookie(),
+      //   }
+      // },
+    }),
+  ],
+})
+
+export type { AppRouter }

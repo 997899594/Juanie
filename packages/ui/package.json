@@ -1,0 +1,78 @@
+{
+  "name": "@juanie/ui",
+  "version": "0.1.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./tokens": {
+      "import": "./dist/src/tokens/bilibili.js",
+      "types": "./dist/src/tokens/bilibili.d.ts"
+    },
+    "./themes": {
+      "import": "./dist/src/themes/bilibili.js",
+      "types": "./dist/src/themes/bilibili.d.ts"
+    },
+    "./naive-ui": {
+      "import": "./dist/src/naive-ui.js",
+      "types": "./dist/src/naive-ui.d.ts"
+    },
+    "./theme": {
+      "import": "./dist/src/theme.js",
+      "types": "./dist/src/theme.d.ts"
+    },
+    "./types": {
+      "import": "./dist/src/tokens/types.js",
+      "types": "./dist/src/tokens/types.d.ts"
+    },
+    "./uno/bilibili": "./uno/bilibili.ts",
+    "./uno/utils": "./uno/utils.ts",
+    "./uno": "./uno/index.ts",
+    "./css": {
+      "import": "./dist/index.css"
+    },
+    "./styles/*": {
+      "import": "./dist/styles/*"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rolldown -c rolldown.config.mjs && tsc -b",
+    "dev": "rolldown -c rolldown.config.mjs --watch",
+    "type-check": "vue-tsc -b --noEmit"
+  },
+  "dependencies": {
+    "naive-ui": "^2.43.1",
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "rolldown": "1.0.0-beta.41",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "^4.5.4",
+    "vue-tsc": "^3.1.0"
+  },
+  "peerDependencies": {
+    "@unocss/preset-attributify": "^66.5.2",
+    "@unocss/preset-icons": "^66.5.2",
+    "@unocss/preset-uno": "^66.5.2",
+    "unocss": "^66.5.2"
+  },
+  "packageManager": "bun@1.2.23",
+  "engines": {
+    "node": ">=22.0.0",
+    "bun": ">=1.0.0"
+  },
+  "sideEffects": [
+    "dist/index.css",
+    "dist/styles/*.css"
+  ]
+}

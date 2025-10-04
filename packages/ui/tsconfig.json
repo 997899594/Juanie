@@ -1,0 +1,11 @@
+{
+  "extends": "../../configs/tsconfig/dom.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
+    "types": ["vite/client", "naive-ui/volar"]
+  },
+  "include": ["src/**/*"]
+}

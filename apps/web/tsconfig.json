@@ -1,0 +1,23 @@
+{
+  "extends": "../../configs/tsconfig/dom.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@juanie/shared": ["../../packages/shared/src"],
+      "@juanie/ui": ["../../packages/ui/src"]
+    },
+    "types": ["vite/client", "naive-ui/volar", "node"],
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*", "env.d.ts"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "*.config.*",
+    "auto-imports.d.ts",
+    "components.d.ts",
+    "../../configs/**/*",
+    "../../packages/ui/uno/**/*"
+  ]
+}

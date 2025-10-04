@@ -1,0 +1,18 @@
+{
+  "extends": "../../configs/tsconfig/node.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@juanie/shared": ["../../packages/shared/src"]
+    },
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "types": ["node", "nitropack"],
+    "typeRoots": ["./types", "../../node_modules/@types"]
+  },
+  "include": ["src/**/*", "routes/**/*", "nitro.d.ts", "types/**/*", "*.ts"],
+  "exclude": ["node_modules", "dist", ".nitro"]
+}
