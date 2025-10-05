@@ -1,18 +1,24 @@
 {
   "extends": "../../configs/tsconfig/node.json",
   "compilerOptions": {
-    "outDir": "./dist",
     "baseUrl": ".",
+    "rootDir": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@juanie/shared": ["../../packages/shared/src"]
     },
+    "types": ["node"],
     "skipLibCheck": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "types": ["node", "nitropack"],
-    "typeRoots": ["./types", "../../node_modules/@types"]
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "allowImportingTsExtensions": false,
+    "noEmit": true,
+    "composite": false,
+    "sourceMap": false,
+    "inlineSourceMap": false,
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*", "routes/**/*", "nitro.d.ts", "types/**/*", "*.ts"],
-  "exclude": ["node_modules", "dist", ".nitro"]
+  "include": ["src/**/*", "routes/**/*", "*.ts"],
+  "exclude": ["node_modules", "dist", ".nitro", "**/*.test.*", "**/*.spec.*"]
 }

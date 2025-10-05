@@ -7,11 +7,19 @@ import type { Theme } from '@unocss/preset-uno'
 import type { DesignTokens } from '../src/tokens/types'
 
 /**
+ * 扩展的主题类型，支持自定义属性
+ */
+export interface ExtendedTheme extends Theme {
+  transitionDuration?: Record<string, string>
+  transitionTimingFunction?: Record<string, string>
+}
+
+/**
  * 从设计令牌生成 UnoCSS 主题配置
  * 扁平令牌：直接映射到 Naive-UI CSS 变量
  */
-export function createUnoTheme(tokens: DesignTokens): Theme {
-  const { colors, semantic, neutral, spacing, radius, typography, shadows, animations } = tokens
+export function createUnoTheme(tokens: DesignTokens): ExtendedTheme {
+  const { colors, neutral, spacing, radius, typography, shadows, animations } = tokens
 
   return {
     colors: {
@@ -78,9 +86,15 @@ export function createUnoTheme(tokens: DesignTokens): Theme {
     },
 
     fontFamily: {
-      sans: typography.fontFamily.sans.split(',').map((f) => f.trim().replace(/['"]/g, '')),
-      mono: typography.fontFamily.mono.split(',').map((f) => f.trim().replace(/['"]/g, '')),
-    } as Record<string, string | string[]>,
+      sans: typography.fontFamily.sans
+        .split(',')
+        .map((f) => f.trim().replace(/['"]/g, ''))
+        .join(','),
+      mono: typography.fontFamily.mono
+        .split(',')
+        .map((f) => f.trim().replace(/['"]/g, ''))
+        .join(','),
+    },
 
     fontSize: {
       xs: [typography.fontSize.xs, typography.lineHeight.tight],
@@ -133,7 +147,7 @@ export function createUnoTheme(tokens: DesignTokens): Theme {
 /**
  * 从设计令牌生成 UnoCSS 快捷类配置
  */
-export function createUnoShortcuts(tokens: DesignTokens) {
+export function createUnoShortcuts(_tokens: DesignTokens) {
   return {
     // 布局快捷类
     'flex-center': 'flex items-center justify-center',

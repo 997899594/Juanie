@@ -8,6 +8,7 @@
     "allowImportingTsExtensions": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "strictPropertyInitialization": false
+    "strictPropertyInitialization": false,
+    "noEmit": false
   }
 }

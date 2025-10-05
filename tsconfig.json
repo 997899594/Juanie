@@ -1,59 +1,7 @@
 {
-<<<<<<< Updated upstream
-  "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": [
-    "env.d.ts",
-    "src/**/*",
-    "src/**/*.vue",
-    "types/**/*"
-  ],
-  "exclude": [
-    "src/**/__tests__/*",
-    "node_modules",
-    "dist",
-    "backup"
-  ],
   "compilerOptions": {
     "composite": true,
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"],
-      "~/*": ["./src/*"],
-      "#/*": ["./types/*"]
-    },
-    "types": [
-      "node",
-      "vite/client",
-      "naive-ui/volar"
-    ],
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "preserve",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
-  }
+    "incremental": true
+  },
+  "references": [{ "path": "./packages/shared" }, { "path": "./packages/ui" }]
 }
-=======
-  "files": [],
-  "references": [
-    { "path": "./packages/shared" },
-    { "path": "./packages/ui" },
-    { "path": "./apps/api" },
-    { "path": "./apps/web" }
-  ]
-}
->>>>>>> Stashed changes

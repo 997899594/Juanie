@@ -2,10 +2,18 @@
   "extends": "../../configs/tsconfig/dom.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
     "composite": true,
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
-    "types": ["vite/client", "naive-ui/volar"]
+    "types": ["vite/client", "naive-ui/volar"],
+    "declaration": true,
+    "declarationMap": true,
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@juanie/shared": ["../shared/src"]
+    }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "uno/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]
 }

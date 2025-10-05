@@ -31,14 +31,15 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b",
-    "dev": "tsc -b --watch",
-    "type-check": "tsc -b --noEmit"
+    "build": "rolldown && bunx tsc -b",
+    "dev": "rolldown --watch",
+    "type-check": "bunx tsc -b --noEmit"
   },
   "dependencies": {
-    "vue": "^3.5.22"
+    "vue": "catalog:"
   },
   "devDependencies": {
+    "rolldown": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "@vitejs/plugin-vue": "catalog:",

@@ -1,4 +1,4 @@
-import type { GlobalTheme, GlobalThemeOverrides } from 'naive-ui'
+import type { GlobalThemeOverrides } from 'naive-ui'
 import { darkTheme, useOsTheme } from 'naive-ui'
 import { computed } from 'vue'
 import { bilibiliTheme } from './themes/bilibili'

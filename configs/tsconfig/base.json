@@ -6,8 +6,10 @@
     "moduleResolution": "bundler",
     "lib": ["ES2022"],
     "strict": true,
+    "useUnknownInCatchVariables": true,
+    "allowJs": false,
     "skipLibCheck": true,
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
@@ -17,15 +19,36 @@
     "noImplicitReturns": true,
     "noImplicitOverride": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": true,
+    "verbatimModuleSyntax": false,
+    "moduleDetection": "force",
+    "useDefineForClassFields": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "removeComments": false,
+    "incremental": true,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitAny": true,
+    "noPropertyAccessFromIndexSignature": false,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@juanie/shared": ["../../packages/shared/src"],
+      "@juanie/ui": ["../../packages/ui/src"]
     }
   },
-  "exclude": ["node_modules", "dist", "build", ".next", ".nuxt", ".output", ".nitro"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    ".output",
+    ".nitro",
+    "coverage",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/__tests__/**",
+    "**/__mocks__/**"
+  ]
 }

@@ -44,27 +44,26 @@
     "dist"
   ],
   "scripts": {
-    "build": "rolldown -c rolldown.config.mjs && tsc -b",
-    "dev": "rolldown -c rolldown.config.mjs --watch",
-    "type-check": "vue-tsc -b --noEmit"
+    "build": "rolldown && bunx tsc -b",
+    "dev": "rolldown --watch",
+    "type-check": "bunx tsc -b --noEmit"
   },
   "dependencies": {
-    "naive-ui": "^2.43.1",
-    "vue": "^3.5.22"
+    "naive-ui": "catalog:",
+    "vue": "catalog:"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "catalog:",
-    "rolldown": "1.0.0-beta.41",
+    "rolldown": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^4.5.4",
-    "vue-tsc": "^3.1.0"
+    "vite-plugin-dts": "^4.5.4"
   },
   "peerDependencies": {
-    "@unocss/preset-attributify": "^66.5.2",
-    "@unocss/preset-icons": "^66.5.2",
-    "@unocss/preset-uno": "^66.5.2",
-    "unocss": "^66.5.2"
+    "@unocss/preset-attributify": "catalog:",
+    "@unocss/preset-icons": "catalog:",
+    "@unocss/preset-uno": "catalog:",
+    "unocss": "catalog:"
   },
   "packageManager": "bun@1.2.23",
   "engines": {

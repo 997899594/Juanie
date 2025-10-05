@@ -8,16 +8,17 @@
       "@juanie/ui": ["../../packages/ui/src"]
     },
     "types": ["vite/client", "naive-ui/volar", "node"],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "composite": false,
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*", "env.d.ts"],
+  "include": ["src/**/*", "env.d.ts", "*.config.*"],
   "exclude": [
     "node_modules",
     "dist",
-    "*.config.*",
     "auto-imports.d.ts",
     "components.d.ts",
-    "../../configs/**/*",
-    "../../packages/ui/uno/**/*"
+    "**/*.test.*",
+    "**/*.spec.*"
   ]
 }
