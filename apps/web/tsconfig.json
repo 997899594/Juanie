@@ -11,15 +11,19 @@
     "types": ["vite/client", "naive-ui/volar", "node"],
     "skipLibCheck": true,
     "composite": false,
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
+    "jsx": "preserve",
+    "jsxImportSource": "vue",
+    "allowJs": true,
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*", "env.d.ts", "*.config.*"],
-  "exclude": [
-    "node_modules",
-    "dist",
+  "include": [
+    "src/**/*",
+    "env.d.ts",
     "auto-imports.d.ts",
     "components.d.ts",
-    "**/*.test.*",
-    "**/*.spec.*"
-  ]
+    "*.config.*",
+    "**/*.vue"
+  ],
+  "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]
 }

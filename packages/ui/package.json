@@ -58,5 +58,13 @@
     "@unocss/preset-uno": "catalog:",
     "unocss": "catalog:"
   },
-  "devDependencies": {}
+  "packageManager": "bun@1.2.23",
+  "engines": {
+    "node": ">=22.0.0",
+    "bun": ">=1.0.0"
+  },
+  "sideEffects": [
+    "dist/index.css",
+    "dist/styles/*.css"
+  ]
 }

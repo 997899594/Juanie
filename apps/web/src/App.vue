@@ -17,21 +17,16 @@
 
 <script setup lang="ts">
 import { darkTheme } from 'naive-ui'
-import { computed } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 import { naiveThemeOverrides } from '@/theme/naive-ui'
 
 const themeStore = useThemeStore()
 
 // 主题配置
-const _theme = computed(() => {
+const theme = computed(() => {
   return themeStore.isDark ? darkTheme : null
 })
 
 // 使用精简的主题覆盖配置
-const _themeOverrides = naiveThemeOverrides
+const themeOverrides = naiveThemeOverrides
 </script>
-
-<style>
-/* 全局样式已在 styles/index.css 中定义 */
-</style>
