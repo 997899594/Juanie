@@ -16,9 +16,9 @@
 </template>
 
 <script setup lang="ts">
+import { bilibiliTheme } from '@juanie/ui/themes'
 import { darkTheme } from 'naive-ui'
 import { useThemeStore } from '@/stores/theme'
-import { naiveThemeOverrides } from '@/theme/naive-ui'
 
 const themeStore = useThemeStore()
 
@@ -27,6 +27,6 @@ const theme = computed(() => {
   return themeStore.isDark ? darkTheme : null
 })
 
-// 使用精简的主题覆盖配置
-const themeOverrides = naiveThemeOverrides
+// 使用 UI 包的主题覆盖配置
+const themeOverrides = bilibiliTheme
 </script>
