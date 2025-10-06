@@ -3,14 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./shared": {
-      "types": "./src/shared.ts",
-      "import": "./src/shared.ts"
+      "types": "./dist/shared.d.ts"
     }
   },
   "scripts": {
@@ -20,9 +20,10 @@
     "build:bun": "bun --bun nitro build",
     "start": "nitro preview",
     "start:bun": "bun --bun nitro preview",
-    "type-check": "tsc -b --noEmit",
+    "type-check": "bunx tsc -b --noEmit",
+    "types:build": "tsc -p tsconfig.types.json",
     "docs:generate": "typedoc",
-    "docs:serve": "npx http-server docs -p 3001",
+    "docs:serve": "npx http-server docs -p 3002",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "drizzle-kit migrate",
     "drizzle:studio": "drizzle-kit studio",
@@ -33,6 +34,8 @@
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
+    "@opentelemetry/auto-instrumentations-node": "^0.64.6",
+    "@opentelemetry/sdk-node": "^0.205.0",
     "@paralleldrive/cuid2": "^2.2.2",
     "@scalar/api-reference": "^1.37.0",
     "@trpc/server": "^11.6.0",
@@ -43,8 +46,6 @@
     "jsonwebtoken": "^9.0.2",
     "postgres": "^3.4.7",
     "reflect-metadata": "^0.2.2",
-    "superjson": "^2.2.1",
-    "trpc-panel": "^1.3.4",
     "trpc-to-openapi": "^3.0.1",
     "zod": "catalog:"
   },
@@ -56,7 +57,7 @@
     "tsx": "^4.20.6",
     "typedoc": "^0.27.6",
     "typedoc-plugin-markdown": "^4.2.10",
-    "typescript": "catalog:",
+    "typescript": "^5.9.3",
     "vitest": "catalog:"
   },
   "peerDependencies": {

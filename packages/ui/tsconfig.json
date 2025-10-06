@@ -1,6 +1,7 @@
 {
   "extends": "../../configs/tsconfig/dom.json",
   "compilerOptions": {
+    "baseUrl": ".",
     "outDir": "./dist",
     "composite": true,
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
@@ -14,6 +15,6 @@
       "@juanie/shared": ["../shared/src"]
     }
   },
-  "include": ["src/**/*", "uno/**/*"],
+  "include": ["src/**/*", "uno/**/*", "*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]
 }

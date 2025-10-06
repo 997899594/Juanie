@@ -5,7 +5,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@juanie/shared": ["../../packages/shared/src"],
-      "@juanie/ui": ["../../packages/ui/src"]
+      "@juanie/ui": ["../../packages/ui/src"],
+      "@juanie/api": ["../../apps/api/src"]
     },
     "types": ["vite/client", "naive-ui/volar", "node"],
     "skipLibCheck": true,

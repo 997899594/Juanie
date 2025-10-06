@@ -1,4 +1,4 @@
-import type { ApiResponse, PaginatedResponse } from '@juanie/api/shared'
+import type { ApiResponse, PaginatedResponse } from '@juanie/api'
 import axios from 'axios'
 
 const api = axios.create({

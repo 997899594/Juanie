@@ -1,38 +1,36 @@
-// 文件默认导出：Nitro 插件
-
-import { createError, eventHandler, getRequestURL } from 'h3'
-import type { NitroAppPlugin } from 'nitropack'
+// 顶部导入
+import {
+  createError,
+  type EventHandlerRequest,
+  getHeader,
+  getRequestURL,
+  type H3Event,
+  sendError,
+} from 'h3'
+import type { NitroApp } from 'nitropack'
+import { getAppContainer } from '@/nest'
 import { logger } from '../src/middleware/logger.middleware'
-import { createContext } from '../src/trpc/context'
 
-const plugin: NitroAppPlugin = (nitroApp) => {
-  nitroApp.h3App.use(
-    eventHandler(async (event) => {
-      const { pathname } = getRequestURL(event)
-      // 仅保护 /panel/**，其他路径直接放行
-      if (!pathname.startsWith('/panel/')) return
-
-      try {
-        const ctx = await createContext({ req: event.node.req, res: event.node.res })
-        const user = await ctx.validateAuth()
-
-        if (!user) {
-          logger.logAuth('panel_access_denied', undefined, false)
-          throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-        }
-
-        logger.logAuth('panel_access_granted', user.id, true)
-        // 认证通过放行
-        return
-      } catch (err) {
-        logger.error('panel_access_error', {
-          error: err instanceof Error ? err.message : String(err),
-          path: pathname,
-        })
-        throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+export default async function (nitroApp: NitroApp) {
+  nitroApp.hooks.hook('request', async (event: H3Event<EventHandlerRequest>) => {
+    const { pathname } = getRequestURL(event)
+    // 只在访问文档相关路由时进行鉴权
+    if (
+      pathname.startsWith('/docs') ||
+      pathname.startsWith('/scalar-docs') ||
+      pathname.startsWith('/openapi') ||
+      pathname.startsWith('/health')
+    ) {
+      const { authService } = getAppContainer()
+      const authHeader = getHeader(event, 'authorization')
+      const user = await authService.validateRequest(authHeader)
+      if (!user) {
+        return sendError(event, createError({ statusCode: 401, statusMessage: 'Unauthorized' }))
       }
-    }),
-  )
-}
+      event.context.user = user
+    }
 
-export default plugin
+    logger.logAuth('access_granted', event.context.user.id, true)
+    return
+  })
+}

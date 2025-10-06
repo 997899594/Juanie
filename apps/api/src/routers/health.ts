@@ -142,18 +142,38 @@ export const healthRouter = router({
         arch: z.string(),
       }),
     )
-    .query(async ({ ctx }) => {
+    .query(async () => {
       try {
         logger.logSystem('metrics_requested')
 
-        const metrics = await ctx.healthService.getMetrics()
+        // 使用 Node 的原生指标，确保与 zod 输出结构一致
+        //  const metrics = await ctx.healthService.getMetrics()
+        const mu = process.memoryUsage()
+        const heapUsedPercentage =
+          mu.heapTotal > 0 ? Number(((mu.heapUsed / mu.heapTotal) * 100).toFixed(2)) : 0
+
+        const result = {
+          memory: {
+            rss: mu.rss,
+            heapTotal: mu.heapTotal,
+            heapUsed: mu.heapUsed,
+            external: mu.external,
+            heapUsedPercentage,
+          },
+          uptime: process.uptime(),
+          timestamp: new Date().toISOString(),
+          environment: process.env.NODE_ENV ?? 'development',
+          nodeVersion: process.version,
+          platform: process.platform,
+          arch: process.arch,
+        }
 
         logger.logSystem('metrics_completed', {
-          memoryUsage: metrics.memory.heapUsedPercentage,
-          uptime: metrics.uptime,
+          memoryUsage: result.memory.heapUsedPercentage,
+          uptime: result.uptime,
         })
 
-        return metrics
+        return result
       } catch (error) {
         logger.error('Metrics collection failed', { error: (error as Error).message })
         throw ErrorHandler.toTRPCError(createError.internal('指标收集失败'))

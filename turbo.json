@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_ENV"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -10,15 +11,7 @@
       "persistent": true
     },
     "type-check": {
-      "dependsOn": ["^build"],
       "outputs": []
-    },
-    "drizzle:generate": {
-      "cache": false,
-      "outputs": ["src/drizzle/migrations/**"]
-    },
-    "drizzle:migrate": {
-      "cache": false
     }
   }
 }

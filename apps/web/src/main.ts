@@ -1,5 +1,3 @@
-// Naive UI
-import naive from 'naive-ui'
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
@@ -20,10 +18,7 @@ const app = createApp(App)
 // 创建状态管理
 const pinia = createPinia()
 
-// Naive UI 主题配置已移至 App.vue 的 themeOverrides
-
 // 注册插件
-app.use(naive)
 app.use(router)
 app.use(pinia)
 

@@ -34,30 +34,7 @@ export default defineEventHandler(async (event) => {
         body: body ? JSON.stringify(body) : undefined,
       }),
       router: appRouter,
-      createContext: async () => {
-        try {
-          return await createContext(event)
-        } catch (error) {
-          console.error('Context creation error:', error)
-          // 返回一个基本的上下文，避免完全失败
-          return {
-            req: event.node.req,
-            res: event.node.res,
-            authHeader: event.node.req.headers?.authorization,
-            async getCurrentUser() {
-              return null
-            },
-            async validateAuth() {
-              return null
-            },
-            // 提供空的服务实例以避免错误
-            healthService: null,
-            trpcService: null,
-            databaseService: null,
-            authService: null,
-          }
-        }
-      },
+      createContext,
     })
 
     // 设置响应头
@@ -69,7 +46,7 @@ export default defineEventHandler(async (event) => {
     setResponseStatus(event, response.status)
 
     // 返回响应体（tRPC 返回 JSON 文本）
-    return await response.text()
+    return await response.json()
   } catch (error) {
     console.error('tRPC handler error:', error)
     throw createError({

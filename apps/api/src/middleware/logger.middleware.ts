@@ -1,3 +1,4 @@
+import { trace } from '@opentelemetry/api'
 /**
  * 日志级别枚举
  */
@@ -20,6 +21,7 @@ export interface LogContext {
   ip?: string
   duration?: number
   statusCode?: number
+  traceId?: string
   [key: string]: any
 }
 
@@ -115,13 +117,15 @@ export class Logger {
     statusCode?: number
     userAgent?: string
     ip?: string
+    traceId?: string
   }): void {
-    const { method, path, duration, statusCode } = context
+    const { method, path, duration, statusCode, traceId } = context
     const status = statusCode ? (statusCode >= 400 ? '❌' : '✅') : '⏳'
 
     this.info(`${status} ${method} ${path} - ${duration}ms`, {
       ...context,
       type: 'api_request',
+      traceId,
     })
   }
 
@@ -206,6 +210,10 @@ export function createLoggingMiddleware() {
     const start = Date.now()
     const { path, type, next } = opts
 
+    // 从当前激活的跨度读取 traceId
+    const activeSpan = trace.getActiveSpan()
+    const traceId = activeSpan?.spanContext().traceId
+
     try {
       const result = await next()
       const duration = Date.now() - start
@@ -215,6 +223,7 @@ export function createLoggingMiddleware() {
         path,
         duration,
         statusCode: 200,
+        traceId,
       })
 
       return result
@@ -226,11 +235,13 @@ export function createLoggingMiddleware() {
         path,
         duration,
         statusCode: 500,
+        traceId,
       })
 
       logger.error(`tRPC ${type} ${path} failed`, {
         error: error instanceof Error ? error.message : String(error),
         duration,
+        traceId,
       })
 
       throw error

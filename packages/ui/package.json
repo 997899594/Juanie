@@ -44,7 +44,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "rolldown && bunx tsc -b",
+    "build": "bunx tsc -b && rolldown",
     "dev": "rolldown --watch",
     "type-check": "bunx tsc -b --noEmit"
   },
@@ -52,26 +52,11 @@
     "naive-ui": "catalog:",
     "vue": "catalog:"
   },
-  "devDependencies": {
-    "@vitejs/plugin-vue": "catalog:",
-    "rolldown": "catalog:",
-    "typescript": "catalog:",
-    "vite": "catalog:",
-    "vite-plugin-dts": "^4.5.4"
-  },
   "peerDependencies": {
     "@unocss/preset-attributify": "catalog:",
     "@unocss/preset-icons": "catalog:",
     "@unocss/preset-uno": "catalog:",
     "unocss": "catalog:"
   },
-  "packageManager": "bun@1.2.23",
-  "engines": {
-    "node": ">=22.0.0",
-    "bun": ">=1.0.0"
-  },
-  "sideEffects": [
-    "dist/index.css",
-    "dist/styles/*.css"
-  ]
+  "devDependencies": {}
 }

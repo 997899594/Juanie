@@ -18,6 +18,38 @@ export interface JWTPayload {
  */
 @Injectable()
 export class AuthService {
+  async validateUser(_email: string, _password: string) {
+    const user = await this.databaseService.getUserByEmail(_email)
+    if (!user) {
+      return null
+    }
+    // 密码验证逻辑（实际应用中应使用密码哈希）
+    if (user.passwordHash !== _password) {
+      return null
+    }
+    return user
+  }
+  async validateToken(_token: string) {
+    const decoded = await this.verifyToken(_token)
+    if (!decoded) {
+      return null
+    }
+    const user = await this.databaseService.getUserById(decoded.userId)
+    if (!user) {
+      return null
+    }
+    return user
+  }
+  async updatePassword(_id: string, _newPassword: string) {
+    const user = await this.databaseService.getUserById(_id)
+    if (!user) {
+      return null
+    }
+    // 更新密码逻辑（实际应用中应使用密码哈希）
+    user.passwordHash = _newPassword
+    await this.databaseService.updateUser(user, { password: _newPassword })
+    return user
+  }
   private readonly jwtSecret: string
 
   constructor(
@@ -47,7 +79,7 @@ export class AuthService {
    * @param user 用户信息
    * @returns JWT令牌
    */
-  generateToken(user: User): string {
+  async generateToken(user: User): Promise<string> {
     const payload: JWTPayload = {
       userId: user.id,
       email: user.email,
@@ -98,6 +130,7 @@ export class AuthService {
       if (!user) {
         const newUser = await this.databaseService.createUser({
           email,
+          password: 'placeholder-password', // 注册时密码为空
           name,
           avatar,
         })

@@ -1,6 +1,8 @@
-import type { AppRouter } from '@juanie/api/shared'
+import type { AppRouter } from '@juanie/api'
 import { createTRPCProxyClient, httpBatchLink } from '@trpc/client'
 import { devtoolsLink } from 'trpc-client-devtools-link'
+
+// todo: devtoolsLink 过时
 
 const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 

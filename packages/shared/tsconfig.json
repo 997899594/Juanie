@@ -2,9 +2,7 @@
   "extends": "../../configs/tsconfig/node.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "rootDir": "./src",
     "outDir": "./dist",
-    "types": [],
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -12,10 +10,12 @@
     "allowImportingTsExtensions": false,
     "composite": true,
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "inlineSourceMap": false,
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
+    "noEmit": false,
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@juanie/shared": ["../shared/src"]
+    }
   },
   "include": ["src/**/*", "*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]

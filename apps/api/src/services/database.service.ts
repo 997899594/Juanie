@@ -12,6 +12,14 @@ import { users } from '../drizzle/schema'
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly drizzleService: DrizzleService) {}
 
+  async updateUser(
+    id: any,
+    input: { name?: string | undefined; email?: string | undefined; password?: string | undefined },
+  ) {
+    const user = await this.db.update(users).set(input).where(eq(users.id, id))
+    return user[0]
+  }
+
   async onModuleInit() {
     console.log('DatabaseService initialized')
   }
@@ -71,7 +79,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async createUser(userData: { email: string; name?: string; avatar?: string }) {
+  async createUser(userData: { email: string; password?: string; name?: string; avatar?: string }) {
     if (!this.isDatabaseAvailable()) {
       throw new Error('Database not available')
     }
@@ -81,7 +89,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         .insert(users)
         .values({
           email: userData.email,
-          passwordHash: '', // 临时空密码，实际应用中需要处理密码哈希
+          passwordHash: userData.password || 'placeholder-password', // 注册时密码为空
           name: userData.name || 'Unknown User',
           createdAt: new Date(),
           updatedAt: new Date(),

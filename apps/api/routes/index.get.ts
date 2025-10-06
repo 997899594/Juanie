@@ -1,46 +1,44 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { defineEventHandler, getRequestURL, setHeader } from 'h3'
+
+// 在模块加载时读取并缓存 package.json，避免每次请求都读文件
+const pkg = (() => {
+  const candidates = [
+    resolve(process.cwd(), 'package.json'),
+    resolve(process.cwd(), 'apps', 'api', 'package.json'),
+  ]
+  for (const p of candidates) {
+    if (existsSync(p)) {
+      try {
+        return JSON.parse(readFileSync(p, 'utf-8'))
+      } catch {
+        // ignore parse error and try next candidate
+      }
+    }
+  }
+  // 回退默认值（仅在找不到或解析失败时使用）
+  return { name: 'Juanie API', version: '1.0.0', description: 'API Service' }
+})()
+
 export default defineEventHandler(async (event) => {
   // 设置响应头
-  setHeader(event, 'Content-Type', 'application/json')
+  setHeader(event, 'Content-Type', 'application/json; charset=utf-8')
   setHeader(event, 'Cache-Control', 'public, max-age=300')
 
   const baseUrl = getRequestURL(event).origin
 
   return {
-    name: 'Juanie API',
-    version: '1.0.0',
-    description: 'NestJS + tRPC + Nitro + Drizzle 全栈 API',
-    status: 'running',
+    name: pkg.name ?? 'Juanie API',
+    version: pkg.version ?? '1.0.0',
+    description: pkg.description ?? 'Juanie 服务入口（Nitro + tRPC + NestJS）',
+    status: 'ok',
     timestamp: new Date().toISOString(),
     links: {
-      health: `${baseUrl}/health`,
-      docs: `${baseUrl}/docs`,
-      panel: `${baseUrl}/panel`,
+      openapi: `${baseUrl}/openapi.json`,
+      docs: `${baseUrl}/scalar-docs`,
       trpc: `${baseUrl}/trpc`,
+      health: `${baseUrl}/health`,
     },
-    endpoints: {
-      health: {
-        check: 'GET /trpc/health.check',
-        ping: 'GET /trpc/health.ping',
-        metrics: 'GET /trpc/health.metrics',
-        database: 'GET /trpc/health.database',
-        ready: 'GET /trpc/health.ready',
-      },
-      auth: {
-        register: 'POST /trpc/auth.register',
-        login: 'POST /trpc/auth.login',
-        verify: 'POST /trpc/auth.verify',
-        me: 'GET /trpc/auth.me',
-        updateProfile: 'PUT /trpc/auth.updateProfile',
-        changePassword: 'PUT /trpc/auth.changePassword',
-        logout: 'POST /trpc/auth.logout',
-      },
-    },
-    stack: [
-      'NestJS - 依赖注入和模块化',
-      'tRPC - 类型安全的 API',
-      'Nitro - 高性能服务器',
-      'Drizzle ORM - 数据库操作',
-      'TypeScript - 类型安全',
-    ],
   }
 })

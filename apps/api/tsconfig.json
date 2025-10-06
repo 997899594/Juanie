@@ -19,6 +19,6 @@
     "inlineSourceMap": false,
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*", "routes/**/*", "*.ts"],
+  "include": ["src/**/*", "routes/**/*", "plugins/**/*", "*.ts"],
   "exclude": ["node_modules", "dist", ".nitro", "**/*.test.*", "**/*.spec.*"]
 }

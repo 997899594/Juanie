@@ -1,4 +1,9 @@
 import { defineNitroConfig } from 'nitropack/config'
+import { dirname, resolve } from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 export default defineNitroConfig({
   // 兼容性日期
@@ -104,12 +109,12 @@ export default defineNitroConfig({
   logLevel: process.env.NODE_ENV === 'development' ? 'debug' : 'warn',
 
   // 插件配置
-  plugins: ['./plugins/logger.ts', './plugins/auth.ts'],
+  plugins: ['./plugins/logger.ts', './plugins/auth.ts', './plugins/otel.ts'],
 
   // 别名配置
   alias: {
-    '~': '.',
-    '@': './src',
+    '~': resolve(__dirname, '.'),
+    '@': resolve(__dirname, './src'),
   },
 
   // 构建配置
@@ -118,6 +123,11 @@ export default defineNitroConfig({
       // 排除一些可能导致构建问题的包
       'fsevents',
       'lightningcss',
+      // 优雅方案：让 OTel 相关包走 Node 原生加载，避免打包器重写顶层 this
+      '@opentelemetry/api',
+      '@opentelemetry/sdk-node',
+      '@opentelemetry/auto-instrumentations-node',
+      '@opentelemetry/exporter-trace-otlp-http',
     ],
     output: {
       sourcemap: true,

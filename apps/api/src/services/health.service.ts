@@ -50,9 +50,9 @@ export class HealthService {
    * @param message 可选的消息内容
    * @returns Ping 响应
    */
-  ping(message?: string): { message: string; timestamp: string } {
+  async ping(message?: string): Promise<{ status: string; timestamp: string }> {
     return {
-      message: message ? `收到消息: ${message}` : 'pong',
+      status: message ? `ok: ${message}` : 'error',
       timestamp: new Date().toISOString(),
     }
   }
@@ -61,7 +61,7 @@ export class HealthService {
    * 获取系统性能指标
    * @returns 系统性能指标
    */
-  getMetrics() {
+  async getMetrics() {
     const memoryUsage = process.memoryUsage()
 
     return {
@@ -76,6 +76,11 @@ export class HealthService {
         version: process.version,
       },
       timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
     }
   }
 

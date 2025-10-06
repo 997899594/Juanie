@@ -65,6 +65,14 @@ export const authRouter = router({
           name: input.name,
         })
 
+        if (!newUser) {
+          logger.logAuth('user_registration_failed', undefined, false, {
+            email: input.email,
+            reason: 'user_creation_failed',
+          })
+          throw createError.internal('用户创建失败')
+        }
+
         logger.logAuth('user_registration_success', newUser.id, true, { email: input.email })
 
         return {
@@ -126,6 +134,7 @@ export const authRouter = router({
 
         // 验证用户凭据
         const user = await ctx.authService.validateUser(input.email, input.password)
+
         if (!user) {
           logger.logAuth('user_login_failed', undefined, false, {
             email: input.email,
@@ -135,7 +144,7 @@ export const authRouter = router({
         }
 
         // 生成访问令牌
-        const token = await ctx.authService.generateToken(user.id)
+        const token = await ctx.authService.generateToken(user)
 
         logger.logAuth('user_login_success', user.id, true, { email: input.email })
 
@@ -202,9 +211,9 @@ export const authRouter = router({
           }
         }
 
-        const user = await ctx.databaseService.getUserById(payload.userId)
+        const user = await ctx.databaseService.getUserById(payload.id)
         if (!user) {
-          logger.logAuth('token_verification_failed', payload.userId, false, {
+          logger.logAuth('token_verification_failed', payload.id, false, {
             reason: 'user_not_found',
           })
           return {
@@ -221,7 +230,7 @@ export const authRouter = router({
             email: user.email,
             name: user.name,
           },
-          expiresAt: new Date(payload.exp * 1000).toISOString(),
+          expiresAt: new Date().toISOString(),
         }
       } catch (error) {
         logger.error('Token verification failed', { error: (error as Error).message })
@@ -336,7 +345,7 @@ export const authRouter = router({
           }
         }
 
-        const updatedUser = await ctx.databaseService.updateUser(ctx.user.id, input)
+        await ctx.databaseService.updateUser(ctx.user.id, input)
 
         logger.logAuth('update_profile_success', ctx.user.id, true, {
           updatedFields: Object.keys(input),
@@ -346,10 +355,10 @@ export const authRouter = router({
           success: true,
           message: '个人信息更新成功',
           user: {
-            id: updatedUser.id,
-            email: updatedUser.email,
-            name: updatedUser.name,
-            updatedAt: updatedUser.updatedAt.toISOString(),
+            id: ctx.user.id,
+            email: ctx.user.email,
+            name: ctx.user.name,
+            updatedAt: ctx.user.updatedAt.toISOString(),
           },
         }
       } catch (error) {

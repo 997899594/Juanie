@@ -1,5 +1,5 @@
+import { trace } from '@opentelemetry/api'
 import { initTRPC, TRPCError } from '@trpc/server'
-import type { TRPCPanelMeta } from 'trpc-panel'
 import type { OpenApiMeta } from 'trpc-to-openapi'
 import { ErrorHandler } from '../middleware/error.middleware'
 import { logger } from '../middleware/logger.middleware'
@@ -12,15 +12,13 @@ type AuthenticatedContext = Context & {
   user: any // 认证后的用户信息
 }
 
-type AppMeta = OpenApiMeta & TRPCPanelMeta
-
 /**
  * 初始化 tRPC 实例
  * 集成错误处理和日志记录中间件
  */
 const t = initTRPC
   .context<Context>()
-  .meta<AppMeta>()
+  .meta<OpenApiMeta>()
   .create({
     errorFormatter({ shape, error }) {
       // 记录错误日志
@@ -46,45 +44,76 @@ const t = initTRPC
 /**
  * 基础中间件 - 添加日志和性能监控
  */
+// 在 baseMiddleware 中注入 traceId
 const baseMiddleware = t.middleware(async ({ next, path, type, ctx }) => {
   const start = Date.now()
+
+  // 从当前激活的跨度读取 traceId
+  const activeSpan = trace.getActiveSpan()
+  const traceId = activeSpan?.spanContext().traceId
+
+  // 为每个 procedure 创建子跨度（父为当前激活上下文）
+  const tracer = trace.getTracer('trpc')
+  const span = tracer.startSpan(`trpc.${path}`, {
+    attributes: {
+      'rpc.system': 'trpc',
+      'rpc.method': path,
+      'juanie.trpc.type': type,
+    },
+  })
 
   try {
     const result = await next()
     const duration = Date.now() - start
 
-    // 记录成功的 API 调用
     logger.logApiRequest({
       method: type,
       path,
       duration,
       statusCode: 200,
-      userId: (await ctx.getCurrentUser())?.id,
+      userId: (await ctx.authService.validateRequest(ctx.authHeader))?.id,
+      traceId,
     })
+
+    // 将耗时与状态写入跨度后结束
+    span.setAttribute('juanie.duration_ms', duration)
+    span.setAttribute('http.status_code', 200)
+    span.end()
 
     return result
   } catch (error) {
     const duration = Date.now() - start
 
-    // 记录失败的 API 调用
     logger.logApiRequest({
       method: type,
       path,
       duration,
       statusCode: 500,
-      userId: (await ctx.getCurrentUser())?.id,
+      userId: (await ctx.authService.validateRequest(ctx.authHeader))?.id,
+      traceId,
     })
+
+    // 同时在错误日志中携带 traceId，便于快速关联到追踪
+    logger.error(`tRPC ${type} ${path} failed`, {
+      error: error instanceof Error ? error.message : String(error),
+      duration,
+      traceId,
+    })
+
+    // 记录异常并结束跨度
+    span.recordException(error as any)
+    span.setAttribute('juanie.duration_ms', duration)
+    span.setAttribute('http.status_code', 500)
+    span.end()
 
     // 转换为标准化的 tRPC 错误
     throw ErrorHandler.toTRPCError(error)
   }
 })
 
-/**
- * 认证中间件
- */
+// 认证中间件
 const authMiddleware = t.middleware(async ({ next, ctx }) => {
-  const user = await ctx.validateAuth()
+  const user = await ctx.authService.validateRequest(ctx.authHeader)
 
   if (!user) {
     logger.logAuth('unauthorized_access', undefined, false)
@@ -132,9 +161,7 @@ const adminMiddleware = authMiddleware.unstable_pipe(
  * 速率限制中间件
  */
 const rateLimitMiddleware = t.middleware(async ({ next, ctx, path }) => {
-  // 这里可以实现基于用户或IP的速率限制
-  // 目前只是记录日志
-  const user = await ctx.getCurrentUser()
+  const user = await ctx.authService.validateRequest(ctx.authHeader)
 
   logger.debug(`Rate limit check for ${path}`, {
     userId: user?.id,
