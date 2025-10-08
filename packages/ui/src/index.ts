@@ -1,12 +1,16 @@
-// 导出设计令牌
+// 导入样式文件
+import './styles/globals.css'
 
-// 导出 Naive UI 相关
-export * from './naive-ui'
-// 导出主题相关
+// 注册所有预设主题
+import { registerAllPresets } from './theme/presets'
+
+registerAllPresets()
+
+// 导出工具函数
+export { cn } from './lib/utils'
+
+// 🎯 导出主题系统
 export * from './theme'
-// 导出主题系统
-export * from './themes/bilibili'
-export * from './tokens/bilibili'
-
-// 导出类型（从tokens/types导出）
-export * from './tokens/types'
+export type { UseThemeReturn } from './theme/composables/useTheme'
+// 🎯 确保 useTheme 被正确导出
+export { useTheme } from './theme/composables/useTheme'

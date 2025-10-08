@@ -1,7 +1,10 @@
 {
-  "compilerOptions": {
-    "composite": true,
-    "incremental": true
-  },
-  "references": [{ "path": "./packages/shared" }, { "path": "./packages/ui" }]
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "./apps/api" },
+    { "path": "./apps/web" },
+    { "path": "./packages/shared" },
+    { "path": "./packages/ui" }
+  ]
 }

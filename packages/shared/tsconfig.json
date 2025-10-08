@@ -1,22 +1,10 @@
 {
-  "extends": "../../configs/tsconfig/node.json",
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../configs/tsconfig/base.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "outDir": "./dist",
-    "skipLibCheck": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "target": "ES2022",
-    "allowImportingTsExtensions": false,
-    "composite": true,
-    "declaration": true,
-    "noEmit": false,
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
-    "paths": {
-      "@/*": ["./src/*"],
-      "@juanie/shared": ["../shared/src"]
-    }
+    "noEmit": false
   },
-  "include": ["src/**/*", "*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules"]
 }

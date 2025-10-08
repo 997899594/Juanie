@@ -5,50 +5,39 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022"],
+
     "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
     "useUnknownInCatchVariables": true,
-    "allowJs": false,
-    "skipLibCheck": true,
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
+
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitReturns": true,
-    "noImplicitOverride": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": false,
-    "moduleDetection": "force",
-    "useDefineForClassFields": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+
+    "skipLibCheck": true,
+    "incremental": true,
+
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "removeComments": false,
-    "incremental": true,
-    "exactOptionalPropertyTypes": false,
-    "noImplicitAny": true,
-    "noPropertyAccessFromIndexSignature": false,
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"],
-      "@juanie/shared": ["../../packages/shared/src"],
-      "@juanie/ui": ["../../packages/ui/src"]
-    }
+    "useDefineForClassFields": true
   },
   "exclude": [
-    "node_modules",
-    "dist",
-    "build",
-    ".next",
-    ".nuxt",
-    ".output",
-    ".nitro",
-    "coverage",
+    "**/node_modules",
+    "**/dist",
+    "**/.next",
+    "**/.nuxt",
+    "**/.nitro",
+    "**/coverage",
     "**/*.test.*",
-    "**/*.spec.*",
-    "**/__tests__/**",
-    "**/__mocks__/**"
+    "**/*.spec.*"
   ]
 }

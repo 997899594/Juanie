@@ -6,7 +6,28 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": false
+    "ignoreUnknown": false,
+    "includes": [
+      "**/*.{js,jsx,ts,tsx,vue,json,md}",
+      "!node_modules",
+      "!dist",
+      "!.next",
+      "!.nitro",
+      "!.turbo",
+      "!coverage",
+      "!build",
+      "!*.min.js",
+      "!*.min.css",
+      "!packages/ui/src/styles/globals.css",
+      "!apps/web/public",
+      "!**/*.d.ts",
+      "!bun.lock",
+      "!package-lock.json",
+      "!yarn.lock",
+      "!pnpm-lock.yaml",
+      "!**/.tsbuildinfo",
+      "!**/*.log"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -30,8 +51,21 @@
         "noNonNullAssertion": "off"
       },
       "suspicious": {
-        "noExplicitAny": "off"
+        "noExplicitAny": "off",
+        "noUnknownAtRules": "off"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.vue"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off"
+          }
+        }
+      }
+    }
+  ]
 }

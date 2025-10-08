@@ -1,8 +1,7 @@
 import { resolve } from 'node:path'
+import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
-import UnoCSS from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
-import { NaiveUiResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 import { defineConfig } from 'vite'
 
@@ -24,64 +23,56 @@ export default function createAppConfig(options: AppOptions = {}) {
     },
     proxy = {},
     manualChunks = {
-      'naive-ui': ['naive-ui'],
       'vue-vendor': ['vue', 'vue-router', 'pinia'],
       utils: ['lodash-es', 'dayjs', '@vueuse/core'],
     },
-    optimizeDepsInclude = [
-      'vue',
-      'vue-router',
-      'pinia',
-      'naive-ui',
-      '@vueuse/core',
-      'lodash-es',
-      'dayjs',
-    ],
+    optimizeDepsInclude = ['vue', 'vue-router', 'pinia', '@vueuse/core', 'lodash-es', 'dayjs'],
   } = options
 
   return defineConfig({
     plugins: [
       vue(),
-      UnoCSS(),
+      tailwindcss(),
       AutoImport({
-        imports: [
-          'vue',
-          'vue-router',
-          'pinia',
-          '@vueuse/core',
-          {
-            'naive-ui': ['useDialog', 'useMessage', 'useNotification', 'useLoadingBar'],
-          },
-        ],
+        imports: ['vue', 'vue-router', 'pinia', '@vueuse/core'],
         dts: true,
         dirs: ['src/composables', 'src/stores', 'src/utils'],
       }),
       Components({
-        resolvers: [NaiveUiResolver()],
         dts: true,
         dirs: ['src/components', 'src/layouts'],
       }),
     ],
     resolve: {
+      // 🎯 2025 最佳实践：条件导入支持开发时源码
+      conditions: ['development', 'import', 'module', 'browser', 'default'],
       alias,
     },
+
+    // 🎯 优化依赖处理：排除 workspace 包
+    optimizeDeps: {
+      exclude: ['@juanie/ui', '@juanie/shared'],
+      include: optimizeDepsInclude,
+    },
+
     server: {
       port,
       host,
       proxy,
+      // 🎯 允许访问 workspace 根目录
+      fs: {
+        allow: ['../..'],
+      },
     },
     build: {
       target: 'esnext',
-      minify: 'esbuild',
+      // minify: 'esbuild',
       sourcemap: false,
       rollupOptions: {
         output: {
           manualChunks,
         },
       },
-    },
-    optimizeDeps: {
-      include: optimizeDepsInclude,
     },
   })
 }

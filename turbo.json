@@ -1,18 +1,46 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["NODE_ENV"],
+  "ui": "tui",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".output/**", ".nitro/**"]
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**", ".next/**", "build/**"]
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
+    "preview": {
+      "cache": false,
+      "persistent": true
+    },
     "type-check": {
+      "inputs": ["$TURBO_DEFAULT$", "tsconfig*.json", "../../configs/tsconfig/**"],
+      "outputs": ["**/*.tsbuildinfo"]
+    },
+    "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "biome.json", "../../biome.json"]
+    },
+    "lint:fix": {
+      "cache": false
+    },
+    "clean": {
+      "cache": false
+    },
+    "build:packages": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": ["dist/**"]
     }
-  }
+  },
+  "globalDependencies": [
+    "**/.env*",
+    "tsconfig.json",
+    "biome.json",
+    "bun.config.ts",
+    "configs/**",
+    "package.json"
+  ],
+  "globalEnv": ["NODE_ENV", "VITE_*", "DATABASE_URL"]
 }

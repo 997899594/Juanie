@@ -17,15 +17,15 @@ export default createAppConfig({
   },
   manualChunks: {
     'vue-vendor': ['vue', 'vue-router', 'pinia'],
-    'ui-vendor': ['naive-ui'],
+    'ui-vendor': ['@juanie/ui'],
     'utils-vendor': ['@vueuse/core', 'lodash-es', 'dayjs'],
     'charts-vendor': ['echarts'],
   },
+  // 🎯 移除 @juanie/ui，让它使用源码
   optimizeDepsInclude: [
     'vue',
     'vue-router',
     'pinia',
-    'naive-ui',
     '@vueuse/core',
     'echarts',
     'lodash-es',

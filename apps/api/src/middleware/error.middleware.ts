@@ -46,7 +46,10 @@ export class AppError extends Error {
     this.code = code
     this.statusCode = statusCode
     this.isOperational = isOperational
-    this.context = context
+    // 只有当 context 存在时才赋值
+    if (context !== undefined) {
+      this.context = context
+    }
 
     // 确保堆栈跟踪正确
     Error.captureStackTrace(this, this.constructor)

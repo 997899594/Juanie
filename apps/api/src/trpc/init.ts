@@ -2,7 +2,7 @@ import { trace } from '@opentelemetry/api'
 import { initTRPC, TRPCError } from '@trpc/server'
 import type { OpenApiMeta } from 'trpc-to-openapi'
 import { ErrorHandler } from '../middleware/error.middleware'
-import { logger } from '../middleware/logger.middleware'
+import { type LogContext, logger } from '../middleware/logger.middleware'
 import { type Context, createContext } from './context'
 
 /**
@@ -66,14 +66,31 @@ const baseMiddleware = t.middleware(async ({ next, path, type, ctx }) => {
     const result = await next()
     const duration = Date.now() - start
 
-    logger.logApiRequest({
+    // 获取用户ID，但只有在存在时才添加到上下文中
+    const authResult = await ctx.authService.validateRequest(ctx.authHeader)
+    const requestContext: {
+      method: string
+      path: string
+      duration: number
+      statusCode?: number
+      userId?: string
+      traceId?: string
+    } = {
       method: type,
       path,
       duration,
       statusCode: 200,
-      userId: (await ctx.authService.validateRequest(ctx.authHeader))?.id,
-      traceId,
-    })
+    }
+
+    if (authResult?.id !== undefined) {
+      requestContext.userId = authResult.id
+    }
+
+    if (traceId !== undefined) {
+      requestContext.traceId = traceId
+    }
+
+    logger.logApiRequest(requestContext)
 
     // 将耗时与状态写入跨度后结束
     span.setAttribute('juanie.duration_ms', duration)
@@ -84,21 +101,44 @@ const baseMiddleware = t.middleware(async ({ next, path, type, ctx }) => {
   } catch (error) {
     const duration = Date.now() - start
 
-    logger.logApiRequest({
+    // 获取用户ID，但只有在存在时才添加到上下文中
+    const authResult = await ctx.authService.validateRequest(ctx.authHeader)
+    const requestContext: {
+      method: string
+      path: string
+      duration: number
+      statusCode?: number
+      userId?: string
+      traceId?: string
+    } = {
       method: type,
       path,
       duration,
       statusCode: 500,
-      userId: (await ctx.authService.validateRequest(ctx.authHeader))?.id,
-      traceId,
-    })
+    }
 
-    // 同时在错误日志中携带 traceId，便于快速关联到追踪
-    logger.error(`tRPC ${type} ${path} failed`, {
+    if (authResult?.id !== undefined) {
+      requestContext.userId = authResult.id
+    }
+
+    if (traceId !== undefined) {
+      requestContext.traceId = traceId
+    }
+
+    logger.logApiRequest(requestContext)
+
+    // 构建错误日志上下文
+    const errorContext: LogContext = {
       error: error instanceof Error ? error.message : String(error),
       duration,
-      traceId,
-    })
+    }
+
+    if (traceId !== undefined) {
+      errorContext.traceId = traceId
+    }
+
+    // 同时在错误日志中携带 traceId，便于快速关联到追踪
+    logger.error(`tRPC ${type} ${path} failed`, errorContext)
 
     // 记录异常并结束跨度
     span.recordException(error as any)
@@ -163,11 +203,31 @@ const adminMiddleware = authMiddleware.unstable_pipe(
 const rateLimitMiddleware = t.middleware(async ({ next, ctx, path }) => {
   const user = await ctx.authService.validateRequest(ctx.authHeader)
 
-  logger.debug(`Rate limit check for ${path}`, {
-    userId: user?.id,
+  // 记录用户访问日志 - 构建日志上下文，只包含非 undefined 的值
+  const logContext: LogContext = {
     path,
     timestamp: new Date().toISOString(),
-  })
+  }
+
+  // 只有当 userId 存在时才添加到上下文中
+  if (user?.id !== undefined) {
+    logContext.userId = user.id
+  }
+
+  logger.info(`User access: ${path}`, logContext)
+
+  // 构建调试日志上下文
+  const debugContext: Record<string, any> = {
+    path,
+    timestamp: new Date().toISOString(),
+  }
+
+  // 只有当 userId 存在时才添加
+  if (user?.id !== undefined) {
+    debugContext.userId = user.id
+  }
+
+  logger.debug(`Rate limit check for ${path}`, debugContext)
 
   return next()
 })

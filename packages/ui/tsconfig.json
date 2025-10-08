@@ -1,20 +1,13 @@
 {
-  "extends": "../../configs/tsconfig/dom.json",
+  "extends": "../../configs/tsconfig/base.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "outDir": "./dist",
-    "composite": true,
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
-    "types": ["vite/client", "naive-ui/volar"],
+    "outDir": "dist",
     "declaration": true,
     "declarationMap": true,
-    "allowImportingTsExtensions": false,
-    "noEmit": false,
-    "paths": {
-      "@/*": ["./src/*"],
-      "@juanie/shared": ["../shared/src"]
-    }
+    "composite": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo"
   },
-  "include": ["src/**/*", "uno/**/*", "*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules", "**/*.test.*", "playground"]
 }

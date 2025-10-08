@@ -11,4 +11,5 @@ export const appRouter = router({
   auth: authRouter,
 })
 
+// 导出主路由类型
 export type AppRouter = typeof appRouter

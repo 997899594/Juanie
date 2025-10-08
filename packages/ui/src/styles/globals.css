@@ -1,0 +1,211 @@
+@import "tailwindcss";
+
+@theme {
+  /* 🎯 默认 Slate 主题颜色（shadcn-vue 官方） */
+  --color-background: oklch(100% 0 0);
+  --color-foreground: oklch(11.2% 0.047 264.7);
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(11.2% 0.047 264.7);
+  --color-popover: oklch(100% 0 0);
+  --color-popover-foreground: oklch(11.2% 0.047 264.7);
+  --color-primary: oklch(11.2% 0.047 264.7);
+  --color-primary-foreground: oklch(98% 0.004 247.9);
+  --color-secondary: oklch(96.1% 0.004 247.9);
+  --color-secondary-foreground: oklch(11.2% 0.047 264.7);
+  --color-muted: oklch(96.1% 0.004 247.9);
+  --color-muted-foreground: oklch(46.9% 0.016 255.5);
+  --color-accent: oklch(96.1% 0.004 247.9);
+  --color-accent-foreground: oklch(11.2% 0.047 264.7);
+  --color-destructive: oklch(62.8% 0.8 27.3);
+  --color-destructive-foreground: oklch(98% 0.004 247.9);
+  --color-success: oklch(55% 0.6 142);
+  --color-success-foreground: oklch(98% 0.004 247.9);
+  --color-warning: oklch(65% 0.8 45);
+  --color-warning-foreground: oklch(11.2% 0.047 264.7);
+  --color-info: oklch(55% 0.7 221);
+  --color-info-foreground: oklch(98% 0.004 247.9);
+  --color-border: oklch(91.4% 0.032 255.5);
+  --color-input: oklch(91.4% 0.032 255.5);
+  --color-ring: oklch(65.1% 0.02 255.1);
+  
+  /* 设计令牌 */
+  --radius: 0.5rem;
+  --spacing: 0.25rem;
+}
+
+@layer base {
+  /* 🎨 Slate 主题 - 暗色模式 */
+  .dark,
+  [data-theme="default"].dark {
+    --color-background: oklch(14.5% 0 0);
+    --color-foreground: oklch(98.5% 0 0);
+    --color-card: oklch(20.5% 0 0);
+    --color-card-foreground: oklch(98.5% 0 0);
+    --color-popover: oklch(26.9% 0 0);
+    --color-popover-foreground: oklch(98.5% 0 0);
+    --color-primary: oklch(92.2% 0 0);
+    --color-primary-foreground: oklch(20.5% 0 0);
+    --color-secondary: oklch(26.9% 0 0);
+    --color-secondary-foreground: oklch(98.5% 0 0);
+    --color-muted: oklch(26.9% 0 0);
+    --color-muted-foreground: oklch(70.8% 0 0);
+    --color-accent: oklch(37.1% 0 0);
+    --color-accent-foreground: oklch(98.5% 0 0);
+    --color-destructive: oklch(70.4% 0.191 22.2);
+    --color-destructive-foreground: oklch(98.5% 0 0);
+    --color-border: oklch(37.1% 0 0);
+    --color-input: oklch(37.1% 0 0);
+    --color-ring: oklch(55.6% 0 0);
+  }
+
+  /* 🎀 Bilibili 主题 - 浅色模式 */
+  [data-theme="bilibili"] {
+    --color-background: oklch(100% 0 0);
+    --color-foreground: oklch(15% 0.02 260);
+    --color-card: oklch(100% 0 0);
+    --color-card-foreground: oklch(15% 0.02 260);
+    --color-popover: oklch(100% 0 0);
+    --color-popover-foreground: oklch(15% 0.02 260);
+    --color-primary: oklch(68% 0.4 340);
+    --color-primary-foreground: oklch(100% 0 0);
+    --color-secondary: oklch(98% 0.02 340);
+    --color-secondary-foreground: oklch(15% 0.02 260);
+    --color-muted: oklch(97% 0.01 260);
+    --color-muted-foreground: oklch(45% 0.02 260);
+    --color-accent: oklch(95% 0.05 340);
+    --color-accent-foreground: oklch(15% 0.02 260);
+    --color-destructive: oklch(55% 0.8 15);
+    --color-destructive-foreground: oklch(100% 0 0);
+    --color-success: oklch(50% 0.6 140);
+    --color-success-foreground: oklch(100% 0 0);
+    --color-warning: oklch(60% 0.8 45);
+    --color-warning-foreground: oklch(15% 0.02 260);
+    --color-info: oklch(55% 0.7 200);
+    --color-info-foreground: oklch(100% 0 0);
+    --color-border: oklch(94% 0.02 340);
+    --color-input: oklch(94% 0.02 340);
+    --color-ring: oklch(68% 0.4 340);
+    
+    --radius: 0.5rem;
+  }
+
+  /* 🎀 Bilibili 主题 - 暗色模式 */
+  [data-theme="bilibili"].dark {
+    --color-background: oklch(8% 0.01 260);
+    --color-foreground: oklch(95% 0.01 260);
+    --color-card: oklch(12% 0.01 260);
+    --color-card-foreground: oklch(95% 0.01 260);
+    --color-popover: oklch(8% 0.01 260);
+    --color-popover-foreground: oklch(95% 0.01 260);
+    --color-primary: oklch(72% 0.45 340);
+    --color-primary-foreground: oklch(8% 0.01 260);
+    --color-secondary: oklch(18% 0.02 260);
+    --color-secondary-foreground: oklch(95% 0.01 260);
+    --color-muted: oklch(18% 0.02 260);
+    --color-muted-foreground: oklch(70% 0.02 260);
+    --color-accent: oklch(25% 0.05 340);
+    --color-accent-foreground: oklch(95% 0.01 260);
+    --color-destructive: oklch(50% 0.7 15);
+    --color-destructive-foreground: oklch(95% 0.01 260);
+    --color-success: oklch(45% 0.5 140);
+    --color-success-foreground: oklch(95% 0.01 260);
+    --color-warning: oklch(55% 0.7 45);
+    --color-warning-foreground: oklch(8% 0.01 260);
+    --color-info: oklch(50% 0.6 200);
+    --color-info-foreground: oklch(95% 0.01 260);
+    --color-border: oklch(25% 0.02 260);
+    --color-input: oklch(25% 0.02 260);
+    --color-ring: oklch(72% 0.45 340);
+  }
+
+  /* 📝 Notion 主题 - 浅色模式 */
+  [data-theme="notion"] {
+    --color-background: oklch(99% 0.005 60);
+    --color-foreground: oklch(22% 0.03 260);
+    --color-card: oklch(100% 0 0);
+    --color-card-foreground: oklch(22% 0.03 260);
+    --color-popover: oklch(100% 0 0);
+    --color-popover-foreground: oklch(22% 0.03 260);
+    --color-primary: oklch(22% 0.03 260);
+    --color-primary-foreground: oklch(100% 0 0);
+    --color-secondary: oklch(96% 0.01 60);
+    --color-secondary-foreground: oklch(22% 0.03 260);
+    --color-muted: oklch(96% 0.01 60);
+    --color-muted-foreground: oklch(50% 0.02 260);
+    --color-accent: oklch(94% 0.02 60);
+    --color-accent-foreground: oklch(22% 0.03 260);
+    --color-destructive: oklch(50% 0.6 15);
+    --color-destructive-foreground: oklch(100% 0 0);
+    --color-success: oklch(45% 0.4 140);
+    --color-success-foreground: oklch(100% 0 0);
+    --color-warning: oklch(60% 0.5 50);
+    --color-warning-foreground: oklch(22% 0.03 260);
+    --color-info: oklch(50% 0.4 220);
+    --color-info-foreground: oklch(100% 0 0);
+    --color-border: oklch(90% 0.01 60);
+    --color-input: oklch(90% 0.01 60);
+    --color-ring: oklch(22% 0.03 260);
+    
+    --radius: 0.1875rem; /* Notion 的极小圆角 */
+  }
+
+  /* 📝 Notion 主题 - 暗色模式 */
+  [data-theme="notion"].dark {
+    --color-background: oklch(10% 0.01 260);
+    --color-foreground: oklch(90% 0.01 60);
+    --color-card: oklch(14% 0.01 260);
+    --color-card-foreground: oklch(90% 0.01 60);
+    --color-popover: oklch(10% 0.01 260);
+    --color-popover-foreground: oklch(90% 0.01 60);
+    --color-primary: oklch(90% 0.01 60);
+    --color-primary-foreground: oklch(10% 0.01 260);
+    --color-secondary: oklch(20% 0.01 260);
+    --color-secondary-foreground: oklch(90% 0.01 60);
+    --color-muted: oklch(20% 0.01 260);
+    --color-muted-foreground: oklch(60% 0.01 60);
+    --color-accent: oklch(25% 0.01 260);
+    --color-accent-foreground: oklch(90% 0.01 60);
+    --color-destructive: oklch(40% 0.5 15);
+    --color-destructive-foreground: oklch(90% 0.01 60);
+    --color-success: oklch(35% 0.3 140);
+    --color-success-foreground: oklch(90% 0.01 60);
+    --color-warning: oklch(50% 0.4 50);
+    --color-warning-foreground: oklch(10% 0.01 260);
+    --color-info: oklch(40% 0.3 220);
+    --color-info-foreground: oklch(90% 0.01 60);
+    --color-border: oklch(25% 0.01 260);
+    --color-input: oklch(25% 0.01 260);
+    --color-ring: oklch(60% 0.01 60);
+  }
+
+  /* 🎨 自定义主题标记 - 用于 JavaScript 识别 */
+  [data-theme^="custom-"],
+  [data-theme="imported"],
+  [data-theme="external"] {
+    /* 这些主题将通过 JavaScript 动态设置 CSS 变量 */
+  }
+
+
+  /* 🌍 全局样式 */
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition: 
+      background-color 300ms ease-in-out,
+      color 300ms ease-in-out,
+      border-color 300ms ease-in-out;
+  }
+
+  /* Notion 主题特殊字体 */
+  [data-theme="notion"] body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif;
+    line-height: 1.65;
+    letter-spacing: -0.01em;
+  }
+
+  * {
+    border-color: var(--color-border);
+  }
+}

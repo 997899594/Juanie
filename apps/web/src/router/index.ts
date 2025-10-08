@@ -1,39 +1,32 @@
-import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHistory } from 'vue-router'
+import Home from '../views/Home.vue'
+import ThemeDemo from '../views/ThemeDemo.vue'
 
-// 路由配置
-const routes: RouteRecordRaw[] = []
-
-// 创建路由实例
 const router = createRouter({
   history: createWebHistory(),
-  routes,
-  scrollBehavior(_to, _from, savedPosition) {
-    if (savedPosition) {
-      return savedPosition
-    } else {
-      return { top: 0 }
-    }
-  },
+  routes: [
+    {
+      path: '/',
+      name: 'Home',
+      component: Home,
+    },
+    {
+      path: '/theme-demo',
+      name: 'ThemeDemo',
+      component: ThemeDemo,
+      meta: {
+        title: 'Juanie 主题系统演示',
+      },
+    },
+  ],
 })
 
-// 路由守卫
-router.beforeEach((to, _from, next) => {
-  // 设置页面标题
+// 路由守卫：设置页面标题
+router.beforeEach((to, from, next) => {
   if (to.meta?.title) {
-    document.title = `${to.meta.title} - DevOps 平台`
+    document.title = to.meta.title as string
   }
-
-  // 检查认证状态
-  const token = localStorage.getItem('auth-token')
-  const requiresAuth = to.meta?.requiresAuth !== false
-
-  if (requiresAuth && !token) {
-    // 暂时跳过认证检查，直接允许访问
-    next()
-  } else {
-    next()
-  }
+  next()
 })
 
 export default router

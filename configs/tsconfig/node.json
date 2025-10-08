@@ -4,11 +4,9 @@
   "compilerOptions": {
     "lib": ["ES2022"],
     "types": ["node"],
-    "moduleResolution": "node",
     "allowImportingTsExtensions": false,
+    "noEmit": false,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "strictPropertyInitialization": false,
-    "noEmit": false
+    "emitDecoratorMetadata": true
   }
 }

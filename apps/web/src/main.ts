@@ -1,16 +1,14 @@
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
 
-// 主题配置已统一到 App.vue 中
-
-// UnoCSS
-import 'virtual:uno.css'
-
 // 应用组件
 import App from './App.vue'
 
 // 路由配置
 import router from './router'
+
+// 样式
+import './app.css'
 
 // 创建应用实例
 const app = createApp(App)

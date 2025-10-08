@@ -128,12 +128,21 @@ export class AuthService {
 
       // 如果用户不存在，创建新用户
       if (!user) {
-        const newUser = await this.databaseService.createUser({
+        // 构建用户数据，只包含非 undefined 的值
+        const userData: { email: string; password?: string; name?: string; avatar?: string } = {
           email,
           password: 'placeholder-password', // 注册时密码为空
-          name,
-          avatar,
-        })
+        }
+
+        if (name !== undefined) {
+          userData.name = name
+        }
+
+        if (avatar !== undefined) {
+          userData.avatar = avatar
+        }
+
+        const newUser = await this.databaseService.createUser(userData)
         user = newUser || null
       }
 

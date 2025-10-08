@@ -3,27 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./shared": {
-      "types": "./dist/shared.d.ts"
+      "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "nitro dev",
-    "dev:bun": "bun --bun nitro dev",
-    "build": "nitro build",
-    "build:bun": "bun --bun nitro build",
+    "build": "tsc --noEmit && nitro build",
     "start": "nitro preview",
-    "start:bun": "bun --bun nitro preview",
-    "type-check": "bunx tsc -b --noEmit",
-    "types:build": "tsc -p tsconfig.types.json",
-    "docs:generate": "typedoc",
-    "docs:serve": "npx http-server docs -p 3002",
+    "type-check": "tsc --noEmit --watch --preserveWatchOutput",
+    "clean": "rm -rf dist .nitro .tsbuildinfo",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "drizzle-kit migrate",
     "drizzle:studio": "drizzle-kit studio",
@@ -60,16 +56,8 @@
     "typescript": "^5.9.3",
     "vitest": "catalog:"
   },
-  "peerDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "@trpc/server": "^11.0.0",
-    "drizzle-orm": "^0.44.0",
-    "zod": "^4.0.0"
-  },
   "engines": {
     "node": ">=22.0.0",
     "bun": ">=1.0.0"
-  },
-  "packageManager": "bun@1.2.23"
+  }
 }

@@ -1,6 +1,6 @@
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineNitroConfig } from 'nitropack/config'
-import { dirname, resolve } from 'path'
-import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -15,6 +15,8 @@ export default defineNitroConfig({
   // 开发服务器配置
   devServer: {
     watch: ['src/**/*', 'routes/**/*'],
+    port: 3000,
+    host: true,
   },
 
   // 路由规则 - 缓存和CORS配置
@@ -120,9 +122,7 @@ export default defineNitroConfig({
   // 构建配置
   rollupConfig: {
     external: [
-      // 排除一些可能导致构建问题的包
-      'fsevents',
-      'lightningcss',
+      '@juanie/shared',
       // 优雅方案：让 OTel 相关包走 Node 原生加载，避免打包器重写顶层 this
       '@opentelemetry/api',
       '@opentelemetry/sdk-node',
@@ -130,7 +130,7 @@ export default defineNitroConfig({
       '@opentelemetry/exporter-trace-otlp-http',
     ],
     output: {
-      sourcemap: true,
+      sourcemap: process.env.NODE_ENV === 'development',
       inlineDynamicImports: false,
     },
   },

@@ -1,29 +1,12 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "../../configs/tsconfig/dom.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@juanie/shared": ["../../packages/shared/src"],
-      "@juanie/ui": ["../../packages/ui/src"],
-      "@juanie/api": ["../../apps/api/src"]
-    },
-    "types": ["vite/client", "naive-ui/volar", "node"],
-    "skipLibCheck": true,
-    "composite": false,
-    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
-    "jsx": "preserve",
-    "jsxImportSource": "vue",
-    "allowJs": true,
-    "resolveJsonModule": true
+      "@/*": ["./src/*"]
+    }
   },
-  "include": [
-    "src/**/*",
-    "env.d.ts",
-    "auto-imports.d.ts",
-    "components.d.ts",
-    "*.config.*",
-    "**/*.vue"
-  ],
-  "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]
+  "include": ["src/**/*", "env.d.ts"],
+  "exclude": ["dist", "node_modules"]
 }

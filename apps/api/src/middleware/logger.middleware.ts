@@ -109,6 +109,9 @@ export class Logger {
   /**
    * 记录 API 请求日志
    */
+  /**
+   * 记录API请求日志
+   */
   logApiRequest(context: {
     method: string
     path: string
@@ -122,11 +125,18 @@ export class Logger {
     const { method, path, duration, statusCode, traceId } = context
     const status = statusCode ? (statusCode >= 400 ? '❌' : '✅') : '⏳'
 
-    this.info(`${status} ${method} ${path} - ${duration}ms`, {
+    // 构建日志上下文，只包含非 undefined 的值
+    const logContext: LogContext = {
       ...context,
       type: 'api_request',
-      traceId,
-    })
+    }
+
+    // 只有当 traceId 存在时才添加
+    if (traceId !== undefined) {
+      logContext.traceId = traceId
+    }
+
+    this.info(`${status} ${method} ${path} - ${duration}ms`, logContext)
   }
 
   /**
@@ -136,13 +146,22 @@ export class Logger {
     const status = success ? '✅' : '❌'
     const message = `${status} DB ${operation}${table ? ` on ${table}` : ''}${duration ? ` - ${duration}ms` : ''}`
 
-    this.debug(message, {
+    // 构建日志上下文，只包含非 undefined 的值
+    const logContext: LogContext = {
       type: 'database_operation',
       operation,
-      table,
-      duration,
       success,
-    })
+    }
+
+    if (table !== undefined) {
+      logContext.table = table
+    }
+
+    if (duration !== undefined) {
+      logContext.duration = duration
+    }
+
+    this.debug(message, logContext)
   }
 
   /**
@@ -152,13 +171,19 @@ export class Logger {
     const status = success ? '✅' : '❌'
     const message = `${status} Auth ${action}${userId ? ` for user ${userId}` : ''}`
 
-    this.info(message, {
+    // 构建日志上下文，只包含非 undefined 的值
+    const logContext: LogContext = {
       type: 'authentication',
       action,
-      userId,
       success,
       ...details,
-    })
+    }
+
+    if (userId !== undefined) {
+      logContext.userId = userId
+    }
+
+    this.info(message, logContext)
   }
 
   /**
@@ -206,7 +231,9 @@ export const logger = Logger.getInstance()
  * tRPC 日志中间件
  */
 export function createLoggingMiddleware() {
-  return async function loggingMiddleware(opts: any) {
+  const logger = Logger.getInstance()
+
+  return async (opts: any) => {
     const start = Date.now()
     const { path, type, next } = opts
 
@@ -218,31 +245,61 @@ export function createLoggingMiddleware() {
       const result = await next()
       const duration = Date.now() - start
 
-      logger.logApiRequest({
+      // 构建请求上下文，只包含非 undefined 的值
+      const requestContext: {
+        method: string
+        path: string
+        duration: number
+        statusCode?: number
+        traceId?: string
+      } = {
         method: type,
         path,
         duration,
         statusCode: 200,
-        traceId,
-      })
+      }
+
+      if (traceId !== undefined) {
+        requestContext.traceId = traceId
+      }
+
+      logger.logApiRequest(requestContext)
 
       return result
     } catch (error) {
       const duration = Date.now() - start
 
-      logger.logApiRequest({
+      // 构建请求上下文，只包含非 undefined 的值
+      const requestContext: {
+        method: string
+        path: string
+        duration: number
+        statusCode?: number
+        traceId?: string
+      } = {
         method: type,
         path,
         duration,
         statusCode: 500,
-        traceId,
-      })
+      }
 
-      logger.error(`tRPC ${type} ${path} failed`, {
+      if (traceId !== undefined) {
+        requestContext.traceId = traceId
+      }
+
+      logger.logApiRequest(requestContext)
+
+      // 构建错误日志上下文
+      const errorContext: LogContext = {
         error: error instanceof Error ? error.message : String(error),
         duration,
-        traceId,
-      })
+      }
+
+      if (traceId !== undefined) {
+        errorContext.traceId = traceId
+      }
+
+      logger.error(`tRPC ${type} ${path} failed`, errorContext)
 
       throw error
     }

@@ -1,6 +1,28 @@
 {
   "name": "juanie",
   "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "preview": "turbo preview --parallel",
+
+    "packages:build": "turbo build --filter='./packages/*'",
+    "packages:dev": "turbo dev --filter='./packages/*'",
+
+    "web:dev": "turbo dev --filter='@juanie/web'",
+    "api:dev": "turbo dev --filter='@juanie/api'",
+
+    "type-check": "turbo type-check",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "clean": "turbo clean && rm -rf node_modules/.cache",
+    "fresh": "bun run clean && bun i && bun run dev"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",
     "@changesets/cli": "^2.29.7",
@@ -10,18 +32,14 @@
     "turbo": "^2.5.8",
     "typescript": "^5.9.3",
     "@types/node": "^22.0.0",
-    "@vitejs/plugin-vue": "^5.2.3",
+    "@vitejs/plugin-vue": "^5.2.4",
     "vitest": "^3.2.4",
     "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.2.4",
     "rolldown": "1.0.0-beta.41",
-    "vite": "^7.1.7",
+    "vite": "^7.1.9",
     "vue-tsc": "^3.1.0",
     "vite-plugin-dts": "^4.5.4",
-    "unocss": "^66.5.2",
-    "@unocss/preset-uno": "^66.5.2",
-    "@unocss/preset-icons": "^66.5.2",
-    "@unocss/preset-attributify": "^66.5.2",
     "drizzle-kit": "^0.31.5"
   },
   "engines": {
@@ -36,40 +54,5 @@
       "biome format --write"
     ]
   },
-  "packageManager": "bun@1.2.23",
-  "private": true,
-  "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "type-check": "turbo type-check",
-    "lint": "biome check .",
-    "lint:fix": "biome check . --write",
-    "lint:unsafe-fix": "biome check . --write --unsafe",
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "turbo build && changeset publish"
-  },
-  "type": "module",
-  "workspaces": {
-    "packages": [
-      "apps/*",
-      "packages/*"
-    ],
-    "catalog": {
-      "@unocss/preset-attributify": "^66.5.2",
-      "@unocss/preset-icons": "^66.5.2",
-      "@unocss/preset-uno": "^66.5.2",
-      "unocss": "^66.5.2",
-      "naive-ui": "^2.42.0",
-      "vue": "^3.5.22",
-      "vue-router": "^4.5.0",
-      "pinia": "^2.3.0",
-      "zod": "^3.24.1",
-      "@types/node": "^22.0.0",
-      "vitest": "^3.2.4"
-    }
-  }
+  "packageManager": "bun@1.2.23"
 }
