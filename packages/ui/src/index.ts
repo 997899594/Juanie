@@ -1,16 +1,21 @@
-// 导入样式文件
-import './styles/globals.css'
+import { ref, watchEffect } from "vue";
 
-// 注册所有预设主题
-import { registerAllPresets } from './theme/presets'
+export function useTheme() {
+  const isDark = ref(false);
+  watchEffect(() => {
+    const el = document.documentElement;
+    if (isDark.value) el.classList.add("dark");
+    else el.classList.remove("dark");
+  });
+  return {
+    isDark,
+    setDark(v: boolean) {
+      isDark.value = !!v;
+    },
+    toggle() {
+      isDark.value = !isDark.value;
+    },
+  };
+}
 
-registerAllPresets()
-
-// 导出工具函数
-export { cn } from './lib/utils'
-
-// 🎯 导出主题系统
-export * from './theme'
-export type { UseThemeReturn } from './theme/composables/useTheme'
-// 🎯 确保 useTheme 被正确导出
-export { useTheme } from './theme/composables/useTheme'
+export const version = "0.0.1";

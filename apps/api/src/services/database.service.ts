@@ -1,7 +1,7 @@
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import type { DrizzleService } from '../drizzle/drizzle.service'
-import { users } from '../drizzle/schema'
+import { oauthAccounts, users } from '../drizzle/schema'
 
 /**
  * 数据库服务
@@ -16,8 +16,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     id: any,
     input: { name?: string | undefined; email?: string | undefined; password?: string | undefined },
   ) {
-    const user = await this.db.update(users).set(input).where(eq(users.id, id))
-    return user[0]
+    const result = await this.db.update(users).set(input).where(eq(users.id, id)).returning()
+    return result[0] ?? null
   }
 
   async onModuleInit() {
@@ -89,14 +89,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         .insert(users)
         .values({
           email: userData.email,
-          passwordHash: userData.password || 'placeholder-password', // 注册时密码为空
+          passwordHash: userData.password || 'placeholder-password',
           name: userData.name || 'Unknown User',
           createdAt: new Date(),
           updatedAt: new Date(),
         })
         .returning()
 
-      return result[0]
+      const newUser = result[0]
+      if (!newUser) throw new Error('Failed to create user')
+      return newUser
     } catch (error) {
       console.error('Error creating user:', error)
       throw new Error('Failed to create user')
@@ -170,5 +172,43 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
    */
   async transaction<T>(callback: (tx: any) => Promise<T>): Promise<T> {
     return await this.db.transaction(callback)
+  }
+
+  async getOAuthAccountByProviderUserId(provider: string, providerUserId: string) {
+    const rows = await this.db
+      .select()
+      .from(oauthAccounts)
+      .where(
+        and(eq(oauthAccounts.provider, provider), eq(oauthAccounts.providerUserId, providerUserId)),
+      )
+      .limit(1)
+    return rows[0] || null
+  }
+
+  async upsertOAuthAccountAndUser(
+    provider: 'wechat' | 'github' | 'gitlab',
+    providerUserId: string,
+    profile: Record<string, unknown>,
+  ) {
+    const existing = await this.getOAuthAccountByProviderUserId(provider, providerUserId)
+    if (existing) {
+      const user = await this.getUserById(existing.userId)
+      return user!
+    }
+
+    const email = `${provider}:${providerUserId}@oauth.local`
+    const name = String((profile as any)?.name || (profile as any)?.login || providerUserId)
+    const newUser = await this.createUser({ email, name })
+
+    await this.db.insert(oauthAccounts).values({
+      userId: newUser.id,
+      provider,
+      providerUserId,
+      profile,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    return newUser
   }
 }

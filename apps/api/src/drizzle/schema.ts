@@ -21,14 +21,23 @@ export const pipelineStatusEnum = pgEnum('pipeline_status', [
 
 // 用户表
 export const users = pgTable('users', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => createId()),
+  id: text('id').primaryKey().$defaultFn(() => createId()),
   email: text('email').unique().notNull(),
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   role: roleEnum('role').default('LEARNER').notNull(),
   learningProgress: json('learning_progress').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+// 新增：OAuth 账号映射表
+export const oauthAccounts = pgTable('oauth_accounts', {
+  id: text('id').primaryKey().$defaultFn(() => createId()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(), // wechat | github | gitlab
+  providerUserId: text('provider_user_id').notNull().unique(),
+  profile: json('profile').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })

@@ -475,4 +475,41 @@ export const authRouter = router({
         throw ErrorHandler.toTRPCError(createError.internal('登出失败'))
       }
     }),
+  sessionMe: publicProcedure
+    .meta({
+      openapi: {
+        method: 'GET',
+        path: '/auth/session/me',
+        tags: ['Authentication'],
+        summary: '当前会话用户',
+        description: '基于 Cookie 会话返回当前登录用户信息',
+      },
+    })
+    .output(
+      z.object({
+        loggedIn: z.boolean(),
+        user: z
+          .object({ id: z.string(), email: z.string(), name: z.string() })
+          .nullable(),
+      }),
+    )
+    .query(async ({ ctx }) => {
+      try {
+        const cookie = ctx.req?.headers?.cookie ?? ''
+        const match = cookie.match(/(?:^|; )session=([^;]+)/)
+        const sessionId = match ? decodeURIComponent(match[1]) : null
+        if (!sessionId) return { loggedIn: false, user: null }
+
+        const { redisClient } = await import('../redis/client')
+        const raw = await redisClient.get(`sess:${sessionId}`)
+        if (!raw) return { loggedIn: false, user: null }
+        const payload = JSON.parse(raw)
+        const user = await ctx.databaseService.getUserById(payload.userId)
+        if (!user) return { loggedIn: false, user: null }
+        return { loggedIn: true, user: { id: user.id, email: user.email, name: user.name } }
+      } catch (error) {
+        logger.error('sessionMe failed', { error: (error as Error).message })
+        throw ErrorHandler.toTRPCError(error)
+      }
+    }),
 })

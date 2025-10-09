@@ -1,13 +1,10 @@
 {
-  "extends": "../../configs/tsconfig/base.json",
+  "extends": "../../configs/tsconfig/dom-lib.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "declaration": true,
-    "declarationMap": true,
     "composite": true,
-    "incremental": true,
-    "tsBuildInfoFile": ".tsbuildinfo"
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src"
   },
-  "include": ["src/**/*"],
-  "exclude": ["dist", "node_modules", "**/*.test.*", "playground"]
+  "include": ["src"]
 }

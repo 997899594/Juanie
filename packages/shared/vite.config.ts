@@ -1,7 +1,15 @@
-import { createLibConfig } from '../../configs/vite/lib.config'
+import { defineConfig } from "vite";
 
-export default createLibConfig({
-  name: 'JuanieShared',
-  external: [], // 工具库通常不需要外部依赖
-  input: 'src/index.ts',
-})
+export default defineConfig({
+  build: {
+    lib: {
+      name: "JuanieShared",
+      entry: "src/index.ts",
+      formats: ["es", "cjs"],
+      fileName: (format) => `index.${format}.js`,
+    },
+    rollupOptions: {
+      external: [],
+    },
+  },
+});

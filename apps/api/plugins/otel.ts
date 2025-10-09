@@ -9,7 +9,10 @@ const plugin: NitroAppPlugin = async (nitroApp) => {
   try {
     // 动态加载，避免未安装时报错
     const { NodeSDK } = await import('@opentelemetry/sdk-node')
-    const sdk = new NodeSDK()
+    const { getNodeAutoInstrumentations } = await import('@opentelemetry/auto-instrumentations-node')
+    const sdk = new NodeSDK({
+      instrumentations: [getNodeAutoInstrumentations()],
+    })
     await sdk.start()
     logger.debug('OpenTelemetry started.')
 

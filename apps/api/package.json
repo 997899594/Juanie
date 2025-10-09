@@ -23,38 +23,36 @@
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "drizzle-kit migrate",
     "drizzle:studio": "drizzle-kit studio",
-    "drizzle:push": "drizzle-kit push"
+    "drizzle:push": "drizzle-kit push",
+    "docs": "typedoc --out docs --plugin typedoc-plugin-markdown"
   },
   "dependencies": {
     "@juanie/shared": "workspace:*",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
-    "@opentelemetry/auto-instrumentations-node": "^0.64.6",
-    "@opentelemetry/sdk-node": "^0.205.0",
+    "@node-rs/argon2": "2.0.2",
+    "@opentelemetry/auto-instrumentations-node": "0.65.0",
+    "@opentelemetry/sdk-node": "0.206.0",
     "@paralleldrive/cuid2": "^2.2.2",
-    "@scalar/api-reference": "^1.37.0",
+    "@scalar/api-reference": "^1.38.0",
     "@trpc/server": "^11.6.0",
     "drizzle-orm": "^0.44.6",
     "drizzle-zod": "^0.8.3",
-    "h3": "^1.15.4",
-    "ioredis": "^5.8.0",
+    "h3": "^1",
+    "ioredis": "^5.8.1",
     "jsonwebtoken": "^9.0.2",
     "postgres": "^3.4.7",
     "reflect-metadata": "^0.2.2",
-    "trpc-to-openapi": "^3.0.1",
-    "zod": "catalog:"
+    "trpc-to-openapi": "^3.1.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "catalog:",
     "drizzle-kit": "^0.31.5",
     "nitropack": "^2.12.6",
-    "tsx": "^4.20.6",
-    "typedoc": "^0.27.6",
-    "typedoc-plugin-markdown": "^4.2.10",
-    "typescript": "^5.9.3",
-    "vitest": "catalog:"
+    "typedoc": "^0.28.0",
+    "typedoc-plugin-markdown": "^4.9.0"
   },
   "engines": {
     "node": ">=22.0.0",
