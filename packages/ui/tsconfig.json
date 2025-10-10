@@ -6,8 +6,7 @@
     "declaration": true,
     "outDir": "dist",
     "declarationDir": "dist",
-    "rootDir": "src",
-    "types": ["vue"]
+    "rootDir": "src"
   },
   "include": ["src"]
 }

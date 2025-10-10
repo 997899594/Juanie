@@ -15,8 +15,10 @@ export default defineConfig(({ mode }) => ({
         : ["default"],
   },
   optimizeDeps: {
-    exclude: ["@juanie/ui", "@juanie/ui/styles", "@juanie/ui/demo"],
     include: [
+      "@juanie/ui",
+      "@juanie/ui/styles",
+      "@juanie/ui/demo",
       "vue",
       "vue-router",
       "pinia",

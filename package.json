@@ -18,7 +18,7 @@
     "lint": "turbo lint",
     "lint:fix": "turbo lint:fix",
     "clean": "turbo clean && rm -rf node_modules/.cache",
-    "fresh": "bun run clean && bun i && bun run dev"
+    "fresh": "rm -rf node_modules/.cache && bun run clean && bun i && bun run dev"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",

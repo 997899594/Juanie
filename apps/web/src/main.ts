@@ -1,14 +1,10 @@
+// 应用组件与路由
 import { createPinia } from "pinia";
 import { createApp } from "vue";
-
-// 应用组件
 import App from "./App.vue";
-
-// 路由配置
 import router from "./router";
 
-// 样式
-import "@juanie/ui";
+import "@juanie/ui/styles";
 
 // 创建应用实例
 const app = createApp(App);
