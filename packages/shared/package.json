@@ -2,14 +2,11 @@
   "name": "@juanie/shared",
   "version": "0.1.1",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "development": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "bun": "./src/index.ts",
+      "default": "./dist/index.js"
     }
   },
   "files": [
@@ -17,10 +14,8 @@
     "src"
   ],
   "scripts": {
-    "dev": "tsc --noEmit --watch --preserveWatchOutput",
-    "build": "tsc --noEmit && vite build && tsc --emitDeclarationOnly --outDir dist",
-    "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist .tsbuildinfo"
+    "dev": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build"
   },
   "engines": {
     "node": ">=18.0.0",

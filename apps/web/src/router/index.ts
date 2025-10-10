@@ -1,32 +1,32 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import Home from '../views/Home.vue'
-import ThemeDemo from '../views/ThemeDemo.vue'
+import { demo } from "@juanie/ui";
+import { createRouter, createWebHistory } from "vue-router";
+import Home from "../views/Home.vue";
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
-      path: '/',
-      name: 'Home',
+      path: "/",
+      name: "Home",
       component: Home,
     },
     {
-      path: '/theme-demo',
-      name: 'ThemeDemo',
-      component: ThemeDemo,
+      path: "/theme-demo",
+      name: "ThemeDemo",
+      component: demo,
       meta: {
-        title: 'Juanie 主题系统演示',
+        title: "Juanie 主题系统演示",
       },
     },
   ],
-})
+});
 
 // 路由守卫：设置页面标题
 router.beforeEach((to, from, next) => {
   if (to.meta?.title) {
-    document.title = to.meta.title as string
+    document.title = to.meta.title as string;
   }
-  next()
-})
+  next();
+});
 
-export default router
+export default router;

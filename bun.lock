@@ -83,6 +83,10 @@
         "@juanie/shared": "workspace:*",
         "@juanie/ui": "workspace:*",
       },
+      "devDependencies": {
+        "@tailwindcss/vite": "^4.1.14",
+        "@vitejs/plugin-vue": "^6.0.1",
+      },
     },
     "packages/shared": {
       "name": "@juanie/shared",

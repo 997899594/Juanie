@@ -1,6 +1,6 @@
-import { defineEventHandler, getQuery, getCookie } from "h3";
-import { upsertOAuthAccount } from "../../src/auth/user";
+import { defineEventHandler, getCookie, getQuery } from "h3";
 import { createSession } from "../../src/auth/session";
+import { upsertOAuthAccount } from "../../src/auth/user";
 
 export default defineEventHandler(async (event) => {
   const { code, state } = getQuery(event) as Record<string, string>;
@@ -19,15 +19,27 @@ export default defineEventHandler(async (event) => {
       redirect_uri: process.env.GITLAB_REDIRECT_URI as string,
     }),
   });
-  const token = await tokenRes.json();
+  const rawToken = await tokenRes.json();
+  const accessToken =
+    typeof (rawToken as any)?.access_token === "string"
+      ? (rawToken as any).access_token
+      : (() => {
+          throw new Error("Invalid token response");
+        })();
+
   const userRes = await fetch("https://gitlab.com/api/v4/user", {
-    headers: { Authorization: `Bearer ${token.access_token}` },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const profile = await userRes.json();
+  const rawProfile = await userRes.json();
+  const profileId = (rawProfile as any)?.id;
+  if (typeof profileId !== "string" && typeof profileId !== "number") {
+    throw new Error("Invalid profile response");
+  }
+  const profile = rawProfile as Record<string, unknown>;
 
   const { userId } = await upsertOAuthAccount(
     "gitlab",
-    String(profile.id),
+    String(profileId),
     profile
   );
   await createSession(event, userId);

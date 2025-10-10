@@ -1,10 +1,13 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "../../configs/tsconfig/dom-lib.json",
   "compilerOptions": {
     "composite": true,
     "declaration": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "declarationDir": "dist",
+    "rootDir": "src",
+    "types": ["vue"]
   },
-  "include": ["src"]
+  "include": ["src", "src/**/*.vue", "src/env.d.ts"]
 }

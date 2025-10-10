@@ -1,5 +1,5 @@
-import { defineEventHandler, setCookie, sendRedirect } from "h3";
 import { randomUUID } from "node:crypto";
+import { defineEventHandler, sendRedirect, setCookie } from "h3";
 
 export default defineEventHandler(async (event) => {
   const state = randomUUID();

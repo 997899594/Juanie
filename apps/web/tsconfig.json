@@ -1,12 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "../../configs/tsconfig/dom.json",
+  "extends": ["../../configs/tsconfig/dom-lib.json"],
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "customConditions": ["development", "bun"]
   },
-  "include": ["src/**/*", "env.d.ts"],
+  "include": ["src/**/*", "env.d.ts", "vite.config.ts", "tailwind.config.ts"],
   "exclude": ["dist", "node_modules"]
 }

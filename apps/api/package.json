@@ -3,12 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js",
+      "development": "./src/index.ts"
     }
   },
   "files": [
@@ -18,7 +16,7 @@
     "dev": "nitro dev",
     "build": "tsc --noEmit && nitro build",
     "start": "nitro preview",
-    "type-check": "tsc --noEmit --watch --preserveWatchOutput",
+    "type-check": "tsc --noEmit",
     "clean": "rm -rf dist .nitro .tsbuildinfo",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:migrate": "drizzle-kit migrate",

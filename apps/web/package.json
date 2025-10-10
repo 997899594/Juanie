@@ -7,8 +7,7 @@
     "dev": "vite dev",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit",
-    "clean": "rm -rf dist .tsbuildinfo"
+    "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@juanie/api": "workspace:*",

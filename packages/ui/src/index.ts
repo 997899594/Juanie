@@ -1,21 +1,93 @@
 import { ref, watchEffect } from "vue";
 
+// 单例状态（所有组件共享）
+const isDark = ref(false);
+const theme = ref<string>(document.documentElement.dataset.theme || "slate");
+const storageKey = "juanie-theme";
+const storageModeKey = "juanie-theme-mode";
+
+function setTheme(name: string) {
+  theme.value = name;
+  document.documentElement.dataset.theme = name;
+  localStorage.setItem(storageKey, name);
+}
+
+function setDark(v: boolean) {
+  isDark.value = !!v;
+  localStorage.setItem(storageModeKey, isDark.value ? "dark" : "light");
+}
+
+function toggle() {
+  setDark(!isDark.value);
+}
+
+function enableSystemMode() {
+  const mq = window.matchMedia("(prefers-color-scheme: dark)");
+  const apply = () => setDark(mq.matches);
+  apply();
+  mq.addEventListener("change", apply);
+}
+
+function loadPersisted() {
+  const savedTheme = localStorage.getItem(storageKey);
+  const savedMode = localStorage.getItem(storageModeKey);
+  if (savedTheme) setTheme(savedTheme);
+  if (savedMode === "dark") setDark(true);
+  if (savedMode === "light") setDark(false);
+}
+
+watchEffect(() => {
+  const el = document.documentElement;
+  if (isDark.value) el.classList.add("dark");
+  else el.classList.remove("dark");
+  el.dataset.theme = theme.value;
+});
+
+const api = {
+  isDark,
+  theme,
+  setTheme,
+  setDark,
+  toggle,
+  enableSystemMode,
+  loadPersisted,
+  // 运行时主题管理
+  registerTheme: (def: any) =>
+    import("./theme-registry").then((m) => m.registerTheme(def)),
+  exportTheme: (name: string) =>
+    import("./theme-registry").then((m) => m.exportTheme(name)),
+  listThemes: () => import("./theme-registry").then((m) => m.listThemes()),
+  removeTheme: (name: string) =>
+    import("./theme-registry").then((m) => m.removeTheme(name)),
+  importThemeJSON: (json: string) =>
+    import("./theme-registry").then((m) => m.importThemeJSON(json)),
+  exportThemeJSON: (name: string) =>
+    import("./theme-registry").then((m) => m.exportThemeJSON(name)),
+  copyThemeJSON: (name: string) =>
+    import("./theme-registry").then((m) => m.copyThemeJSON(name)),
+  // 颜色选择器：从主色生成主题并应用
+  applyPrimaryHex: async (hex: string) => {
+    const { hexToOklch, makeOklchPaletteFromPrimary } = await import(
+      "./color-utils"
+    );
+    const { registerTheme } = await import("./theme-registry");
+    const okl = hexToOklch(hex);
+    const palette = makeOklchPaletteFromPrimary(okl);
+    registerTheme({
+      name: "__custom__",
+      light: palette.light,
+      dark: palette.dark,
+    });
+    setTheme("__custom__");
+  },
+};
+
 export function useTheme() {
-  const isDark = ref(false);
-  watchEffect(() => {
-    const el = document.documentElement;
-    if (isDark.value) el.classList.add("dark");
-    else el.classList.remove("dark");
-  });
-  return {
-    isDark,
-    setDark(v: boolean) {
-      isDark.value = !!v;
-    },
-    toggle() {
-      isDark.value = !isDark.value;
-    },
-  };
+  // 返回同一个实例，避免多处出现不一致的 isDark/theme
+  return api;
 }
 
 export const version = "0.0.1";
+
+export * from "./demo";
+import "./styles.css";

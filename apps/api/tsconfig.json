@@ -1,14 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "../../configs/tsconfig/node.json",
+  "extends": ["../../configs/tsconfig/node.json"],
   "compilerOptions": {
-    "outDir": "./dist",
+    "composite": true,
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"],
-      "@juanie/shared": ["../../packages/shared/src"]
-    }
+    "paths": { "@/*": ["./src/*"] },
+    "customConditions": ["development", "bun"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["dist", "node_modules", ".nitro"]
+  "include": ["src", "plugins", "routes", "nitro.config.ts", "drizzle.config.ts"],
+  "exclude": ["dist", "node_modules"]
 }

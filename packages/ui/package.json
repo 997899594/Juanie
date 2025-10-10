@@ -3,18 +3,20 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "development": "./src/index.ts",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "bun": "./src/index.ts",
+      "default": "./dist/index.es.js"
     },
     "./styles": {
-      "development": "./src/styles.css",
-      "default": "./src/styles.css"
+      "development": "./src/styles",
+      "default": "./dist/styles"
+    },
+    "./demo": {
+      "development": "./src/demo.ts",
+      "bun": "./src/demo.ts",
+      "default": "./dist/demo.es.js"
     }
   },
   "files": [
@@ -22,9 +24,9 @@
     "src"
   ],
   "scripts": {
-    "dev": "tsc --noEmit --watch --preserveWatchOutput",
-    "build": "tsc --noEmit && vite build && tsc --emitDeclarationOnly --outDir dist",
-    "type-check": "tsc --noEmit",
+    "dev": "tsc --noEmit",
+    "build": "vue-tsc --noEmit && vite build",
+    "type-check": "vue-tsc --noEmit",
     "clean": "rm -rf dist .tsbuildinfo"
   },
   "peerDependencies": {
