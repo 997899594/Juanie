@@ -1,1 +1,1 @@
-export { default as demo } from "./DemoThemeShowcase.vue";
+export { default as demo } from "./ThemeDemo.vue";

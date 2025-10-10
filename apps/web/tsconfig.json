@@ -6,7 +6,12 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "customConditions": ["development", "bun"]
+    "customConditions": ["development", "bun"],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "incremental": false,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
   },
   "include": ["src/**/*", "env.d.ts", "vite.config.ts", "tailwind.config.ts"],
   "exclude": ["dist", "node_modules"]

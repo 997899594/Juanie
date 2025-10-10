@@ -21,7 +21,7 @@
     "verbatimModuleSyntax": true,
 
     "skipLibCheck": true,
-    "incremental": true,
+    "incremental": false,
 
     "declaration": true,
     "declarationMap": true,

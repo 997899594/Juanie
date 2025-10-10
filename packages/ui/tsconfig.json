@@ -2,11 +2,11 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "../../configs/tsconfig/dom-lib.json",
   "compilerOptions": {
-    "composite": true,
+    "composite": false,
     "declaration": true,
     "outDir": "dist",
     "declarationDir": "dist",
-    "rootDir": "src"
+    "incremental": false
   },
-  "include": ["src"]
+  "include": ["src", "env.d.ts", "vite.config.ts", "tailwind.config.ts"]
 }

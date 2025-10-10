@@ -1,3 +1,5 @@
+// 样式副作用导入
+import "./styles.css";
 import { ref, watchEffect } from "vue";
 
 // 单例状态（所有组件共享）
@@ -43,51 +45,57 @@ watchEffect(() => {
   el.dataset.theme = theme.value;
 });
 
-const api = {
-  isDark,
-  theme,
-  setTheme,
-  setDark,
-  toggle,
-  enableSystemMode,
-  loadPersisted,
-  // 运行时主题管理
-  registerTheme: (def: any) =>
-    import("./theme-registry").then((m) => m.registerTheme(def)),
-  exportTheme: (name: string) =>
-    import("./theme-registry").then((m) => m.exportTheme(name)),
-  listThemes: () => import("./theme-registry").then((m) => m.listThemes()),
-  removeTheme: (name: string) =>
-    import("./theme-registry").then((m) => m.removeTheme(name)),
-  importThemeJSON: (json: string) =>
-    import("./theme-registry").then((m) => m.importThemeJSON(json)),
-  exportThemeJSON: (name: string) =>
-    import("./theme-registry").then((m) => m.exportThemeJSON(name)),
-  copyThemeJSON: (name: string) =>
-    import("./theme-registry").then((m) => m.copyThemeJSON(name)),
-  // 颜色选择器：从主色生成主题并应用
-  applyPrimaryHex: async (hex: string) => {
-    const { hexToOklch, makeOklchPaletteFromPrimary } = await import(
-      "./color-utils"
-    );
-    const { registerTheme } = await import("./theme-registry");
-    const okl = hexToOklch(hex);
-    const palette = makeOklchPaletteFromPrimary(okl);
-    registerTheme({
-      name: "__custom__",
-      light: palette.light,
-      dark: palette.dark,
-    });
-    setTheme("__custom__");
-  },
-};
+// const api = {
+//   isDark,
+//   theme,
+//   setTheme,
+//   setDark,
+//   toggle,
+//   enableSystemMode,
+//   loadPersisted,
+//   // 运行时主题管理
+//   registerTheme: (def: any) =>
+//     import("./theme-registry").then((m) => m.registerTheme(def)),
+//   exportTheme: (name: string) =>
+//     import("./theme-registry").then((m) => m.exportTheme(name)),
+//   listThemes: () => import("./theme-registry").then((m) => m.listThemes()),
+//   removeTheme: (name: string) =>
+//     import("./theme-registry").then((m) => m.removeTheme(name)),
+//   importThemeJSON: (json: string) =>
+//     import("./theme-registry").then((m) => m.importThemeJSON(json)),
+//   exportThemeJSON: (name: string) =>
+//     import("./theme-registry").then((m) => m.exportThemeJSON(name)),
+//   copyThemeJSON: (name: string) =>
+//     import("./theme-registry").then((m) => m.copyThemeJSON(name)),
+//   // 颜色选择器：从主色生成主题并应用
+//   applyPrimaryHex: async (hex: string) => {
+//     const { hexToOklch, makeOklchPaletteFromPrimary } = await import(
+//       "./color-utils"
+//     );
+//     const { registerTheme } = await import("./theme-registry");
+//     const okl = hexToOklch(hex);
+//     const palette = makeOklchPaletteFromPrimary(okl);
+//     registerTheme({
+//       name: "__custom__",
+//       light: palette.light,
+//       dark: palette.dark,
+//     });
+//     setTheme("__custom__");
+//   },
+// };
 
-export function useTheme() {
-  // 返回同一个实例，避免多处出现不一致的 isDark/theme
-  return api;
-}
+export type { OklchColor, RgbColor } from "./color-utils";
+// 颜色工具
+export {
+  generateColorPalette,
+  getContrastRatio,
+  hexToOklch,
+  isAccessible,
+  oklchToString,
+} from "./color-utils";
+export type { ColorMode, ThemeName } from "./theme";
+// 主题系统
+export { BUILT_IN_THEMES, useTheme } from "./theme";
 
-export const version = "0.0.1";
-
-export * from "./demo";
-import "./styles.css";
+// 版本信息
+export const version = "2.1.0";

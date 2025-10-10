@@ -8,15 +8,10 @@
   ],
   "scripts": {
     "dev": "turbo run dev",
+    "dev:web": "turbo dev --filter='@juanie/web'",
+    "dev:ui": "turbo dev --filter='@juanie/ui'",
     "build": "turbo build",
-    "preview": "turbo preview --parallel",
-    "packages:build": "turbo build --filter='./packages/*'",
-    "packages:dev": "turbo dev --filter='./packages/*'",
-    "web:dev": "turbo dev --filter='@juanie/web'",
-    "api:dev": "turbo dev --filter='@juanie/api'",
     "type-check": "turbo type-check",
-    "lint": "turbo lint",
-    "lint:fix": "turbo lint:fix",
     "clean": "turbo clean && rm -rf node_modules/.cache",
     "fresh": "rm -rf node_modules/.cache && bun run clean && bun i && bun run dev"
   },

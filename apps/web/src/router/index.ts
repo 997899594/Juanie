@@ -1,4 +1,4 @@
-import { demo } from "@juanie/ui";
+import { demo } from "@juanie/ui/demo";
 import { createRouter, createWebHistory } from "vue-router";
 import Home from "../views/Home.vue";
 

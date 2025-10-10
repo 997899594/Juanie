@@ -15,27 +15,22 @@ export default defineConfig(({ mode }) => ({
         : ["default"],
   },
   optimizeDeps: {
-    include: [
-      "@juanie/ui",
-      "@juanie/ui/styles",
-      "@juanie/ui/demo",
-      "vue",
-      "vue-router",
-      "pinia",
-      "@vueuse/core",
-      "echarts",
-      "lodash-es",
-      "dayjs",
-    ],
+    include: ["@juanie/ui", "vue", "vue-router", "lucide-vue-next"],
+    // 移除不需要的依赖
+    exclude: ["@juanie/api"],
+  },
+  server: {
+    port: 5173,
+    host: true,
+    open: true, // 自动打开浏览器
   },
   build: {
+    target: "esnext", // 现代浏览器优化
     rollupOptions: {
       output: {
         manualChunks: {
-          "vue-vendor": ["vue", "vue-router", "pinia"],
-          "ui-vendor": ["@juanie/ui"],
-          "utils-vendor": ["@vueuse/core", "lodash-es", "dayjs"],
-          "charts-vendor": ["echarts"],
+          "vue-vendor": ["vue", "vue-router"],
+          "ui-vendor": ["@juanie/ui", "lucide-vue-next"],
         },
       },
     },
