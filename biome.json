@@ -26,7 +26,8 @@
       "!yarn.lock",
       "!pnpm-lock.yaml",
       "!**/.tsbuildinfo",
-      "!**/*.log"
+      "!**/*.log",
+      "!**/*.vue"
     ]
   },
   "formatter": {
@@ -55,17 +56,5 @@
         "noUnknownAtRules": "off"
       }
     }
-  },
-  "overrides": [
-    {
-      "includes": ["**/*.vue"],
-      "linter": {
-        "rules": {
-          "correctness": {
-            "noUnusedVariables": "off"
-          }
-        }
-      }
-    }
-  ]
+  }
 }

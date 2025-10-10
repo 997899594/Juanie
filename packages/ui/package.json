@@ -1,6 +1,6 @@
 {
   "name": "@juanie/ui",
-  "version": "0.0.1",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,7 +11,7 @@
     },
     "./styles": {
       "development": "./src/styles",
-      "default": "./dist/styles"
+      "default": "./dist/styles.css"
     },
     "./demo": {
       "development": "./src/demo.ts",
@@ -24,10 +24,17 @@
     "src"
   ],
   "scripts": {
-    "dev": "tsc --noEmit",
+    "dev": "vue-tsc --noEmit",
     "build": "vue-tsc --noEmit && vite build",
     "type-check": "vue-tsc --noEmit",
     "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "radix-vue": "^1.9.0",
+    "tailwind-merge": "^2.5.2",
+    "@vueuse/core": "^11.0.0"
   },
   "peerDependencies": {
     "vue": "^3.5.22"
