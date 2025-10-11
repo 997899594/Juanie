@@ -5,7 +5,7 @@
     "composite": true,
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] },
-    "customConditions": ["development", "bun"]
+    "customConditions": ["development"]
   },
   "include": ["src", "plugins", "routes", "nitro.config.ts", "drizzle.config.ts"],
   "exclude": ["dist", "node_modules"]

@@ -1,0 +1,780 @@
+@import "tailwindcss";
+
+/* ===== 默认主题 (shadcn-vue 标准) ===== */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.129 0.042 264.695);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.129 0.042 264.695);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.129 0.042 264.695);
+  --primary: oklch(0.208 0.042 265.755);
+  --primary-foreground: oklch(0.984 0.003 247.858);
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+  --radius: 0.625rem;
+  
+  /* 新增交互式元素变量 */
+  --surface-elevated: oklch(0.98 0.005 247.896);
+  --outline: oklch(0.9 0.01 255.508);
+  --success: oklch(0.64 0.15 142);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.75 0.15 85);
+  --warning-foreground: oklch(0.1 0 0);
+  --info: oklch(0.6 0.15 250);
+  --info-foreground: oklch(1 0 0);
+}
+
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.129 0.042 264.695);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.129 0.042 264.695);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.984 0.003 247.858);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.279 0.041 260.031);
+  --input: oklch(0.279 0.041 260.031);
+  --ring: oklch(0.446 0.043 257.281);
+  
+  --surface-elevated: oklch(0.18 0.035 260.031);
+  --outline: oklch(0.35 0.04 260.031);
+  --success: oklch(0.5 0.12 142);
+  --success-foreground: oklch(0.9 0.05 142);
+  --warning: oklch(0.65 0.12 85);
+  --warning-foreground: oklch(0.9 0.05 85);
+  --info: oklch(0.55 0.12 250);
+  --info-foreground: oklch(0.9 0.05 250);
+}
+
+/* ===== Bilibili 主题 - 官方色彩完美还原 ===== */
+[data-theme="bilibili"] {
+  /* B站官方色彩: #00A1D6, #FB7299, #23ADE5, #6dc781, #F4F4F4 */
+  --background: #fafafa;
+  --foreground: #222222;
+  --card: #ffffff;
+  --card-foreground: #222222;
+  --popover: #ffffff;
+  --popover-foreground: #222222;
+  
+  /* 主色: B站蓝 #00A1D6 */
+  --primary: #00a1d6;
+  --primary-foreground: #ffffff;
+  
+  /* 次要色: B站粉 #FB7299 */
+  --secondary: #fb7299;
+  --secondary-foreground: #ffffff;
+  
+  --muted: #f4f4f4;
+  --muted-foreground: #666666;
+  
+  /* 强调色: 浅蓝 #23ADE5 */
+  --accent: #23ade5;
+  --accent-foreground: #ffffff;
+  
+  --destructive: #ff6b6b;
+  --destructive-foreground: #ffffff;
+  --border: #e3e5e7;
+  --input: #f9f9f9;
+  --ring: #00a1d6;
+  
+  /* 功能色 */
+  --success: #6dc781;
+  --success-foreground: #ffffff;
+  --warning: #ff9500;
+  --warning-foreground: #ffffff;
+  --info: #23ade5;
+  --info-foreground: #ffffff;
+  
+  /* 交互式元素 */
+  --surface-elevated: #ffffff;
+  --outline: #e3e5e7;
+  
+  /* B站特色渐变 */
+  --gradient-bilibili: linear-gradient(135deg, #00a1d6 0%, #23ade5 50%, #fb7299 100%);
+  --gradient-bilibili-hover: linear-gradient(135deg, #0091c2 0%, #1a9dd1 50%, #f85d85 100%);
+  --gradient-pink: linear-gradient(135deg, #fb7299 0%, #ff8db4 100%);
+  --gradient-blue: linear-gradient(135deg, #00a1d6 0%, #23ade5 100%);
+  
+  --radius: 0.5rem;
+}
+
+[data-theme="bilibili"].dark {
+  --background: #0f0f23;
+  --foreground: #e7e9ea;
+  --card: #1a1a2e;
+  --card-foreground: #e7e9ea;
+  --popover: #1a1a2e;
+  --popover-foreground: #e7e9ea;
+  --primary: #23ade5;
+  --primary-foreground: #0f0f23;
+  --secondary: #f85d85;
+  --secondary-foreground: #0f0f23;
+  --muted: #16213e;
+  --muted-foreground: #8b949e;
+  --accent: #00a1d6;
+  --accent-foreground: #e7e9ea;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #e7e9ea;
+  --border: #30363d;
+  --input: #21262d;
+  --ring: #23ade5;
+  --success: #6dc781;
+  --success-foreground: #0f0f23;
+  --warning: #ff9500;
+  --warning-foreground: #0f0f23;
+  --info: #23ade5;
+  --info-foreground: #0f0f23;
+  --surface-elevated: #1a1a2e;
+  --outline: #30363d;
+  --gradient-bilibili: linear-gradient(135deg, #23ade5 0%, #00a1d6 50%, #f85d85 100%);
+  --gradient-bilibili-hover: linear-gradient(135deg, #1a9dd1 0%, #0091c2 50%, #f04971 100%);
+}
+
+/* ===== Notion 主题 - 极简主义完美还原 ===== */
+[data-theme="notion"] {
+  /* Notion 官方色彩: #37352F (文字), #F7F6F3 (背景), #E9E9E7 (边框) */
+  --background: #ffffff;
+  --foreground: #37352f;
+  --card: #ffffff;
+  --card-foreground: #37352f;
+  --popover: #ffffff;
+  --popover-foreground: #37352f;
+  
+  /* 主色: Notion 蓝 */
+  --primary: #2383e2;
+  --primary-foreground: #ffffff;
+  
+  /* 次要色: 极浅灰 */
+  --secondary: #f1f1ef;
+  --secondary-foreground: #37352f;
+  
+  --muted: #f7f6f3;
+  --muted-foreground: #9b9a97;
+  --accent: #f1f1ef;
+  --accent-foreground: #37352f;
+  --destructive: #eb5757;
+  --destructive-foreground: #ffffff;
+  --border: #e9e9e7;
+  --input: #ffffff;
+  --ring: #2383e2;
+  
+  /* Notion 功能色 - 低饱和度 */
+  --success: #0f7b0f;
+  --success-foreground: #ffffff;
+  --warning: #f9b700;
+  --warning-foreground: #37352f;
+  --info: #2383e2;
+  --info-foreground: #ffffff;
+  
+  /* 交互式元素 */
+  --surface-elevated: #f7f6f3;
+  --outline: #e9e9e7;
+  
+  /* Notion 特色色彩 */
+  --notion-red: #eb5757;
+  --notion-orange: #f9b700;
+  --notion-yellow: #f7cc33;
+  --notion-green: #0f7b0f;
+  --notion-blue: #2383e2;
+  --notion-purple: #9065b0;
+  --notion-pink: #e255a1;
+  --notion-brown: #64473a;
+  --notion-gray: #9b9a97;
+  
+  --radius: 0.25rem;
+}
+
+[data-theme="notion"].dark {
+  --background: #191919;
+  --foreground: #e9e9e7;
+  --card: #2f2f2f;
+  --card-foreground: #e9e9e7;
+  --popover: #2f2f2f;
+  --popover-foreground: #e9e9e7;
+  --primary: #5ba2f0;
+  --primary-foreground: #191919;
+  --secondary: #373737;
+  --secondary-foreground: #e9e9e7;
+  --muted: #2f2f2f;
+  --muted-foreground: #9b9998;
+  --accent: #373737;
+  --accent-foreground: #e9e9e7;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #e9e9e7;
+  --border: #373737;
+  --input: #2f2f2f;
+  --ring: #5ba2f0;
+  --success: #4ade80;
+  --success-foreground: #191919;
+  --warning: #fbbf24;
+  --warning-foreground: #191919;
+  --info: #5ba2f0;
+  --info-foreground: #191919;
+  --surface-elevated: #373737;
+  --outline: #373737;
+  
+  /* Notion 深色模式特色色彩 */
+  --notion-red: #ff6b6b;
+  --notion-orange: #fbbf24;
+  --notion-yellow: #fde047;
+  --notion-green: #4ade80;
+  --notion-blue: #5ba2f0;
+  --notion-purple: #a78bfa;
+  --notion-pink: #f472b6;
+  --notion-brown: #a3a3a3;
+  --notion-gray: #9b9998;
+}
+
+/* ===== GitHub 主题 - Primer 设计系统完美还原 ===== */
+[data-theme="github"] {
+  /* GitHub 官方色彩: #24292F, #0969DA, #1F883D, #D1242F */
+  --background: #ffffff;
+  --foreground: #24292f;
+  --card: #ffffff;
+  --card-foreground: #24292f;
+  --popover: #ffffff;
+  --popover-foreground: #24292f;
+  
+  /* 主色: GitHub 蓝 #0969DA */
+  --primary: #0969da;
+  --primary-foreground: #ffffff;
+  
+  /* 次要色: GitHub 灰 */
+  --secondary: #f6f8fa;
+  --secondary-foreground: #24292f;
+  
+  --muted: #f6f8fa;
+  --muted-foreground: #656d76;
+  --accent: #ddf4ff;
+  --accent-foreground: #0969da;
+  --destructive: #d1242f;
+  --destructive-foreground: #ffffff;
+  --border: #d0d7de;
+  --input: #ffffff;
+  --ring: #0969da;
+  
+  /* GitHub 功能色 */
+  --success: #1f883d;
+  --success-foreground: #ffffff;
+  --warning: #9a6700;
+  --warning-foreground: #ffffff;
+  --info: #0969da;
+  --info-foreground: #ffffff;
+  
+  /* 交互式元素 */
+  --surface-elevated: #f6f8fa;
+  --outline: #d0d7de;
+  
+  /* GitHub 特色色彩 */
+  --github-blue: #0969da;
+  --github-green: #1f883d;
+  --github-red: #d1242f;
+  --github-orange: #fb8500;
+  --github-purple: #8250df;
+  --github-pink: #bf8700;
+  --github-gray: #656d76;
+  
+  --radius: 0.375rem;
+}
+
+[data-theme="github"].dark {
+  /* GitHub 深色模式: #0D1117, #21262D, #30363D */
+  --background: #0d1117;
+  --foreground: #f0f6fc;
+  --card: #161b22;
+  --card-foreground: #f0f6fc;
+  --popover: #161b22;
+  --popover-foreground: #f0f6fc;
+  --primary: #4493f8;
+  --primary-foreground: #0d1117;
+  --secondary: #21262d;
+  --secondary-foreground: #f0f6fc;
+  --muted: #21262d;
+  --muted-foreground: #8b949e;
+  --accent: #0d419d;
+  --accent-foreground: #f0f6fc;
+  --destructive: #f85149;
+  --destructive-foreground: #f0f6fc;
+  --border: #30363d;
+  --input: #21262d;
+  --ring: #4493f8;
+  --success: #3fb950;
+  --success-foreground: #0d1117;
+  --warning: #d29922;
+  --warning-foreground: #0d1117;
+  --info: #4493f8;
+  --info-foreground: #0d1117;
+  --surface-elevated: #21262d;
+  --outline: #30363d;
+  
+  /* GitHub 深色模式特色色彩 */
+  --github-blue: #4493f8;
+  --github-green: #3fb950;
+  --github-red: #f85149;
+  --github-orange: #fb8500;
+  --github-purple: #a5a5ff;
+  --github-pink: #d29922;
+  --github-gray: #8b949e;
+}
+
+/* ===== Tailwind v4 主题定义 ===== */
+@theme {
+  --radius: var(--radius);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  
+  /* 新增交互式元素 */
+  --color-surface-elevated: var(--surface-elevated);
+  --color-outline: var(--outline);
+}
+
+/* ===== 基础样式和交互效果 ===== */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "rlig" 1, "calt" 1;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: var(--muted);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: var(--muted-foreground);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-foreground);
+  }
+}
+
+/* ===== 通用交互式元素样式 ===== */
+@layer components {
+  /* 交互式元素基础样式 */
+  .interactive {
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    position: relative;
+  }
+  
+  .interactive::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--primary);
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+    pointer-events: none;
+  }
+  
+  .interactive:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  
+  .interactive:hover::before {
+    opacity: 0.03;
+  }
+  
+  .interactive:active {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+  
+  /* 间距工具类 */
+  .spacing-xs { padding: 0.5rem; }
+  .spacing-sm { padding: 0.75rem; }
+  .spacing-md { padding: 1rem; }
+  .spacing-lg { padding: 1.5rem; }
+  .spacing-xl { padding: 2rem; }
+  
+  /* 表面高度 */
+  .bg-surface-elevated {
+    background-color: var(--surface-elevated);
+  }
+  
+  .border-outline {
+    border-color: var(--outline);
+  }
+}
+
+/* ===== Bilibili 主题特色样式 ===== */
+[data-theme="bilibili"] {
+  /* B站渐变按钮 */
+  .btn-bilibili-gradient {
+    background: var(--gradient-bilibili);
+    color: white;
+    border: none;
+    transition: background 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .btn-bilibili-gradient::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.3s ease-in-out;
+  }
+  
+  .btn-bilibili-gradient:hover {
+    background: var(--gradient-bilibili-hover);
+    box-shadow: 0 4px 12px rgba(0, 161, 214, 0.2);
+  }
+  
+  .btn-bilibili-gradient:hover::before {
+    left: 100%;
+  }
+  
+  /* B站卡片 */
+  .bilibili-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    transition: box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .bilibili-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-bilibili);
+    transform: scaleX(0);
+    transition: transform 0.2s ease-in-out;
+  }
+  
+  .bilibili-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 161, 214, 0.15);
+  }
+  
+  .bilibili-card:hover::before {
+    transform: scaleX(1);
+  }
+  
+  /* B站标签 */
+  .bilibili-tag {
+    background: var(--gradient-blue);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: box-shadow 0.15s ease-in-out;
+    display: inline-block;
+  }
+  
+  .bilibili-tag:hover {
+    box-shadow: 0 2px 8px rgba(0, 161, 214, 0.2);
+  }
+  
+  .bilibili-tag.pink {
+    background: var(--gradient-pink);
+  }
+  
+  /* B站特色交互效果 */
+  .interactive:hover {
+    background: linear-gradient(135deg, rgba(0, 161, 214, 0.05) 0%, rgba(251, 114, 153, 0.05) 100%);
+    border-color: var(--primary);
+  }
+}
+
+[data-theme="bilibili"].dark {
+  .bilibili-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .bilibili-card:hover {
+    box-shadow: 0 8px 30px rgba(35, 173, 229, 0.3);
+  }
+}
+
+/* ===== Notion 主题特色样式 ===== */
+[data-theme="notion"] {
+  /* Notion 块元素 */
+  .notion-block {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin: 0.5rem 0;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    position: relative;
+  }
+  
+  .notion-block::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--primary);
+    transform: scaleY(0);
+    transition: transform 0.15s ease-in-out;
+  }
+  
+  .notion-block:hover {
+    background: var(--muted);
+    border-color: var(--primary);
+  }
+  
+  .notion-block:hover::before {
+    transform: scaleY(1);
+  }
+  
+  /* Notion 颜色标签 */
+  .notion-color-red { background: var(--notion-red); color: white; }
+  .notion-color-orange { background: var(--notion-orange); color: white; }
+  .notion-color-yellow { background: var(--notion-yellow); color: var(--foreground); }
+  .notion-color-green { background: var(--notion-green); color: white; }
+  .notion-color-blue { background: var(--notion-blue); color: white; }
+  .notion-color-purple { background: var(--notion-purple); color: white; }
+  .notion-color-pink { background: var(--notion-pink); color: white; }
+  .notion-color-brown { background: var(--notion-brown); color: white; }
+  .notion-color-gray { background: var(--notion-gray); color: white; }
+  
+  /* Notion 特色交互效果 */
+  .interactive:hover {
+    background: var(--muted);
+    border-left: 3px solid var(--primary);
+    padding-left: calc(1rem - 3px);
+  }
+}
+
+/* ===== GitHub 主题特色样式 ===== */
+[data-theme="github"] {
+  /* GitHub 按钮 */
+  .github-button {
+    background: var(--secondary);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    border-radius: var(--radius);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    position: relative;
+  }
+  
+  .github-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--primary);
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+  }
+  
+  .github-button:hover {
+    background: var(--muted);
+    border-color: var(--ring);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  
+  .github-button.primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+  }
+  
+  .github-button.primary:hover {
+    background: var(--github-blue);
+    box-shadow: 0 2px 8px rgba(9, 105, 218, 0.2);
+  }
+  
+  /* GitHub 标签 */
+  .github-label {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    border-radius: calc(var(--radius) * 0.5);
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+  }
+  
+  .github-label:hover {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  
+  /* GitHub 代码块 */
+  .github-code {
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    padding: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .github-code::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--primary);
+    transform: scaleX(0);
+    transition: transform 0.15s ease-in-out;
+  }
+  
+  .github-code:hover::before {
+    transform: scaleX(1);
+  }
+  
+  /* GitHub 特色交互效果 */
+  .interactive:hover {
+    background: var(--muted);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--ring);
+  }
+}
+
+[data-theme="github"].dark {
+  .github-button:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  .github-button.primary:hover {
+    box-shadow: 0 4px 12px rgba(68, 147, 248, 0.3);
+  }
+}
+
+/* ===== 动画效果 ===== */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--primary), 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(var(--primary), 0); }
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.05); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 应用动画 */
+.animate-shimmer::before {
+  animation: shimmer 2s infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ===== 响应式设计 ===== */
+@media (max-width: 768px) {
+  .interactive:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  
+  .interactive:active {
+    transform: scale(0.98);
+  }
+}
+
+/* ===== 可访问性增强 ===== */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .interactive:hover {
+    transform: none;
+  }
+}
+
+/* ===== 高对比度模式 ===== */
+@media (prefers-contrast: high) {
+  :root {
+    --border: #000000;
+    --ring: #000000;
+  }
+  
+  .dark {
+    --border: #ffffff;
+    --ring: #ffffff;
+  }
+}

@@ -4,9 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vue-tsc --noEmit && vite dev",
     "dev:host": "vite dev --host",
-    "dev:check": "vue-tsc --noEmit && vite dev",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit --pretty"
@@ -16,5 +15,8 @@
     "vue": "^3.5.22",
     "vue-router": "^4.4.5",
     "lucide-vue-next": "^0.460.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^4.0.0"
   }
 }

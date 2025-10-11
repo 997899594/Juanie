@@ -6,17 +6,11 @@
   "exports": {
     ".": {
       "development": "./src/index.ts",
-      "bun": "./src/index.ts",
       "default": "./dist/index.es.js"
     },
     "./styles": {
-      "development": "./src/styles",
-      "default": "./dist/styles.css"
-    },
-    "./demo": {
-      "development": "./src/demo.ts",
-      "bun": "./src/demo.ts",
-      "default": "./dist/demo.es.js"
+      "development": "./dist/ui.css",
+      "default": "./dist/ui.css"
     }
   },
   "files": [

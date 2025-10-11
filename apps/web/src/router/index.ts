@@ -1,5 +1,5 @@
-import { demo } from "@juanie/ui/demo";
 import { createRouter, createWebHistory } from "vue-router";
+import ComponentDemo from "../views/ComponentDemo.vue";
 import Home from "../views/Home.vue";
 
 const router = createRouter({
@@ -11,11 +11,11 @@ const router = createRouter({
       component: Home,
     },
     {
-      path: "/theme-demo",
-      name: "ThemeDemo",
-      component: demo,
+      path: "/demo",
+      name: "ComponentDemo",
+      component: ComponentDemo,
       meta: {
-        title: "Juanie 主题系统演示",
+        title: "Juanie UI 组件库演示",
       },
     },
   ],

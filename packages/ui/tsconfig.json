@@ -1,12 +1,28 @@
 {
-  "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "../../configs/tsconfig/dom-lib.json",
   "compilerOptions": {
-    "composite": false,
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "declaration": true,
-    "outDir": "dist",
-    "declarationDir": "dist",
-    "incremental": false
+    "declarationDir": "./dist",
+    "emitDeclarationOnly": true
   },
-  "include": ["src", "env.d.ts", "vite.config.ts", "tailwind.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"],
+  "references": [{ "path": "./tsconfig.node.json" }]
 }

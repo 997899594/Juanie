@@ -12,8 +12,8 @@
     "dev:ui": "turbo dev --filter='@juanie/ui'",
     "build": "turbo build",
     "type-check": "turbo type-check",
-    "clean": "turbo clean && rm -rf node_modules/.cache",
-    "fresh": "rm -rf node_modules/.cache && bun run clean && bun i && bun run dev"
+    "clean:processes": "pkill -f vite; pkill -f node; pkill -f bun; echo '进程已清理'",
+    "dev:clean": "bun run clean:processes && bun run dev:web"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",

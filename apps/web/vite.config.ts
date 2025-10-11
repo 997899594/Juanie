@@ -9,20 +9,15 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": resolve(__dirname, "src"),
     },
-    conditions:
-      mode === "development"
-        ? ["development", "bun", "module", "default"]
-        : ["default"],
+    conditions: mode === "development" ? ["development"] : ["default"],
   },
   optimizeDeps: {
-    include: ["@juanie/ui", "vue", "vue-router", "lucide-vue-next"],
-    // 移除不需要的依赖
-    exclude: ["@juanie/api"],
+    include: ["vue", "vue-router", "lucide-vue-next"],
+    exclude: ["@juanie/ui", "@juanie/api"],
   },
   server: {
-    port: 5173,
+    port: 1997,
     host: true,
-    open: true, // 自动打开浏览器
   },
   build: {
     target: "esnext", // 现代浏览器优化
