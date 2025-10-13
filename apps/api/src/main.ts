@@ -11,14 +11,21 @@
 
 // 导出 NestJS 应用模块供 tRPC 上下文使用
 export { AppModule } from './app.module'
+export type { Config } from './config/config.validation'
+// 导出配置
+export { configValidationSchema } from './config/config.validation'
+export type { AuthService } from './modules/auth/services/auth.service'
+export type { DatabaseService } from './modules/database/services/database.service'
+export type { GitService } from './modules/git/services/git.service'
+export type { HealthService } from './modules/health/services/health.service'
+export type { AppContainer } from './nest'
+// 导出应用容器
+export { getAppContainer, initNestAppContainer } from './nest'
 // 导出 tRPC 路由类型供前端使用
 export type { AppRouter } from './routers/index'
-export type { AuthService } from './services/auth.service'
-export type { DatabaseService } from './services/database.service'
-// 导出服务层接口（供外部使用）
-export type { HealthService } from './services/health.service'
 // 导出共享类型
 export * from './shared'
+export type { TrpcService } from './trpc/trpc.service'
 
 /**
  * 架构说明：

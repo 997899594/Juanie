@@ -22,14 +22,19 @@
     "drizzle:migrate": "drizzle-kit migrate",
     "drizzle:studio": "drizzle-kit studio",
     "drizzle:push": "drizzle-kit push",
-    "docs": "typedoc --out docs --plugin typedoc-plugin-markdown"
+    "docs": "typedoc --out docs --plugin typedoc-plugin-markdown",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix"
   },
   "dependencies": {
     "@juanie/shared": "workspace:*",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
-    "@node-rs/argon2": "2.0.2",
+    "@octokit/rest": "^21.0.2",
+    "@gitbeaker/rest": "^40.2.0",
     "@opentelemetry/auto-instrumentations-node": "0.65.0",
     "@opentelemetry/sdk-node": "0.206.0",
     "@paralleldrive/cuid2": "^2.2.2",
@@ -38,19 +43,27 @@
     "drizzle-orm": "^0.44.6",
     "drizzle-zod": "^0.8.3",
     "h3": "^1",
+    "helmet": "^8.0.0",
     "ioredis": "^5.8.1",
-    "jsonwebtoken": "^9.0.2",
     "postgres": "^3.4.7",
     "reflect-metadata": "^0.2.2",
     "trpc-to-openapi": "^3.1.0",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "arctic": "^2.0.0",
+    "@oslo/crypto": "^1.0.1",
+    "@oslo/password": "^1.0.1",
+    "@oslo/session": "^1.0.0",
+    "@oslo/encoding": "^1.0.0"
   },
   "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.10",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "@vitest/coverage-v8": "^2.1.8",
     "drizzle-kit": "^0.31.5",
     "nitropack": "^2.12.6",
     "typedoc": "^0.28.0",
-    "typedoc-plugin-markdown": "^4.9.0"
+    "typedoc-plugin-markdown": "^4.9.0",
+    "vitest": "^2.1.8"
   },
   "engines": {
     "node": ">=22.0.0",

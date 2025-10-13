@@ -1,29 +1,25 @@
-import 'reflect-metadata'
-import { getAppContainer, initNestAppContainer } from '../nest'
+import type { inferAsyncReturnType } from '@trpc/server'
+import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch'
+import { initNestAppContainer } from '../nest'
 
 /**
  * 创建 tRPC 上下文
- * @param opts 请求选项
- * @returns tRPC 上下文对象
+ * 初始化 NestJS 容器并提供服务访问
  */
-export async function createContext(opts: { req?: any; res?: any }) {
-  await initNestAppContainer()
-
-  const { healthService, trpcService, databaseService, authService } = getAppContainer()
-
-  const authHeader: string | undefined = opts.req?.headers?.authorization
+export async function createContext({ req, resHeaders }: FetchCreateContextFnOptions) {
+  // 初始化 NestJS 容器
+  const container = await initNestAppContainer()
 
   return {
-    healthService,
-    trpcService,
-    databaseService,
-    authService,
-
-    // 请求态
-    req: opts.req,
-    res: opts.res,
-    authHeader,
+    req,
+    resHeaders,
+    // 服务定位器模式 - 从容器中获取服务
+    authService: container.authService,
+    databaseService: container.databaseService,
+    healthService: container.healthService,
+    gitService: container.gitService,
+    trpcService: container.trpcService,
   }
 }
 
-export type Context = Awaited<ReturnType<typeof createContext>>
+export type Context = inferAsyncReturnType<typeof createContext>

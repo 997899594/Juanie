@@ -1,15 +1,16 @@
+import { authRouter } from '../modules/auth/routers/auth.router'
+import { gitRouter } from '../modules/git/routers/git.router'
+import { healthRouter } from '../modules/health/routers/health.router'
 import { router } from '../trpc/init'
-import { authRouter } from './auth'
-import { healthRouter } from './health'
 
 /**
- * 应用程序主路由
- * 聚合所有子路由模块
+ * 应用主路由
+ * 聚合所有模块的路由
  */
 export const appRouter = router({
-  health: healthRouter,
   auth: authRouter,
+  git: gitRouter,
+  health: healthRouter,
 })
 
-// 导出主路由类型
 export type AppRouter = typeof appRouter

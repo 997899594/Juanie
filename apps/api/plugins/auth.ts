@@ -1,40 +1,48 @@
-import {
-  createError,
-  type EventHandlerRequest,
-  getHeader,
-  getRequestURL,
-  type H3Event,
-  sendError,
-} from "h3";
-import type { NitroApp } from "nitropack";
-import { getAppContainer } from "@/nest";
-import { logger } from "../src/middleware/logger.middleware";
+import { createError, type EventHandlerRequest, getCookie, getRequestURL, type H3Event } from 'h3'
+import type { NitroApp } from 'nitropack'
+import { getAppContainer } from '@/nest'
 
 export default async function (nitroApp: NitroApp) {
-  nitroApp.hooks.hook(
-    "request",
-    async (event: H3Event<EventHandlerRequest>) => {
-      const { pathname } = getRequestURL(event);
-      if (
-        pathname.startsWith("/docs") ||
-        pathname.startsWith("/scalar-docs") ||
-        pathname.startsWith("/openapi") ||
-        pathname.startsWith("/health")
-      ) {
-        const { authService } = getAppContainer();
-        const authHeader = getHeader(event, "authorization");
-        const user = await authService.validateRequest(authHeader);
-        if (!user) {
-          return sendError(
-            event,
-            createError({ statusCode: 401, statusMessage: "Unauthorized" })
-          );
-        }
-        event.context.user = user;
-      }
+  nitroApp.hooks.hook('request', async (event: H3Event<EventHandlerRequest>) => {
+    const { pathname } = getRequestURL(event)
 
-      logger.logAuth("access_granted", event.context.user.id, true);
-      return;
+    // 跳过不需要认证的路径
+    if (
+      pathname.startsWith('/auth/') ||
+      pathname.startsWith('/health') ||
+      pathname.startsWith('/docs') ||
+      pathname.startsWith('/scalar-docs') ||
+      pathname.startsWith('/openapi')
+    ) {
+      return
     }
-  );
+
+    const { authService, databaseService } = getAppContainer()
+
+    // 从 Cookie 获取会话 ID
+    const sessionId = getCookie(event, 'session')
+
+    if (!sessionId) {
+      throw createError({ statusCode: 401, statusMessage: 'No session found' })
+    }
+
+    // 验证会话
+    const sessionData = await authService.validateSession(sessionId)
+
+    if (!sessionData) {
+      throw createError({ statusCode: 401, statusMessage: 'Invalid or expired session' })
+    }
+
+    // 获取用户信息
+    const user = await databaseService.getUserById(sessionData.userId)
+
+    if (!user) {
+      await authService.destroySession(sessionId)
+      throw createError({ statusCode: 401, statusMessage: 'User not found' })
+    }
+
+    // 将用户信息添加到上下文
+    event.context.user = user
+    event.context.session = sessionData
+  })
 }
