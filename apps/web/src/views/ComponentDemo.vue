@@ -35,7 +35,6 @@
                 :variant="currentTheme === theme.name ? 'default' : 'outline'"
                 size="sm"
                 class="theme-switch-button"
-                :class="{ 'theme-switching': isThemeSwitching }"
               >
                 {{ theme.displayName }}
               </Button>
@@ -464,22 +463,11 @@ const switchValues = ref({
 })
 
 // 主题切换状态
-const isThemeSwitching = ref(false)
 
 // 主题切换处理函数
 const handleThemeSwitch = async (themeName: string) => {
   if (currentTheme.value === themeName) return
-  
-  // 标记正在切换主题
-  isThemeSwitching.value = true
-  
-  // 切换主题
   setTheme(themeName)
-  
-  // 短暂延迟后恢复动画
-  setTimeout(() => {
-    isThemeSwitching.value = false
-  }, 100)
 }
 
 // 主题切换

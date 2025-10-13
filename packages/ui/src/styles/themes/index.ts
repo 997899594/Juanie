@@ -16,19 +16,19 @@ export const BUILTIN_THEMES: ThemeConfig[] = [
     mode: "dark",
     group: "bilibili",
   },
-  { name: "notion", displayName: "Notion", mode: "light", group: "notion" },
+  { name: "github", displayName: "Github", mode: "light", group: "github" },
   {
-    name: "notion-dark",
-    displayName: "Notion暗色",
+    name: "github-dark",
+    displayName: "Github暗色",
     mode: "dark",
-    group: "notion",
+    group: "github",
   },
 ];
 
 export const THEME_GROUPS = {
   default: { name: "default", displayName: "默认主题" },
   bilibili: { name: "bilibili", displayName: "B站主题" },
-  notion: { name: "notion", displayName: "Notion主题" },
+  notion: { name: "github", displayName: "Github主题" },
 } as const;
 
 export type ThemeGroup = keyof typeof THEME_GROUPS;
@@ -44,7 +44,6 @@ export function getCurrentTheme(): ThemeConfig | null {
     return BUILTIN_THEMES.find((t) => t.name === themeName) || null;
   }
 
-  // 修复类型比较错误
   const defaultThemeName = isDark ? "default-dark" : "default";
   return BUILTIN_THEMES.find((t) => t.name === defaultThemeName) || null;
 }
