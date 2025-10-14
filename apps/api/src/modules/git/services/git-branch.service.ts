@@ -1,186 +1,147 @@
-import { Injectable } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
-import type { DrizzleService } from "../../../drizzle/drizzle.service";
+import { Injectable } from '@nestjs/common'
+import { and, eq } from 'drizzle-orm'
+import type { DrizzleService } from '../../../drizzle/drizzle.service'
 import {
   type GitBranch,
   gitBranches,
   gitRepositories,
   type NewGitBranch,
-} from "../../../drizzle/schemas";
-import type { GitProviderFactory } from "../providers/git-provider.factory";
+} from '../../../drizzle/schemas'
+import { AppError } from '../../../lib/errors'
+import type { GitProviderFactory } from '../providers/git-provider.factory'
 
 @Injectable()
 export class GitBranchService {
   constructor(
-    private readonly db: DrizzleService,
-    private readonly gitProviderFactory: GitProviderFactory
+    private readonly drizzleService: DrizzleService,
+    private readonly gitProviderFactory: GitProviderFactory,
   ) {}
 
   async createBranch(
     repositoryId: string,
     branchName: string,
-    sourceBranch: string = "main",
-    userId?: string
+    sourceBranch: string = 'main',
+    userId?: string,
   ): Promise<GitBranch> {
-    const repo = await this.getRepository(repositoryId);
-    const provider = this.gitProviderFactory.create(
-      repo.provider,
-      repo.accessToken!
-    );
+    const repo = await this.getRepository(repositoryId)
+    const provider = this.gitProviderFactory.create(repo.provider, repo.accessToken!)
 
     try {
       // 在远程创建分支
-      const branchInfo = await provider.createBranch(
-        repo.repoId,
-        branchName,
-        sourceBranch
-      );
+      const branchInfo = await provider.createBranch(repo.repoId, branchName, sourceBranch)
 
       // 保存到本地数据库
-      const [newBranch] = await this.db.drizzle
+      const inserted = await this.drizzleService.db
         .insert(gitBranches)
         .values({
           repositoryId,
           name: branchName,
-          sha: branchInfo.sha,
-          status: "ACTIVE",
-          isProtected: branchInfo.protected,
-          isDefault: branchInfo.default,
-          lastCommit: branchInfo.lastCommit
-            ? {
-                sha: branchInfo.lastCommit.sha,
-                message: branchInfo.lastCommit.message,
-                author: branchInfo.lastCommit.author,
-                date: branchInfo.lastCommit.date.toISOString(),
-              }
-            : undefined,
-          createdBy: userId,
+          sha: branchInfo.commit, // GitBranchInfo.commit is sha
+          status: 'ACTIVE',
+          isProtected: branchInfo.protected ?? false,
+          isDefault: false,
         })
-        .returning();
+        .returning()
 
-      return newBranch;
+      const newBranch = inserted[0]
+      if (!newBranch) {
+        throw AppError.internal('Failed to create branch', { reason: 'Insert returned no rows' })
+      }
+
+      return newBranch
     } catch (error) {
-      throw new Error(`Failed to create branch: ${error.message}`);
+      throw AppError.internal(`Failed to create branch`, { originalError: error })
     }
   }
 
   async deleteBranch(repositoryId: string, branchName: string): Promise<void> {
-    const repo = await this.getRepository(repositoryId);
-    const provider = this.gitProviderFactory.create(
-      repo.provider,
-      repo.accessToken!
-    );
+    const repo = await this.getRepository(repositoryId)
+    const provider = this.gitProviderFactory.create(repo.provider, repo.accessToken!)
 
     try {
       // 从远程删除分支
-      await provider.deleteBranch(repo.repoId, branchName);
+      await provider.deleteBranch(repo.repoId, branchName)
 
       // 更新本地状态
-      await this.db.drizzle
+      await this.drizzleService.db
         .update(gitBranches)
         .set({
-          status: "DELETED",
+          status: 'DELETED',
           updatedAt: new Date(),
         })
-        .where(
-          and(
-            eq(gitBranches.repositoryId, repositoryId),
-            eq(gitBranches.name, branchName)
-          )
-        );
+        .where(and(eq(gitBranches.repositoryId, repositoryId), eq(gitBranches.name, branchName)))
     } catch (error) {
-      throw new Error(`Failed to delete branch: ${error.message}`);
+      throw AppError.internal('Failed to delete branch', { originalError: error })
     }
   }
 
-  async syncBranches(
-    repositoryId: string
-  ): Promise<{ synced: number; errors: string[] }> {
-    const repo = await this.getRepository(repositoryId);
-    const provider = this.gitProviderFactory.create(
-      repo.provider,
-      repo.accessToken!
-    );
+  async syncBranches(repositoryId: string): Promise<{ synced: number; errors: string[] }> {
+    const repo = await this.getRepository(repositoryId)
+    const provider = this.gitProviderFactory.create(repo.provider, repo.accessToken!)
 
     try {
-      const remoteBranches = await provider.getBranches(repo.repoId);
-      const errors: string[] = [];
-      let synced = 0;
+      const remoteBranches = await provider.getBranches(repo.repoId)
+      const errors: string[] = []
+      let synced = 0
 
       for (const branch of remoteBranches) {
         try {
-          await this.db.drizzle
+          await this.drizzleService.db
             .insert(gitBranches)
             .values({
               repositoryId,
               name: branch.name,
-              sha: branch.sha,
-              status: "ACTIVE",
-              isProtected: branch.protected,
-              isDefault: branch.default,
-              lastCommit: branch.lastCommit
-                ? {
-                    sha: branch.lastCommit.sha,
-                    message: branch.lastCommit.message,
-                    author: branch.lastCommit.author,
-                    date: branch.lastCommit.date.toISOString(),
-                  }
-                : undefined,
+              sha: branch.commit,
+              status: 'ACTIVE',
+              isProtected: branch.protected ?? false,
+              isDefault: false,
             })
             .onConflictDoUpdate({
               target: [gitBranches.repositoryId, gitBranches.name],
               set: {
-                sha: branch.sha,
-                isProtected: branch.protected,
-                isDefault: branch.default,
-                lastCommit: branch.lastCommit
-                  ? {
-                      sha: branch.lastCommit.sha,
-                      message: branch.lastCommit.message,
-                      author: branch.lastCommit.author,
-                      date: branch.lastCommit.date.toISOString(),
-                    }
-                  : undefined,
+                sha: branch.commit,
+                isProtected: branch.protected ?? false,
+                isDefault: false,
                 updatedAt: new Date(),
               },
-            });
+            })
 
-          synced++;
+          synced++
         } catch (error) {
-          errors.push(`Failed to sync branch ${branch.name}: ${error.message}`);
+          errors.push(`Failed to sync branch ${branch.name}`)
         }
       }
 
       // 更新仓库的最后同步时间
-      await this.db.drizzle
+      await this.drizzleService.db
         .update(gitRepositories)
         .set({ lastSyncAt: new Date() })
-        .where(eq(gitRepositories.id, repositoryId));
+        .where(eq(gitRepositories.id, repositoryId))
 
-      return { synced, errors };
+      return { synced, errors }
     } catch (error) {
-      throw new Error(`Failed to sync branches: ${error.message}`);
+      throw AppError.internal('Failed to sync branches', { originalError: error })
     }
   }
 
   async getBranches(repositoryId: string): Promise<GitBranch[]> {
-    return await this.db.drizzle
+    return await this.drizzleService.db
       .select()
       .from(gitBranches)
-      .where(eq(gitBranches.repositoryId, repositoryId));
+      .where(eq(gitBranches.repositoryId, repositoryId))
   }
 
   private async getRepository(repositoryId: string) {
-    const [repo] = await this.db.drizzle
+    const [repo] = await this.drizzleService.db
       .select()
       .from(gitRepositories)
       .where(eq(gitRepositories.id, repositoryId))
-      .limit(1);
+      .limit(1)
 
     if (!repo) {
-      throw new Error("Repository not found");
+      throw AppError.notFound('Repository not found')
     }
 
-    return repo;
+    return repo
   }
 }
