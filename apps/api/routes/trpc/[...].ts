@@ -7,8 +7,8 @@ import {
   setHeader,
   setResponseStatus,
 } from "h3";
+import { createContext } from "@/lib/trpc/context";
 import { appRouter } from "@/routers";
-import { createContext } from "@/trpc/context";
 
 export default defineEventHandler(async (event) => {
   try {

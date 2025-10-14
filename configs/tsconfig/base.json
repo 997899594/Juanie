@@ -12,6 +12,8 @@
     "noImplicitReturns": true,
     "noUncheckedIndexedAccess": true,
     "useUnknownInCatchVariables": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
 
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

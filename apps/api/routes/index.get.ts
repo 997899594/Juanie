@@ -35,10 +35,16 @@ export default defineEventHandler(async (event) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     links: {
-      openapi: `${baseUrl}/openapi.json`,
-      docs: `${baseUrl}/scalar-docs`,
+      openapi: `${baseUrl}/docs/openapi.json`,  // 修正路径
+      docs: `${baseUrl}/docs/scalar`,           // 修正路径
       trpc: `${baseUrl}/trpc`,
-      health: `${baseUrl}/health`,
+      health: `${baseUrl}/api/health`,
+      auth: {
+        github: `${baseUrl}/auth/github/redirect`,
+        gitlab: `${baseUrl}/auth/gitlab/redirect`,
+        me: `${baseUrl}/auth/session/me`,
+        logout: `${baseUrl}/auth/session/destroy`,
+      },
     },
   }
 })

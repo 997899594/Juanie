@@ -1,26 +1,25 @@
-import { defineEventHandler, sendRedirect, setCookie } from 'h3'
-import { getAppContainer } from '../../../src/nest'
+import { defineEventHandler, sendRedirect, setCookie } from "h3";
+import { AuthService } from "@/modules/auth/services/auth.service";
+import { getNestApp } from "@/nest";
 
 export default defineEventHandler(async (event) => {
-  const { authService } = getAppContainer()
+  const app = await getNestApp();
+  const authService = app.get(AuthService);
 
-  const { url, state, codeVerifier } = await authService.createGitLabAuthorizationURL()
+  const { url, state, codeVerifier } =
+    await authService.createGitLabAuthorizationURL();
 
-  setCookie(event, 'oauth_state', state, {
+  // 存储 state 和 codeVerifier 到 cookie
+  setCookie(event, "oauth_state", state, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 600,
-    path: '/',
-  })
-
-  setCookie(event, 'oauth_code_verifier', codeVerifier, {
+    secure: true,
+    maxAge: 600, // 10分钟
+  });
+  setCookie(event, "oauth_code_verifier", codeVerifier, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: true,
     maxAge: 600,
-    path: '/',
-  })
+  });
 
-  return sendRedirect(event, url.toString(), 302)
-})
+  return sendRedirect(event, url.toString());
+});

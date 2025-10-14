@@ -1,6 +1,7 @@
-import { TRPCError } from '@trpc/server'
-import { z } from 'zod'
-import { protectedProcedure, router } from '../../../trpc/init'
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+import { AppError } from "../../../lib/errors";
+import { protectedProcedure, router } from "../../../lib/trpc/procedures";
 
 // 输入验证 schemas
 const createBranchSchema = z.object({
@@ -10,13 +11,13 @@ const createBranchSchema = z.object({
     .min(1)
     .max(255)
     .regex(/^[a-zA-Z0-9\-_/]+$/),
-  sourceBranch: z.string().optional().default('main'),
-})
+  sourceBranch: z.string().optional().default("main"),
+});
 
 const deleteBranchSchema = z.object({
   repositoryId: z.string().cuid2(),
   branchName: z.string().min(1),
-})
+});
 
 const createMergeRequestSchema = z.object({
   repositoryId: z.string().cuid2(),
@@ -27,149 +28,319 @@ const createMergeRequestSchema = z.object({
   assigneeId: z.string().cuid2().optional(),
   reviewerIds: z.array(z.string().cuid2()).optional(),
   labels: z.array(z.string()).optional(),
-})
+});
 
 const connectRepositorySchema = z.object({
   projectId: z.string().cuid2(),
-  provider: z.enum(['GITHUB', 'GITLAB', 'GITEA']),
+  provider: z.enum(["GITHUB", "GITLAB", "GITEA"]),
   repoUrl: z.string().url(),
   accessToken: z.string().min(1),
-})
+});
 
 const setupWebhookSchema = z.object({
   repositoryId: z.string().cuid2(),
   webhookUrl: z.string().url(),
-})
+});
 
 export const gitRouter = router({
   // 分支管理
   branches: router({
-    create: protectedProcedure.input(createBranchSchema).mutation(async ({ input, ctx }) => {
-      try {
-        return await ctx.gitService.branches.createBranch(
-          input.repositoryId,
-          input.branchName,
-          input.sourceBranch,
-          ctx.user.id,
-        )
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+    create: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/branches",
+          tags: ["Git Branches"],
+          summary: "创建分支",
+          description: "在指定仓库中创建新分支",
+          protect: true,
+        },
+      })
+      .input(createBranchSchema)
+      .output(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          commit: z.string(),
+          protected: z.boolean(),
         })
-      }
-    }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.gitService.branches.createBranch(
+            input.repositoryId,
+            input.branchName,
+            input.sourceBranch,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message,
+          });
+        }
+      }),
 
-    delete: protectedProcedure.input(deleteBranchSchema).mutation(async ({ input, ctx }) => {
-      try {
-        await ctx.gitService.branches.deleteBranch(input.repositoryId, input.branchName)
-        return { success: true }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
-        })
-      }
-    }),
+    delete: protectedProcedure
+      .meta({
+        openapi: {
+          method: "DELETE",
+          path: "/git/branches/{repositoryId}/{branchName}",
+          tags: ["Git Branches"],
+          summary: "删除分支",
+          description: "删除指定仓库中的分支",
+          protect: true,
+        },
+      })
+      .input(deleteBranchSchema)
+      .output(z.object({ success: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          await ctx.gitService.branches.deleteBranch(
+            input.repositoryId,
+            input.branchName
+          );
+          return { success: true };
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message,
+          });
+        }
+      }),
 
     list: protectedProcedure
+      .meta({
+        openapi: {
+          method: "GET",
+          path: "/git/branches/{repositoryId}",
+          tags: ["Git Branches"],
+          summary: "获取分支列表",
+          description: "获取指定仓库的所有分支",
+          protect: true,
+        },
+      })
       .input(z.object({ repositoryId: z.string().cuid2() }))
+      .output(
+        z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            commit: z.string(),
+            protected: z.boolean(),
+          })
+        )
+      )
       .query(async ({ input, ctx }) => {
-        return await ctx.gitService.branches.getBranches(input.repositoryId)
+        return await ctx.gitService.branches.getBranches(input.repositoryId);
       }),
 
     sync: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/branches/{repositoryId}/sync",
+          tags: ["Git Branches"],
+          summary: "同步分支",
+          description: "同步指定仓库的分支信息",
+          protect: true,
+        },
+      })
       .input(z.object({ repositoryId: z.string().cuid2() }))
+      .output(
+        z.object({
+          synced: z.number(),
+          created: z.number(),
+          updated: z.number(),
+        })
+      )
       .mutation(async ({ input, ctx }) => {
         try {
-          return await ctx.gitService.branches.syncBranches(input.repositoryId)
+          return await ctx.gitService.branches.syncBranches(input.repositoryId);
         } catch (error) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
+            code: "INTERNAL_SERVER_ERROR",
             message: error.message,
-          })
+          });
         }
       }),
   }),
 
   // 合并请求管理
   mergeRequests: router({
-    create: protectedProcedure.input(createMergeRequestSchema).mutation(async ({ input, ctx }) => {
-      try {
-        return await ctx.gitService.mergeRequests.createMergeRequest(input, ctx.user.id)
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+    create: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/merge-requests",
+          tags: ["Git Merge Requests"],
+          summary: "创建合并请求",
+          description: "在指定仓库中创建新的合并请求",
+          protect: true,
+        },
+      })
+      .input(createMergeRequestSchema)
+      .output(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          description: z.string().optional(),
+          status: z.enum(["OPEN", "MERGED", "CLOSED", "DRAFT"]),
+          webUrl: z.string(),
         })
-      }
-    }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.gitService.mergeRequests.createMergeRequest(
+            input,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message,
+          });
+        }
+      }),
 
     list: protectedProcedure
+      .meta({
+        openapi: {
+          method: "GET",
+          path: "/git/merge-requests/{repositoryId}",
+          tags: ["Git Merge Requests"],
+          summary: "获取合并请求列表",
+          description: "获取指定仓库的合并请求列表",
+          protect: true,
+        },
+      })
       .input(
         z.object({
           repositoryId: z.string().cuid2(),
-          status: z.enum(['OPEN', 'MERGED', 'CLOSED', 'DRAFT']).optional(),
+          status: z.enum(["OPEN", "MERGED", "CLOSED", "DRAFT"]).optional(),
           page: z.number().min(1).default(1),
           limit: z.number().min(1).max(100).default(20),
-        }),
+        })
+      )
+      .output(
+        z.object({
+          data: z.array(
+            z.object({
+              id: z.string(),
+              title: z.string(),
+              status: z.enum(["OPEN", "MERGED", "CLOSED", "DRAFT"]),
+              sourceBranch: z.string(),
+              targetBranch: z.string(),
+              webUrl: z.string(),
+            })
+          ),
+          pagination: z.object({
+            page: z.number(),
+            limit: z.number(),
+            total: z.number(),
+          }),
+        })
       )
       .query(async ({ input, ctx }) => {
-        return await ctx.gitService.mergeRequests.getMergeRequests(input)
+        return await ctx.gitService.mergeRequests.getMergeRequests(input);
       }),
 
     merge: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/merge-requests/{repositoryId}/{mrId}/merge",
+          tags: ["Git Merge Requests"],
+          summary: "合并请求",
+          description: "合并指定的合并请求",
+          protect: true,
+        },
+      })
       .input(
         z.object({
           repositoryId: z.string().cuid2(),
           mrId: z.string(),
-        }),
+        })
       )
+      .output(z.object({ success: z.boolean() }))
       .mutation(async ({ input, ctx }) => {
         try {
           await ctx.gitService.mergeRequests.mergeMergeRequest(
             input.repositoryId,
             input.mrId,
-            ctx.user.id,
-          )
-          return { success: true }
+            ctx.user.id
+          );
+          return { success: true };
         } catch (error) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
+            code: "INTERNAL_SERVER_ERROR",
             message: error.message,
-          })
+          });
         }
       }),
 
     close: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/merge-requests/{repositoryId}/{mrId}/close",
+          tags: ["Git Merge Requests"],
+          summary: "关闭合并请求",
+          description: "关闭指定的合并请求",
+          protect: true,
+        },
+      })
       .input(
         z.object({
           repositoryId: z.string().cuid2(),
           mrId: z.string(),
-        }),
+        })
       )
+      .output(z.object({ success: z.boolean() }))
       .mutation(async ({ input, ctx }) => {
         try {
-          await ctx.gitService.mergeRequests.closeMergeRequest(input.repositoryId, input.mrId)
-          return { success: true }
+          await ctx.gitService.mergeRequests.closeMergeRequest(
+            input.repositoryId,
+            input.mrId
+          );
+          return { success: true };
         } catch (error) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
+            code: "INTERNAL_SERVER_ERROR",
             message: error.message,
-          })
+          });
         }
       }),
 
     sync: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/merge-requests/{repositoryId}/sync",
+          tags: ["Git Merge Requests"],
+          summary: "同步合并请求",
+          description: "同步指定仓库的合并请求",
+          protect: true,
+        },
+      })
       .input(z.object({ repositoryId: z.string().cuid2() }))
+      .output(
+        z.object({
+          synced: z.number(),
+          created: z.number(),
+          updated: z.number(),
+        })
+      )
       .mutation(async ({ input, ctx }) => {
         try {
-          return await ctx.gitService.mergeRequests.syncMergeRequests(input.repositoryId)
+          return await ctx.gitService.mergeRequests.syncMergeRequests(
+            input.repositoryId
+          );
         } catch (error) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
+            code: "INTERNAL_SERVER_ERROR",
             message: error.message,
-          })
+          });
         }
       }),
   }),
@@ -177,83 +348,191 @@ export const gitRouter = router({
   // 仓库管理
   repositories: router({
     list: protectedProcedure
+      .meta({
+        openapi: {
+          method: "GET",
+          path: "/git/repositories",
+          tags: ["Git Repositories"],
+          summary: "获取仓库列表",
+          description: "获取用户的仓库列表",
+          protect: true,
+        },
+      })
       .input(
         z.object({
           projectId: z.string().cuid2().optional(),
           page: z.number().min(1).default(1),
           limit: z.number().min(1).max(100).default(20),
-        }),
+        })
+      )
+      .output(
+        z.object({
+          data: z.array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              fullName: z.string(),
+              provider: z.enum(["GITHUB", "GITLAB", "GITEA"]),
+              isPrivate: z.boolean(),
+              defaultBranch: z.string(),
+              webUrl: z.string(),
+            })
+          ),
+          pagination: z.object({
+            page: z.number(),
+            limit: z.number(),
+            total: z.number(),
+          }),
+        })
       )
       .query(async ({ input, ctx }) => {
-        return await ctx.gitService.repositories.getRepositories(input, ctx.user.id)
+        return await ctx.gitService.repositories.getRepositories(
+          input,
+          ctx.user.id
+        );
       }),
 
-    connect: protectedProcedure.input(connectRepositorySchema).mutation(async ({ input, ctx }) => {
-      try {
-        return await ctx.gitService.repositories.connectRepository(input, ctx.user.id)
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
+    connect: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/repositories/connect",
+          tags: ["Git Repositories"],
+          summary: "连接仓库",
+          description: "连接外部 Git 仓库到项目",
+          protect: true,
+        },
+      })
+      .input(connectRepositorySchema)
+      .output(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          fullName: z.string(),
+          provider: z.enum(["GITHUB", "GITLAB", "GITEA"]),
+          connected: z.boolean(),
         })
-      }
-    }),
-
-    sync: protectedProcedure
-      .input(z.object({ repositoryId: z.string().cuid2() }))
+      )
       .mutation(async ({ input, ctx }) => {
         try {
-          await ctx.gitService.repositories.syncRepository(input.repositoryId)
-          return { success: true }
+          return await ctx.gitService.repositories.connectRepository(
+            input,
+            ctx.user.id
+          );
         } catch (error) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
+            code: "INTERNAL_SERVER_ERROR",
             message: error.message,
-          })
+          });
+        }
+      }),
+
+    sync: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/repositories/{repositoryId}/sync",
+          tags: ["Git Repositories"],
+          summary: "同步仓库",
+          description: "同步指定仓库的信息",
+          protect: true,
+        },
+      })
+      .input(z.object({ repositoryId: z.string().cuid2() }))
+      .output(z.object({ success: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          await ctx.gitService.repositories.syncRepository(input.repositoryId);
+          return { success: true };
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message,
+          });
         }
       }),
 
     disconnect: protectedProcedure
+      .meta({
+        openapi: {
+          method: "DELETE",
+          path: "/git/repositories/{repositoryId}",
+          tags: ["Git Repositories"],
+          summary: "断开仓库连接",
+          description: "断开指定仓库的连接",
+          protect: true,
+        },
+      })
       .input(z.object({ repositoryId: z.string().cuid2() }))
+      .output(z.object({ success: z.boolean() }))
       .mutation(async ({ input, ctx }) => {
         try {
-          await ctx.gitService.repositories.disconnectRepository(input.repositoryId)
-          return { success: true }
+          await ctx.gitService.repositories.disconnectRepository(
+            input.repositoryId
+          );
+          return { success: true };
         } catch (error) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
+            code: "INTERNAL_SERVER_ERROR",
             message: error.message,
-          })
+          });
         }
       }),
   }),
 
   // Webhook 管理
   webhooks: router({
-    setup: protectedProcedure.input(setupWebhookSchema).mutation(async ({ input, ctx }) => {
-      try {
-        await ctx.gitService.webhooks.setupWebhook(input.repositoryId, input.webhookUrl)
-        return { success: true }
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: error.message,
-        })
-      }
-    }),
-
-    remove: protectedProcedure
-      .input(z.object({ repositoryId: z.string().cuid2() }))
+    setup: protectedProcedure
+      .meta({
+        openapi: {
+          method: "POST",
+          path: "/git/webhooks/setup",
+          tags: ["Git Webhooks"],
+          summary: "设置 Webhook",
+          description: "为指定仓库设置 Webhook",
+          protect: true,
+        },
+      })
+      .input(setupWebhookSchema)
+      .output(z.object({ success: z.boolean() }))
       .mutation(async ({ input, ctx }) => {
         try {
-          await ctx.gitService.webhooks.removeWebhook(input.repositoryId)
-          return { success: true }
+          await ctx.gitService.webhooks.setupWebhook(
+            input.repositoryId,
+            input.webhookUrl
+          );
+          return { success: true };
         } catch (error) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
+            code: "INTERNAL_SERVER_ERROR",
             message: error.message,
-          })
+          });
+        }
+      }),
+
+    remove: protectedProcedure
+      .meta({
+        openapi: {
+          method: "DELETE",
+          path: "/git/webhooks/{repositoryId}",
+          tags: ["Git Webhooks"],
+          summary: "移除 Webhook",
+          description: "移除指定仓库的 Webhook",
+          protect: true,
+        },
+      })
+      .input(z.object({ repositoryId: z.string().cuid2() }))
+      .output(z.object({ success: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          await ctx.gitService.webhooks.removeWebhook(input.repositoryId);
+          return { success: true };
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message,
+          });
         }
       }),
   }),
-})
+});

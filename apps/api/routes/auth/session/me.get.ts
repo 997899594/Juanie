@@ -1,40 +1,44 @@
-import { defineEventHandler, getCookie } from 'h3'
-import { getAppContainer } from '../../../src/nest'
+import { createError, defineEventHandler, getCookie, setHeader } from "h3";
+import { SessionService } from "@/modules/auth/services/session.service";
+import { getNestApp } from "@/nest";
 
 export default defineEventHandler(async (event) => {
-  const { authService, databaseService } = getAppContainer()
+  const app = await getNestApp();
+  const sessionService = app.get(SessionService);
+
+  const sessionToken = getCookie(event, "session_token");
+
+  if (!sessionToken) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: "No session token",
+    });
+  }
 
   try {
-    const sessionId = getCookie(event, 'session')
-
-    if (!sessionId) {
-      return { loggedIn: false, user: null }
-    }
-
-    const sessionData = await authService.validateSession(sessionId)
-
-    if (!sessionData) {
-      return { loggedIn: false, user: null }
-    }
-
-    const user = await databaseService.getUserById(sessionData.userId)
+    const user = await sessionService.validateSession(sessionToken);
 
     if (!user) {
-      await authService.destroySession(sessionId)
-      return { loggedIn: false, user: null }
+      throw createError({
+        statusCode: 401,
+        statusMessage: "Invalid session",
+      });
     }
 
+    setHeader(event, "Content-Type", "application/json; charset=utf-8");
     return {
-      loggedIn: true,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
         avatar: user.avatar,
+        role: user.role,
       },
-    }
+    };
   } catch (error) {
-    console.error('Session validation error:', error)
-    return { loggedIn: false, user: null }
+    throw createError({
+      statusCode: 401,
+      statusMessage: "Session validation failed",
+    });
   }
-})
+});

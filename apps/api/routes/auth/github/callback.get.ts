@@ -1,57 +1,58 @@
 import {
   createError,
   defineEventHandler,
-  getClientIP,
   getCookie,
-  getHeader,
   getQuery,
+  sendRedirect,
   setCookie,
-} from 'h3'
-import { getAppContainer } from '../../../src/nest'
+} from "h3";
+import { AuthService } from "@/modules/auth/services/auth.service";
+import { SessionService } from "@/modules/auth/services/session.service";
+import { getNestApp } from "@/nest";
 
 export default defineEventHandler(async (event) => {
-  const { authService } = getAppContainer()
+  const app = await getNestApp();
+  const authService = app.get(AuthService);
+  const sessionService = app.get(SessionService);
 
-  const { code, state } = getQuery(event) as Record<string, string>
-  const savedState = getCookie(event, 'oauth_state')
-  const codeVerifier = getCookie(event, 'oauth_code_verifier')
+  const { code, state } = getQuery(event);
+  const storedState = getCookie(event, "oauth_state");
+  const codeVerifier = getCookie(event, "oauth_code_verifier");
 
-  // 验证 state 参数
-  if (!code || !state || !savedState || !codeVerifier) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid OAuth callback' })
-  }
-
-  if (!authService.constantTimeCompare(state, savedState)) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid state parameter' })
+  if (!code || !state || state !== storedState || !codeVerifier) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid OAuth callback",
+    });
   }
 
   try {
-    // 验证授权码并获取用户信息
-    const profile = await authService.validateGitHubCallback(code, codeVerifier)
+    const user = await authService.validateGitHubCallback(
+      code as string,
+      codeVerifier
+    );
+    const { session } = await sessionService.createSession(
+      user.id,
+      event.node.req.headers["user-agent"],
+      event.node.req.socket.remoteAddress
+    );
 
-    // 创建或更新用户
-    const user = await authService.upsertOAuthAccount('github', String(profile.id), profile)
-
-    // 创建会话
-    const userAgent = getHeader(event, 'user-agent')
-    const ipAddress = getClientIP(event)
-    const sessionId = await authService.createSession(user.id, userAgent, ipAddress)
-
-    // 设置会话 Cookie
-    setCookie(event, 'session', sessionId, {
+    // 设置会话 cookie
+    setCookie(event, "session_token", session.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60, // 7 天
-      path: '/',
-    })
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60, // 7天
+    });
 
-    // 清理临时 Cookie
-    setCookie(event, 'oauth_state', '', { maxAge: 0, path: '/' })
-    setCookie(event, 'oauth_code_verifier', '', { maxAge: 0, path: '/' })
+    // 清除临时 cookie
+    setCookie(event, "oauth_state", "", { maxAge: 0 });
+    setCookie(event, "oauth_code_verifier", "", { maxAge: 0 });
 
-    return { success: true, user: { id: user.id, email: user.email, name: user.name } }
+    return sendRedirect(event, "/dashboard");
   } catch (error) {
-    throw createError({ statusCode: 500, statusMessage: 'OAuth callback failed' })
+    throw createError({
+      statusCode: 500,
+      statusMessage: "Authentication failed",
+    });
   }
-})
+});

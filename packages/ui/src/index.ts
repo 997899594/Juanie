@@ -6,11 +6,11 @@ import "./styles/globals.css";
 export * from "./components/ui";
 // 主题系统导出
 export * from "./composables/useTheme";
+// 工具函数导出
+
 export * from "./styles/themes";
 // 类型导出
 export type * from "./types";
-// 工具函数导出
-export { cn } from "./utils/cn";
 
 // 版本信息
 export const version = "1.0.0";

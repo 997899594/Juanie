@@ -1,49 +1,48 @@
-import { Injectable } from '@nestjs/common'
-import { and, desc, eq } from 'drizzle-orm'
+import { Injectable } from "@nestjs/common";
+import { and, desc, eq } from "drizzle-orm";
+import type { DrizzleService } from "../../../drizzle/drizzle.service";
 import {
-  type GitMergeRequest,
-  gitMergeRequests,
+  type MergeRequest as GitMergeRequest,
+  mergeRequests as gitMergeRequests,
   gitRepositories,
-  type NewGitMergeRequest,
-} from '../../../drizzle/schemas'
-import type { DatabaseService } from '../../database/services/database.service'
-import type { GitProviderFactory } from '../providers/git-provider.factory'
+} from "../../../drizzle/schemas";
+import type { GitProviderFactory } from "../providers/git-provider.factory";
 
 interface CreateMergeRequestInput {
-  repositoryId: string
-  title: string
-  description?: string
-  sourceBranch: string
-  targetBranch: string
-  assigneeId?: string
-  reviewerIds?: string[]
-  labels?: string[]
+  repositoryId: string;
+  title: string;
+  description?: string;
+  sourceBranch: string;
+  targetBranch: string;
+  assigneeId?: string;
+  reviewerIds?: string[];
+  labels?: string[];
 }
 
 interface GetMergeRequestsInput {
-  repositoryId: string
-  status?: 'OPEN' | 'MERGED' | 'CLOSED' | 'DRAFT'
-  page: number
-  limit: number
+  repositoryId: string;
+  status?: "OPEN" | "MERGED" | "CLOSED" | "DRAFT";
+  page: number;
+  limit: number;
 }
 
 interface MergeRequestListResult {
-  mergeRequests: GitMergeRequest[]
-  total: number
-  page: number
-  limit: number
+  mergeRequests: GitMergeRequest[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 @Injectable()
 export class GitMergeRequestService {
   constructor(
-    private readonly db: DatabaseService,
-    private readonly gitProviderFactory: GitProviderFactory,
+    private readonly db: DrizzleService,
+    private readonly gitProviderFactory: GitProviderFactory
   ) {}
 
   async createMergeRequest(
     input: CreateMergeRequestInput,
-    userId: string,
+    userId: string
   ): Promise<GitMergeRequest> {
     const {
       repositoryId,
@@ -54,23 +53,26 @@ export class GitMergeRequestService {
       assigneeId,
       reviewerIds,
       labels,
-    } = input
+    } = input;
 
     try {
       // 获取仓库信息
-      const repo = await this.getRepository(repositoryId)
-      const provider = this.gitProviderFactory.create(repo.provider, repo.accessToken!)
+      const repo = await this.getRepository(repositoryId);
+      const provider = this.gitProviderFactory.create(
+        repo.provider,
+        repo.accessToken!
+      );
 
       // 在远程创建合并请求
       const mrInfo = await provider.createMergeRequest(repo.repoId, {
         title,
-        description: description || '',
+        description: description || "",
         sourceBranch,
         targetBranch,
         assigneeId,
         reviewerIds,
         labels,
-      })
+      });
 
       // 保存到本地数据库
       const [newMr] = await this.db.drizzle
@@ -79,76 +81,86 @@ export class GitMergeRequestService {
           repositoryId,
           mrId: mrInfo.id,
           title,
-          description: description || '',
+          description: description || "",
           sourceBranch,
           targetBranch,
-          status: 'OPEN',
+          status: "OPEN",
           url: mrInfo.url,
           assigneeId,
           reviewerIds: reviewerIds || [],
           labels: labels || [],
           createdBy: userId,
         })
-        .returning()
+        .returning();
 
-      return newMr
+      return newMr;
     } catch (error) {
-      throw new Error(`Failed to create merge request: ${error.message}`)
+      throw new Error(`Failed to create merge request: ${error.message}`);
     }
   }
 
-  async getMergeRequests(input: GetMergeRequestsInput): Promise<MergeRequestListResult> {
-    const { repositoryId, status, page, limit } = input
-    const offset = (page - 1) * limit
+  async getMergeRequests(
+    input: GetMergeRequestsInput
+  ): Promise<MergeRequestListResult> {
+    const { repositoryId, status, page, limit } = input;
+    const offset = (page - 1) * limit;
 
     let query = this.db.drizzle
       .select()
       .from(gitMergeRequests)
-      .where(eq(gitMergeRequests.repositoryId, repositoryId))
+      .where(eq(gitMergeRequests.repositoryId, repositoryId));
 
     if (status) {
-      query = query.where(eq(gitMergeRequests.status, status))
+      query = query.where(eq(gitMergeRequests.status, status));
     }
 
     const mergeRequests = await query
       .limit(limit)
       .offset(offset)
-      .orderBy(desc(gitMergeRequests.createdAt))
+      .orderBy(desc(gitMergeRequests.createdAt));
 
     // 获取总数
     let countQuery = this.db.drizzle
       .select({ count: gitMergeRequests.id })
       .from(gitMergeRequests)
-      .where(eq(gitMergeRequests.repositoryId, repositoryId))
+      .where(eq(gitMergeRequests.repositoryId, repositoryId));
 
     if (status) {
-      countQuery = countQuery.where(eq(gitMergeRequests.status, status))
+      countQuery = countQuery.where(eq(gitMergeRequests.status, status));
     }
 
-    const [{ count }] = await countQuery
+    const [{ count }] = await countQuery;
 
     return {
       mergeRequests,
       total: Number(count),
       page,
       limit,
-    }
+    };
   }
 
-  async getMergeRequest(repositoryId: string, mrId: string): Promise<GitMergeRequest | null> {
+  async getMergeRequest(
+    repositoryId: string,
+    mrId: string
+  ): Promise<GitMergeRequest | null> {
     const [mr] = await this.db.drizzle
       .select()
       .from(gitMergeRequests)
-      .where(and(eq(gitMergeRequests.repositoryId, repositoryId), eq(gitMergeRequests.mrId, mrId)))
-      .limit(1)
+      .where(
+        and(
+          eq(gitMergeRequests.repositoryId, repositoryId),
+          eq(gitMergeRequests.mrId, mrId)
+        )
+      )
+      .limit(1);
 
-    return mr || null
+    return mr || null;
   }
 
   async updateMergeRequestStatus(
     repositoryId: string,
     mrId: string,
-    status: 'OPEN' | 'MERGED' | 'CLOSED' | 'DRAFT',
+    status: "OPEN" | "MERGED" | "CLOSED" | "DRAFT"
   ): Promise<void> {
     await this.db.drizzle
       .update(gitMergeRequests)
@@ -156,57 +168,80 @@ export class GitMergeRequestService {
         status,
         updatedAt: new Date(),
       })
-      .where(and(eq(gitMergeRequests.repositoryId, repositoryId), eq(gitMergeRequests.mrId, mrId)))
+      .where(
+        and(
+          eq(gitMergeRequests.repositoryId, repositoryId),
+          eq(gitMergeRequests.mrId, mrId)
+        )
+      );
   }
 
-  async mergeMergeRequest(repositoryId: string, mrId: string, userId: string): Promise<void> {
+  async mergeMergeRequest(
+    repositoryId: string,
+    mrId: string,
+    userId: string
+  ): Promise<void> {
     try {
-      const repo = await this.getRepository(repositoryId)
-      const provider = this.gitProviderFactory.create(repo.provider, repo.accessToken!)
+      const repo = await this.getRepository(repositoryId);
+      const provider = this.gitProviderFactory.create(
+        repo.provider,
+        repo.accessToken!
+      );
 
       // 在远程合并
-      await provider.mergeMergeRequest(repo.repoId, mrId)
+      await provider.mergeMergeRequest(repo.repoId, mrId);
 
       // 更新本地状态
       await this.db.drizzle
         .update(gitMergeRequests)
         .set({
-          status: 'MERGED',
+          status: "MERGED",
           mergedAt: new Date(),
           mergedBy: userId,
           updatedAt: new Date(),
         })
         .where(
-          and(eq(gitMergeRequests.repositoryId, repositoryId), eq(gitMergeRequests.mrId, mrId)),
-        )
+          and(
+            eq(gitMergeRequests.repositoryId, repositoryId),
+            eq(gitMergeRequests.mrId, mrId)
+          )
+        );
     } catch (error) {
-      throw new Error(`Failed to merge merge request: ${error.message}`)
+      throw new Error(`Failed to merge merge request: ${error.message}`);
     }
   }
 
   async closeMergeRequest(repositoryId: string, mrId: string): Promise<void> {
     try {
-      const repo = await this.getRepository(repositoryId)
-      const provider = this.gitProviderFactory.create(repo.provider, repo.accessToken!)
+      const repo = await this.getRepository(repositoryId);
+      const provider = this.gitProviderFactory.create(
+        repo.provider,
+        repo.accessToken!
+      );
 
       // 在远程关闭
-      await provider.closeMergeRequest(repo.repoId, mrId)
+      await provider.closeMergeRequest(repo.repoId, mrId);
 
       // 更新本地状态
-      await this.updateMergeRequestStatus(repositoryId, mrId, 'CLOSED')
+      await this.updateMergeRequestStatus(repositoryId, mrId, "CLOSED");
     } catch (error) {
-      throw new Error(`Failed to close merge request: ${error.message}`)
+      throw new Error(`Failed to close merge request: ${error.message}`);
     }
   }
 
-  async syncMergeRequests(repositoryId: string): Promise<{ synced: number; errors: string[] }> {
-    const repo = await this.getRepository(repositoryId)
-    const provider = this.gitProviderFactory.create(repo.provider, repo.accessToken!)
+  async syncMergeRequests(
+    repositoryId: string
+  ): Promise<{ synced: number; errors: string[] }> {
+    const repo = await this.getRepository(repositoryId);
+    const provider = this.gitProviderFactory.create(
+      repo.provider,
+      repo.accessToken!
+    );
 
     try {
-      const remoteMRs = await provider.getMergeRequests(repo.repoId)
-      const errors: string[] = []
-      let synced = 0
+      const remoteMRs = await provider.getMergeRequests(repo.repoId);
+      const errors: string[] = [];
+      let synced = 0;
 
       for (const mr of remoteMRs) {
         try {
@@ -219,7 +254,7 @@ export class GitMergeRequestService {
               description: mr.description,
               sourceBranch: mr.sourceBranch,
               targetBranch: mr.targetBranch,
-              status: mr.status as 'OPEN' | 'MERGED' | 'CLOSED' | 'DRAFT',
+              status: mr.status as "OPEN" | "MERGED" | "CLOSED" | "DRAFT",
               url: mr.url,
               assigneeId: mr.assigneeId,
               reviewerIds: mr.reviewerIds || [],
@@ -232,7 +267,7 @@ export class GitMergeRequestService {
               set: {
                 title: mr.title,
                 description: mr.description,
-                status: mr.status as 'OPEN' | 'MERGED' | 'CLOSED' | 'DRAFT',
+                status: mr.status as "OPEN" | "MERGED" | "CLOSED" | "DRAFT",
                 assigneeId: mr.assigneeId,
                 reviewerIds: mr.reviewerIds || [],
                 labels: mr.labels || [],
@@ -240,17 +275,17 @@ export class GitMergeRequestService {
                 mergedBy: mr.mergedBy,
                 updatedAt: new Date(),
               },
-            })
+            });
 
-          synced++
+          synced++;
         } catch (error) {
-          errors.push(`Failed to sync MR ${mr.id}: ${error.message}`)
+          errors.push(`Failed to sync MR ${mr.id}: ${error.message}`);
         }
       }
 
-      return { synced, errors }
+      return { synced, errors };
     } catch (error) {
-      throw new Error(`Failed to sync merge requests: ${error.message}`)
+      throw new Error(`Failed to sync merge requests: ${error.message}`);
     }
   }
 
@@ -259,12 +294,12 @@ export class GitMergeRequestService {
       .select()
       .from(gitRepositories)
       .where(eq(gitRepositories.id, repositoryId))
-      .limit(1)
+      .limit(1);
 
     if (!repo) {
-      throw new Error('Repository not found')
+      throw new Error("Repository not found");
     }
 
-    return repo
+    return repo;
   }
 }

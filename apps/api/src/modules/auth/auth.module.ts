@@ -1,11 +1,12 @@
-import { Module } from '@nestjs/common'
-import { ConfigModule } from '@nestjs/config'
-import { DatabaseModule } from '../database/database.module'
-import { AuthService } from './services/auth.service'
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { DrizzleModule } from "../../drizzle/drizzle.module"; // 更新引用
+import { AuthService } from "./services/auth.service";
+import { SessionService } from "./services/session.service";
 
 @Module({
-  imports: [ConfigModule, DatabaseModule],
-  providers: [AuthService],
-  exports: [AuthService],
+  imports: [ConfigModule, DrizzleModule], // 更新模块
+  providers: [AuthService, SessionService],
+  exports: [AuthService, SessionService],
 })
 export class AuthModule {}

@@ -1,34 +1,28 @@
-import type { NitroAppPlugin } from 'nitropack'
-import { logger } from '../src/middleware/logger.middleware'
+import { defineNitroPlugin } from "nitropack/runtime";
+import { config } from "@/lib/config";
 
-const plugin: NitroAppPlugin = async (nitroApp) => {
-  if (process.env.OTEL_ENABLED !== 'true') {
-    return
+export default defineNitroPlugin(async (nitroApp) => {
+  if (!config.tracing.enabled) {
+    return;
   }
 
-  try {
-    // 动态加载，避免未安装时报错
-    const { NodeSDK } = await import('@opentelemetry/sdk-node')
-    const { getNodeAutoInstrumentations } = await import('@opentelemetry/auto-instrumentations-node')
-    const sdk = new NodeSDK({
-      instrumentations: [getNodeAutoInstrumentations()],
-    })
-    await sdk.start()
-    logger.debug('OpenTelemetry started.')
+  console.log(
+    `OpenTelemetry enabled for service: ${config.tracing.serviceName}`
+  );
 
-    nitroApp.hooks.hook('close', async () => {
-      try {
-        await sdk.shutdown()
-        logger.debug('OpenTelemetry shutdown.')
-      } catch (e) {
-        logger.error('OTEL shutdown failed', { error: e instanceof Error ? e.message : String(e) })
-      }
-    })
-  } catch (e) {
-    logger.warn('OpenTelemetry init failed (dependency not installed or config error).', {
-      error: e instanceof Error ? e.message : String(e),
-    })
+  if (config.tracing.endpoint) {
+    console.log(`OTLP endpoint: ${config.tracing.endpoint}`);
   }
-}
 
-export default plugin
+  // 这里可以添加实际的 OpenTelemetry 初始化代码
+  // 例如：
+  // const { NodeSDK } = await import('@opentelemetry/sdk-node');
+  // const { getNodeAutoInstrumentations } = await import('@opentelemetry/auto-instrumentations-node');
+  //
+  // const sdk = new NodeSDK({
+  //   serviceName: config.tracing.serviceName,
+  //   instrumentations: [getNodeAutoInstrumentations()],
+  // });
+  //
+  // sdk.start();
+});

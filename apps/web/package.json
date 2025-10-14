@@ -11,6 +11,7 @@
     "type-check": "vue-tsc --noEmit --pretty"
   },
   "dependencies": {
+    "@juanie/api": "workspace:*",
     "@juanie/ui": "workspace:*",
     "vue": "^3.5.22",
     "vue-router": "^4.4.5",
