@@ -1,6 +1,6 @@
 import { createError, defineEventHandler, getCookie, setHeader } from "h3";
 import { SessionService } from "@/modules/auth/services/session.service";
-import { getNestApp } from "@/nest";
+import { getNestApp } from "@/index";
 
 export default defineEventHandler(async (event) => {
   const app = await getNestApp();

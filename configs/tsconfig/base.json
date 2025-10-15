@@ -29,7 +29,9 @@
     "declarationMap": true,
     "sourceMap": true,
     "removeComments": false,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "exclude": [
     "**/node_modules",

@@ -1,5 +1,5 @@
 import { defineNitroPlugin } from "nitropack/runtime";
-import { config } from "@/lib/config";
+import { config } from "@/lib/nitro-config";
 
 export default defineNitroPlugin(async (nitroApp) => {
   if (!config.tracing.enabled) {

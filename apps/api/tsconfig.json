@@ -4,7 +4,9 @@
   "compilerOptions": {
     "composite": false,
     "baseUrl": ".",
-    "paths": { "@/*": ["./src/*"] },
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "customConditions": ["development"]
   },
   "include": ["src", "plugins", "routes", "nitro.config.ts", "drizzle.config.ts"],

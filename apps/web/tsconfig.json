@@ -11,7 +11,9 @@
     "noEmit": true,
     "incremental": false,
     "isolatedModules": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "env.d.ts", "vite.config.ts", "tailwind.config.ts", "index.html"],
   "exclude": ["dist", "node_modules"]

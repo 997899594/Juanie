@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common'
-import type { GitBranchService } from './git-branch.service'
-import type { GitMergeRequestService } from './git-merge-request.service'
-import type { GitRepositoryService } from './git-repository.service'
-import type { GitWebhookService } from './git-webhook.service'
+import { GitBranchService } from './git-branch.service'
+import { GitMergeRequestService } from './git-merge-request.service'
+import { GitRepositoryService } from './git-repository.service'
+import { GitWebhookService } from './git-webhook.service'
 
 @Injectable()
 export class GitService {
@@ -12,21 +12,4 @@ export class GitService {
     public readonly repositories: GitRepositoryService,
     public readonly webhooks: GitWebhookService,
   ) {}
-
-  // 提供统一的服务访问点
-  getBranchService(): GitBranchService {
-    return this.branches
-  }
-
-  getMergeRequestService(): GitMergeRequestService {
-    return this.mergeRequests
-  }
-
-  getRepositoryService(): GitRepositoryService {
-    return this.repositories
-  }
-
-  getWebhookService(): GitWebhookService {
-    return this.webhooks
-  }
 }

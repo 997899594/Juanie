@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { and, eq, sql } from 'drizzle-orm'
-import type { DrizzleService } from '../../../drizzle/drizzle.service'
+import { DrizzleService } from '../../../drizzle/drizzle.service'
 import {
   type GitRepository,
   gitRepositories,
@@ -8,7 +8,7 @@ import {
   projects,
 } from '../../../drizzle/schemas'
 import { AppError } from '../../../lib/errors'
-import type { GitProviderFactory } from '../providers/git-provider.factory'
+import { GitProviderFactory } from '../providers/git-provider.factory'
 
 interface ConnectRepositoryInput {
   projectId: string

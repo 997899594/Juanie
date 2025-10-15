@@ -7,11 +7,12 @@ export default defineNitroConfig({
   alias: {
     "@": resolve(__dirname, "./src"),
   },
-  routeRules: {
-    "/api/trpc/**": { cors: true },
-  },
+  // Note: CORS is handled entirely in route handlers for precise control
+  // No global CORS rules - each route manages its own CORS policy
   storage: {
     redis: { driver: "redis" },
   },
-  plugins: ["~/plugins/otel.ts"],
+  plugins: [
+    // "~/plugins/otel.ts",
+  ],
 });

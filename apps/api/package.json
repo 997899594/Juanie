@@ -9,11 +9,14 @@
       "development": "./src/index.ts"
     }
   },
+  "imports": {
+    "#src/*": "./src/*"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "dev": "nitro dev",
+    "dev": "dotenvx run --env-file=.env -- nitro dev",
     "build": "tsc --noEmit && nitro build",
     "start": "nitro preview",
     "type-check": "tsc --noEmit",
@@ -47,6 +50,7 @@
     "@upstash/ratelimit": "^2.0.6",
     "@upstash/redis": "^1.35.5",
     "arctic": "^2.0.0",
+    "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.6",
     "drizzle-zod": "^0.8.3",
     "h3": "^1",

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { DrizzleService } from "../../../drizzle/drizzle.service";
 import { publicProcedure, router } from "../../../lib/trpc/procedures";
-import { getNestApp } from "../../../nest";
 
 export const healthRouter = router({
   // 健康检查

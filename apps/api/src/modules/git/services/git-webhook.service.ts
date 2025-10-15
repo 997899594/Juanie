@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common'
 import { createHmac } from 'crypto'
 import { and, eq } from 'drizzle-orm'
-import type { DrizzleService } from '../../../drizzle/drizzle.service'
+import { DrizzleService } from '../../../drizzle/drizzle.service'
 import {
   gitBranches,
   mergeRequests as gitMergeRequests,
   gitRepositories,
 } from '../../../drizzle/schemas'
 import { AppError } from '../../../lib/errors'
-import type { GitProviderFactory } from '../providers/git-provider.factory'
+import { GitProviderFactory } from '../providers/git-provider.factory'
 
 interface WebhookPayload {
   event: string

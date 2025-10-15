@@ -1,7 +1,7 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import pino from "pino";
-import { config } from "../config";
+import { config } from "../nitro-config";
 import { AppError } from "../errors";
 import type { HealthStatus } from "../types";
 

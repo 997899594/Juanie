@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { Injectable } from "@nestjs/common";
-import type { ConfigService } from "@nestjs/config";
+import { ConfigService } from "@nestjs/config";
 import { eq } from "drizzle-orm";
-import type { DrizzleService } from "../../../drizzle/drizzle.service";
+import type { Config } from "../../../config/configuration";
+import { DrizzleService } from "../../../drizzle/drizzle.service";
 import * as schema from "../../../drizzle/schemas";
 
 export interface SessionPayload {
@@ -17,7 +18,7 @@ export class SessionService {
   private readonly refreshTokenTTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 
   constructor(
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService<Config>,
     private readonly drizzleService: DrizzleService
   ) {}
 

@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
 <body>
   <script
     id="api-reference"
-    data-url="${baseUrl}/api/docs?format=json"
+    data-url="${baseUrl}/docs?format=json"
     data-configuration='{
       "theme": "saturn",
       "layout": "modern",

@@ -5,7 +5,10 @@ import { AuthService } from "./services/auth.service";
 import { SessionService } from "./services/session.service";
 
 @Module({
-  imports: [ConfigModule, DrizzleModule], // 更新模块
+  imports: [
+    ConfigModule, // 显式导入 ConfigModule
+    DrizzleModule
+  ],
   providers: [AuthService, SessionService],
   exports: [AuthService, SessionService],
 })

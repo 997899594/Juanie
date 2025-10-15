@@ -1,6 +1,6 @@
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
 import { GitService } from '@/modules/git/services/git.service'
-import { getNestApp } from '@/nest'
+import { getNestApp } from '@/index'
 
 export default defineEventHandler(async (event) => {
   try {

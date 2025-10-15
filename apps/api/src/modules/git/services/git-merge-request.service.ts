@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common'
 import { and, desc, eq, sql } from 'drizzle-orm'
-import type { DrizzleService } from '../../../drizzle/drizzle.service'
+import { DrizzleService } from '../../../drizzle/drizzle.service'
 import {
   type MergeRequest as GitMergeRequest,
   mergeRequests as gitMergeRequests,
   gitRepositories,
 } from '../../../drizzle/schemas'
 import { AppError } from '../../../lib/errors'
-import type { GitProviderFactory } from '../providers/git-provider.factory'
+import { GitProviderFactory } from '../providers/git-provider.factory'
 
 interface CreateMergeRequestInput {
   repositoryId: string

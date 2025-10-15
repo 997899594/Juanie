@@ -1,6 +1,7 @@
 import { Gitlab } from '@gitbeaker/rest'
 import { Injectable } from '@nestjs/common'
-import type { ConfigService } from '@nestjs/config'
+import { ConfigService } from '@nestjs/config'
+import type { Config } from '../../../config/configuration'
 import type { CreateMergeRequestData, GitCommitInfo } from '../../../lib/types/index'
 import type {
   GitBranchInfo,
@@ -15,14 +16,14 @@ export class GitLabProvider extends BaseGitProvider {
   private gitlab: InstanceType<typeof Gitlab>
 
   constructor(
-    private configService: ConfigService,
+    private configService: ConfigService<Config>,
     accessToken: string,
     baseUrl?: string,
   ) {
     super()
     this.gitlab = new Gitlab({
       token: accessToken,
-      host: baseUrl || this.configService.get('GITLAB_BASE_URL'),
+      host: baseUrl || this.configService.get("oauth.gitlab.baseUrl", { infer: true }),
     })
   }
 

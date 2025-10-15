@@ -9,11 +9,17 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": resolve(__dirname, "src"),
     },
+    // 确保 UI 库与应用使用同一份 Vue 实例，避免运行时冲突
+    dedupe: ["vue"],
     conditions: mode === "development" ? ["development"] : ["default"],
   },
   optimizeDeps: {
     include: ["vue", "vue-router", "lucide-vue-next"],
     exclude: ["@juanie/ui", "@juanie/api"],
+  },
+  define: {
+    // 跳过 @juanie/api 包的类型检查
+    __SKIP_API_TYPE_CHECK__: true,
   },
   server: {
     port: 1997,
