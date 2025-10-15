@@ -1,67 +1,105 @@
-import { Injectable } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import type { Config } from "../../../config/configuration";
-import { DrizzleService } from "../../../drizzle/drizzle.service";
-import type { HealthStatus } from "../../../lib/types/index";
+import { Injectable } from '@nestjs/common'
+import { sql } from 'drizzle-orm'
+import { ConfigService } from '../../../core/config/nestjs'
+import { DrizzleService } from '../../../drizzle/drizzle.service'
+
+export interface HealthStatus {
+  status: 'healthy' | 'unhealthy'
+  timestamp: string
+  version: string
+  environment: string
+  uptime: number
+  details: {
+    database: {
+      status: 'healthy' | 'unhealthy'
+      responseTime?: number
+      error?: string
+    }
+    config: {
+      status: 'healthy' | 'unhealthy'
+      environment: string
+      debug: boolean
+    }
+  }
+}
 
 @Injectable()
 export class HealthService {
   constructor(
+    private readonly configService: ConfigService,
     private readonly drizzleService: DrizzleService,
-    private readonly configService: ConfigService<Config>
   ) {}
 
-  async checkDatabaseHealth(): Promise<{
-    connected: boolean;
-    responseTime: number;
-  }> {
-    const start = Date.now();
-    try {
-      // Use Drizzle's db instance to execute a simple query
-      await this.drizzleService.db.execute("SELECT 1");
-      return {
-        connected: true,
-        responseTime: Date.now() - start,
-      };
-    } catch (error) {
-      return {
-        connected: false,
-        responseTime: Date.now() - start,
-      };
-    }
-  }
-
   async getHealthStatus(): Promise<HealthStatus> {
-    const appConfig = this.configService.get("app");
-    const version = appConfig?.version || "unknown";
-    const environment = appConfig?.environment || "unknown";
+    const startTime = Date.now()
 
-    const dbHealth = await this.checkDatabaseHealth();
+    // 调试日志
+    console.log('🔍 HealthService.getHealthStatus called')
+    console.log('🔍 configService:', this.configService)
+    console.log('🔍 configService type:', typeof this.configService)
 
-    return {
-      status: dbHealth.connected ? "healthy" : "unhealthy",
-      timestamp: new Date().toISOString(),
-      version,
-      environment,
-      services: {
-        database: dbHealth.connected ? "healthy" : "unhealthy",
-      },
-      details: {
-        database: dbHealth,
-      },
-    };
-  }
-
-  async checkReadiness() {
-    const dbHealth = await this.checkDatabaseHealth();
-
-    if (!dbHealth.connected) {
-      throw new Error("Database not ready");
+    if (!this.configService) {
+      throw new Error('ConfigService is undefined in HealthService')
     }
 
+    const appConfig = this.configService.getApp()
+
+    // 检查数据库连接
+    const databaseHealth = await this.checkDatabaseHealth()
+
+    // 计算整体健康状态
+    const isHealthy = databaseHealth.status === 'healthy'
+
     return {
-      status: "ready",
+      status: isHealthy ? 'healthy' : 'unhealthy',
       timestamp: new Date().toISOString(),
-    };
+      version: appConfig.version,
+      environment: appConfig.environment,
+      uptime: process.uptime(),
+      details: {
+        database: databaseHealth,
+        config: {
+          status: 'healthy',
+          environment: appConfig.environment,
+          debug: appConfig.debug,
+        },
+      },
+    }
+  }
+
+  private async checkDatabaseHealth(): Promise<{
+    status: 'healthy' | 'unhealthy'
+    responseTime?: number
+    error?: string
+  }> {
+    try {
+      const startTime = Date.now()
+
+      // 检查 DrizzleService 是否可用
+      if (!this.drizzleService || !this.drizzleService.db) {
+        return {
+          status: 'unhealthy',
+          error: 'DrizzleService or database connection is not available',
+        }
+      }
+
+      // 执行简单的数据库查询来检查连接
+      await this.drizzleService.db.execute(sql`SELECT 1`)
+
+      const responseTime = Date.now() - startTime
+
+      return {
+        status: 'healthy',
+        responseTime,
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown database error'
+      console.error('🔍 Database health check failed:', errorMessage)
+
+      return {
+        status: 'unhealthy',
+        error: `Failed query: SELECT 1\nparams: ${errorMessage}`,
+      }
+    }
   }
 }

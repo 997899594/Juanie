@@ -1,10 +1,10 @@
 import { createError, defineEventHandler, getRouterParam, readBody } from 'h3'
-import { GitService } from '@/modules/git/services/git.service'
 import { getNestApp } from '@/index'
 
 export default defineEventHandler(async (event) => {
   try {
     const app = await getNestApp()
+    const { GitService } = await import('@/modules/git/services/git.service')
     const gitService = app.get(GitService)
 
     const provider = getRouterParam(event, 'provider')

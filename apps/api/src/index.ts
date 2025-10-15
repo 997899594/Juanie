@@ -6,96 +6,112 @@
  * - NestJS (领域服务/DI 容器)：承载业务服务
  * - Drizzle (数据持久化)：ORM 层
  */
-import "reflect-metadata";
+import 'reflect-metadata'
 
-import type { INestApplicationContext } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { NestFactory } from "@nestjs/core";
-import { AppModule } from "./app.module";
+import type { INestApplicationContext } from '@nestjs/common'
+import { NestFactory } from '@nestjs/core'
+import { defineNitroPlugin } from 'nitropack/runtime'
+import { AppModule } from './app.module'
+import { getConfig } from './core/config/nitro'
+import { ServiceContainer } from './lib/service-container'
 
 // NestJS 应用实例管理
-let nestApp: INestApplicationContext | null = null;
+let nestApp: INestApplicationContext | null = null
 
 export interface AppContainer {
-  nestApp: INestApplicationContext;
+  nestApp: INestApplicationContext
 }
 
 // 创建 HTTP 服务器（用于独立运行）
 export async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  await app.init();
-  return app;
+  const app = await NestFactory.create(AppModule)
+  await app.init()
+  return app
 }
+
+export default defineNitroPlugin(async (nitroApp) => {
+  try {
+    console.log('🚀 Initializing Nitro plugin...')
+
+    // 初始化配置系统
+    const config = getConfig()
+    console.log(`📋 Configuration loaded for environment: ${config.app.environment}`)
+
+    // 延迟初始化 NestJS 应用，避免重复创建
+    console.log('✅ Nitro plugin initialized, NestJS app will be created on first request')
+  } catch (error) {
+    console.error('❌ Failed to initialize Nitro plugin:', error)
+    throw error
+  }
+})
 
 // 创建应用上下文（用于 Nitro 集成）
 export async function initNestAppContainer(): Promise<AppContainer> {
   if (nestApp) {
-    return { nestApp };
+    return { nestApp }
   }
 
   try {
-    console.log("🚀 开始初始化 NestJS 应用上下文...");
+    console.log('🚀 开始初始化 NestJS 应用上下文...')
+
+    // 加载配置
+    const config = getConfig()
+    console.log(`📋 配置已加载，环境: ${config.app.environment}`)
 
     // 创建 NestJS 应用上下文
     nestApp = await NestFactory.createApplicationContext(AppModule, {
-      logger: ["error", "warn", "log"],
-    });
+      logger: config.app.debug ? ['log', 'error', 'warn', 'debug', 'verbose'] : ['error', 'warn'],
+    })
 
     // 启用关闭钩子
-    nestApp.enableShutdownHooks();
+    nestApp.enableShutdownHooks()
 
-    // 验证 ConfigService 是否正确初始化
-    const configService = nestApp.get(ConfigService);
-    if (!configService) {
-      throw new Error("ConfigService not initialized");
-    }
-
-    console.log("✅ NestJS 应用上下文初始化成功");
-    console.log("✅ ConfigService 初始化成功");
+    console.log('✅ NestJS 应用上下文初始化成功')
 
     // 初始化服务容器
-    const { getServiceContainer } = await import("./lib/service-container");
-    const serviceContainer = getServiceContainer();
-    await serviceContainer.initialize(nestApp);
+    const { getServiceContainer } = await import('./lib/service-container')
+    const serviceContainer = getServiceContainer()
+    await serviceContainer.initialize(nestApp)
 
-    return { nestApp };
+    console.log('✅ 服务容器初始化成功')
+
+    return { nestApp }
   } catch (error) {
-    console.error("❌ NestJS 应用初始化失败:", error);
-    throw error;
+    console.error('❌ NestJS 应用上下文初始化失败:', error)
+    throw error
   }
 }
 
 export async function getNestApp(): Promise<INestApplicationContext> {
   if (!nestApp) {
-    const container = await initNestAppContainer();
-    return container.nestApp;
+    const container = await initNestAppContainer()
+    return container.nestApp
   }
-  return nestApp;
+  return nestApp
 }
 
 export async function getAppContainer(): Promise<AppContainer> {
-  const nestApp = await getNestApp();
-  return { nestApp };
+  return initNestAppContainer()
 }
 
-// 优雅关闭
 export async function closeNestApp(): Promise<void> {
   if (nestApp) {
-    await nestApp.close();
-    nestApp = null;
+    await nestApp.close()
+    nestApp = null
   }
 }
-// 导出
-export { createContext } from "./lib/trpc/context";
+
+export { createContext } from './lib/trpc/context'
 export {
   protectedProcedure,
   publicProcedure,
   router,
-} from "./lib/trpc/procedures";
+} from './lib/trpc/procedures'
 
-// 类型定义
-export * from "./lib/types/index";
-// 工具
-export { buildOpenApiDocument } from "./openapi";
-// tRPC
-export type { AppRouter } from "./routers/index";
+export * from './lib/types/index'
+
+export { buildOpenApiDocument } from './openapi'
+
+export type { AppRouter } from './routers/index'
+
+export { nestApp }

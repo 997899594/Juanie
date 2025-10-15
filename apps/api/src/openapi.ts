@@ -19,8 +19,8 @@ export const buildOpenApiDocument = (baseUrl: string) => {
         BearerAuth: {
           type: 'http',
           scheme: 'bearer',
-          bearerFormat: 'JWT',
-          description: 'Use Authorization: Bearer <token>',
+          bearerFormat: 'Session',
+          description: 'Use Authorization: Bearer <session_token>',
         },
       },
     },

@@ -1,6 +1,6 @@
 import type { H3Event } from 'h3'
 import { getRequestHeader, setHeader, setResponseStatus } from 'h3'
-import { config } from './nitro-config'
+import { getConfig } from '../core/config/nitro'
 
 /**
  * 统一的 CORS 处理工具函数
@@ -8,6 +8,7 @@ import { config } from './nitro-config'
  */
 export function setCorsHeaders(event: H3Event): void {
   const origin = getRequestHeader(event, 'origin')
+  const config = getConfig()
   const allowedOrigins = config.security.corsOrigins
 
   // 设置基础 CORS 头
@@ -42,12 +43,12 @@ export function handleCorsPreflightRequest(event: H3Event): boolean {
 export function handleCors(event: H3Event): boolean {
   // 先设置 CORS 头
   setCorsHeaders(event)
-  
+
   // 如果是 OPTIONS 请求，设置状态码并返回 true 表示已处理
   if ((event.node.req.method || 'GET') === 'OPTIONS') {
     setResponseStatus(event, 204)
     return true // 表示已处理预检请求，不需要继续处理
   }
-  
+
   return false // 表示不是预检请求，需要继续处理业务逻辑
 }

@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
 import { Octokit } from '@octokit/rest'
-import type { Config } from '../../../config/configuration'
+import { ConfigService } from '../../../core/config/nestjs'
 import type { GitCommitInfo } from '../../../lib/types/index'
 import type {
   GitBranchInfo,
@@ -16,7 +15,7 @@ export class GitHubProvider extends BaseGitProvider {
   private octokit: Octokit
 
   constructor(
-    private configService: ConfigService<Config>,
+    private configService: ConfigService,
     accessToken: string,
   ) {
     super()
