@@ -1,0 +1,15 @@
+{
+  "extends": "../../configs/tsconfig/node.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./src/*"]
+    },
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*", "plugins/**/*", "routes/**/*", "nitro.config.ts"],
+  "exclude": ["node_modules", ".nitro", "dist"]
+}
