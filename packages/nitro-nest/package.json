@@ -1,0 +1,62 @@
+{
+  "name": "nitro-nest",
+  "version": "1.0.0",
+  "description": "Nitro and NestJS integration bridge with H3 event handling",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "nitro",
+    "nestjs",
+    "h3",
+    "serverless",
+    "integration",
+    "bridge",
+    "typescript"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "peerDependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "nitropack": "^2.0.0",
+    "h3": "^1.0.0",
+    "reflect-metadata": "^0.1.13"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@types/node": "^20.0.0",
+    "nitropack": "^2.0.0",
+    "h3": "^2.0.1-rc.2",
+    "reflect-metadata": "^0.1.13",
+    "rimraf": "^5.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/nitro-nest.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/nitro-nest/issues"
+  },
+  "homepage": "https://github.com/your-username/nitro-nest#readme"
+}
