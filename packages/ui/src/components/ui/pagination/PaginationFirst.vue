@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { PaginationFirstProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
-import type { ButtonVariants } from 'src/components/ui/button'
+import type { ButtonVariants } from '@/components/ui/button'
 import { reactiveOmit } from "@vueuse/core"
 import { ChevronLeftIcon } from "lucide-vue-next"
 import { PaginationFirst, useForwardProps } from "reka-ui"
 import { cn } from '@/utils'
-import { buttonVariants } from 'src/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 
 const props = withDefaults(defineProps<PaginationFirstProps & {
   size?: ButtonVariants["size"]

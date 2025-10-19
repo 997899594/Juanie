@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:13.12.15-ce.0
+    container_name: gitlab-ultra-minimal
+    restart: unless-stopped
+    hostname: 'localhost'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        # 外部URL配置
+        external_url 'http://localhost'
+        
+        # 禁用HTTPS
+        nginx['redirect_http_to_https'] = false
+        nginx['ssl_certificate'] = nil
+        nginx['ssl_certificate_key'] = nil
+        
+        # 最小化内存使用
+        postgresql['shared_buffers'] = "64MB"
+        postgresql['max_connections'] = 50
+        
+        # Redis配置
+        redis['maxmemory'] = "64mb"
+        redis['maxmemory_policy'] = "allkeys-lru"
+        
+        # Puma配置（替代Unicorn）
+        puma['worker_processes'] = 2
+        puma['min_threads'] = 4
+        puma['max_threads'] = 8
+        puma['worker_timeout'] = 60
+        puma['worker_memory_limit_min'] = "500m"
+        puma['worker_memory_limit_max'] = "1000m"
+        
+        # Sidekiq配置
+        sidekiq['max_concurrency'] = 5
+        sidekiq['memory_killer_max_rss'] = 1000000
+        
+        # 禁用监控和日志服务
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        node_exporter['enable'] = false
+        redis_exporter['enable'] = false
+        postgres_exporter['enable'] = false
+        gitlab_exporter['enable'] = false
+        grafana['enable'] = false
+        
+        # 禁用其他服务
+        gitlab_pages['enable'] = false
+        gitlab_kas['enable'] = false
+        mattermost['enable'] = false
+        registry['enable'] = false
+        gitlab_ci['gitlab_ci_all_broken_builds'] = false
+        gitlab_ci['gitlab_ci_add_pusher'] = false
+        
+        # 禁用备份
+        gitlab_rails['backup_keep_time'] = 0
+        gitlab_rails['backup_archive_permissions'] = 0644
+        
+        # 禁用Git LFS
+        gitlab_rails['lfs_enabled'] = false
+        
+        # 禁用容器注册表
+        gitlab_rails['registry_enabled'] = false
+        
+        # 禁用包注册表
+        gitlab_rails['packages_enabled'] = false
+        
+        # 简化日志配置
+        logging['svlogd_size'] = 10 * 1024 * 1024 # 10MB
+        logging['svlogd_num'] = 2
+        
+        # 禁用不必要的功能
+        gitlab_rails['usage_ping_enabled'] = false
+        gitlab_rails['sentry_enabled'] = false
+        gitlab_rails['gitlab_email_enabled'] = false
+        
+        # 最小化Gitaly配置
+        gitaly['configuration'] = {
+          storage: [
+            {
+              name: 'default',
+              path: '/var/opt/gitlab/git-data/repositories',
+            },
+          ],
+        }
+    ports:
+      - '8080:80'
+      - '2222:22'
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+    shm_size: '256m'
+    # 设置资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+volumes:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:

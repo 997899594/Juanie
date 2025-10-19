@@ -1,25 +1,46 @@
-import { boolean, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, integer, text, timestamp } from 'drizzle-orm/pg-core';
+
+export const documents = pgTable('documents', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  content: text('content').notNull(),
+  embedding: text('embedding'), // JSON string of vector array
+});
 
 export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull(),
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   email: text('email').notNull().unique(),
-  isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-})
+  name: text('name').notNull(),
+  image: text('image'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
-export const posts = pgTable('posts', {
-  id: serial('id').primaryKey(),
-  title: text('title').notNull(),
-  content: text('content'),
-  authorId: serial('author_id').references(() => users.id),
-  published: boolean('published').default(false),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-})
+export const accounts = pgTable('accounts', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  provider: text('provider').notNull(), // 'github' | 'gitlab'
+  providerId: text('provider_id').notNull(),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
-export type User = typeof users.$inferSelect
-export type NewUser = typeof users.$inferInsert
-export type Post = typeof posts.$inferSelect
-export type NewPost = typeof posts.$inferInsert
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  expires: timestamp('expires').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export type InsertDocument = typeof documents.$inferInsert;
+export type SelectDocument = typeof documents.$inferSelect;
+
+export type InsertUser = typeof users.$inferInsert;
+export type SelectUser = typeof users.$inferSelect;
+
+export type InsertAccount = typeof accounts.$inferInsert;
+export type SelectAccount = typeof accounts.$inferSelect;
+
+export type InsertSession = typeof sessions.$inferInsert;
+export type SelectSession = typeof sessions.$inferSelect;

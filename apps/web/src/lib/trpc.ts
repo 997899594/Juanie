@@ -1,4 +1,4 @@
-import type { AppRouter } from '@juanie/api'
+import type { AppRouter } from '@juanie/api-new/src/trpc/trpc.service'
 import { createTRPCProxyClient, httpBatchLink, loggerLink } from '@trpc/client'
 
 const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'

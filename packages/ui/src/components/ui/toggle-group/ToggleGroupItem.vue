@@ -6,7 +6,7 @@ import { reactiveOmit } from "@vueuse/core"
 import { ToggleGroupItem, useForwardProps } from "reka-ui"
 import { inject } from "vue"
 import { cn } from '@/utils'
-import { toggleVariants } from 'src/components/ui/toggle'
+import { toggleVariants } from '@/components/ui/toggle'
 
 type ToggleGroupVariants = VariantProps<typeof toggleVariants>
 

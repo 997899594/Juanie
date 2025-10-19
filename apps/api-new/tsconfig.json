@@ -1,15 +1,23 @@
 {
-  "extends": "../../configs/tsconfig/node.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "~/*": ["./src/*"]
-    },
-    "experimentalDecorators": true,
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "declaration": true,
+    "removeComments": true,
     "emitDecoratorMetadata": true,
-    "strict": true,
-    "skipLibCheck": true
-  },
-  "include": ["src/**/*", "plugins/**/*", "routes/**/*", "nitro.config.ts"],
-  "exclude": ["node_modules", ".nitro", "dist"]
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "target": "ES2024",
+    "strictNullChecks": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./",
+    "baseUrl": "./",
+    "skipLibCheck": true,
+    "incremental": true,
+    "allowImportingTsExtensions": false,
+    "noEmit": false
+  }
 }

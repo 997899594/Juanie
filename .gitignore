@@ -119,3 +119,10 @@ temp/
 
 # Trae AI
 .trae
+
+# GitLab Private Server
+gitlab/.env.local
+gitlab/data/
+gitlab/logs/
+gitlab/config/
+gitlab/backups/

@@ -1,5 +1,21 @@
-import type { ApiResponse, PaginatedResponse } from '@juanie/api'
+// import type { ApiResponse, PaginatedResponse } from '@juanie/api'
 import axios from 'axios'
+
+// 临时定义类型，直到@juanie/api包可用
+export interface ApiResponse<T = any> {
+  data: T
+  message?: string
+  success: boolean
+}
+
+export interface PaginatedResponse<T = any> extends ApiResponse<T[]> {
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
@@ -26,4 +42,4 @@ api.interceptors.response.use(
 )
 
 export { api }
-export type { ApiResponse, PaginatedResponse }
+// export type { ApiResponse, PaginatedResponse }

@@ -1,0 +1,52 @@
+services:
+  gitlab:
+    image: registry.cn-hangzhou.aliyuncs.com/gitlab-ce/gitlab-ce:16.11.1-ce.0
+    container_name: gitlab-ce-simple
+    restart: unless-stopped
+    hostname: localhost
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://localhost:8080'
+        gitlab_rails['initial_root_password'] = 'admin123456'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+
+        # 禁用不必要的服务以节省资源和启动时间
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        node_exporter['enable'] = false
+        redis_exporter['enable'] = false
+        postgres_exporter['enable'] = false
+        gitlab_exporter['enable'] = false
+        grafana['enable'] = false
+
+        # 减少内存使用
+        postgresql['shared_buffers'] = "128MB"
+        postgresql['max_connections'] = 100
+
+        # 禁用 GitLab Pages
+        pages_external_url nil
+        gitlab_pages['enable'] = false
+
+        # 禁用 Container Registry
+        registry_external_url nil
+        gitlab_rails['registry_enabled'] = false
+
+    ports:
+      - "8080:80"
+      - "2222:22"
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+    shm_size: "256m"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+volumes:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:

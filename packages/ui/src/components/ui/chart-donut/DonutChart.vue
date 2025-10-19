@@ -6,7 +6,7 @@ import { VisDonut, VisSingleContainer } from "@unovis/vue"
 import { useMounted } from "@vueuse/core"
 import { computed, ref } from "vue"
 import { cn } from '@/utils'
-import { ChartSingleTooltip, defaultColors } from 'src/components/ui/chart'
+import { ChartSingleTooltip, defaultColors } from '@/components/ui/chart'
 
 const props = withDefaults(defineProps<Pick<BaseChartProps<T>, "data" | "colors" | "index" | "margin" | "showLegend" | "showTooltip" | "filterOpacity"> & {
   /**

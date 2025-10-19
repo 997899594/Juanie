@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue"
 import { cn } from '@/utils'
-import { Textarea } from 'src/components/ui/textarea'
+import { Textarea } from '@/components/ui/textarea'
 
 const props = defineProps<{
   class?: HTMLAttributes["class"]

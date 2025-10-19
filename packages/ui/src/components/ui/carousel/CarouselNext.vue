@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { WithClassAsProps } from "./interface"
-import type { ButtonVariants } from 'src/components/ui/button'
+import type { ButtonVariants } from '@/components/ui/button'
 import { ArrowRight } from "lucide-vue-next"
 import { cn } from '@/utils'
-import { Button } from 'src/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { useCarousel } from "./useCarousel"
 
 const props = withDefaults(defineProps<{

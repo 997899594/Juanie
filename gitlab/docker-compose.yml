@@ -1,0 +1,85 @@
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:16.11.1-ce.0
+    container_name: gitlab-ce
+    restart: always
+    hostname: "localhost"
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        # GitLab 外部访问地址
+        external_url 'http://localhost:8080'
+
+        # GitLab Rails 配置
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+        gitlab_rails['time_zone'] = 'Asia/Shanghai'
+
+        # 邮件配置（可选）
+        # gitlab_rails['smtp_enable'] = true
+        # gitlab_rails['smtp_address'] = "smtp.gmail.com"
+        # gitlab_rails['smtp_port'] = 587
+        # gitlab_rails['smtp_user_name'] = "your-email@gmail.com"
+        # gitlab_rails['smtp_password'] = "your-password"
+        # gitlab_rails['smtp_domain'] = "smtp.gmail.com"
+        # gitlab_rails['smtp_authentication'] = "login"
+        # gitlab_rails['smtp_enable_starttls_auto'] = true
+        # gitlab_rails['smtp_tls'] = false
+
+        # 性能优化配置
+        postgresql['shared_buffers'] = "256MB"
+        postgresql['max_connections'] = 200
+
+        # 禁用一些不必要的服务以节省资源
+        prometheus_monitoring['enable'] = false
+        alertmanager['enable'] = false
+        node_exporter['enable'] = false
+        redis_exporter['enable'] = false
+        postgres_exporter['enable'] = false
+        gitlab_exporter['enable'] = false
+        grafana['enable'] = false
+
+        # 设置初始管理员密码（首次启动后会自动生成）
+        gitlab_rails['initial_root_password'] = 'admin123456'
+
+    ports:
+      - "8080:80" # HTTP 端口
+      - "8443:443" # HTTPS 端口
+      - "2222:22" # SSH 端口
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+    shm_size: "256m"
+    # 资源限制（可根据服务器配置调整）
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # GitLab Runner（可选，用于 CI/CD）
+  gitlab-runner:
+    image: gitlab/gitlab-runner:latest
+    container_name: gitlab-runner
+    restart: always
+    volumes:
+      - gitlab_runner_config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - gitlab
+    profiles:
+      - runner # 使用 profile 控制是否启动 runner
+
+volumes:
+  gitlab_config:
+    driver: local
+  gitlab_logs:
+    driver: local
+  gitlab_data:
+    driver: local
+  gitlab_runner_config:
+    driver: local
+
+networks:
+  default:
+    name: gitlab-network
