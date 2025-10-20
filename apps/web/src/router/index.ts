@@ -1,11 +1,12 @@
 import { createRouter, createWebHistory } from "vue-router";
-import AppLayout from "@/views/AppLayout.vue";
+import AppLayout from "@/layouts/AppLayout.vue";
 import Apps from "@/views/Apps.vue";
 import ComponentDemo from "@/views/ComponentDemo.vue";
 import Dashboard from "@/views/Dashboard.vue";
 import Documents from "@/views/Documents.vue";
 import Home from "@/views/Home.vue";
 import Login from "@/views/Login.vue";
+import Settings from "@/views/Settings.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -25,6 +26,36 @@ const router = createRouter({
           name: "documents",
           component: Documents,
         },
+        {
+          path: "dashboard",
+          name: "dashboard",
+          component: Dashboard,
+        },
+        {
+          path: "pipelines",
+          name: "pipelines",
+          component: Apps, // 暂时使用 Apps 组件，后续可以创建专门的组件
+        },
+        {
+          path: "deployments",
+          name: "deployments",
+          component: Apps, // 暂时使用 Apps 组件，后续可以创建专门的组件
+        },
+        {
+          path: "monitoring",
+          name: "monitoring",
+          component: Apps, // 暂时使用 Apps 组件，后续可以创建专门的组件
+        },
+        {
+          path: "settings",
+          name: "settings",
+          component: Settings,
+        },
+        {
+          path: "demo",
+          name: "demo",
+          component: ComponentDemo,
+        },
       ],
     },
     {
@@ -36,17 +67,6 @@ const router = createRouter({
       path: "/home",
       name: "home",
       component: Home,
-    },
-    {
-      path: "/dashboard",
-      name: "dashboard",
-      component: Dashboard,
-      meta: { requiresAuth: true },
-    },
-    {
-      path: "/demo",
-      name: "demo",
-      component: ComponentDemo,
     },
   ],
 });

@@ -4,6 +4,8 @@ import { createApp } from "vue";
 import App from "./App.vue";
 import router from "./router";
 
+// 导入样式
+import "./styles/main.css";
 import "@juanie/ui/styles";
 
 // 创建应用实例

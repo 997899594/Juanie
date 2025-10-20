@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-background text-foreground">
+  <div class="space-y-8">
     <!-- 导航栏 -->
     <nav class="border-b bg-card">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -28,64 +28,150 @@
     <!-- 主内容区 -->
     <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
       <div class="px-4 py-6 sm:px-0">
-        <!-- 欢迎卡片 -->
-        <Card class="mb-6">
-          <CardHeader>
-            <CardTitle>欢迎回来！</CardTitle>
-            <CardDescription v-if="authStore.user">
-              你好，{{ authStore.user.name }}，欢迎使用 Juanie 系统
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div class="text-center p-4 bg-muted rounded-lg">
-                <h3 class="font-semibold">文档管理</h3>
-                <p class="text-sm text-muted-foreground mt-1">管理和搜索文档</p>
-                <Button class="mt-3" size="sm" @click="$router.push('/documents')">
-                  进入文档
-                </Button>
-              </div>
-              <div class="text-center p-4 bg-muted rounded-lg">
-                <h3 class="font-semibold">组件演示</h3>
-                <p class="text-sm text-muted-foreground mt-1">查看 UI 组件库</p>
-                <Button class="mt-3" size="sm" variant="outline" @click="$router.push('/demo')">
-                  查看演示
-                </Button>
-              </div>
-              <div class="text-center p-4 bg-muted rounded-lg">
-                <h3 class="font-semibold">系统设置</h3>
-                <p class="text-sm text-muted-foreground mt-1">个人设置和偏好</p>
-                <Button class="mt-3" size="sm" variant="outline" disabled>
-                  即将推出
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <!-- 主要内容 -->
+        <div class="space-y-6">
+          <div class="space-y-2">
+            <h1 class="text-3xl font-bold tracking-tight">仪表盘</h1>
+            <p class="text-muted-foreground">
+              欢迎回来！这里是您的应用概览。
+            </p>
+          </div>
 
-        <!-- 用户信息卡片 -->
-        <Card v-if="authStore.user">
-          <CardHeader>
-            <CardTitle>用户信息</CardTitle>
-            <CardDescription>当前登录用户的详细信息</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div class="space-y-3">
-              <div class="flex items-center space-x-3">
-                <span class="text-sm font-medium w-16">用户ID:</span>
-                <span class="text-sm text-muted-foreground">{{ authStore.user.id }}</span>
-              </div>
-              <div class="flex items-center space-x-3">
-                <span class="text-sm font-medium w-16">邮箱:</span>
-                <span class="text-sm text-muted-foreground">{{ authStore.user.email }}</span>
-              </div>
-              <div class="flex items-center space-x-3">
-                <span class="text-sm font-medium w-16">姓名:</span>
-                <span class="text-sm text-muted-foreground">{{ authStore.user.name }}</span>
-              </div>
+          <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <Card>
+              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle class="text-sm font-medium">总应用数</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div class="text-2xl font-bold">12</div>
+                <p class="text-xs text-muted-foreground">
+                  +2 较上月
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle class="text-sm font-medium">运行中应用</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div class="text-2xl font-bold">8</div>
+                <p class="text-xs text-muted-foreground">
+                  66.7% 运行率
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle class="text-sm font-medium">本月部署</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div class="text-2xl font-bold">24</div>
+                <p class="text-xs text-muted-foreground">
+                  +12 较上月
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div class="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>用户信息</CardTitle>
+                <CardDescription>当前登录用户的基本信息</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div class="space-y-2">
+                  <p><strong>用户名:</strong> {{ authStore.user?.name || '未知用户' }}</p>
+                  <p><strong>邮箱:</strong> {{ authStore.user?.email || '未知邮箱' }}</p>
+                  <p><strong>登录状态:</strong> 
+                    <span class="text-green-600">已登录</span>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>快速操作</CardTitle>
+                <CardDescription>常用功能快捷入口</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div class="space-y-2">
+                  <Button class="w-full" @click="$router.push('/apps')">
+                    管理应用
+                  </Button>
+                  <Button variant="outline" class="w-full">
+                    查看日志
+                  </Button>
+                  <Button variant="outline" class="w-full">
+                    系统设置
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <!-- 添加更多内容来测试滚动效果 -->
+          <div class="space-y-6">
+            <h2 class="text-2xl font-bold tracking-tight">最近活动</h2>
+            
+            <div class="space-y-4">
+              <Card v-for="i in 10" :key="i">
+                <CardHeader>
+                  <CardTitle class="text-lg">活动 {{ i }}</CardTitle>
+                  <CardDescription>{{ new Date().toLocaleDateString() }}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p class="text-sm text-muted-foreground">
+                    这是第 {{ i }} 个活动的详细描述。这里可以显示应用部署、更新、错误等各种活动信息。
+                    为了测试滚动效果，我们添加了更多的内容来确保页面有足够的高度。
+                  </p>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          <!-- 更多测试内容 -->
+          <div class="space-y-6">
+            <h2 class="text-2xl font-bold tracking-tight">系统监控</h2>
+            
+            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              <Card v-for="metric in ['CPU使用率', '内存使用率', '磁盘使用率', '网络流量']" :key="metric">
+                <CardHeader class="pb-2">
+                  <CardTitle class="text-sm font-medium">{{ metric }}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div class="text-2xl font-bold">{{ Math.floor(Math.random() * 100) }}%</div>
+                  <div class="h-2 bg-muted rounded-full mt-2">
+                    <div class="h-2 bg-primary rounded-full" :style="{ width: Math.floor(Math.random() * 100) + '%' }"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <!-- 底部内容 -->
+          <div class="space-y-6 pb-20">
+            <h2 class="text-2xl font-bold tracking-tight">应用列表</h2>
+            
+            <div class="space-y-4">
+              <Card v-for="app in ['Web应用', 'API服务', '数据库', '缓存服务', '消息队列']" :key="app">
+                <CardHeader>
+                  <CardTitle class="text-lg">{{ app }}</CardTitle>
+                  <CardDescription>运行状态：正常</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div class="flex justify-between items-center">
+                    <span class="text-sm text-muted-foreground">最后更新：{{ new Date().toLocaleString() }}</span>
+                    <Button size="sm" variant="outline">查看详情</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -100,6 +186,11 @@ import { useAuthStore } from '@/stores/auth'
 const router = useRouter()
 const authStore = useAuthStore()
 
+const handleLogout = async () => {
+  await authStore.logout()
+  router.push({ name: 'Login' })
+}
+
 onMounted(async () => {
   // 初始化认证状态
   await authStore.initialize()
@@ -109,13 +200,4 @@ onMounted(async () => {
     router.replace({ name: 'Login' })
   }
 })
-
-async function handleLogout() {
-  try {
-    await authStore.logout()
-    router.push({ name: 'Login' })
-  } catch (error) {
-    console.error('Logout failed:', error)
-  }
-}
 </script>

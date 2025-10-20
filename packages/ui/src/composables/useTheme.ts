@@ -28,11 +28,12 @@ export function useTheme() {
   });
 
   const currentThemeConfig = computed(() => {
-    return getCurrentTheme();
+    const theme = availableThemes.value.find(t => t.name === currentTheme.value);
+    return theme || null;
   });
 
-  const isCurrentThemeDark = computed(() => {
-    return isDarkTheme();
+  const isDark = computed(() => {
+    return currentTheme.value.includes("dark");
   });
 
   // 方法
@@ -79,24 +80,6 @@ export function useTheme() {
   // 初始化
   onMounted(() => {
     currentTheme.value = restoreTheme();
-
-    // 监听系统主题变化
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => {
-      // 只有在使用默认主题时才自动切换
-      const current = getCurrentTheme();
-      if (current?.group === "default") {
-        const newTheme = mediaQuery.matches ? "default-dark" : "default";
-        setTheme(newTheme);
-      }
-    };
-
-    mediaQuery.addEventListener("change", handleChange);
-
-    // 清理函数
-    return () => {
-      mediaQuery.removeEventListener("change", handleChange);
-    };
   });
 
   return {
@@ -108,7 +91,7 @@ export function useTheme() {
     availableThemes,
     themeGroups,
     currentThemeConfig,
-    isCurrentThemeDark,
+    isDark,
 
     // 方法
     setTheme,

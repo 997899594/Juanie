@@ -30,10 +30,10 @@
             </Button>
           </div>
           <Button 
-            :variant="isCurrentThemeDark ? 'default' : 'outline'"
+            :variant="isDark ? 'default' : 'outline'"
             @click="toggleMode()"
           >
-            {{ isCurrentThemeDark ? '🌙 暗色模式' : '☀️ 亮色模式' }}
+            {{ isDark ? '🌙 暗色模式' : '☀️ 亮色模式' }}
           </Button>
         </CardContent>
       </Card>
@@ -164,6 +164,6 @@ import {
   useTheme 
 } from '@juanie/ui'
 
-const { currentTheme, setTheme, toggleMode, availableThemes, isCurrentThemeDark } = useTheme()
+const { currentTheme, setTheme, toggleMode, availableThemes, isDark } = useTheme()
 const themes = availableThemes
 </script>
