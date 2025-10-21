@@ -285,6 +285,7 @@ import {
   Plus,
   Rocket,
   Settings,
+  TrendingUp,
 } from 'lucide-vue-next'
 
 // 模拟应用数据

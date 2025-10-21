@@ -2,39 +2,57 @@ import { NestFactory } from "@nestjs/core";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
+import { AuthService } from "./auth/auth.service";
 import { TrpcService } from "./trpc/trpc.service";
+import { AuthMiddleware } from "./middleware/auth.middleware";
+import { HttpExceptionFilter } from "./common/exceptions/http-exception.filter";
+import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 添加 cookie-parser 中间件
+  // 启用CORS
+  app.enableCors({
+    origin: ["http://localhost:5173", "http://localhost:3000"],
+    credentials: true,
+  });
+
+  // 全局异常过滤器
+  app.useGlobalFilters(new HttpExceptionFilter());
+
+  // 全局拦截器
+  app.useGlobalInterceptors(new LoggingInterceptor());
+
+  // 使用cookie解析器
   app.use(cookieParser());
+
+  // 应用认证中间件到所有路由
+  const authMiddleware = app.get(AuthMiddleware);
+  app.use((req: any, res: any, next: any) => {
+    authMiddleware.use(req, res, next);
+  });
 
   const trpcService = app.get(TrpcService);
 
-  // 配置CORS，允许前端域名访问
-  app.enableCors({
-    origin: [
-      "http://localhost:1997", // 前端开发服务器
-      "http://localhost:1998", // 前端开发服务器备用端口
-      "http://localhost:5173", // Vite默认端口
-      "http://192.168.100.46:1997", // 网络IP访问
-    ],
-    credentials: true, // 允许携带Cookie
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-trpc-source"],
-  });
-
-  // tRPC Express适配器配置 - 需要单独配置CORS
+  // tRPC Express适配器配置 - 使用优化的createContext
   app.use(
     "/trpc",
     trpcExpress.createExpressMiddleware({
       router: trpcService.router,
-      createContext: ({ req, res }) => {
-        console.log("=== tRPC createContext 调试信息 ===");
-        console.log("req.cookies:", req.cookies);
-        console.log("req.headers.cookie:", req.headers.cookie);
-        return { req, res };
+      createContext: async ({ req, res }) => {
+        // 从中间件中获取已验证的用户和会话信息
+        const authenticatedReq = req as any;
+        
+        return {
+          req,
+          res,
+          app,
+          user: authenticatedReq.user || null,
+          session: authenticatedReq.session ? {
+            userId: authenticatedReq.session.userId,
+            sessionId: authenticatedReq.session.id,
+          } : null,
+        };
       },
     })
   );

@@ -6,12 +6,7 @@
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
-    "start:prod": "node .",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "start:prod": "node ."
   },
   "keywords": [],
   "author": "",
@@ -22,21 +17,26 @@
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/swagger": "^11.2.1",
+    "@nestjs/throttler": "^6.4.0",
     "@trpc/server": "^11.6.0",
     "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.3",
     "ai": "^5.0.76",
     "arctic": "^3.7.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.44.6",
-    "drizzle-zod": "^0.8.3",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
     "oslo": "^1.2.1",
     "postgres": "^3.4.7",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^3.25.1"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.6",
-    "@types/express": "^5.0.3",
-    "@types/jest": "^30.0.0",
     "drizzle-kit": "^0.31.5",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5"

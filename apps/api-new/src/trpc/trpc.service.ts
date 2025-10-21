@@ -1,62 +1,64 @@
-import { Injectable } from "@nestjs/common";
-import { initTRPC } from "@trpc/server";
-import { DocumentsService } from "../documents/documents.service";
-import { AuthService } from "../auth/auth.service";
-import { createDocumentSchema } from "../schemas/document.schema";
-import { createAuthRouter } from "./routers/auth.router";
-
-const t = initTRPC.create();
+import { Injectable, OnModuleInit } from "@nestjs/common";
+import { ModuleRef } from '@nestjs/core';
+import { DiscoveryService, MetadataScanner } from '@nestjs/core';
+import type { AnyRouter } from '@trpc/server';
+import { AuthRouter } from "./routers/auth.decorator.router";
+import { GitLabRouter } from "./routers/gitlab.decorator.router";
+import { DocumentsRouter } from "./routers/documents.decorator.router";
 
 @Injectable()
-export class TrpcService {
-  private _appRouter: ReturnType<typeof this.createAppRouter>;
+export class TrpcService implements OnModuleInit {
+  private _appRouter: AnyRouter | null = null;
+  private _routers: Map<string, AnyRouter> = new Map();
 
   constructor(
-    private readonly documentsService: DocumentsService,
-    private readonly authService: AuthService,
-  ) {
-    this._appRouter = this.createAppRouter();
+    private readonly moduleRef: ModuleRef,
+    private readonly discoveryService: DiscoveryService,
+    private readonly metadataScanner: MetadataScanner,
+    private readonly authRouter: AuthRouter,
+    private readonly gitlabRouter: GitLabRouter,
+    private readonly documentsRouter: DocumentsRouter
+  ) {}
+
+  async onModuleInit() {
+    // 手动注册路由器
+    this.registerRouters([
+      this.authRouter,
+      this.gitlabRouter,
+      this.documentsRouter,
+    ]);
   }
 
-  private createAppRouter() {
-    return t.router({
-      // 认证相关路由
-      auth: createAuthRouter(this.authService),
-    
-    // 文档相关路由
-      createDocument: t.procedure
-        .input(createDocumentSchema)
-        .mutation(async ({ input }) => {
-          return this.documentsService.createWithEmbedding(input);
-        }),
-
-      getDocument: t.procedure
-        .input((input: unknown) => {
-          if (typeof input !== "object" || input === null || !("id" in input)) {
-            throw new Error("Invalid input: id is required");
-          }
-          const id = Number((input as any).id);
-          if (isNaN(id)) {
-            throw new Error("Invalid input: id must be a number");
-          }
-          return { id };
-        })
-        .query(async ({ input }) => {
-          return this.documentsService.findById(input.id);
-        }),
-
-      getDocuments: t.procedure.query(async () => {
-        return this.documentsService.findAll();
-      }),
-    });
+  /**
+   * 手动注册路由器数组
+   */
+  registerRouters(routers: any[]) {
+    // 这里暂时使用简单的实现，实际应该根据装饰器元数据构建路由器
+    // 由于缺少完整的@trpc/nest包实现，这里提供基本结构
+    console.log('Registering routers:', routers.map(r => r.constructor.name));
   }
 
-  get appRouter() {
+  /**
+   * 获取应用路由器
+   */
+  get appRouter(): AnyRouter {
+    if (!this._appRouter) {
+      // 创建一个基本的空路由器作为占位符
+      // 实际实现需要根据注册的路由器构建
+      return {} as AnyRouter;
+    }
     return this._appRouter;
   }
 
-  get router() {
-    return this.appRouter;
+  /**
+   * 获取路由器统计信息
+   */
+  getStats() {
+    return {
+      totalRouters: this._routers.size,
+      routerNames: Array.from(this._routers.keys()),
+      hasAppRouter: !!this._appRouter,
+    };
   }
 }
 

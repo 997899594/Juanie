@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import AppLayout from "@/layouts/AppLayout.vue";
 import Apps from "@/views/Apps.vue";
-import ComponentDemo from "@/views/ComponentDemo.vue";
 import Dashboard from "@/views/Dashboard.vue";
 import Documents from "@/views/Documents.vue";
 import Home from "@/views/Home.vue";
@@ -51,11 +50,6 @@ const router = createRouter({
           name: "settings",
           component: Settings,
         },
-        {
-          path: "demo",
-          name: "demo",
-          component: ComponentDemo,
-        },
       ],
     },
     {
@@ -79,8 +73,20 @@ router.beforeEach(async (to, from, next) => {
 
   // 检查是否需要认证
   if (to.meta?.requiresAuth) {
-    // 这里可以添加认证检查逻辑
-    // 暂时允许所有访问，具体认证在组件内处理
+    // 动态导入 auth store 以避免循环依赖
+    const { useAuthStore } = await import("@/stores/auth");
+    const authStore = useAuthStore();
+
+    // 如果还没有初始化，先初始化认证状态
+    if (!authStore.initialized) {
+      await authStore.initialize();
+    }
+
+    // 如果未认证，跳转到登录页
+    if (!authStore.isAuthenticated) {
+      next({ name: "login", query: { redirect: to.fullPath } });
+      return;
+    }
   }
 
   next();

@@ -252,6 +252,7 @@ import {
   Activity,
   AppWindow,
   BarChart3,
+  ChevronsUpDown,
   FileText,
   GitBranch,
   LogOut,

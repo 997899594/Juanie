@@ -22,11 +22,12 @@
           <div class="flex flex-wrap gap-3 mb-4">
             <Button 
               v-for="themeOption in themes"
-              :key="themeOption.name"
-              :variant="currentTheme === themeOption.name ? 'default' : 'outline'"
-              @click="setTheme(themeOption.name)"
+              :key="themeOption.id"
+              :variant="currentTheme?.id === themeOption.id ? 'default' : 'outline'"
+              size="sm"
+              @click="setTheme(themeOption.id)"
             >
-              {{ themeOption.displayName }}
+              {{ themeOption.name }}
             </Button>
           </div>
           <Button 
@@ -164,6 +165,6 @@ import {
   useTheme 
 } from '@juanie/ui'
 
-const { currentTheme, setTheme, toggleMode, availableThemes, isDark } = useTheme()
-const themes = availableThemes
+const { currentTheme, setTheme, toggleMode, themes, isDark } = useTheme()
+  const availableThemes = themes
 </script>
