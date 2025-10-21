@@ -77,6 +77,19 @@ export type SearchInput = z.infer<typeof searchSchema>;
 export type IdInput = z.infer<typeof idSchema>;
 export type BulkOperationInput = z.infer<typeof bulkOperationSchema>;
 export type DateRangeInput = z.infer<typeof dateRangeSchema>;
-export type SuccessResponse<T = any> = Omit<z.infer<typeof successResponseSchema>, 'data'> & { data: T };
+export type SuccessResponse<T = any> = Omit<z.infer<typeof successResponseSchema>, 'data'> & { data?: T };
+export type SuccessMessageResponse = Omit<z.infer<typeof successResponseSchema>, 'data'> & { message: string };
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
-export type PaginatedResponse<T = any> = Omit<z.infer<typeof paginatedResponseSchema>, 'data'> & { data: T[] };
+export type PaginatedResponse<T = any> = {
+  success: true;
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+  timestamp: string;
+};

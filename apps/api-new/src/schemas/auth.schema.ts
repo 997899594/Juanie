@@ -4,6 +4,25 @@ import { idSchema } from './common.schema';
 // OAuth提供商枚举
 export const oauthProviderSchema = z.enum(['gitlab', 'github']);
 
+// 登录输入schema
+export const loginInputSchema = z.object({
+  email: z.string().email('请输入有效的邮箱地址'),
+  password: z.string().min(6, '密码至少6位'),
+});
+
+// 注册输入schema
+export const registerInputSchema = z.object({
+  email: z.string().email('请输入有效的邮箱地址'),
+  password: z.string().min(6, '密码至少6位'),
+  name: z.string().min(1, '请输入姓名'),
+});
+
+// 更新用户输入schema
+export const updateUserInputSchema = z.object({
+  name: z.string().min(1, '请输入姓名').optional(),
+  email: z.string().email('请输入有效的邮箱地址').optional(),
+});
+
 // 创建认证URL请求
 export const createAuthUrlSchema = z.object({
   provider: oauthProviderSchema,
@@ -92,6 +111,9 @@ export const checkPermissionSchema = z.object({
 
 // 类型推断
 export type OAuthProvider = z.infer<typeof oauthProviderSchema>;
+export type LoginInput = z.infer<typeof loginInputSchema>;
+export type RegisterInput = z.infer<typeof registerInputSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserInputSchema>;
 export type CreateAuthUrlInput = z.infer<typeof createAuthUrlSchema>;
 export type OAuthCallbackInput = z.infer<typeof oauthCallbackSchema>;
 export type ValidateSessionInput = z.infer<typeof validateSessionSchema>;

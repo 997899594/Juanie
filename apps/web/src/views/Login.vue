@@ -121,6 +121,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { config } from '@/utils/config'
 import LoginForm from '@/components/LoginForm.vue'
 
 const router = useRouter()
@@ -134,7 +135,11 @@ const handleGitHubLogin = async () => {
   error.value = ''
   
   try {
-    const authUrl = await authStore.getGitHubAuthUrl()
+    // 获取当前路由的 redirect 参数，如果没有则重定向到首页
+    const redirectQuery = router.currentRoute.value.query.redirect as string
+    const redirectTo = redirectQuery ? config.getRedirectUrl(redirectQuery) : config.getRedirectUrl()
+    
+    const authUrl = await authStore.getGitHubAuthUrl(redirectTo)
     // 直接跳转到认证页面
     window.location.href = authUrl
   } catch (err) {
@@ -149,7 +154,11 @@ const handleGitLabLogin = async () => {
   error.value = ''
   
   try {
-    const authUrl = await authStore.getGitLabAuthUrl()
+    // 获取当前路由的 redirect 参数，如果没有则重定向到首页
+    const redirectQuery = router.currentRoute.value.query.redirect as string
+    const redirectTo = redirectQuery ? config.getRedirectUrl(redirectQuery) : config.getRedirectUrl()
+    
+    const authUrl = await authStore.getGitLabAuthUrl(redirectTo)
     // 直接跳转到认证页面
     window.location.href = authUrl
   } catch (err) {

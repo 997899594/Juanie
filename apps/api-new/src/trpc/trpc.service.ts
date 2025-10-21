@@ -1,65 +1,51 @@
 import { Injectable, OnModuleInit } from "@nestjs/common";
-import { ModuleRef } from '@nestjs/core';
-import { DiscoveryService, MetadataScanner } from '@nestjs/core';
-import type { AnyRouter } from '@trpc/server';
-import { AuthRouter } from "./routers/auth.decorator.router";
-import { GitLabRouter } from "./routers/gitlab.decorator.router";
-import { DocumentsRouter } from "./routers/documents.decorator.router";
+import { AuthService } from "../auth/auth.service";
+import { DocumentsService } from "../documents/documents.service";
+import { GitLabService } from "../gitlab/gitlab.service";
+import { createAuthRouter } from "./routers/auth.router";
+import { createDocumentsRouter } from "./routers/documents.router";
+import { createGitLabRouter } from "./routers/gitlab.router";
+import { createTRPCRouter } from "./trpc";
 
 @Injectable()
 export class TrpcService implements OnModuleInit {
-  private _appRouter: AnyRouter | null = null;
-  private _routers: Map<string, AnyRouter> = new Map();
+  private appRouter: ReturnType<typeof createTRPCRouter>;
 
   constructor(
-    private readonly moduleRef: ModuleRef,
-    private readonly discoveryService: DiscoveryService,
-    private readonly metadataScanner: MetadataScanner,
-    private readonly authRouter: AuthRouter,
-    private readonly gitlabRouter: GitLabRouter,
-    private readonly documentsRouter: DocumentsRouter
+    private readonly authService: AuthService,
+    private readonly gitlabService: GitLabService,
+    private readonly documentsService: DocumentsService
   ) {}
 
   async onModuleInit() {
-    // 手动注册路由器
-    this.registerRouters([
-      this.authRouter,
-      this.gitlabRouter,
-      this.documentsRouter,
-    ]);
+    this.appRouter = createTRPCRouter({
+      auth: createAuthRouter(this.authService),
+      gitlab: createGitLabRouter(this.gitlabService),
+      documents: createDocumentsRouter(this.documentsService),
+    });
   }
 
-  /**
-   * 手动注册路由器数组
-   */
-  registerRouters(routers: any[]) {
-    // 这里暂时使用简单的实现，实际应该根据装饰器元数据构建路由器
-    // 由于缺少完整的@trpc/nest包实现，这里提供基本结构
-    console.log('Registering routers:', routers.map(r => r.constructor.name));
+  get router() {
+    return this.appRouter;
   }
 
-  /**
-   * 获取应用路由器
-   */
-  get appRouter(): AnyRouter {
-    if (!this._appRouter) {
-      // 创建一个基本的空路由器作为占位符
-      // 实际实现需要根据注册的路由器构建
-      return {} as AnyRouter;
-    }
-    return this._appRouter;
+  getAppRouter() {
+    return this.appRouter;
   }
 
-  /**
-   * 获取路由器统计信息
-   */
   getStats() {
     return {
-      totalRouters: this._routers.size,
-      routerNames: Array.from(this._routers.keys()),
-      hasAppRouter: !!this._appRouter,
+      routers: ["auth", "gitlab", "documents"],
+      totalRouters: 3,
     };
   }
 }
 
-export type AppRouter = TrpcService["appRouter"];
+// 正确的 AppRouter 类型定义
+export type AppRouter = ReturnType<
+  typeof createTRPCRouter<{
+    auth: ReturnType<typeof createAuthRouter>;
+    gitlab: ReturnType<typeof createGitLabRouter>;
+    documents: ReturnType<typeof createDocumentsRouter>;
+  }>
+>;

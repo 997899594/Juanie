@@ -19,18 +19,18 @@ export class AuthController {
     @Res() res?: Response
   ) {
     try {
-      const { url, state } = await this.authService.createGitLabAuthUrl(
-        redirectTo
+      const authUrl = await this.authService.createGitLabAuthUrl(
+        redirectTo ? { provider: "gitlab", redirectTo } : { provider: "gitlab" }
       );
 
-      res?.cookie("oauth_state", state, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 10 * 60 * 1000, // 10分钟
-      });
+      res?.cookie("oauth_state", authUrl.state, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 10 * 60 * 1000, // 10分钟
+        });
 
-      return res?.redirect(url);
+        return res?.redirect(authUrl.url);
     } catch (error) {
       throw new HttpException(
         "Failed to initiate GitLab OAuth",
@@ -56,11 +56,10 @@ export class AuthController {
     try {
       const {
         user,
-        sessionId,
-        redirectTo: storedRedirectTo,
-      } = await this.authService.handleGitLabCallback(code, state);
+        session,
+      } = await this.authService.handleGitLabCallback({ provider: "gitlab", code, state });
 
-      res?.cookie("session", sessionId, {
+      res?.cookie("session", session.id, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -69,8 +68,8 @@ export class AuthController {
 
       res?.clearCookie("oauth_state");
 
-      // 优先使用存储的redirectTo
-      const finalRedirectTo = storedRedirectTo || redirectTo || "";
+      // 使用传入的redirectTo参数，如果没有则重定向到前端首页
+      const finalRedirectTo = redirectTo || process.env.FRONTEND_URL || "http://localhost:1997/";
 
       // 直接重定向，不使用中间页面
       return res?.redirect(finalRedirectTo);

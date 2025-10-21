@@ -1,9 +1,14 @@
-import { pgTable, integer, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, integer, text, timestamp, jsonb } from 'drizzle-orm/pg-core';
 
 export const documents = pgTable('documents', {
   id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   content: text('content').notNull(),
+  title: text('title'),
+  tags: jsonb('tags').$type<string[]>().default([]),
+  metadata: jsonb('metadata').$type<Record<string, any>>(),
   embedding: text('embedding'), // JSON string of vector array
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export const users = pgTable('users', {
@@ -33,8 +38,8 @@ export const sessions = pgTable('sessions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
-export type InsertDocument = typeof documents.$inferInsert;
 export type SelectDocument = typeof documents.$inferSelect;
+export type InsertDocument = typeof documents.$inferInsert;
 
 export type InsertUser = typeof users.$inferInsert;
 export type SelectUser = typeof users.$inferSelect;

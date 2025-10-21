@@ -84,6 +84,12 @@ export const getUserSchema = z.object({
   with_custom_attributes: z.boolean().default(false),
 });
 
+// 根据用户名获取用户信息
+export const getUserByUsernameSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  with_custom_attributes: z.boolean().default(false),
+});
+
 // 获取群组列表
 export const listGroupsSchema = z.object({
   ...paginationSchema.shape,
@@ -246,6 +252,7 @@ export type DeleteGitlabProjectInput = z.infer<typeof deleteGitlabProjectSchema>
 export type ForkGitlabProjectInput = z.infer<typeof forkGitlabProjectSchema>;
 export type GetCurrentUserInput = z.infer<typeof getCurrentUserSchema>;
 export type GetUserInput = z.infer<typeof getUserSchema>;
+export type GetUserByUsernameInput = z.infer<typeof getUserByUsernameSchema>;
 export type ListGroupsInput = z.infer<typeof listGroupsSchema>;
 export type GetGroupInput = z.infer<typeof getGroupSchema>;
 export type GitlabProjectResponse = z.infer<typeof gitlabProjectResponseSchema>;

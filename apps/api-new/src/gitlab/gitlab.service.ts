@@ -9,6 +9,7 @@ import {
   forkGitlabProjectSchema,
   getCurrentUserSchema,
   getUserSchema,
+  getUserByUsernameSchema,
   listGroupsSchema,
   getGroupSchema,
   type CreateGitlabProjectInput,
@@ -19,13 +20,14 @@ import {
   type ForkGitlabProjectInput,
   type GetCurrentUserInput,
   type GetUserInput,
+  type GetUserByUsernameInput,
   type ListGroupsInput,
   type GetGroupInput,
   type GitlabProjectResponse,
   type GitlabUserResponse,
   type GitlabGroupResponse,
 } from '../schemas/gitlab.schema';
-import { successResponseSchema, paginatedResponseSchema, type SuccessResponse, type PaginatedResponse } from '../schemas/common.schema';
+import { successResponseSchema, paginatedResponseSchema, type SuccessResponse, type SuccessMessageResponse, type PaginatedResponse } from '../schemas/common.schema';
 
 @Injectable()
 export class GitLabService {
@@ -36,9 +38,10 @@ export class GitLabService {
     this.baseUrl = this.configService.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com';
     this.accessToken = this.configService.get<string>('GITLAB_ACCESS_TOKEN') || '';
     
-    if (!this.accessToken) {
-      throw new InternalServerErrorException('GitLab access token is not configured');
-    }
+    // 只在需要时检查token，而不是在服务初始化时
+    // if (!this.accessToken) {
+    //   throw new InternalServerErrorException('GitLab access token is not configured');
+    // }
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
@@ -119,9 +122,9 @@ export class GitLabService {
   /**
    * 根据用户名获取用户信息
    */
-  async getUser(userId: number, input: GetUserInput): Promise<GitlabUserResponse[]> {
+  async getUser(userId: number, input: GetUserByUsernameInput): Promise<GitlabUserResponse[]> {
     try {
-      const validatedInput = getUserSchema.parse(input);
+      const validatedInput = getUserByUsernameSchema.parse(input);
       const users = await this.makeRequest(`/users?username=${validatedInput.username}`);
       
       if (!Array.isArray(users) || users.length === 0) {
@@ -151,8 +154,8 @@ export class GitLabService {
       if (validatedInput.page !== undefined) {
         params.append('page', validatedInput.page.toString());
       }
-      if (validatedInput.per_page !== undefined) {
-        params.append('per_page', validatedInput.per_page.toString());
+      if (validatedInput.limit !== undefined) {
+        params.append('per_page', validatedInput.limit.toString());
       }
       
       // 过滤参数
@@ -162,11 +165,9 @@ export class GitLabService {
       if (validatedInput.owned !== undefined) {
         params.append('owned', validatedInput.owned.toString());
       }
-      if (validatedInput.order_by) {
-        params.append('order_by', validatedInput.order_by);
-      }
-      if (validatedInput.sort) {
-        params.append('sort', validatedInput.sort);
+      // 移除order_by检查，因为listGroupsSchema中没有这个字段
+      if (validatedInput.sortBy) {
+        params.append('sort', validatedInput.sortBy);
       }
       if (validatedInput.search) {
         params.append('search', validatedInput.search);
@@ -175,11 +176,16 @@ export class GitLabService {
       const groups = await this.makeRequest(`/groups?${params.toString()}`);
       
       return {
+        success: true,
         data: groups,
+        timestamp: new Date().toISOString(),
         pagination: {
           page: validatedInput.page || 1,
-          per_page: validatedInput.per_page || 20,
-          total: groups.length, // GitLab API 通常在响应头中提供总数，这里简化处理
+          limit: validatedInput.limit || 20,
+          total: groups.length,
+          totalPages: Math.ceil(groups.length / (validatedInput.limit || 20)),
+          hasNext: (validatedInput.page || 1) < Math.ceil(groups.length / (validatedInput.limit || 20)),
+          hasPrev: (validatedInput.page || 1) > 1,
         }
       };
     } catch (error) {
@@ -222,8 +228,8 @@ export class GitLabService {
       if (validatedInput.page !== undefined) {
         params.append('page', validatedInput.page.toString());
       }
-      if (validatedInput.per_page !== undefined) {
-        params.append('per_page', validatedInput.per_page.toString());
+      if (validatedInput.limit !== undefined) {
+        params.append('per_page', validatedInput.limit.toString());
       }
       
       // 过滤参数
@@ -263,8 +269,8 @@ export class GitLabService {
       if (validatedInput.order_by) {
         params.append('order_by', validatedInput.order_by);
       }
-      if (validatedInput.sort) {
-        params.append('sort', validatedInput.sort);
+      if (validatedInput.sortBy) {
+        params.append('sort', validatedInput.sortBy);
       }
       if (validatedInput.search) {
         params.append('search', validatedInput.search);
@@ -273,11 +279,16 @@ export class GitLabService {
       const projects = await this.makeRequest(`/projects?${params.toString()}`);
       
       return {
+        success: true,
         data: projects,
+        timestamp: new Date().toISOString(),
         pagination: {
           page: validatedInput.page || 1,
-          per_page: validatedInput.per_page || 20,
-          total: projects.length, // GitLab API 通常在响应头中提供总数，这里简化处理
+          limit: validatedInput.limit || 20,
+          total: projects.length,
+          totalPages: Math.ceil(projects.length / (validatedInput.limit || 20)),
+          hasNext: (validatedInput.page || 1) < Math.ceil(projects.length / (validatedInput.limit || 20)),
+          hasPrev: (validatedInput.page || 1) > 1,
         }
       };
     } catch (error) {
@@ -347,7 +358,7 @@ export class GitLabService {
   /**
    * 删除项目
    */
-  async deleteProject(userId: number, input: DeleteGitlabProjectInput): Promise<SuccessResponse> {
+  async deleteProject(userId: number, input: DeleteGitlabProjectInput): Promise<SuccessMessageResponse> {
     try {
       const validatedInput = deleteGitlabProjectSchema.parse(input);
       await this.makeRequest(`/projects/${validatedInput.id}`, {
@@ -356,7 +367,8 @@ export class GitLabService {
       
       return {
         success: true,
-        message: 'Project deleted successfully'
+        message: 'Project deleted successfully',
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
       if (error instanceof BadRequestException || 
@@ -416,8 +428,8 @@ export class GitLabService {
       if (validatedInput.page !== undefined) {
         params.append('page', validatedInput.page.toString());
       }
-      if (validatedInput.per_page !== undefined) {
-        params.append('per_page', validatedInput.per_page.toString());
+      if (validatedInput.limit !== undefined) {
+        params.append('per_page', validatedInput.limit.toString());
       }
       
       // 搜索参数
@@ -432,11 +444,16 @@ export class GitLabService {
       const projects = await this.makeRequest(`/projects?${params.toString()}`);
       
       return {
+        success: true,
         data: projects,
+        timestamp: new Date().toISOString(),
         pagination: {
           page: validatedInput.page || 1,
-          per_page: validatedInput.per_page || 20,
-          total: projects.length, // GitLab API 通常在响应头中提供总数，这里简化处理
+          limit: validatedInput.limit || 20,
+          total: projects.length,
+          totalPages: Math.ceil(projects.length / (validatedInput.limit || 20)),
+          hasNext: (validatedInput.page || 1) < Math.ceil(projects.length / (validatedInput.limit || 20)),
+          hasPrev: (validatedInput.page || 1) > 1,
         }
       };
     } catch (error) {

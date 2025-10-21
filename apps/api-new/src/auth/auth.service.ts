@@ -1,17 +1,33 @@
-import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { eq, and } from 'drizzle-orm';
-import { DrizzleService } from '../db/drizzle.service';
-import { users, accounts, sessions } from '../db/schema';
-import { SessionCacheService } from './session-cache.service';
 import {
-  OAuthProvider,
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { GitLab } from "arctic";
+import { and, eq } from "drizzle-orm";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { alphabet, generateRandomString, sha256 } from "oslo/crypto";
+import { encodeBase64url } from "oslo/encoding";
+import { PG_CONNECTION } from "../db/drizzle.provider";
+import type { SelectSession, SelectUser } from "../db/schema";
+import { accounts, sessions, users } from "../db/schema";
+import {
+  AuthResponse,
+  AuthUrlResponse,
   CreateAuthUrlInput,
+  createAuthUrlSchema,
+  LogoutInput,
+  logoutSchema,
   OAuthCallbackInput,
-  UserResponse,
+  OAuthProvider,
+  oauthCallbackSchema,
   SessionResponse,
-} from '../schemas/auth.schema';
-import { GitLabOAuth2 } from 'arctic';
+  UserResponse,
+} from "../schemas/auth.schema";
+import { SessionCacheService } from "./session-cache.service";
 
 export interface OAuthState {
   provider: "gitlab";
@@ -39,8 +55,9 @@ export class AuthService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly drizzleService: DrizzleService,
-    private readonly sessionCacheService: SessionCacheService,
+    @Inject(PG_CONNECTION)
+    private readonly db: PostgresJsDatabase<typeof import("../db/schema")>,
+    private readonly sessionCacheService: SessionCacheService
   ) {
     this.initializeOAuthProviders();
   }
@@ -69,21 +86,31 @@ export class AuthService {
   /**
    * 创建 GitLab 认证 URL
    */
-  async createGitLabAuthUrl(input?: CreateAuthUrlInput): Promise<AuthUrlResponse> {
-    const validatedInput = input ? createAuthUrlSchema.parse(input) : { provider: 'gitlab' as const };
-    
+  async createGitLabAuthUrl(
+    input?: CreateAuthUrlInput
+  ): Promise<AuthUrlResponse> {
+    const validatedInput = input
+      ? createAuthUrlSchema.parse(input)
+      : { provider: "gitlab" as const };
+
     if (!this.gitlab) {
       throw new BadRequestException("GitLab OAuth 未配置");
     }
 
     try {
       const state = generateRandomString(32, alphabet("a-z", "A-Z", "0-9"));
-      const codeVerifier = generateRandomString(128, alphabet("a-z", "A-Z", "0-9", "-", ".", "_", "~"));
-      const codeChallenge = encodeBase64url(await sha256(new TextEncoder().encode(codeVerifier)));
+      const codeVerifier = generateRandomString(
+        128,
+        alphabet("a-z", "A-Z", "0-9", "-", "_")
+      );
+      const codeChallenge = encodeBase64url(
+        await sha256(new TextEncoder().encode(codeVerifier))
+      );
 
-      const url = await this.gitlab.createAuthorizationURL(state, codeChallenge, "S256", {
-        scopes: ["read_user", "read_api"],
-      });
+      const url = await this.gitlab.createAuthorizationURL(state, [
+        "read_user",
+        "read_api",
+      ]);
 
       // 存储 OAuth 状态
       if (!globalThis.oauthStates) {
@@ -99,7 +126,11 @@ export class AuthService {
 
       return { url: url.toString(), state };
     } catch (error) {
-      throw new BadRequestException(`创建 GitLab 认证 URL 失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `创建 GitLab 认证 URL 失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
@@ -108,7 +139,7 @@ export class AuthService {
    */
   async handleGitLabCallback(input: OAuthCallbackInput): Promise<AuthResponse> {
     const validatedInput = oauthCallbackSchema.parse(input);
-    
+
     if (!this.gitlab) {
       throw new BadRequestException("GitLab OAuth 未配置");
     }
@@ -117,22 +148,23 @@ export class AuthService {
       throw new BadRequestException("OAuth 状态未找到");
     }
 
-    const storedState = globalThis.oauthStates.get(validatedInput.state || '');
+    const storedState = globalThis.oauthStates.get(validatedInput.state || "");
     if (!storedState || storedState.provider !== "gitlab") {
       throw new BadRequestException("无效的 OAuth 状态");
     }
 
     try {
       const tokens = await this.gitlab.validateAuthorizationCode(
-        validatedInput.code,
-        storedState.codeVerifier
+        validatedInput.code
       );
 
       // 获取用户信息
-      const gitlabBaseUrl = this.configService.get<string>("GITLAB_BASE_URL") || "https://gitlab.com";
+      const gitlabBaseUrl =
+        this.configService.get<string>("GITLAB_BASE_URL") ||
+        "https://gitlab.com";
       const userResponse = await fetch(`${gitlabBaseUrl}/api/v4/user`, {
         headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
+          Authorization: `Bearer ${tokens.accessToken()}`,
         },
       });
 
@@ -149,23 +181,27 @@ export class AuthService {
         email: gitlabUser.email,
         name: gitlabUser.name,
         image: gitlabUser.avatar_url,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: tokens.accessToken(),
+        refreshToken: tokens.refreshToken?.(),
       });
 
       // 创建会话
       const session = await this.createSession(user.id);
 
       // 清理 OAuth 状态
-      globalThis.oauthStates.delete(validatedInput.state || '');
+      globalThis.oauthStates.delete(validatedInput.state || "");
 
       return {
         user: this.mapToUserResponse(user),
         session: this.mapToSessionResponse(session),
-        accessToken: tokens.accessToken,
+        accessToken: tokens.accessToken(),
       };
     } catch (error) {
-      throw new BadRequestException(`GitLab OAuth 回调处理失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `GitLab OAuth 回调处理失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
@@ -265,7 +301,11 @@ export class AuthService {
 
       return user;
     } catch (error) {
-      throw new BadRequestException(`用户创建或更新失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `用户创建或更新失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
@@ -288,16 +328,22 @@ export class AuthService {
 
       return session;
     } catch (error) {
-      throw new BadRequestException(`会话创建失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `会话创建失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
   /**
    * 验证会话（带缓存优化）
    */
-  async validateSession(sessionId: string): Promise<{ user: UserResponse; session: SessionResponse } | null> {
+  async validateSession(
+    sessionId: string
+  ): Promise<{ user: UserResponse; session: SessionResponse } | null> {
     if (!sessionId) {
-      throw new BadRequestException('Session ID is required');
+      throw new BadRequestException("Session ID is required");
     }
 
     // 首先检查缓存
@@ -309,16 +355,17 @@ export class AuthService {
         return {
           user,
           session: {
-            id: cachedSession.sessionId,
+            id: cachedSession.id,
             userId: cachedSession.userId,
             expires: cachedSession.expires,
+            createdAt: new Date().toISOString(), // 添加createdAt字段
           },
         };
       }
     }
 
     try {
-      const db = this.drizzleService.getDb();
+      const db = this.db;
       const result = await db
         .select({
           session: sessions,
@@ -338,15 +385,15 @@ export class AuthService {
       // 检查会话是否过期
       if (new Date() > session.expires) {
         // 删除过期会话
-        await this.deleteSession({ sessionId });
+        await this.deleteSession({ sessionId, allSessions: false });
         this.sessionCacheService.delete(sessionId);
         return null;
       }
 
       // 缓存有效会话
       this.sessionCacheService.set(sessionId, {
-        userId: user.id.toString(),
-        sessionId: session.id,
+        id: session.id,
+        userId: user.id,
         expires: session.expires.toISOString(),
       });
 
@@ -355,8 +402,8 @@ export class AuthService {
         session: this.mapToSessionResponse(session),
       };
     } catch (error) {
-      console.error('Session validation error:', error);
-      throw new UnauthorizedException('Invalid session');
+      console.error("Session validation error:", error);
+      throw new UnauthorizedException("Invalid session");
     }
   }
 
@@ -364,7 +411,7 @@ export class AuthService {
    * 刷新会话
    */
   async refreshSession(sessionId: string): Promise<SessionResponse> {
-    const existingSession = await this.validateSession({ sessionId });
+    const existingSession = await this.validateSession(sessionId);
     if (!existingSession) {
       throw new UnauthorizedException("会话无效或已过期");
     }
@@ -376,14 +423,17 @@ export class AuthService {
         .update(sessions)
         .set({
           expires: newExpires,
-          updatedAt: new Date(),
         })
         .where(eq(sessions.id, sessionId))
         .returning();
 
       return this.mapToSessionResponse(updatedSession);
     } catch (error) {
-      throw new BadRequestException(`会话刷新失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `会话刷新失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
@@ -392,7 +442,7 @@ export class AuthService {
    */
   async deleteSession(input: LogoutInput): Promise<void> {
     const validatedInput = logoutSchema.parse(input);
-    
+
     if (!validatedInput.sessionId) {
       throw new BadRequestException("会话 ID 不能为空");
     }
@@ -406,14 +456,16 @@ export class AuthService {
       if (result.length === 0) {
         throw new NotFoundException("会话不存在");
       }
-      
+
       // 同时清除缓存
       this.sessionCacheService.delete(validatedInput.sessionId);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException(`登出失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `登出失败: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 
@@ -422,15 +474,55 @@ export class AuthService {
    */
   async getUserById(userId: number): Promise<UserResponse | null> {
     try {
-      const result = await this.db
+      const db = this.db;
+      const result = await db
         .select()
         .from(users)
         .where(eq(users.id, userId))
         .limit(1);
-      
+
       return result[0] ? this.mapToUserResponse(result[0]) : null;
     } catch (error) {
-      throw new BadRequestException(`获取用户失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `获取用户失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  }
+
+  /**
+   * 更新用户信息
+   */
+  async updateUser(
+    userId: number,
+    updateData: { name?: string; email?: string; image?: string }
+  ): Promise<UserResponse> {
+    try {
+      const db = this.db;
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          ...updateData,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning();
+
+      if (!updatedUser) {
+        throw new NotFoundException("用户不存在");
+      }
+
+      return this.mapToUserResponse(updatedUser);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `更新用户失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
@@ -444,9 +536,13 @@ export class AuthService {
         .from(sessions)
         .where(eq(sessions.userId, userId));
 
-      return result.map(session => this.mapToSessionResponse(session));
+      return result.map((session) => this.mapToSessionResponse(session));
     } catch (error) {
-      throw new BadRequestException(`获取用户会话失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `获取用户会话失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
@@ -468,13 +564,17 @@ export class AuthService {
         .returning();
 
       // 清除所有相关的缓存
-      userSessions.forEach(session => {
+      userSessions.forEach((session) => {
         this.sessionCacheService.delete(session.id);
       });
 
       return result.length;
     } catch (error) {
-      throw new BadRequestException(`删除用户会话失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `删除用户会话失败: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 

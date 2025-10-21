@@ -1,68 +1,83 @@
+import { ValidationPipe } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
-import * as trpcExpress from "@trpc/server/adapters/express";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
-import { AuthService } from "./auth/auth.service";
-import { TrpcService } from "./trpc/trpc.service";
 import { AuthMiddleware } from "./middleware/auth.middleware";
-import { HttpExceptionFilter } from "./common/exceptions/http-exception.filter";
-import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
+import { TrpcService } from "./trpc/trpc.service";
+
+// import { HttpExceptionFilter } from "./common/exceptions/http-exception.filter";
+// import { LoggingInterceptor } from "./common/interceptors/logging.interceptor";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
 
   // 启用CORS
   app.enableCors({
-    origin: ["http://localhost:5173", "http://localhost:3000"],
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://localhost:1997",
+    ],
     credentials: true,
   });
 
-  // 全局异常过滤器
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // 全局验证管道
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    })
+  );
 
-  // 全局拦截器
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  // 全局异常过滤器 (暂时注释，因为文件不存在)
+  // app.useGlobalFilters(new HttpExceptionFilter());
+
+  // 全局拦截器 (暂时注释，因为文件不存在)
+  // app.useGlobalInterceptors(new LoggingInterceptor());
 
   // 使用cookie解析器
   app.use(cookieParser());
 
-  // 应用认证中间件到所有路由
-  const authMiddleware = app.get(AuthMiddleware);
-  app.use((req: any, res: any, next: any) => {
-    authMiddleware.use(req, res, next);
-  });
-
   const trpcService = app.get(TrpcService);
+  const authMiddleware = app.get(AuthMiddleware);
 
-  // tRPC Express适配器配置 - 使用优化的createContext
+  // 等待tRPC服务初始化完成
+  await trpcService.onModuleInit();
+
+  // tRPC Express适配器配置 - 集成AuthMiddleware
   app.use(
     "/trpc",
-    trpcExpress.createExpressMiddleware({
+    // 先应用认证中间件
+    (req: any, res: any, next: any) => {
+      authMiddleware.use(req, res, next);
+    },
+    createExpressMiddleware({
       router: trpcService.router,
       createContext: async ({ req, res }) => {
-        // 从中间件中获取已验证的用户和会话信息
+        // 从AuthMiddleware中获取已验证的用户和会话信息
         const authenticatedReq = req as any;
-        
+
         return {
           req,
           res,
-          app,
-          user: authenticatedReq.user || null,
-          session: authenticatedReq.session ? {
-            userId: authenticatedReq.session.userId,
-            sessionId: authenticatedReq.session.id,
-          } : null,
+          session: authenticatedReq.session
+            ? {
+                userId: String(authenticatedReq.session.userId),
+                sessionId: String(authenticatedReq.session.id),
+              }
+            : undefined,
         };
       },
     })
   );
 
-  await app.listen(process.env.PORT || 3000);
-  console.log(
-    `Application is running on: http://localhost:${process.env.PORT || 3000}`
-  );
-  console.log(
-    `tRPC endpoint: http://localhost:${process.env.PORT || 3000}/trpc`
-  );
+  const port = configService.get<number>("PORT") || 3000;
+  await app.listen(port);
+  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(`tRPC endpoint: http://localhost:${port}/trpc`);
 }
+
 bootstrap();

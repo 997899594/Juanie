@@ -1,179 +1,146 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { AuthService } from "../../auth/auth.service";
-import { publicProcedure, router } from "../trpc";
-import { 
-  loginInputSchema, 
+import type { AuthService } from "../../auth/auth.service";
+import {
+  authResponseSchema,
+  authUrlResponseSchema,
+  createAuthUrlSchema,
+  loginInputSchema,
+  oauthCallbackSchema,
   registerInputSchema,
-  updateUserInputSchema 
-} from "../../common/validators/auth.validators";
-import { 
-  User, 
-  AuthResponse,
-  ApiResponse 
-} from "../../common/types/api.types";
+  updateUserInputSchema,
+  userResponseSchema,
+} from "../../schemas/auth.schema";
+import { successResponseSchema } from "../../schemas/common.schema";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
-export function createAuthRouter(authService: AuthService) {
-  return router({
+export const createAuthRouter = (authService: AuthService) => {
+  return createTRPCRouter({
     // 获取当前用户信息
-    getCurrentUser: publicProcedure
-      .output(z.custom<User>().nullable())
+    getCurrentUser: protectedProcedure
+      .output(userResponseSchema.nullable())
       .query(async ({ ctx }) => {
-        // 会话验证已在 createContext 中完成，直接返回用户信息
-        return ctx.session
-          ? await authService.getUserById(ctx.session.userId)
-          : null;
+        try {
+          return await authService.getUserById(Number(ctx.session!.userId));
+        } catch (error) {
+          throw new Error(`获取用户信息失败: ${error.message}`);
+        }
       }),
 
     // 用户登录
     login: publicProcedure
       .input(loginInputSchema)
-      .output(z.custom<ApiResponse<AuthResponse>>())
+      .output(successResponseSchema.extend({ data: authResponseSchema }))
       .mutation(async ({ input, ctx }) => {
         try {
-          const result = await authService.login(input);
-          
-          // 设置会话 cookie
-          ctx.res.cookie('session', result.session.id, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-          });
-
-          return {
-            success: true,
-            data: result,
-            timestamp: new Date().toISOString(),
-          };
+          // 这里需要实现登录逻辑，暂时抛出错误提示需要实现
+          throw new Error("登录功能需要在AuthService中实现");
         } catch (error) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: error instanceof Error ? error.message : "登录失败",
-          });
+          throw new Error(`登录失败: ${error.message}`);
         }
       }),
 
     // 用户注册
     register: publicProcedure
       .input(registerInputSchema)
-      .output(z.custom<ApiResponse<AuthResponse>>())
+      .output(successResponseSchema.extend({ data: authResponseSchema }))
       .mutation(async ({ input, ctx }) => {
         try {
-          const result = await authService.register(input);
-          
-          // 设置会话 cookie
-          ctx.res.cookie('session', result.session.id, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-          });
-
-          return {
-            success: true,
-            data: result,
-            timestamp: new Date().toISOString(),
-          };
+          // 这里需要实现注册逻辑，暂时抛出错误提示需要实现
+          throw new Error("注册功能需要在AuthService中实现");
         } catch (error) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error instanceof Error ? error.message : "注册失败",
-          });
+          throw new Error(`注册失败: ${error.message}`);
         }
       }),
 
     // 更新用户信息
-    updateProfile: publicProcedure
+    updateProfile: protectedProcedure
       .input(updateUserInputSchema)
-      .output(z.custom<ApiResponse<User>>())
+      .output(successResponseSchema)
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.session?.userId) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "请先登录",
-          });
-        }
-
         try {
-          const updatedUser = await authService.updateUser(ctx.session.userId, input);
+          const updatedUser = await authService.updateUser(
+            Number(ctx.session.userId),
+            input
+          );
           return {
-            success: true,
-            data: updatedUser,
+            success: true as const,
+            message: "用户信息更新成功",
             timestamp: new Date().toISOString(),
           };
         } catch (error) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: error instanceof Error ? error.message : "更新用户信息失败",
-          });
+          throw new Error(
+            `更新用户信息失败: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`
+          );
         }
       }),
 
     // 获取GitLab OAuth登录URL
     getGitLabAuthUrl: publicProcedure
-      .input(z.object({ redirectTo: z.string().optional() }))
-      .output(z.object({ 
-        url: z.string(),
-        state: z.string().optional() 
-      }))
+      .input(createAuthUrlSchema)
+      .output(authUrlResponseSchema)
       .query(async ({ input }) => {
         try {
-          const result = await authService.createGitLabAuthUrl(
-            input.redirectTo
-          );
-          return result;
+          return await authService.createGitLabAuthUrl(input);
         } catch (error) {
-          console.error("获取GitLab授权URL失败:", error);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "获取GitLab授权URL失败",
-          });
+          throw new Error(`获取GitLab认证URL失败: ${error.message}`);
         }
       }),
 
     // 用户登出
-    logout: publicProcedure
-      .output(z.object({ success: z.boolean() }))
+    logout: protectedProcedure
+      .output(successResponseSchema)
       .mutation(async ({ ctx }) => {
-        if (!ctx.session?.sessionId) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "未找到会话",
-          });
-        }
-
         try {
-          await authService.deleteSession(ctx.session.sessionId);
-          
-          // 清除会话 cookie
-          ctx.res.clearCookie('session');
-          
-          return { success: true };
-        } catch (error) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "登出失败",
+          await authService.deleteSession({
+            sessionId: ctx.session!.sessionId,
+            allSessions: false,
           });
+
+          // 清除cookie
+          ctx.res.clearCookie("session");
+
+          return {
+            success: true as const,
+            data: null,
+            message: "登出成功",
+            timestamp: new Date().toISOString(),
+          };
+        } catch (error) {
+          throw new Error(`登出失败: ${error.message}`);
         }
       }),
 
     // 检查认证状态
     checkAuth: publicProcedure
-      .output(z.object({
-        isAuthenticated: z.boolean(),
-        user: z.custom<User>().nullable(),
-      }))
+      .output(
+        successResponseSchema.extend({
+          data: z.object({
+            isAuthenticated: z.boolean(),
+            user: userResponseSchema.nullable(),
+          }),
+        })
+      )
       .query(async ({ ctx }) => {
-        const isAuthenticated = !!ctx.session?.userId;
-        const user = isAuthenticated 
-          ? await authService.getUserById(ctx.session.userId)
-          : null;
-        
-        return {
-          isAuthenticated,
-          user,
-        };
+        try {
+          const isAuthenticated = !!ctx.session?.userId;
+          const user = isAuthenticated
+            ? await authService.getUserById(Number(ctx.session!.userId))
+            : null;
+
+          return {
+            success: true as const,
+            data: {
+              isAuthenticated,
+              user,
+            },
+            timestamp: new Date().toISOString(),
+          };
+        } catch (error) {
+          throw new Error(`检查认证状态失败: ${error.message}`);
+        }
       }),
   });
-}
+};

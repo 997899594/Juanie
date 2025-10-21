@@ -41,7 +41,7 @@ const loading = ref(false)
 const loadDocuments = async () => {
   try {
     loading.value = true
-    const result = await trpc.getDocuments.query()
+    const result = await trpc.documents.findAll.query()
     documents.value = result || []
   } catch (error) {
     console.error('加载文档失败:', error)
