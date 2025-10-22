@@ -27,13 +27,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { trpc } from '../lib/trpc'
+import { trpc, type AppRouter } from '../lib/trpc'
 
-interface Document {
-  id: number
-  content: string
-  title?: string
-}
+type Document = Awaited<ReturnType<typeof trpc.documents.findAll.query>>[0]
 
 const documents = ref<Document[]>([])
 const loading = ref(false)

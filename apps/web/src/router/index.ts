@@ -6,6 +6,8 @@ import Documents from "@/views/Documents.vue";
 import Home from "@/views/Home.vue";
 import Login from "@/views/Login.vue";
 import Settings from "@/views/Settings.vue";
+import Projects from "@/views/Projects.vue";
+import ProjectDetail from "@/views/ProjectDetail.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -49,6 +51,17 @@ const router = createRouter({
           path: "settings",
           name: "settings",
           component: Settings,
+        },
+        {
+          path: "projects",
+          name: "projects",
+          component: Projects,
+        },
+        {
+          path: "projects/:id",
+          name: "project-detail",
+          component: ProjectDetail,
+          props: true,
         },
       ],
     },

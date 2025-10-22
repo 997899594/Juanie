@@ -120,7 +120,7 @@
               </div>
               <div class="min-w-0 flex-1">
                 <CardTitle class="text-base font-semibold truncate text-foreground">{{ app.name }}</CardTitle>
-                <CardDescription class="text-sm text-muted-foreground line-clamp-1 mt-0.5">{{ app.description }}</CardDescription>
+                <CardDescription class="text-sm text-muted-foreground line-clamp-1 mt-2">{{ app.description }}</CardDescription>
               </div>
             </div>
             <Badge :variant="getStatusVariant(app.status)" class="text-xs shrink-0">

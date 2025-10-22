@@ -23,3 +23,4 @@ export * from "./sidebar";
 export * from "./stepper";
 export * from "./switch";
 export * from "./tabs";
+export * from "./textarea";
