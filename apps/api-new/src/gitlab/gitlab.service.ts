@@ -86,7 +86,7 @@ export class GitLabService {
       }
 
       return response.json();
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -109,7 +109,7 @@ export class GitLabService {
       
       const user = await this.makeRequest('/user');
       return user;
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -132,7 +132,7 @@ export class GitLabService {
       }
       
       return users;
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -188,7 +188,7 @@ export class GitLabService {
           hasPrev: (validatedInput.page || 1) > 1,
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -206,7 +206,7 @@ export class GitLabService {
       const validatedInput = getGroupSchema.parse(input);
       const group = await this.makeRequest(`/groups/${validatedInput.id}`);
       return group;
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -291,7 +291,7 @@ export class GitLabService {
           hasPrev: (validatedInput.page || 1) > 1,
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -324,7 +324,7 @@ export class GitLabService {
       
       const project = await this.makeRequest(endpoint);
       return project;
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -345,7 +345,7 @@ export class GitLabService {
         body: JSON.stringify(validatedInput),
       });
       return project;
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -370,7 +370,7 @@ export class GitLabService {
         message: 'Project deleted successfully',
         timestamp: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -406,7 +406,7 @@ export class GitLabService {
         body: JSON.stringify(forkData),
       });
       return project;
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {
@@ -456,7 +456,7 @@ export class GitLabService {
           hasPrev: (validatedInput.page || 1) > 1,
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof BadRequestException || 
           error instanceof NotFoundException || 
           error instanceof InternalServerErrorException) {

@@ -182,7 +182,7 @@ const loadProjects = async () => {
     })
     
     projects.value = result.projects
-    totalProjects.value = result.total
+    totalProjects.value = result.pagination.total
   } catch (error) {
     console.error('加载项目失败:', error)
     // 这里可以添加错误提示

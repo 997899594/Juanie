@@ -21,12 +21,12 @@
               <div class="environment-status">
                 <div 
                   class="status-indicator"
-                  :class="getStatusColor(environment.status)"
+                  :class="environment.isActive ? 'bg-green-500' : 'bg-gray-400'"
                 ></div>
               </div>
               <div>
                 <CardTitle class="text-base">{{ environment.name }}</CardTitle>
-                <CardDescription>{{ environment.description || '暂无描述' }}</CardDescription>
+                <CardDescription>{{ environment.displayName || '暂无描述' }}</CardDescription>
               </div>
             </div>
             <div class="environment-actions">
@@ -66,9 +66,9 @@
           <div class="environment-info">
             <div class="info-grid">
               <div class="info-item">
-                <span class="info-label">类型</span>
-                <Badge :variant="getTypeVariant(environment.type)">
-                  {{ getTypeLabel(environment.type) }}
+                <span class="info-label">状态</span>
+                <Badge :variant="environment.isActive ? 'default' : 'secondary'">
+                  {{ environment.isActive ? '活跃' : '非活跃' }}
                 </Badge>
               </div>
               <div class="info-item">
@@ -87,9 +87,9 @@
                 </span>
               </div>
               <div class="info-item">
-                <span class="info-label">最后部署</span>
+                <span class="info-label">分支</span>
                 <span class="info-value">
-                  {{ environment.lastDeployedAt ? formatTime(environment.lastDeployedAt) : '从未部署' }}
+                  {{ environment.branch || '未配置' }}
                 </span>
               </div>
               <div class="info-item">
@@ -260,40 +260,44 @@ const loadEnvironments = async () => {
     loading.value = true
     const result = await trpc.environments.listByProject.query({ projectId: props.projectId })
     environments.value = result || []
-  } catch (error) {
-    console.error('加载环境列表失败:', error)
+  } catch (error: any) {
+    console.error('获取环境列表失败:', error)
     
     // 使用模拟数据
     environments.value = [
       {
         id: 1,
+        projectId: 1,
         name: 'production',
-        description: '生产环境',
-        type: 'production',
-        status: 'active',
+        displayName: '生产环境',
         url: 'https://app.example.com',
-        lastDeployedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+        branch: 'main',
+        isActive: true,
+        config: null,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
         updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
       },
       {
         id: 2,
+        projectId: 1,
         name: 'staging',
-        description: '预发布环境',
-        type: 'staging',
-        status: 'active',
+        displayName: '预发布环境',
         url: 'https://staging.example.com',
-        lastDeployedAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+        branch: 'develop',
+        isActive: true,
+        config: null,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 25).toISOString(),
         updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString()
       },
       {
         id: 3,
+        projectId: 1,
         name: 'development',
-        description: '开发环境',
-        type: 'development',
-        status: 'inactive',
+        displayName: '开发环境',
         url: 'https://dev.example.com',
+        branch: 'develop',
+        isActive: false,
+        config: null,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString(),
         updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString()
       }
@@ -330,7 +334,7 @@ const deleteEnvironment = async (environment: Environment) => {
   try {
     await trpc.environments.delete.mutate({ id: environment.id })
     environments.value = environments.value.filter(env => env.id !== environment.id)
-  } catch (error) {
+  } catch (error: any) {
     console.error('删除环境失败:', error)
     alert('删除环境失败，请稍后重试')
   }

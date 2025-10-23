@@ -3,10 +3,22 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/src/main.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./trpc": {
+      "types": "./dist/src/trpc/trpc.service.d.ts",
+      "default": "./dist/src/trpc/trpc.service.js"
+    }
+  },
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
-    "start:prod": "node ."
+    "start:prod": "node .",
+    "type-check": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",

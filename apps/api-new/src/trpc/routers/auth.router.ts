@@ -22,7 +22,7 @@ export const createAuthRouter = (authService: AuthService) => {
       .query(async ({ ctx }) => {
         try {
           return await authService.getUserById(Number(ctx.session!.userId));
-        } catch (error) {
+        } catch (error: any) {
           throw new Error(`获取用户信息失败: ${error.message}`);
         }
       }),
@@ -35,7 +35,7 @@ export const createAuthRouter = (authService: AuthService) => {
         try {
           // 这里需要实现登录逻辑，暂时抛出错误提示需要实现
           throw new Error("登录功能需要在AuthService中实现");
-        } catch (error) {
+        } catch (error: any) {
           throw new Error(`登录失败: ${error.message}`);
         }
       }),
@@ -48,7 +48,7 @@ export const createAuthRouter = (authService: AuthService) => {
         try {
           // 这里需要实现注册逻辑，暂时抛出错误提示需要实现
           throw new Error("注册功能需要在AuthService中实现");
-        } catch (error) {
+        } catch (error: any) {
           throw new Error(`注册失败: ${error.message}`);
         }
       }),
@@ -68,7 +68,7 @@ export const createAuthRouter = (authService: AuthService) => {
             message: "用户信息更新成功",
             timestamp: new Date().toISOString(),
           };
-        } catch (error) {
+        } catch (error: any) {
           throw new Error(
             `更新用户信息失败: ${
               error instanceof Error ? error.message : "Unknown error"
@@ -84,7 +84,7 @@ export const createAuthRouter = (authService: AuthService) => {
       .query(async ({ input }) => {
         try {
           return await authService.createGitLabAuthUrl(input);
-        } catch (error) {
+        } catch (error: any) {
           throw new Error(`获取GitLab认证URL失败: ${error.message}`);
         }
       }),
@@ -108,7 +108,7 @@ export const createAuthRouter = (authService: AuthService) => {
             message: "登出成功",
             timestamp: new Date().toISOString(),
           };
-        } catch (error) {
+        } catch (error: any) {
           throw new Error(`登出失败: ${error.message}`);
         }
       }),
@@ -138,7 +138,7 @@ export const createAuthRouter = (authService: AuthService) => {
             },
             timestamp: new Date().toISOString(),
           };
-        } catch (error) {
+        } catch (error: any) {
           throw new Error(`检查认证状态失败: ${error.message}`);
         }
       }),

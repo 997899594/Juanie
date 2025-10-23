@@ -25,6 +25,28 @@
         </div>
 
         <div class="form-group">
+          <label for="displayName" class="form-label">显示名称</label>
+          <input
+            id="displayName"
+            v-model="form.displayName"
+            type="text"
+            class="form-input"
+            placeholder="输入项目显示名称（可选）"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="logo" class="form-label">项目Logo</label>
+          <input
+            id="logo"
+            v-model="form.logo"
+            type="url"
+            class="form-input"
+            placeholder="输入Logo URL（可选）"
+          />
+        </div>
+
+        <div class="form-group">
           <label for="description" class="form-label">项目描述</label>
           <textarea
             id="description"
@@ -118,7 +140,9 @@ const errors = ref<Record<string, string>>({})
 
 const form = reactive({
   name: '',
+  displayName: '',
   description: '',
+  logo: '',
   isPublic: false,
   gitlabProjectId: null as number | null
 })
@@ -154,7 +178,9 @@ const handleSubmit = async () => {
     
     const projectData = {
       name: form.name.trim(),
-      description: form.description.trim() || undefined,
+      displayName: form.displayName.trim() || '',
+      description: form.description.trim() || '',
+      logo: form.logo.trim() || '',
       isPublic: form.isPublic,
       gitlabProjectId: form.gitlabProjectId || undefined
     }
@@ -163,17 +189,19 @@ const handleSubmit = async () => {
     
     // 重置表单
     form.name = ''
+    form.displayName = ''
     form.description = ''
+    form.logo = ''
     form.isPublic = false
     form.gitlabProjectId = null
     
     // 通知父组件
     emit('created')
-  } catch (error) {
+  } catch (error: any) {
     console.error('创建项目失败:', error)
     
     // 处理特定错误
-    if (error.message?.includes('name')) {
+    if (error?.message?.includes('name')) {
       errors.value.name = '项目名称已存在或不符合要求'
     } else {
       // 显示通用错误提示

@@ -125,7 +125,7 @@ export class AuthService {
       });
 
       return { url: url.toString(), state };
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `创建 GitLab 认证 URL 失败: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -196,7 +196,7 @@ export class AuthService {
         session: this.mapToSessionResponse(session),
         accessToken: tokens.accessToken(),
       };
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `GitLab OAuth 回调处理失败: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -300,7 +300,7 @@ export class AuthService {
       });
 
       return user;
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `用户创建或更新失败: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -327,7 +327,7 @@ export class AuthService {
         .returning();
 
       return session;
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `会话创建失败: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -401,7 +401,7 @@ export class AuthService {
         user: this.mapToUserResponse(user),
         session: this.mapToSessionResponse(session),
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("Session validation error:", error);
       throw new UnauthorizedException("Invalid session");
     }
@@ -428,7 +428,7 @@ export class AuthService {
         .returning();
 
       return this.mapToSessionResponse(updatedSession);
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `会话刷新失败: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -459,7 +459,7 @@ export class AuthService {
 
       // 同时清除缓存
       this.sessionCacheService.delete(validatedInput.sessionId);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof NotFoundException) {
         throw error;
       }
@@ -482,7 +482,7 @@ export class AuthService {
         .limit(1);
 
       return result[0] ? this.mapToUserResponse(result[0]) : null;
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `获取用户失败: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -514,7 +514,7 @@ export class AuthService {
       }
 
       return this.mapToUserResponse(updatedUser);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof NotFoundException) {
         throw error;
       }
@@ -537,7 +537,7 @@ export class AuthService {
         .where(eq(sessions.userId, userId));
 
       return result.map((session) => this.mapToSessionResponse(session));
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `获取用户会话失败: ${
           error instanceof Error ? error.message : "Unknown error"
@@ -569,7 +569,7 @@ export class AuthService {
       });
 
       return result.length;
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `删除用户会话失败: ${
           error instanceof Error ? error.message : "Unknown error"

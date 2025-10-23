@@ -6,7 +6,7 @@
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between">
           <div class="flex items-start space-x-4 flex-1">
             <Avatar class="w-12 h-12">
-              <AvatarImage v-if="project?.avatar" :src="project.avatar" :alt="project.name" />
+              <AvatarImage v-if="project?.logo" :src="project.logo" :alt="project.name" />
               <AvatarFallback>
                 <Folder class="w-6 h-6" />
               </AvatarFallback>
@@ -37,7 +37,7 @@
                 </span>
                 <span class="flex items-center">
                   <Clock class="w-4 h-4 mr-1" />
-                  更新于 {{ formatTime(project?.updatedAt) }}
+                  更新于 {{ project?.updatedAt ? formatTime(project.updatedAt) : '未知' }}
                 </span>
               </div>
             </div>
@@ -144,7 +144,7 @@ const route = useRoute()
 const router = useRouter()
 
 type ProjectWithDetails = Awaited<ReturnType<typeof trpc.projects.getById.query>>
-const project = ref<ProjectWithDetails>(null)
+const project = ref<ProjectWithDetails | null>(null)
 const loading = ref(false)
 const activeTab = ref('overview')
 const showEditModal = ref(false)

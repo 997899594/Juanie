@@ -7,13 +7,13 @@
     <CardHeader class="flex flex-row items-start justify-between space-y-0 pb-2">
       <div class="flex items-start space-x-3 flex-1">
         <Avatar class="flex-shrink-0">
-          <AvatarImage v-if="project.avatar" :src="project.avatar" :alt="project.name" />
+          <AvatarImage v-if="project.logo || project.owner?.image" :src="(project.logo || project.owner?.image) || ''" :alt="project.displayName" />
           <AvatarFallback>
             <Folder class="h-4 w-4" />
           </AvatarFallback>
         </Avatar>
         <div class="flex-1 min-w-0">
-          <h3 class="text-lg font-semibold text-foreground truncate">{{ project.name }}</h3>
+          <h3 class="text-lg font-semibold text-foreground truncate">{{ project.displayName }}</h3>
           <p class="text-sm text-muted-foreground mt-1 line-clamp-2">{{ project.description || '暂无描述' }}</p>
         </div>
       </div>
@@ -72,38 +72,20 @@
         </div>
       </div>
 
-      <!-- 最近部署状态 -->
-      <div v-if="project.lastDeployment">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center">
-            <div class="flex items-center mr-2">
-              <div 
-                :class="[
-                  'w-2 h-2 rounded-full mr-2',
-                  {
-                    'bg-green-500': project.lastDeployment.status === 'success',
-                    'bg-red-500': project.lastDeployment.status === 'failed',
-                    'bg-blue-500': project.lastDeployment.status === 'running',
-                    'bg-yellow-500': project.lastDeployment.status === 'pending'
-                  }
-                ]"
-              />
-              <span class="text-sm text-muted-foreground">
-                {{ getStatusText(project.lastDeployment.status) }}
-              </span>
-            </div>
-          </div>
-          <span class="text-xs text-muted-foreground">
-            {{ formatTime(project.lastDeployment.createdAt) }}
-          </span>
+      <!-- 项目信息 -->
+        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+          <Badge variant="secondary">
+            {{ project.deploymentsCount }} 次部署
+          </Badge>
+          <span>•</span>
+          <span>{{ formatTime(project.updatedAt) }}</span>
         </div>
-      </div>
     </CardContent>
 
     <CardFooter class="flex items-center justify-between text-sm text-muted-foreground pt-4">
       <div class="flex items-center">
-        <Avatar v-if="project.owner?.avatar" class="w-6 h-6 mr-2">
-          <AvatarImage :src="project.owner.avatar" :alt="project.owner.name" />
+        <Avatar v-if="project.owner?.image" class="w-6 h-6 mr-2">
+          <AvatarImage :src="project.owner.image" :alt="project.owner.name" />
           <AvatarFallback class="text-xs">{{ project.owner.name?.charAt(0) }}</AvatarFallback>
         </Avatar>
         <div v-else class="w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs flex items-center justify-center mr-2 font-medium">
@@ -122,6 +104,7 @@
 import { ref } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
+import { trpc } from '@/lib/trpc'
 import { 
   Card, 
   CardContent, 
@@ -147,26 +130,8 @@ import {
   Folder 
 } from 'lucide-vue-next'
 
-interface Project {
-  id: number
-  name: string
-  description?: string
-  avatar?: string
-  isPublic: boolean
-  gitlabProjectId?: number
-  environmentsCount?: number
-  deploymentsCount?: number
-  membersCount?: number
-  lastDeployment?: {
-    status: 'success' | 'failed' | 'running' | 'pending'
-    createdAt: string
-  }
-  owner?: {
-    name: string
-    avatar?: string
-  }
-  updatedAt: string
-}
+// 使用 tRPC 推断类型，不再自定义 Project 接口
+type Project = NonNullable<Awaited<ReturnType<typeof trpc.projects.list.query>>>['projects'][0]
 
 defineProps<{
   project: Project
@@ -187,8 +152,8 @@ const formatTime = (dateString: string) => {
 }
 
 // 获取状态文本
-const getStatusText = (status: string) => {
-  const statusMap = {
+const getStatusText = (status: string): string => {
+  const statusMap: Record<string, string> = {
     success: '部署成功',
     failed: '部署失败',
     running: '部署中',

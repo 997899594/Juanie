@@ -194,13 +194,15 @@ const form = reactive({
 // 初始化表单数据
 const initForm = () => {
   form.name = props.environment.name
-  form.description = props.environment.description || ''
-  form.type = props.environment.type
-  form.status = props.environment.status === 'deploying' || props.environment.status === 'error' 
+  form.description = props.environment.displayName || ''
+  form.type = 'development' // 默认类型，因为 environment schema 中没有 type 字段
+  form.status = props.environment.isActive 
     ? 'active' 
-    : props.environment.status
+    : 'inactive'
   form.url = props.environment.url || ''
-  form.variables = props.environment.variables ? [...props.environment.variables] : []
+  // 从 config.environmentVariables 获取环境变量
+  const envVars = props.environment.config?.environmentVariables || {}
+  form.variables = Object.entries(envVars).map(([key, value]) => ({ key, value: String(value) }))
 }
 
 // 监听环境变化
@@ -273,17 +275,22 @@ const handleSubmit = async () => {
   try {
     loading.value = true
     
-    // 过滤空的环境变量
+    // 过滤空的环境变量并转换为 config.environmentVariables 格式
     const variables = form.variables.filter(v => v.key.trim() && v.value.trim())
+    const environmentVariables = variables.reduce((acc, v) => {
+      acc[v.key] = v.value
+      return acc
+    }, {} as Record<string, string>)
     
     const updateData = {
       id: props.environment.id,
-      name: form.name.trim(),
-      description: form.description.trim() || undefined,
-      type: form.type,
-      status: form.status,
+      displayName: form.description.trim() || form.name.trim(),
       url: form.url.trim() || undefined,
-      variables: variables.length > 0 ? variables : undefined
+      branch: undefined,
+      isActive: form.status === 'active',
+      config: Object.keys(environmentVariables).length > 0 ? {
+        environmentVariables
+      } : undefined
     }
     
     const result = await trpc.environments.update.mutate(updateData)

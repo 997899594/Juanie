@@ -45,7 +45,7 @@
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm text-muted-foreground">成功率</p>
-                <p class="text-2xl font-bold text-green-600">{{ stats.successRate }}%</p>
+                <p class="text-2xl font-bold text-green-600">{{ calculateSuccessRate() }}%</p>
               </div>
               <CheckCircle class="h-8 w-8 text-green-500" />
             </div>
@@ -57,7 +57,7 @@
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm text-muted-foreground">平均部署时间</p>
-                <p class="text-2xl font-bold">{{ stats.avgDeployTime }}分钟</p>
+                <p class="text-2xl font-bold">{{ stats.averageDeployTime }}分钟</p>
               </div>
               <Clock class="h-8 w-8 text-orange-500" />
             </div>
@@ -69,7 +69,7 @@
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm text-muted-foreground">本月部署</p>
-                <p class="text-2xl font-bold">{{ stats.monthlyDeployments }}</p>
+                <p class="text-2xl font-bold">{{ stats.totalDeployments }}</p>
               </div>
               <BarChart3 class="h-8 w-8 text-purple-500" />
             </div>
@@ -103,14 +103,14 @@
                 <div class="deployment-header">
                   <div class="deployment-info">
                     <h4 class="deployment-title">
-                      部署到 {{ deployment.environment }}
+                      部署到 {{ getEnvironmentName(deployment.environmentId) }}
                       <Badge :variant="getStatusVariant(deployment.status)" class="ml-2">
                         {{ getStatusLabel(deployment.status) }}
                       </Badge>
                     </h4>
                     <p class="deployment-meta">
                       版本 {{ deployment.version }} • 
-                      {{ deployment.deployedBy }} • 
+                      {{ getUserName(deployment.userId) }} • 
                       {{ formatTime(deployment.createdAt) }}
                     </p>
                   </div>
@@ -164,14 +164,14 @@
                   </div>
                 </div>
                 
-                <div v-if="deployment.description" class="deployment-description">
-                  {{ deployment.description }}
-                </div>
+                <div v-if="deployment.commitMessage" class="deployment-description">
+                      {{ deployment.commitMessage }}
+                    </div>
                 
                 <div class="deployment-details">
                   <div class="detail-item">
                     <span class="detail-label">持续时间:</span>
-                    <span class="detail-value">{{ deployment.duration || '-' }}</span>
+                    <span class="detail-value">{{ getDuration(deployment.startedAt, deployment.finishedAt) }}</span>
                   </div>
                   <div class="detail-item" v-if="deployment.commitHash">
                     <span class="detail-label">提交:</span>
@@ -254,26 +254,11 @@ import {
 } from 'lucide-vue-next'
 import { trpc } from '@/lib/trpc'
 
-interface DeploymentStats {
-  totalDeployments: number
-  successRate: number
-  avgDeployTime: number
-  monthlyDeployments: number
-}
+// 使用 tRPC 推断类型
+type DeploymentStats = Awaited<ReturnType<typeof trpc.deployments.getStats.query>>
 
-interface Deployment {
-  id: number
-  environment: string
-  version: string
-  status: 'pending' | 'running' | 'success' | 'failed' | 'cancelled'
-  description?: string
-  duration?: string
-  commitHash?: string
-  branch?: string
-  deployedBy: string
-  createdAt: string
-  completedAt?: string
-}
+// 从 tRPC 推断 Deployment 类型
+type Deployment = Awaited<ReturnType<typeof trpc.deployments.listByProject.query>>[0]
 
 const props = defineProps<{
   projectId: number
@@ -288,9 +273,13 @@ const environmentFilter = ref('all')
 const deployments = ref<Deployment[]>([])
 const stats = ref<DeploymentStats>({
   totalDeployments: 0,
-  successRate: 0,
-  avgDeployTime: 0,
-  monthlyDeployments: 0
+  successfulDeployments: 0,
+  failedDeployments: 0,
+  pendingDeployments: 0,
+  runningDeployments: 0,
+  averageDeployTime: 0,
+  deploymentsByDay: [],
+  recentDeployments: []
 })
 
 // 过滤后的部署记录
@@ -298,8 +287,15 @@ const filteredDeployments = computed(() => {
   if (environmentFilter.value === 'all') {
     return deployments.value
   }
-  return deployments.value.filter(d => d.environment === environmentFilter.value)
+  return deployments.value.filter(d => d.environmentId === Number(environmentFilter.value))
 })
+
+// 计算成功率
+const calculateSuccessRate = () => {
+  if (deployments.value.length === 0) return 0
+  const successCount = deployments.value.filter(d => d.status === 'success').length
+  return Math.round((successCount / deployments.value.length) * 100)
+}
 
 // 获取状态颜色
 const getStatusColor = (status: string) => {
@@ -319,7 +315,47 @@ const getStatusColor = (status: string) => {
   }
 }
 
-// 获取状态变体
+// 用户映射
+const userMap = ref<Record<number, string>>({
+  1: 'Admin',
+  2: 'Developer',
+  3: 'DevOps'
+})
+
+// 获取用户名称
+const getUserName = (userId: number) => {
+  return userMap.value[userId] || `用户 ${userId}`
+}
+
+// 环境映射
+const environmentMap = ref<Record<number, string>>({
+  1: 'production',
+  2: 'staging', 
+  3: 'development'
+})
+
+// 获取环境名称
+const getEnvironmentName = (environmentId: number) => {
+  return environmentMap.value[environmentId] || `环境 ${environmentId}`
+}
+
+// 计算持续时间
+const getDuration = (startedAt: string | null, finishedAt: string | null) => {
+  if (!startedAt) return '-'
+  if (!finishedAt) return '进行中'
+  
+  const start = new Date(startedAt)
+  const end = new Date(finishedAt)
+  const diffMs = end.getTime() - start.getTime()
+  
+  const minutes = Math.floor(diffMs / 60000)
+  const seconds = Math.floor((diffMs % 60000) / 1000)
+  
+  if (minutes > 0) {
+    return `${minutes}分${seconds}秒`
+  }
+  return `${seconds}秒`
+}
 const getStatusVariant = (status: string) => {
   switch (status) {
     case 'success':
@@ -338,21 +374,15 @@ const getStatusVariant = (status: string) => {
 }
 
 // 获取状态标签
-const getStatusLabel = (status: string) => {
-  switch (status) {
-    case 'success':
-      return '成功'
-    case 'failed':
-      return '失败'
-    case 'running':
-      return '部署中'
-    case 'pending':
-      return '等待中'
-    case 'cancelled':
-      return '已取消'
-    default:
-      return status
+const getStatusLabel = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    success: '成功',
+    failed: '失败',
+    running: '运行中',
+    pending: '等待中',
+    cancelled: '已取消'
   }
+  return statusMap[status] || status
 }
 
 // 格式化时间
@@ -400,55 +430,73 @@ const loadDeployments = async () => {
     if (statsResult) {
       stats.value = statsResult
     }
-  } catch (error) {
-    console.error('加载部署记录失败:', error)
+  } catch (error: any) {
+    console.error('取消部署失败:', error)
     
     // 使用模拟数据
     deployments.value = [
       {
         id: 1,
-        environment: 'production',
+        environmentId: 1,
+        projectId: props.projectId,
+        userId: 1,
         version: 'v1.2.3',
         status: 'success',
-        description: '修复用户登录问题',
-        duration: '3分钟',
         commitHash: 'a1b2c3d4e5f6',
+        commitMessage: '修复用户登录问题',
         branch: 'main',
-        deployedBy: '张三',
+        logs: null,
+        startedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+        finishedAt: new Date(Date.now() - 1000 * 60 * 27).toISOString(),
+        metadata: null,
         createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        completedAt: new Date(Date.now() - 1000 * 60 * 27).toISOString()
+        updatedAt: new Date(Date.now() - 1000 * 60 * 27).toISOString()
       },
       {
         id: 2,
-        environment: 'staging',
+        environmentId: 2,
+        projectId: props.projectId,
+        userId: 1,
         version: 'v1.2.4-beta',
         status: 'running',
-        description: '新增用户权限管理功能',
         commitHash: 'b2c3d4e5f6g7',
+        commitMessage: '新增用户权限管理功能',
         branch: 'feature/user-permissions',
-        deployedBy: '李四',
-        createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString()
+        logs: null,
+        startedAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+        finishedAt: null,
+        metadata: null,
+        createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+        updatedAt: new Date(Date.now() - 1000 * 60 * 10).toISOString()
       },
       {
         id: 3,
-        environment: 'production',
+        environmentId: 1,
+        projectId: props.projectId,
+        userId: 1,
         version: 'v1.2.2',
         status: 'failed',
-        description: '优化数据库查询性能',
-        duration: '1分钟',
         commitHash: 'c3d4e5f6g7h8',
+        commitMessage: '优化数据库查询性能',
         branch: 'main',
-        deployedBy: '王五',
+        logs: null,
+        startedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+        finishedAt: new Date(Date.now() - 1000 * 60 * 60 * 2 + 1000 * 60).toISOString(),
+        metadata: null,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        completedAt: new Date(Date.now() - 1000 * 60 * 60 * 2 + 1000 * 60).toISOString()
+        updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2 + 1000 * 60).toISOString()
       }
     ]
     
     stats.value = {
       totalDeployments: 24,
-      successRate: 92,
-      avgDeployTime: 4,
-      monthlyDeployments: 8
+      successfulDeployments: 22,
+      failedDeployments: 2,
+      pendingDeployments: 0,
+      runningDeployments: 0,
+      averageDeployTime: 4,
+      deploymentsByDay: [],
+      recentDeployments: []
     }
   } finally {
     loading.value = false
@@ -469,13 +517,13 @@ const rollbackDeployment = async (deployment: Deployment) => {
   
   try {
     await trpc.deployments.rollback.mutate({ 
-      id: deployment.id,
-      projectId: props.projectId 
+      deploymentId: deployment.id,
+      environmentId: deployment.environmentId
     })
     // 重新加载部署记录
     await loadDeployments()
-  } catch (error) {
-    console.error('回滚失败:', error)
+  } catch (error: any) {
+    console.error('回滚部署失败:', error)
     alert('回滚失败，请稍后重试')
   }
 }
@@ -494,12 +542,11 @@ const redeployVersion = async (deployment: Deployment) => {
   
   try {
     await trpc.deployments.redeploy.mutate({ 
-      id: deployment.id,
-      projectId: props.projectId 
+      deploymentId: deployment.id
     })
     // 重新加载部署记录
     await loadDeployments()
-  } catch (error) {
+  } catch (error: any) {
     console.error('重新部署失败:', error)
     alert('重新部署失败，请稍后重试')
   }
@@ -515,8 +562,8 @@ const cancelDeployment = async (deployment: Deployment) => {
     await trpc.deployments.cancel.mutate({ id: deployment.id })
     // 重新加载部署记录
     await loadDeployments()
-  } catch (error) {
-    console.error('取消部署失败:', error)
+  } catch (error: any) {
+    console.error('获取部署列表失败:', error)
     alert('取消部署失败，请稍后重试')
   }
 }

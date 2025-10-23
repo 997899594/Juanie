@@ -31,7 +31,7 @@ export class AuthController {
         });
 
         return res?.redirect(authUrl.url);
-    } catch (error) {
+    } catch (error: any) {
       throw new HttpException(
         "Failed to initiate GitLab OAuth",
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -73,7 +73,7 @@ export class AuthController {
 
       // 直接重定向，不使用中间页面
       return res?.redirect(finalRedirectTo);
-    } catch (error) {
+    } catch (error: any) {
       console.error("GitLab callback error:", error);
       throw new HttpException(
         "GitLab authentication failed",

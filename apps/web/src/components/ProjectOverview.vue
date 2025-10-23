@@ -8,9 +8,9 @@
           <Activity class="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-bold">{{ stats.environmentsCount }}</div>
+          <div class="text-2xl font-bold">{{ stats.totalEnvironments }}</div>
           <p class="text-xs text-muted-foreground">
-            +{{ stats.environmentsGrowth }} 本月新增
+            环境总数
           </p>
         </CardContent>
       </Card>
@@ -21,9 +21,9 @@
           <Rocket class="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-bold">{{ stats.deploymentsCount }}</div>
+          <div class="text-2xl font-bold">{{ stats.totalDeployments }}</div>
           <p class="text-xs text-muted-foreground">
-            +{{ stats.deploymentsGrowth }} 本月新增
+            部署总数
           </p>
         </CardContent>
       </Card>
@@ -34,9 +34,9 @@
           <BarChart3 class="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-bold">{{ stats.successRate }}%</div>
+          <div class="text-2xl font-bold">{{ calculateSuccessRate(stats) }}%</div>
           <p class="text-xs text-muted-foreground">
-            {{ stats.successRateChange > 0 ? '+' : '' }}{{ stats.successRateChange }}% 较上月
+            基于部署成功率计算
           </p>
         </CardContent>
       </Card>
@@ -47,9 +47,9 @@
           <User class="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-bold">{{ stats.activeMembers }}</div>
+          <div class="text-2xl font-bold">1</div>
           <p class="text-xs text-muted-foreground">
-            {{ stats.totalMembers }} 总成员
+            项目成员
           </p>
         </CardContent>
       </Card>
@@ -65,28 +65,28 @@
         <CardContent>
           <div class="space-y-4">
             <div 
-              v-for="activity in recentActivities" 
-              :key="activity.id"
-              class="flex items-start space-x-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-            >
-              <div class="activity-icon">
-                <component 
-                  :is="getActivityIcon(activity.type)" 
-                  class="h-4 w-4"
-                  :class="getActivityIconColor(activity.type)"
-                />
-              </div>
-              <div class="activity-content">
-                <div class="activity-title">{{ activity.title }}</div>
-                <div class="activity-description">{{ activity.description }}</div>
-                <div class="activity-time">{{ formatTime(activity.createdAt) }}</div>
-              </div>
-              <div class="activity-status">
-                <Badge :variant="getStatusVariant(activity.status)">
-                  {{ activity.status }}
-                </Badge>
-              </div>
+            v-for="activity in recentActivities" 
+            :key="activity.id"
+            class="flex items-start space-x-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+          >
+            <div class="activity-icon">
+              <component 
+                :is="getActivityIcon(activity.type)" 
+                class="h-4 w-4"
+                :class="getActivityIconColor(activity.type)"
+              />
             </div>
+            <div class="activity-content">
+              <div class="activity-title">{{ activity.title }}</div>
+              <div class="activity-description">{{ activity.description }}</div>
+              <div class="activity-time">{{ formatTime(activity.timestamp) }}</div>
+            </div>
+            <div class="activity-status">
+              <Badge :variant="getStatusVariant(activity.metadata?.status || 'pending')">
+                {{ activity.metadata?.status || 'pending' }}
+              </Badge>
+            </div>
+          </div>
           </div>
 
           <div v-if="recentActivities.length === 0" class="empty-state">
@@ -169,29 +169,14 @@ import {
   GitBranch,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Settings
 } from 'lucide-vue-next'
 import { trpc } from '@/lib/trpc'
 
-interface ProjectStats {
-  environmentsCount: number
-  environmentsGrowth: number
-  deploymentsCount: number
-  deploymentsGrowth: number
-  successRate: number
-  successRateChange: number
-  activeMembers: number
-  totalMembers: number
-}
-
-interface Activity {
-  id: number
-  type: 'deployment' | 'environment' | 'member' | 'settings'
-  title: string
-  description: string
-  status: 'success' | 'failed' | 'pending' | 'running'
-  createdAt: string
-}
+// 直接使用 tRPC 推断类型
+type ProjectStats = Awaited<ReturnType<typeof trpc.projects.getStats.query>>
+type RecentActivity = Awaited<ReturnType<typeof trpc.projects.getRecentActivities.query>>[0]
 
 const props = defineProps<{
   projectId: number
@@ -206,17 +191,20 @@ const emit = defineEmits<{
 
 const loading = ref(false)
 const stats = ref<ProjectStats>({
-  environmentsCount: 0,
-  environmentsGrowth: 0,
-  deploymentsCount: 0,
-  deploymentsGrowth: 0,
-  successRate: 0,
-  successRateChange: 0,
-  activeMembers: 0,
-  totalMembers: 0
+  totalDeployments: 0,
+  successfulDeployments: 0,
+  failedDeployments: 0,
+  totalEnvironments: 0,
+  lastDeployment: null
 })
 
-const recentActivities = ref<Activity[]>([])
+// 计算成功率
+const calculateSuccessRate = (stats: ProjectStats) => {
+  if (stats.totalDeployments === 0) return 0
+  return Math.round((stats.successfulDeployments / stats.totalDeployments) * 100)
+}
+
+const recentActivities = ref<RecentActivity[]>([])
 
 // 获取活动图标
 const getActivityIcon = (type: string) => {
@@ -267,21 +255,17 @@ const getStatusVariant = (status: string) => {
 }
 
 // 格式化时间
-const formatTime = (dateString: string) => {
-  const date = new Date(dateString)
+const formatTime = (timestamp: Date | string) => {
+  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   
-  const minutes = Math.floor(diff / (1000 * 60))
-  const hours = Math.floor(diff / (1000 * 60 * 60))
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  
-  if (minutes < 60) {
-    return `${minutes} 分钟前`
-  } else if (hours < 24) {
-    return `${hours} 小时前`
-  } else if (days < 7) {
-    return `${days} 天前`
+  if (diff < 1000 * 60) {
+    return '刚刚'
+  } else if (diff < 1000 * 60 * 60) {
+    return `${Math.floor(diff / (1000 * 60))}分钟前`
+  } else if (diff < 1000 * 60 * 60 * 24) {
+    return `${Math.floor(diff / (1000 * 60 * 60))}小时前`
   } else {
     return date.toLocaleDateString('zh-CN')
   }
@@ -293,7 +277,7 @@ const loadProjectStats = async () => {
     loading.value = true
     
     // 获取项目统计
-    const statsResult = await trpc.projects.getStats.query({ id: props.projectId })
+    const statsResult = await trpc.projects.getStats.query({ projectId: props.projectId })
     if (statsResult) {
       stats.value = statsResult
     }
@@ -306,45 +290,48 @@ const loadProjectStats = async () => {
     if (activitiesResult) {
       recentActivities.value = activitiesResult
     }
-  } catch (error) {
-    console.error('加载项目统计失败:', error)
+  } catch (error: any) {
+    console.error('获取项目统计失败:', error)
     
     // 使用模拟数据
     stats.value = {
-      environmentsCount: 3,
-      environmentsGrowth: 1,
-      deploymentsCount: 24,
-      deploymentsGrowth: 8,
-      successRate: 92,
-      successRateChange: 5,
-      activeMembers: 4,
-      totalMembers: 6
+      totalDeployments: 24,
+      successfulDeployments: 22,
+      failedDeployments: 2,
+      totalEnvironments: 3,
+      lastDeployment: {
+        id: 1,
+        version: 'v1.2.3',
+        status: 'success',
+        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+        environment: {
+          name: 'production',
+          displayName: '生产环境'
+        },
+        user: {
+          name: '张三'
+        }
+      }
     }
     
     recentActivities.value = [
       {
         id: 1,
-        type: 'deployment',
+        type: 'deployment' as const,
         title: '生产环境部署',
         description: '部署版本 v1.2.3 到生产环境',
-        status: 'success',
-        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString()
+        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+        user: { name: '张三', image: null },
+        metadata: { version: 'v1.2.3', status: 'success', environment: 'production' }
       },
       {
         id: 2,
-        type: 'environment',
+        type: 'deployment' as const,
         title: '新建测试环境',
         description: '创建了新的测试环境 test-v2',
-        status: 'success',
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
-      },
-      {
-        id: 3,
-        type: 'deployment',
-        title: '预发布环境部署',
-        description: '部署版本 v1.2.4-beta 到预发布环境',
-        status: 'running',
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString()
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+        user: { name: '李四', image: null },
+        metadata: { version: null, status: 'success', environment: 'test-v2' }
       }
     ]
   } finally {

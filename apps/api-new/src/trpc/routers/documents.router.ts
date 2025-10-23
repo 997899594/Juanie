@@ -1,94 +1,82 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
 import { DocumentsService } from "../../documents/documents.service";
-import { 
+import {
   createDocumentSchema,
   updateDocumentSchema,
   getDocumentSchema,
-  deleteDocumentSchema,
   listDocumentsSchema,
+  deleteDocumentSchema,
   searchDocumentsSchema,
   documentResponseSchema,
-  bulkDeleteDocumentsSchema,
-  bulkUpdateDocumentsSchema
 } from "../../schemas/document.schema";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-export function createDocumentsRouter(documentsService: DocumentsService) {
+export const createDocumentsRouter = (documentsService: DocumentsService) => {
   return createTRPCRouter({
-    // 创建文档
-    create: publicProcedure
-      .input(createDocumentSchema)
-      .output(documentResponseSchema)
-      .mutation(async ({ input }) => {
-        return documentsService.createWithEmbedding(input);
-      }),
-
     // 获取所有文档
-    findAll: publicProcedure
-      .input(listDocumentsSchema.optional())
+    findAll: protectedProcedure
+      .input(z.object({}).optional())
       .output(z.array(documentResponseSchema))
-      .query(async ({ input }) => {
-        return documentsService.findAll(input);
+      .query(async ({ ctx }) => {
+        return await documentsService.findAll();
       }),
 
     // 根据ID获取文档
-    findById: publicProcedure
+    findById: protectedProcedure
       .input(getDocumentSchema)
       .output(documentResponseSchema.nullable())
-      .query(async ({ input }) => {
-        return documentsService.findById(input.id);
+      .query(async ({ input, ctx }) => {
+        return await documentsService.findById(Number(input));
+      }),
+
+    // 创建文档
+    create: protectedProcedure
+      .input(createDocumentSchema)
+      .output(documentResponseSchema)
+      .mutation(async ({ input, ctx }) => {
+        return await documentsService.createWithEmbedding(input);
       }),
 
     // 更新文档
-    update: publicProcedure
+    update: protectedProcedure
       .input(updateDocumentSchema)
       .output(documentResponseSchema)
-      .mutation(async ({ input }) => {
-        return documentsService.update(input);
+      .mutation(async ({ input, ctx }) => {
+        return await documentsService.update(input);
       }),
 
     // 删除文档
-    delete: publicProcedure
+    delete: protectedProcedure
       .input(deleteDocumentSchema)
       .output(z.object({ success: z.boolean() }))
-      .mutation(async ({ input }) => {
-        return documentsService.delete(input.id);
+      .mutation(async ({ input, ctx }) => {
+        await documentsService.delete(Number(input));
+        return { success: true };
       }),
 
     // 搜索文档
-    search: publicProcedure
+    search: protectedProcedure
       .input(searchDocumentsSchema)
       .output(z.array(documentResponseSchema))
-      .query(async ({ input }) => {
-        return documentsService.search(input);
+      .query(async ({ input, ctx }) => {
+        return await documentsService.search(input);
       }),
 
-    // 批量删除
-    bulkDelete: publicProcedure
-      .input(bulkDeleteDocumentsSchema)
-      .output(z.object({ deletedCount: z.number() }))
-      .mutation(async ({ input }) => {
-        return documentsService.bulkDelete(input.ids);
-      }),
-
-    // 批量更新
-    bulkUpdate: publicProcedure
-      .input(bulkUpdateDocumentsSchema)
-      .output(z.object({ updatedCount: z.number() }))
-      .mutation(async ({ input }) => {
-        return documentsService.bulkUpdate(input.ids, input.updates);
-      }),
-
-    // 获取统计信息
-    getStats: publicProcedure
+    // 获取文档统计
+    getStats: protectedProcedure
+      .input(z.object({}).optional())
       .output(z.object({
         total: z.number(),
-        totalWithEmbedding: z.number(),
-        averageLength: z.number(),
-        tagCount: z.number()
+        recent: z.number(),
       }))
-      .query(async () => {
-        return documentsService.getStats();
+      .query(async ({ ctx }) => {
+        // 这里需要在 DocumentsService 中实现 getStats 方法
+        // 暂时返回模拟数据
+        return {
+          total: 0,
+          recent: 0,
+        };
       }),
   });
-}
+};

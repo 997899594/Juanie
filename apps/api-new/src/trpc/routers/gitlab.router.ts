@@ -19,7 +19,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
     getCurrentUser: protectedProcedure.query(async ({ ctx }) => {
       try {
         return await gitlabService.getCurrentUser(Number(ctx.session.userId));
-      } catch (error) {
+      } catch (error: any) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:
@@ -36,7 +36,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
       .query(async ({ ctx, input }) => {
         try {
           return await gitlabService.getUser(Number(ctx.session.userId), input);
-        } catch (error) {
+        } catch (error: any) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:
@@ -51,7 +51,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
       .query(async ({ ctx, input }) => {
         try {
           return await gitlabService.listGroups(Number(ctx.session.userId), input);
-        } catch (error) {
+        } catch (error: any) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:
@@ -66,7 +66,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
       .query(async ({ ctx, input }) => {
         try {
           return await gitlabService.listProjects(Number(ctx.session.userId), input);
-        } catch (error) {
+        } catch (error: any) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:
@@ -83,7 +83,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
       .query(async ({ ctx, input }) => {
         try {
           return await gitlabService.getProject(Number(ctx.session.userId), input);
-        } catch (error) {
+        } catch (error: any) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:
@@ -98,7 +98,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
       .mutation(async ({ ctx, input }) => {
         try {
           return await gitlabService.createProject(Number(ctx.session.userId), input);
-        } catch (error) {
+        } catch (error: any) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:
@@ -115,7 +115,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
       .mutation(async ({ ctx, input }) => {
         try {
           return await gitlabService.deleteProject(Number(ctx.session.userId), input);
-        } catch (error) {
+        } catch (error: any) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:
@@ -132,7 +132,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
       .mutation(async ({ ctx, input }) => {
         try {
           return await gitlabService.forkProject(Number(ctx.session.userId), input);
-        } catch (error) {
+        } catch (error: any) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:
@@ -147,7 +147,7 @@ export const createGitLabRouter = (gitlabService: GitLabService) =>
       .query(async ({ ctx, input }) => {
         try {
           return await gitlabService.searchProjects(Number(ctx.session.userId), input);
-        } catch (error) {
+        } catch (error: any) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:

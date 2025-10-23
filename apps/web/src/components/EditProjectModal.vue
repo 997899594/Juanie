@@ -19,12 +19,32 @@
         </div>
 
         <div class="space-y-2">
+          <Label for="displayName">显示名称</Label>
+          <Input
+            id="displayName"
+            v-model="form.displayName"
+            type="text"
+            placeholder="输入项目显示名称"
+          />
+        </div>
+
+        <div class="space-y-2">
           <Label for="description">项目描述</Label>
           <Textarea
             id="description"
             v-model="form.description"
             rows="3"
             placeholder="简要描述项目用途和功能"
+          />
+        </div>
+
+        <div class="space-y-2">
+          <Label for="logo">项目Logo</Label>
+          <Input
+            id="logo"
+            v-model="form.logo"
+            type="text"
+            placeholder="输入Logo URL"
           />
         </div>
 
@@ -72,9 +92,10 @@
           <Label for="gitlabProjectId">GitLab 项目 ID</Label>
           <Input
             id="gitlabProjectId"
-            v-model.number="form.gitlabProjectId"
             type="number"
             placeholder="可选：关联的 GitLab 项目 ID"
+            :value="form.gitlabProjectId || ''"
+            @input="(e: any) => form.gitlabProjectId = e.target.value ? Number(e.target.value) : null"
           />
           <p class="text-sm text-muted-foreground">关联 GitLab 项目后可以自动同步代码和触发部署</p>
         </div>
@@ -103,13 +124,8 @@ import { Textarea } from '@juanie/ui'
 import { Label } from '@juanie/ui'
 import { Lock, Globe, Loader2 } from 'lucide-vue-next'
 
-interface Project {
-  id: number
-  name: string
-  description?: string
-  isPublic: boolean
-  gitlabProjectId?: number
-}
+// 使用 tRPC 推断类型，不再自定义 Project 接口
+type Project = NonNullable<Awaited<ReturnType<typeof trpc.projects.getById.query>>>
 
 const props = defineProps<{
   project: Project
@@ -125,7 +141,9 @@ const errors = ref<Record<string, string>>({})
 
 const form = reactive({
   name: '',
+  displayName: '',
   description: '',
+  logo: '',
   isPublic: false,
   gitlabProjectId: null as number | null
 })
@@ -133,9 +151,11 @@ const form = reactive({
 // 初始化表单数据
 const initForm = () => {
   form.name = props.project.name
-  form.description = props.project.description ?? ''
+  form.displayName = props.project.displayName
+  form.description = props.project.description || ''
+  form.logo = props.project.logo || ''
   form.isPublic = props.project.isPublic
-  form.gitlabProjectId = props.project.gitlabProjectId || null
+  form.gitlabProjectId = props.project.gitlabProjectId
 }
 
 // 监听项目变化
@@ -173,7 +193,9 @@ const handleSubmit = async () => {
     const updateData = {
       id: props.project.id,
       name: form.name.trim(),
+      displayName: form.displayName.trim() || undefined,
       description: form.description.trim() || undefined,
+      logo: form.logo.trim() || undefined,
       isPublic: form.isPublic,
       gitlabProjectId: form.gitlabProjectId || undefined
     }
@@ -182,11 +204,11 @@ const handleSubmit = async () => {
     
     // 通知父组件
     emit('updated')
-  } catch (error) {
+  } catch (error: any) {
     console.error('更新项目失败:', error)
     
     // 处理特定错误
-    if (error.message?.includes('name')) {
+    if (error?.message?.includes('name')) {
       errors.value.name = '项目名称已存在或不符合要求'
     } else {
       // 显示通用错误提示

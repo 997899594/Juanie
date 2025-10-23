@@ -20,10 +20,29 @@ export const searchSchema = z.object({
 });
 
 // 通用ID参数
-export const idSchema = z.object({
-  id: z.union([z.string(), z.number()]).transform((val) => 
-    typeof val === 'string' ? parseInt(val, 10) : val
-  ),
+export const idSchema = z.number();
+
+// 项目ID参数
+export const projectIdSchema = z.number();
+
+// 用户信息schema
+export const userInfoSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().email(),
+  image: z.string().nullable(),
+});
+
+// 角色schema
+export const roleSchema = z.enum(['owner', 'admin', 'member', 'viewer']);
+
+// 部署设置schema
+export const deploySettingsSchema = z.object({
+  autoDeployEnabled: z.boolean().default(false),
+  deployBranch: z.string().default('main'),
+  buildCommand: z.string().optional(),
+  outputDirectory: z.string().optional(),
+  environmentVariables: z.record(z.string()).optional(),
 });
 
 // 通用批量操作参数

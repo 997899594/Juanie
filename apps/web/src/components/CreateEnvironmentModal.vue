@@ -243,16 +243,22 @@ const handleSubmit = async () => {
   try {
     loading.value = true
     
-    // 过滤空的环境变量
+    // 过滤空的环境变量并转换为 config.environmentVariables 格式
     const variables = form.variables.filter(v => v.key.trim() && v.value.trim())
+    const environmentVariables = variables.reduce((acc, v) => {
+      acc[v.key] = v.value
+      return acc
+    }, {} as Record<string, string>)
     
     const createData = {
       projectId: props.projectId,
       name: form.name.trim(),
-      description: form.description.trim() || undefined,
-      type: form.type,
+      displayName: form.description.trim() || form.name.trim(),
       url: form.url.trim() || undefined,
-      variables: variables.length > 0 ? variables : undefined
+      branch: undefined,
+      config: Object.keys(environmentVariables).length > 0 ? {
+        environmentVariables
+      } : undefined
     }
     
     const result = await trpc.environments.create.mutate(createData)
@@ -270,7 +276,7 @@ const handleSubmit = async () => {
         errors.value[field] = zodErrors[field][0]
       })
     } else if (error?.message) {
-      errors.value.general = error.message
+      errors.value.general = error?.message
     } else {
       errors.value.general = '创建环境失败，请稍后重试'
     }
