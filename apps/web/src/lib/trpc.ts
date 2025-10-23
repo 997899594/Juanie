@@ -1,38 +1,30 @@
 import type { AppRouter } from '@juanie/api-new'
-import { createTRPCProxyClient, httpBatchLink, loggerLink } from '@trpc/client'
+import { createTRPCProxyClient, httpBatchLink, loggerLink, type TRPCClient } from '@trpc/client'
 
 const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
-/**
- * tRPC 客户端配置
- * 集成了调试支持，用于开发时调试tRPC请求
- */
-export const trpc: ReturnType<typeof createTRPCProxyClient<AppRouter>> =
-  createTRPCProxyClient<AppRouter>({
-    links: [
-      // 开发环境下启用日志记录
-      loggerLink({
-        enabled: (opts) =>
-          process.env.NODE_ENV === 'development' ||
-          (opts.direction === 'down' && opts.result instanceof Error),
-        colorMode: 'ansi',
-      }),
-      httpBatchLink({
-        url: `${baseUrl}/trpc`,
-        // 允许跨域携带 Cookie（与服务端 CORS 的 Allow-Credentials 配置保持一致）
-        fetch: (url, options) =>
-          fetch(url, {
-            ...options,
-            credentials: 'include',
-          }),
-        // 可以在这里添加认证头
-        // headers() {
-        //   return {
-        //     authorization: getAuthCookie(),
-        //   }
-        // },
-      }),
-    ],
-  })
+// 创建 tRPC 客户端
+const trpcClient = createTRPCProxyClient<AppRouter>({
+  links: [
+    loggerLink({
+      enabled: () => import.meta.env.DEV,
+    }),
+    httpBatchLink({
+      url: `${baseUrl}/trpc`,
+      fetch: (url: RequestInfo | URL, options?: RequestInit) =>
+        fetch(url, {
+          ...options,
+          credentials: 'include',
+        }),
+      // headers() {
+      //   const token = localStorage.getItem('token')
+      //   return token ? { authorization: `Bearer ${token}` } : {}
+      // },
+    }),
+  ],
+})
+
+// 导出 tRPC 客户端，使用正确的类型定义
+export const trpc: TRPCClient<AppRouter> = trpcClient
 
 export type { AppRouter }

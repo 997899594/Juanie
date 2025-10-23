@@ -29,7 +29,6 @@
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
-    "@nestjs/swagger": "^11.2.1",
     "@nestjs/throttler": "^6.4.0",
     "@trpc/server": "^11.6.0",
     "@types/cookie-parser": "^1.4.9",
@@ -48,9 +47,8 @@
     "zod": "^3.25.1"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
     "@nestjs/testing": "^11.1.6",
-    "drizzle-kit": "^0.31.5",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.5"
+    "drizzle-kit": "^0.31.5"
   }
 }

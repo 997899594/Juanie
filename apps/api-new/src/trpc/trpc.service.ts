@@ -13,9 +13,31 @@ import { createGitLabRouter } from "./routers/gitlab.router";
 import { createProjectsRouter } from "./routers/projects.router";
 import { createTRPCRouter } from "./trpc";
 
+// 先定义路由器创建函数，用于类型推断
+function createAppRouter(services: {
+  authService: AuthService;
+  gitlabService: GitLabService;
+  documentsService: DocumentsService;
+  projectsService: ProjectsService;
+  environmentsService: EnvironmentsService;
+  deploymentsService: DeploymentsService;
+}) {
+  return createTRPCRouter({
+    auth: createAuthRouter(services.authService),
+    documents: createDocumentsRouter(services.documentsService),
+    gitlab: createGitLabRouter(services.gitlabService),
+    projects: createProjectsRouter(services.projectsService),
+    environments: createEnvironmentsRouter(services.environmentsService),
+    deployments: createDeploymentsRouter(services.deploymentsService),
+  });
+}
+
+// 导出 AppRouter 类型 - 这是 tRPC 的标准做法
+export type AppRouter = ReturnType<typeof createAppRouter>;
+
 @Injectable()
 export class TrpcService implements OnModuleInit {
-  private appRouter!: ReturnType<typeof createTRPCRouter>;
+  private appRouter!: AppRouter;
 
   constructor(
     private readonly authService: AuthService,
@@ -27,13 +49,13 @@ export class TrpcService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    this.appRouter = createTRPCRouter({
-      auth: createAuthRouter(this.authService),
-      documents: createDocumentsRouter(this.documentsService),
-      gitlab: createGitLabRouter(this.gitlabService),
-      projects: createProjectsRouter(this.projectsService),
-      environments: createEnvironmentsRouter(this.environmentsService),
-      deployments: createDeploymentsRouter(this.deploymentsService),
+    this.appRouter = createAppRouter({
+      authService: this.authService,
+      gitlabService: this.gitlabService,
+      documentsService: this.documentsService,
+      projectsService: this.projectsService,
+      environmentsService: this.environmentsService,
+      deploymentsService: this.deploymentsService,
     });
   }
 
@@ -59,15 +81,3 @@ export class TrpcService implements OnModuleInit {
     };
   }
 }
-
-// 正确的 AppRouter 类型定义
-export type AppRouter = ReturnType<
-  typeof createTRPCRouter<{
-    auth: ReturnType<typeof createAuthRouter>;
-    documents: ReturnType<typeof createDocumentsRouter>;
-    gitlab: ReturnType<typeof createGitLabRouter>;
-    projects: ReturnType<typeof createProjectsRouter>;
-    environments: ReturnType<typeof createEnvironmentsRouter>;
-    deployments: ReturnType<typeof createDeploymentsRouter>;
-  }>
->;
