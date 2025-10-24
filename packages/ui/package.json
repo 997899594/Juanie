@@ -8,7 +8,7 @@
       "default": "./dist/index.es.js"
     },
     "./styles": {
-      "default": "./dist/style.css"
+      "default": "./dist/ui.css"
     }
   },
   "files": [

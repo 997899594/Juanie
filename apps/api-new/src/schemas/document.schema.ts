@@ -49,8 +49,8 @@ export const documentResponseSchema = z.object({
   tags: z.array(z.string()),
   metadata: z.record(z.any()).nullable(),
   embedding: z.string().nullable(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
 // 文档统计

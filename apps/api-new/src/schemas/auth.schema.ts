@@ -47,17 +47,17 @@ export const userResponseSchema = z.object({
   id: z.number().int(),
   email: z.string().email(),
   name: z.string(),
-  image: z.string().url().nullable(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  image: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
 // 会话信息响应
 export const sessionResponseSchema = z.object({
   id: z.string(),
   userId: z.number().int(),
-  expires: z.string().datetime(),
-  createdAt: z.string().datetime(),
+  expires: z.date(),
+  createdAt: z.date(),
 });
 
 // 认证响应
@@ -91,8 +91,10 @@ export const accountResponseSchema = z.object({
   userId: z.number().int(),
   provider: oauthProviderSchema,
   providerId: z.string(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  accessToken: z.string().nullable(),
+  refreshToken: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
 // 用户权限schema

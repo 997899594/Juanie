@@ -357,8 +357,8 @@ export class AuthService {
           session: {
             id: cachedSession.id,
             userId: cachedSession.userId,
-            expires: cachedSession.expires,
-            createdAt: new Date().toISOString(), // 添加createdAt字段
+            expires: new Date(cachedSession.expires),
+            createdAt: new Date(),
           },
         };
       }
@@ -587,8 +587,8 @@ export class AuthService {
       email: user.email,
       name: user.name,
       image: user.image,
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     };
   }
 
@@ -599,8 +599,8 @@ export class AuthService {
     return {
       id: session.id,
       userId: session.userId,
-      expires: session.expires.toISOString(),
-      createdAt: session.createdAt.toISOString(),
+      expires: session.expires,
+      createdAt: session.createdAt,
     };
   }
 }

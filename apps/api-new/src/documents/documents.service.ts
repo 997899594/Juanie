@@ -100,8 +100,8 @@ export class DocumentsService {
       tags: document.tags || [],
       metadata: document.metadata,
       embedding: document.embedding,
-      createdAt: document.createdAt?.toISOString() || new Date().toISOString(),
-      updatedAt: document.updatedAt?.toISOString() || new Date().toISOString(),
+      createdAt: document.createdAt || new Date(),
+      updatedAt: document.updatedAt || new Date(),
     };
   }
 }
