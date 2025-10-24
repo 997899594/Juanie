@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "builder": "swc",
+    "typeCheck": true,
+    "assets": [
+      {
+        "include": "**/*.proto",
+        "outDir": "./dist"
+      },
+      {
+        "include": "**/*.graphql",
+        "outDir": "./dist"
+      }
+    ],
+    "watchAssets": true,
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "classValidatorShim": true,
+          "introspectComments": true,
+          "dtoFileNameSuffix": [".dto.ts", ".entity.ts", ".schema.ts"]
+        }
+      }
+    ]
+  },
+  "projects": {},
+  "monorepo": false,
+  "root": ".",
+  "entryFile": "main",
+  "exec": "node"
+}
