@@ -47,10 +47,21 @@ export const insertProjectSchema = createInsertSchema(projects);
 
 export const selectProjectSchema = createSelectSchema(projects);
 
-export const updateProjectSchema = insertProjectSchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
+export const updateProjectSchema = selectProjectSchema.pick({
+  organizationId: true,
+  name: true,
+  slug: true,
+  displayName: true,
+  description: true,
+  repositoryUrl: true,
+  visibility: true,
+  status: true,
+  settings: true,
+  aiSettings: true,
+  resourceLimits: true,
+  currentUsage: true,
+  tags: true,
+  isArchived: true,
 });
 
 export type Project = typeof projects.$inferSelect;

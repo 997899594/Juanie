@@ -73,10 +73,34 @@ export const insertDeploymentSchema = createInsertSchema(deployments);
 
 export const selectDeploymentSchema = createSelectSchema(deployments);
 
-export const updateDeploymentSchema = insertDeploymentSchema.partial().omit({
-  id: true,
-  createdAt: true,
-});
+export const updateDeploymentSchema = selectDeploymentSchema.pick({
+  projectId: true,
+  environmentId: true,
+  pipelineRunId: true,
+  version: true,
+  commitHash: true,
+  commitMessage: true,
+  branch: true,
+  deploymentStrategy: true,
+  rollbackStrategy: true,
+  status: true,
+  startedAt: true,
+  finishedAt: true,
+  deployedBy: true,
+  approvedBy: true,
+  successProbability: true,
+  riskAssessment: true,
+  performancePrediction: true,
+  performanceMetrics: true,
+  errorRate: true,
+  responseTimeP95: true,
+  deploymentCost: true,
+  resourceUsage: true,
+  carbonFootprint: true,
+  rollbackReason: true,
+  rolledBackAt: true,
+  rollbackDuration: true,
+}).partial();
 
 export type Deployment = typeof deployments.$inferSelect;
 export type NewDeployment = typeof deployments.$inferInsert;

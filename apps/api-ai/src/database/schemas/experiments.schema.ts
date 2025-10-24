@@ -67,11 +67,29 @@ export const insertExperimentSchema = createInsertSchema(experiments);
 
 export const selectExperimentSchema = createSelectSchema(experiments);
 
-export const updateExperimentSchema = insertExperimentSchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const updateExperimentSchema = selectExperimentSchema.pick({
+  projectId: true,
+  featureFlagId: true,
+  name: true,
+  hypothesis: true,
+  successMetrics: true,
+  trafficAllocation: true,
+  controlVariant: true,
+  testVariants: true,
+  startDate: true,
+  endDate: true,
+  durationDays: true,
+  minimumSampleSize: true,
+  confidenceLevel: true,
+  statisticalPower: true,
+  aiAnalysisEnabled: true,
+  realTimeMonitoring: true,
+  autoStopConditions: true,
+  results: true,
+  statisticalSignificance: true,
+  winnerVariant: true,
+  status: true,
+}).partial();
 
 export type Experiment = typeof experiments.$inferSelect;
 export type NewExperiment = typeof experiments.$inferInsert;

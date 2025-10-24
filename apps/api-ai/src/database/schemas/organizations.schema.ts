@@ -32,11 +32,15 @@ export const insertOrganizationSchema = createInsertSchema(organizations);
 
 export const selectOrganizationSchema = createSelectSchema(organizations);
 
-export const updateOrganizationSchema = insertOrganizationSchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const updateOrganizationSchema = selectOrganizationSchema.pick({
+  name: true,
+  slug: true,
+  displayName: true,
+  description: true,
+  logoUrl: true,
+  website: true,
+  settings: true
+}).partial();
 
 export type Organization = typeof organizations.$inferSelect;
 export type NewOrganization = typeof organizations.$inferInsert;

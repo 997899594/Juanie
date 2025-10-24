@@ -47,11 +47,22 @@ export const insertZeroTrustPolicySchema = createInsertSchema(zeroTrustPolicies)
 
 export const selectZeroTrustPolicySchema = createSelectSchema(zeroTrustPolicies);
 
-export const updateZeroTrustPolicySchema = insertZeroTrustPolicySchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const updateZeroTrustPolicySchema = selectZeroTrustPolicySchema.pick({
+  resourceType: true,
+  resourceId: true,
+  userConditions: true,
+  deviceConditions: true,
+  networkConditions: true,
+  timeConditions: true,
+  continuousVerification: true,
+  verificationInterval: true,
+  riskThreshold: true,
+  adaptiveAccess: true,
+  aiRiskScoring: true,
+  auditAllAccess: true,
+  logFailedAttempts: true,
+  isActive: true,
+}).partial();
 
 export type ZeroTrustPolicy = typeof zeroTrustPolicies.$inferSelect;
 export type NewZeroTrustPolicy = typeof zeroTrustPolicies.$inferInsert;

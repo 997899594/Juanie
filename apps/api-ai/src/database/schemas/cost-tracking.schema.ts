@@ -290,11 +290,21 @@ export const insertCostTrackingSchema = createInsertSchema(costTracking);
 
 export const selectCostTrackingSchema = createSelectSchema(costTracking);
 
-export const updateCostTrackingSchema = insertCostTrackingSchema.partial().omit({
-  id: true,
+export const updateCostTrackingSchema = selectCostTrackingSchema.pick({
+  period: true,
+  totalCost: true,
+  currency: true,
+  serviceCosts: true,
+  resourceUtilization: true,
+  costAllocation: true,
+  optimizationOpportunities: true,
+  sustainabilityMetrics: true,
+  budgetForecasting: true,
+  costAnomalies: true,
+  billingInfo: true,
+  projectId: true,
   organizationId: true,
-  createdAt: true,
-});
+}).partial();
 
 export const costTrackingPublicSchema = selectCostTrackingSchema.pick({
   id: true,

@@ -63,11 +63,21 @@ export const insertSecurityPolicySchema = createInsertSchema(securityPolicies);
 
 export const selectSecurityPolicySchema = createSelectSchema(securityPolicies);
 
-export const updateSecurityPolicySchema = insertSecurityPolicySchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const updateSecurityPolicySchema = selectSecurityPolicySchema.pick({
+  organizationId: true,
+  projectId: true,
+  policyName: true,
+  policyType: true,
+  policyRules: true,
+  enforcementLevel: true,
+  appliesTo: true,
+  exceptions: true,
+  aiGenerated: true,
+  aiConfidence: true,
+  autoUpdateEnabled: true,
+  complianceFrameworks: true,
+  isActive: true,
+}).partial();
 
 export type SecurityPolicy = typeof securityPolicies.$inferSelect;
 export type NewSecurityPolicy = typeof securityPolicies.$inferInsert;

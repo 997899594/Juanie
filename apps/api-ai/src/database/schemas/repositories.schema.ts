@@ -70,11 +70,32 @@ export const insertRepositorySchema = createInsertSchema(repositories);
 
 export const selectRepositorySchema = createSelectSchema(repositories);
 
-export const updateRepositorySchema = insertRepositorySchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const updateRepositorySchema = selectRepositorySchema.pick({
+  projectId: true,
+  provider: true,
+  providerId: true,
+  name: true,
+  fullName: true,
+  cloneUrl: true,
+  webUrl: true,
+  defaultBranch: true,
+  protectedBranches: true,
+  branchProtectionRules: true,
+  isPrivate: true,
+  isArchived: true,
+  isTemplate: true,
+  autoMergeEnabled: true,
+  autoDeleteBranches: true,
+  requireCodeReview: true,
+  requireStatusChecks: true,
+  lastSyncAt: true,
+  syncStatus: true,
+  syncError: true,
+  starsCount: true,
+  forksCount: true,
+  issuesCount: true,
+  pullRequestsCount: true,
+}).partial();
 
 export type Repository = typeof repositories.$inferSelect;
 export type NewRepository = typeof repositories.$inferInsert;

@@ -65,10 +65,20 @@ export const insertPerformanceMetricSchema = createInsertSchema(performanceMetri
 
 export const selectPerformanceMetricSchema = createSelectSchema(performanceMetrics);
 
-export const updatePerformanceMetricSchema = insertPerformanceMetricSchema.partial().omit({
-  id: true,
-  createdAt: true,
-});
+export const updatePerformanceMetricSchema = selectPerformanceMetricSchema.pick({
+  projectId: true,
+  environmentId: true,
+  serviceName: true,
+  metricName: true,
+  metricType: true,
+  value: true,
+  unit: true,
+  labels: true,
+  dimensions: true,
+  timestamp: true,
+  isAnomaly: true,
+  anomalyScore: true,
+}).partial();
 
 export type PerformanceMetric = typeof performanceMetrics.$inferSelect;
 export type NewPerformanceMetric = typeof performanceMetrics.$inferInsert;

@@ -6,31 +6,10 @@
     "deleteOutDir": true,
     "builder": "swc",
     "typeCheck": true,
-    "assets": [
-      {
-        "include": "**/*.proto",
-        "outDir": "./dist"
-      },
-      {
-        "include": "**/*.graphql",
-        "outDir": "./dist"
-      }
-    ],
-    "watchAssets": true,
-    "plugins": [
-      {
-        "name": "@nestjs/swagger",
-        "options": {
-          "classValidatorShim": true,
-          "introspectComments": true,
-          "dtoFileNameSuffix": [".dto.ts", ".entity.ts", ".schema.ts"]
-        }
-      }
-    ]
+    "assets": ["**/*.proto", "**/*.graphql"],
+    "watchAssets": true
   },
   "projects": {},
   "monorepo": false,
-  "root": ".",
-  "entryFile": "main",
-  "exec": "node"
+  "root": "apps/api-ai"
 }

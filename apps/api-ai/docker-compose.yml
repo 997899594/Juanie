@@ -1,63 +1,281 @@
+# 🚀 Juanie AI - Docker Compose 配置
+# 实现完整的容器化部署和边缘节点分发策略
+
 version: '3.8'
 
+# ============================================================================
+# 网络配置
+# ============================================================================
+networks:
+  juanie-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  
+  edge-network:
+    driver: overlay
+    attachable: true
+
+# ============================================================================
+# 数据卷配置
+# ============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  edge_cache:
+    driver: local
+  app_logs:
+    driver: local
+
+# ============================================================================
+# 服务配置
+# ============================================================================
 services:
+  # ----------------------------------------------------------------------------
+  # 核心应用服务
+  # ----------------------------------------------------------------------------
   api:
     build:
       context: .
       dockerfile: Dockerfile
       target: runner
+    container_name: juanie-api
+    restart: unless-stopped
     ports:
-      - '3001:3001'
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://juanie:juanie123@postgres:5432/juanie_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PROMETHEUS_URL=http://prometheus:9090
+      - GRAFANA_URL=http://grafana:3001
+    volumes:
+      - app_logs:/app/logs
+      - ./uploads:/app/uploads
+    networks:
+      - juanie-network
+    depends_on:
+      - postgres
+      - redis
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 开发环境服务
+  # ----------------------------------------------------------------------------
+  api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: juanie-api-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+      - "9229:9229"  # 调试端口
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/devops_ai
+      - DATABASE_URL=postgresql://juanie:juanie123@postgres:5432/juanie_dev_db
       - REDIS_URL=redis://redis:6379
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - JWT_SECRET=dev-jwt-secret
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     volumes:
       - .:/app
       - /app/node_modules
-    command: bun run dev
-
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: devops_ai
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-    ports:
-      - '5432:5432'
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - '6379:6379'
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  adminer:
-    image: adminer:latest
-    ports:
-      - '8080:8080'
+      - app_logs:/app/logs
+    networks:
+      - juanie-network
     depends_on:
       - postgres
+      - redis
+    profiles:
+      - dev
 
-volumes:
-  postgres_data:
-  redis_data:
+  # ----------------------------------------------------------------------------
+  # 边缘节点服务
+  # ----------------------------------------------------------------------------
+  edge-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: edge
+    container_name: juanie-edge
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "8443:443"
+    environment:
+      - NODE_ENV=production
+      - EDGE_MODE=true
+      - CACHE_STRATEGY=edge
+      - REDIS_URL=redis://edge-redis:6379
+      - MAIN_API_URL=http://api:3000
+    volumes:
+      - edge_cache:/var/cache/edge
+    networks:
+      - juanie-network
+      - edge-network
+    depends_on:
+      - edge-redis
+    profiles:
+      - edge
+
+  # ----------------------------------------------------------------------------
+  # 数据库服务
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: juanie-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=juanie_db
+      - POSTGRES_USER=juanie
+      - POSTGRES_PASSWORD=juanie123
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - juanie-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U juanie -d juanie_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ----------------------------------------------------------------------------
+  # 缓存服务
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: juanie-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - juanie-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # 边缘节点专用Redis
+  edge-redis:
+    image: redis:7-alpine
+    container_name: juanie-edge-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - edge_cache:/data
+    networks:
+      - edge-network
+    profiles:
+      - edge
+
+  # ----------------------------------------------------------------------------
+  # 监控服务
+  # ----------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: juanie-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - juanie-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: juanie-grafana
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - juanie-network
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ----------------------------------------------------------------------------
+  # 数据库管理工具
+  # ----------------------------------------------------------------------------
+  adminer:
+    image: adminer:latest
+    container_name: juanie-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    networks:
+      - juanie-network
+    depends_on:
+      - postgres

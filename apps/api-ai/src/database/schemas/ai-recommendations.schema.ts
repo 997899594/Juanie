@@ -60,10 +60,24 @@ export const insertAiRecommendationSchema = createInsertSchema(aiRecommendations
 
 export const selectAiRecommendationSchema = createSelectSchema(aiRecommendations);
 
-export const updateAiRecommendationSchema = insertAiRecommendationSchema.partial().omit({
-  id: true,
-  createdAt: true,
-});
+export const updateAiRecommendationSchema = selectAiRecommendationSchema.pick({
+  assistantId: true,
+  contextType: true,
+  contextId: true,
+  title: true,
+  description: true,
+  recommendationData: true,
+  confidenceScore: true,
+  priority: true,
+  category: true,
+  tags: true,
+  userFeedback: true,
+  feedbackReason: true,
+  appliedAt: true,
+  estimatedImpact: true,
+  actualImpact: true,
+  expiresAt: true,
+}).partial();
 
 export type AiRecommendation = typeof aiRecommendations.$inferSelect;
 export type NewAiRecommendation = typeof aiRecommendations.$inferInsert;

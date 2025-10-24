@@ -69,10 +69,26 @@ export const insertResourceOptimizationSchema = createInsertSchema(resourceOptim
 
 export const selectResourceOptimizationSchema = createSelectSchema(resourceOptimization);
 
-export const updateResourceOptimizationSchema = insertResourceOptimizationSchema.partial().omit({
-  id: true,
-  createdAt: true,
-});
+export const updateResourceOptimizationSchema = selectResourceOptimizationSchema.pick({
+  projectId: true,
+  environmentId: true,
+  optimizationType: true,
+  currentConfiguration: true,
+  currentCost: true,
+  currentPerformance: true,
+  recommendedConfiguration: true,
+  estimatedCost: true,
+  estimatedPerformance: true,
+  costSavings: true,
+  performanceImpact: true,
+  riskAssessment: true,
+  aiConfidence: true,
+  aiReasoning: true,
+  status: true,
+  implementedAt: true,
+  actualSavings: true,
+  expiresAt: true,
+}).partial();
 
 export type ResourceOptimization = typeof resourceOptimization.$inferSelect;
 export type NewResourceOptimization = typeof resourceOptimization.$inferInsert;

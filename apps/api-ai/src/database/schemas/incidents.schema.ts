@@ -236,11 +236,31 @@ export const insertIncidentSchema = createInsertSchema(incidents, {
 
 export const selectIncidentSchema = createSelectSchema(incidents);
 
-export const updateIncidentSchema = insertIncidentSchema.partial().omit({
-  id: true,
+export const updateIncidentSchema = selectIncidentSchema.pick({
+  title: true,
+  description: true,
+  severity: true,
+  priority: true,
+  status: true,
+  category: true,
+  subcategory: true,
+  impactAssessment: true,
+  detectionResponse: true,
+  technicalDetails: true,
+  rootCauseAnalysis: true,
+  resolutionMitigation: true,
+  communicationUpdates: true,
+  aiAssistedResponse: true,
+  metricsSla: true,
+  postIncidentReview: true,
+  projectId: true,
   reportedBy: true,
-  createdAt: true,
-});
+  assignedTo: true,
+  reportedAt: true,
+  acknowledgedAt: true,
+  resolvedAt: true,
+  closedAt: true,
+}).partial();
 
 export const incidentPublicSchema = selectIncidentSchema.pick({
   id: true,
@@ -251,8 +271,8 @@ export const incidentPublicSchema = selectIncidentSchema.pick({
   status: true,
   category: true,
   subcategory: true,
-  impact: true,
-  metrics: true,
+  impactAssessment: true,
+  metricsSla: true,
   createdAt: true,
   updatedAt: true,
   resolvedAt: true,

@@ -69,10 +69,9 @@ export const insertPipelineRunSchema = createInsertSchema(pipelineRuns);
 
 export const selectPipelineRunSchema = createSelectSchema(pipelineRuns);
 
-export const updatePipelineRunSchema = insertPipelineRunSchema.partial().omit({
-  id: true,
-  createdAt: true,
-});
+export const updatePipelineRunSchema = selectPipelineRunSchema.pick({
+  pipelineId: true
+}).partial();
 
 export type PipelineRun = typeof pipelineRuns.$inferSelect;
 export type NewPipelineRun = typeof pipelineRuns.$inferInsert;

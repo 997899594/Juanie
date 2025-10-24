@@ -57,11 +57,30 @@ export const insertEnvironmentSchema = createInsertSchema(environments);
 
 export const selectEnvironmentSchema = createSelectSchema(environments);
 
-export const updateEnvironmentSchema = insertEnvironmentSchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const updateEnvironmentSchema = selectEnvironmentSchema.pick({
+  projectId: true,
+  name: true,
+  displayName: true,
+  description: true,
+  environmentType: true,
+  cloudProvider: true,
+  region: true,
+  infrastructureConfig: true,
+  computeResources: true,
+  networkConfig: true,
+  status: true,
+  healthCheckUrl: true,
+  lastHealthCheck: true,
+  accessRestrictions: true,
+  allowedUsers: true,
+  allowedTeams: true,
+  resourceQuotas: true,
+  costBudget: true,
+  autoScalingConfig: true,
+  complianceRequirements: true,
+  securityPolicies: true,
+  dataClassification: true,
+}).partial();
 
 export type Environment = typeof environments.$inferSelect;
 export type NewEnvironment = typeof environments.$inferInsert;

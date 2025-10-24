@@ -74,10 +74,30 @@ export const insertIntelligentAlertSchema = createInsertSchema(intelligentAlerts
 
 export const selectIntelligentAlertSchema = createSelectSchema(intelligentAlerts);
 
-export const updateIntelligentAlertSchema = insertIntelligentAlertSchema.partial().omit({
-  id: true,
-  createdAt: true,
-});
+export const updateIntelligentAlertSchema = selectIntelligentAlertSchema.pick({
+  monitorConfigId: true,
+  alertType: true,
+  severity: true,
+  title: true,
+  description: true,
+  aiConfidence: true,
+  rootCauseAnalysis: true,
+  correlationAnalysis: true,
+  impactAssessment: true,
+  predictionHorizon: true,
+  probabilityScore: true,
+  autoRemediationAvailable: true,
+  remediationActions: true,
+  autoRemediationApplied: true,
+  status: true,
+  acknowledgedBy: true,
+  acknowledgedAt: true,
+  resolvedAt: true,
+  resolutionNotes: true,
+  notificationsSent: true,
+  escalated: true,
+  escalatedAt: true,
+}).partial();
 
 export type IntelligentAlert = typeof intelligentAlerts.$inferSelect;
 export type NewIntelligentAlert = typeof intelligentAlerts.$inferInsert;

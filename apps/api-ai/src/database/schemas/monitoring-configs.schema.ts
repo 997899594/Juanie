@@ -66,11 +66,9 @@ export const insertMonitoringConfigSchema = createInsertSchema(monitoringConfigs
 
 export const selectMonitoringConfigSchema = createSelectSchema(monitoringConfigs);
 
-export const updateMonitoringConfigSchema = insertMonitoringConfigSchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const updateMonitoringConfigSchema = selectMonitoringConfigSchema.pick({
+  projectId: true
+}).partial();
 
 export type MonitoringConfig = typeof monitoringConfigs.$inferSelect;
 export type NewMonitoringConfig = typeof monitoringConfigs.$inferInsert;

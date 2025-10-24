@@ -49,11 +49,24 @@ export const insertPipelineSchema = createInsertSchema(pipelines);
 
 export const selectPipelineSchema = createSelectSchema(pipelines);
 
-export const updatePipelineSchema = insertPipelineSchema.partial().omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const updatePipelineSchema = selectPipelineSchema.pick({
+  projectId: true,
+  repositoryId: true,
+  name: true,
+  description: true,
+  configSource: true,
+  configPath: true,
+  pipelineConfig: true,
+  triggers: true,
+  triggerBranches: true,
+  triggerPaths: true,
+  aiOptimizationEnabled: true,
+  autoParallelization: true,
+  smartCaching: true,
+  isActive: true,
+  successRate: true,
+  averageDuration: true,
+}).partial();
 
 export type Pipeline = typeof pipelines.$inferSelect;
 export type NewPipeline = typeof pipelines.$inferInsert;

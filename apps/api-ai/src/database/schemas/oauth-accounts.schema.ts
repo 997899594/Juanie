@@ -129,13 +129,20 @@ export const insertOAuthAccountSchema = createInsertSchema(oauthAccounts, {
 
 export const selectOAuthAccountSchema = createSelectSchema(oauthAccounts);
 
-export const updateOAuthAccountSchema = insertOAuthAccountSchema.partial().omit({
-  id: true,
+export const updateOAuthAccountSchema = selectOAuthAccountSchema.pick({
   userId: true,
   provider: true,
   providerAccountId: true,
-  createdAt: true,
-});
+  accessToken: true,
+  refreshToken: true,
+  tokenType: true,
+  scope: true,
+  expiresAt: true,
+  githubData: true,
+  gitlabData: true,
+  permissions: true,
+  lastUsedAt: true,
+}).partial();
 
 export type OAuthAccount = typeof oauthAccounts.$inferSelect;
 export type NewOAuthAccount = typeof oauthAccounts.$inferInsert;

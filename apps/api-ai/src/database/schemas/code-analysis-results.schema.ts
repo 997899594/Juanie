@@ -1,11 +1,20 @@
-import { pgTable, serial, integer, text, timestamp, jsonb, decimal, index } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
-import { z } from 'zod';
-import { repositories } from './repositories.schema';
+import { relations } from 'drizzle-orm'
+import {
+  decimal,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core'
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
+import { z } from 'zod'
+import { repositories } from './repositories.schema'
 
 // 枚举定义
-export const AnalyzerTypeEnum = z.enum(['security', 'quality', 'performance', 'ai_review']);
+export const AnalyzerTypeEnum = z.enum(['security', 'quality', 'performance', 'ai_review'])
 
 export const codeAnalysisResults = pgTable('code_analysis_results', {
   id: serial('id').primaryKey(),
@@ -38,11 +47,21 @@ export const codeAnalysisResults = pgTable('code_analysis_results', {
 });
 
 // Indexes
-export const codeAnalysisResultsRepositoryIdx = index('code_analysis_results_repository_idx').on(codeAnalysisResults.repositoryId);
-export const codeAnalysisResultsCommitIdx = index('code_analysis_results_commit_idx').on(codeAnalysisResults.commitHash);
-export const codeAnalysisResultsAnalyzerTypeIdx = index('code_analysis_results_analyzer_type_idx').on(codeAnalysisResults.analyzerType);
-export const codeAnalysisResultsBranchIdx = index('code_analysis_results_branch_idx').on(codeAnalysisResults.branch);
-export const codeAnalysisResultsCreatedAtIdx = index('code_analysis_results_created_at_idx').on(codeAnalysisResults.createdAt);
+export const codeAnalysisResultsRepositoryIdx = index('code_analysis_results_repository_idx').on(
+  codeAnalysisResults.repositoryId,
+)
+export const codeAnalysisResultsCommitIdx = index('code_analysis_results_commit_idx').on(
+  codeAnalysisResults.commitHash,
+)
+export const codeAnalysisResultsAnalyzerTypeIdx = index(
+  'code_analysis_results_analyzer_type_idx',
+).on(codeAnalysisResults.analyzerType)
+export const codeAnalysisResultsBranchIdx = index('code_analysis_results_branch_idx').on(
+  codeAnalysisResults.branch,
+)
+export const codeAnalysisResultsCreatedAtIdx = index('code_analysis_results_created_at_idx').on(
+  codeAnalysisResults.createdAt,
+)
 
 // Relations
 export const codeAnalysisResultsRelations = relations(codeAnalysisResults, ({ one }) => ({
@@ -50,19 +69,31 @@ export const codeAnalysisResultsRelations = relations(codeAnalysisResults, ({ on
     fields: [codeAnalysisResults.repositoryId],
     references: [repositories.id],
   }),
-}));
+}))
 
 // Zod Schemas with detailed enums
-export const insertCodeAnalysisResultSchema = createInsertSchema(codeAnalysisResults);
+export const insertCodeAnalysisResultSchema = createInsertSchema(codeAnalysisResults)
 
-export const selectCodeAnalysisResultSchema = createSelectSchema(codeAnalysisResults);
+export const selectCodeAnalysisResultSchema = createSelectSchema(codeAnalysisResults)
 
-export const updateCodeAnalysisResultSchema = insertCodeAnalysisResultSchema.partial().omit({
-  id: true,
-  createdAt: true,
-});
+export const updateCodeAnalysisResultSchema = selectCodeAnalysisResultSchema.pick({
+  repositoryId: true,
+  commitHash: true,
+  branch: true,
+  analyzerType: true,
+  analyzerVersion: true,
+  overallScore: true,
+  issuesFound: true,
+  criticalIssues: true,
+  securityVulnerabilities: true,
+  findings: true,
+  suggestions: true,
+  aiSummary: true,
+  aiPriorityRecommendations: true,
+  improvementTrend: true,
+}).partial();
 
-export type CodeAnalysisResult = typeof codeAnalysisResults.$inferSelect;
-export type NewCodeAnalysisResult = typeof codeAnalysisResults.$inferInsert;
-export type UpdateCodeAnalysisResult = z.infer<typeof updateCodeAnalysisResultSchema>;
-export type AnalyzerType = z.infer<typeof AnalyzerTypeEnum>;
+export type CodeAnalysisResult = typeof codeAnalysisResults.$inferSelect
+export type NewCodeAnalysisResult = typeof codeAnalysisResults.$inferInsert
+export type UpdateCodeAnalysisResult = z.infer<typeof updateCodeAnalysisResultSchema>
+export type AnalyzerType = z.infer<typeof AnalyzerTypeEnum>
