@@ -51,7 +51,7 @@ export class OrganizationsService {
       this.logger.log(`Organization created: ${newOrganization.id}`);
       return newOrganization;
     } catch (error) {
-      this.logger.error(`Failed to create organization: ${error.message}`);
+      this.logger.error(`Failed to create organization: ${error}`);
       throw error;
     }
   }
@@ -69,7 +69,7 @@ export class OrganizationsService {
 
       return org || null;
     } catch (error) {
-      this.logger.error(`Failed to find organization by ID ${id}: ${error.message}`);
+      this.logger.error(`Failed to find organization by ID ${id}: ${error}`);
       throw error;
     }
   }
@@ -87,7 +87,7 @@ export class OrganizationsService {
 
       return org || null;
     } catch (error) {
-      this.logger.error(`Failed to find organization by name ${name}: ${error.message}`);
+      this.logger.error(`Failed to find organization by name ${name}: ${error}`);
       throw error;
     }
   }
@@ -105,7 +105,7 @@ export class OrganizationsService {
 
       return org || null;
     } catch (error) {
-      this.logger.error(`Failed to find organization by slug ${slug}: ${error.message}`);
+      this.logger.error(`Failed to find organization by slug ${slug}: ${error}`);
       throw error;
     }
   }
@@ -149,7 +149,7 @@ export class OrganizationsService {
       this.logger.log(`Organization updated: ${id}`);
       return updatedOrg;
     } catch (error) {
-      this.logger.error(`Failed to update organization ${id}: ${error.message}`);
+      this.logger.error(`Failed to update organization ${id}: ${error}`);
       throw error;
     }
   }
@@ -170,7 +170,7 @@ export class OrganizationsService {
 
       this.logger.log(`Organization deleted: ${id}`);
     } catch (error) {
-      this.logger.error(`Failed to delete organization ${id}: ${error.message}`);
+      this.logger.error(`Failed to delete organization ${id}: ${error}`);
       throw error;
     }
   }
@@ -197,7 +197,7 @@ export class OrganizationsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to search organizations: ${error.message}`);
+      this.logger.error(`Failed to search organizations: ${error}`);
       throw error;
     }
   }
@@ -214,7 +214,7 @@ export class OrganizationsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to get organizations: ${error.message}`);
+      this.logger.error(`Failed to get organizations: ${error}`);
       throw error;
     }
   }
@@ -246,7 +246,7 @@ export class OrganizationsService {
       this.logger.log(`Organization usage updated: ${id}`);
       return updatedOrg;
     } catch (error) {
-      this.logger.error(`Failed to update organization usage ${id}: ${error.message}`);
+      this.logger.error(`Failed to update organization usage ${id}: ${error}`);
       throw error;
     }
   }
@@ -287,7 +287,7 @@ export class OrganizationsService {
         violations,
       };
     } catch (error) {
-      this.logger.error(`Failed to check usage limits for organization ${id}: ${error.message}`);
+      this.logger.error(`Failed to check usage limits for organization ${id}: ${error}`);
       throw error;
     }
   }

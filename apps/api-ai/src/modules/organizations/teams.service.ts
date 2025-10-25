@@ -47,7 +47,7 @@ export class TeamsService {
       this.logger.log(`Team created: ${newTeam.id} in organization ${newTeam.organizationId}`);
       return newTeam;
     } catch (error) {
-      this.logger.error(`Failed to create team: ${error.message}`);
+      this.logger.error(`Failed to create team: ${error}`);
       throw error;
     }
   }
@@ -65,7 +65,7 @@ export class TeamsService {
 
       return team || null;
     } catch (error) {
-      this.logger.error(`Failed to find team by ID ${id}: ${error.message}`);
+      this.logger.error(`Failed to find team by ID ${id}: ${error}`);
       throw error;
     }
   }
@@ -86,7 +86,7 @@ export class TeamsService {
 
       return team || null;
     } catch (error) {
-      this.logger.error(`Failed to find team by slug ${slug} in organization ${organizationId}: ${error.message}`);
+      this.logger.error(`Failed to find team by slug ${slug} in organization ${organizationId}: ${error}`);
       throw error;
     }
   }
@@ -104,7 +104,7 @@ export class TeamsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to get teams for organization ${organizationId}: ${error.message}`);
+      this.logger.error(`Failed to get teams for organization ${organizationId}: ${error}`);
       throw error;
     }
   }
@@ -143,7 +143,7 @@ export class TeamsService {
       this.logger.log(`Team updated: ${id}`);
       return updatedTeam;
     } catch (error) {
-      this.logger.error(`Failed to update team ${id}: ${error.message}`);
+      this.logger.error(`Failed to update team ${id}: ${error}`);
       throw error;
     }
   }
@@ -164,7 +164,7 @@ export class TeamsService {
 
       this.logger.log(`Team deleted: ${id}`);
     } catch (error) {
-      this.logger.error(`Failed to delete team ${id}: ${error.message}`);
+      this.logger.error(`Failed to delete team ${id}: ${error}`);
       throw error;
     }
   }
@@ -196,7 +196,7 @@ export class TeamsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to search teams in organization ${organizationId}: ${error.message}`);
+      this.logger.error(`Failed to search teams in organization ${organizationId}: ${error}`);
       throw error;
     }
   }
@@ -214,7 +214,7 @@ export class TeamsService {
 
       return team || null;
     } catch (error) {
-      this.logger.error(`Failed to find team by external ID ${externalId}: ${error.message}`);
+      this.logger.error(`Failed to find team by external ID ${externalId}: ${error}`);
       throw error;
     }
   }
@@ -231,7 +231,7 @@ export class TeamsService {
 
       return result.length;
     } catch (error) {
-      this.logger.error(`Failed to get team count for organization ${organizationId}: ${error.message}`);
+      this.logger.error(`Failed to get team count for organization ${organizationId}: ${error}`);
       throw error;
     }
   }

@@ -55,7 +55,7 @@ export class UsersService {
       this.logger.log(`User created: ${newUser.id}`);
       return newUser;
     } catch (error) {
-      this.logger.error(`Failed to create user: ${error.message}`);
+      this.logger.error(`Failed to create user: ${error}`);
       throw error;
     }
   }
@@ -73,7 +73,7 @@ export class UsersService {
 
       return user || null;
     } catch (error) {
-      this.logger.error(`Failed to find user by ID ${id}: ${error.message}`);
+      this.logger.error(`Failed to find user by ID ${id}: ${error}`);
       throw error;
     }
   }
@@ -91,7 +91,7 @@ export class UsersService {
 
       return user || null;
     } catch (error) {
-      this.logger.error(`Failed to find user by email ${email}: ${error.message}`);
+      this.logger.error(`Failed to find user by email ${email}: ${error}`);
       throw error;
     }
   }
@@ -109,7 +109,7 @@ export class UsersService {
 
       return user || null;
     } catch (error) {
-      this.logger.error(`Failed to find user by username ${username}: ${error.message}`);
+      this.logger.error(`Failed to find user by username ${username}: ${error}`);
       throw error;
     }
   }
@@ -153,7 +153,7 @@ export class UsersService {
       this.logger.log(`User updated: ${id}`);
       return updatedUser;
     } catch (error) {
-      this.logger.error(`Failed to update user ${id}: ${error.message}`);
+      this.logger.error(`Failed to update user ${id}: ${error}`);
       throw error;
     }
   }
@@ -174,7 +174,7 @@ export class UsersService {
 
       this.logger.log(`User deleted: ${id}`);
     } catch (error) {
-      this.logger.error(`Failed to delete user ${id}: ${error.message}`);
+      this.logger.error(`Failed to delete user ${id}: ${error}`);
       throw error;
     }
   }
@@ -200,7 +200,7 @@ export class UsersService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to search users: ${error.message}`);
+      this.logger.error(`Failed to search users: ${error}`);
       throw error;
     }
   }
@@ -217,7 +217,7 @@ export class UsersService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to get users: ${error.message}`);
+      this.logger.error(`Failed to get users: ${error}`);
       throw error;
     }
   }
@@ -237,7 +237,7 @@ export class UsersService {
 
       this.logger.log(`Updated last login for user: ${id}`);
     } catch (error) {
-      this.logger.error(`Failed to update last login for user ${id}: ${error.message}`);
+      this.logger.error(`Failed to update last login for user ${id}: ${error}`);
       throw error;
     }
   }
