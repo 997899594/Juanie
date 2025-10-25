@@ -1,40 +1,63 @@
-import { pgTable, serial, integer, text, timestamp, jsonb, decimal, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, integer, text, timestamp, boolean, decimal, index, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { projects } from './projects.schema';
 import { environments } from './environments.schema';
 import { users } from './users.schema';
+import { pipelineRuns } from './pipeline-runs.schema';
 
 // 枚举定义
 export const DeploymentStatusEnum = z.enum(['pending', 'running', 'success', 'failed', 'cancelled', 'rolled_back']);
 export const DeploymentStrategyEnum = z.enum(['rolling', 'blue_green', 'canary', 'recreate', 'a_b_testing']);
 export const RollbackStrategyEnum = z.enum(['automatic', 'manual', 'conditional']);
 
+// 使用 pgEnum 管理枚举类型（DB 级）
+export const DeploymentStatusPgEnum = pgEnum('deployment_status', ['pending', 'running', 'success', 'failed', 'cancelled', 'rolled_back']);
+export const DeploymentStrategyPgEnum = pgEnum('deployment_strategy', ['rolling', 'blue_green', 'canary', 'recreate', 'a_b_testing']);
+export const RollbackStrategyPgEnum = pgEnum('rollback_strategy', ['automatic', 'manual', 'conditional']);
+
 export const deployments = pgTable('deployments', {
-  id: serial('id').primaryKey(),
-  projectId: integer('project_id').notNull().references(() => projects.id),
-  environmentId: integer('environment_id').notNull().references(() => environments.id),
-  pipelineRunId: integer('pipeline_run_id'),
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  environmentId: uuid('environment_id').notNull().references(() => environments.id),
+  pipelineRunId: uuid('pipeline_run_id').references(() => pipelineRuns.id),
   version: text('version').notNull(),
   commitHash: text('commit_hash').notNull(),
   commitMessage: text('commit_message'),
   branch: text('branch').notNull(),
-  deploymentStrategy: text('deployment_strategy').default('rolling'), // 'rolling', 'blue_green', 'canary', 'recreate', 'a_b_testing'
-  rollbackStrategy: text('rollback_strategy').default('manual'), // 'automatic', 'manual', 'conditional'
-  status: text('status').default('pending'), // 'pending', 'running', 'success', 'failed', 'cancelled', 'rolled_back'
+  deploymentStrategy: DeploymentStrategyPgEnum('deployment_strategy').default('rolling'),
+  rollbackStrategy: RollbackStrategyPgEnum('rollback_strategy').default('manual'),
+  status: DeploymentStatusPgEnum('status').default('pending'),
   startedAt: timestamp('started_at'),
   finishedAt: timestamp('finished_at'),
-  deployedBy: integer('deployed_by').references(() => users.id),
-  approvedBy: integer('approved_by').references(() => users.id),
+  deployedBy: uuid('deployed_by').references(() => users.id),
+  approvedBy: uuid('approved_by').references(() => users.id),
   successProbability: decimal('success_probability', { precision: 3, scale: 2 }),
-  riskAssessment: jsonb('risk_assessment').default({}),
-  performancePrediction: jsonb('performance_prediction').default({}),
-  performanceMetrics: jsonb('performance_metrics').default({}),
+  
+  // 简化 riskAssessment - 核心风险评估
+  riskLevel: text('risk_level'), // 风险等级：low, medium, high
+  riskScore: integer('risk_score'), // 风险评分：0-100
+  riskFactors: text('risk_factors'), // 风险因素（逗号分隔）
+  
+  // 简化 performancePrediction - 核心性能预测
+  predictedResponseTime: integer('predicted_response_time'), // 预测响应时间
+  predictedThroughput: integer('predicted_throughput'), // 预测吞吐量
+  predictedAvailability: decimal('predicted_availability', { precision: 5, scale: 2 }), // 预测可用性
+  
+  // 简化 performanceMetrics - 核心性能指标
+  avgResponseTime: integer('avg_response_time'), // 平均响应时间
+  throughputRps: integer('throughput_rps'), // 吞吐量（请求/秒）
+  availability: decimal('availability', { precision: 5, scale: 2 }), // 可用性
+  
   errorRate: decimal('error_rate', { precision: 5, scale: 4 }),
   responseTimeP95: integer('response_time_p95'),
   deploymentCost: decimal('deployment_cost', { precision: 10, scale: 2 }),
-  resourceUsage: jsonb('resource_usage').default({}),
+  
+  // 简化 resourceUsage - 核心资源使用
+  cpuUsageAvg: decimal('cpu_usage_avg', { precision: 5, scale: 2 }), // CPU使用率
+  memoryUsageAvg: decimal('memory_usage_avg', { precision: 5, scale: 2 }), // 内存使用率
+  diskUsageGb: decimal('disk_usage_gb', { precision: 8, scale: 2 }), // 磁盘使用（GB）
   carbonFootprint: decimal('carbon_footprint', { precision: 8, scale: 3 }),
   rollbackReason: text('rollback_reason'),
   rolledBackAt: timestamp('rolled_back_at'),
@@ -89,13 +112,21 @@ export const updateDeploymentSchema = selectDeploymentSchema.pick({
   deployedBy: true,
   approvedBy: true,
   successProbability: true,
-  riskAssessment: true,
-  performancePrediction: true,
-  performanceMetrics: true,
+  riskLevel: true,
+  riskScore: true,
+  riskFactors: true,
+  predictedResponseTime: true,
+  predictedThroughput: true,
+  predictedAvailability: true,
+  avgResponseTime: true,
+  throughputRps: true,
+  availability: true,
   errorRate: true,
   responseTimeP95: true,
   deploymentCost: true,
-  resourceUsage: true,
+  cpuUsageAvg: true,
+  memoryUsageAvg: true,
+  diskUsageGb: true,
   carbonFootprint: true,
   rollbackReason: true,
   rolledBackAt: true,

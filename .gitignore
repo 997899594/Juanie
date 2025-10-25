@@ -126,3 +126,6 @@ gitlab/data/
 gitlab/logs/
 gitlab/config/
 gitlab/backups/
+
+
+.history

@@ -1,61 +1,66 @@
-import { pgTable, serial, integer, text, timestamp, jsonb, boolean, index } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
-import { z } from 'zod';
-import { projects } from './projects.schema';
+import { pgTable, uuid, integer, text, timestamp, jsonb, boolean, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core'
+import { relations } from 'drizzle-orm'
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
+import { z } from 'zod'
+import { projects } from './projects.schema'
 
 // 枚举定义
-export const RepositoryProviderEnum = z.enum(['github', 'gitlab', 'bitbucket']);
-export const SyncStatusEnum = z.enum(['pending', 'syncing', 'success', 'failed']);
+export const RepositoryProviderEnum = z.enum(['github', 'gitlab', 'bitbucket'])
+export const SyncStatusEnum = z.enum(['pending', 'syncing', 'success', 'failed'])
+export const RepositoryProviderPgEnum = pgEnum('repository_provider', ['github', 'gitlab', 'bitbucket'])
+export const SyncStatusPgEnum = pgEnum('repository_sync_status', ['pending', 'syncing', 'success', 'failed'])
 
 export const repositories = pgTable('repositories', {
-  id: serial('id').primaryKey(),
-  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }),
-  
+  id: uuid('id').primaryKey().defaultRandom(), // 仓库唯一ID
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }), // 所属项目ID
   // 仓库信息
-  provider: text('provider').notNull(), // 'github', 'gitlab', 'bitbucket'
-  providerId: text('provider_id').notNull(),
-  name: text('name').notNull(),
-  fullName: text('full_name').notNull(),
-  cloneUrl: text('clone_url').notNull(),
-  webUrl: text('web_url').notNull(),
-  
+  provider: RepositoryProviderPgEnum('provider').notNull(), // 仓库提供商：github/gitlab/bitbucket
+  providerId: text('provider_id').notNull(), // 提供商侧仓库ID
+  name: text('name').notNull(), // 仓库名
+  fullName: text('full_name').notNull(), // 全名（组织/仓库）
+  cloneUrl: text('clone_url').notNull(), // 克隆地址
+  webUrl: text('web_url').notNull(), // Web 访问地址
   // 分支管理
-  defaultBranch: text('default_branch').default('main'),
-  protectedBranches: jsonb('protected_branches').default([]),
-  branchProtectionRules: jsonb('branch_protection_rules').default({}),
-  
+  defaultBranch: text('default_branch').default('main'), // 默认分支
+  // 简化 protectedBranches - 核心受保护分支
+  protectedBranchNames: text('protected_branch_names'), // 受保护分支名称（逗号分隔）
+  mainBranchProtected: boolean('main_branch_protected').default(true), // 主分支是否受保护
+  // 简化 branchProtectionRules - 核心分支保护规则
+  requireApprovalCount: integer('require_approval_count').default(1), // 需要审批数量
+  requireLinearHistory: boolean('require_linear_history').default(false), // 需要线性历史
+  allowForcePushes: boolean('allow_force_pushes').default(false), // 允许强制推送
+  allowDeletions: boolean('allow_deletions').default(false), // 允许删除
   // 仓库配置
-  isPrivate: boolean('is_private').default(true),
-  isArchived: boolean('is_archived').default(false),
-  isTemplate: boolean('is_template').default(false),
-  
+  isPrivate: boolean('is_private').default(true), // 是否私有
+  isArchived: boolean('is_archived').default(false), // 是否归档
+  isTemplate: boolean('is_template').default(false), // 是否模板仓库
   // 自动化配置
-  autoMergeEnabled: boolean('auto_merge_enabled').default(false),
-  autoDeleteBranches: boolean('auto_delete_branches').default(true),
-  requireCodeReview: boolean('require_code_review').default(true),
-  requireStatusChecks: boolean('require_status_checks').default(true),
-  
+  autoMergeEnabled: boolean('auto_merge_enabled').default(false), // 是否启用自动合并
+  autoDeleteBranches: boolean('auto_delete_branches').default(true), // 合并后自动删除分支
+  requireCodeReview: boolean('require_code_review').default(true), // 需要代码评审
+  requireStatusChecks: boolean('require_status_checks').default(true), // 需要状态检查
   // 同步状态
-  lastSyncAt: timestamp('last_sync_at'),
-  syncStatus: text('sync_status').default('pending'), // 'pending', 'syncing', 'success', 'failed'
-  syncError: text('sync_error'),
-  
+  lastSyncAt: timestamp('last_sync_at'), // 最近同步时间
+  syncStatus: SyncStatusPgEnum('sync_status').default('pending'), // 同步状态：pending/syncing/success/failed
+  syncError: text('sync_error'), // 同步错误信息
   // 统计信息
-  starsCount: integer('stars_count').default(0),
-  forksCount: integer('forks_count').default(0),
-  issuesCount: integer('issues_count').default(0),
-  pullRequestsCount: integer('pull_requests_count').default(0),
-  
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+  starsCount: integer('stars_count').default(0), // Star 数
+  forksCount: integer('forks_count').default(0), // Fork 数
+  issuesCount: integer('issues_count').default(0), // Issue 数
+  pullRequestsCount: integer('pull_requests_count').default(0), // PR 数
+  createdAt: timestamp('created_at').defaultNow().notNull(), // 创建时间
+  updatedAt: timestamp('updated_at').defaultNow().notNull(), // 更新时间
+})
 
 // Indexes
 export const repositoriesProjectIdx = index('repositories_project_idx').on(repositories.projectId);
 export const repositoriesProviderIdx = index('repositories_provider_idx').on(repositories.provider);
 export const repositoriesSyncStatusIdx = index('repositories_sync_status_idx').on(repositories.syncStatus);
 export const repositoriesProviderIdIdx = index('repositories_provider_id_idx').on(repositories.provider, repositories.providerId);
+export const repositoriesProjectFullNameUnique = uniqueIndex('repositories_project_full_name_unique').on(
+  repositories.projectId,
+  repositories.fullName,
+);
 
 // Relations
 export const repositoriesRelations = relations(repositories, ({ one }) => ({
@@ -79,8 +84,12 @@ export const updateRepositorySchema = selectRepositorySchema.pick({
   cloneUrl: true,
   webUrl: true,
   defaultBranch: true,
-  protectedBranches: true,
-  branchProtectionRules: true,
+  protectedBranchNames: true,
+  mainBranchProtected: true,
+  requireApprovalCount: true,
+  requireLinearHistory: true,
+  allowForcePushes: true,
+  allowDeletions: true,
   isPrivate: true,
   isArchived: true,
   isTemplate: true,

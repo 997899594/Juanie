@@ -9,25 +9,26 @@ import {
   timestamp,
   uuid,
   varchar,
-} from "drizzle-orm/pg-core";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
-import { organizations } from "./organizations.schema";
-import { users } from "./users.schema";
+} from 'drizzle-orm/pg-core';
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { z } from 'zod';
+import { organizations } from './organizations.schema';
+import { users } from './users.schema';
 
-export const aiAssistants = pgTable("ai_assistants", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: varchar("name", { length: 100 }).notNull(),
-  description: text("description"),
-  avatar: text("avatar"),
+export const aiAssistants = pgTable('ai_assistants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description'),
+  avatar: text('avatar'),
 
-  // AI Assistant Type & Specialization
-  type: varchar("type", { length: 50 }).notNull(), // 'code-reviewer', 'devops-engineer', 'security-analyst', 'cost-optimizer', 'incident-responder'
-  specialization: varchar("specialization", { length: 100 }), // 'frontend', 'backend', 'infrastructure', 'security', 'performance'
+  // AI助手类型和专业化（简化）
+  type: varchar('type', { length: 50 }).notNull(), // 'code-reviewer', 'devops-engineer', 'security-analyst', 'cost-optimizer', 'incident-responder'
+  specialization: varchar('specialization', { length: 100 }), // 'frontend', 'backend', 'infrastructure', 'security', 'performance'
 
-  // AI Model Configuration
-  aiModel: jsonb("ai_model").$type<{
-    provider: "openai" | "anthropic" | "google" | "custom";
+  // 多模型配置（核心功能，保留但简化）
+  modelType: varchar('model_type', { length: 50 }).notNull(), // 模型类型标识
+  modelConfig: jsonb('model_config').notNull().$type<{
+    provider: 'openai' | 'anthropic' | 'google' | 'custom';
     modelName: string;
     version?: string;
     temperature?: number;
@@ -37,126 +38,92 @@ export const aiAssistants = pgTable("ai_assistants", {
     presencePenalty?: number;
   }>(),
 
-  // Capabilities & Skills
-  capabilities: jsonb("capabilities").$type<{
-    codeReview?: {
-      languages: string[];
-      frameworks: string[];
-      focusAreas: string[]; // 'security', 'performance', 'maintainability', 'best-practices'
-      autoApprove?: boolean;
-    };
-    devopsAutomation?: {
-      cicd: boolean;
-      deployment: boolean;
-      monitoring: boolean;
-      scaling: boolean;
-      rollback: boolean;
-    };
-    securityAnalysis?: {
-      vulnerabilityScanning: boolean;
-      complianceChecking: boolean;
-      threatDetection: boolean;
-      accessReview: boolean;
-    };
-    costOptimization?: {
-      resourceAnalysis: boolean;
-      rightsizing: boolean;
-      scheduledShutdown: boolean;
-      reservedInstances: boolean;
-    };
-    incidentResponse?: {
-      alertTriage: boolean;
-      rootCauseAnalysis: boolean;
-      mitigationSuggestions: boolean;
-      postmortemGeneration: boolean;
-    };
-  }>(),
+  // 能力管理（简化结构）
+  capabilities: text('capabilities').array().default([]), // 能力数组，如 ['code-review', 'devops-automation', 'security-analysis']
 
-  // Personality & Behavior
-  personality: jsonb("personality").$type<{
-    tone?: "professional" | "friendly" | "concise" | "detailed";
-    communicationStyle?: "direct" | "collaborative" | "educational";
-    proactiveness?: "reactive" | "proactive" | "autonomous";
-    riskTolerance?: "conservative" | "balanced" | "aggressive";
-  }>(),
+  // 基础性能指标（删除复杂JSONB结构）
+  usageCount: integer('usage_count').default(0),
+  averageRating: integer('average_rating').default(0), // 1-5评分
 
-  // Knowledge Base & Training
-  knowledgeBase: jsonb("knowledge_base").$type<{
-    trainingData?: string[];
-    customInstructions?: string;
-    contextWindow?: number;
-    lastTrainingUpdate?: string;
-    specializedKnowledge?: {
-      domains: string[];
-      certifications: string[];
-      experience: string[];
-    };
-  }>(),
+  // 状态控制
+  isPublic: boolean('is_public').default(false).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
 
-  // Performance Metrics
-  performanceMetrics: jsonb("performance_metrics").$type<{
-    accuracy?: number;
-    responseTime?: number; // milliseconds
-    userSatisfaction?: number; // 1-5 scale
-    tasksCompleted?: number;
-    successRate?: number;
-    lastEvaluated?: string;
-  }>(),
-
-  // Access Control
-  isPublic: boolean("is_public").default(false).notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-
-  // Ownership
-  createdBy: uuid("created_by")
+  // 所有权
+  createdBy: uuid('created_by')
     .notNull()
     .references(() => users.id),
-  organizationId: uuid("organization_id").references(() => organizations.id),
+  organizationId: uuid('organization_id').references(() => organizations.id),
 
-  // Timestamps
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  lastUsedAt: timestamp("last_used_at"),
+  // 时间戳
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  lastUsedAt: timestamp('last_used_at'),
 });
 
-// 索引定义
+// 简化索引定义
 export const aiAssistantsIndexes = {
-  typeIdx: index("ai_assistants_type_idx").on(aiAssistants.type),
-  specializationIdx: index("ai_assistants_specialization_idx").on(
+  typeIdx: index('ai_assistants_type_idx').on(aiAssistants.type),
+  specializationIdx: index('ai_assistants_specialization_idx').on(
     aiAssistants.specialization
   ),
-  createdByIdx: index("ai_assistants_created_by_idx").on(
+  createdByIdx: index('ai_assistants_created_by_idx').on(
     aiAssistants.createdBy
   ),
-  organizationIdIdx: index("ai_assistants_organization_id_idx").on(
+  organizationIdIdx: index('ai_assistants_organization_id_idx').on(
     aiAssistants.organizationId
   ),
-  isActiveIdx: index("ai_assistants_is_active_idx").on(aiAssistants.isActive),
-  isPublicIdx: index("ai_assistants_is_public_idx").on(aiAssistants.isPublic),
+  isActiveIdx: index('ai_assistants_is_active_idx').on(aiAssistants.isActive),
+  modelTypeIdx: index('ai_assistants_model_type_idx').on(
+    aiAssistants.modelType
+  ),
 };
 
-// Zod schemas for validation
+// 简化Zod schemas
 export const insertAiAssistantSchema = createInsertSchema(aiAssistants, {
   name: z.string().min(1).max(100),
+  type: z.enum([
+    'code-reviewer',
+    'devops-engineer',
+    'security-analyst',
+    'cost-optimizer',
+    'incident-responder',
+  ]),
+  modelType: z.string().max(50),
+  modelConfig: z.object({
+    provider: z.enum(['openai', 'anthropic', 'google', 'custom']),
+    modelName: z.string(),
+    version: z.string().optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    maxTokens: z.number().positive().optional(),
+    topP: z.number().min(0).max(1).optional(),
+    frequencyPenalty: z.number().min(-2).max(2).optional(),
+    presencePenalty: z.number().min(-2).max(2).optional(),
+  }),
+  capabilities: z.array(z.string()).max(20),
+  usageCount: z.number().int().min(0),
+  averageRating: z.number().int().min(1).max(5),
 });
 
 export const selectAiAssistantSchema = createSelectSchema(aiAssistants);
 
-export const updateAiAssistantSchema = selectAiAssistantSchema.pick({
-  name: true,
-  description: true,
-  avatar: true,
-  type: true,
-  specialization: true,
-  aiModel: true,
-  capabilities: true,
-  personality: true,
-  knowledgeBase: true,
-  performanceMetrics: true,
-  isPublic: true,
-  isActive: true,
-  lastUsedAt: true,
-}).partial();
+export const updateAiAssistantSchema = selectAiAssistantSchema
+  .pick({
+    name: true,
+    description: true,
+    avatar: true,
+    type: true,
+    specialization: true,
+    modelType: true,
+    modelConfig: true,
+    capabilities: true,
+    usageCount: true,
+    averageRating: true,
+    isPublic: true,
+    isActive: true,
+    lastUsedAt: true,
+  })
+  .partial();
 
 export const aiAssistantPublicSchema = selectAiAssistantSchema
   .pick({
@@ -166,8 +133,10 @@ export const aiAssistantPublicSchema = selectAiAssistantSchema
     avatar: true,
     type: true,
     specialization: true,
+    modelType: true,
     capabilities: true,
-    personality: true,
+    usageCount: true,
+    averageRating: true,
     isPublic: true,
     createdAt: true,
   })

@@ -1,20 +1,17 @@
-import { defineConfig } from 'drizzle-kit';
-import { config } from 'dotenv';
+/**
+ * Drizzle 配置文件
+ * 支持数据库迁移、Studio和开发工具
+ */
 
-config();
+import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
-  schema: './src/database/schema/index.ts',
-  out: './drizzle',
-  driver: 'pg',
+  schema: './src/database/schemas/*',
+  out: './src/database/migrations',
+  dialect: 'postgresql',
   dbCredentials: {
-    connectionString: process.env.DATABASE_URL!,
+    url: process.env.DATABASE_URL!,
   },
   verbose: true,
   strict: true,
-  migrations: {
-    prefix: 'timestamp',
-    table: '__drizzle_migrations__',
-    schema: 'public',
-  },
 });

@@ -7,8 +7,6 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
-import { SecurityHeadersMiddleware } from './security/middleware/security-headers.middleware';
-import { ZeroTrustGuard } from './security/guards/zero-trust.guard';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -38,27 +36,15 @@ async function bootstrap() {
     }),
   );
 
-  // 安全中间件
-  app.use(new SecurityHeadersMiddleware().use);
-
-  // 零信任安全守卫
-  const zeroTrustGuard = app.get(ZeroTrustGuard);
-  app.useGlobalGuards(zeroTrustGuard);
-
   // 性能优化配置
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
   
   // 启动应用
-  await app.listen(port, '0.0.0.0');
-
-  logger.log(`🚀 Juanie AI 应用已启动`);
-  logger.log(`🌐 服务地址: http://localhost:${port}`);
-  logger.log(`🔧 运行环境: ${nodeEnv}`);
-  logger.log(`📊 监控端点: http://localhost:${port}/api/performance/health`);
+  await app.listen(port);
   
-  if (nodeEnv === 'development') {
-    logger.log(`🔍 调试模式已启用`);
-  }
+  logger.log(`🚀 Application is running on: http://localhost:${port}`);
+  logger.log(`📊 Environment: ${nodeEnv}`);
+  logger.log(`🔗 Health check: http://localhost:${port}/trpc/health`);
 
   // 优雅关闭处理
   process.on('SIGTERM', async () => {
@@ -74,8 +60,7 @@ async function bootstrap() {
   });
 }
 
-// 启动应用
 bootstrap().catch((error) => {
-  console.error('❌ 应用启动失败:', error);
+  console.error('❌ Error starting server:', error);
   process.exit(1);
 });

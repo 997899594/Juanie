@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, jsonb, decimal, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, integer, text, timestamp, decimal, index, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -9,43 +9,36 @@ export const ContextTypeEnum = z.enum(['code', 'security', 'performance', 'cost'
 export const RecommendationPriorityEnum = z.enum(['low', 'medium', 'high', 'critical']);
 export const UserFeedbackEnum = z.enum(['accepted', 'rejected', 'modified']);
 
+export const ContextTypePgEnum = pgEnum('recommendation_context_type', ['code', 'security', 'performance', 'cost']);
+export const RecommendationPriorityPgEnum = pgEnum('recommendation_priority', ['low', 'medium', 'high', 'critical']);
+export const UserFeedbackPgEnum = pgEnum('user_feedback', ['accepted', 'rejected', 'modified']);
+
 export const aiRecommendations = pgTable('ai_recommendations', {
-  id: serial('id').primaryKey(),
-  assistantId: integer('assistant_id').references(() => aiAssistants.id),
-  contextType: text('context_type').notNull(), // 'code', 'security', 'performance', 'cost'
-  contextId: integer('context_id').notNull(), // 关联的具体对象ID
+  id: uuid('id').defaultRandom().primaryKey(),
+  assistantId: uuid('assistant_id').references(() => aiAssistants.id),
+  contextType: ContextTypePgEnum('context_type').notNull(),
+  contextId: integer('context_id').notNull(),
   
   // 推荐内容
   title: text('title').notNull(),
   description: text('description'),
-  recommendationData: jsonb('recommendation_data').notNull(),
+  recommendationType: text('recommendation_type').notNull(),
+  recommendationDetails: text('recommendation_details'),
+  implementationSteps: text('implementation_steps'),
   confidenceScore: decimal('confidence_score', { precision: 3, scale: 2 }).notNull(),
-  priority: text('priority').default('medium'), // 'low', 'medium', 'high', 'critical'
+  priority: RecommendationPriorityPgEnum('priority').default('medium'),
   
-  // 分类和标签
-  category: text('category'),
-  tags: jsonb('tags').default([]),
-  
-  // 用户反馈
-  userFeedback: text('user_feedback'), // 'accepted', 'rejected', 'modified'
-  feedbackReason: text('feedback_reason'),
-  appliedAt: timestamp('applied_at'),
-  
-  // 影响评估
-  estimatedImpact: jsonb('estimated_impact').default({}), // 成本节省、性能提升等
-  actualImpact: jsonb('actual_impact').default({}),
+  // 反馈
+  userFeedback: UserFeedbackPgEnum('user_feedback'),
+  feedbackNotes: text('feedback_notes'),
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  expiresAt: timestamp('expires_at'),
 });
 
 // Indexes
 export const aiRecommendationsAssistantIdx = index('ai_recommendations_assistant_idx').on(aiRecommendations.assistantId);
 export const aiRecommendationsContextIdx = index('ai_recommendations_context_idx').on(aiRecommendations.contextType, aiRecommendations.contextId);
 export const aiRecommendationsPriorityIdx = index('ai_recommendations_priority_idx').on(aiRecommendations.priority);
-export const aiRecommendationsFeedbackIdx = index('ai_recommendations_feedback_idx').on(aiRecommendations.userFeedback);
-export const aiRecommendationsCreatedAtIdx = index('ai_recommendations_created_at_idx').on(aiRecommendations.createdAt);
-export const aiRecommendationsExpiresAtIdx = index('ai_recommendations_expires_at_idx').on(aiRecommendations.expiresAt);
 
 // Relations
 export const aiRecommendationsRelations = relations(aiRecommendations, ({ one }) => ({
@@ -55,28 +48,22 @@ export const aiRecommendationsRelations = relations(aiRecommendations, ({ one })
   }),
 }));
 
-// Zod Schemas with detailed enums
+// Zod Schemas
 export const insertAiRecommendationSchema = createInsertSchema(aiRecommendations);
-
 export const selectAiRecommendationSchema = createSelectSchema(aiRecommendations);
-
 export const updateAiRecommendationSchema = selectAiRecommendationSchema.pick({
   assistantId: true,
   contextType: true,
   contextId: true,
   title: true,
   description: true,
-  recommendationData: true,
+  recommendationType: true,
+  recommendationDetails: true,
+  implementationSteps: true,
   confidenceScore: true,
   priority: true,
-  category: true,
-  tags: true,
   userFeedback: true,
-  feedbackReason: true,
-  appliedAt: true,
-  estimatedImpact: true,
-  actualImpact: true,
-  expiresAt: true,
+  feedbackNotes: true,
 }).partial();
 
 export type AiRecommendation = typeof aiRecommendations.$inferSelect;

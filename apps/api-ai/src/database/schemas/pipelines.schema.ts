@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, jsonb, boolean, decimal, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, integer, text, timestamp, boolean, decimal, index, pgEnum, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -7,19 +7,34 @@ import { projects } from './projects.schema';
 // 枚举定义
 export const ConfigSourceEnum = z.enum(['repository', 'ui', 'api', 'template']);
 export const TriggerTypeEnum = z.enum(['push', 'pull_request', 'schedule', 'manual', 'webhook']);
+export const ConfigSourcePgEnum = pgEnum('config_source', ['repository', 'ui', 'api', 'template']);
 
 export const pipelines = pgTable('pipelines', {
-  id: serial('id').primaryKey(),
-  projectId: integer('project_id').notNull().references(() => projects.id),
-  repositoryId: integer('repository_id'),
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id),
+  repositoryId: uuid('repository_id'),
   name: text('name').notNull(),
   description: text('description'),
-  configSource: text('config_source').default('repository'), // 'repository', 'ui', 'api', 'template'
+  configSource: ConfigSourcePgEnum('config_source').default('repository'),
   configPath: text('config_path').default('.github/workflows/ci.yml'),
-  pipelineConfig: jsonb('pipeline_config').default({}),
-  triggers: jsonb('triggers').default([]), // Array of trigger types
-  triggerBranches: jsonb('trigger_branches').default([]),
-  triggerPaths: jsonb('trigger_paths').default([]),
+  // 简化pipeline_config JSONB字段
+  pipelineTimeout: integer('pipeline_timeout').default(3600), // 默认1小时
+  maxRetries: integer('max_retries').default(3),
+  enableArtifacts: boolean('enable_artifacts').default(true),
+  
+  // 简化triggers JSONB字段
+  triggerOnPush: boolean('trigger_on_push').default(true),
+  triggerOnPr: boolean('trigger_on_pr').default(true),
+  triggerOnSchedule: boolean('trigger_on_schedule').default(false),
+  triggerOnManual: boolean('trigger_on_manual').default(true),
+  
+  // 简化trigger_branches JSONB字段
+  mainBranch: text('main_branch').default('main'),
+  protectedBranches: text('protected_branches').default('main,develop'), // 逗号分隔的分支名
+  
+  // 简化trigger_paths JSONB字段
+  includePaths: text('include_paths').default('**/*'), // 逗号分隔的路径模式
+  excludePaths: text('exclude_paths').default('node_modules/**,.git/**'), // 逗号分隔的排除路径
   aiOptimizationEnabled: boolean('ai_optimization_enabled').default(true),
   autoParallelization: boolean('auto_parallelization').default(false),
   smartCaching: boolean('smart_caching').default(true),
@@ -35,6 +50,10 @@ export const pipelinesProjectIdx = index('pipelines_project_idx').on(pipelines.p
 export const pipelinesRepositoryIdx = index('pipelines_repository_idx').on(pipelines.repositoryId);
 export const pipelinesActiveIdx = index('pipelines_active_idx').on(pipelines.isActive);
 export const pipelinesConfigSourceIdx = index('pipelines_config_source_idx').on(pipelines.configSource);
+export const pipelinesProjectNameUnique = uniqueIndex('pipelines_project_name_unique').on(
+  pipelines.projectId,
+  pipelines.name,
+);
 
 // Relations
 export const pipelinesRelations = relations(pipelines, ({ one }) => ({
@@ -56,10 +75,17 @@ export const updatePipelineSchema = selectPipelineSchema.pick({
   description: true,
   configSource: true,
   configPath: true,
-  pipelineConfig: true,
-  triggers: true,
-  triggerBranches: true,
-  triggerPaths: true,
+  pipelineTimeout: true,
+  maxRetries: true,
+  enableArtifacts: true,
+  triggerOnPush: true,
+  triggerOnPr: true,
+  triggerOnSchedule: true,
+  triggerOnManual: true,
+  mainBranch: true,
+  protectedBranches: true,
+  includePaths: true,
+  excludePaths: true,
   aiOptimizationEnabled: true,
   autoParallelization: true,
   smartCaching: true,

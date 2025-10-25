@@ -7,23 +7,14 @@
  * - 零信任安全架构
  * - 性能优化和自动扩缩容
  * - 实时监控和智能告警
- * - WebAssembly微服务
- * - 边缘计算网格
- * - 量子安全加密
  */
 
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-// 业务功能模块
-import { AIModule } from "./ai/ai.module";
-// 核心模块
-import { CoreModule } from "./core/core.module";
-import { MonitoringModule } from "./monitoring/monitoring.module";
-import { PerformanceModule } from "./performance/performance.module";
-import { SecurityModule } from "./security/security.module";
-
-// tRPC 服务器
-import { TRPCModule } from "./trpc/trpc.module";
+import { DatabaseModule } from "./database/database.module";
+import { TrpcModule } from "./trpc/trpc.module";
+import { UsersModule } from "./modules/users";
+import { OrganizationsModule } from "./modules/organizations";
 
 @Module({
   imports: [
@@ -34,23 +25,41 @@ import { TRPCModule } from "./trpc/trpc.module";
       cache: true,
     }),
 
-    // 核心基础设施模块
-    CoreModule,
-
-    // AI智能化模块
-    AIModule,
-
-    // 安全模块
-    SecurityModule,
-
-    // 监控模块
-    MonitoringModule,
-
-    // 性能优化模块
-    PerformanceModule,
+    // 数据库模块
+    DatabaseModule,
 
     // tRPC API模块
-    TRPCModule,
+    TrpcModule,
+
+    // 核心业务模块
+    UsersModule,
+    OrganizationsModule,
+    // ProjectsModule,
+    // TeamsModule,
+
+    // 权限认证模块 (待实现)
+    // AuthModule,
+    // OAuthModule,
+
+    // 代码管理模块 (待实现)
+    // RepositoriesModule,
+    // CodeAnalysisModule,
+
+    // 部署运维模块 (待实现)
+    // EnvironmentsModule,
+    // DeploymentsModule,
+    // MonitoringModule,
+
+    // 事件处理模块 (待实现)
+    // EventsModule,
+    // IncidentsModule,
+
+    // AI智能模块 (待实现)
+    // AIModule,
+
+    // 成本审计模块 (待实现)
+    // CostModule,
+    // AuditModule,
   ],
   controllers: [],
   providers: [],

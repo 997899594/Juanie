@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, jsonb, decimal, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, integer, text, timestamp, boolean, decimal, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -6,21 +6,34 @@ import { projects } from './projects.schema';
 
 // 枚举定义
 export const ExperimentStatusEnum = z.enum(['draft', 'running', 'completed', 'stopped']);
+export const SuccessMetricTypeEnum = z.enum(['conversion_rate', 'click_through_rate', 'engagement_time', 'revenue', 'user_satisfaction']);
+export const VariantTypeEnum = z.enum(['control', 'treatment', 'feature_toggle', 'ui_variant']);
+export const AutoStopConditionEnum = z.enum(['significance_reached', 'sample_size_reached', 'duration_exceeded', 'performance_degradation']);
 
 export const experiments = pgTable('experiments', {
-  id: serial('id').primaryKey(),
-  projectId: integer('project_id').references(() => projects.id),
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').references(() => projects.id),
   featureFlagId: integer('feature_flag_id'), // 移除外键引用，因为 feature_flags 表不存在
   
   // 实验信息
   name: text('name').notNull(),
   hypothesis: text('hypothesis'),
-  successMetrics: jsonb('success_metrics').default([]),
+  
+  // 简化 successMetrics - 核心成功指标
+  primarySuccessMetric: text('primary_success_metric'), // 主要成功指标
+  secondarySuccessMetrics: text('secondary_success_metrics'), // 次要成功指标（逗号分隔）
+  successMetricTargetValue: decimal('success_metric_target_value', { precision: 5, scale: 2 }), // 目标值
   
   // 实验配置
   trafficAllocation: decimal('traffic_allocation', { precision: 5, scale: 2 }).default('50.0'), // 百分比
-  controlVariant: jsonb('control_variant').notNull(),
-  testVariants: jsonb('test_variants').default([]),
+  
+  // 简化 controlVariant - 核心对照组配置
+  controlVariantName: text('control_variant_name').notNull(), // 对照组名称
+  controlVariantDescription: text('control_variant_description'), // 对照组描述
+  
+  // 简化 testVariants - 核心实验组配置
+  testVariantCount: integer('test_variant_count').default(1), // 实验组数量
+  testVariantNames: text('test_variant_names'), // 实验组名称（逗号分隔）
   
   // 时间配置
   startDate: timestamp('start_date'),
@@ -35,10 +48,18 @@ export const experiments = pgTable('experiments', {
   // AI分析
   aiAnalysisEnabled: boolean('ai_analysis_enabled').default(true),
   realTimeMonitoring: boolean('real_time_monitoring').default(true),
-  autoStopConditions: jsonb('auto_stop_conditions').default({}),
   
-  // 结果
-  results: jsonb('results').default({}),
+  // 简化 autoStopConditions - 核心自动停止条件
+  autoStopEnabled: boolean('auto_stop_enabled').default(false), // 是否启用自动停止
+  autoStopMinSampleSize: integer('auto_stop_min_sample_size'), // 自动停止最小样本数
+  autoStopConfidenceLevel: decimal('auto_stop_confidence_level', { precision: 3, scale: 2 }), // 自动停止置信度
+  autoStopMaxDuration: integer('auto_stop_max_duration'), // 自动停止最大持续时间（天）
+  
+  // 简化 results - 核心实验结果
+  experimentConclusion: text('experiment_conclusion'), // 实验结论
+  primaryMetricResult: decimal('primary_metric_result', { precision: 5, scale: 2 }), // 主要指标结果
+  statisticalSignificanceAchieved: boolean('statistical_significance_achieved'), // 是否达到统计显著性
+  
   statisticalSignificance: boolean('statistical_significance'),
   winnerVariant: text('winner_variant'),
   
@@ -72,10 +93,14 @@ export const updateExperimentSchema = selectExperimentSchema.pick({
   featureFlagId: true,
   name: true,
   hypothesis: true,
-  successMetrics: true,
+  primarySuccessMetric: true,
+  secondarySuccessMetrics: true,
+  successMetricTargetValue: true,
   trafficAllocation: true,
-  controlVariant: true,
-  testVariants: true,
+  controlVariantName: true,
+  controlVariantDescription: true,
+  testVariantCount: true,
+  testVariantNames: true,
   startDate: true,
   endDate: true,
   durationDays: true,
@@ -84,8 +109,13 @@ export const updateExperimentSchema = selectExperimentSchema.pick({
   statisticalPower: true,
   aiAnalysisEnabled: true,
   realTimeMonitoring: true,
-  autoStopConditions: true,
-  results: true,
+  autoStopEnabled: true,
+  autoStopMinSampleSize: true,
+  autoStopConfidenceLevel: true,
+  autoStopMaxDuration: true,
+  experimentConclusion: true,
+  primaryMetricResult: true,
+  statisticalSignificanceAchieved: true,
   statisticalSignificance: true,
   winnerVariant: true,
   status: true,

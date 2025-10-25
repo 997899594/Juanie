@@ -3,11 +3,11 @@ import {
   decimal,
   index,
   integer,
-  jsonb,
   pgTable,
-  serial,
+  uuid,
   text,
   timestamp,
+  pgEnum,
 } from 'drizzle-orm/pg-core'
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 import { z } from 'zod'
@@ -15,15 +15,16 @@ import { repositories } from './repositories.schema'
 
 // 枚举定义
 export const AnalyzerTypeEnum = z.enum(['security', 'quality', 'performance', 'ai_review'])
+export const AnalyzerTypePgEnum = pgEnum('analyzer_type', ['security', 'quality', 'performance', 'ai_review'])
 
 export const codeAnalysisResults = pgTable('code_analysis_results', {
-  id: serial('id').primaryKey(),
-  repositoryId: integer('repository_id').references(() => repositories.id),
+  id: uuid('id').defaultRandom().primaryKey(),
+  repositoryId: uuid('repository_id').references(() => repositories.id),
   commitHash: text('commit_hash').notNull(),
   branch: text('branch'),
   
   // 分析配置
-  analyzerType: text('analyzer_type').notNull(), // 'security', 'quality', 'performance', 'ai_review'
+  analyzerType: AnalyzerTypePgEnum('analyzer_type').notNull(),
   analyzerVersion: text('analyzer_version'),
   
   // 分析结果
@@ -33,15 +34,26 @@ export const codeAnalysisResults = pgTable('code_analysis_results', {
   securityVulnerabilities: integer('security_vulnerabilities').default(0),
   
   // 详细结果
-  findings: jsonb('findings').default([]),
-  suggestions: jsonb('suggestions').default([]),
+  // 简化findings JSONB字段
+  topFindingCategory: text('top_finding_category'),
+  findingCount: integer('finding_count').default(0),
+  findingSeverity: text('finding_severity'), // 'low', 'medium', 'high', 'critical'
+  
+  // 简化suggestions JSONB字段
+  suggestionCount: integer('suggestion_count').default(0),
+  topSuggestion: text('top_suggestion'),
   
   // AI增强分析
   aiSummary: text('ai_summary'),
-  aiPriorityRecommendations: jsonb('ai_priority_recommendations').default([]),
+  // 简化ai_priority_recommendations JSONB字段
+  aiRecommendationCount: integer('ai_recommendation_count').default(0),
+  topAiRecommendation: text('top_ai_recommendation'),
+  aiConfidenceScore: decimal('ai_confidence_score', { precision: 3, scale: 2 }),
   
   // 趋势分析
-  improvementTrend: jsonb('improvement_trend').default({}),
+  // 简化improvement_trend JSONB字段
+  scoreTrend: text('score_trend'), // 'improving', 'stable', 'declining'
+  trendPercentage: decimal('trend_percentage', { precision: 5, scale: 2 }), // 变化百分比
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -62,6 +74,10 @@ export const codeAnalysisResultsBranchIdx = index('code_analysis_results_branch_
 export const codeAnalysisResultsCreatedAtIdx = index('code_analysis_results_created_at_idx').on(
   codeAnalysisResults.createdAt,
 )
+export const codeAnalysisResultsRepoCreatedIdx = index('code_analysis_results_repo_created_idx').on(
+  codeAnalysisResults.repositoryId,
+  codeAnalysisResults.createdAt,
+)
 
 // Relations
 export const codeAnalysisResultsRelations = relations(codeAnalysisResults, ({ one }) => ({
@@ -72,8 +88,11 @@ export const codeAnalysisResultsRelations = relations(codeAnalysisResults, ({ on
 }))
 
 // Zod Schemas with detailed enums
-export const insertCodeAnalysisResultSchema = createInsertSchema(codeAnalysisResults)
-
+export const insertCodeAnalysisResultSchema = createInsertSchema(codeAnalysisResults, {
+  overallScore: z.number().min(0).max(1).optional(),
+  aiConfidenceScore: z.number().min(0).max(1).optional(),
+  trendPercentage: z.number().min(0).max(100).optional(),
+})
 export const selectCodeAnalysisResultSchema = createSelectSchema(codeAnalysisResults)
 
 export const updateCodeAnalysisResultSchema = selectCodeAnalysisResultSchema.pick({
@@ -86,11 +105,17 @@ export const updateCodeAnalysisResultSchema = selectCodeAnalysisResultSchema.pic
   issuesFound: true,
   criticalIssues: true,
   securityVulnerabilities: true,
-  findings: true,
-  suggestions: true,
+  topFindingCategory: true,
+  findingCount: true,
+  findingSeverity: true,
+  suggestionCount: true,
+  topSuggestion: true,
   aiSummary: true,
-  aiPriorityRecommendations: true,
-  improvementTrend: true,
+  aiRecommendationCount: true,
+  topAiRecommendation: true,
+  aiConfidenceScore: true,
+  scoreTrend: true,
+  trendPercentage: true,
 }).partial();
 
 export type CodeAnalysisResult = typeof codeAnalysisResults.$inferSelect

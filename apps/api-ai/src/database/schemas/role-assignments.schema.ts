@@ -1,0 +1,79 @@
+import { pgTable, uuid, text, timestamp, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { z } from 'zod';
+import { users } from './users.schema';
+import { roles } from './roles.schema';
+import { organizations } from './organizations.schema';
+import { teams } from './teams.schema';
+import { projects } from './projects.schema';
+
+// 角色绑定作用域类型：控制角色授予在哪个层级生效
+export const RoleAssignmentScopeEnum = z.enum(['global', 'organization', 'team', 'project']);
+export const RoleAssignmentScopePgEnum = pgEnum('role_assignment_scope', ['global', 'organization', 'team', 'project']);
+
+export const roleAssignments = pgTable('role_assignments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+
+  // 用户ID：被授予角色的用户
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+
+  // 角色ID：授予的角色
+  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+
+  // 作用域类型：global/organization/team/project
+  scopeType: RoleAssignmentScopePgEnum('scope_type').notNull().default('organization'),
+
+  // 组织作用域：当 scopeType=organization 时使用
+  organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+
+  // 团队作用域：当 scopeType=team 时使用
+  teamId: uuid('team_id').references(() => teams.id, { onDelete: 'cascade' }),
+
+  // 项目作用域：当 scopeType=project 时使用
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
+
+  // 授权者：谁进行的授予（用于审计）
+  assignedBy: uuid('assigned_by').references(() => users.id),
+
+  // 授予时间：角色绑定创建时间
+  assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+
+  // 过期时间：可选；用于临时授权
+  expiresAt: timestamp('expires_at'),
+
+  // 时间戳：创建与更新
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// 索引与唯一约束
+export const roleAssignmentsIndexes = {
+  userIdx: index('role_assignments_user_idx').on(roleAssignments.userId),
+  roleIdx: index('role_assignments_role_idx').on(roleAssignments.roleId),
+  scopeIdx: index('role_assignments_scope_idx').on(roleAssignments.scopeType),
+  orgIdx: index('role_assignments_org_idx').on(roleAssignments.organizationId),
+  teamIdx: index('role_assignments_team_idx').on(roleAssignments.teamId),
+  projectIdx: index('role_assignments_project_idx').on(roleAssignments.projectId),
+  uniqueUserRoleScope: uniqueIndex('role_assignments_user_role_scope_unique').on(
+    roleAssignments.userId,
+    roleAssignments.roleId,
+    roleAssignments.scopeType,
+    roleAssignments.organizationId,
+    roleAssignments.teamId,
+    roleAssignments.projectId,
+  ),
+};
+
+// Zod 校验
+export const insertRoleAssignmentSchema = createInsertSchema(roleAssignments, {
+  scopeType: RoleAssignmentScopeEnum,
+});
+export const selectRoleAssignmentSchema = createSelectSchema(roleAssignments);
+export const updateRoleAssignmentSchema = selectRoleAssignmentSchema
+  .pick({ scopeType: true, organizationId: true, teamId: true, projectId: true, assignedBy: true, expiresAt: true })
+  .partial();
+
+export type RoleAssignment = typeof roleAssignments.$inferSelect;
+export type NewRoleAssignment = typeof roleAssignments.$inferInsert;
+export type UpdateRoleAssignment = z.infer<typeof updateRoleAssignmentSchema>;
+export type RoleAssignmentScope = z.infer<typeof RoleAssignmentScopeEnum>;
