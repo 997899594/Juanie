@@ -10,7 +10,7 @@ export default defineConfig({
   out: './src/database/migrations',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    url: process.env.DATABASE_URL || 'postgresql://username:password@localhost:5432/juanie_ai_devops',
   },
   verbose: true,
   strict: true,

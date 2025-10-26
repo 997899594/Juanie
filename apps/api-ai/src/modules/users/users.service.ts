@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
-import { eq, and, or, ilike, desc, sql } from 'drizzle-orm';
+import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { DATABASE_CONNECTION } from '../../database';
+import { Database } from '../../database/database.module';
+import { eq, and, desc, asc, count, sql, ilike, inArray, gte, lte, or } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from '../../database/schemas';
 import { 
@@ -20,7 +20,7 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
   constructor(
-    @InjectDatabase() private readonly db: NodePgDatabase<typeof schema>
+    @InjectDatabase() private readonly db: Database,
   ) {}
 
   /**

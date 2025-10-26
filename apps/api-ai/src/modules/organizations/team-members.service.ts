@@ -44,7 +44,8 @@ export class TeamMembersService {
       this.logger.log(`Team member added: ${newMember.userId} to team ${newMember.teamId}`);
       return newMember;
     } catch (error) {
-      this.logger.error(`Failed to add team member: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to add team member: ${errorMessage}`);
       throw error;
     }
   }
@@ -62,7 +63,8 @@ export class TeamMembersService {
 
       return member || null;
     } catch (error) {
-      this.logger.error(`Failed to find team member by ID ${id}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to find team member by ID ${id}: ${errorMessage}`);
       throw error;
     }
   }
@@ -83,7 +85,8 @@ export class TeamMembersService {
 
       return member || null;
     } catch (error) {
-      this.logger.error(`Failed to find team member by team ${teamId} and user ${userId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to find team member by team ${teamId} and user ${userId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -112,7 +115,8 @@ export class TeamMembersService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to get team members for team ${teamId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get team members for team ${teamId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -141,7 +145,8 @@ export class TeamMembersService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to get user teams for user ${userId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get user teams for user ${userId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -174,7 +179,8 @@ export class TeamMembersService {
       this.logger.log(`Team member updated: ${id}`);
       return updatedMember;
     } catch (error) {
-      this.logger.error(`Failed to update team member ${id}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to update team member ${id}: ${errorMessage}`);
       throw error;
     }
   }
@@ -201,7 +207,8 @@ export class TeamMembersService {
       this.logger.log(`Team member role updated: ${id} to ${role}`);
       return updatedMember;
     } catch (error) {
-      this.logger.error(`Failed to update team member role ${id}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to update team member role ${id}: ${errorMessage}`);
       throw error;
     }
   }
@@ -228,7 +235,8 @@ export class TeamMembersService {
       this.logger.log(`Team member status updated: ${id} to ${status}`);
       return updatedMember;
     } catch (error) {
-      this.logger.error(`Failed to update team member status ${id}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to update team member status ${id}: ${errorMessage}`);
       throw error;
     }
   }
@@ -249,7 +257,8 @@ export class TeamMembersService {
 
       this.logger.log(`Team member removed: ${id}`);
     } catch (error) {
-      this.logger.error(`Failed to remove team member ${id}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to remove team member ${id}: ${errorMessage}`);
       throw error;
     }
   }
@@ -273,7 +282,8 @@ export class TeamMembersService {
 
       this.logger.log(`Team member removed: user ${userId} from team ${teamId}`);
     } catch (error) {
-      this.logger.error(`Failed to remove team member by team and user: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to remove team member by team and user: ${errorMessage}`);
       throw error;
     }
   }
@@ -296,7 +306,8 @@ export class TeamMembersService {
 
       return result.length;
     } catch (error) {
-      this.logger.error(`Failed to get team member count for team ${teamId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get team member count for team ${teamId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -316,7 +327,8 @@ export class TeamMembersService {
         ))
         .orderBy(desc(teamMembers.joinedAt));
     } catch (error) {
-      this.logger.error(`Failed to get team owners for team ${teamId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get team owners for team ${teamId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -338,7 +350,8 @@ export class TeamMembersService {
 
       return member.length > 0;
     } catch (error) {
-      this.logger.error(`Failed to check team membership: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to check team membership: ${errorMessage}`);
       throw error;
     }
   }
@@ -362,7 +375,8 @@ export class TeamMembersService {
       
       return ['maintainer', 'owner'].includes(member[0].role);
     } catch (error) {
-      this.logger.error(`Failed to check team admin status: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to check team admin status: ${errorMessage}`);
       throw error;
     }
   }

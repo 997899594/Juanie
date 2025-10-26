@@ -1,405 +1,208 @@
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { TrpcService } from '../../trpc/trpc.service';
-import {
-  insertOrganizationSchema,
+import { OrganizationsService } from './organizations.service';
+import { 
+  insertOrganizationSchema, 
   updateOrganizationSchema,
-  selectOrganizationSchema,
+  Organization 
 } from '../../database/schemas/organizations.schema';
-import {
-  insertTeamSchema,
-  updateTeamSchema,
-  selectTeamSchema,
-} from '../../database/schemas/teams.schema';
-import {
-  insertTeamMemberSchema,
-  updateTeamMemberSchema,
-  selectTeamMemberSchema,
-  TeamMembershipRoleEnum,
-  TeamMembershipStatusEnum,
-} from '../../database/schemas/team-members.schema';
 
-// Create router using TrpcService instance
-const trpc = new TrpcService();
+@Injectable()
+export class OrganizationsRouter {
+  constructor(
+    private readonly trpc: TrpcService,
+    private readonly organizationsService: OrganizationsService,
+  ) {}
 
-export const organizationsRouter = trpc.router({
-  // Organization routes
-  organizations: trpc.router({
-    create: trpc.publicProcedure
-      .input(insertOrganizationSchema)
-      .output(selectOrganizationSchema)
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    list: trpc.publicProcedure
-      .input(
-        z.object({
-          page: z.number().min(1).default(1),
-          limit: z.number().min(1).max(100).default(10),
-          search: z.string().optional(),
+  public get organizationsRouter() {
+    return this.trpc.router({
+      // 组织管理
+      create: this.trpc.protectedProcedure
+        .input(insertOrganizationSchema.omit({ 
+          id: true, 
+          createdAt: true, 
+          updatedAt: true,
+          currentProjects: true,
+          currentUsers: true,
+          currentStorageGb: true,
+          currentMonthlyRuns: true,
+        }))
+        .mutation(async ({ input, ctx }) => {
+          return this.organizationsService.createOrganization(input);
         }),
-      )
-      .output(
-        z.object({
-          organizations: z.array(selectOrganizationSchema),
-          total: z.number(),
-          page: z.number(),
-          limit: z.number(),
+
+      getById: this.trpc.protectedProcedure
+        .input(z.object({ id: z.string() }))
+        .query(async ({ input }) => {
+          const organization = await this.organizationsService.findById(input.id);
+          if (!organization) {
+            throw new Error('Organization not found');
+          }
+          return organization;
         }),
-      )
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
 
-    getById: trpc.publicProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .output(selectOrganizationSchema)
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getByName: trpc.publicProcedure
-      .input(z.object({ name: z.string() }))
-      .output(selectOrganizationSchema)
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getBySlug: trpc.publicProcedure
-      .input(z.object({ slug: z.string() }))
-      .output(selectOrganizationSchema)
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    update: trpc.publicProcedure
-      .input(
-        z.object({
-          id: z.string().uuid(),
-          data: updateOrganizationSchema,
+      getBySlug: this.trpc.protectedProcedure
+        .input(z.object({ slug: z.string() }))
+        .query(async ({ input }) => {
+          const organization = await this.organizationsService.findBySlug(input.slug);
+          if (!organization) {
+            throw new Error('Organization not found');
+          }
+          return organization;
         }),
-      )
-      .output(selectOrganizationSchema)
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
 
-    delete: trpc.publicProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .output(z.void())
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
+      update: this.trpc.protectedProcedure
+        .input(z.object({
+          id: z.string(),
+          data: updateOrganizationSchema.partial(),
+        }))
+        .mutation(async ({ input }) => {
+          return this.organizationsService.updateOrganization(input.id, input.data);
+        }),
 
-    updateUsage: trpc.publicProcedure
-      .input(
-        z.object({
-          id: z.string().uuid(),
+      delete: this.trpc.protectedProcedure
+        .input(z.object({ id: z.string() }))
+        .mutation(async ({ input }) => {
+          await this.organizationsService.deleteOrganization(input.id);
+          return { success: true };
+        }),
+
+      list: this.trpc.protectedProcedure
+        .input(z.object({
+          limit: z.number().min(1).max(100).default(20),
+          offset: z.number().min(0).default(0),
+        }))
+        .query(async ({ input }) => {
+          return this.organizationsService.getOrganizations(input.limit, input.offset);
+        }),
+
+      search: this.trpc.protectedProcedure
+        .input(z.object({
+          query: z.string(),
+          limit: z.number().min(1).max(100).default(20),
+          offset: z.number().min(0).default(0),
+        }))
+        .query(async ({ input }) => {
+          return this.organizationsService.searchOrganizations(
+            input.query,
+            input.limit,
+            input.offset
+          );
+        }),
+
+      // 组织成员管理
+      getMembers: this.trpc.protectedProcedure
+        .input(z.object({
+          organizationId: z.string(),
+          limit: z.number().min(1).max(100).default(20),
+          offset: z.number().min(0).default(0),
+        }))
+        .query(async ({ input }) => {
+          return this.organizationsService.getOrganizationMembers(
+            input.organizationId,
+            input.limit,
+            input.offset
+          );
+        }),
+
+      addMember: this.trpc.protectedProcedure
+        .input(z.object({
+          organizationId: z.string(),
+          userId: z.string(),
+          roleId: z.string(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          return this.organizationsService.addOrganizationMember(
+            input.organizationId,
+            input.userId,
+            input.roleId,
+            ctx.user.id
+          );
+        }),
+
+      removeMember: this.trpc.protectedProcedure
+        .input(z.object({
+          organizationId: z.string(),
+          userId: z.string(),
+        }))
+        .mutation(async ({ input }) => {
+          await this.organizationsService.removeOrganizationMember(
+            input.organizationId,
+            input.userId
+          );
+          return { success: true };
+        }),
+
+      updateMemberRole: this.trpc.protectedProcedure
+        .input(z.object({
+          organizationId: z.string(),
+          userId: z.string(),
+          roleId: z.string(),
+        }))
+        .mutation(async ({ input }) => {
+          return this.organizationsService.updateMemberRole(
+            input.organizationId,
+            input.userId,
+            input.roleId
+          );
+        }),
+
+      // 组织统计和使用情况
+      getStats: this.trpc.protectedProcedure
+        .input(z.object({ organizationId: z.string() }))
+        .query(async ({ input }) => {
+          return this.organizationsService.getOrganizationStats(input.organizationId);
+        }),
+
+      updateUsage: this.trpc.protectedProcedure
+        .input(z.object({
+          organizationId: z.string(),
           usage: z.object({
             currentProjects: z.number().optional(),
             currentUsers: z.number().optional(),
-            currentStorage: z.number().optional(),
+            currentStorageGb: z.number().optional(),
             currentMonthlyRuns: z.number().optional(),
           }),
+        }))
+        .mutation(async ({ input }) => {
+          return this.organizationsService.updateOrganizationUsage(
+            input.organizationId,
+            input.usage
+          );
         }),
-      )
-      .output(selectOrganizationSchema)
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
 
-    checkUsageLimits: trpc.publicProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .output(
-        z.object({
-          canCreateProject: z.boolean(),
-          canAddUser: z.boolean(),
-          canUseStorage: z.boolean(),
-          canRunMore: z.boolean(),
-          limits: z.object({
-            maxProjects: z.number(),
-            maxUsers: z.number(),
-            maxStorage: z.number(),
-            maxMonthlyRuns: z.number(),
-          }),
-          current: z.object({
-            currentProjects: z.number(),
-            currentUsers: z.number(),
-            currentStorage: z.number(),
-            currentMonthlyRuns: z.number(),
-          }),
+      checkUsageLimits: this.trpc.protectedProcedure
+        .input(z.object({ organizationId: z.string() }))
+        .query(async ({ input }) => {
+          return this.organizationsService.checkOrganizationUsageLimits(input.organizationId);
         }),
-      )
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-  }),
 
-  // Team routes
-  teams: trpc.router({
-    create: trpc.publicProcedure
-      .input(insertTeamSchema)
-      .output(selectTeamSchema)
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getByOrganization: trpc.publicProcedure
-      .input(
-        z.object({
-          organizationId: z.string().uuid(),
-          page: z.number().min(1).default(1),
-          limit: z.number().min(1).max(100).default(10),
-          search: z.string().optional(),
+      // 用户相关
+      getUserOrganizations: this.trpc.protectedProcedure
+        .input(z.object({ userId: z.string() }))
+        .query(async ({ input }) => {
+          return this.organizationsService.getUserOrganizations(input.userId);
         }),
-      )
-      .output(
-        z.object({
-          teams: z.array(selectTeamSchema),
-          total: z.number(),
-          page: z.number(),
-          limit: z.number(),
+
+      checkUserPermission: this.trpc.protectedProcedure
+        .input(z.object({
+          organizationId: z.string(),
+          userId: z.string(),
+        }))
+        .query(async ({ input }) => {
+          return this.organizationsService.checkUserPermission(
+            input.organizationId,
+            input.userId
+          );
         }),
-      )
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
 
-    getById: trpc.publicProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .output(selectTeamSchema)
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getBySlug: trpc.publicProcedure
-      .input(
-        z.object({
-          organizationId: z.string().uuid(),
-          slug: z.string(),
+      // 设置验证
+      validateSettings: this.trpc.protectedProcedure
+        .input(z.object({ settings: z.any() }))
+        .mutation(async ({ input }) => {
+          return this.organizationsService.validateOrganizationSettings(input.settings);
         }),
-      )
-      .output(selectTeamSchema)
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getByExternalId: trpc.publicProcedure
-      .input(z.object({ externalId: z.string() }))
-      .output(selectTeamSchema)
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    update: trpc.publicProcedure
-      .input(
-        z.object({
-          id: z.string().uuid(),
-          data: updateTeamSchema,
-        }),
-      )
-      .output(selectTeamSchema)
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    delete: trpc.publicProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .output(z.void())
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getStats: trpc.publicProcedure
-      .input(z.object({ organizationId: z.string().uuid() }))
-      .output(z.object({ totalTeams: z.number() }))
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-  }),
-
-  // Team Members routes
-  teamMembers: trpc.router({
-    add: trpc.publicProcedure
-      .input(insertTeamMemberSchema)
-      .output(selectTeamMemberSchema)
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getByTeam: trpc.publicProcedure
-      .input(
-        z.object({
-          teamId: z.string().uuid(),
-          page: z.number().min(1).default(1),
-          limit: z.number().min(1).max(100).default(10),
-          status: TeamMembershipStatusEnum.optional(),
-          role: TeamMembershipRoleEnum.optional(),
-        }),
-      )
-      .output(
-        z.object({
-          members: z.array(selectTeamMemberSchema),
-          total: z.number(),
-          page: z.number(),
-          limit: z.number(),
-        }),
-      )
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getByUser: trpc.publicProcedure
-      .input(
-        z.object({
-          userId: z.string().uuid(),
-          page: z.number().min(1).default(1),
-          limit: z.number().min(1).max(100).default(10),
-          status: TeamMembershipStatusEnum.optional(),
-        }),
-      )
-      .output(
-        z.object({
-          teams: z.array(selectTeamMemberSchema),
-          total: z.number(),
-          page: z.number(),
-          limit: z.number(),
-        }),
-      )
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getById: trpc.publicProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .output(selectTeamMemberSchema)
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getByTeamAndUser: trpc.publicProcedure
-      .input(
-        z.object({
-          teamId: z.string().uuid(),
-          userId: z.string().uuid(),
-        }),
-      )
-      .output(selectTeamMemberSchema)
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    update: trpc.publicProcedure
-      .input(
-        z.object({
-          id: z.string().uuid(),
-          data: updateTeamMemberSchema,
-        }),
-      )
-      .output(selectTeamMemberSchema)
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    updateByTeamAndUser: trpc.publicProcedure
-      .input(
-        z.object({
-          teamId: z.string().uuid(),
-          userId: z.string().uuid(),
-          data: updateTeamMemberSchema,
-        }),
-      )
-      .output(selectTeamMemberSchema)
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    remove: trpc.publicProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .output(z.void())
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    removeByTeamAndUser: trpc.publicProcedure
-      .input(
-        z.object({
-          teamId: z.string().uuid(),
-          userId: z.string().uuid(),
-        }),
-      )
-      .output(z.void())
-      .mutation(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getTeamStats: trpc.publicProcedure
-      .input(z.object({ teamId: z.string().uuid() }))
-      .output(
-        z.object({
-          totalMembers: z.number(),
-          activeMembers: z.number(),
-          pendingMembers: z.number(),
-          membersByRole: z.record(TeamMembershipRoleEnum, z.number()),
-        }),
-      )
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    getTeamOwners: trpc.publicProcedure
-      .input(z.object({ teamId: z.string().uuid() }))
-      .output(z.array(selectTeamMemberSchema))
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-
-    checkMembership: trpc.publicProcedure
-      .input(
-        z.object({
-          teamId: z.string().uuid(),
-          userId: z.string().uuid(),
-        }),
-      )
-      .output(
-        z.object({
-          isMember: z.boolean(),
-          isAdmin: z.boolean(),
-          role: TeamMembershipRoleEnum.optional(),
-          status: TeamMembershipStatusEnum.optional(),
-        }),
-      )
-      .query(async ({ input }) => {
-        // TODO: Implement with proper service injection
-        throw new Error('Not implemented');
-      }),
-  }),
-});
+    });
+  }
+}

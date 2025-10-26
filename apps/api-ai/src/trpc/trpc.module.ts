@@ -6,11 +6,22 @@
 import { Module } from '@nestjs/common';
 import { TrpcService } from './trpc.service';
 import { TrpcRouter } from './trpc.router';
-import { UsersModule } from '../modules/users';
-import { OrganizationsModule } from '../modules/organizations';
+import { UsersModule } from '../modules/users/users.module';
+import { OrganizationsModule } from '../modules/organizations/organizations.module';
+import { ProjectsModule } from '../modules/projects/projects.module';
+import { AuthModule } from '../modules/auth/auth.module';
+import { AiAssistantsModule } from '../modules/ai-assistants/ai-assistants.module';
+import { WorkflowsModule } from '../modules/workflows/workflows.module';
 
 @Module({
-  imports: [UsersModule, OrganizationsModule],
+  imports: [
+    UsersModule,
+    OrganizationsModule,
+    ProjectsModule,
+    AuthModule,
+    AiAssistantsModule,
+    WorkflowsModule,
+  ],
   providers: [TrpcService, TrpcRouter],
   exports: [TrpcService, TrpcRouter],
 })

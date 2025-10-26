@@ -1,9 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
-import { eq, and, or, ilike, desc } from 'drizzle-orm';
+import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { DATABASE_CONNECTION } from '../../database';
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as schema from '../../database/schemas';
+import { Database } from '../../database/database.module';
+import { eq, and, desc, asc, count, sql, ilike, inArray, gte, lte, or } from 'drizzle-orm';
 import { 
   teams, 
   Team, 
@@ -19,7 +17,7 @@ export class TeamsService {
   private readonly logger = new Logger(TeamsService.name);
 
   constructor(
-    @InjectDatabase() private readonly db: NodePgDatabase<typeof schema>
+    @InjectDatabase() private readonly db: Database,
   ) {}
 
   /**
@@ -47,7 +45,8 @@ export class TeamsService {
       this.logger.log(`Team created: ${newTeam.id} in organization ${newTeam.organizationId}`);
       return newTeam;
     } catch (error) {
-      this.logger.error(`Failed to create team: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to create team: ${errorMessage}`);
       throw error;
     }
   }
@@ -65,7 +64,8 @@ export class TeamsService {
 
       return team || null;
     } catch (error) {
-      this.logger.error(`Failed to find team by ID ${id}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to find team by ID ${id}: ${errorMessage}`);
       throw error;
     }
   }
@@ -86,7 +86,8 @@ export class TeamsService {
 
       return team || null;
     } catch (error) {
-      this.logger.error(`Failed to find team by slug ${slug} in organization ${organizationId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to find team by slug ${slug} in organization ${organizationId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -104,7 +105,8 @@ export class TeamsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to get teams for organization ${organizationId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get teams for organization ${organizationId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -143,7 +145,8 @@ export class TeamsService {
       this.logger.log(`Team updated: ${id}`);
       return updatedTeam;
     } catch (error) {
-      this.logger.error(`Failed to update team ${id}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to update team ${id}: ${errorMessage}`);
       throw error;
     }
   }
@@ -164,7 +167,8 @@ export class TeamsService {
 
       this.logger.log(`Team deleted: ${id}`);
     } catch (error) {
-      this.logger.error(`Failed to delete team ${id}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to delete team ${id}: ${errorMessage}`);
       throw error;
     }
   }
@@ -196,7 +200,8 @@ export class TeamsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      this.logger.error(`Failed to search teams in organization ${organizationId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to search teams in organization ${organizationId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -214,7 +219,8 @@ export class TeamsService {
 
       return team || null;
     } catch (error) {
-      this.logger.error(`Failed to find team by external ID ${externalId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to find team by external ID ${externalId}: ${errorMessage}`);
       throw error;
     }
   }
@@ -231,7 +237,8 @@ export class TeamsService {
 
       return result.length;
     } catch (error) {
-      this.logger.error(`Failed to get team count for organization ${organizationId}: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get team count for organization ${organizationId}: ${errorMessage}`);
       throw error;
     }
   }

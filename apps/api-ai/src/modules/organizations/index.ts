@@ -5,4 +5,4 @@ export { TeamMembersService } from './team-members.service';
 export { OrganizationsController } from './organizations.controller';
 export { TeamsController } from './teams.controller';
 export { TeamMembersController } from './team-members.controller';
-export { organizationsRouter } from './organizations.router';
+export { OrganizationsRouter } from './organizations.router';

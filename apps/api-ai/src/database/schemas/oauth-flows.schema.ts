@@ -1,6 +1,10 @@
-import { pgTable, uuid, varchar, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
+
+// OAuth Provider 类型定义
+export const OAuthProviderEnum = z.enum(['github', 'gitlab', 'oidc', 'saml']);
+export const OAuthProviderPgEnum = pgEnum('oauth_provider', ['github', 'gitlab', 'oidc', 'saml']);
 
 // OAuth 授权流程状态（支持 OIDC/PKCE 安全最佳实践）
 export const oauthFlows = pgTable('oauth_flows', {
@@ -8,7 +12,7 @@ export const oauthFlows = pgTable('oauth_flows', {
   id: uuid('id').defaultRandom().primaryKey(),
 
   // OAuth 提供商，如 'gitlab'、'github'、'okta' 等
-  provider: varchar('provider', { length: 50 }).notNull(),
+  provider: OAuthProviderPgEnum('provider').notNull(),
 
   // 授权流程的 state，用于防止CSRF；唯一约束保证不可重复使用
   state: varchar('state', { length: 255 }).notNull(),
@@ -57,3 +61,4 @@ export const selectOAuthFlowSchema = createSelectSchema(oauthFlows);
 export type OAuthFlow = typeof oauthFlows.$inferSelect;
 export type NewOAuthFlow = typeof oauthFlows.$inferInsert;
 export type UpdateOAuthFlow = z.infer<typeof insertOAuthFlowSchema>;
+export type OAuthProvider = z.infer<typeof OAuthProviderEnum>;

@@ -79,7 +79,7 @@ export const insertProjectSchema = createInsertSchema(projects, {
   aiModelPreference: z.string().max(50).default('gpt-4'),
   maxComputeUnits: z.number().int().min(1).max(10000).default(100),
   maxStorageGb: z.number().int().min(1).max(10000).default(100),
-  maxMonthlyCost: z.number().positive().default(1000),
+  maxMonthlyCost: z.string().regex(/^\d+(\.\d{1,2})?$/).default('1000.00'), // 最大月度成本，字符串格式
   primaryTag: z.string().max(50).optional(),
   secondaryTags: z.string().max(200).optional(),
 });

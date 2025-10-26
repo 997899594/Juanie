@@ -65,7 +65,7 @@ export const performanceMetricsRelations = relations(performanceMetrics, ({ one 
 export const insertPerformanceMetricSchema = createInsertSchema(performanceMetrics, {
   metricType: MetricTypeEnum,
   metricCategory: MetricCategoryEnum,
-  value: z.number().min(0),
+  value: z.string(),
 });
 
 export const selectPerformanceMetricSchema = createSelectSchema(performanceMetrics);
