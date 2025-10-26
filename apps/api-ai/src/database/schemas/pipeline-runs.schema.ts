@@ -82,9 +82,13 @@ export const pipelineRunsRelations = relations(pipelineRuns, ({ one }) => ({
 // Zod Schemas with detailed enums
 export const insertPipelineRunSchema = createInsertSchema(pipelineRuns, {
   performanceScore: z.number().int().min(1).max(100).optional(),
-  testCoverage: z.number().min(0).max(100).optional(),
+  testCoverage: z.string().optional(),
   securityScore: z.number().int().min(1).max(100).optional(),
-  failurePredictionScore: z.number().min(0).max(1).optional(),
+  failurePredictionScore: z.string().optional(),
+  computeUnitsUsed: z.string().optional(),
+  estimatedCost: z.string().optional(),
+  carbonFootprint: z.string().optional(),
+  artifactSizeMb: z.string().optional(),
 });
 
 export const selectPipelineRunSchema = createSelectSchema(pipelineRuns);

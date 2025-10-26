@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { eq, and, desc, asc, count, sql, like, inArray, gte, lte, between } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { eq, and, desc, asc, count, sql, like, inArray, gte, lte, between, or } from 'drizzle-orm';
+import { InjectDatabase } from '../../common/decorators/database.decorator';
+import { Database } from '../../database/database.module';
 import { 
   pipelineRuns, 
   pipelines,
@@ -9,88 +10,151 @@ import {
   type NewPipelineRun, 
   type UpdatePipelineRun,
   insertPipelineRunSchema,
-  updatePipelineRunSchema
+  updatePipelineRunSchema,
+  selectPipelineRunSchema
 } from '../../database/schemas';
 
 @Injectable()
 export class PipelineRunsService {
-  constructor(private readonly db: DatabaseService) {}
+  private readonly logger = new Logger(PipelineRunsService.name);
+
+  constructor(@InjectDatabase() private readonly db: Database) {}
 
   /**
-   * 创建流水线执行
+   * 创建新的流水线运行
    */
   async createPipelineRun(data: NewPipelineRun): Promise<PipelineRun> {
-    // 验证输入数据
-    const validatedData = insertPipelineRunSchema.parse(data);
+    try {
+      const validatedData = insertPipelineRunSchema.parse(data);
+      
+      const [newRun] = await this.db
+        .insert(pipelineRuns)
+        .values(validatedData)
+        .returning();
 
-    // 检查流水线是否存在
-    const [pipeline] = await this.db.database
-      .select()
-      .from(pipelines)
-      .where(eq(pipelines.id, validatedData.pipelineId))
-      .limit(1);
-
-    if (!pipeline) {
-      throw new NotFoundException('Pipeline not found');
+      this.logger.log(`Pipeline run created: ${newRun.id}`);
+      return newRun;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to create pipeline run: ${errorMessage}`);
+      throw new BadRequestException('Failed to create pipeline run');
     }
-
-    // 生成运行序号
-    const [lastRun] = await this.db.database
-      .select({ runNumber: pipelineRuns.runNumber })
-      .from(pipelineRuns)
-      .where(eq(pipelineRuns.pipelineId, validatedData.pipelineId))
-      .orderBy(desc(pipelineRuns.runNumber))
-      .limit(1);
-
-    const runNumber = (lastRun?.runNumber || 0) + 1;
-
-    const [pipelineRun] = await this.db.database
-      .insert(pipelineRuns)
-      .values({
-        ...validatedData,
-        runNumber,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return pipelineRun;
   }
 
   /**
-   * 根据ID获取流水线执行
+   * 根据ID获取流水线运行详情
    */
   async getPipelineRunById(id: string): Promise<PipelineRun & {
     pipeline?: { name: string; projectId: string };
-    triggeredByUser?: { name: string; email: string };
+    triggerUser?: { name: string; email: string };
   }> {
-    const [pipelineRun] = await this.db.database
-      .select({
-        ...pipelineRuns,
-        pipeline: {
-          name: pipelines.name,
-          projectId: pipelines.projectId,
-        },
-        triggeredByUser: {
-          name: users.name,
-          email: users.email,
-        },
-      })
-      .from(pipelineRuns)
-      .leftJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
-      .leftJoin(users, eq(pipelineRuns.triggeredBy, users.id))
-      .where(eq(pipelineRuns.id, id))
-      .limit(1);
+    try {
+      const result = await this.db
+        .select({
+          // Pipeline run fields
+          id: pipelineRuns.id,
+          pipelineId: pipelineRuns.pipelineId,
+          triggerType: pipelineRuns.triggerType,
+          triggerUserId: pipelineRuns.triggerUserId,
+          triggerSource: pipelineRuns.triggerSource,
+          triggerBranch: pipelineRuns.triggerBranch,
+          triggerCommit: pipelineRuns.triggerCommit,
+          runNumber: pipelineRuns.runNumber,
+          commitHash: pipelineRuns.commitHash,
+          branch: pipelineRuns.branch,
+          status: pipelineRuns.status,
+          startedAt: pipelineRuns.startedAt,
+          finishedAt: pipelineRuns.finishedAt,
+          duration: pipelineRuns.duration,
+          computeUnitsUsed: pipelineRuns.computeUnitsUsed,
+          estimatedCost: pipelineRuns.estimatedCost,
+          carbonFootprint: pipelineRuns.carbonFootprint,
+          failurePredictionScore: pipelineRuns.failurePredictionScore,
+          optimizationSuggestion: pipelineRuns.optimizationSuggestion,
+          performanceScore: pipelineRuns.performanceScore,
+          testsTotal: pipelineRuns.testsTotal,
+          testsPassed: pipelineRuns.testsPassed,
+          testsFailed: pipelineRuns.testsFailed,
+          testCoverage: pipelineRuns.testCoverage,
+          vulnerabilitiesCritical: pipelineRuns.vulnerabilitiesCritical,
+          vulnerabilitiesHigh: pipelineRuns.vulnerabilitiesHigh,
+          vulnerabilitiesMedium: pipelineRuns.vulnerabilitiesMedium,
+          vulnerabilitiesLow: pipelineRuns.vulnerabilitiesLow,
+          securityScore: pipelineRuns.securityScore,
+          artifactCount: pipelineRuns.artifactCount,
+          artifactSizeMb: pipelineRuns.artifactSizeMb,
+          createdAt: pipelineRuns.createdAt,
+          // Related data
+          pipelineName: pipelines.name,
+          pipelineProjectId: pipelines.projectId,
+          triggerUserName: users.displayName,
+          triggerUserEmail: users.email,
+        })
+        .from(pipelineRuns)
+        .leftJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
+        .leftJoin(users, eq(pipelineRuns.triggerUserId, users.id))
+        .where(eq(pipelineRuns.id, id))
+        .limit(1);
 
-    if (!pipelineRun) {
-      throw new NotFoundException('Pipeline run not found');
+      if (!result.length) {
+        throw new NotFoundException(`Pipeline run with ID ${id} not found`);
+      }
+
+      const run = result[0];
+      return {
+        id: run.id,
+        pipelineId: run.pipelineId,
+        triggerType: run.triggerType,
+        triggerUserId: run.triggerUserId,
+        triggerSource: run.triggerSource,
+        triggerBranch: run.triggerBranch,
+        triggerCommit: run.triggerCommit,
+        runNumber: run.runNumber,
+        commitHash: run.commitHash,
+        branch: run.branch,
+        status: run.status,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        duration: run.duration,
+        computeUnitsUsed: run.computeUnitsUsed,
+        estimatedCost: run.estimatedCost,
+        carbonFootprint: run.carbonFootprint,
+        failurePredictionScore: run.failurePredictionScore,
+        optimizationSuggestion: run.optimizationSuggestion,
+        performanceScore: run.performanceScore,
+        testsTotal: run.testsTotal,
+        testsPassed: run.testsPassed,
+        testsFailed: run.testsFailed,
+        testCoverage: run.testCoverage,
+        vulnerabilitiesCritical: run.vulnerabilitiesCritical,
+        vulnerabilitiesHigh: run.vulnerabilitiesHigh,
+        vulnerabilitiesMedium: run.vulnerabilitiesMedium,
+        vulnerabilitiesLow: run.vulnerabilitiesLow,
+        securityScore: run.securityScore,
+        artifactCount: run.artifactCount,
+        artifactSizeMb: run.artifactSizeMb,
+        createdAt: run.createdAt,
+        pipeline: run.pipelineName && run.pipelineProjectId ? {
+          name: run.pipelineName,
+          projectId: run.pipelineProjectId
+        } : undefined,
+        triggerUser: run.triggerUserName && run.triggerUserEmail ? {
+          name: run.triggerUserName,
+          email: run.triggerUserEmail
+        } : undefined,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get pipeline run by ID ${id}: ${errorMessage}`);
+      throw new BadRequestException('Failed to get pipeline run');
     }
-
-    return pipelineRun;
   }
 
   /**
-   * 获取流水线的执行列表
+   * 根据流水线ID获取运行列表
    */
   async getPipelineRunsByPipeline(
     pipelineId: string,
@@ -106,74 +170,146 @@ export class PipelineRunsService {
   ): Promise<{
     runs: (PipelineRun & {
       pipeline?: { name: string };
-      triggeredByUser?: { name: string; email: string };
+      triggerUser?: { name: string; email: string };
     })[];
     total: number;
     page: number;
     limit: number;
   }> {
-    const { page = 1, limit = 20, status, branch, triggeredBy, dateFrom, dateTo } = options;
-    const offset = (page - 1) * limit;
+    try {
+      const { page = 1, limit = 20, status, branch, triggeredBy, dateFrom, dateTo } = options;
+      const offset = (page - 1) * limit;
 
-    // 构建查询条件
-    const conditions = [eq(pipelineRuns.pipelineId, pipelineId)];
+      const whereConditions = [eq(pipelineRuns.pipelineId, pipelineId)];
 
-    if (status) {
-      conditions.push(eq(pipelineRuns.status, status as any));
+      if (status) {
+        whereConditions.push(eq(pipelineRuns.status, status as any));
+      }
+      if (branch) {
+        whereConditions.push(eq(pipelineRuns.branch, branch));
+      }
+      if (triggeredBy) {
+        whereConditions.push(eq(pipelineRuns.triggerUserId, triggeredBy));
+      }
+      if (dateFrom) {
+        whereConditions.push(gte(pipelineRuns.createdAt, dateFrom));
+      }
+      if (dateTo) {
+        whereConditions.push(lte(pipelineRuns.createdAt, dateTo));
+      }
+
+      const whereClause = and(...whereConditions);
+
+      // Get total count
+      const [totalResult] = await this.db
+        .select({ count: count() })
+        .from(pipelineRuns)
+        .where(whereClause);
+
+      // Get runs with related data
+      const results = await this.db
+        .select({
+          // Pipeline run fields
+          id: pipelineRuns.id,
+          pipelineId: pipelineRuns.pipelineId,
+          triggerType: pipelineRuns.triggerType,
+          triggerUserId: pipelineRuns.triggerUserId,
+          triggerSource: pipelineRuns.triggerSource,
+          triggerBranch: pipelineRuns.triggerBranch,
+          triggerCommit: pipelineRuns.triggerCommit,
+          runNumber: pipelineRuns.runNumber,
+          commitHash: pipelineRuns.commitHash,
+          branch: pipelineRuns.branch,
+          status: pipelineRuns.status,
+          startedAt: pipelineRuns.startedAt,
+          finishedAt: pipelineRuns.finishedAt,
+          duration: pipelineRuns.duration,
+          computeUnitsUsed: pipelineRuns.computeUnitsUsed,
+          estimatedCost: pipelineRuns.estimatedCost,
+          carbonFootprint: pipelineRuns.carbonFootprint,
+          failurePredictionScore: pipelineRuns.failurePredictionScore,
+          optimizationSuggestion: pipelineRuns.optimizationSuggestion,
+          performanceScore: pipelineRuns.performanceScore,
+          testsTotal: pipelineRuns.testsTotal,
+          testsPassed: pipelineRuns.testsPassed,
+          testsFailed: pipelineRuns.testsFailed,
+          testCoverage: pipelineRuns.testCoverage,
+          vulnerabilitiesCritical: pipelineRuns.vulnerabilitiesCritical,
+          vulnerabilitiesHigh: pipelineRuns.vulnerabilitiesHigh,
+          vulnerabilitiesMedium: pipelineRuns.vulnerabilitiesMedium,
+          vulnerabilitiesLow: pipelineRuns.vulnerabilitiesLow,
+          securityScore: pipelineRuns.securityScore,
+          artifactCount: pipelineRuns.artifactCount,
+          artifactSizeMb: pipelineRuns.artifactSizeMb,
+          createdAt: pipelineRuns.createdAt,
+          // Related data
+          pipelineName: pipelines.name,
+          triggerUserName: users.displayName,
+          triggerUserEmail: users.email,
+        })
+        .from(pipelineRuns)
+        .leftJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
+        .leftJoin(users, eq(pipelineRuns.triggerUserId, users.id))
+        .where(whereClause)
+        .orderBy(desc(pipelineRuns.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const runs = results.map(run => ({
+        id: run.id,
+        pipelineId: run.pipelineId,
+        triggerType: run.triggerType,
+        triggerUserId: run.triggerUserId,
+        triggerSource: run.triggerSource,
+        triggerBranch: run.triggerBranch,
+        triggerCommit: run.triggerCommit,
+        runNumber: run.runNumber,
+        commitHash: run.commitHash,
+        branch: run.branch,
+        status: run.status,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        duration: run.duration,
+        computeUnitsUsed: run.computeUnitsUsed,
+        estimatedCost: run.estimatedCost,
+        carbonFootprint: run.carbonFootprint,
+        failurePredictionScore: run.failurePredictionScore,
+        optimizationSuggestion: run.optimizationSuggestion,
+        performanceScore: run.performanceScore,
+        testsTotal: run.testsTotal,
+        testsPassed: run.testsPassed,
+        testsFailed: run.testsFailed,
+        testCoverage: run.testCoverage,
+        vulnerabilitiesCritical: run.vulnerabilitiesCritical,
+        vulnerabilitiesHigh: run.vulnerabilitiesHigh,
+        vulnerabilitiesMedium: run.vulnerabilitiesMedium,
+        vulnerabilitiesLow: run.vulnerabilitiesLow,
+        securityScore: run.securityScore,
+        artifactCount: run.artifactCount,
+        artifactSizeMb: run.artifactSizeMb,
+        createdAt: run.createdAt,
+        pipeline: run.pipelineName ? { name: run.pipelineName } : undefined,
+        triggerUser: run.triggerUserName && run.triggerUserEmail ? {
+          name: run.triggerUserName,
+          email: run.triggerUserEmail
+        } : undefined,
+      }));
+
+      return {
+        runs,
+        total: totalResult.count,
+        page,
+        limit,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get pipeline runs by pipeline ${pipelineId}: ${errorMessage}`);
+      throw new BadRequestException('Failed to get pipeline runs');
     }
-
-    if (branch) {
-      conditions.push(eq(pipelineRuns.branch, branch));
-    }
-
-    if (triggeredBy) {
-      conditions.push(eq(pipelineRuns.triggeredBy, triggeredBy));
-    }
-
-    if (dateFrom && dateTo) {
-      conditions.push(between(pipelineRuns.createdAt, dateFrom, dateTo));
-    } else if (dateFrom) {
-      conditions.push(gte(pipelineRuns.createdAt, dateFrom));
-    } else if (dateTo) {
-      conditions.push(lte(pipelineRuns.createdAt, dateTo));
-    }
-
-    // 获取总数
-    const [{ count: total }] = await this.db.database
-      .select({ count: count() })
-      .from(pipelineRuns)
-      .where(and(...conditions));
-
-    // 获取分页数据
-    const runs = await this.db.database
-      .select({
-        ...pipelineRuns,
-        pipeline: {
-          name: pipelines.name,
-        },
-        triggeredByUser: {
-          name: users.name,
-          email: users.email,
-        },
-      })
-      .from(pipelineRuns)
-      .leftJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
-      .leftJoin(users, eq(pipelineRuns.triggeredBy, users.id))
-      .where(and(...conditions))
-      .orderBy(desc(pipelineRuns.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    return {
-      runs,
-      total,
-      page,
-      limit,
-    };
   }
 
   /**
-   * 获取项目的流水线执行列表
+   * 根据项目ID获取运行列表
    */
   async getPipelineRunsByProject(
     projectId: string,
@@ -186,159 +322,270 @@ export class PipelineRunsService {
   ): Promise<{
     runs: (PipelineRun & {
       pipeline?: { name: string };
-      triggeredByUser?: { name: string; email: string };
+      triggerUser?: { name: string; email: string };
     })[];
     total: number;
     page: number;
     limit: number;
   }> {
-    const { page = 1, limit = 20, status, pipelineId } = options;
-    const offset = (page - 1) * limit;
+    try {
+      const { page = 1, limit = 20, status, pipelineId } = options;
+      const offset = (page - 1) * limit;
 
-    // 构建查询条件
-    const conditions = [eq(pipelines.projectId, projectId)];
+      const whereConditions = [eq(pipelines.projectId, projectId)];
 
-    if (status) {
-      conditions.push(eq(pipelineRuns.status, status as any));
+      if (status) {
+        whereConditions.push(eq(pipelineRuns.status, status as any));
+      }
+      if (pipelineId) {
+        whereConditions.push(eq(pipelineRuns.pipelineId, pipelineId));
+      }
+
+      const whereClause = and(...whereConditions);
+
+      // Get total count
+      const [totalResult] = await this.db
+        .select({ count: count() })
+        .from(pipelineRuns)
+        .innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
+        .where(whereClause);
+
+      // Get runs with related data
+      const results = await this.db
+        .select({
+          // Pipeline run fields
+          id: pipelineRuns.id,
+          pipelineId: pipelineRuns.pipelineId,
+          triggerType: pipelineRuns.triggerType,
+          triggerUserId: pipelineRuns.triggerUserId,
+          triggerSource: pipelineRuns.triggerSource,
+          triggerBranch: pipelineRuns.triggerBranch,
+          triggerCommit: pipelineRuns.triggerCommit,
+          runNumber: pipelineRuns.runNumber,
+          commitHash: pipelineRuns.commitHash,
+          branch: pipelineRuns.branch,
+          status: pipelineRuns.status,
+          startedAt: pipelineRuns.startedAt,
+          finishedAt: pipelineRuns.finishedAt,
+          duration: pipelineRuns.duration,
+          computeUnitsUsed: pipelineRuns.computeUnitsUsed,
+          estimatedCost: pipelineRuns.estimatedCost,
+          carbonFootprint: pipelineRuns.carbonFootprint,
+          failurePredictionScore: pipelineRuns.failurePredictionScore,
+          optimizationSuggestion: pipelineRuns.optimizationSuggestion,
+          performanceScore: pipelineRuns.performanceScore,
+          testsTotal: pipelineRuns.testsTotal,
+          testsPassed: pipelineRuns.testsPassed,
+          testsFailed: pipelineRuns.testsFailed,
+          testCoverage: pipelineRuns.testCoverage,
+          vulnerabilitiesCritical: pipelineRuns.vulnerabilitiesCritical,
+          vulnerabilitiesHigh: pipelineRuns.vulnerabilitiesHigh,
+          vulnerabilitiesMedium: pipelineRuns.vulnerabilitiesMedium,
+          vulnerabilitiesLow: pipelineRuns.vulnerabilitiesLow,
+          securityScore: pipelineRuns.securityScore,
+          artifactCount: pipelineRuns.artifactCount,
+          artifactSizeMb: pipelineRuns.artifactSizeMb,
+          createdAt: pipelineRuns.createdAt,
+          // Related data
+          pipelineName: pipelines.name,
+          triggerUserName: users.displayName,
+          triggerUserEmail: users.email,
+        })
+        .from(pipelineRuns)
+        .innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
+        .leftJoin(users, eq(pipelineRuns.triggerUserId, users.id))
+        .where(whereClause)
+        .orderBy(desc(pipelineRuns.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const runs = results.map(run => ({
+        id: run.id,
+        pipelineId: run.pipelineId,
+        triggerType: run.triggerType,
+        triggerUserId: run.triggerUserId,
+        triggerSource: run.triggerSource,
+        triggerBranch: run.triggerBranch,
+        triggerCommit: run.triggerCommit,
+        runNumber: run.runNumber,
+        commitHash: run.commitHash,
+        branch: run.branch,
+        status: run.status,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        duration: run.duration,
+        computeUnitsUsed: run.computeUnitsUsed,
+        estimatedCost: run.estimatedCost,
+        carbonFootprint: run.carbonFootprint,
+        failurePredictionScore: run.failurePredictionScore,
+        optimizationSuggestion: run.optimizationSuggestion,
+        performanceScore: run.performanceScore,
+        testsTotal: run.testsTotal,
+        testsPassed: run.testsPassed,
+        testsFailed: run.testsFailed,
+        testCoverage: run.testCoverage,
+        vulnerabilitiesCritical: run.vulnerabilitiesCritical,
+        vulnerabilitiesHigh: run.vulnerabilitiesHigh,
+        vulnerabilitiesMedium: run.vulnerabilitiesMedium,
+        vulnerabilitiesLow: run.vulnerabilitiesLow,
+        securityScore: run.securityScore,
+        artifactCount: run.artifactCount,
+        artifactSizeMb: run.artifactSizeMb,
+        createdAt: run.createdAt,
+        pipeline: run.pipelineName ? { name: run.pipelineName } : undefined,
+        triggerUser: run.triggerUserName && run.triggerUserEmail ? {
+          name: run.triggerUserName,
+          email: run.triggerUserEmail
+        } : undefined,
+      }));
+
+      return {
+        runs,
+        total: totalResult.count,
+        page,
+        limit,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get pipeline runs by project ${projectId}: ${errorMessage}`);
+      throw new BadRequestException('Failed to get pipeline runs');
     }
-
-    if (pipelineId) {
-      conditions.push(eq(pipelineRuns.pipelineId, pipelineId));
-    }
-
-    // 获取总数
-    const [{ count: total }] = await this.db.database
-      .select({ count: count() })
-      .from(pipelineRuns)
-      .innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
-      .where(and(...conditions));
-
-    // 获取分页数据
-    const runs = await this.db.database
-      .select({
-        ...pipelineRuns,
-        pipeline: {
-          name: pipelines.name,
-        },
-        triggeredByUser: {
-          name: users.name,
-          email: users.email,
-        },
-      })
-      .from(pipelineRuns)
-      .innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
-      .leftJoin(users, eq(pipelineRuns.triggeredBy, users.id))
-      .where(and(...conditions))
-      .orderBy(desc(pipelineRuns.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    return {
-      runs,
-      total,
-      page,
-      limit,
-    };
   }
 
   /**
-   * 更新流水线执行
+   * 更新流水线运行
    */
   async updatePipelineRun(id: string, data: UpdatePipelineRun): Promise<PipelineRun> {
-    // 验证输入数据
-    const validatedData = updatePipelineRunSchema.parse(data);
+    try {
+      const validatedData = updatePipelineRunSchema.parse(data);
+      
+      const [updatedRun] = await this.db
+        .update(pipelineRuns)
+        .set(validatedData)
+        .where(eq(pipelineRuns.id, id))
+        .returning();
 
-    // 检查流水线执行是否存在
-    await this.getPipelineRunById(id);
+      if (!updatedRun) {
+        throw new NotFoundException(`Pipeline run with ID ${id} not found`);
+      }
 
-    const [updatedPipelineRun] = await this.db.database
-      .update(pipelineRuns)
-      .set({
-        ...validatedData,
-        updatedAt: new Date(),
-      })
-      .where(eq(pipelineRuns.id, id))
-      .returning();
-
-    return updatedPipelineRun;
+      this.logger.log(`Pipeline run updated: ${id}`);
+      return updatedRun;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to update pipeline run ${id}: ${errorMessage}`);
+      throw new BadRequestException('Failed to update pipeline run');
+    }
   }
 
   /**
-   * 开始执行流水线
+   * 开始流水线运行
    */
   async startPipelineRun(id: string): Promise<PipelineRun> {
-    const [updatedPipelineRun] = await this.db.database
-      .update(pipelineRuns)
-      .set({
-        status: 'running',
-        startedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(pipelineRuns.id, id))
-      .returning();
+    try {
+      const [updatedRun] = await this.db
+        .update(pipelineRuns)
+        .set({
+          status: 'running',
+          startedAt: new Date(),
+        })
+        .where(eq(pipelineRuns.id, id))
+        .returning();
 
-    if (!updatedPipelineRun) {
-      throw new NotFoundException('Pipeline run not found');
+      if (!updatedRun) {
+        throw new NotFoundException(`Pipeline run with ID ${id} not found`);
+      }
+
+      this.logger.log(`Pipeline run started: ${id}`);
+      return updatedRun;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to start pipeline run ${id}: ${errorMessage}`);
+      throw new BadRequestException('Failed to start pipeline run');
     }
-
-    return updatedPipelineRun;
   }
 
   /**
-   * 完成流水线执行
+   * 完成流水线运行
    */
   async finishPipelineRun(
     id: string,
-    status: 'success' | 'failure' | 'cancelled',
+    status: 'success' | 'failed' | 'cancelled',
     duration?: number
   ): Promise<PipelineRun> {
-    const finishedAt = new Date();
-    
-    const [updatedPipelineRun] = await this.db.database
-      .update(pipelineRuns)
-      .set({
-        status,
-        finishedAt,
-        duration,
-        updatedAt: new Date(),
-      })
-      .where(eq(pipelineRuns.id, id))
-      .returning();
+    try {
+      const finishedAt = new Date();
+      
+      const [updatedRun] = await this.db
+        .update(pipelineRuns)
+        .set({
+          status,
+          finishedAt,
+          duration,
+        })
+        .where(eq(pipelineRuns.id, id))
+        .returning();
 
-    if (!updatedPipelineRun) {
-      throw new NotFoundException('Pipeline run not found');
+      if (!updatedRun) {
+        throw new NotFoundException(`Pipeline run with ID ${id} not found`);
+      }
+
+      this.logger.log(`Pipeline run finished: ${id} with status ${status}`);
+      return updatedRun;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to finish pipeline run ${id}: ${errorMessage}`);
+      throw new BadRequestException('Failed to finish pipeline run');
     }
-
-    return updatedPipelineRun;
   }
 
   /**
-   * 取消流水线执行
+   * 取消流水线运行
    */
   async cancelPipelineRun(id: string): Promise<PipelineRun> {
     return this.finishPipelineRun(id, 'cancelled');
   }
 
   /**
-   * 重新运行流水线
+   * 重试流水线运行
    */
   async retryPipelineRun(id: string, triggeredBy?: string): Promise<PipelineRun> {
-    const originalRun = await this.getPipelineRunById(id);
+    try {
+      const originalRun = await this.getPipelineRunById(id);
+      
+      const newRunData: NewPipelineRun = {
+        pipelineId: originalRun.pipelineId,
+        triggerType: 'manual',
+        triggerUserId: triggeredBy || originalRun.triggerUserId,
+        triggerSource: 'retry',
+        triggerBranch: originalRun.triggerBranch,
+        triggerCommit: originalRun.triggerCommit,
+        runNumber: originalRun.runNumber + 1000, // Add offset for retry
+        commitHash: originalRun.commitHash,
+        branch: originalRun.branch,
+      };
 
-    // 创建新的执行记录
-    const { id: _, runNumber, createdAt, updatedAt, startedAt, finishedAt, duration, ...runData } = originalRun;
-    
-    const newRun = await this.createPipelineRun({
-      ...runData,
-      triggeredBy: triggeredBy || runData.triggeredBy,
-      status: 'pending',
-    });
-
-    return newRun;
+      const newRun = await this.createPipelineRun(newRunData);
+      this.logger.log(`Pipeline run retried: ${id} -> ${newRun.id}`);
+      return newRun;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to retry pipeline run ${id}: ${errorMessage}`);
+      throw new BadRequestException('Failed to retry pipeline run');
+    }
   }
 
   /**
-   * 获取流水线执行统计
+   * 获取流水线运行统计信息
    */
   async getPipelineRunStats(
     pipelineId?: string,
@@ -358,187 +605,291 @@ export class PipelineRunsService {
     byStatus: Record<string, number>;
     byBranch: Record<string, number>;
   }> {
-    // 构建查询条件
-    const conditions = [];
+    try {
+      const whereConditions = [];
 
-    if (pipelineId) {
-      conditions.push(eq(pipelineRuns.pipelineId, pipelineId));
-    }
-
-    if (projectId) {
-      conditions.push(eq(pipelines.projectId, projectId));
-    }
-
-    if (dateFrom && dateTo) {
-      conditions.push(between(pipelineRuns.createdAt, dateFrom, dateTo));
-    } else if (dateFrom) {
-      conditions.push(gte(pipelineRuns.createdAt, dateFrom));
-    } else if (dateTo) {
-      conditions.push(lte(pipelineRuns.createdAt, dateTo));
-    }
-
-    // 基础统计
-    const query = this.db.database
-      .select({
-        total: count(),
-        success: sql<number>`count(case when ${pipelineRuns.status} = 'success' then 1 end)`,
-        failure: sql<number>`count(case when ${pipelineRuns.status} = 'failure' then 1 end)`,
-        cancelled: sql<number>`count(case when ${pipelineRuns.status} = 'cancelled' then 1 end)`,
-        running: sql<number>`count(case when ${pipelineRuns.status} = 'running' then 1 end)`,
-        pending: sql<number>`count(case when ${pipelineRuns.status} = 'pending' then 1 end)`,
-        avgDuration: sql<number>`avg(${pipelineRuns.duration})`,
-        totalDuration: sql<number>`sum(${pipelineRuns.duration})`,
-      })
-      .from(pipelineRuns);
-
-    if (projectId && !pipelineId) {
-      query.innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id));
-    }
-
-    if (conditions.length > 0) {
-      query.where(and(...conditions));
-    }
-
-    const [stats] = await query;
-
-    // 按状态统计
-    const statusQuery = this.db.database
-      .select({
-        status: pipelineRuns.status,
-        count: count(),
-      })
-      .from(pipelineRuns);
-
-    if (projectId && !pipelineId) {
-      statusQuery.innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id));
-    }
-
-    if (conditions.length > 0) {
-      statusQuery.where(and(...conditions));
-    }
-
-    const statusStats = await statusQuery.groupBy(pipelineRuns.status);
-
-    // 按分支统计
-    const branchQuery = this.db.database
-      .select({
-        branch: pipelineRuns.branch,
-        count: count(),
-      })
-      .from(pipelineRuns);
-
-    if (projectId && !pipelineId) {
-      branchQuery.innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id));
-    }
-
-    if (conditions.length > 0) {
-      branchQuery.where(and(...conditions));
-    }
-
-    const branchStats = await branchQuery
-      .where(sql`${pipelineRuns.branch} IS NOT NULL`)
-      .groupBy(pipelineRuns.branch);
-
-    const byStatus = statusStats.reduce((acc, stat) => {
-      acc[stat.status] = stat.count;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const byBranch = branchStats.reduce((acc, stat) => {
-      if (stat.branch) {
-        acc[stat.branch] = stat.count;
+      if (pipelineId) {
+        whereConditions.push(eq(pipelineRuns.pipelineId, pipelineId));
       }
-      return acc;
-    }, {} as Record<string, number>);
+      if (projectId) {
+        whereConditions.push(eq(pipelines.projectId, projectId));
+      }
+      if (dateFrom) {
+        whereConditions.push(gte(pipelineRuns.createdAt, dateFrom));
+      }
+      if (dateTo) {
+        whereConditions.push(lte(pipelineRuns.createdAt, dateTo));
+      }
 
-    const successRate = stats.total > 0 ? (stats.success / stats.total) * 100 : 0;
+      const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
-    return {
-      total: stats.total,
-      success: stats.success,
-      failure: stats.failure,
-      cancelled: stats.cancelled,
-      running: stats.running,
-      pending: stats.pending,
-      successRate: Number(successRate.toFixed(2)),
-      avgDuration: Number(stats.avgDuration) || 0,
-      totalDuration: Number(stats.totalDuration) || 0,
-      byStatus,
-      byBranch,
-    };
+      // Get basic stats
+      const statsQuery = this.db
+        .select({
+          total: count(),
+          success: count(sql`CASE WHEN ${pipelineRuns.status} = 'success' THEN 1 END`),
+          failure: count(sql`CASE WHEN ${pipelineRuns.status} = 'failed' THEN 1 END`),
+          cancelled: count(sql`CASE WHEN ${pipelineRuns.status} = 'cancelled' THEN 1 END`),
+          running: count(sql`CASE WHEN ${pipelineRuns.status} = 'running' THEN 1 END`),
+          pending: count(sql`CASE WHEN ${pipelineRuns.status} = 'pending' THEN 1 END`),
+          avgDuration: sql<number>`AVG(${pipelineRuns.duration})`,
+          totalDuration: sql<number>`SUM(${pipelineRuns.duration})`,
+        })
+        .from(pipelineRuns);
+
+      if (projectId && !pipelineId) {
+        statsQuery.innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id));
+      }
+
+      if (whereClause) {
+        statsQuery.where(whereClause);
+      }
+
+      const [stats] = await statsQuery;
+
+      // Get status breakdown
+      const statusQuery = this.db
+        .select({
+          status: pipelineRuns.status,
+          count: count(),
+        })
+        .from(pipelineRuns);
+
+      if (projectId && !pipelineId) {
+        statusQuery.innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id));
+      }
+
+      if (whereClause) {
+        statusQuery.where(whereClause);
+      }
+
+      const statusStats = await statusQuery.groupBy(pipelineRuns.status);
+
+      // Get branch breakdown
+      const branchQuery = this.db
+        .select({
+          branch: pipelineRuns.branch,
+          count: count(),
+        })
+        .from(pipelineRuns);
+
+      if (projectId && !pipelineId) {
+        branchQuery.innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id));
+      }
+
+      if (whereClause) {
+        branchQuery.where(whereClause);
+      }
+
+      const branchStats = await branchQuery.groupBy(pipelineRuns.branch);
+
+      const successRate = stats.total > 0 ? (stats.success / stats.total) * 100 : 0;
+
+      return {
+        total: stats.total,
+        success: stats.success,
+        failure: stats.failure,
+        cancelled: stats.cancelled,
+        running: stats.running,
+        pending: stats.pending,
+        successRate: Math.round(successRate * 100) / 100,
+        avgDuration: Math.round((stats.avgDuration || 0) * 100) / 100,
+        totalDuration: stats.totalDuration || 0,
+        byStatus: statusStats.reduce((acc, item) => {
+          if (item.status) {
+            acc[item.status] = item.count;
+          }
+          return acc;
+        }, {} as Record<string, number>),
+        byBranch: branchStats.reduce((acc, item) => {
+          if (item.branch) {
+            acc[item.branch] = item.count;
+          }
+          return acc;
+        }, {} as Record<string, number>),
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get pipeline run stats: ${errorMessage}`);
+      throw new BadRequestException('Failed to get pipeline run stats');
+    }
   }
 
   /**
-   * 批量取消流水线执行
+   * 批量取消流水线运行
    */
   async batchCancelPipelineRuns(runIds: string[]): Promise<PipelineRun[]> {
-    const updatedRuns = await this.db.database
-      .update(pipelineRuns)
-      .set({
-        status: 'cancelled',
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          inArray(pipelineRuns.id, runIds),
-          inArray(pipelineRuns.status, ['pending', 'running'])
-        )
-      )
-      .returning();
+    try {
+      if (runIds.length === 0) {
+        return [];
+      }
 
-    return updatedRuns;
+      const updatedRuns = await this.db
+        .update(pipelineRuns)
+        .set({
+          status: 'cancelled',
+          finishedAt: new Date(),
+        })
+        .where(inArray(pipelineRuns.id, runIds))
+        .returning();
+
+      this.logger.log(`Batch cancelled ${updatedRuns.length} pipeline runs`);
+      return updatedRuns;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to batch cancel pipeline runs: ${errorMessage}`);
+      throw new BadRequestException('Failed to batch cancel pipeline runs');
+    }
   }
 
   /**
-   * 删除流水线执行记录
+   * 删除流水线运行
    */
   async deletePipelineRun(id: string): Promise<void> {
-    // 检查流水线执行是否存在
-    await this.getPipelineRunById(id);
+    try {
+      const result = await this.db
+        .delete(pipelineRuns)
+        .where(eq(pipelineRuns.id, id))
+        .returning({ id: pipelineRuns.id });
 
-    await this.db.database
-      .delete(pipelineRuns)
-      .where(eq(pipelineRuns.id, id));
+      if (!result.length) {
+        throw new NotFoundException(`Pipeline run with ID ${id} not found`);
+      }
+
+      this.logger.log(`Pipeline run deleted: ${id}`);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to delete pipeline run ${id}: ${errorMessage}`);
+      throw new BadRequestException('Failed to delete pipeline run');
+    }
   }
 
   /**
-   * 批量删除流水线执行记录
+   * 批量删除流水线运行
    */
   async batchDeletePipelineRuns(runIds: string[]): Promise<void> {
-    await this.db.database
-      .delete(pipelineRuns)
-      .where(inArray(pipelineRuns.id, runIds));
+    try {
+      if (runIds.length === 0) {
+        return;
+      }
+
+      const result = await this.db
+        .delete(pipelineRuns)
+        .where(inArray(pipelineRuns.id, runIds))
+        .returning({ id: pipelineRuns.id });
+
+      this.logger.log(`Batch deleted ${result.length} pipeline runs`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to batch delete pipeline runs: ${errorMessage}`);
+      throw new BadRequestException('Failed to batch delete pipeline runs');
+    }
   }
 
   /**
-   * 获取最近的流水线执行
+   * 获取最近的流水线运行
    */
   async getRecentPipelineRuns(
     projectId: string,
     limit: number = 10
   ): Promise<(PipelineRun & {
     pipeline?: { name: string };
-    triggeredByUser?: { name: string; email: string };
+    triggerUser?: { name: string; email: string };
   })[]> {
-    const runs = await this.db.database
-      .select({
-        ...pipelineRuns,
-        pipeline: {
-          name: pipelines.name,
-        },
-        triggeredByUser: {
-          name: users.name,
-          email: users.email,
-        },
-      })
-      .from(pipelineRuns)
-      .innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
-      .leftJoin(users, eq(pipelineRuns.triggeredBy, users.id))
-      .where(eq(pipelines.projectId, projectId))
-      .orderBy(desc(pipelineRuns.createdAt))
-      .limit(limit);
+    try {
+      const results = await this.db
+        .select({
+          // Pipeline run fields
+          id: pipelineRuns.id,
+          pipelineId: pipelineRuns.pipelineId,
+          triggerType: pipelineRuns.triggerType,
+          triggerUserId: pipelineRuns.triggerUserId,
+          triggerSource: pipelineRuns.triggerSource,
+          triggerBranch: pipelineRuns.triggerBranch,
+          triggerCommit: pipelineRuns.triggerCommit,
+          runNumber: pipelineRuns.runNumber,
+          commitHash: pipelineRuns.commitHash,
+          branch: pipelineRuns.branch,
+          status: pipelineRuns.status,
+          startedAt: pipelineRuns.startedAt,
+          finishedAt: pipelineRuns.finishedAt,
+          duration: pipelineRuns.duration,
+          computeUnitsUsed: pipelineRuns.computeUnitsUsed,
+          estimatedCost: pipelineRuns.estimatedCost,
+          carbonFootprint: pipelineRuns.carbonFootprint,
+          failurePredictionScore: pipelineRuns.failurePredictionScore,
+          optimizationSuggestion: pipelineRuns.optimizationSuggestion,
+          performanceScore: pipelineRuns.performanceScore,
+          testsTotal: pipelineRuns.testsTotal,
+          testsPassed: pipelineRuns.testsPassed,
+          testsFailed: pipelineRuns.testsFailed,
+          testCoverage: pipelineRuns.testCoverage,
+          vulnerabilitiesCritical: pipelineRuns.vulnerabilitiesCritical,
+          vulnerabilitiesHigh: pipelineRuns.vulnerabilitiesHigh,
+          vulnerabilitiesMedium: pipelineRuns.vulnerabilitiesMedium,
+          vulnerabilitiesLow: pipelineRuns.vulnerabilitiesLow,
+          securityScore: pipelineRuns.securityScore,
+          artifactCount: pipelineRuns.artifactCount,
+          artifactSizeMb: pipelineRuns.artifactSizeMb,
+          createdAt: pipelineRuns.createdAt,
+          // Related data
+          pipelineName: pipelines.name,
+          triggerUserName: users.displayName,
+          triggerUserEmail: users.email,
+        })
+        .from(pipelineRuns)
+        .innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
+        .leftJoin(users, eq(pipelineRuns.triggerUserId, users.id))
+        .where(eq(pipelines.projectId, projectId))
+        .orderBy(desc(pipelineRuns.startedAt))
+        .limit(limit);
 
-    return runs;
+      return results.map(run => ({
+        id: run.id,
+        pipelineId: run.pipelineId,
+        triggerType: run.triggerType,
+        triggerUserId: run.triggerUserId,
+        triggerSource: run.triggerSource,
+        triggerBranch: run.triggerBranch,
+        triggerCommit: run.triggerCommit,
+        runNumber: run.runNumber,
+        commitHash: run.commitHash,
+        branch: run.branch,
+        status: run.status,
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        duration: run.duration,
+        computeUnitsUsed: run.computeUnitsUsed,
+        estimatedCost: run.estimatedCost,
+        carbonFootprint: run.carbonFootprint,
+        failurePredictionScore: run.failurePredictionScore,
+        optimizationSuggestion: run.optimizationSuggestion,
+        performanceScore: run.performanceScore,
+        testsTotal: run.testsTotal,
+        testsPassed: run.testsPassed,
+        testsFailed: run.testsFailed,
+        testCoverage: run.testCoverage,
+        vulnerabilitiesCritical: run.vulnerabilitiesCritical,
+        vulnerabilitiesHigh: run.vulnerabilitiesHigh,
+        vulnerabilitiesMedium: run.vulnerabilitiesMedium,
+        vulnerabilitiesLow: run.vulnerabilitiesLow,
+        securityScore: run.securityScore,
+        artifactCount: run.artifactCount,
+        artifactSizeMb: run.artifactSizeMb,
+        createdAt: run.createdAt,
+        pipeline: run.pipelineName ? { name: run.pipelineName } : undefined,
+        triggerUser: run.triggerUserName && run.triggerUserEmail ? {
+          name: run.triggerUserName,
+          email: run.triggerUserEmail
+        } : undefined,
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get recent pipeline runs for project ${projectId}: ${errorMessage}`);
+      throw new BadRequestException('Failed to get recent pipeline runs');
+    }
   }
 }

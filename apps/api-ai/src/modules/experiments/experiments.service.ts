@@ -1,15 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { eq, and, desc, asc, sql, gte, lte, inArray, like } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
+import { InjectDatabase } from '../../common/decorators/database.decorator';
+import { Database } from '../../database/database.module';
 import { experiments, type Experiment, type NewExperiment, type UpdateExperiment } from '../../database/schemas/experiments.schema';
 
 @Injectable()
 export class ExperimentsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(@InjectDatabase() private readonly db: Database) {}
 
   // 创建实验
   async create(data: NewExperiment): Promise<Experiment> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .insert(experiments)
       .values({
         ...data,
@@ -21,7 +22,7 @@ export class ExperimentsService {
 
   // 根据ID获取实验
   async findById(id: string): Promise<Experiment | null> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .select()
       .from(experiments)
       .where(eq(experiments.id, id))
@@ -31,7 +32,7 @@ export class ExperimentsService {
 
   // 根据项目获取实验列表
   async findByProject(projectId: string, limit = 50, offset = 0): Promise<Experiment[]> {
-    return await this.db.database
+    return await this.db
       .select()
       .from(experiments)
       .where(eq(experiments.projectId, projectId))
@@ -47,7 +48,7 @@ export class ExperimentsService {
       conditions.push(eq(experiments.projectId, projectId));
     }
 
-    return await this.db.database
+    return await this.db
       .select()
       .from(experiments)
       .where(and(...conditions))
@@ -65,7 +66,7 @@ export class ExperimentsService {
       conditions.push(eq(experiments.projectId, projectId));
     }
 
-    return await this.db.database
+    return await this.db
       .select()
       .from(experiments)
       .where(and(...conditions))
@@ -76,7 +77,7 @@ export class ExperimentsService {
 
   // 更新实验
   async update(id: string, data: UpdateExperiment): Promise<Experiment | null> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .update(experiments)
       .set({
         ...data,
@@ -89,7 +90,7 @@ export class ExperimentsService {
 
   // 启动实验
   async start(id: string): Promise<Experiment | null> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .update(experiments)
       .set({
         status: 'running',
@@ -103,7 +104,7 @@ export class ExperimentsService {
 
   // 停止实验
   async stop(id: string, conclusion?: string): Promise<Experiment | null> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .update(experiments)
       .set({
         status: 'stopped',
@@ -123,7 +124,7 @@ export class ExperimentsService {
     statisticalSignificanceAchieved: boolean;
     winnerVariant?: string;
   }): Promise<Experiment | null> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .update(experiments)
       .set({
         status: 'completed',
@@ -142,21 +143,23 @@ export class ExperimentsService {
 
   // 删除实验
   async delete(id: string): Promise<boolean> {
-    const result = await this.db.database
+    const result = await this.db
       .delete(experiments)
       .where(eq(experiments.id, id));
-    return result.rowCount > 0;
+    return (result.count || 0) > 0;
   }
 
   // 批量删除实验
   async batchDelete(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0;
     
-    const result = await this.db.database
+    const result = await this.db
       .delete(experiments)
       .where(inArray(experiments.id, ids));
-    return result.rowCount;
+    return result.count || 0;
   }
+
+
 
   // 获取实验统计信息
   async getExperimentStats(projectId?: string): Promise<{
@@ -171,7 +174,7 @@ export class ExperimentsService {
   }> {
     const conditions = projectId ? [eq(experiments.projectId, projectId)] : [];
 
-    const [stats] = await this.db.database
+    const [stats] = await this.db
       .select({
         totalExperiments: sql<number>`COUNT(*)`,
         runningExperiments: sql<number>`COUNT(CASE WHEN ${experiments.status} = 'running' THEN 1 END)`,
@@ -185,7 +188,7 @@ export class ExperimentsService {
       .where(conditions.length > 0 ? and(...conditions) : undefined);
 
     // 获取状态分布
-    const statusDistribution = await this.db.database
+    const statusDistribution = await this.db
       .select({
         status: experiments.status,
         count: sql<number>`COUNT(*)`,
@@ -345,7 +348,7 @@ export class ExperimentsService {
       conditions.push(eq(experiments.projectId, projectId));
     }
 
-    const results = await this.db.database
+    const results = await this.db
       .select({
         date: sql<string>`DATE(${experiments.createdAt})`,
         experimentsStarted: sql<number>`COUNT(CASE WHEN ${experiments.status} = 'running' THEN 1 END)`,

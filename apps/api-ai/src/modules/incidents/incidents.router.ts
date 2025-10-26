@@ -1,5 +1,6 @@
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { publicProcedure, router } from '../../trpc/trpc';
+import { TrpcService } from '../../trpc/trpc.service';
 import { IncidentsService } from './incidents.service';
 import { 
   insertIncidentSchema,
@@ -94,7 +95,7 @@ const getStatisticsSchema = z.object({
   dateTo: z.date().optional()
 });
 
-// 输出 schemas
+// 响应 schemas
 const incidentListResponseSchema = z.object({
   incidents: z.array(selectIncidentSchema),
   total: z.number()
@@ -133,186 +134,175 @@ const aiRecommendationsSchema = z.object({
   })
 });
 
-export const incidentsRouter = router({
-  // 创建事件
-  create: publicProcedure
-    .input(createIncidentSchema)
-    .output(selectIncidentSchema)
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.createIncident(input);
-    }),
+@Injectable()
+export class IncidentsRouter {
+  public router: any;
 
-  // 根据ID获取事件
-  getById: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .output(selectIncidentSchema.nullable())
-    .query(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.getIncidentById(input.id);
-    }),
+  constructor(
+    private readonly trpc: TrpcService,
+    private readonly incidentsService: IncidentsService,
+  ) {
+    this.router = this.trpc.router({
+      // 创建事件
+      create: this.trpc.publicProcedure
+        .input(createIncidentSchema)
+        .output(selectIncidentSchema)
+        .mutation(async ({ input }) => {
+          return this.incidentsService.createIncident(input);
+        }),
 
-  // 获取项目的事件列表
-  getByProject: publicProcedure
-    .input(getIncidentsByProjectSchema)
-    .output(incidentListResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      const { projectId, ...options } = input;
-      return service.getIncidentsByProject(projectId, options);
-    }),
+      // 根据ID获取事件
+      getById: this.trpc.publicProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .output(selectIncidentSchema.nullable())
+        .query(async ({ input }) => {
+          return this.incidentsService.getIncidentById(input.id);
+        }),
 
-  // 更新事件
-  update: publicProcedure
-    .input(z.object({
-      id: z.string().uuid(),
-      data: updateIncidentSchema
-    }))
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.updateIncident(input.id, input.data);
-    }),
+      // 根据项目获取事件列表
+      getByProject: this.trpc.publicProcedure
+        .input(getIncidentsByProjectSchema)
+        .output(incidentListResponseSchema)
+        .query(async ({ input }) => {
+          return this.incidentsService.getIncidentsByProject(input.projectId, input);
+        }),
 
-  // 确认事件
-  acknowledge: publicProcedure
-    .input(acknowledgeIncidentSchema)
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.acknowledgeIncident(input.id, input.assignedTo);
-    }),
+      // 更新事件
+      update: this.trpc.publicProcedure
+        .input(z.object({
+          id: z.string().uuid(),
+          data: updateIncidentSchema
+        }))
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.updateIncident(input.id, input.data);
+        }),
 
-  // 解决事件
-  resolve: publicProcedure
-    .input(resolveIncidentSchema)
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.resolveIncident(input.id, input.resolutionData);
-    }),
+      // 确认事件
+      acknowledge: this.trpc.publicProcedure
+        .input(acknowledgeIncidentSchema)
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.acknowledgeIncident(input.id, input.assignedTo);
+        }),
 
-  // 关闭事件
-  close: publicProcedure
-    .input(closeIncidentSchema)
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.closeIncident(input.id, input.postIncidentReview);
-    }),
+      // 解决事件
+      resolve: this.trpc.publicProcedure
+        .input(resolveIncidentSchema)
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.resolveIncident(input.id, input.resolutionData);
+        }),
 
-  // 重新打开事件
-  reopen: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.reopenIncident(input.id);
-    }),
+      // 关闭事件
+      close: this.trpc.publicProcedure
+        .input(closeIncidentSchema)
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.closeIncident(input.id, input.postIncidentReview);
+        }),
 
-  // 分配事件
-  assign: publicProcedure
-    .input(assignIncidentSchema)
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.assignIncident(input.id, input.assignedTo);
-    }),
+      // 重新打开事件
+      reopen: this.trpc.publicProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.reopenIncident(input.id);
+        }),
 
-  // 更新事件严重级别
-  updateSeverity: publicProcedure
-    .input(updateSeveritySchema)
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.updateSeverity(input.id, input.severity);
-    }),
+      // 分配事件
+      assign: this.trpc.publicProcedure
+        .input(assignIncidentSchema)
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.assignIncident(input.id, input.assignedTo);
+        }),
 
-  // 更新事件优先级
-  updatePriority: publicProcedure
-    .input(updatePrioritySchema)
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.updatePriority(input.id, input.priority);
-    }),
+      // 更新严重程度
+      updateSeverity: this.trpc.publicProcedure
+        .input(updateSeveritySchema)
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.updateSeverity(input.id, input.severity);
+        }),
 
-  // 添加沟通更新
-  addCommunicationUpdate: publicProcedure
-    .input(addCommunicationUpdateSchema)
-    .output(selectIncidentSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.addCommunicationUpdate(input.id, input.update);
-    }),
+      // 更新优先级
+      updatePriority: this.trpc.publicProcedure
+        .input(updatePrioritySchema)
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.updatePriority(input.id, input.priority);
+        }),
 
-  // 获取事件统计信息
-  getStatistics: publicProcedure
-    .input(getStatisticsSchema)
-    .output(incidentStatisticsSchema)
-    .query(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.getIncidentStatistics(
-        input.projectId,
-        input.dateFrom,
-        input.dateTo
-      );
-    }),
+      // 添加沟通更新
+      addCommunicationUpdate: this.trpc.publicProcedure
+        .input(addCommunicationUpdateSchema)
+        .output(selectIncidentSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.incidentsService.addCommunicationUpdate(input.id, input.update);
+        }),
 
-  // 批量更新事件状态
-  batchUpdateStatus: publicProcedure
-    .input(batchUpdateStatusSchema)
-    .output(z.object({ updatedCount: z.number() }))
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      const updatedCount = await service.batchUpdateStatus(
-        input.incidentIds,
-        input.status,
-        input.assignedTo
-      );
-      return { updatedCount };
-    }),
+      // 获取统计信息
+      getStatistics: this.trpc.publicProcedure
+        .input(getStatisticsSchema)
+        .output(incidentStatisticsSchema)
+        .query(async ({ input }) => {
+          return this.incidentsService.getIncidentStatistics(
+            input.projectId,
+            input.dateFrom,
+            input.dateTo
+          );
+        }),
 
-  // 删除事件
-  delete: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .output(z.object({ success: z.boolean() }))
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      const success = await service.deleteIncident(input.id);
-      return { success };
-    }),
+      // 批量更新状态
+      batchUpdateStatus: this.trpc.publicProcedure
+        .input(batchUpdateStatusSchema)
+        .output(z.object({ updatedCount: z.number() }))
+        .mutation(async ({ input }) => {
+          const updatedCount = await this.incidentsService.batchUpdateStatus(
+            input.incidentIds,
+            input.status,
+            input.assignedTo
+          );
+          return { updatedCount };
+        }),
 
-  // 批量删除事件
-  batchDelete: publicProcedure
-    .input(z.object({ incidentIds: z.array(z.string().uuid()).min(1) }))
-    .output(z.object({ deletedCount: z.number() }))
-    .mutation(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      const deletedCount = await service.batchDeleteIncidents(input.incidentIds);
-      return { deletedCount };
-    }),
+      // 删除事件
+      delete: this.trpc.publicProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .output(z.object({ success: z.boolean() }))
+        .mutation(async ({ input }) => {
+          const success = await this.incidentsService.deleteIncident(input.id);
+          return { success };
+        }),
 
-  // 获取相似事件
-  getSimilarIncidents: publicProcedure
-    .input(z.object({
-      incidentId: z.string().uuid(),
-      limit: z.number().min(1).max(50).default(10)
-    }))
-    .output(z.array(selectIncidentSchema))
-    .query(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.getSimilarIncidents(input.incidentId, input.limit);
-    }),
+      // 批量删除事件
+      batchDelete: this.trpc.publicProcedure
+        .input(z.object({ incidentIds: z.array(z.string().uuid()).min(1) }))
+        .output(z.object({ deletedCount: z.number() }))
+        .mutation(async ({ input }) => {
+          const deletedCount = await this.incidentsService.batchDeleteIncidents(input.incidentIds);
+          return { deletedCount };
+        }),
 
-  // AI 辅助诊断
-  getAIRecommendations: publicProcedure
-    .input(z.object({ incidentId: z.string().uuid() }))
-    .output(aiRecommendationsSchema)
-    .query(async ({ input, ctx }) => {
-      const service = new IncidentsService(ctx.db);
-      return service.getAIRecommendations(input.incidentId);
-    })
-});
+      // 获取相似事件
+      getSimilarIncidents: this.trpc.publicProcedure
+        .input(z.object({
+          incidentId: z.string().uuid(),
+          limit: z.number().min(1).max(50).default(10)
+        }))
+        .output(z.array(selectIncidentSchema))
+        .query(async ({ input }) => {
+          return this.incidentsService.getSimilarIncidents(input.incidentId, input.limit);
+        }),
 
-export type IncidentsRouter = typeof incidentsRouter;
+      // 获取AI推荐
+      getAIRecommendations: this.trpc.publicProcedure
+        .input(z.object({ incidentId: z.string().uuid() }))
+        .output(aiRecommendationsSchema)
+        .query(async ({ input }) => {
+          return this.incidentsService.getAIRecommendations(input.incidentId);
+        })
+    });
+  }
+}

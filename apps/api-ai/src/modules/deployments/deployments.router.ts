@@ -1,5 +1,6 @@
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { publicProcedure, router } from '../../lib/trpc';
+import { TrpcService } from '../../trpc/trpc.service';
 import { DeploymentsService } from './deployments.service';
 import { 
   insertDeploymentSchema, 
@@ -118,7 +119,7 @@ const getEnvironmentUsageSchema = z.object({
   environmentId: z.string().uuid(),
 });
 
-// 输出schemas
+// 响应schemas
 const deploymentWithDetailsSchema = selectDeploymentSchema.extend({
   project: z.object({
     name: z.string(),
@@ -180,250 +181,209 @@ const environmentUsageResponseSchema = z.object({
   lastDeployment: deploymentWithDetailsSchema.optional(),
 });
 
-export const deploymentsRouter = router({
-  /**
-   * 创建部署
-   */
-  create: publicProcedure
-    .input(insertDeploymentSchema)
-    .output(selectDeploymentSchema)
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.createDeployment(input);
-    }),
+@Injectable()
+export class DeploymentsRouter {
+  public router: any;
 
-  /**
-   * 根据ID获取部署
-   */
-  getById: publicProcedure
-    .input(getDeploymentByIdSchema)
-    .output(deploymentWithDetailsSchema)
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.getDeploymentById(input.id);
-    }),
+  constructor(
+    private readonly trpc: TrpcService,
+    private readonly deploymentsService: DeploymentsService,
+  ) {
+    this.router = this.trpc.router({
+      // 创建部署
+      create: this.trpc.publicProcedure
+        .input(insertDeploymentSchema)
+        .output(selectDeploymentSchema)
+        .mutation(async ({ input }) => {
+          return this.deploymentsService.createDeployment(input);
+        }),
 
-  /**
-   * 获取项目的部署列表
-   */
-  getByProject: publicProcedure
-    .input(getDeploymentsByProjectSchema)
-    .output(deploymentListResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.getDeploymentsByProject(input.projectId, {
-        page: input.page,
-        limit: input.limit,
-        status: input.status,
-        environmentId: input.environmentId,
-        deployedBy: input.deployedBy,
-        branch: input.branch,
-        dateFrom: input.dateFrom,
-        dateTo: input.dateTo,
-      });
-    }),
+      // 根据ID获取部署
+      getById: this.trpc.publicProcedure
+        .input(getDeploymentByIdSchema)
+        .output(selectDeploymentSchema.nullable())
+        .query(async ({ input }) => {
+          return this.deploymentsService.getDeploymentById(input.id);
+        }),
 
-  /**
-   * 获取环境的部署列表
-   */
-  getByEnvironment: publicProcedure
-    .input(getDeploymentsByEnvironmentSchema)
-    .output(deploymentListResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.getDeploymentsByEnvironment(input.environmentId, {
-        page: input.page,
-        limit: input.limit,
-        status: input.status,
-        deployedBy: input.deployedBy,
-        branch: input.branch,
-        dateFrom: input.dateFrom,
-        dateTo: input.dateTo,
-      });
-    }),
+      // 根据项目获取部署列表
+      getByProject: this.trpc.publicProcedure
+        .input(getDeploymentsByProjectSchema)
+        .output(deploymentListResponseSchema)
+        .query(async ({ input }) => {
+          return this.deploymentsService.getDeploymentsByProject(
+            input.projectId,
+            {
+              page: input.page,
+              limit: input.limit,
+              status: input.status,
+              environmentId: input.environmentId,
+              deployedBy: input.deployedBy,
+              branch: input.branch,
+              dateFrom: input.dateFrom,
+              dateTo: input.dateTo,
+            }
+          );
+        }),
 
-  /**
-   * 更新部署
-   */
-  update: publicProcedure
-    .input(updateDeploymentParamsSchema)
-    .output(selectDeploymentSchema)
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.updateDeployment(input.id, input.data);
-    }),
+      // 根据环境获取部署列表
+      getByEnvironment: this.trpc.publicProcedure
+        .input(getDeploymentsByEnvironmentSchema)
+        .output(deploymentListResponseSchema)
+        .query(async ({ input }) => {
+          return this.deploymentsService.getDeploymentsByEnvironment(
+            input.environmentId,
+            {
+              page: input.page,
+              limit: input.limit,
+              status: input.status,
+              deployedBy: input.deployedBy,
+              branch: input.branch,
+              dateFrom: input.dateFrom,
+              dateTo: input.dateTo,
+            }
+          );
+        }),
 
-  /**
-   * 开始部署
-   */
-  start: publicProcedure
-    .input(startDeploymentSchema)
-    .output(selectDeploymentSchema)
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.startDeployment(input.id);
-    }),
+      // 更新部署
+      update: this.trpc.publicProcedure
+        .input(updateDeploymentParamsSchema)
+        .output(selectDeploymentSchema)
+        .mutation(async ({ input }) => {
+          return this.deploymentsService.updateDeployment(input.id, input.data);
+        }),
 
-  /**
-   * 完成部署
-   */
-  finish: publicProcedure
-    .input(finishDeploymentSchema)
-    .output(selectDeploymentSchema)
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.finishDeployment(
-        input.id,
-        input.status,
-        input.metrics
-      );
-    }),
+      // 启动部署
+      start: this.trpc.publicProcedure
+        .input(startDeploymentSchema)
+        .output(selectDeploymentSchema)
+        .mutation(async ({ input }) => {
+          return this.deploymentsService.startDeployment(input.id);
+        }),
 
-  /**
-   * 回滚部署
-   */
-  rollback: publicProcedure
-    .input(rollbackDeploymentSchema)
-    .output(selectDeploymentSchema)
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.rollbackDeployment(
-        input.id,
-        input.reason,
-        input.rollbackDuration
-      );
-    }),
+      // 完成部署
+      finish: this.trpc.publicProcedure
+        .input(finishDeploymentSchema)
+        .output(selectDeploymentSchema)
+        .mutation(async ({ input }) => {
+          return this.deploymentsService.finishDeployment(
+            input.id,
+            input.status,
+            input.metrics
+          );
+        }),
 
-  /**
-   * 取消部署
-   */
-  cancel: publicProcedure
-    .input(cancelDeploymentSchema)
-    .output(selectDeploymentSchema)
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.cancelDeployment(input.id);
-    }),
+      // 回滚部署
+      rollback: this.trpc.publicProcedure
+        .input(rollbackDeploymentSchema)
+        .output(selectDeploymentSchema)
+        .mutation(async ({ input }) => {
+          return this.deploymentsService.rollbackDeployment(
+            input.id,
+            input.reason,
+            input.rollbackDuration
+          );
+        }),
 
-  /**
-   * 获取部署统计
-   */
-  getStats: publicProcedure
-    .input(getDeploymentStatsSchema)
-    .output(deploymentStatsResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.getDeploymentStats(
-        input.projectId,
-        input.environmentId,
-        input.dateFrom,
-        input.dateTo
-      );
-    }),
+      // 取消部署
+      cancel: this.trpc.publicProcedure
+        .input(cancelDeploymentSchema)
+        .output(selectDeploymentSchema)
+        .mutation(async ({ input }) => {
+          return this.deploymentsService.cancelDeployment(input.id);
+        }),
 
-  /**
-   * 批量更新部署状态
-   */
-  batchUpdateStatus: publicProcedure
-    .input(batchUpdateDeploymentStatusSchema)
-    .output(z.array(selectDeploymentSchema))
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.batchUpdateDeploymentStatus(
-        input.deploymentIds,
-        input.status
-      );
-    }),
+      // 获取部署统计
+      getStats: this.trpc.publicProcedure
+        .input(getDeploymentStatsSchema)
+        .output(deploymentStatsResponseSchema)
+        .query(async ({ input }) => {
+          return this.deploymentsService.getDeploymentStats(
+            input.projectId,
+            input.environmentId,
+            input.dateFrom,
+            input.dateTo
+          );
+        }),
 
-  /**
-   * 删除部署
-   */
-  delete: publicProcedure
-    .input(deleteDeploymentSchema)
-    .output(z.object({ success: z.boolean() }))
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      await deploymentsService.deleteDeployment(input.id);
-      return { success: true };
-    }),
+      // 批量更新部署状态
+      batchUpdateStatus: this.trpc.procedure
+        .input(batchUpdateDeploymentStatusSchema)
+        .output(z.object({ updatedCount: z.number() }))
+        .mutation(async ({ input }) => {
+          const updatedDeployments = await this.deploymentsService.batchUpdateDeploymentStatus(
+            input.deploymentIds,
+            input.status
+          );
+          return { updatedCount: updatedDeployments.length };
+        }),
 
-  /**
-   * 批量删除部署
-   */
-  batchDelete: publicProcedure
-    .input(batchDeleteDeploymentsSchema)
-    .output(z.object({ success: z.boolean() }))
-    .mutation(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      await deploymentsService.batchDeleteDeployments(input.deploymentIds);
-      return { success: true };
-    }),
+      // 删除部署
+      delete: this.trpc.procedure
+      .input(deleteDeploymentSchema)
+      .output(z.object({ success: z.boolean() }))
+      .mutation(async ({ input }) => {
+        await this.deploymentsService.deleteDeployment(input.id);
+        return { success: true };
+      }),
 
-  /**
-   * 获取最近的部署
-   */
-  getRecent: publicProcedure
-    .input(getRecentDeploymentsSchema)
-    .output(z.array(deploymentWithDetailsSchema))
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.getRecentDeployments(
-        input.projectId,
-        input.limit
-      );
-    }),
+    batchDelete: this.trpc.procedure
+      .input(batchDeleteDeploymentsSchema)
+      .output(z.object({ success: z.boolean() }))
+      .mutation(async ({ input }) => {
+        await this.deploymentsService.batchDeleteDeployments(input.deploymentIds);
+        return { success: true };
+      }),
 
-  /**
-   * 获取活跃的部署
-   */
-  getActive: publicProcedure
-    .input(getActiveDeploymentsSchema)
-    .output(z.array(deploymentWithDetailsSchema))
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.getActiveDeployments(input.projectId);
-    }),
+      // 获取最近部署
+      getRecent: this.trpc.publicProcedure
+        .input(getRecentDeploymentsSchema)
+        .output(z.array(deploymentWithDetailsSchema))
+        .query(async ({ input }) => {
+          return this.deploymentsService.getRecentDeployments(input.projectId, input.limit);
+        }),
 
-  /**
-   * AI风险评估
-   */
-  assessRisk: publicProcedure
-    .input(assessDeploymentRiskSchema)
-    .output(riskAssessmentResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.assessDeploymentRisk(
-        input.projectId,
-        input.environmentId,
-        input.commitHash,
-        input.branch
-      );
-    }),
+      // 获取活跃部署
+      getActive: this.trpc.publicProcedure
+        .input(getActiveDeploymentsSchema)
+        .output(z.array(deploymentWithDetailsSchema))
+        .query(async ({ input }) => {
+          return this.deploymentsService.getActiveDeployments(input.projectId);
+        }),
 
-  /**
-   * AI性能预测
-   */
-  predictPerformance: publicProcedure
-    .input(predictDeploymentPerformanceSchema)
-    .output(performancePredictionResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.predictDeploymentPerformance(
-        input.projectId,
-        input.environmentId
-      );
-    }),
+      // 评估部署风险
+      assessRisk: this.trpc.publicProcedure
+        .input(assessDeploymentRiskSchema)
+        .output(riskAssessmentResponseSchema)
+        .query(async ({ input }) => {
+          return this.deploymentsService.assessDeploymentRisk(
+            input.projectId,
+            input.environmentId,
+            input.commitHash,
+            input.branch
+          );
+        }),
 
-  /**
-   * 获取环境使用情况
-   */
-  getEnvironmentUsage: publicProcedure
-    .input(getEnvironmentUsageSchema)
-    .output(environmentUsageResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const deploymentsService = new DeploymentsService(ctx.db);
-      return await deploymentsService.getEnvironmentUsage(input.environmentId);
-    }),
-});
+      // 预测部署性能
+      predictPerformance: this.trpc.publicProcedure
+        .input(predictDeploymentPerformanceSchema)
+        .output(performancePredictionResponseSchema)
+        .query(async ({ input }) => {
+          return this.deploymentsService.predictDeploymentPerformance(
+            input.projectId,
+            input.environmentId
+          );
+        }),
 
-export type DeploymentsRouter = typeof deploymentsRouter;
+      // 获取环境使用情况
+      getEnvironmentUsage: this.trpc.procedure
+      .input(getEnvironmentUsageSchema)
+      .output(environmentUsageResponseSchema)
+      .query(async ({ input }) => {
+        return this.deploymentsService.getEnvironmentUsage(input.environmentId);
+      }),
+    });
+  }
+}
+
+export type DeploymentsRouterType = typeof DeploymentsRouter;

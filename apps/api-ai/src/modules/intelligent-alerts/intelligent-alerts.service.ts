@@ -1,24 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { eq, and, desc, asc, count, sql, inArray } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
+import { InjectDatabase } from '../../common/decorators/database.decorator';
+import { Database } from '../../database/database.module';
 import { 
   intelligentAlerts, 
-  InsertIntelligentAlert, 
-  SelectIntelligentAlert,
+  NewIntelligentAlert, 
+  IntelligentAlert,
   AlertType,
   AlertSeverity,
   AlertStatus,
-  RootCauseCategory,
-  RemediationActionType
+  RootCauseCategoryEnum
 } from '../../database/schemas/intelligent-alerts.schema';
 
 @Injectable()
 export class IntelligentAlertsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(@InjectDatabase() private readonly db: Database) {}
 
   // 创建智能告警
-  async createAlert(data: InsertIntelligentAlert): Promise<SelectIntelligentAlert> {
-    const [alert] = await this.db.database
+  async createAlert(data: NewIntelligentAlert): Promise<IntelligentAlert> {
+    const [alert] = await this.db
       .insert(intelligentAlerts)
       .values(data)
       .returning();
@@ -26,8 +26,8 @@ export class IntelligentAlertsService {
   }
 
   // 根据ID获取告警
-  async getAlertById(id: string): Promise<SelectIntelligentAlert | null> {
-    const [alert] = await this.db.database
+  async getAlertById(id: string): Promise<IntelligentAlert | null> {
+    const [alert] = await this.db
       .select()
       .from(intelligentAlerts)
       .where(eq(intelligentAlerts.id, id))
@@ -47,7 +47,7 @@ export class IntelligentAlertsService {
       sortBy?: 'createdAt' | 'severity' | 'aiConfidence';
       sortOrder?: 'asc' | 'desc';
     } = {}
-  ): Promise<{ alerts: SelectIntelligentAlert[]; total: number }> {
+  ): Promise<{ alerts: IntelligentAlert[]; total: number }> {
     const {
       status,
       severity,
@@ -58,14 +58,7 @@ export class IntelligentAlertsService {
       sortOrder = 'desc'
     } = options;
 
-    let query = this.db.database.select().from(intelligentAlerts);
-    let countQuery = this.db.database.select({ count: count() }).from(intelligentAlerts);
-
     const conditions = [];
-    
-    // 通过 monitorConfigId 关联到项目（需要 join monitoring_configs 表）
-    // 这里简化处理，假设可以直接通过某种方式关联到项目
-    // 实际实现中可能需要 join monitoring_configs 表
     
     if (status) {
       conditions.push(eq(intelligentAlerts.status, status));
@@ -77,35 +70,40 @@ export class IntelligentAlertsService {
       conditions.push(eq(intelligentAlerts.alertType, alertType));
     }
 
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-      countQuery = countQuery.where(and(...conditions));
-    }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // 排序
-    const orderColumn = intelligentAlerts[sortBy];
-    query = query.orderBy(sortOrder === 'desc' ? desc(orderColumn) : asc(orderColumn));
-
-    // 分页
-    query = query.limit(limit).offset(offset);
+    const sortColumn = sortBy === 'createdAt' ? intelligentAlerts.createdAt :
+                      sortBy === 'severity' ? intelligentAlerts.severity :
+                      intelligentAlerts.aiConfidence;
+    
+    const orderBy = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
     const [alerts, totalResult] = await Promise.all([
-      query,
-      countQuery
+      this.db
+        .select()
+        .from(intelligentAlerts)
+        .where(whereClause)
+        .orderBy(orderBy)
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ count: count() })
+        .from(intelligentAlerts)
+        .where(whereClause)
     ]);
 
     return {
       alerts,
-      total: totalResult[0].count
+      total: totalResult[0]?.count || 0
     };
   }
 
   // 更新告警
   async updateAlert(
     id: string,
-    data: Partial<InsertIntelligentAlert>
-  ): Promise<SelectIntelligentAlert | null> {
-    const [alert] = await this.db.database
+    data: Partial<NewIntelligentAlert>
+  ): Promise<IntelligentAlert | null> {
+    const [alert] = await this.db
       .update(intelligentAlerts)
       .set(data)
       .where(eq(intelligentAlerts.id, id))
@@ -117,8 +115,8 @@ export class IntelligentAlertsService {
   async acknowledgeAlert(
     id: string,
     acknowledgedBy: string
-  ): Promise<SelectIntelligentAlert | null> {
-    const [alert] = await this.db.database
+  ): Promise<IntelligentAlert | null> {
+    const [alert] = await this.db
       .update(intelligentAlerts)
       .set({
         status: 'acknowledged',
@@ -134,8 +132,8 @@ export class IntelligentAlertsService {
   async resolveAlert(
     id: string,
     resolutionNotes?: string
-  ): Promise<SelectIntelligentAlert | null> {
-    const [alert] = await this.db.database
+  ): Promise<IntelligentAlert | null> {
+    const [alert] = await this.db
       .update(intelligentAlerts)
       .set({
         status: 'resolved',
@@ -148,8 +146,8 @@ export class IntelligentAlertsService {
   }
 
   // 升级告警
-  async escalateAlert(id: string): Promise<SelectIntelligentAlert | null> {
-    const [alert] = await this.db.database
+  async escalateAlert(id: string): Promise<IntelligentAlert | null> {
+    const [alert] = await this.db
       .update(intelligentAlerts)
       .set({
         escalated: true,
@@ -161,24 +159,24 @@ export class IntelligentAlertsService {
   }
 
   // 应用自动修复
-  async applyAutoRemediation(id: string): Promise<SelectIntelligentAlert | null> {
+  async applyAutoRemediation(id: string): Promise<IntelligentAlert | null> {
     const alert = await this.getAlertById(id);
     if (!alert || !alert.autoRemediationAvailable) {
       return null;
     }
 
-    const [updatedAlert] = await this.db.database
+    const [updatedAlert] = await this.db
       .update(intelligentAlerts)
       .set({
         autoRemediationApplied: true
       })
       .where(eq(intelligentAlerts.id, id))
       .returning();
-
+    
     return updatedAlert || null;
   }
 
-  // 获取告警统计信息
+  // 获取告警统计
   async getAlertStatistics(projectId?: string): Promise<{
     total: number;
     byStatus: Record<AlertStatus, number>;
@@ -187,54 +185,58 @@ export class IntelligentAlertsService {
     avgResolutionTime: number;
     autoRemediationRate: number;
   }> {
-    let baseQuery = this.db.database.select().from(intelligentAlerts);
-    
-    // 如果指定了项目ID，需要添加过滤条件
-    // 这里简化处理，实际需要通过 monitoring_configs 关联
+    const conditions = projectId ? [eq(intelligentAlerts.monitorConfigId, projectId)] : [];
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [
-      totalResult,
+      totalCount,
       statusStats,
       severityStats,
       typeStats,
       resolutionStats,
       autoRemediationStats
     ] = await Promise.all([
-      this.db.database.select({ count: count() }).from(intelligentAlerts),
-      this.db.database
+      this.db.select({ count: count() }).from(intelligentAlerts).where(whereClause),
+      this.db
         .select({
           status: intelligentAlerts.status,
           count: count()
         })
         .from(intelligentAlerts)
+        .where(whereClause)
         .groupBy(intelligentAlerts.status),
-      this.db.database
+      this.db
         .select({
           severity: intelligentAlerts.severity,
           count: count()
         })
         .from(intelligentAlerts)
+        .where(whereClause)
         .groupBy(intelligentAlerts.severity),
-      this.db.database
+      this.db
         .select({
           alertType: intelligentAlerts.alertType,
           count: count()
         })
         .from(intelligentAlerts)
+        .where(whereClause)
         .groupBy(intelligentAlerts.alertType),
-      this.db.database
+      this.db
         .select({
           avgTime: sql<number>`AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)))`
         })
         .from(intelligentAlerts)
-        .where(eq(intelligentAlerts.status, 'resolved')),
-      this.db.database
+        .where(and(
+          whereClause,
+          eq(intelligentAlerts.status, 'resolved')
+        )),
+      this.db
         .select({
           total: count(),
-          autoApplied: sql<number>`COUNT(CASE WHEN auto_remediation_applied = true THEN 1 END)`
+          autoRemediated: count(intelligentAlerts.autoRemediationApplied)
         })
         .from(intelligentAlerts)
-        .where(eq(intelligentAlerts.autoRemediationAvailable, true))
+        .where(whereClause)
     ]);
 
     const byStatus = {} as Record<AlertStatus, number>;
@@ -242,32 +244,40 @@ export class IntelligentAlertsService {
     const byType = {} as Record<AlertType, number>;
 
     statusStats.forEach(stat => {
-      byStatus[stat.status] = stat.count;
+      if (stat.status) {
+        byStatus[stat.status] = stat.count;
+      }
     });
 
     severityStats.forEach(stat => {
-      bySeverity[stat.severity] = stat.count;
+      if (stat.severity) {
+        bySeverity[stat.severity] = stat.count;
+      }
     });
 
     typeStats.forEach(stat => {
-      byType[stat.alertType] = stat.count;
+      if (stat.alertType) {
+        byType[stat.alertType] = stat.count;
+      }
     });
 
-    const autoRemediationRate = autoRemediationStats[0]?.total > 0 
-      ? (autoRemediationStats[0].autoApplied / autoRemediationStats[0].total) * 100 
+    const total = totalCount[0]?.count || 0;
+    const avgResolutionTime = resolutionStats[0]?.avgTime || 0;
+    const autoRemediationRate = total > 0 
+      ? (autoRemediationStats[0]?.autoRemediated || 0) / total 
       : 0;
 
     return {
-      total: totalResult[0].count,
+      total,
       byStatus,
       bySeverity,
       byType,
-      avgResolutionTime: resolutionStats[0]?.avgTime || 0,
+      avgResolutionTime,
       autoRemediationRate
     };
   }
 
-  // 批量更新告警状态
+  // 批量更新状态
   async batchUpdateStatus(
     alertIds: string[],
     status: AlertStatus,
@@ -282,106 +292,96 @@ export class IntelligentAlertsService {
       updateData.resolvedAt = new Date();
     }
 
-    const result = await this.db.database
+    await this.db
       .update(intelligentAlerts)
       .set(updateData)
       .where(inArray(intelligentAlerts.id, alertIds));
-
-    return result.rowCount || 0;
+    
+    return alertIds.length;
   }
 
   // 删除告警
   async deleteAlert(id: string): Promise<boolean> {
-    const result = await this.db.database
+    await this.db
       .delete(intelligentAlerts)
       .where(eq(intelligentAlerts.id, id));
-    return (result.rowCount || 0) > 0;
+    return true;
   }
 
   // 批量删除告警
   async batchDeleteAlerts(alertIds: string[]): Promise<number> {
-    const result = await this.db.database
+    await this.db
       .delete(intelligentAlerts)
       .where(inArray(intelligentAlerts.id, alertIds));
-    return result.rowCount || 0;
+    return alertIds.length;
   }
 
   // 获取相关告警
   async getRelatedAlerts(
     alertId: string,
     limit: number = 10
-  ): Promise<SelectIntelligentAlert[]> {
+  ): Promise<IntelligentAlert[]> {
     const alert = await this.getAlertById(alertId);
-    if (!alert) return [];
+    if (!alert) {
+      return [];
+    }
 
-    // 基于根因类别和组件查找相关告警
-    const relatedAlerts = await this.db.database
+    const relatedAlerts = await this.db
       .select()
       .from(intelligentAlerts)
       .where(
         and(
-          eq(intelligentAlerts.rootCauseCategory, alert.rootCauseCategory),
-          eq(intelligentAlerts.rootCauseComponent, alert.rootCauseComponent),
-          sql`${intelligentAlerts.id} != ${alertId}`
+          eq(intelligentAlerts.rootCauseComponent, alert.rootCauseComponent || ''),
+          eq(intelligentAlerts.severity, alert.severity)
         )
       )
-      .orderBy(desc(intelligentAlerts.correlationStrength))
       .limit(limit);
 
     return relatedAlerts;
   }
 
-  // AI 根因分析
+  // 执行根因分析
   async performRootCauseAnalysis(alertId: string): Promise<{
-    category: RootCauseCategory;
+    category: 'performance' | 'availability' | 'security' | 'capacity' | 'configuration';
     component: string;
     description: string;
     confidence: number;
     suggestedActions: string[];
   }> {
-    // 这里应该调用 AI 服务进行根因分析
-    // 暂时返回模拟数据
     const alert = await this.getAlertById(alertId);
     if (!alert) {
       throw new Error('Alert not found');
     }
 
-    // 模拟 AI 分析结果
+    // 这里应该集成AI分析逻辑
+    const category = (alert.rootCauseCategory as 'performance' | 'availability' | 'security' | 'capacity' | 'configuration') || 'performance';
+    
     return {
-      category: 'infrastructure',
-      component: 'database',
-      description: 'High database connection pool usage detected',
-      confidence: 0.85,
-      suggestedActions: [
-        'Increase database connection pool size',
-        'Optimize slow queries',
-        'Consider database scaling'
-      ]
+      category,
+      component: alert.rootCauseComponent || 'unknown',
+      description: alert.rootCauseDescription || 'No description available',
+      confidence: Number(alert.aiConfidence) || 0,
+      suggestedActions: []
     };
   }
 
-  // 预测性告警分析
+  // 生成预测性告警
   async generatePredictiveAlert(
     monitorConfigId: string,
     predictionHorizon: number
-  ): Promise<SelectIntelligentAlert | null> {
-    // 这里应该调用 AI 服务进行预测分析
-    // 暂时返回模拟的预测性告警
-    const predictiveAlert: InsertIntelligentAlert = {
+  ): Promise<IntelligentAlert | null> {
+    // 这里应该集成预测分析逻辑
+    const alertData: NewIntelligentAlert = {
       monitorConfigId,
-      alertType: 'predictive',
+      alertType: 'prediction',
       severity: 'warning',
-      title: 'Predicted Performance Degradation',
-      description: 'AI model predicts potential performance issues in the next 2 hours',
-      aiConfidence: 0.78,
+      title: 'Predicted Issue',
+      description: 'System analysis predicts potential issue',
+      aiConfidence: '0.75',
       predictionHorizon,
-      probabilityScore: 0.65,
-      status: 'active',
-      impactLevel: 'medium',
-      affectedServices: ['api-service', 'database'],
-      estimatedDowntime: 15
+      probabilityScore: '0.80'
     };
 
-    return this.createAlert(predictiveAlert);
+    return this.createAlert(alertData);
   }
 }

@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import { eq, and, desc, asc, count, sql, inArray, gte, lte } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { eq, and, desc, asc, count, sql, gte, lte, inArray, like, isNull } from 'drizzle-orm';
+import { InjectDatabase } from '../../common/decorators/database.decorator';
+import { Database } from '../../database/database.module';
 import { 
   incidents, 
   insertIncidentSchema,
@@ -22,11 +23,11 @@ type IncidentCategory = typeof IncidentCategoryEnum[number];
 
 @Injectable()
 export class IncidentsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(@InjectDatabase() private readonly db: Database) {}
 
   // 创建事件
   async createIncident(data: NewIncident): Promise<Incident> {
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .insert(incidents)
       .values({
         ...data,
@@ -38,7 +39,7 @@ export class IncidentsService {
 
   // 根据ID获取事件
   async getIncidentById(id: string): Promise<Incident | null> {
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .select()
       .from(incidents)
       .where(eq(incidents.id, id))
@@ -79,8 +80,8 @@ export class IncidentsService {
       sortOrder = 'desc'
     } = options;
 
-    let query = this.db.database.select().from(incidents);
-    let countQuery = this.db.database.select({ count: count() }).from(incidents);
+    let query = this.db.select().from(incidents);
+    let countQuery = this.db.select({ count: count() }).from(incidents);
 
     const conditions = [eq(incidents.projectId, projectId)];
     
@@ -110,26 +111,44 @@ export class IncidentsService {
     }
 
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-      countQuery = countQuery.where(and(...conditions));
+      const whereClause = and(...conditions);
+      const filteredQuery = query.where(whereClause);
+      const filteredCountQuery = countQuery.where(whereClause);
+      
+      // 排序
+      const orderColumn = incidents[sortBy];
+      const orderedQuery = filteredQuery.orderBy(sortOrder === 'desc' ? desc(orderColumn) : asc(orderColumn));
+
+      // 分页
+      const finalQuery = orderedQuery.limit(limit).offset(offset);
+
+      const [incidentList, totalResult] = await Promise.all([
+        finalQuery.execute(),
+        filteredCountQuery.execute()
+      ]);
+
+      return {
+        incidents: incidentList,
+        total: totalResult[0].count
+      };
+    } else {
+      // 排序
+      const orderColumn = incidents[sortBy];
+      const orderedQuery = query.orderBy(sortOrder === 'desc' ? desc(orderColumn) : asc(orderColumn));
+
+      // 分页
+      const finalQuery = orderedQuery.limit(limit).offset(offset);
+
+      const [incidentList, totalResult] = await Promise.all([
+        finalQuery.execute(),
+        countQuery.execute()
+      ]);
+
+      return {
+        incidents: incidentList,
+        total: totalResult[0].count
+      };
     }
-
-    // 排序
-    const orderColumn = incidents[sortBy];
-    query = query.orderBy(sortOrder === 'desc' ? desc(orderColumn) : asc(orderColumn));
-
-    // 分页
-    query = query.limit(limit).offset(offset);
-
-    const [incidentList, totalResult] = await Promise.all([
-      query,
-      countQuery
-    ]);
-
-    return {
-      incidents: incidentList,
-      total: totalResult[0].count
-    };
   }
 
   // 更新事件
@@ -137,7 +156,7 @@ export class IncidentsService {
     id: string,
     data: UpdateIncident
   ): Promise<Incident | null> {
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .update(incidents)
       .set({
         ...data,
@@ -154,7 +173,7 @@ export class IncidentsService {
     assignedTo?: string
   ): Promise<Incident | null> {
     const updateData: any = {
-      status: 'investigating' as IncidentStatus,
+      status: 'investigating',
       acknowledgedAt: new Date(),
       updatedAt: new Date()
     };
@@ -163,7 +182,7 @@ export class IncidentsService {
       updateData.assignedTo = assignedTo;
     }
 
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .update(incidents)
       .set(updateData)
       .where(eq(incidents.id, id))
@@ -192,7 +211,7 @@ export class IncidentsService {
       updateData.rootCauseAnalysis = resolutionData.rootCauseAnalysis;
     }
 
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .update(incidents)
       .set(updateData)
       .where(eq(incidents.id, id))
@@ -215,7 +234,7 @@ export class IncidentsService {
       updateData.postIncidentReview = postIncidentReview;
     }
 
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .update(incidents)
       .set(updateData)
       .where(eq(incidents.id, id))
@@ -225,7 +244,7 @@ export class IncidentsService {
 
   // 重新打开事件
   async reopenIncident(id: string): Promise<Incident | null> {
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .update(incidents)
       .set({
         status: 'open' as IncidentStatus,
@@ -243,7 +262,7 @@ export class IncidentsService {
     id: string,
     assignedTo: string
   ): Promise<Incident | null> {
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .update(incidents)
       .set({
         assignedTo,
@@ -259,7 +278,7 @@ export class IncidentsService {
     id: string,
     severity: IncidentSeverity
   ): Promise<Incident | null> {
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .update(incidents)
       .set({
         severity,
@@ -275,7 +294,7 @@ export class IncidentsService {
     id: string,
     priority: IncidentPriority
   ): Promise<Incident | null> {
-    const [incident] = await this.db.database
+    const [incident] = await this.db
       .update(incidents)
       .set({
         priority,
@@ -342,7 +361,7 @@ export class IncidentsService {
         break;
     }
 
-    const [updatedIncident] = await this.db.database
+    const [updatedIncident] = await this.db
       .update(incidents)
       .set({
         communicationUpdates: updatedCommunications,
@@ -394,35 +413,39 @@ export class IncidentsService {
       resolutionStats,
       slaStats
     ] = await Promise.all([
-      this.db.database
+      this.db
         .select({ count: count() })
         .from(incidents)
-        .where(whereClause),
-      this.db.database
+        .where(whereClause)
+        .execute(),
+      this.db
         .select({
           status: incidents.status,
           count: count()
         })
         .from(incidents)
         .where(whereClause)
-        .groupBy(incidents.status),
-      this.db.database
+        .groupBy(incidents.status)
+        .execute(),
+      this.db
         .select({
           severity: incidents.severity,
           count: count()
         })
         .from(incidents)
         .where(whereClause)
-        .groupBy(incidents.severity),
-      this.db.database
+        .groupBy(incidents.severity)
+        .execute(),
+      this.db
         .select({
           category: incidents.category,
           count: count()
         })
         .from(incidents)
         .where(whereClause)
-        .groupBy(incidents.category),
-      this.db.database
+        .groupBy(incidents.category)
+        .execute(),
+      this.db
         .select({
           avgTime: sql<number>`AVG(EXTRACT(EPOCH FROM (resolved_at - reported_at)))`
         })
@@ -431,14 +454,16 @@ export class IncidentsService {
           whereClause 
             ? and(whereClause, eq(incidents.status, 'resolved'))
             : eq(incidents.status, 'resolved')
-        ),
-      this.db.database
+        )
+        .execute(),
+      this.db
         .select({
           total: count(),
           compliant: sql<number>`COUNT(CASE WHEN (metrics_sla->>'slaCompliance')::jsonb->>'breached' = 'false' THEN 1 END)`
         })
         .from(incidents)
         .where(whereClause)
+        .execute()
     ]);
 
     const byStatus = {} as Record<IncidentStatus, number>;
@@ -487,45 +512,38 @@ export class IncidentsService {
     status: IncidentStatus,
     assignedTo?: string
   ): Promise<number> {
-    const updateData: any = { 
-      status,
-      updatedAt: new Date()
-    };
-    
-    if (status === 'investigating') {
-      updateData.acknowledgedAt = new Date();
-    } else if (status === 'resolved') {
-      updateData.resolvedAt = new Date();
-    } else if (status === 'closed') {
-      updateData.closedAt = new Date();
-    }
-
+    const updateData: Partial<UpdateIncident> = { status };
     if (assignedTo) {
       updateData.assignedTo = assignedTo;
     }
 
-    const result = await this.db.database
+    const result = await this.db
       .update(incidents)
       .set(updateData)
       .where(inArray(incidents.id, incidentIds));
 
-    return result.rowCount || 0;
+    // postgres.js 返回的结果有 count 属性，表示受影响的行数
+    return result.count || 0;
   }
 
   // 删除事件
   async deleteIncident(id: string): Promise<boolean> {
-    const result = await this.db.database
+    const result = await this.db
       .delete(incidents)
       .where(eq(incidents.id, id));
-    return (result.rowCount || 0) > 0;
+    
+    // postgres.js 返回的结果有 count 属性，表示受影响的行数
+    return (result.count || 0) > 0;
   }
 
   // 批量删除事件
   async batchDeleteIncidents(incidentIds: string[]): Promise<number> {
-    const result = await this.db.database
+    const result = await this.db
       .delete(incidents)
       .where(inArray(incidents.id, incidentIds));
-    return result.rowCount || 0;
+    
+    // postgres.js 返回的结果有 count 属性，表示受影响的行数
+    return result.count || 0;
   }
 
   // 获取相似事件
@@ -537,7 +555,7 @@ export class IncidentsService {
     if (!incident) return [];
 
     // 基于分类、严重级别和关键词查找相似事件
-    const similarIncidents = await this.db.database
+    const similarIncidents = await this.db
       .select()
       .from(incidents)
       .where(

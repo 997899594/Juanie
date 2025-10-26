@@ -1,5 +1,6 @@
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { publicProcedure, router } from '../../lib/trpc';
+import { TrpcService } from '../../trpc/trpc.service';
 import { PipelineRunsService } from './pipeline-runs.service';
 import { 
   insertPipelineRunSchema, 
@@ -16,7 +17,7 @@ const getPipelineRunsByPipelineSchema = z.object({
   pipelineId: z.string().uuid(),
   page: z.number().int().positive().optional().default(1),
   limit: z.number().int().positive().max(100).optional().default(20),
-  status: z.enum(['pending', 'running', 'success', 'failure', 'cancelled']).optional(),
+  status: z.enum(['pending', 'running', 'success', 'failed', 'cancelled']).optional(),
   branch: z.string().optional(),
   triggeredBy: z.string().uuid().optional(),
   dateFrom: z.date().optional(),
@@ -27,7 +28,7 @@ const getPipelineRunsByProjectSchema = z.object({
   projectId: z.string().uuid(),
   page: z.number().int().positive().optional().default(1),
   limit: z.number().int().positive().max(100).optional().default(20),
-  status: z.enum(['pending', 'running', 'success', 'failure', 'cancelled']).optional(),
+  status: z.enum(['pending', 'running', 'success', 'failed', 'cancelled']).optional(),
   pipelineId: z.string().uuid().optional(),
 });
 
@@ -42,7 +43,7 @@ const startPipelineRunSchema = z.object({
 
 const finishPipelineRunSchema = z.object({
   id: z.string().uuid(),
-  status: z.enum(['success', 'failure', 'cancelled']),
+  status: z.enum(['success', 'failed', 'cancelled']),
   duration: z.number().int().positive().optional(),
 });
 
@@ -112,187 +113,145 @@ const pipelineRunStatsResponseSchema = z.object({
   byBranch: z.record(z.string(), z.number()),
 });
 
-export const pipelineRunsRouter = router({
-  /**
-   * 创建流水线执行
-   */
-  create: publicProcedure
-    .input(insertPipelineRunSchema)
-    .output(selectPipelineRunSchema)
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.createPipelineRun(input);
-    }),
+@Injectable()
+export class PipelineRunsRouter {
+  constructor(
+    private readonly trpc: TrpcService,
+    private readonly pipelineRunsService: PipelineRunsService,
+  ) {}
 
-  /**
-   * 根据ID获取流水线执行
-   */
-  getById: publicProcedure
-    .input(getPipelineRunByIdSchema)
-    .output(pipelineRunWithDetailsSchema)
-    .query(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.getPipelineRunById(input.id);
-    }),
+  public get pipelineRunsRouter() {
+    return this.trpc.router({
+      // 创建流水线运行
+      create: this.trpc.publicProcedure
+        .input(insertPipelineRunSchema)
+        .output(selectPipelineRunSchema)
+        .mutation(async ({ input }) => {
+          return this.pipelineRunsService.createPipelineRun(input);
+        }),
 
-  /**
-   * 获取流水线的执行列表
-   */
-  getByPipeline: publicProcedure
-    .input(getPipelineRunsByPipelineSchema)
-    .output(pipelineRunListResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.getPipelineRunsByPipeline(input.pipelineId, {
-        page: input.page,
-        limit: input.limit,
-        status: input.status,
-        branch: input.branch,
-        triggeredBy: input.triggeredBy,
-        dateFrom: input.dateFrom,
-        dateTo: input.dateTo,
-      });
-    }),
+      // 根据ID获取流水线运行
+      getById: this.trpc.publicProcedure
+        .input(getPipelineRunByIdSchema)
+        .output(pipelineRunWithDetailsSchema)
+        .query(async ({ input }) => {
+          return this.pipelineRunsService.getPipelineRunById(input.id);
+        }),
 
-  /**
-   * 获取项目的流水线执行列表
-   */
-  getByProject: publicProcedure
-    .input(getPipelineRunsByProjectSchema)
-    .output(pipelineRunListResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.getPipelineRunsByProject(input.projectId, {
-        page: input.page,
-        limit: input.limit,
-        status: input.status,
-        pipelineId: input.pipelineId,
-      });
-    }),
+      // 根据流水线获取运行列表
+      getByPipeline: this.trpc.publicProcedure
+        .input(getPipelineRunsByPipelineSchema)
+        .output(pipelineRunListResponseSchema)
+        .query(async ({ input }) => {
+          const { pipelineId, page, limit, ...filters } = input;
+          return this.pipelineRunsService.getPipelineRunsByPipeline(
+            pipelineId,
+            { page, limit, ...filters }
+          );
+        }),
 
-  /**
-   * 更新流水线执行
-   */
-  update: publicProcedure
-    .input(updatePipelineRunParamsSchema)
-    .output(selectPipelineRunSchema)
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.updatePipelineRun(input.id, input.data);
-    }),
+      // 根据项目获取运行列表
+      getByProject: this.trpc.publicProcedure
+        .input(getPipelineRunsByProjectSchema)
+        .output(pipelineRunListResponseSchema)
+        .query(async ({ input }) => {
+          const { projectId, page, limit, ...filters } = input;
+          return this.pipelineRunsService.getPipelineRunsByProject(
+            projectId,
+            { page, limit, ...filters }
+          );
+        }),
 
-  /**
-   * 开始执行流水线
-   */
-  start: publicProcedure
-    .input(startPipelineRunSchema)
-    .output(selectPipelineRunSchema)
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.startPipelineRun(input.id);
-    }),
+      // 更新流水线运行
+      update: this.trpc.publicProcedure
+        .input(updatePipelineRunParamsSchema)
+        .output(selectPipelineRunSchema)
+        .mutation(async ({ input }) => {
+          return this.pipelineRunsService.updatePipelineRun(input.id, input.data);
+        }),
 
-  /**
-   * 完成流水线执行
-   */
-  finish: publicProcedure
-    .input(finishPipelineRunSchema)
-    .output(selectPipelineRunSchema)
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.finishPipelineRun(
-        input.id,
-        input.status,
-        input.duration
-      );
-    }),
+      // 开始流水线运行
+      start: this.trpc.publicProcedure
+        .input(startPipelineRunSchema)
+        .output(selectPipelineRunSchema)
+        .mutation(async ({ input }) => {
+          return this.pipelineRunsService.startPipelineRun(input.id);
+        }),
 
-  /**
-   * 取消流水线执行
-   */
-  cancel: publicProcedure
-    .input(cancelPipelineRunSchema)
-    .output(selectPipelineRunSchema)
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.cancelPipelineRun(input.id);
-    }),
+      // 完成流水线运行
+      finish: this.trpc.publicProcedure
+        .input(finishPipelineRunSchema)
+        .output(selectPipelineRunSchema)
+        .mutation(async ({ input }) => {
+          return this.pipelineRunsService.finishPipelineRun(
+            input.id,
+            input.status,
+            input.duration
+          );
+        }),
 
-  /**
-   * 重新运行流水线
-   */
-  retry: publicProcedure
-    .input(retryPipelineRunSchema)
-    .output(selectPipelineRunSchema)
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.retryPipelineRun(input.id, input.triggeredBy);
-    }),
+      // 取消流水线运行
+      cancel: this.trpc.publicProcedure
+        .input(cancelPipelineRunSchema)
+        .output(selectPipelineRunSchema)
+        .mutation(async ({ input }) => {
+          return this.pipelineRunsService.cancelPipelineRun(input.id);
+        }),
 
-  /**
-   * 获取流水线执行统计
-   */
-  getStats: publicProcedure
-    .input(getPipelineRunStatsSchema)
-    .output(pipelineRunStatsResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.getPipelineRunStats(
-        input.pipelineId,
-        input.projectId,
-        input.dateFrom,
-        input.dateTo
-      );
-    }),
+      // 重试流水线运行
+      retry: this.trpc.publicProcedure
+        .input(retryPipelineRunSchema)
+        .output(selectPipelineRunSchema)
+        .mutation(async ({ input }) => {
+          return this.pipelineRunsService.retryPipelineRun(input.id, input.triggeredBy);
+        }),
 
-  /**
-   * 批量取消流水线执行
-   */
-  batchCancel: publicProcedure
-    .input(batchCancelPipelineRunsSchema)
-    .output(z.array(selectPipelineRunSchema))
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.batchCancelPipelineRuns(input.runIds);
-    }),
+      // 获取流水线运行统计
+      getStats: this.trpc.publicProcedure
+        .input(getPipelineRunStatsSchema)
+        .output(pipelineRunStatsResponseSchema)
+        .query(async ({ input }) => {
+          return this.pipelineRunsService.getPipelineRunStats(
+            input.pipelineId,
+            input.projectId,
+            input.dateFrom,
+            input.dateTo
+          );
+        }),
 
-  /**
-   * 删除流水线执行记录
-   */
-  delete: publicProcedure
-    .input(deletePipelineRunSchema)
-    .output(z.object({ success: z.boolean() }))
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      await pipelineRunsService.deletePipelineRun(input.id);
-      return { success: true };
-    }),
+      // 批量取消流水线运行
+      batchCancel: this.trpc.publicProcedure
+        .input(batchCancelPipelineRunsSchema)
+        .output(z.array(selectPipelineRunSchema))
+        .mutation(async ({ input }) => {
+          return this.pipelineRunsService.batchCancelPipelineRuns(input.runIds);
+        }),
 
-  /**
-   * 批量删除流水线执行记录
-   */
-  batchDelete: publicProcedure
-    .input(batchDeletePipelineRunsSchema)
-    .output(z.object({ success: z.boolean() }))
-    .mutation(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      await pipelineRunsService.batchDeletePipelineRuns(input.runIds);
-      return { success: true };
-    }),
+      // 删除流水线运行
+      delete: this.trpc.publicProcedure
+        .input(deletePipelineRunSchema)
+        .output(z.object({ success: z.boolean() }))
+        .mutation(async ({ input }) => {
+          await this.pipelineRunsService.deletePipelineRun(input.id);
+          return { success: true };
+        }),
 
-  /**
-   * 获取最近的流水线执行
-   */
-  getRecent: publicProcedure
-    .input(getRecentPipelineRunsSchema)
-    .output(z.array(pipelineRunWithDetailsSchema))
-    .query(async ({ input, ctx }) => {
-      const pipelineRunsService = new PipelineRunsService(ctx.db);
-      return await pipelineRunsService.getRecentPipelineRuns(
-        input.projectId,
-        input.limit
-      );
-    }),
-});
+      // 批量删除流水线运行
+      batchDelete: this.trpc.publicProcedure
+        .input(batchDeletePipelineRunsSchema)
+        .output(z.object({ success: z.boolean() }))
+        .mutation(async ({ input }) => {
+          await this.pipelineRunsService.batchDeletePipelineRuns(input.runIds);
+          return { success: true };
+        }),
 
-export type PipelineRunsRouter = typeof pipelineRunsRouter;
+      // 获取最近的流水线运行
+      getRecent: this.trpc.publicProcedure
+        .input(getRecentPipelineRunsSchema)
+        .output(z.array(pipelineRunWithDetailsSchema))
+        .query(async ({ input }) => {
+          return this.pipelineRunsService.getRecentPipelineRuns(input.projectId, input.limit);
+        }),
+    });
+  }
+}

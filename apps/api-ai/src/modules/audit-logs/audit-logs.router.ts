@@ -89,9 +89,8 @@ export class AuditLogsRouter {
       total: z.number()
     }))
     .query(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
       const { projectId, ...options } = input;
-      return await auditLogsService.getByProject(projectId, options);
+      return await this.auditLogsService.getByProject(projectId, options);
     }),
 
   // 根据用户ID获取审计日志
@@ -116,9 +115,8 @@ export class AuditLogsRouter {
       total: z.number()
     }))
     .query(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
       const { userId, ...options } = input;
-      return await auditLogsService.getByUser(userId, options);
+      return await this.auditLogsService.getByUser(userId, options);
     }),
 
   // 根据关联ID获取审计日志
@@ -128,8 +126,7 @@ export class AuditLogsRouter {
     }))
     .output(z.array(selectAuditLogSchema))
     .query(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
-      return await auditLogsService.getByCorrelationId(input.correlationId);
+      return await this.auditLogsService.getByCorrelationId(input.correlationId);
     }),
 
   // 根据请求ID获取审计日志
@@ -139,8 +136,7 @@ export class AuditLogsRouter {
     }))
     .output(z.array(selectAuditLogSchema))
     .query(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
-      return await auditLogsService.getByRequestId(input.requestId);
+      return await this.auditLogsService.getByRequestId(input.requestId);
     }),
 
   // 根据资源获取审计日志
@@ -165,9 +161,8 @@ export class AuditLogsRouter {
       total: z.number()
     }))
     .query(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
       const { resourceType, resourceId, ...options } = input;
-      return await auditLogsService.getByResource(resourceType, resourceId, options);
+      return await this.auditLogsService.getByResource(resourceType, resourceId, options);
     }),
 
   // 更新审计日志
@@ -178,8 +173,7 @@ export class AuditLogsRouter {
     }))
     .output(selectAuditLogSchema.nullable())
     .mutation(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
-      return await auditLogsService.update(input.id, input.data);
+      return await this.auditLogsService.update(input.id, input.data);
     }),
 
   // 删除审计日志
@@ -189,8 +183,7 @@ export class AuditLogsRouter {
     }))
     .output(z.boolean())
     .mutation(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
-      return await auditLogsService.delete(input.id);
+      return await this.auditLogsService.delete(input.id);
     }),
 
   // 批量删除审计日志
@@ -200,8 +193,7 @@ export class AuditLogsRouter {
     }))
     .output(z.number())
     .mutation(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
-      return await auditLogsService.deleteMany(input.ids);
+      return await this.auditLogsService.deleteMany(input.ids);
     }),
 
   // 清理旧的审计日志
@@ -212,8 +204,7 @@ export class AuditLogsRouter {
     }))
     .output(z.number())
     .mutation(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
-      return await auditLogsService.cleanupOldLogs(input.organizationId, input.retentionDays);
+      return await this.auditLogsService.cleanupOldLogs(input.organizationId, input.retentionDays); 
     }),
 
   // 获取审计日志统计信息
@@ -239,8 +230,7 @@ export class AuditLogsRouter {
       }))
     }))
     .query(async ({ input, ctx }) => {
-      const auditLogsService = new AuditLogsService(ctx.db);
-      return await auditLogsService.getStatistics(
+      return await this.auditLogsService.getStatistics(
         input.organizationId,
         input.projectId,
         input.startDate,
@@ -252,8 +242,8 @@ export class AuditLogsRouter {
       search: this.trpc.protectedProcedure
         .input(z.object({
           query: z.string().min(1),
-          organizationId: z.string().uuid().optional(),
-          projectId: z.string().uuid().optional(),
+          organizationId: z.uuid().optional(),
+          projectId: z.uuid().optional(),
           limit: z.number().min(1).max(100).default(50),
           offset: z.number().min(0).default(0),
           sortBy: z.enum(['createdAt', 'action', 'outcome', 'severity']).default('createdAt'),

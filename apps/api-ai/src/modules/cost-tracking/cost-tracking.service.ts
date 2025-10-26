@@ -1,15 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { eq, and, desc, asc, sql, gte, lte, inArray } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
+import { eq, and, desc, asc, count, sql, gte, lte, inArray } from 'drizzle-orm';
+import { InjectDatabase } from '../../common/decorators/database.decorator';
+import { Database } from '../../database/database.module';
 import { costTracking, type CostTracking, type NewCostTracking, type UpdateCostTracking } from '../../database/schemas/cost-tracking.schema';
 
 @Injectable()
 export class CostTrackingService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(@InjectDatabase() private readonly db: Database) {}
 
   // 创建成本记录
   async create(data: NewCostTracking): Promise<CostTracking> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .insert(costTracking)
       .values({
         ...data,
@@ -21,7 +22,7 @@ export class CostTrackingService {
 
   // 根据ID获取成本记录
   async findById(id: string): Promise<CostTracking | null> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .select()
       .from(costTracking)
       .where(eq(costTracking.id, id))
@@ -31,7 +32,7 @@ export class CostTrackingService {
 
   // 根据项目获取成本记录
   async findByProject(projectId: string, limit = 50, offset = 0): Promise<CostTracking[]> {
-    return await this.db.database
+    return await this.db
       .select()
       .from(costTracking)
       .where(eq(costTracking.projectId, projectId))
@@ -42,7 +43,7 @@ export class CostTrackingService {
 
   // 根据组织获取成本记录
   async findByOrganization(organizationId: string, limit = 50, offset = 0): Promise<CostTracking[]> {
-    return await this.db.database
+    return await this.db
       .select()
       .from(costTracking)
       .where(eq(costTracking.organizationId, organizationId))
@@ -53,7 +54,7 @@ export class CostTrackingService {
 
   // 根据时间周期获取成本记录
   async findByPeriod(organizationId: string, period: string): Promise<CostTracking[]> {
-    return await this.db.database
+    return await this.db
       .select()
       .from(costTracking)
       .where(and(
@@ -80,7 +81,7 @@ export class CostTrackingService {
       conditions.push(eq(costTracking.projectId, projectId));
     }
 
-    return await this.db.database
+    return await this.db
       .select()
       .from(costTracking)
       .where(and(...conditions))
@@ -89,7 +90,7 @@ export class CostTrackingService {
 
   // 更新成本记录
   async update(id: string, data: UpdateCostTracking): Promise<CostTracking | null> {
-    const [result] = await this.db.database
+    const [result] = await this.db
       .update(costTracking)
       .set({
         ...data,
@@ -102,20 +103,20 @@ export class CostTrackingService {
 
   // 删除成本记录
   async delete(id: string): Promise<boolean> {
-    const result = await this.db.database
+    await this.db
       .delete(costTracking)
       .where(eq(costTracking.id, id));
-    return result.rowCount > 0;
+    return true;
   }
 
   // 批量删除成本记录
   async batchDelete(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0;
     
-    const result = await this.db.database
+    await this.db
       .delete(costTracking)
       .where(inArray(costTracking.id, ids));
-    return result.rowCount;
+    return ids.length;
   }
 
   // 获取成本统计信息
@@ -138,7 +139,7 @@ export class CostTrackingService {
       conditions.push(eq(costTracking.projectId, projectId));
     }
 
-    const [stats] = await this.db.database
+    const [stats] = await this.db
       .select({
         totalCost: sql<number>`COALESCE(SUM(${costTracking.totalCost}), 0)`,
         avgCost: sql<number>`COALESCE(AVG(${costTracking.totalCost}), 0)`,
@@ -190,7 +191,7 @@ export class CostTrackingService {
       conditions.push(eq(costTracking.projectId, projectId));
     }
 
-    const results = await this.db.database
+    const results = await this.db
       .select({
         period: costTracking.period,
         totalCost: sql<number>`COALESCE(SUM(${costTracking.totalCost}), 0)`,
@@ -243,7 +244,7 @@ export class CostTrackingService {
       budgetPercent: number;
     }>;
   }> {
-    const [totalStats] = await this.db.database
+    const [totalStats] = await this.db
       .select({
         actualCost: sql<number>`COALESCE(SUM(${costTracking.totalCost}), 0)`,
       })
@@ -253,7 +254,7 @@ export class CostTrackingService {
         eq(costTracking.period, period)
       ));
 
-    const projectStats = await this.db.database
+    const projectStats = await this.db
       .select({
         projectId: costTracking.projectId,
         actualCost: sql<number>`COALESCE(SUM(${costTracking.totalCost}), 0)`,

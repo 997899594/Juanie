@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { eq, and, desc, asc, count, gte, lte, ilike, inArray, sql } from 'drizzle-orm';
-import { DatabaseService } from '../../database/database.service';
+import { InjectDatabase } from '../../common/decorators/database.decorator';
+import { Database } from '../../database/database.module';
 import { 
   auditLogs, 
   type AuditLog, 
@@ -13,11 +14,11 @@ import {
 
 @Injectable()
 export class AuditLogsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(@InjectDatabase() private readonly db: Database) {}
 
   // 创建审计日志
   async create(data: NewAuditLog): Promise<AuditLog> {
-    const [auditLog] = await this.db.database
+    const [auditLog] = await this.db
       .insert(auditLogs)
       .values({
         ...data,
@@ -36,7 +37,7 @@ export class AuditLogsService {
       correlationId: log.correlationId || this.generateCorrelationId(),
     }));
 
-    return await this.db.database
+    return await this.db
       .insert(auditLogs)
       .values(logsWithIds)
       .returning();
@@ -44,7 +45,7 @@ export class AuditLogsService {
 
   // 根据ID获取审计日志
   async getById(id: string): Promise<AuditLog | null> {
-    const [auditLog] = await this.db.database
+    const [auditLog] = await this.db
       .select()
       .from(auditLogs)
       .where(eq(auditLogs.id, id))
@@ -116,17 +117,19 @@ export class AuditLogsService {
     const orderBy = sortOrder === 'desc' ? desc(auditLogs[sortBy]) : asc(auditLogs[sortBy]);
 
     const [logs, totalResult] = await Promise.all([
-      this.db.database
+      this.db
         .select()
         .from(auditLogs)
         .where(whereClause)
         .orderBy(orderBy)
         .limit(limit)
-        .offset(offset),
-      this.db.database
+        .offset(offset)
+        .execute(),
+      this.db
         .select({ count: count() })
         .from(auditLogs)
         .where(whereClause)
+        .execute()
     ]);
 
     return {
@@ -199,17 +202,19 @@ export class AuditLogsService {
     const orderBy = sortOrder === 'desc' ? desc(auditLogs[sortBy]) : asc(auditLogs[sortBy]);
 
     const [logs, totalResult] = await Promise.all([
-      this.db.database
+      this.db
         .select()
         .from(auditLogs)
         .where(whereClause)
         .orderBy(orderBy)
         .limit(limit)
-        .offset(offset),
-      this.db.database
+        .offset(offset)
+        .execute(),
+      this.db
         .select({ count: count() })
         .from(auditLogs)
         .where(whereClause)
+        .execute()
     ]);
 
     return {
@@ -282,17 +287,19 @@ export class AuditLogsService {
     const orderBy = sortOrder === 'desc' ? desc(auditLogs[sortBy]) : asc(auditLogs[sortBy]);
 
     const [logs, totalResult] = await Promise.all([
-      this.db.database
+      this.db
         .select()
         .from(auditLogs)
         .where(whereClause)
         .orderBy(orderBy)
         .limit(limit)
-        .offset(offset),
-      this.db.database
+        .offset(offset)
+        .execute(),
+      this.db
         .select({ count: count() })
         .from(auditLogs)
         .where(whereClause)
+        .execute()
     ]);
 
     return {
@@ -303,7 +310,7 @@ export class AuditLogsService {
 
   // 根据关联ID获取审计日志
   async getByCorrelationId(correlationId: string): Promise<AuditLog[]> {
-    return await this.db.database
+    return await this.db
       .select()
       .from(auditLogs)
       .where(eq(auditLogs.correlationId, correlationId))
@@ -312,7 +319,7 @@ export class AuditLogsService {
 
   // 根据请求ID获取审计日志
   async getByRequestId(requestId: string): Promise<AuditLog[]> {
-    return await this.db.database
+    return await this.db
       .select()
       .from(auditLogs)
       .where(eq(auditLogs.requestId, requestId))
@@ -382,17 +389,19 @@ export class AuditLogsService {
     const orderBy = sortOrder === 'desc' ? desc(auditLogs[sortBy]) : asc(auditLogs[sortBy]);
 
     const [logs, totalResult] = await Promise.all([
-      this.db.database
+      this.db
         .select()
         .from(auditLogs)
         .where(whereClause)
         .orderBy(orderBy)
         .limit(limit)
-        .offset(offset),
-      this.db.database
+        .offset(offset)
+        .execute(),
+      this.db
         .select({ count: count() })
         .from(auditLogs)
         .where(whereClause)
+        .execute()
     ]);
 
     return {
@@ -403,7 +412,7 @@ export class AuditLogsService {
 
   // 更新审计日志
   async update(id: string, data: UpdateAuditLog): Promise<AuditLog | null> {
-    const [auditLog] = await this.db.database
+    const [auditLog] = await this.db
       .update(auditLogs)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(auditLogs.id, id))
@@ -413,18 +422,18 @@ export class AuditLogsService {
 
   // 删除审计日志
   async delete(id: string): Promise<boolean> {
-    const result = await this.db.database
+    const result = await this.db
       .delete(auditLogs)
       .where(eq(auditLogs.id, id));
-    return result.rowCount > 0;
+    return result.count > 0;
   }
 
   // 批量删除审计日志
   async deleteMany(ids: string[]): Promise<number> {
-    const result = await this.db.database
+    const result = await this.db
       .delete(auditLogs)
       .where(inArray(auditLogs.id, ids));
-    return result.rowCount;
+    return result.count;
   }
 
   // 清理旧的审计日志
@@ -435,7 +444,7 @@ export class AuditLogsService {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-    const result = await this.db.database
+    const result = await this.db
       .delete(auditLogs)
       .where(
         and(
@@ -443,7 +452,7 @@ export class AuditLogsService {
           lte(auditLogs.createdAt, cutoffDate)
         )
       );
-    return result.rowCount;
+    return result.count;
   }
 
   // 获取审计日志统计信息
@@ -486,13 +495,13 @@ export class AuditLogsService {
       resourceStats
     ] = await Promise.all([
       // 总数
-      this.db.database
+      this.db
         .select({ count: count() })
         .from(auditLogs)
         .where(whereClause),
       
       // 按结果统计
-      this.db.database
+      this.db
         .select({
           outcome: auditLogs.outcome,
           count: count()
@@ -502,7 +511,7 @@ export class AuditLogsService {
         .groupBy(auditLogs.outcome),
       
       // 按严重级别统计
-      this.db.database
+      this.db
         .select({
           severity: auditLogs.severity,
           count: count()
@@ -512,7 +521,7 @@ export class AuditLogsService {
         .groupBy(auditLogs.severity),
       
       // 按主体类型统计
-      this.db.database
+      this.db
         .select({
           actorType: auditLogs.actorType,
           count: count()
@@ -522,7 +531,7 @@ export class AuditLogsService {
         .groupBy(auditLogs.actorType),
       
       // 热门操作
-      this.db.database
+      this.db
         .select({
           action: auditLogs.action,
           count: count()
@@ -534,7 +543,7 @@ export class AuditLogsService {
         .limit(10),
       
       // 热门资源类型
-      this.db.database
+      this.db
         .select({
           resourceType: auditLogs.resourceType,
           count: count()
@@ -660,17 +669,19 @@ export class AuditLogsService {
     const orderBy = sortOrder === 'desc' ? desc(auditLogs[sortBy]) : asc(auditLogs[sortBy]);
 
     const [logs, totalResult] = await Promise.all([
-      this.db.database
+      this.db
         .select()
         .from(auditLogs)
         .where(whereClause)
         .orderBy(orderBy)
         .limit(limit)
-        .offset(offset),
-      this.db.database
+        .offset(offset)
+        .execute(),
+      this.db
         .select({ count: count() })
         .from(auditLogs)
         .where(whereClause)
+        .execute()
     ]);
 
     return {

@@ -1,14 +1,14 @@
+import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { publicProcedure, router } from '../../trpc/trpc';
+import { TrpcService } from '../../trpc/trpc.service';
 import { IntelligentAlertsService } from './intelligent-alerts.service';
 import { 
   insertIntelligentAlertSchema,
   selectIntelligentAlertSchema,
-  AlertType,
-  AlertSeverity,
-  AlertStatus,
-  RootCauseCategory,
-  RemediationActionType
+  AlertTypeEnum,
+  AlertSeverityEnum,
+  AlertStatusEnum,
+  RootCauseCategoryEnum
 } from '../../database/schemas/intelligent-alerts.schema';
 
 // 输入验证 schemas
@@ -28,9 +28,9 @@ const updateAlertSchema = insertIntelligentAlertSchema.partial().omit({
 
 const getAlertsByProjectSchema = z.object({
   projectId: z.string().uuid(),
-  status: z.enum(['active', 'acknowledged', 'resolved', 'suppressed']).optional(),
-  severity: z.enum(['critical', 'high', 'medium', 'low', 'info']).optional(),
-  alertType: z.enum(['threshold', 'anomaly', 'predictive', 'composite', 'correlation']).optional(),
+  status: z.enum(['open', 'acknowledged', 'resolved', 'suppressed']).optional(),
+  severity: z.enum(['info', 'warning', 'critical']).optional(),
+  alertType: z.enum(['anomaly', 'threshold', 'prediction', 'correlation']).optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
   sortBy: z.enum(['createdAt', 'severity', 'aiConfidence']).default('createdAt'),
@@ -39,7 +39,7 @@ const getAlertsByProjectSchema = z.object({
 
 const batchUpdateStatusSchema = z.object({
   alertIds: z.array(z.string().uuid()).min(1),
-  status: z.enum(['active', 'acknowledged', 'resolved', 'suppressed']),
+  status: z.enum(['open', 'acknowledged', 'resolved', 'suppressed']),
   acknowledgedBy: z.string().uuid().optional()
 });
 
@@ -58,7 +58,7 @@ const generatePredictiveAlertSchema = z.object({
   predictionHorizon: z.number().min(1).max(168) // 1 hour to 1 week
 });
 
-// 输出 schemas
+// 响应 schemas
 const alertListResponseSchema = z.object({
   alerts: z.array(selectIntelligentAlertSchema),
   total: z.number()
@@ -66,173 +66,175 @@ const alertListResponseSchema = z.object({
 
 const alertStatisticsSchema = z.object({
   total: z.number(),
-  byStatus: z.record(z.enum(['active', 'acknowledged', 'resolved', 'suppressed']), z.number()),
-  bySeverity: z.record(z.enum(['critical', 'high', 'medium', 'low', 'info']), z.number()),
-  byType: z.record(z.enum(['threshold', 'anomaly', 'predictive', 'composite', 'correlation']), z.number()),
+  byStatus: z.record(z.enum(['open', 'acknowledged', 'resolved', 'suppressed']), z.number()),
+  bySeverity: z.record(z.enum(['info', 'warning', 'critical']), z.number()),
+  byType: z.record(z.enum(['anomaly', 'threshold', 'prediction', 'correlation']), z.number()),
   avgResolutionTime: z.number(),
   autoRemediationRate: z.number()
 });
 
 const rootCauseAnalysisSchema = z.object({
-  category: z.enum(['infrastructure', 'application', 'network', 'security', 'data', 'external']),
+  category: z.enum(['performance', 'availability', 'security', 'capacity', 'configuration']),
   component: z.string(),
   description: z.string(),
   confidence: z.number().min(0).max(1),
   suggestedActions: z.array(z.string())
 });
 
-export const intelligentAlertsRouter = router({
-  // 创建告警
-  create: publicProcedure
-    .input(createAlertSchema)
-    .output(selectIntelligentAlertSchema)
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.createAlert(input);
-    }),
+@Injectable()
+export class IntelligentAlertsRouter {
+  public router: any;
 
-  // 根据ID获取告警
-  getById: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .output(selectIntelligentAlertSchema.nullable())
-    .query(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.getAlertById(input.id);
-    }),
+  constructor(
+    private readonly trpc: TrpcService,
+    private readonly intelligentAlertsService: IntelligentAlertsService,
+  ) {
+    this.router = this.trpc.router({
+      // 创建智能告警
+      create: this.trpc.publicProcedure
+        .input(createAlertSchema)
+        .output(selectIntelligentAlertSchema)
+        .mutation(async ({ input }) => {
+          return this.intelligentAlertsService.createAlert(input);
+        }),
 
-  // 获取项目的告警列表
-  getByProject: publicProcedure
-    .input(getAlertsByProjectSchema)
-    .output(alertListResponseSchema)
-    .query(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      const { projectId, ...options } = input;
-      return service.getAlertsByProject(projectId, options);
-    }),
+      // 根据ID获取告警
+      getById: this.trpc.publicProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .output(selectIntelligentAlertSchema.nullable())
+        .query(async ({ input }) => {
+          return this.intelligentAlertsService.getAlertById(input.id);
+        }),
 
-  // 更新告警
-  update: publicProcedure
-    .input(z.object({
-      id: z.string().uuid(),
-      data: updateAlertSchema
-    }))
-    .output(selectIntelligentAlertSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.updateAlert(input.id, input.data);
-    }),
+      // 根据项目获取告警列表
+      getByProject: this.trpc.publicProcedure
+        .input(getAlertsByProjectSchema)
+        .output(alertListResponseSchema)
+        .query(async ({ input }) => {
+          return this.intelligentAlertsService.getAlertsByProject(input.projectId, {
+            status: input.status,
+            severity: input.severity,
+            alertType: input.alertType,
+            limit: input.limit,
+            offset: input.offset,
+            sortBy: input.sortBy,
+            sortOrder: input.sortOrder
+          });
+        }),
 
-  // 确认告警
-  acknowledge: publicProcedure
-    .input(acknowledgeAlertSchema)
-    .output(selectIntelligentAlertSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.acknowledgeAlert(input.id, input.acknowledgedBy);
-    }),
+      // 更新告警
+      update: this.trpc.publicProcedure
+        .input(z.object({
+          id: z.string().uuid(),
+          data: updateAlertSchema
+        }))
+        .output(selectIntelligentAlertSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.intelligentAlertsService.updateAlert(input.id, input.data);
+        }),
 
-  // 解决告警
-  resolve: publicProcedure
-    .input(resolveAlertSchema)
-    .output(selectIntelligentAlertSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.resolveAlert(input.id, input.resolutionNotes);
-    }),
+      // 确认告警
+      acknowledge: this.trpc.publicProcedure
+        .input(acknowledgeAlertSchema)
+        .output(selectIntelligentAlertSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.intelligentAlertsService.acknowledgeAlert(input.id, input.acknowledgedBy);
+        }),
 
-  // 升级告警
-  escalate: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .output(selectIntelligentAlertSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.escalateAlert(input.id);
-    }),
+      // 解决告警
+      resolve: this.trpc.publicProcedure
+        .input(resolveAlertSchema)
+        .output(selectIntelligentAlertSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.intelligentAlertsService.resolveAlert(input.id, input.resolutionNotes);
+        }),
 
-  // 应用自动修复
-  applyAutoRemediation: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .output(selectIntelligentAlertSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.applyAutoRemediation(input.id);
-    }),
+      // 升级告警
+      escalate: this.trpc.publicProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .output(selectIntelligentAlertSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.intelligentAlertsService.escalateAlert(input.id);
+        }),
 
-  // 获取告警统计信息
-  getStatistics: publicProcedure
-    .input(z.object({ projectId: z.string().uuid().optional() }))
-    .output(alertStatisticsSchema)
-    .query(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.getAlertStatistics(input.projectId);
-    }),
+      // 应用自动修复
+      applyAutoRemediation: this.trpc.publicProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .output(selectIntelligentAlertSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.intelligentAlertsService.applyAutoRemediation(input.id);
+        }),
 
-  // 批量更新告警状态
-  batchUpdateStatus: publicProcedure
-    .input(batchUpdateStatusSchema)
-    .output(z.object({ updatedCount: z.number() }))
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      const updatedCount = await service.batchUpdateStatus(
-        input.alertIds,
-        input.status,
-        input.acknowledgedBy
-      );
-      return { updatedCount };
-    }),
+      // 获取告警统计信息
+      getStatistics: this.trpc.publicProcedure
+        .input(z.object({ projectId: z.string().uuid().optional() }))
+        .output(alertStatisticsSchema)
+        .query(async ({ input }) => {
+          return this.intelligentAlertsService.getAlertStatistics(input.projectId);
+        }),
 
-  // 删除告警
-  delete: publicProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .output(z.object({ success: z.boolean() }))
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      const success = await service.deleteAlert(input.id);
-      return { success };
-    }),
+      // 批量更新告警状态
+      batchUpdateStatus: this.trpc.publicProcedure
+        .input(batchUpdateStatusSchema)
+        .output(z.object({ updatedCount: z.number() }))
+        .mutation(async ({ input }) => {
+          const updatedCount = await this.intelligentAlertsService.batchUpdateStatus(
+            input.alertIds,
+            input.status,
+            input.acknowledgedBy
+          );
+          return { updatedCount };
+        }),
 
-  // 批量删除告警
-  batchDelete: publicProcedure
-    .input(z.object({ alertIds: z.array(z.string().uuid()).min(1) }))
-    .output(z.object({ deletedCount: z.number() }))
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      const deletedCount = await service.batchDeleteAlerts(input.alertIds);
-      return { deletedCount };
-    }),
+      // 删除告警
+      delete: this.trpc.publicProcedure
+        .input(z.object({ id: z.string().uuid() }))
+        .output(z.object({ success: z.boolean() }))
+        .mutation(async ({ input }) => {
+          await this.intelligentAlertsService.deleteAlert(input.id);
+          return { success: true };
+        }),
 
-  // 获取相关告警
-  getRelatedAlerts: publicProcedure
-    .input(z.object({
-      alertId: z.string().uuid(),
-      limit: z.number().min(1).max(50).default(10)
-    }))
-    .output(z.array(selectIntelligentAlertSchema))
-    .query(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.getRelatedAlerts(input.alertId, input.limit);
-    }),
+      // 批量删除告警
+      batchDelete: this.trpc.publicProcedure
+        .input(z.object({ alertIds: z.array(z.string().uuid()).min(1) }))
+        .output(z.object({ deletedCount: z.number() }))
+        .mutation(async ({ input }) => {
+          const deletedCount = await this.intelligentAlertsService.batchDeleteAlerts(input.alertIds);
+          return { deletedCount };
+        }),
 
-  // AI 根因分析
-  performRootCauseAnalysis: publicProcedure
-    .input(z.object({ alertId: z.string().uuid() }))
-    .output(rootCauseAnalysisSchema)
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.performRootCauseAnalysis(input.alertId);
-    }),
+      // 获取相关告警
+      getRelatedAlerts: this.trpc.publicProcedure
+        .input(z.object({
+          alertId: z.string().uuid(),
+          limit: z.number().min(1).max(50).default(10)
+        }))
+        .output(z.array(selectIntelligentAlertSchema))
+        .query(async ({ input }) => {
+          return this.intelligentAlertsService.getRelatedAlerts(input.alertId, input.limit);
+        }),
 
-  // 生成预测性告警
-  generatePredictiveAlert: publicProcedure
-    .input(generatePredictiveAlertSchema)
-    .output(selectIntelligentAlertSchema.nullable())
-    .mutation(async ({ input, ctx }) => {
-      const service = new IntelligentAlertsService(ctx.db);
-      return service.generatePredictiveAlert(
-        input.monitorConfigId,
-        input.predictionHorizon
-      );
-    })
-});
+      // 执行根因分析
+      performRootCauseAnalysis: this.trpc.publicProcedure
+        .input(z.object({ alertId: z.string().uuid() }))
+        .output(rootCauseAnalysisSchema)
+        .mutation(async ({ input }) => {
+          return this.intelligentAlertsService.performRootCauseAnalysis(input.alertId);
+        }),
 
-export type IntelligentAlertsRouter = typeof intelligentAlertsRouter;
+      // 生成预测性告警
+      generatePredictiveAlert: this.trpc.publicProcedure
+        .input(generatePredictiveAlertSchema)
+        .output(selectIntelligentAlertSchema.nullable())
+        .mutation(async ({ input }) => {
+          return this.intelligentAlertsService.generatePredictiveAlert(
+            input.monitorConfigId,
+            input.predictionHorizon
+          );
+        })
+    });
+  }
+}
+
+export type IntelligentAlertsRouterType = typeof IntelligentAlertsRouter;
