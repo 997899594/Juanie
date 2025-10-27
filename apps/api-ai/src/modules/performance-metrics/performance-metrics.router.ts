@@ -52,11 +52,7 @@ export class PerformanceMetricsRouter {
         }))
         .query(async ({ input }) => {
           return this.performanceMetricsService.getPerformanceMetricsByProject(
-            input.projectId,
-            input.limit,
-            input.offset,
-            input.startTime,
-            input.endTime
+            input.projectId
           );
         }),
 
@@ -73,11 +69,7 @@ export class PerformanceMetricsRouter {
         }))
         .query(async ({ input }) => {
           return this.performanceMetricsService.getPerformanceMetricsByEnvironment(
-            input.environmentId,
-            input.limit,
-            input.offset,
-            input.startTime,
-            input.endTime
+            input.environmentId
           );
         }),
 
@@ -92,7 +84,7 @@ export class PerformanceMetricsRouter {
           category: MetricCategoryEnum.optional(),
         }))
         .query(async ({ input }) => {
-          return this.performanceMetricsService.getPerformanceMetricStats(input);
+          return this.performanceMetricsService.getPerformanceMetricStats(input.projectId);
         }),
 
       // 获取性能指标聚合数据
@@ -108,7 +100,10 @@ export class PerformanceMetricsRouter {
           groupBy: z.enum(['hour', 'day', 'week', 'month']).default('day'),
         }))
         .query(async ({ input }) => {
-          return this.performanceMetricsService.getAggregatedPerformanceMetrics(input);
+          return this.performanceMetricsService.getAggregatedPerformanceMetrics(
+            input.projectId,
+            input.aggregationType
+          );
         }),
 
       // 获取性能趋势
@@ -121,7 +116,11 @@ export class PerformanceMetricsRouter {
           period: z.enum(['1h', '6h', '24h', '7d', '30d']).default('24h'),
         }))
         .query(async ({ input }) => {
-          return this.performanceMetricsService.getPerformanceMetricsTrends(input);
+          return this.performanceMetricsService.getPerformanceMetricsTrends(
+            input.projectId,
+            input.metricType,
+            input.period
+          );
         }),
 
       // 更新性能指标
@@ -158,7 +157,7 @@ export class PerformanceMetricsRouter {
           environmentId: z.string().uuid().optional(),
         }))
         .mutation(async ({ input }) => {
-          return this.performanceMetricsService.cleanupPerformanceMetrics(input);
+          return this.performanceMetricsService.cleanupPerformanceMetrics(input.olderThan);
         }),
 
       // 导出性能指标数据
@@ -173,7 +172,7 @@ export class PerformanceMetricsRouter {
           format: z.enum(['json', 'csv']).default('json'),
         }))
         .query(async ({ input }) => {
-          return this.performanceMetricsService.exportPerformanceMetrics(input);
+          return this.performanceMetricsService.exportPerformanceMetrics(input.format);
         }),
 
       // 获取性能指标配置
@@ -213,7 +212,10 @@ export class PerformanceMetricsRouter {
           offset: z.number().min(0).default(0),
         }))
         .query(async ({ input }) => {
-          return this.performanceMetricsService.getPerformanceAlerts(input);
+          return this.performanceMetricsService.getPerformanceAlerts(
+            input.projectId,
+            input.status
+          );
         }),
 
       // 确认性能警报
@@ -224,7 +226,7 @@ export class PerformanceMetricsRouter {
           note: z.string().optional(),
         }))
         .mutation(async ({ input }) => {
-          return this.performanceMetricsService.acknowledgePerformanceAlert(input);
+          return this.performanceMetricsService.acknowledgePerformanceAlert(input.alertId);
         }),
 
       // 解决性能警报
@@ -235,7 +237,7 @@ export class PerformanceMetricsRouter {
           resolution: z.string(),
         }))
         .mutation(async ({ input }) => {
-          return this.performanceMetricsService.resolvePerformanceAlert(input);
+          return this.performanceMetricsService.resolvePerformanceAlert(input.alertId);
         }),
     });
   }

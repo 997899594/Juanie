@@ -9,26 +9,34 @@ import {
   timestamp,
   uuid,
   varchar,
-} from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
-import { z } from 'zod';
-import { organizations } from './organizations.schema';
-import { users } from './users.schema';
+  pgEnum,
+} from "drizzle-orm/pg-core";
+import { z } from "zod";
+import { organizations } from "./organizations.schema";
+import { users } from "./users.schema";
 
-export const aiAssistants = pgTable('ai_assistants', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 100 }).notNull(),
-  description: text('description'),
-  avatar: text('avatar'),
+// 枚举定义
+export const AssistantTypeEnum = z.enum(['code-reviewer', 'devops-engineer', 'security-analyst', 'cost-optimizer', 'incident-responder']);
+export const ModelProviderEnum = z.enum(['openai', 'anthropic', 'google', 'custom']);
+
+// PostgreSQL 枚举定义
+export const AssistantTypePgEnum = pgEnum('assistant_type', ['code-reviewer', 'devops-engineer', 'security-analyst', 'cost-optimizer', 'incident-responder']);
+export const ModelProviderPgEnum = pgEnum('model_provider', ['openai', 'anthropic', 'google', 'custom']);
+
+export const aiAssistants = pgTable("ai_assistants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  avatar: text("avatar"),
 
   // AI助手类型和专业化（简化）
-  type: varchar('type', { length: 50 }).notNull(), // 'code-reviewer', 'devops-engineer', 'security-analyst', 'cost-optimizer', 'incident-responder'
-  specialization: varchar('specialization', { length: 100 }), // 'frontend', 'backend', 'infrastructure', 'security', 'performance'
+  type: AssistantTypePgEnum("type").notNull(), // 'code-reviewer', 'devops-engineer', 'security-analyst', 'cost-optimizer', 'incident-responder'
+  specialization: varchar("specialization", { length: 100 }), // 'frontend', 'backend', 'infrastructure', 'security', 'performance'
 
   // 多模型配置（核心功能，保留但简化）
-  modelType: varchar('model_type', { length: 50 }).notNull(), // 模型类型标识
-  modelConfig: jsonb('model_config').notNull().$type<{
-    provider: 'openai' | 'anthropic' | 'google' | 'custom';
+  modelType: varchar("model_type", { length: 50 }).notNull(), // 模型类型标识
+  modelConfig: jsonb("model_config").notNull().$type<{
+    provider: "openai" | "anthropic" | "google" | "custom";
     modelName: string;
     version?: string;
     temperature?: number;
@@ -38,109 +46,117 @@ export const aiAssistants = pgTable('ai_assistants', {
     presencePenalty?: number;
   }>(),
 
+  // 系统提示词
+  systemPrompt: text("system_prompt").notNull(),
+
   // 能力管理（简化结构）
-  capabilities: text('capabilities').array().default([]), // 能力数组，如 ['code-review', 'devops-automation', 'security-analysis']
+  capabilities: text("capabilities").array().notNull().default([]), // 能力数组，如 ['code-review', 'devops-automation', 'security-analysis']
 
   // 基础性能指标（删除复杂JSONB结构）
-  usageCount: integer('usage_count').default(0),
-  averageRating: integer('average_rating').default(0), // 1-5评分
+  usageCount: integer("usage_count").default(0).notNull(),
+  averageRating: integer("average_rating").default(0).notNull(), // 1-5评分
 
   // 状态控制
-  isPublic: boolean('is_public').default(false).notNull(),
-  isActive: boolean('is_active').default(true).notNull(),
+  isPublic: boolean("is_public").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
 
   // 所有权
-  createdBy: uuid('created_by')
+  createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
-  organizationId: uuid('organization_id').references(() => organizations.id),
+  organizationId: uuid("organization_id").references(() => organizations.id),
 
   // 时间戳
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  lastUsedAt: timestamp('last_used_at'),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at"),
 });
 
 // 简化索引定义
 export const aiAssistantsIndexes = {
-  typeIdx: index('ai_assistants_type_idx').on(aiAssistants.type),
-  specializationIdx: index('ai_assistants_specialization_idx').on(
+  typeIdx: index("ai_assistants_type_idx").on(aiAssistants.type),
+  specializationIdx: index("ai_assistants_specialization_idx").on(
     aiAssistants.specialization
   ),
-  createdByIdx: index('ai_assistants_created_by_idx').on(
+  createdByIdx: index("ai_assistants_created_by_idx").on(
     aiAssistants.createdBy
   ),
-  organizationIdIdx: index('ai_assistants_organization_id_idx').on(
+  organizationIdIdx: index("ai_assistants_organization_id_idx").on(
     aiAssistants.organizationId
   ),
-  isActiveIdx: index('ai_assistants_is_active_idx').on(aiAssistants.isActive),
-  modelTypeIdx: index('ai_assistants_model_type_idx').on(
+  isActiveIdx: index("ai_assistants_is_active_idx").on(aiAssistants.isActive),
+  modelTypeIdx: index("ai_assistants_model_type_idx").on(
     aiAssistants.modelType
   ),
 };
 
-// 简化Zod schemas
-export const insertAiAssistantSchema = createInsertSchema(aiAssistants, {
-  name: z.string().min(1).max(100),
-  type: z.enum([
-    'code-reviewer',
-    'devops-engineer',
-    'security-analyst',
-    'cost-optimizer',
-    'incident-responder',
-  ]),
-  modelType: z.string().max(50),
+// 手动定义的 Zod schemas - 替换 drizzle-zod
+export const insertAiAssistantSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string(),
+  description: z.string().optional(),
+  avatar: z.string().optional(),
+  type: AssistantTypeEnum,
+  specialization: z.string().optional(),
+  modelType: z.string(),
   modelConfig: z.object({
-    provider: z.enum(['openai', 'anthropic', 'google', 'custom']),
+    provider: ModelProviderEnum,
     modelName: z.string(),
-    version: z.string().optional(),
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().positive().optional(),
-    topP: z.number().min(0).max(1).optional(),
-    frequencyPenalty: z.number().min(-2).max(2).optional(),
-    presencePenalty: z.number().min(-2).max(2).optional(),
+    temperature: z.number().optional(),
+    maxTokens: z.number().int().optional(),
+    topP: z.number().optional(),
+    frequencyPenalty: z.number().optional(),
+    presencePenalty: z.number().optional(),
   }),
-  capabilities: z.array(z.string()).max(20),
-  usageCount: z.number().int().min(0),
-  averageRating: z.number().int().min(1).max(5),
+  systemPrompt: z.string(),
+  capabilities: z.array(z.string()),
+  isActive: z.boolean().optional(),
+  usageCount: z.number().int().optional(),
+  averageRating: z.number().int().optional(),
+  lastUsedAt: z.date().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+  createdBy: z.string().uuid(),
+  organizationId: z.string().uuid().optional(),
+  isPublic: z.boolean().optional(),
 });
 
-export const selectAiAssistantSchema = createSelectSchema(aiAssistants);
+export const selectAiAssistantSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  avatar: z.string().nullable(),
+  type: AssistantTypeEnum,
+  specialization: z.string().nullable(),
+  modelType: z.string(),
+  modelConfig: z.object({
+    provider: ModelProviderEnum,
+    modelName: z.string(),
+    temperature: z.number().optional(),
+    maxTokens: z.number().int().optional(),
+    topP: z.number().optional(),
+    frequencyPenalty: z.number().optional(),
+    presencePenalty: z.number().optional(),
+  }),
+  systemPrompt: z.string(),
+  capabilities: z.array(z.string()),
+  isActive: z.boolean(),
+  usageCount: z.number().int(),
+  averageRating: z.number().int(),
+  lastUsedAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  createdBy: z.string().uuid(),
+  organizationId: z.string().uuid().nullable(),
+  isPublic: z.boolean(),
+});
 
-export const updateAiAssistantSchema = selectAiAssistantSchema
-  .pick({
-    name: true,
-    description: true,
-    avatar: true,
-    type: true,
-    specialization: true,
-    modelType: true,
-    modelConfig: true,
-    capabilities: true,
-    usageCount: true,
-    averageRating: true,
-    isPublic: true,
-    isActive: true,
-    lastUsedAt: true,
-  })
-  .partial();
+export const updateAiAssistantSchema = insertAiAssistantSchema.partial();
 
-export const aiAssistantPublicSchema = selectAiAssistantSchema
-  .pick({
-    id: true,
-    name: true,
-    description: true,
-    avatar: true,
-    type: true,
-    specialization: true,
-    modelType: true,
-    capabilities: true,
-    usageCount: true,
-    averageRating: true,
-    isPublic: true,
-    createdAt: true,
-  })
-  .partial();
+export const aiAssistantPublicSchema = selectAiAssistantSchema.omit({
+  createdBy: true,
+  organizationId: true,
+});
 
 export type AiAssistant = typeof aiAssistants.$inferSelect;
 export type NewAiAssistant = typeof aiAssistants.$inferInsert;

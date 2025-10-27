@@ -1,6 +1,5 @@
 import { pgTable, uuid, integer, text, timestamp, decimal, index, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { aiAssistants } from './ai-assistants.schema';
 
@@ -49,8 +48,41 @@ export const aiRecommendationsRelations = relations(aiRecommendations, ({ one })
 }));
 
 // Zod Schemas
-export const insertAiRecommendationSchema = createInsertSchema(aiRecommendations);
-export const selectAiRecommendationSchema = createSelectSchema(aiRecommendations);
+export const insertAiRecommendationSchema = z.object({
+  id: z.string().uuid().optional(),
+  assistantId: z.string().uuid().optional(),
+  contextType: ContextTypeEnum,
+  contextId: z.number().int(),
+  title: z.string(),
+  description: z.string().optional(),
+  recommendationType: z.string(),
+  confidenceScore: z.string(),
+  priority: RecommendationPriorityEnum.optional(),
+  implementationDetails: z.string().optional(),
+  estimatedImpact: z.string().optional(),
+  feedbackRating: z.number().int().min(1).max(5).optional(),
+  feedbackNotes: z.string().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+
+export const selectAiRecommendationSchema = z.object({
+  id: z.string().uuid(),
+  assistantId: z.string().uuid().nullable(),
+  contextType: ContextTypeEnum,
+  contextId: z.number().int(),
+  title: z.string(),
+  description: z.string().nullable(),
+  recommendationType: z.string(),
+  confidenceScore: z.string(),
+  priority: RecommendationPriorityEnum,
+  implementationDetails: z.string().nullable(),
+  estimatedImpact: z.string().nullable(),
+  feedbackRating: z.number().int().nullable(),
+  feedbackNotes: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export const updateAiRecommendationSchema = selectAiRecommendationSchema.pick({
   assistantId: true,
   contextType: true,

@@ -1,26 +1,43 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
-import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
-import { eq, and, or, desc, asc, count, inArray, isNull, like, sql } from 'drizzle-orm';
 import {
-  aiAssistants,
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  like,
+  or,
+  sql,
+} from "drizzle-orm";
+import { z } from "zod";
+import { InjectDatabase } from "../../common/decorators/database.decorator";
+import { Database } from "../../database/database.module";
+import {
   AiAssistant,
-  NewAiAssistant,
-  UpdateAiAssistant,
   AiAssistantPublic,
+  AssistantTypeEnum,
+  aiAssistantPublicSchema,
+  aiAssistants,
   insertAiAssistantSchema,
+  NewAiAssistant,
   selectAiAssistantSchema,
+  UpdateAiAssistant,
   updateAiAssistantSchema,
-  aiAssistantPublicSchema
-} from '../../database/schemas/ai-assistants.schema';
-import { z } from 'zod';
+} from "../../database/schemas/ai-assistants.schema";
 
 // AI 相关类型定义
 export enum AIProvider {
-  OPENAI = 'openai',
-  ANTHROPIC = 'anthropic',
-  GOOGLE = 'google',
-  AZURE_OPENAI = 'azure_openai',
+  OPENAI = "openai",
+  ANTHROPIC = "anthropic",
+  GOOGLE = "google",
+  AZURE_OPENAI = "azure_openai",
 }
 
 export interface AIModelConfig {
@@ -35,7 +52,7 @@ export interface AIModelConfig {
 }
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: "system" | "user" | "assistant";
   content: string;
 }
 
@@ -61,10 +78,12 @@ export interface CreateChatCompletionInput {
 }
 
 export const createChatCompletionSchema = z.object({
-  messages: z.array(z.object({
-    role: z.enum(['system', 'user', 'assistant']),
-    content: z.string(),
-  })),
+  messages: z.array(
+    z.object({
+      role: z.enum(["system", "user", "assistant"]),
+      content: z.string(),
+    })
+  ),
   provider: z.nativeEnum(AIProvider),
   model: z.string().optional(),
   maxTokens: z.number().min(1).max(32000).optional(),
@@ -100,12 +119,10 @@ export interface AiAssistantSearchFilters {
 export class AiAssistantsService {
   private readonly logger = new Logger(AiAssistantsService.name);
 
-  constructor(
-    @InjectDatabase() private readonly db: Database,
-  ) {}
+  constructor(@InjectDatabase() private readonly db: Database) {}
 
   /**
-   * 创建AI助手
+   * 创建 AI 助手
    */
   async createAiAssistant(data: NewAiAssistant): Promise<AiAssistant> {
     try {
@@ -124,14 +141,15 @@ export class AiAssistantsService {
       this.logger.log(`Created AI assistant: ${assistant.id}`);
       return assistant;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to create AI assistant: ${errorMessage}`);
-      throw new BadRequestException('Failed to create AI assistant');
+      throw new BadRequestException("Failed to create AI assistant");
     }
   }
 
   /**
-   * 根据ID获取AI助手
+   * 根据 ID 获取 AI 助手
    */
   async getAiAssistantById(id: string): Promise<AiAssistant | null> {
     try {
@@ -143,9 +161,10 @@ export class AiAssistantsService {
 
       return assistant || null;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to get AI assistant by ID: ${errorMessage}`);
-      throw new BadRequestException('Failed to get AI assistant');
+      throw new BadRequestException("Failed to get AI assistant");
     }
   }
 
@@ -157,20 +176,23 @@ export class AiAssistantsService {
       const [assistant] = await this.db
         .select()
         .from(aiAssistants)
-        .where(and(
-          eq(aiAssistants.id, id),
-          eq(aiAssistants.isPublic, true),
-          eq(aiAssistants.isActive, true)
-        ))
+        .where(
+          and(
+            eq(aiAssistants.id, id),
+            eq(aiAssistants.isPublic, true),
+            eq(aiAssistants.isActive, true)
+          )
+        )
         .limit(1);
 
       if (!assistant) return null;
 
       return aiAssistantPublicSchema.parse(assistant);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to get public AI assistant: ${errorMessage}`);
-      throw new BadRequestException('Failed to get public AI assistant');
+      throw new BadRequestException("Failed to get public AI assistant");
     }
   }
 
@@ -191,9 +213,12 @@ export class AiAssistantsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to get AI assistants by creator: ${errorMessage}`);
-      throw new BadRequestException('Failed to get AI assistants by creator');
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      this.logger.error(
+        `Failed to get AI assistants by creator: ${errorMessage}`
+      );
+      throw new BadRequestException("Failed to get AI assistants by creator");
     }
   }
 
@@ -214,9 +239,14 @@ export class AiAssistantsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to get AI assistants by organization: ${errorMessage}`);
-      throw new BadRequestException('Failed to get AI assistants by organization');
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      this.logger.error(
+        `Failed to get AI assistants by organization: ${errorMessage}`
+      );
+      throw new BadRequestException(
+        "Failed to get AI assistants by organization"
+      );
     }
   }
 
@@ -224,7 +254,7 @@ export class AiAssistantsService {
    * 根据类型获取AI助手列表
    */
   async getAiAssistantsByType(
-    type: string,
+    type: z.infer<typeof AssistantTypeEnum>,
     limit: number = 50,
     offset: number = 0
   ): Promise<AiAssistant[]> {
@@ -232,17 +262,17 @@ export class AiAssistantsService {
       return await this.db
         .select()
         .from(aiAssistants)
-        .where(and(
-          eq(aiAssistants.type, type),
-          eq(aiAssistants.isActive, true)
-        ))
+        .where(
+          and(eq(aiAssistants.type, type), eq(aiAssistants.isActive, true))
+        )
         .orderBy(desc(aiAssistants.usageCount))
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to get AI assistants by type: ${errorMessage}`);
-      throw new BadRequestException('Failed to get AI assistants by type');
+      throw new BadRequestException("Failed to get AI assistants by type");
     }
   }
 
@@ -257,19 +287,24 @@ export class AiAssistantsService {
       const assistants = await this.db
         .select()
         .from(aiAssistants)
-        .where(and(
-          eq(aiAssistants.isPublic, true),
-          eq(aiAssistants.isActive, true)
-        ))
-        .orderBy(desc(aiAssistants.averageRating), desc(aiAssistants.usageCount))
+        .where(
+          and(eq(aiAssistants.isPublic, true), eq(aiAssistants.isActive, true))
+        )
+        .orderBy(
+          desc(aiAssistants.averageRating),
+          desc(aiAssistants.usageCount)
+        )
         .limit(limit)
         .offset(offset);
 
-      return assistants.map(assistant => aiAssistantPublicSchema.parse(assistant));
+      return assistants.map((assistant) =>
+        aiAssistantPublicSchema.parse(assistant)
+      );
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to get public AI assistants: ${errorMessage}`);
-      throw new BadRequestException('Failed to get public AI assistants');
+      throw new BadRequestException("Failed to get public AI assistants");
     }
   }
 
@@ -283,7 +318,7 @@ export class AiAssistantsService {
     offset: number = 0
   ): Promise<AiAssistant[]> {
     try {
-      let whereConditions = [];
+      const whereConditions = [];
 
       // 文本搜索
       if (query) {
@@ -297,10 +332,12 @@ export class AiAssistantsService {
 
       // 过滤条件
       if (filters.type) {
-        whereConditions.push(eq(aiAssistants.type, filters.type));
+        whereConditions.push(eq(aiAssistants.type, filters.type as any));
       }
       if (filters.specialization) {
-        whereConditions.push(eq(aiAssistants.specialization, filters.specialization));
+        whereConditions.push(
+          eq(aiAssistants.specialization, filters.specialization)
+        );
       }
       if (filters.isPublic !== undefined) {
         whereConditions.push(eq(aiAssistants.isPublic, filters.isPublic));
@@ -309,26 +346,34 @@ export class AiAssistantsService {
         whereConditions.push(eq(aiAssistants.isActive, filters.isActive));
       }
       if (filters.organizationId) {
-        whereConditions.push(eq(aiAssistants.organizationId, filters.organizationId));
+        whereConditions.push(
+          eq(aiAssistants.organizationId, filters.organizationId)
+        );
       }
       if (filters.createdBy) {
         whereConditions.push(eq(aiAssistants.createdBy, filters.createdBy));
       }
       if (filters.minRating) {
-        whereConditions.push(sql`${aiAssistants.averageRating} >= ${filters.minRating}`);
+        whereConditions.push(
+          sql`${aiAssistants.averageRating} >= ${filters.minRating}`
+        );
       }
 
       return await this.db
         .select()
         .from(aiAssistants)
         .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
-        .orderBy(desc(aiAssistants.averageRating), desc(aiAssistants.usageCount))
+        .orderBy(
+          desc(aiAssistants.averageRating),
+          desc(aiAssistants.usageCount)
+        )
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to search AI assistants: ${errorMessage}`);
-      throw new BadRequestException('Failed to search AI assistants');
+      throw new BadRequestException("Failed to search AI assistants");
     }
   }
 
@@ -353,18 +398,19 @@ export class AiAssistantsService {
         .returning();
 
       if (!updatedAssistant) {
-        throw new NotFoundException('AI assistant not found');
+        throw new NotFoundException("AI assistant not found");
       }
 
       this.logger.log(`Updated AI assistant: ${id}`);
       return updatedAssistant;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to update AI assistant: ${errorMessage}`);
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to update AI assistant');
+      throw new BadRequestException("Failed to update AI assistant");
     }
   }
 
@@ -383,18 +429,21 @@ export class AiAssistantsService {
         .returning();
 
       if (!updatedAssistant) {
-        throw new NotFoundException('AI assistant not found');
+        throw new NotFoundException("AI assistant not found");
       }
 
-      this.logger.log(`Toggled AI assistant ${id} to ${isActive ? 'active' : 'inactive'}`);
+      this.logger.log(
+        `Toggled AI assistant ${id} to ${isActive ? "active" : "inactive"}`
+      );
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to toggle AI assistant: ${errorMessage}`);
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to toggle AI assistant');
+      throw new BadRequestException("Failed to toggle AI assistant");
     }
   }
 
@@ -409,18 +458,19 @@ export class AiAssistantsService {
         .returning();
 
       if (result.length === 0) {
-        throw new NotFoundException('AI assistant not found');
+        throw new NotFoundException("AI assistant not found");
       }
 
       this.logger.log(`Deleted AI assistant: ${id}`);
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to delete AI assistant: ${errorMessage}`);
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to delete AI assistant');
+      throw new BadRequestException("Failed to delete AI assistant");
     }
   }
 
@@ -437,9 +487,12 @@ export class AiAssistantsService {
       this.logger.log(`Batch deleted ${result.length} AI assistants`);
       return result.length;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to batch delete AI assistants: ${errorMessage}`);
-      throw new BadRequestException('Failed to batch delete AI assistants');
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      this.logger.error(
+        `Failed to batch delete AI assistants: ${errorMessage}`
+      );
+      throw new BadRequestException("Failed to batch delete AI assistants");
     }
   }
 
@@ -459,17 +512,18 @@ export class AiAssistantsService {
         .returning();
 
       if (!updatedAssistant) {
-        throw new NotFoundException('AI assistant not found');
+        throw new NotFoundException("AI assistant not found");
       }
 
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to record usage: ${errorMessage}`);
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to record usage');
+      throw new BadRequestException("Failed to record usage");
     }
   }
 
@@ -479,7 +533,7 @@ export class AiAssistantsService {
   async updateRating(id: string, rating: number): Promise<boolean> {
     try {
       if (rating < 1 || rating > 5) {
-        throw new BadRequestException('Rating must be between 1 and 5');
+        throw new BadRequestException("Rating must be between 1 and 5");
       }
 
       const [updatedAssistant] = await this.db
@@ -492,27 +546,33 @@ export class AiAssistantsService {
         .returning();
 
       if (!updatedAssistant) {
-        throw new NotFoundException('AI assistant not found');
+        throw new NotFoundException("AI assistant not found");
       }
 
       this.logger.log(`Updated rating for AI assistant ${id} to ${rating}`);
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to update rating: ${errorMessage}`);
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
-      throw new BadRequestException('Failed to update rating');
+      throw new BadRequestException("Failed to update rating");
     }
   }
 
   /**
    * 获取AI助手统计信息
    */
-  async getAiAssistantStats(organizationId?: string): Promise<AiAssistantStats> {
+  async getAiAssistantStats(
+    organizationId?: string
+  ): Promise<AiAssistantStats> {
     try {
-      const whereCondition = organizationId 
+      const whereCondition = organizationId
         ? eq(aiAssistants.organizationId, organizationId)
         : undefined;
 
@@ -525,18 +585,26 @@ export class AiAssistantsService {
       const [activeResult] = await this.db
         .select({ count: count() })
         .from(aiAssistants)
-        .where(whereCondition ? and(whereCondition, eq(aiAssistants.isActive, true)) : eq(aiAssistants.isActive, true));
+        .where(
+          whereCondition
+            ? and(whereCondition, eq(aiAssistants.isActive, true))
+            : eq(aiAssistants.isActive, true)
+        );
 
       const [publicResult] = await this.db
         .select({ count: count() })
         .from(aiAssistants)
-        .where(whereCondition ? and(whereCondition, eq(aiAssistants.isPublic, true)) : eq(aiAssistants.isPublic, true));
+        .where(
+          whereCondition
+            ? and(whereCondition, eq(aiAssistants.isPublic, true))
+            : eq(aiAssistants.isPublic, true)
+        );
 
       // 按类型统计
       const typeStats = await this.db
         .select({
           type: aiAssistants.type,
-          count: count()
+          count: count(),
         })
         .from(aiAssistants)
         .where(whereCondition)
@@ -546,7 +614,7 @@ export class AiAssistantsService {
       const providerStats = await this.db
         .select({
           provider: sql<string>`${aiAssistants.modelConfig}->>'provider'`,
-          count: count()
+          count: count(),
         })
         .from(aiAssistants)
         .where(whereCondition)
@@ -556,7 +624,7 @@ export class AiAssistantsService {
       const [avgRatingResult] = await this.db
         .select({
           avgRating: sql<number>`AVG(${aiAssistants.averageRating})`,
-          totalUsage: sql<number>`SUM(${aiAssistants.usageCount})`
+          totalUsage: sql<number>`SUM(${aiAssistants.usageCount})`,
         })
         .from(aiAssistants)
         .where(whereCondition);
@@ -577,9 +645,10 @@ export class AiAssistantsService {
         totalUsage: avgRatingResult.totalUsage || 0,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to get AI assistant stats: ${errorMessage}`);
-      throw new BadRequestException('Failed to get AI assistant stats');
+      throw new BadRequestException("Failed to get AI assistant stats");
     }
   }
 
@@ -594,7 +663,7 @@ export class AiAssistantsService {
     try {
       const originalAssistant = await this.getAiAssistantById(id);
       if (!originalAssistant) {
-        throw new NotFoundException('Original AI assistant not found');
+        throw new NotFoundException("Original AI assistant not found");
       }
 
       const duplicateData: NewAiAssistant = {
@@ -605,6 +674,7 @@ export class AiAssistantsService {
         specialization: originalAssistant.specialization,
         modelType: originalAssistant.modelType,
         modelConfig: originalAssistant.modelConfig,
+        systemPrompt: originalAssistant.systemPrompt,
         capabilities: originalAssistant.capabilities,
         isPublic: false, // 复制的助手默认为私有
         isActive: true,
@@ -614,12 +684,13 @@ export class AiAssistantsService {
 
       return await this.createAiAssistant(duplicateData);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to duplicate AI assistant: ${errorMessage}`);
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to duplicate AI assistant');
+      throw new BadRequestException("Failed to duplicate AI assistant");
     }
   }
 
@@ -631,7 +702,7 @@ export class AiAssistantsService {
     isActive?: boolean
   ): Promise<number> {
     try {
-      let whereConditions = [];
+      const whereConditions = [];
 
       if (organizationId) {
         whereConditions.push(eq(aiAssistants.organizationId, organizationId));
@@ -643,13 +714,16 @@ export class AiAssistantsService {
       const [result] = await this.db
         .select({ count: count() })
         .from(aiAssistants)
-        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+        .where(
+          whereConditions.length > 0 ? and(...whereConditions) : undefined
+        );
 
       return result.count;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to get AI assistant count: ${errorMessage}`);
-      throw new BadRequestException('Failed to get AI assistant count');
+      throw new BadRequestException("Failed to get AI assistant count");
     }
   }
 
@@ -665,29 +739,32 @@ export class AiAssistantsService {
 
       // 基本验证
       if (!assistant.name || assistant.name.trim().length === 0) {
-        errors.push('Name is required');
+        errors.push("Name is required");
       }
       if (!assistant.type) {
-        errors.push('Type is required');
+        errors.push("Type is required");
       }
       if (!assistant.modelType) {
-        errors.push('Model type is required');
+        errors.push("Model type is required");
       }
       if (!assistant.modelConfig) {
-        errors.push('Model config is required');
+        errors.push("Model config is required");
       }
 
       // 评分验证
-      if (assistant.averageRating !== null && assistant.averageRating !== undefined) {
+      if (
+        assistant.averageRating !== null &&
+        assistant.averageRating !== undefined
+      ) {
         if (assistant.averageRating < 1 || assistant.averageRating > 5) {
-          errors.push('Average rating must be between 1 and 5');
+          errors.push("Average rating must be between 1 and 5");
         }
       }
 
       // 使用次数验证
       if (assistant.usageCount !== null && assistant.usageCount !== undefined) {
         if (assistant.usageCount < 0) {
-          errors.push('Usage count cannot be negative');
+          errors.push("Usage count cannot be negative");
         }
       }
 
@@ -696,11 +773,12 @@ export class AiAssistantsService {
         errors,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to validate AI assistant: ${errorMessage}`);
       return {
         isValid: false,
-        errors: ['Validation failed'],
+        errors: ["Validation failed"],
       };
     }
   }
@@ -708,13 +786,17 @@ export class AiAssistantsService {
   /**
    * OpenAI聊天完成
    */
-  private async createOpenAIChatCompletion(input: CreateChatCompletionInput, model: string): Promise<AIResponse> {
+  private async createOpenAIChatCompletion(
+    input: CreateChatCompletionInput,
+    model: string
+  ): Promise<AIResponse> {
     // 这里应该实现实际的OpenAI API调用
     // 暂时返回模拟响应
-    this.logger.debug('Creating OpenAI chat completion (mock)');
-    
+    this.logger.debug("Creating OpenAI chat completion (mock)");
+
     return {
-      content: 'This is a mock response from OpenAI. Please implement the actual OpenAI API integration.',
+      content:
+        "This is a mock response from OpenAI. Please implement the actual OpenAI API integration.",
       usage: {
         promptTokens: 100,
         completionTokens: 50,
@@ -728,12 +810,16 @@ export class AiAssistantsService {
   /**
    * Anthropic聊天完成
    */
-  private async createAnthropicChatCompletion(input: CreateChatCompletionInput, model: string): Promise<AIResponse> {
+  private async createAnthropicChatCompletion(
+    input: CreateChatCompletionInput,
+    model: string
+  ): Promise<AIResponse> {
     // 这里应该实现实际的Anthropic API调用
-    this.logger.debug('Creating Anthropic chat completion (mock)');
-    
+    this.logger.debug("Creating Anthropic chat completion (mock)");
+
     return {
-      content: 'This is a mock response from Anthropic. Please implement the actual Anthropic API integration.',
+      content:
+        "This is a mock response from Anthropic. Please implement the actual Anthropic API integration.",
       usage: {
         promptTokens: 100,
         completionTokens: 50,
@@ -747,12 +833,16 @@ export class AiAssistantsService {
   /**
    * Google聊天完成
    */
-  private async createGoogleChatCompletion(input: CreateChatCompletionInput, model: string): Promise<AIResponse> {
+  private async createGoogleChatCompletion(
+    input: CreateChatCompletionInput,
+    model: string
+  ): Promise<AIResponse> {
     // 这里应该实现实际的Google AI API调用
-    this.logger.debug('Creating Google chat completion (mock)');
-    
+    this.logger.debug("Creating Google chat completion (mock)");
+
     return {
-      content: 'This is a mock response from Google AI. Please implement the actual Google AI API integration.',
+      content:
+        "This is a mock response from Google AI. Please implement the actual Google AI API integration.",
       usage: {
         promptTokens: 100,
         completionTokens: 50,
@@ -766,12 +856,16 @@ export class AiAssistantsService {
   /**
    * Azure OpenAI聊天完成
    */
-  private async createAzureOpenAIChatCompletion(input: CreateChatCompletionInput, model: string): Promise<AIResponse> {
+  private async createAzureOpenAIChatCompletion(
+    input: CreateChatCompletionInput,
+    model: string
+  ): Promise<AIResponse> {
     // 这里应该实现实际的Azure OpenAI API调用
-    this.logger.debug('Creating Azure OpenAI chat completion (mock)');
-    
+    this.logger.debug("Creating Azure OpenAI chat completion (mock)");
+
     return {
-      content: 'This is a mock response from Azure OpenAI. Please implement the actual Azure OpenAI API integration.',
+      content:
+        "This is a mock response from Azure OpenAI. Please implement the actual Azure OpenAI API integration.",
       usage: {
         promptTokens: 100,
         completionTokens: 50,
@@ -788,15 +882,15 @@ export class AiAssistantsService {
   private getDefaultModel(provider: AIProvider): string {
     switch (provider) {
       case AIProvider.OPENAI:
-        return 'gpt-4o-mini';
+        return "gpt-4o-mini";
       case AIProvider.ANTHROPIC:
-        return 'claude-3-5-sonnet-20241022';
+        return "claude-3-5-sonnet-20241022";
       case AIProvider.GOOGLE:
-        return 'gemini-1.5-flash';
+        return "gemini-1.5-flash";
       case AIProvider.AZURE_OPENAI:
-        return 'gpt-4o-mini';
+        return "gpt-4o-mini";
       default:
-        return 'gpt-4o-mini';
+        return "gpt-4o-mini";
     }
   }
 }

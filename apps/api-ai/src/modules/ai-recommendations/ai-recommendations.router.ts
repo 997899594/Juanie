@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { TrpcService } from '../../trpc/trpc.service';
 import { AiRecommendationsService, AiRecommendationSearchFilters } from './ai-recommendations.service';
-import { z } from 'zod';
 import {
   insertAiRecommendationSchema,
   updateAiRecommendationSchema,
@@ -43,7 +44,10 @@ export class AiRecommendationsRouter {
       .query(async ({ input }) => {
         const recommendation = await this.aiRecommendationsService.getAiRecommendationById(input.id);
         if (!recommendation) {
-          throw new Error('AI recommendation not found');
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'AI recommendation not found',
+          });
         }
         return recommendation;
       }),
@@ -132,7 +136,10 @@ export class AiRecommendationsRouter {
       .mutation(async ({ input }) => {
         const recommendation = await this.aiRecommendationsService.updateAiRecommendation(input.id, input.data);
         if (!recommendation) {
-          throw new Error('AI recommendation not found');
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'AI recommendation not found',
+          });
         }
         return recommendation;
       }),
@@ -143,7 +150,10 @@ export class AiRecommendationsRouter {
       .mutation(async ({ input }) => {
         const success = await this.aiRecommendationsService.deleteAiRecommendation(input.id);
         if (!success) {
-          throw new Error('AI recommendation not found');
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'AI recommendation not found',
+          });
         }
         return { success: true };
       }),
@@ -174,7 +184,10 @@ export class AiRecommendationsRouter {
           input.comment
         );
         if (!success) {
-          throw new Error('Failed to submit feedback');
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to submit feedback',
+          });
         }
         return { success: true };
       }),

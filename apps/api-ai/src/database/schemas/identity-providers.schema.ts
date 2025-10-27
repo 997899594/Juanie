@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, jsonb, boolean, index, uniqueIndex, varchar, pgEnum } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { organizations } from './organizations.schema';
 
@@ -71,30 +70,62 @@ export const identityProvidersIndexes = {
   uniqueOrgName: uniqueIndex('identity_providers_org_name_unique').on(identityProviders.organizationId, identityProviders.name),
 };
 
-// Zod 校验
-export const insertIdentityProviderSchema = createInsertSchema(identityProviders, {
+// Zod Schemas
+export const insertIdentityProviderSchema = z.object({
+  id: z.string().uuid().optional(),
+  organizationId: z.string().uuid(),
   providerType: IdentityProviderTypeEnum,
   name: z.string().min(1),
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+  issuerUrl: z.string().optional(),
+  authorizationUrl: z.string().optional(),
+  tokenUrl: z.string().optional(),
+  userInfoUrl: z.string().optional(),
+  redirectUri: z.string().optional(),
+  scope: z.string().optional(),
+  settings: z.record(z.string(), z.any()).optional(),
+  enabled: z.boolean().default(true),
+  description: z.string().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 });
-export const selectIdentityProviderSchema = createSelectSchema(identityProviders);
-export const updateIdentityProviderSchema = selectIdentityProviderSchema
-  .pick({
-    organizationId: true,
-    providerType: true,
-    name: true,
-    clientId: true,
-    clientSecret: true,
-    issuerUrl: true,
-    authorizationUrl: true,
-    tokenUrl: true,
-    userInfoUrl: true,
-    redirectUri: true,
-    scope: true,
-    settings: true,
-    enabled: true,
-    description: true,
-  })
-  .partial();
+
+export const selectIdentityProviderSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  providerType: IdentityProviderTypeEnum,
+  name: z.string(),
+  clientId: z.string().nullable(),
+  clientSecret: z.string().nullable(),
+  issuerUrl: z.string().nullable(),
+  authorizationUrl: z.string().nullable(),
+  tokenUrl: z.string().nullable(),
+  userInfoUrl: z.string().nullable(),
+  redirectUri: z.string().nullable(),
+  scope: z.string().nullable(),
+  settings: z.record(z.string(), z.any()).nullable(),
+  enabled: z.boolean(),
+  description: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+export const updateIdentityProviderSchema = z.object({
+  organizationId: z.string().uuid().optional(),
+  providerType: IdentityProviderTypeEnum.optional(),
+  name: z.string().optional(),
+  clientId: z.string().nullable().optional(),
+  clientSecret: z.string().nullable().optional(),
+  issuerUrl: z.string().nullable().optional(),
+  authorizationUrl: z.string().nullable().optional(),
+  tokenUrl: z.string().nullable().optional(),
+  userInfoUrl: z.string().nullable().optional(),
+  redirectUri: z.string().nullable().optional(),
+  scope: z.string().nullable().optional(),
+  settings: z.record(z.string(), z.any()).nullable().optional(),
+  enabled: z.boolean().optional(),
+  description: z.string().nullable().optional(),
+});
 
 export type IdentityProvider = typeof identityProviders.$inferSelect;
 export type NewIdentityProvider = typeof identityProviders.$inferInsert;

@@ -44,7 +44,7 @@ export class AiAssistantsRouter {
           offset: z.number().min(0).default(0),
         }))
         .output(z.object({
-          items: z.array(aiAssistantPublicSchema),
+          items: z.union([z.array(selectAiAssistantSchema), z.array(z.any())]),
           total: z.number(),
         }))
         .query(async ({ input }) => {

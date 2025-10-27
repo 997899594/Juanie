@@ -143,32 +143,32 @@ export class IncidentsRouter {
 
   public get incidentsRouter() {
     return this.trpc.router({
-      // 创建事件
-      create: this.trpc.publicProcedure
+      // 创建事件 - 需要认证
+      create: this.trpc.protectedProcedure
         .input(createIncidentSchema)
         .output(selectIncidentSchema)
         .mutation(async ({ input }) => {
           return this.incidentsService.createIncident(input);
         }),
 
-      // 根据ID获取事件
-      getById: this.trpc.publicProcedure
+      // 根据ID获取事件 - 需要认证
+      getById: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(selectIncidentSchema.nullable())
         .query(async ({ input }) => {
           return this.incidentsService.getIncidentById(input.id);
         }),
 
-      // 根据项目获取事件列表
-      getByProject: this.trpc.publicProcedure
+      // 根据项目获取事件列表 - 需要认证
+      getByProject: this.trpc.protectedProcedure
         .input(getIncidentsByProjectSchema)
         .output(incidentListResponseSchema)
         .query(async ({ input }) => {
           return this.incidentsService.getIncidentsByProject(input.projectId, input);
         }),
 
-      // 更新事件
-      update: this.trpc.publicProcedure
+      // 更新事件 - 需要认证
+      update: this.trpc.protectedProcedure
         .input(z.object({
           id: z.string().uuid(),
           data: updateIncidentSchema
@@ -178,72 +178,72 @@ export class IncidentsRouter {
           return this.incidentsService.updateIncident(input.id, input.data);
         }),
 
-      // 确认事件
-      acknowledge: this.trpc.publicProcedure
+      // 确认事件 - 需要认证
+      acknowledge: this.trpc.protectedProcedure
         .input(acknowledgeIncidentSchema)
         .output(selectIncidentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.incidentsService.acknowledgeIncident(input.id, input.assignedTo);
         }),
 
-      // 解决事件
-      resolve: this.trpc.publicProcedure
+      // 解决事件 - 需要认证
+      resolve: this.trpc.protectedProcedure
         .input(resolveIncidentSchema)
         .output(selectIncidentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.incidentsService.resolveIncident(input.id, input.resolutionData);
         }),
 
-      // 关闭事件
-      close: this.trpc.publicProcedure
+      // 关闭事件 - 需要认证
+      close: this.trpc.protectedProcedure
         .input(closeIncidentSchema)
         .output(selectIncidentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.incidentsService.closeIncident(input.id, input.postIncidentReview);
         }),
 
-      // 重新打开事件
-      reopen: this.trpc.publicProcedure
+      // 重新打开事件 - 需要认证
+      reopen: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(selectIncidentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.incidentsService.reopenIncident(input.id);
         }),
 
-      // 分配事件
-      assign: this.trpc.publicProcedure
+      // 分配事件 - 需要认证
+      assign: this.trpc.protectedProcedure
         .input(assignIncidentSchema)
         .output(selectIncidentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.incidentsService.assignIncident(input.id, input.assignedTo);
         }),
 
-      // 更新严重程度
-      updateSeverity: this.trpc.publicProcedure
+      // 更新严重程度 - 需要认证
+      updateSeverity: this.trpc.protectedProcedure
         .input(updateSeveritySchema)
         .output(selectIncidentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.incidentsService.updateSeverity(input.id, input.severity);
         }),
 
-      // 更新优先级
-      updatePriority: this.trpc.publicProcedure
+      // 更新优先级 - 需要认证
+      updatePriority: this.trpc.protectedProcedure
         .input(updatePrioritySchema)
         .output(selectIncidentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.incidentsService.updatePriority(input.id, input.priority);
         }),
 
-      // 添加沟通更新
-      addCommunicationUpdate: this.trpc.publicProcedure
+      // 添加沟通更新 - 需要认证
+      addCommunicationUpdate: this.trpc.protectedProcedure
         .input(addCommunicationUpdateSchema)
         .output(selectIncidentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.incidentsService.addCommunicationUpdate(input.id, input.update);
         }),
 
-      // 获取统计信息
-      getStatistics: this.trpc.publicProcedure
+      // 获取统计信息 - 需要认证
+      getStatistics: this.trpc.protectedProcedure
         .input(getStatisticsSchema)
         .output(incidentStatisticsSchema)
         .query(async ({ input }) => {
@@ -254,8 +254,8 @@ export class IncidentsRouter {
           );
         }),
 
-      // 批量更新状态
-      batchUpdateStatus: this.trpc.publicProcedure
+      // 批量更新状态 - 需要认证
+      batchUpdateStatus: this.trpc.protectedProcedure
         .input(batchUpdateStatusSchema)
         .output(z.object({ updatedCount: z.number() }))
         .mutation(async ({ input }) => {
@@ -267,8 +267,8 @@ export class IncidentsRouter {
           return { updatedCount };
         }),
 
-      // 删除事件
-      delete: this.trpc.publicProcedure
+      // 删除事件 - 需要认证
+      delete: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(z.object({ success: z.boolean() }))
         .mutation(async ({ input }) => {
@@ -276,8 +276,8 @@ export class IncidentsRouter {
           return { success };
         }),
 
-      // 批量删除事件
-      batchDelete: this.trpc.publicProcedure
+      // 批量删除事件 - 需要认证
+      batchDelete: this.trpc.protectedProcedure
         .input(z.object({ incidentIds: z.array(z.string().uuid()).min(1) }))
         .output(z.object({ deletedCount: z.number() }))
         .mutation(async ({ input }) => {
@@ -285,8 +285,8 @@ export class IncidentsRouter {
           return { deletedCount };
         }),
 
-      // 获取相似事件
-      getSimilarIncidents: this.trpc.publicProcedure
+      // 获取相似事件 - 需要认证
+      getSimilarIncidents: this.trpc.protectedProcedure
         .input(z.object({
           incidentId: z.string().uuid(),
           limit: z.number().min(1).max(50).default(10)
@@ -296,8 +296,8 @@ export class IncidentsRouter {
           return this.incidentsService.getSimilarIncidents(input.incidentId, input.limit);
         }),
 
-      // 获取AI推荐
-      getAIRecommendations: this.trpc.publicProcedure
+      // 获取AI推荐 - 需要认证
+      getAIRecommendations: this.trpc.protectedProcedure
         .input(z.object({ incidentId: z.string().uuid() }))
         .output(aiRecommendationsSchema)
         .query(async ({ input }) => {

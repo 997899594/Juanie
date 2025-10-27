@@ -1,17 +1,34 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
-import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
-import { eq, and, or, desc, asc, count, inArray, isNull, like } from 'drizzle-orm';
 import {
-  monitoringConfigs,
-  MonitoringConfig,
-  NewMonitoringConfig,
-  UpdateMonitoringConfig,
-  MonitorType,
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  like,
+  or,
+} from "drizzle-orm";
+import { z } from "zod";
+import { InjectDatabase } from "../../common/decorators/database.decorator";
+import { Database } from "../../database/database.module";
+import {
   insertMonitoringConfigSchema,
+  MonitoringConfig,
+  MonitorType,
+  MonitorTypeEnum,
+  monitoringConfigs,
+  NewMonitoringConfig,
   selectMonitoringConfigSchema,
-  updateMonitoringConfigSchema
-} from '../../database/schemas/monitoring-configs.schema';
+  UpdateMonitoringConfig,
+  updateMonitoringConfigSchema,
+} from "../../database/schemas/monitoring-configs.schema";
 
 // 只保留必要的业务逻辑类型，其他都从schema导入
 export interface MonitoringConfigStats {
@@ -26,32 +43,32 @@ export interface MonitoringConfigStats {
 export class MonitoringConfigsService {
   private readonly logger = new Logger(MonitoringConfigsService.name);
 
-  constructor(
-    @InjectDatabase() private readonly db: Database,
-  ) {}
+  constructor(@InjectDatabase() private readonly db: Database) {}
 
   /**
    * 创建监控配置
    */
-  async createMonitoringConfig(data: NewMonitoringConfig): Promise<MonitoringConfig> {
+  async createMonitoringConfig(
+    data: NewMonitoringConfig
+  ): Promise<MonitoringConfig> {
     try {
       // 验证输入数据
       const validatedData = insertMonitoringConfigSchema.parse(data);
 
       const [config] = await this.db
         .insert(monitoringConfigs)
-        .values({
-          ...validatedData,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
+        .values(validatedData)
         .returning();
 
-      this.logger.log(`Monitoring config created: ${config.id} for project: ${config.projectId}`);
+      this.logger.log(
+        `Monitoring config created: ${config.id} for project: ${config.projectId}`
+      );
       return config;
     } catch (error) {
       this.logger.error(`Failed to create monitoring config: ${error}`);
-      throw new BadRequestException('Failed to create monitoring configuration');
+      throw new BadRequestException(
+        "Failed to create monitoring configuration"
+      );
     }
   }
 
@@ -92,8 +109,10 @@ export class MonitoringConfigsService {
 
       return configs;
     } catch (error) {
-      this.logger.error(`Failed to get monitoring configs by project: ${error}`);
-      throw new BadRequestException('Failed to get monitoring configurations');
+      this.logger.error(
+        `Failed to get monitoring configs by project: ${error}`
+      );
+      throw new BadRequestException("Failed to get monitoring configurations");
     }
   }
 
@@ -116,8 +135,10 @@ export class MonitoringConfigsService {
 
       return configs;
     } catch (error) {
-      this.logger.error(`Failed to get monitoring configs by environment: ${error}`);
-      throw new BadRequestException('Failed to get monitoring configurations');
+      this.logger.error(
+        `Failed to get monitoring configs by environment: ${error}`
+      );
+      throw new BadRequestException("Failed to get monitoring configurations");
     }
   }
 
@@ -125,7 +146,7 @@ export class MonitoringConfigsService {
    * 根据监控类型获取配置列表
    */
   async getMonitoringConfigsByType(
-    monitorType: MonitorType,
+    monitorType: z.infer<typeof MonitorTypeEnum>,
     limit: number = 50,
     offset: number = 0
   ): Promise<MonitoringConfig[]> {
@@ -141,7 +162,7 @@ export class MonitoringConfigsService {
       return configs;
     } catch (error) {
       this.logger.error(`Failed to get monitoring configs by type: ${error}`);
-      throw new BadRequestException('Failed to get monitoring configurations');
+      throw new BadRequestException("Failed to get monitoring configurations");
     }
   }
 
@@ -154,8 +175,8 @@ export class MonitoringConfigsService {
     offset: number = 0
   ): Promise<MonitoringConfig[]> {
     try {
-      let whereCondition;
-      
+      let whereCondition: ReturnType<typeof eq> | ReturnType<typeof and>;
+
       if (projectId) {
         whereCondition = and(
           eq(monitoringConfigs.isActive, true),
@@ -173,8 +194,11 @@ export class MonitoringConfigsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to get active monitoring configs: ${errorMessage}`);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      this.logger.error(
+        `Failed to get active monitoring configs: ${errorMessage}`
+      );
       return [];
     }
   }
@@ -189,7 +213,7 @@ export class MonitoringConfigsService {
     offset: number = 0
   ): Promise<MonitoringConfig[]> {
     try {
-      let whereCondition;
+      let whereCondition: ReturnType<typeof eq> | ReturnType<typeof and>;
 
       if (projectId) {
         whereCondition = and(
@@ -208,7 +232,8 @@ export class MonitoringConfigsService {
         .limit(limit)
         .offset(offset);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to search monitoring configs: ${errorMessage}`);
       return [];
     }
@@ -227,15 +252,12 @@ export class MonitoringConfigsService {
 
       const [updatedConfig] = await this.db
         .update(monitoringConfigs)
-        .set({
-          ...validatedData,
-          updatedAt: new Date(),
-        })
+        .set(validatedData)
         .where(eq(monitoringConfigs.id, id))
         .returning();
 
       if (!updatedConfig) {
-        throw new NotFoundException('Monitoring configuration not found');
+        throw new NotFoundException("Monitoring configuration not found");
       }
 
       this.logger.log(`Monitoring config updated: ${id}`);
@@ -245,21 +267,23 @@ export class MonitoringConfigsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to update monitoring configuration');
+      throw new BadRequestException(
+        "Failed to update monitoring configuration"
+      );
     }
   }
 
   /**
    * 启用/禁用监控配置
    */
-  async toggleMonitoringConfig(id: string, isActive: boolean): Promise<boolean> {
+  async toggleMonitoringConfig(
+    id: string,
+    isActive: boolean
+  ): Promise<boolean> {
     try {
       const [updatedConfig] = await this.db
         .update(monitoringConfigs)
-        .set({
-          isActive,
-          updatedAt: new Date(),
-        })
+        .set({ isActive })
         .where(eq(monitoringConfigs.id, id))
         .returning();
 
@@ -268,7 +292,9 @@ export class MonitoringConfigsService {
         return false;
       }
 
-      this.logger.log(`Monitoring config ${isActive ? 'enabled' : 'disabled'}: ${id}`);
+      this.logger.log(
+        `Monitoring config ${isActive ? "enabled" : "disabled"}: ${id}`
+      );
       return true;
     } catch (error) {
       this.logger.error(`Failed to toggle monitoring config: ${error}`);
@@ -315,7 +341,10 @@ export class MonitoringConfigsService {
   /**
    * 批量启用/禁用监控配置
    */
-  async batchToggleMonitoringConfigs(ids: string[], isActive: boolean): Promise<number> {
+  async batchToggleMonitoringConfigs(
+    ids: string[],
+    isActive: boolean
+  ): Promise<number> {
     try {
       if (ids.length === 0) return 0;
 
@@ -327,7 +356,11 @@ export class MonitoringConfigsService {
         })
         .where(inArray(monitoringConfigs.id, ids));
 
-      this.logger.log(`Batch ${isActive ? 'enabled' : 'disabled'} ${ids.length} monitoring configs`);
+      this.logger.log(
+        `Batch ${isActive ? "enabled" : "disabled"} ${
+          ids.length
+        } monitoring configs`
+      );
       return ids.length;
     } catch (error) {
       this.logger.error(`Failed to batch toggle monitoring configs: ${error}`);
@@ -338,9 +371,13 @@ export class MonitoringConfigsService {
   /**
    * 获取监控配置统计信息
    */
-  async getMonitoringConfigStats(projectId?: string): Promise<MonitoringConfigStats> {
+  async getMonitoringConfigStats(
+    projectId?: string
+  ): Promise<MonitoringConfigStats> {
     try {
-      const baseCondition = projectId ? eq(monitoringConfigs.projectId, projectId) : undefined;
+      const baseCondition = projectId
+        ? eq(monitoringConfigs.projectId, projectId)
+        : undefined;
 
       // 总配置数
       const [totalResult] = await this.db
@@ -352,16 +389,13 @@ export class MonitoringConfigsService {
       const [activeResult] = await this.db
         .select({ count: count() })
         .from(monitoringConfigs)
-        .where(and(
-          baseCondition,
-          eq(monitoringConfigs.isActive, true)
-        ));
+        .where(and(baseCondition, eq(monitoringConfigs.isActive, true)));
 
       // 按类型统计
       const typeStats = await this.db
         .select({
           monitorType: monitoringConfigs.monitorType,
-          count: count()
+          count: count(),
         })
         .from(monitoringConfigs)
         .where(baseCondition)
@@ -371,14 +405,15 @@ export class MonitoringConfigsService {
       const avgIntervalResult = await this.db
         .select()
         .from(monitoringConfigs)
-        .where(and(
-          baseCondition,
-          eq(monitoringConfigs.isActive, true)
-        ));
+        .where(and(baseCondition, eq(monitoringConfigs.isActive, true)));
 
-      const avgCheckInterval = avgIntervalResult.length > 0
-        ? avgIntervalResult.reduce((sum, config) => sum + (config.checkInterval || 60), 0) / avgIntervalResult.length
-        : 60;
+      const avgCheckInterval =
+        avgIntervalResult.length > 0
+          ? avgIntervalResult.reduce(
+              (sum, config) => sum + (config.checkInterval || 60),
+              0
+            ) / avgIntervalResult.length
+          : 60;
 
       const configsByType: Record<MonitorType, number> = {
         uptime: 0,
@@ -387,7 +422,7 @@ export class MonitoringConfigsService {
         custom: 0,
       };
 
-      typeStats.forEach(stat => {
+      typeStats.forEach((stat) => {
         configsByType[stat.monitorType] = stat.count;
       });
 
@@ -400,7 +435,9 @@ export class MonitoringConfigsService {
       };
     } catch (error) {
       this.logger.error(`Failed to get monitoring config stats: ${error}`);
-      throw new BadRequestException('Failed to get monitoring configuration statistics');
+      throw new BadRequestException(
+        "Failed to get monitoring configuration statistics"
+      );
     }
   }
 
@@ -414,38 +451,48 @@ export class MonitoringConfigsService {
     try {
       const originalConfig = await this.getMonitoringConfigById(id);
       if (!originalConfig) {
-        throw new NotFoundException('Original monitoring configuration not found');
+        throw new NotFoundException(
+          "Original monitoring configuration not found"
+        );
       }
 
       const { id: _, createdAt, updatedAt, ...configData } = originalConfig;
-      
+
       const duplicatedConfig = await this.createMonitoringConfig({
         ...configData,
-        serviceName: newServiceName || `${configData.serviceName || 'service'}_copy`,
+        serviceName:
+          newServiceName || `${configData.serviceName || "service"}_copy`,
       });
 
-      this.logger.log(`Monitoring config duplicated: ${id} -> ${duplicatedConfig.id}`);
+      this.logger.log(
+        `Monitoring config duplicated: ${id} -> ${duplicatedConfig.id}`
+      );
       return duplicatedConfig;
     } catch (error) {
       this.logger.error(`Failed to duplicate monitoring config: ${error}`);
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to duplicate monitoring configuration');
+      throw new BadRequestException(
+        "Failed to duplicate monitoring configuration"
+      );
     }
   }
 
   /**
    * 获取监控配置数量
    */
-  async getMonitoringConfigCount(projectId?: string, isActive?: boolean): Promise<number> {
+  async getMonitoringConfigCount(
+    projectId?: string,
+    isActive?: boolean
+  ): Promise<number> {
     try {
       const conditions = [];
-      
+
       if (projectId) {
         conditions.push(eq(monitoringConfigs.projectId, projectId));
       }
-      
+
       if (isActive !== undefined) {
         conditions.push(eq(monitoringConfigs.isActive, isActive));
       }
@@ -474,31 +521,37 @@ export class MonitoringConfigsService {
     try {
       // 基本验证
       if (!config.monitorType) {
-        errors.push('Monitor type is required');
+        errors.push("Monitor type is required");
       }
 
       if (!config.projectId) {
-        errors.push('Project ID is required');
+        errors.push("Project ID is required");
       }
 
       // URL验证（如果是uptime监控）
-      if (config.monitorType === 'uptime' && !config.checkUrl) {
-        errors.push('Check URL is required for uptime monitoring');
+      if (config.monitorType === "uptime" && !config.checkUrl) {
+        errors.push("Check URL is required for uptime monitoring");
       }
 
       // 检查间隔验证
-      if (config.checkInterval && (config.checkInterval < 30 || config.checkInterval > 3600)) {
-        errors.push('Check interval must be between 30 and 3600 seconds');
+      if (
+        config.checkInterval &&
+        (config.checkInterval < 30 || config.checkInterval > 3600)
+      ) {
+        errors.push("Check interval must be between 30 and 3600 seconds");
       }
 
       // 超时验证
       if (config.timeout && (config.timeout < 5 || config.timeout > 300)) {
-        errors.push('Timeout must be between 5 and 300 seconds');
+        errors.push("Timeout must be between 5 and 300 seconds");
       }
 
       // 重试次数验证
-      if (config.retryCount && (config.retryCount < 0 || config.retryCount > 10)) {
-        errors.push('Retry count must be between 0 and 10');
+      if (
+        config.retryCount &&
+        (config.retryCount < 0 || config.retryCount > 10)
+      ) {
+        errors.push("Retry count must be between 0 and 10");
       }
 
       return {
@@ -509,12 +562,12 @@ export class MonitoringConfigsService {
       this.logger.error(`Failed to validate monitoring config: ${error}`);
       return {
         isValid: false,
-        errors: ['Validation failed due to internal error'],
+        errors: ["Validation failed due to internal error"],
       };
     }
   }
 
   hello(): string {
-    return 'Hello from MonitoringConfigsService!';
+    return "Hello from MonitoringConfigsService!";
   }
 }

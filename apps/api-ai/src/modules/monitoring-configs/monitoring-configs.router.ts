@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { TrpcService } from '../../trpc/trpc.service';
 import { MonitoringConfigsService } from './monitoring-configs.service';
-import { z } from 'zod';
 import {
   insertMonitoringConfigSchema,
+  selectMonitoringConfigSchema,
   updateMonitoringConfigSchema,
-  MonitorTypeEnum
+  MonitorTypeEnum,
 } from '../../database/schemas/monitoring-configs.schema';
 
 @Injectable()
@@ -108,7 +110,7 @@ export class MonitoringConfigsRouter {
       .mutation(async ({ input }) => {
         const config = await this.monitoringConfigsService.updateMonitoringConfig(input.id, input.data);
         if (!config) {
-          throw new Error('Monitoring config not found');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Monitoring config not found' });
         }
         return config;
       }),
@@ -119,7 +121,10 @@ export class MonitoringConfigsRouter {
       .mutation(async ({ input }) => {
         const success = await this.monitoringConfigsService.toggleMonitoringConfig(input.id, true);
         if (!success) {
-          throw new Error('Failed to toggle monitoring config status');
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to toggle monitoring config status',
+          });
         }
         return { success: true };
       }),
@@ -130,7 +135,10 @@ export class MonitoringConfigsRouter {
       .mutation(async ({ input }) => {
         const success = await this.monitoringConfigsService.deleteMonitoringConfig(input.id);
         if (!success) {
-          throw new Error('Failed to delete monitoring config');
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to delete monitoring config',
+          });
         }
         return { success: true };
       }),
@@ -189,7 +197,10 @@ export class MonitoringConfigsRouter {
       .mutation(async ({ input }) => {
         const config = await this.monitoringConfigsService.duplicateMonitoringConfig(input.id);
         if (!config) {
-          throw new Error('Failed to duplicate monitoring config');
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to duplicate monitoring config',
+          });
         }
         return config;
       }),

@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, boolean, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { organizations } from './organizations.schema';
 import { projects } from './projects.schema';
@@ -64,11 +63,41 @@ export const webhookEndpointsIndexes = {
   ),
 };
 
-export const insertWebhookEndpointSchema = createInsertSchema(webhookEndpoints, {
+export const insertWebhookEndpointSchema = z.object({
+  id: z.string().uuid().optional(),
+  organizationId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
   name: z.string().min(1),
   url: z.string().url(),
+  secret: z.string().optional(),
+  enabled: z.boolean().optional(),
+  subscribedEvents: z.array(z.string()).optional(),
+  settings: z.record(z.string(), z.object({})).optional(),
+  lastSuccessAt: z.date().optional(),
+  lastFailureAt: z.date().optional(),
+  failureCount: z.string().optional(),
+  description: z.string().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 });
-export const selectWebhookEndpointSchema = createSelectSchema(webhookEndpoints);
+
+export const selectWebhookEndpointSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid().nullable(),
+  projectId: z.string().uuid().nullable(),
+  name: z.string(),
+  url: z.string(),
+  secret: z.string().nullable(),
+  enabled: z.boolean(),
+  subscribedEvents: z.array(z.string()).nullable(),
+  settings: z.record(z.string(), z.object({})).nullable(),
+  lastSuccessAt: z.date().nullable(),
+  lastFailureAt: z.date().nullable(),
+  failureCount: z.string().nullable(),
+  description: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export const updateWebhookEndpointSchema = selectWebhookEndpointSchema
   .pick({ name: true, url: true, secret: true, enabled: true, subscribedEvents: true, settings: true, description: true })
   .partial();

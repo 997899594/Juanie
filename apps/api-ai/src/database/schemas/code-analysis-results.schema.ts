@@ -9,7 +9,6 @@ import {
   timestamp,
   pgEnum,
 } from 'drizzle-orm/pg-core'
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 import { z } from 'zod'
 import { repositories } from './repositories.schema'
 
@@ -88,12 +87,55 @@ export const codeAnalysisResultsRelations = relations(codeAnalysisResults, ({ on
 }))
 
 // Zod Schemas with detailed enums
-export const insertCodeAnalysisResultSchema = createInsertSchema(codeAnalysisResults, {
+export const insertCodeAnalysisResultSchema = z.object({
+  id: z.string().uuid().optional(),
+  repositoryId: z.string().uuid().optional(),
+  commitHash: z.string(),
+  branch: z.string().optional(),
+  analyzerType: AnalyzerTypeEnum,
+  analyzerVersion: z.string().optional(),
   overallScore: z.number().min(0).max(1).optional(),
+  issuesFound: z.number().int().optional(),
+  criticalIssues: z.number().int().optional(),
+  securityVulnerabilities: z.number().int().optional(),
+  topFindingCategory: z.string().optional(),
+  findingCount: z.number().int().optional(),
+  findingSeverity: z.string().optional(),
+  suggestionCount: z.number().int().optional(),
+  topSuggestion: z.string().optional(),
+  aiSummary: z.string().optional(),
+  aiRecommendationCount: z.number().int().optional(),
+  topAiRecommendation: z.string().optional(),
   aiConfidenceScore: z.number().min(0).max(1).optional(),
+  scoreTrend: z.string().optional(),
   trendPercentage: z.number().min(0).max(100).optional(),
-})
-export const selectCodeAnalysisResultSchema = createSelectSchema(codeAnalysisResults)
+  createdAt: z.date().optional(),
+});
+
+export const selectCodeAnalysisResultSchema = z.object({
+  id: z.string().uuid(),
+  repositoryId: z.string().uuid().nullable(),
+  commitHash: z.string(),
+  branch: z.string().nullable(),
+  analyzerType: AnalyzerTypeEnum,
+  analyzerVersion: z.string().nullable(),
+  overallScore: z.number().nullable(),
+  issuesFound: z.number().int(),
+  criticalIssues: z.number().int(),
+  securityVulnerabilities: z.number().int(),
+  topFindingCategory: z.string().nullable(),
+  findingCount: z.number().int(),
+  findingSeverity: z.string().nullable(),
+  suggestionCount: z.number().int(),
+  topSuggestion: z.string().nullable(),
+  aiSummary: z.string().nullable(),
+  aiRecommendationCount: z.number().int(),
+  topAiRecommendation: z.string().nullable(),
+  aiConfidenceScore: z.number().nullable(),
+  scoreTrend: z.string().nullable(),
+  trendPercentage: z.number().nullable(),
+  createdAt: z.date(),
+});
 
 export const updateCodeAnalysisResultSchema = selectCodeAnalysisResultSchema.pick({
   repositoryId: true,

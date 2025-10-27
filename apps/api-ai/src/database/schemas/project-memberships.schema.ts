@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { projects } from './projects.schema';
 import { users } from './users.schema';
@@ -53,11 +52,31 @@ export const projectMembershipsIndexes = {
 };
 
 // Zod 校验
-export const insertProjectMembershipSchema = createInsertSchema(projectMemberships, {
+export const insertProjectMembershipSchema = z.object({
+  id: z.string().uuid().optional(),
+  projectId: z.string().uuid(),
+  userId: z.string().uuid(),
+  teamId: z.string().uuid().optional(),
+  role: ProjectMemberRoleEnum.optional(),
+  status: ProjectMemberStatusEnum.optional(),
+  invitedBy: z.string().uuid().optional(),
+  joinedAt: z.date().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+
+export const selectProjectMembershipSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
+  userId: z.string().uuid(),
+  teamId: z.string().uuid().nullable(),
   role: ProjectMemberRoleEnum,
   status: ProjectMemberStatusEnum,
+  invitedBy: z.string().uuid().nullable(),
+  joinedAt: z.date(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
-export const selectProjectMembershipSchema = createSelectSchema(projectMemberships);
 export const updateProjectMembershipSchema = selectProjectMembershipSchema
   .pick({ role: true, status: true, invitedBy: true, teamId: true })
   .partial();

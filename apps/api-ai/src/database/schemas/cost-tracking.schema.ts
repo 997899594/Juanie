@@ -1,5 +1,4 @@
 import { pgTable, uuid, varchar, text, timestamp, decimal, index, foreignKey } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { projects } from './projects.schema';
 import { organizations } from './organizations.schema';
@@ -47,9 +46,39 @@ export const costTrackingIndexes = {
 };
 
 // Zod schemas for validation
-export const insertCostTrackingSchema = createInsertSchema(costTracking);
+export const insertCostTrackingSchema = z.object({
+  id: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  organizationId: z.string().uuid(),
+  period: z.string().length(7), // YYYY-MM format
+  totalCost: z.string(),
+  currency: z.string().length(3).default('USD'),
+  computeCost: z.string().optional(),
+  storageCost: z.string().optional(),
+  networkCost: z.string().optional(),
+  databaseCost: z.string().optional(),
+  monitoringCost: z.string().optional(),
+  optimizationTips: z.string().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
 
-export const selectCostTrackingSchema = createSelectSchema(costTracking);
+export const selectCostTrackingSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid().nullable(),
+  organizationId: z.string().uuid(),
+  period: z.string(),
+  totalCost: z.string(),
+  currency: z.string(),
+  computeCost: z.string().nullable(),
+  storageCost: z.string().nullable(),
+  networkCost: z.string().nullable(),
+  databaseCost: z.string().nullable(),
+  monitoringCost: z.string().nullable(),
+  optimizationTips: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export const updateCostTrackingSchema = selectCostTrackingSchema.pick({
   period: true,

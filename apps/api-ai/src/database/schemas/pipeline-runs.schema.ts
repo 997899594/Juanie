@@ -1,6 +1,5 @@
 import { pgTable, uuid, integer, text, timestamp, jsonb, decimal, boolean, index, pgEnum } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 import { z } from 'zod'
 import { pipelines } from './pipelines.schema'
 import { users } from './users.schema'
@@ -54,6 +53,7 @@ export const pipelineRuns = pgTable('pipeline_runs', {
   artifactCount: integer('artifact_count').default(0), // 制品数量
   artifactSizeMb: decimal('artifact_size_mb', { precision: 10, scale: 2 }), // 制品大小MB
   createdAt: timestamp('created_at').defaultNow().notNull(), // 创建时间
+  updatedAt: timestamp('updated_at').defaultNow().notNull(), // 更新时间
 })
 
 // Indexes
@@ -80,21 +80,82 @@ export const pipelineRunsRelations = relations(pipelineRuns, ({ one }) => ({
 }));
 
 // Zod Schemas with detailed enums
-export const insertPipelineRunSchema = createInsertSchema(pipelineRuns, {
-  performanceScore: z.number().int().min(1).max(100).optional(),
-  testCoverage: z.string().optional(),
-  securityScore: z.number().int().min(1).max(100).optional(),
-  failurePredictionScore: z.string().optional(),
+export const insertPipelineRunSchema = z.object({
+  id: z.string().uuid().optional(),
+  pipelineId: z.string().uuid().optional(),
+  triggerType: PipelineRunTriggerTypeEnum,
+  triggerUserId: z.string().uuid().optional(),
+  triggerSource: z.string().optional(),
+  triggerBranch: z.string().optional(),
+  triggerCommit: z.string().optional(),
+  runNumber: z.number().int(),
+  commitHash: z.string().optional(),
+  branch: z.string().optional(),
+  status: PipelineRunStatusEnum.optional(),
+  startedAt: z.date().optional(),
+  finishedAt: z.date().optional(),
+  duration: z.number().int().optional(),
   computeUnitsUsed: z.string().optional(),
   estimatedCost: z.string().optional(),
   carbonFootprint: z.string().optional(),
+  failurePredictionScore: z.string().optional(),
+  optimizationSuggestion: z.string().optional(),
+  performanceScore: z.number().int().min(1).max(100).optional(),
+  testsTotal: z.number().int().optional(),
+  testsPassed: z.number().int().optional(),
+  testsFailed: z.number().int().optional(),
+  testCoverage: z.string().optional(),
+  vulnerabilitiesCritical: z.number().int().optional(),
+  vulnerabilitiesHigh: z.number().int().optional(),
+  vulnerabilitiesMedium: z.number().int().optional(),
+  vulnerabilitiesLow: z.number().int().optional(),
+  securityScore: z.number().int().min(1).max(100).optional(),
+  artifactCount: z.number().int().optional(),
   artifactSizeMb: z.string().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 });
 
-export const selectPipelineRunSchema = createSelectSchema(pipelineRuns);
+export const selectPipelineRunSchema = z.object({
+  id: z.string().uuid(),
+  pipelineId: z.string().uuid().nullable(),
+  triggerType: PipelineRunTriggerTypeEnum,
+  triggerUserId: z.string().uuid().nullable(),
+  triggerSource: z.string().nullable(),
+  triggerBranch: z.string().nullable(),
+  triggerCommit: z.string().nullable(),
+  runNumber: z.number().int(),
+  commitHash: z.string().nullable(),
+  branch: z.string().nullable(),
+  status: PipelineRunStatusEnum.nullable(),
+  startedAt: z.date().nullable(),
+  finishedAt: z.date().nullable(),
+  duration: z.number().int().nullable(),
+  computeUnitsUsed: z.string().nullable(),
+  estimatedCost: z.string().nullable(),
+  carbonFootprint: z.string().nullable(),
+  failurePredictionScore: z.string().nullable(),
+  optimizationSuggestion: z.string().nullable(),
+  performanceScore: z.number().int().min(1).max(100).nullable(),
+  testsTotal: z.number().int().nullable(),
+  testsPassed: z.number().int().nullable(),
+  testsFailed: z.number().int().nullable(),
+  testCoverage: z.string().nullable(),
+  vulnerabilitiesCritical: z.number().int().nullable(),
+  vulnerabilitiesHigh: z.number().int().nullable(),
+  vulnerabilitiesMedium: z.number().int().nullable(),
+  vulnerabilitiesLow: z.number().int().nullable(),
+  securityScore: z.number().int().min(1).max(100).nullable(),
+  artifactCount: z.number().int().nullable(),
+  artifactSizeMb: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
-export const updatePipelineRunSchema = selectPipelineRunSchema.pick({
-  pipelineId: true
+export const updatePipelineRunSchema = selectPipelineRunSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
 }).partial();
 
 export type PipelineRun = typeof pipelineRuns.$inferSelect;

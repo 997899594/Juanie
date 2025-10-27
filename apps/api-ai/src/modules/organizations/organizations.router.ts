@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { TrpcService } from '../../trpc/trpc.service';
 import { OrganizationsService } from './organizations.service';
-import { 
-  insertOrganizationSchema, 
+import {
+  insertOrganizationSchema,
+  selectOrganizationSchema,
   updateOrganizationSchema,
-  Organization 
 } from '../../database/schemas/organizations.schema';
 
 @Injectable()
@@ -37,7 +38,10 @@ export class OrganizationsRouter {
         .query(async ({ input }) => {
           const organization = await this.organizationsService.findById(input.id);
           if (!organization) {
-            throw new Error('Organization not found');
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Organization not found',
+            });
           }
           return organization;
         }),
@@ -47,7 +51,10 @@ export class OrganizationsRouter {
         .query(async ({ input }) => {
           const organization = await this.organizationsService.findBySlug(input.slug);
           if (!organization) {
-            throw new Error('Organization not found');
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Organization not found',
+            });
           }
           return organization;
         }),
@@ -73,8 +80,11 @@ export class OrganizationsRouter {
           limit: z.number().min(1).max(100).default(20),
           offset: z.number().min(0).default(0),
         }))
-        .query(async ({ input }) => {
-          return this.organizationsService.getOrganizations(input.limit, input.offset);
+        .query(async ({ input, ctx }) => {
+          return this.organizationsService.getOrganizations(
+            ctx.user.id,
+            { limit: input.limit, offset: input.offset }
+          );
         }),
 
       search: this.trpc.protectedProcedure
@@ -100,9 +110,7 @@ export class OrganizationsRouter {
         }))
         .query(async ({ input }) => {
           return this.organizationsService.getOrganizationMembers(
-            input.organizationId,
-            input.limit,
-            input.offset
+            input.organizationId
           );
         }),
 
@@ -116,8 +124,7 @@ export class OrganizationsRouter {
           return this.organizationsService.addOrganizationMember(
             input.organizationId,
             input.userId,
-            input.roleId,
-            ctx.user.id
+            input.roleId
           );
         }),
 
@@ -152,7 +159,7 @@ export class OrganizationsRouter {
       getStats: this.trpc.protectedProcedure
         .input(z.object({ organizationId: z.string() }))
         .query(async ({ input }) => {
-          return this.organizationsService.getOrganizationStats(input.organizationId);
+          return this.organizationsService.getOrganizationStats();
         }),
 
       updateUsage: this.trpc.protectedProcedure

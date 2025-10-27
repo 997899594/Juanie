@@ -1,6 +1,5 @@
 import { pgTable, uuid, integer, text, timestamp, boolean, decimal, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { projects } from './projects.schema';
 
@@ -83,10 +82,77 @@ export const experimentsRelations = relations(experiments, ({ one }) => ({
   // 移除 featureFlag 关系，因为 feature_flags 表不存在
 }));
 
-// Zod Schemas
-export const insertExperimentSchema = createInsertSchema(experiments);
+export const insertExperimentSchema = z.object({
+  id: z.string().uuid().optional(),
+  projectId: z.string().uuid(),
+  featureFlagId: z.number().int().optional(),
+  name: z.string(),
+  hypothesis: z.string().optional(),
+  primarySuccessMetric: z.string().optional(),
+  secondarySuccessMetrics: z.string().optional(),
+  successMetricTargetValue: z.string().optional(),
+  trafficAllocation: z.string().optional(),
+  controlVariantName: z.string(),
+  controlVariantDescription: z.string().optional(),
+  testVariantCount: z.number().int().optional(),
+  testVariantNames: z.string().optional(),
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+  durationDays: z.number().int().optional(),
+  minimumSampleSize: z.number().int().optional(),
+  confidenceLevel: z.string().optional(),
+  statisticalPower: z.string().optional(),
+  aiAnalysisEnabled: z.boolean().optional(),
+  realTimeMonitoring: z.boolean().optional(),
+  autoStopEnabled: z.boolean().optional(),
+  autoStopMinSampleSize: z.number().int().optional(),
+  autoStopConfidenceLevel: z.string().optional(),
+  autoStopMaxDuration: z.number().int().optional(),
+  experimentConclusion: z.string().optional(),
+  primaryMetricResult: z.string().optional(),
+  statisticalSignificanceAchieved: z.boolean().optional(),
+  statisticalSignificance: z.boolean().optional(),
+  winnerVariant: z.string().optional(),
+  status: z.string().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
 
-export const selectExperimentSchema = createSelectSchema(experiments);
+export const selectExperimentSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid().nullable(),
+  featureFlagId: z.number().int().nullable(),
+  name: z.string(),
+  hypothesis: z.string().nullable(),
+  primarySuccessMetric: z.string().nullable(),
+  secondarySuccessMetrics: z.string().nullable(),
+  successMetricTargetValue: z.string().nullable(),
+  trafficAllocation: z.string().nullable(),
+  controlVariantName: z.string(),
+  controlVariantDescription: z.string().nullable(),
+  testVariantCount: z.number().int().nullable(),
+  testVariantNames: z.string().nullable(),
+  startDate: z.date().nullable(),
+  endDate: z.date().nullable(),
+  durationDays: z.number().int().nullable(),
+  minimumSampleSize: z.number().int().nullable(),
+  confidenceLevel: z.string().nullable(),
+  statisticalPower: z.string().nullable(),
+  aiAnalysisEnabled: z.boolean().nullable(),
+  realTimeMonitoring: z.boolean().nullable(),
+  autoStopEnabled: z.boolean().nullable(),
+  autoStopMinSampleSize: z.number().int().nullable(),
+  autoStopConfidenceLevel: z.string().nullable(),
+  autoStopMaxDuration: z.number().int().nullable(),
+  experimentConclusion: z.string().nullable(),
+  primaryMetricResult: z.string().nullable(),
+  statisticalSignificanceAchieved: z.boolean().nullable(),
+  statisticalSignificance: z.boolean().nullable(),
+  winnerVariant: z.string().nullable(),
+  status: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export const updateExperimentSchema = selectExperimentSchema.pick({
   projectId: true,

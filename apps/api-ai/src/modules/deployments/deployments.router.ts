@@ -9,7 +9,7 @@ import {
   DeploymentStatusEnum,
   DeploymentStrategyEnum,
   RollbackStrategyEnum
-} from '../../database/schemas';
+} from '../../database/schemas/deployments.schema';
 
 // 输入验证schemas
 const getDeploymentByIdSchema = z.object({
@@ -178,7 +178,7 @@ const performancePredictionResponseSchema = z.object({
 const environmentUsageResponseSchema = z.object({
   activeDeployments: z.number(),
   totalDeployments: z.number(),
-  lastDeployment: deploymentWithDetailsSchema.optional(),
+  lastDeployment: selectDeploymentSchema.optional(),
 });
 
 @Injectable()
@@ -190,26 +190,31 @@ export class DeploymentsRouter {
 
   public get deploymentsRouter() {
     return this.trpc.router({
-      // 创建部署
-      create: this.trpc.publicProcedure
+      // 创建部署 - 需要认证
+      create: this.trpc.organizationProcedure
         .input(insertDeploymentSchema)
         .output(selectDeploymentSchema)
         .mutation(async ({ input }) => {
           return this.deploymentsService.createDeployment(input);
         }),
 
-      // 根据ID获取部署
-      getById: this.trpc.publicProcedure
-        .input(getDeploymentByIdSchema)
+      // 根据ID获取部署 - 需要认证
+      getById: this.trpc.organizationProcedure
+        .input(z.object({ id: z.string() }))
         .output(selectDeploymentSchema.nullable())
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
           return this.deploymentsService.getDeploymentById(input.id);
         }),
 
-      // 根据项目获取部署列表
-      getByProject: this.trpc.publicProcedure
+      // 根据项目获取部署列表 - 需要认证
+      getByProject: this.trpc.organizationProcedure
         .input(getDeploymentsByProjectSchema)
-        .output(deploymentListResponseSchema)
+        .output(z.object({
+          deployments: z.array(selectDeploymentSchema),
+          total: z.number(),
+          page: z.number(),
+          limit: z.number(),
+        }))
         .query(async ({ input }) => {
           return this.deploymentsService.getDeploymentsByProject(
             input.projectId,
@@ -226,10 +231,15 @@ export class DeploymentsRouter {
           );
         }),
 
-      // 根据环境获取部署列表
-      getByEnvironment: this.trpc.publicProcedure
+      // 根据环境获取部署列表 - 需要认证
+      getByEnvironment: this.trpc.organizationProcedure
         .input(getDeploymentsByEnvironmentSchema)
-        .output(deploymentListResponseSchema)
+        .output(z.object({
+          deployments: z.array(selectDeploymentSchema),
+          total: z.number(),
+          page: z.number(),
+          limit: z.number(),
+        }))
         .query(async ({ input }) => {
           return this.deploymentsService.getDeploymentsByEnvironment(
             input.environmentId,
@@ -245,24 +255,24 @@ export class DeploymentsRouter {
           );
         }),
 
-      // 更新部署
-      update: this.trpc.publicProcedure
+      // 更新部署 - 需要认证
+      update: this.trpc.organizationProcedure
         .input(updateDeploymentParamsSchema)
         .output(selectDeploymentSchema)
         .mutation(async ({ input }) => {
           return this.deploymentsService.updateDeployment(input.id, input.data);
         }),
 
-      // 启动部署
-      start: this.trpc.publicProcedure
+      // 开始部署 - 需要认证
+      start: this.trpc.organizationProcedure
         .input(startDeploymentSchema)
         .output(selectDeploymentSchema)
         .mutation(async ({ input }) => {
           return this.deploymentsService.startDeployment(input.id);
         }),
 
-      // 完成部署
-      finish: this.trpc.publicProcedure
+      // 完成部署 - 需要认证
+      finish: this.trpc.organizationProcedure
         .input(finishDeploymentSchema)
         .output(selectDeploymentSchema)
         .mutation(async ({ input }) => {
@@ -273,8 +283,8 @@ export class DeploymentsRouter {
           );
         }),
 
-      // 回滚部署
-      rollback: this.trpc.publicProcedure
+      // 回滚部署 - 需要认证
+      rollback: this.trpc.organizationProcedure
         .input(rollbackDeploymentSchema)
         .output(selectDeploymentSchema)
         .mutation(async ({ input }) => {
@@ -285,16 +295,16 @@ export class DeploymentsRouter {
           );
         }),
 
-      // 取消部署
-      cancel: this.trpc.publicProcedure
+      // 取消部署 - 需要认证
+      cancel: this.trpc.organizationProcedure
         .input(cancelDeploymentSchema)
         .output(selectDeploymentSchema)
         .mutation(async ({ input }) => {
           return this.deploymentsService.cancelDeployment(input.id);
         }),
 
-      // 获取部署统计
-      getStats: this.trpc.publicProcedure
+      // 获取部署统计 - 需要认证
+      getStats: this.trpc.organizationProcedure
         .input(getDeploymentStatsSchema)
         .output(deploymentStatsResponseSchema)
         .query(async ({ input }) => {
@@ -306,8 +316,8 @@ export class DeploymentsRouter {
           );
         }),
 
-      // 批量更新部署状态
-      batchUpdateStatus: this.trpc.procedure
+      // 批量更新部署状态 - 需要认证
+      batchUpdateStatus: this.trpc.organizationProcedure
         .input(batchUpdateDeploymentStatusSchema)
         .output(z.object({ updatedCount: z.number() }))
         .mutation(async ({ input }) => {
@@ -318,8 +328,8 @@ export class DeploymentsRouter {
           return { updatedCount: updatedDeployments.length };
         }),
 
-      // 删除部署
-      delete: this.trpc.procedure
+      // 删除部署 - 需要认证
+      delete: this.trpc.organizationProcedure
       .input(deleteDeploymentSchema)
       .output(z.object({ success: z.boolean() }))
       .mutation(async ({ input }) => {
@@ -327,7 +337,7 @@ export class DeploymentsRouter {
         return { success: true };
       }),
 
-    batchDelete: this.trpc.procedure
+    batchDelete: this.trpc.organizationProcedure
       .input(batchDeleteDeploymentsSchema)
       .output(z.object({ success: z.boolean() }))
       .mutation(async ({ input }) => {
@@ -335,24 +345,24 @@ export class DeploymentsRouter {
         return { success: true };
       }),
 
-      // 获取最近部署
-      getRecent: this.trpc.publicProcedure
+      // 获取最近部署 - 需要认证
+      getRecent: this.trpc.organizationProcedure
         .input(getRecentDeploymentsSchema)
-        .output(z.array(deploymentWithDetailsSchema))
+        .output(z.array(selectDeploymentSchema))
         .query(async ({ input }) => {
           return this.deploymentsService.getRecentDeployments(input.projectId, input.limit);
         }),
 
-      // 获取活跃部署
-      getActive: this.trpc.publicProcedure
+      // 获取活跃部署 - 需要认证
+      getActive: this.trpc.organizationProcedure
         .input(getActiveDeploymentsSchema)
-        .output(z.array(deploymentWithDetailsSchema))
+        .output(z.array(selectDeploymentSchema))
         .query(async ({ input }) => {
           return this.deploymentsService.getActiveDeployments(input.projectId);
         }),
 
-      // 评估部署风险
-      assessRisk: this.trpc.publicProcedure
+      // 评估部署风险 - 需要认证
+      assessRisk: this.trpc.organizationProcedure
         .input(assessDeploymentRiskSchema)
         .output(riskAssessmentResponseSchema)
         .query(async ({ input }) => {
@@ -364,8 +374,8 @@ export class DeploymentsRouter {
           );
         }),
 
-      // 预测部署性能
-      predictPerformance: this.trpc.publicProcedure
+      // 预测部署性能 - 需要认证
+      predictPerformance: this.trpc.organizationProcedure
         .input(predictDeploymentPerformanceSchema)
         .output(performancePredictionResponseSchema)
         .query(async ({ input }) => {
@@ -375,8 +385,8 @@ export class DeploymentsRouter {
           );
         }),
 
-      // 获取环境使用情况
-      getEnvironmentUsage: this.trpc.procedure
+      // 获取环境使用情况 - 需要认证
+      getEnvironmentUsage: this.trpc.organizationProcedure
       .input(getEnvironmentUsageSchema)
       .output(environmentUsageResponseSchema)
       .query(async ({ input }) => {

@@ -1,6 +1,5 @@
 import { pgTable, uuid, integer, text, timestamp, jsonb, boolean, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 import { z } from 'zod'
 import { projects } from './projects.schema'
 
@@ -71,9 +70,73 @@ export const repositoriesRelations = relations(repositories, ({ one }) => ({
 }));
 
 // Zod Schemas with detailed enums
-export const insertRepositorySchema = createInsertSchema(repositories);
+export const insertRepositorySchema = z.object({
+  id: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  provider: RepositoryProviderEnum,
+  providerId: z.string(),
+  name: z.string(),
+  fullName: z.string(),
+  cloneUrl: z.string().url(),
+  webUrl: z.string().url(),
+  defaultBranch: z.string().optional(),
+  protectedBranchNames: z.string().optional(),
+  mainBranchProtected: z.boolean().optional(),
+  requireApprovalCount: z.number().int().min(0).optional(),
+  requireLinearHistory: z.boolean().optional(),
+  allowForcePushes: z.boolean().optional(),
+  allowDeletions: z.boolean().optional(),
+  isPrivate: z.boolean().optional(),
+  isArchived: z.boolean().optional(),
+  isTemplate: z.boolean().optional(),
+  autoMergeEnabled: z.boolean().optional(),
+  autoDeleteBranches: z.boolean().optional(),
+  requireCodeReview: z.boolean().optional(),
+  requireStatusChecks: z.boolean().optional(),
+  lastSyncAt: z.date().optional(),
+  syncStatus: SyncStatusEnum.optional(),
+  syncError: z.string().optional(),
+  starsCount: z.number().int().min(0).optional(),
+  forksCount: z.number().int().min(0).optional(),
+  issuesCount: z.number().int().min(0).optional(),
+  pullRequestsCount: z.number().int().min(0).optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
 
-export const selectRepositorySchema = createSelectSchema(repositories);
+export const selectRepositorySchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid().nullable(),
+  provider: z.string(),
+  providerId: z.string(),
+  name: z.string(),
+  fullName: z.string(),
+  cloneUrl: z.string(),
+  webUrl: z.string(),
+  defaultBranch: z.string(),
+  protectedBranchNames: z.string().nullable(),
+  mainBranchProtected: z.boolean(),
+  requireApprovalCount: z.number().int(),
+  requireLinearHistory: z.boolean(),
+  allowForcePushes: z.boolean(),
+  allowDeletions: z.boolean(),
+  isPrivate: z.boolean(),
+  isArchived: z.boolean(),
+  isTemplate: z.boolean(),
+  autoMergeEnabled: z.boolean(),
+  autoDeleteBranches: z.boolean(),
+  requireCodeReview: z.boolean(),
+  requireStatusChecks: z.boolean(),
+  lastSyncAt: z.date().nullable(),
+  syncStatus: z.string(),
+  syncError: z.string().nullable(),
+  starsCount: z.number().int(),
+  forksCount: z.number().int(),
+  issuesCount: z.number().int(),
+  pullRequestsCount: z.number().int(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export const updateRepositorySchema = selectRepositorySchema.pick({
   projectId: true,

@@ -1,5 +1,4 @@
 import { pgTable, uuid, varchar, text, timestamp, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
 // OAuth Provider 类型定义
@@ -49,14 +48,38 @@ export const oauthFlowsIndexes = {
   stateUnique: uniqueIndex('oauth_flows_state_unique').on(oauthFlows.state),
 };
 
-// Zod 校验（插入与选择）
-export const insertOAuthFlowSchema = createInsertSchema(oauthFlows, {
-  provider: z.string().min(2).max(50),
+// Zod Schemas
+export const insertOAuthFlowSchema = z.object({
+  id: z.string().uuid().optional(),
+  provider: OAuthProviderEnum,
   state: z.string().min(8).max(255),
+  nonce: z.string().max(255).optional(),
+  codeVerifier: z.string().optional(),
   redirectUri: z.string().url(),
+  createdAt: z.date().optional(),
+  expiresAt: z.date().optional(),
+  usedAt: z.date().optional(),
+  ipAddress: z.string().max(45).optional(),
+  userAgent: z.string().optional(),
+  errorCode: z.string().max(100).optional(),
+  errorDescription: z.string().optional(),
 });
 
-export const selectOAuthFlowSchema = createSelectSchema(oauthFlows);
+export const selectOAuthFlowSchema = z.object({
+  id: z.string().uuid(),
+  provider: OAuthProviderEnum,
+  state: z.string(),
+  nonce: z.string().nullable(),
+  codeVerifier: z.string().nullable(),
+  redirectUri: z.string(),
+  createdAt: z.date(),
+  expiresAt: z.date().nullable(),
+  usedAt: z.date().nullable(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  errorCode: z.string().nullable(),
+  errorDescription: z.string().nullable(),
+});
 
 export type OAuthFlow = typeof oauthFlows.$inferSelect;
 export type NewOAuthFlow = typeof oauthFlows.$inferInsert;

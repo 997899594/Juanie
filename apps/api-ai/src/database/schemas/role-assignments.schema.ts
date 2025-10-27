@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { users } from './users.schema';
 import { roles } from './roles.schema';
@@ -64,11 +63,36 @@ export const roleAssignmentsIndexes = {
   ),
 };
 
-// Zod 校验
-export const insertRoleAssignmentSchema = createInsertSchema(roleAssignments, {
+// Zod Schemas
+export const insertRoleAssignmentSchema = z.object({
+  id: z.string().uuid().optional(),
+  userId: z.string().uuid(),
+  roleId: z.string().uuid(),
   scopeType: RoleAssignmentScopeEnum,
+  organizationId: z.string().uuid().optional(),
+  teamId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  assignedBy: z.string().uuid().optional(),
+  assignedAt: z.date().optional(),
+  expiresAt: z.date().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 });
-export const selectRoleAssignmentSchema = createSelectSchema(roleAssignments);
+
+export const selectRoleAssignmentSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  roleId: z.string().uuid(),
+  scopeType: RoleAssignmentScopeEnum,
+  organizationId: z.string().uuid().nullable(),
+  teamId: z.string().uuid().nullable(),
+  projectId: z.string().uuid().nullable(),
+  assignedBy: z.string().uuid().nullable(),
+  assignedAt: z.date(),
+  expiresAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export const updateRoleAssignmentSchema = selectRoleAssignmentSchema
   .pick({ scopeType: true, organizationId: true, teamId: true, projectId: true, assignedBy: true, expiresAt: true })
   .partial();

@@ -1,6 +1,5 @@
 import { pgTable, uuid, integer, text, timestamp, boolean, index, decimal, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 import { z } from 'zod'
 import { projects } from './projects.schema'
 
@@ -83,22 +82,90 @@ export const environmentsRelations = relations(environments, ({ one }) => ({
   }),
 }));
 
-// Zod Schemas with detailed enums
-export const insertEnvironmentSchema = createInsertSchema(environments, {
-  clusterSize: z.number().int().min(1),
-  cpuCores: z.number().int().min(1),
-  memoryGb: z.number().int().min(1),
-  storageGb: z.number().int().min(1),
-  maxCpuCores: z.number().int().min(1),
-  maxMemoryGb: z.number().int().min(1),
-  maxStorageGb: z.number().int().min(1),
+// Zod Schemas
+export const insertEnvironmentSchema = z.object({
+  id: z.string().uuid().optional(),
+  projectId: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  displayName: z.string().max(100).optional(),
+  description: z.string().max(500).optional(),
+  environmentType: EnvironmentTypeEnum,
+  cloudProvider: CloudProviderEnum.optional(),
+  region: z.string().optional(),
+  instanceType: z.string().optional(),
+  clusterSize: z.number().int().min(1).optional(),
+  enableAutoScaling: z.boolean().optional(),
+  cpuCores: z.number().int().min(1).optional(),
+  memoryGb: z.number().int().min(1).optional(),
+  storageGb: z.number().int().min(1).optional(),
+  vpcId: z.string().optional(),
+  subnetId: z.string().optional(),
+  securityGroupId: z.string().optional(),
+  loadBalancerEnabled: z.boolean().optional(),
+  status: EnvironmentStatusEnum.optional(),
+  healthCheckUrl: z.string().url().optional(),
+  lastHealthCheck: z.date().optional(),
+  requireVpn: z.boolean().optional(),
+  allowedIps: z.string().optional(),
+  allowedUserIds: z.string().optional(),
+  allowedTeamIds: z.string().optional(),
+  maxCpuCores: z.number().int().min(1).optional(),
+  maxMemoryGb: z.number().int().min(1).optional(),
+  maxStorageGb: z.number().int().min(1).optional(),
   costBudget: z.number().min(0).optional(),
-  minInstances: z.number().int().min(1),
-  maxInstances: z.number().int().min(1),
-  targetCpuUtilization: z.number().int().min(0).max(100),
+  minInstances: z.number().int().min(1).optional(),
+  maxInstances: z.number().int().min(1).optional(),
+  targetCpuUtilization: z.number().int().min(0).max(100).optional(),
+  complianceFrameworks: z.string().optional(),
+  encryptionEnabled: z.boolean().optional(),
+  backupEnabled: z.boolean().optional(),
+  monitoringEnabled: z.boolean().optional(),
+  dataClassification: DataClassificationEnum.optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 });
 
-export const selectEnvironmentSchema = createSelectSchema(environments);
+export const selectEnvironmentSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
+  name: z.string(),
+  displayName: z.string().nullable(),
+  description: z.string().nullable(),
+  environmentType: z.string(),
+  cloudProvider: z.string().nullable(),
+  region: z.string().nullable(),
+  instanceType: z.string().nullable(),
+  clusterSize: z.number().int(),
+  enableAutoScaling: z.boolean(),
+  cpuCores: z.number().int(),
+  memoryGb: z.number().int(),
+  storageGb: z.number().int(),
+  vpcId: z.string().nullable(),
+  subnetId: z.string().nullable(),
+  securityGroupId: z.string().nullable(),
+  loadBalancerEnabled: z.boolean(),
+  status: z.string(),
+  healthCheckUrl: z.string().nullable(),
+  lastHealthCheck: z.date().nullable(),
+  requireVpn: z.boolean(),
+  allowedIps: z.string().nullable(),
+  allowedUserIds: z.string().nullable(),
+  allowedTeamIds: z.string().nullable(),
+  maxCpuCores: z.number().int(),
+  maxMemoryGb: z.number().int(),
+  maxStorageGb: z.number().int(),
+  costBudget: z.number().nullable(),
+  minInstances: z.number().int(),
+  maxInstances: z.number().int(),
+  targetCpuUtilization: z.number().int(),
+  complianceFrameworks: z.string().nullable(),
+  encryptionEnabled: z.boolean(),
+  backupEnabled: z.boolean(),
+  monitoringEnabled: z.boolean(),
+  dataClassification: z.string(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export const updateEnvironmentSchema = insertEnvironmentSchema.partial();
 

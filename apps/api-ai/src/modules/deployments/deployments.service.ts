@@ -1,16 +1,17 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
+import { TRPCError } from "@trpc/server";
 import { and, asc, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { InjectDatabase } from "../../common/decorators/database.decorator";
 import { Database } from "../../database/database.module";
-import {
-  type Deployment,
-  type DeploymentStatus,
-  type DeploymentStrategy,
-  deployments,
-  type NewDeployment,
-  type RollbackStrategy,
-  type UpdateDeployment,
-} from "../../database/schemas";
+import type {
+  Deployment,
+  DeploymentStatus,
+  DeploymentStrategy,
+  NewDeployment,
+  RollbackStrategy,
+  UpdateDeployment,
+} from "../../database/schemas/deployments.schema";
+import { deployments } from "../../database/schemas/deployments.schema";
 
 export interface DeploymentFilters {
   page?: number;
@@ -55,6 +56,8 @@ export interface PerformancePrediction {
 
 @Injectable()
 export class DeploymentsService {
+  private readonly logger = new Logger(DeploymentsService.name);
+
   constructor(@InjectDatabase() private readonly db: Database) {}
 
   /**
@@ -67,7 +70,10 @@ export class DeploymentsService {
       .returning();
 
     if (!deployment) {
-      throw new Error("Failed to create deployment");
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to create deployment",
+      });
     }
 
     return deployment;
@@ -187,7 +193,10 @@ export class DeploymentsService {
       .returning();
 
     if (!deployment) {
-      throw new Error("Deployment not found");
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Deployment not found",
+      });
     }
 
     return deployment;
@@ -363,11 +372,13 @@ export class DeploymentsService {
       avgDeploymentTime: stats.avgDeploymentTime || 0,
       totalDeploymentCost: stats.totalDeploymentCost || 0,
       byEnvironment: Object.fromEntries(
-        environmentStats.map((s) => [s.environmentId, s.count])
+        environmentStats.map((s: any) => [s.environmentId, s.count])
       ),
-      byStatus: Object.fromEntries(statusStats.map((s) => [s.status, s.count])),
+      byStatus: Object.fromEntries(
+        statusStats.map((s: any) => [s.status, s.count])
+      ),
       byStrategy: Object.fromEntries(
-        strategyStats.map((s) => [s.strategy, s.count])
+        strategyStats.map((s: any) => [s.strategy, s.count])
       ),
     };
   }

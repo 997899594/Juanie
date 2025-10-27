@@ -1,6 +1,5 @@
 import { pgTable, uuid, integer, text, timestamp, boolean, decimal, index, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { projects } from './projects.schema';
 import { environments } from './environments.schema';
@@ -61,14 +60,38 @@ export const performanceMetricsRelations = relations(performanceMetrics, ({ one 
   }),
 }));
 
-// 简化的Zod Schemas
-export const insertPerformanceMetricSchema = createInsertSchema(performanceMetrics, {
+// Zod Schemas
+export const insertPerformanceMetricSchema = z.object({
+  id: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  environmentId: z.string().uuid().optional(),
+  serviceName: z.string(),
+  metricName: z.string(),
   metricType: MetricTypeEnum,
   metricCategory: MetricCategoryEnum,
   value: z.string(),
+  unit: z.string().optional(),
+  simpleLabels: z.string().optional(),
+  timestamp: z.date(),
+  isAlert: z.boolean().default(false),
+  createdAt: z.date().optional(),
 });
 
-export const selectPerformanceMetricSchema = createSelectSchema(performanceMetrics);
+export const selectPerformanceMetricSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid().nullable(),
+  environmentId: z.string().uuid().nullable(),
+  serviceName: z.string(),
+  metricName: z.string(),
+  metricType: MetricTypeEnum,
+  metricCategory: MetricCategoryEnum,
+  value: z.string(),
+  unit: z.string().nullable(),
+  simpleLabels: z.string().nullable(),
+  timestamp: z.date(),
+  isAlert: z.boolean(),
+  createdAt: z.date(),
+});
 
 export const updatePerformanceMetricSchema = insertPerformanceMetricSchema.partial();
 

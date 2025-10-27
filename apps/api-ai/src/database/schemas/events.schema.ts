@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, jsonb, index, pgEnum } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { organizations } from './organizations.schema';
 import { projects } from './projects.schema';
@@ -64,15 +63,52 @@ export const eventsIndexes = {
   processedAtIdx: index('events_processed_at_idx').on(events.processedAt),
 };
 
-export const insertEventSchema = createInsertSchema(events, {
+// Zod Schemas
+export const insertEventSchema = z.object({
+  id: z.string().uuid().optional(),
+  organizationId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
   eventType: z.string().min(1),
+  source: z.string().optional(),
+  priority: EventPriorityEnum.default('medium'),
+  status: EventStatusEnum.default('created'),
+  payload: z.unknown(),
+  traceId: z.string().optional(),
+  spanId: z.string().optional(),
+  result: z.record(z.string(), z.unknown()).optional(),
+  queuedAt: z.date().optional(),
+  processedAt: z.date().optional(),
+  failedAt: z.date().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+
+export const selectEventSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid().nullable(),
+  projectId: z.string().uuid().nullable(),
+  eventType: z.string(),
+  source: z.string().nullable(),
   priority: EventPriorityEnum,
   status: EventStatusEnum,
+  payload: z.unknown(),
+  traceId: z.string().nullable(),
+  spanId: z.string().nullable(),
+  result: z.record(z.string(), z.unknown()).nullable(),
+  queuedAt: z.date().nullable(),
+  processedAt: z.date().nullable(),
+  failedAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
-export const selectEventSchema = createSelectSchema(events);
-export const updateEventSchema = selectEventSchema
-  .pick({ priority: true, status: true, result: true, queuedAt: true, processedAt: true, failedAt: true })
-  .partial();
+export const updateEventSchema = z.object({
+  priority: EventPriorityEnum.optional(),
+  status: EventStatusEnum.optional(),
+  result: z.record(z.string(), z.unknown()).optional(),
+  queuedAt: z.date().optional(),
+  processedAt: z.date().optional(),
+  failedAt: z.date().optional(),
+});
 
 export type Event = typeof events.$inferSelect;
 export type NewEvent = typeof events.$inferInsert;

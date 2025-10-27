@@ -76,7 +76,6 @@ const batchDeletePipelineRunsSchema = z.object({
 });
 
 const getRecentPipelineRunsSchema = z.object({
-  projectId: z.string().uuid(),
   limit: z.number().int().positive().max(50).optional().default(10),
 });
 
@@ -84,9 +83,9 @@ const getRecentPipelineRunsSchema = z.object({
 const pipelineRunWithDetailsSchema = selectPipelineRunSchema.extend({
   pipeline: z.object({
     name: z.string(),
-    projectId: z.string().optional(),
+    projectId: z.string().uuid().optional(),
   }).optional(),
-  triggeredByUser: z.object({
+  triggerUser: z.object({
     name: z.string(),
     email: z.string(),
   }).optional(),
@@ -122,24 +121,24 @@ export class PipelineRunsRouter {
 
   public get pipelineRunsRouter() {
     return this.trpc.router({
-      // 创建流水线运行
-      create: this.trpc.publicProcedure
+      // 创建流水线运行 - 需要认证
+      create: this.trpc.protectedProcedure
         .input(insertPipelineRunSchema)
         .output(selectPipelineRunSchema)
         .mutation(async ({ input }) => {
           return this.pipelineRunsService.createPipelineRun(input);
         }),
 
-      // 根据ID获取流水线运行
-      getById: this.trpc.publicProcedure
+      // 根据ID获取流水线运行 - 需要认证
+      getById: this.trpc.protectedProcedure
         .input(getPipelineRunByIdSchema)
         .output(pipelineRunWithDetailsSchema)
         .query(async ({ input }) => {
           return this.pipelineRunsService.getPipelineRunById(input.id);
         }),
 
-      // 根据流水线获取运行列表
-      getByPipeline: this.trpc.publicProcedure
+      // 根据流水线获取运行列表 - 需要认证
+      getByPipeline: this.trpc.protectedProcedure
         .input(getPipelineRunsByPipelineSchema)
         .output(pipelineRunListResponseSchema)
         .query(async ({ input }) => {
@@ -150,8 +149,8 @@ export class PipelineRunsRouter {
           );
         }),
 
-      // 根据项目获取运行列表
-      getByProject: this.trpc.publicProcedure
+      // 根据项目获取运行列表 - 需要认证
+      getByProject: this.trpc.protectedProcedure
         .input(getPipelineRunsByProjectSchema)
         .output(pipelineRunListResponseSchema)
         .query(async ({ input }) => {
@@ -162,24 +161,23 @@ export class PipelineRunsRouter {
           );
         }),
 
-      // 更新流水线运行
-      update: this.trpc.publicProcedure
+      // 更新流水线运行 - 需要认证
+      update: this.trpc.protectedProcedure
         .input(updatePipelineRunParamsSchema)
         .output(selectPipelineRunSchema)
         .mutation(async ({ input }) => {
           return this.pipelineRunsService.updatePipelineRun(input.id, input.data);
         }),
 
-      // 开始流水线运行
-      start: this.trpc.publicProcedure
+      // 开始流水线运行 - 需要认证
+      start: this.trpc.protectedProcedure
         .input(startPipelineRunSchema)
-        .output(selectPipelineRunSchema)
         .mutation(async ({ input }) => {
           return this.pipelineRunsService.startPipelineRun(input.id);
         }),
 
-      // 完成流水线运行
-      finish: this.trpc.publicProcedure
+      // 完成流水线运行 - 需要认证
+      finish: this.trpc.protectedProcedure
         .input(finishPipelineRunSchema)
         .output(selectPipelineRunSchema)
         .mutation(async ({ input }) => {
@@ -190,24 +188,23 @@ export class PipelineRunsRouter {
           );
         }),
 
-      // 取消流水线运行
-      cancel: this.trpc.publicProcedure
+      // 取消流水线运行 - 需要认证
+      cancel: this.trpc.protectedProcedure
         .input(cancelPipelineRunSchema)
         .output(selectPipelineRunSchema)
         .mutation(async ({ input }) => {
           return this.pipelineRunsService.cancelPipelineRun(input.id);
         }),
 
-      // 重试流水线运行
-      retry: this.trpc.publicProcedure
+      // 重试流水线运行 - 需要认证
+      retry: this.trpc.protectedProcedure
         .input(retryPipelineRunSchema)
-        .output(selectPipelineRunSchema)
         .mutation(async ({ input }) => {
           return this.pipelineRunsService.retryPipelineRun(input.id, input.triggeredBy);
         }),
 
-      // 获取流水线运行统计
-      getStats: this.trpc.publicProcedure
+      // 获取流水线运行统计 - 需要认证
+      getStats: this.trpc.protectedProcedure
         .input(getPipelineRunStatsSchema)
         .output(pipelineRunStatsResponseSchema)
         .query(async ({ input }) => {
@@ -219,16 +216,15 @@ export class PipelineRunsRouter {
           );
         }),
 
-      // 批量取消流水线运行
-      batchCancel: this.trpc.publicProcedure
+      // 批量取消流水线运行 - 需要认证
+      batchCancel: this.trpc.protectedProcedure
         .input(batchCancelPipelineRunsSchema)
-        .output(z.array(selectPipelineRunSchema))
         .mutation(async ({ input }) => {
           return this.pipelineRunsService.batchCancelPipelineRuns(input.runIds);
         }),
 
-      // 删除流水线运行
-      delete: this.trpc.publicProcedure
+      // 删除流水线运行 - 需要认证
+      delete: this.trpc.protectedProcedure
         .input(deletePipelineRunSchema)
         .output(z.object({ success: z.boolean() }))
         .mutation(async ({ input }) => {
@@ -236,8 +232,8 @@ export class PipelineRunsRouter {
           return { success: true };
         }),
 
-      // 批量删除流水线运行
-      batchDelete: this.trpc.publicProcedure
+      // 批量删除流水线运行 - 需要认证
+      batchDelete: this.trpc.protectedProcedure
         .input(batchDeletePipelineRunsSchema)
         .output(z.object({ success: z.boolean() }))
         .mutation(async ({ input }) => {
@@ -245,12 +241,12 @@ export class PipelineRunsRouter {
           return { success: true };
         }),
 
-      // 获取最近的流水线运行
-      getRecent: this.trpc.publicProcedure
+      // 获取最近的流水线运行 - 需要认证
+      getRecent: this.trpc.protectedProcedure
         .input(getRecentPipelineRunsSchema)
         .output(z.array(pipelineRunWithDetailsSchema))
         .query(async ({ input }) => {
-          return this.pipelineRunsService.getRecentPipelineRuns(input.projectId, input.limit);
+          return this.pipelineRunsService.getRecentPipelineRuns(input.limit);
         }),
     });
   }

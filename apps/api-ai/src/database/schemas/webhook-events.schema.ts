@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, boolean, jsonb, index, integer, pgEnum } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { webhookEndpoints } from './webhook-endpoints.schema';
 
@@ -56,11 +55,39 @@ export const webhookEventsIndexes = {
   createdAtIdx: index('webhook_events_created_at_idx').on(webhookEvents.createdAt),
 };
 
-export const insertWebhookEventSchema = createInsertSchema(webhookEvents, {
+export const insertWebhookEventSchema = z.object({
+  id: z.string().uuid().optional(),
+  endpointId: z.string().uuid(),
   eventType: z.string().min(1),
-  status: WebhookEventStatusEnum,
+  payload: z.record(z.string(), z.object({})),
+  signature: z.string().optional(),
+  status: WebhookEventStatusEnum.optional(),
+  retryCount: z.number().int().optional(),
+  responseCode: z.number().int().optional(),
+  responseBody: z.string().optional(),
+  errorMessage: z.string().optional(),
+  deliveredAt: z.date().optional(),
+  description: z.string().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 });
-export const selectWebhookEventSchema = createSelectSchema(webhookEvents);
+
+export const selectWebhookEventSchema = z.object({
+  id: z.string().uuid(),
+  endpointId: z.string().uuid(),
+  eventType: z.string(),
+  payload: z.record(z.string(), z.object({})),
+  signature: z.string().nullable(),
+  status: WebhookEventStatusEnum,
+  retryCount: z.number().int(),
+  responseCode: z.number().int().nullable(),
+  responseBody: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  deliveredAt: z.date().nullable(),
+  description: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export const updateWebhookEventSchema = selectWebhookEventSchema
   .pick({ status: true, retryCount: true, responseCode: true, responseBody: true, errorMessage: true, deliveredAt: true, description: true })
   .partial();

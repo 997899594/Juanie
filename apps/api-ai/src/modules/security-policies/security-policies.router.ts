@@ -75,7 +75,7 @@ export class SecurityPoliciesRouter {
       // 根据策略类型获取安全策略列表
       getByType: this.trpc.protectedProcedure
         .input(z.object({
-          policyType: z.enum(SecurityPolicyTypeEnum),
+          policyType: SecurityPolicyTypeEnum,
           limit: z.number().min(1).max(100).default(50),
           offset: z.number().min(0).default(0),
         }))
@@ -90,7 +90,7 @@ export class SecurityPoliciesRouter {
       // 根据状态获取安全策略列表
       getByStatus: this.trpc.protectedProcedure
         .input(z.object({
-          status: z.enum(SecurityPolicyStatusEnum),
+          status: SecurityPolicyStatusEnum,
           limit: z.number().min(1).max(100).default(50),
           offset: z.number().min(0).default(0),
         }))
@@ -126,8 +126,8 @@ export class SecurityPoliciesRouter {
           filters: z.object({
             projectId: z.string().uuid().optional(),
             environmentId: z.string().uuid().optional(),
-            policyType: z.enum(SecurityPolicyTypeEnum).optional(),
-            status: z.enum(SecurityPolicyStatusEnum).optional(),
+            policyType: SecurityPolicyTypeEnum.optional(),
+            status: SecurityPolicyStatusEnum.optional(),
             isEnforced: z.boolean().optional(),
             createdBy: z.string().uuid().optional(),
             minPriority: z.number().optional(),
@@ -139,9 +139,16 @@ export class SecurityPoliciesRouter {
           offset: z.number().min(0).default(0),
         }))
         .query(async ({ input }) => {
-          // 转换日期字符串为Date对象
+          // 转换日期字符串为Date对象并确保类型匹配
           const filters = input.filters ? {
-            ...input.filters,
+            projectId: input.filters.projectId,
+            environmentId: input.filters.environmentId,
+            policyType: input.filters.policyType as any,
+            status: input.filters.status as any,
+            isEnforced: input.filters.isEnforced,
+            createdBy: input.filters.createdBy,
+            minPriority: input.filters.minPriority,
+            maxPriority: input.filters.maxPriority,
             dateFrom: input.filters.dateFrom ? new Date(input.filters.dateFrom) : undefined,
             dateTo: input.filters.dateTo ? new Date(input.filters.dateTo) : undefined,
           } : undefined;
@@ -168,7 +175,7 @@ export class SecurityPoliciesRouter {
       toggleStatus: this.trpc.protectedProcedure
         .input(z.object({
           id: z.string().uuid(),
-          status: z.enum(SecurityPolicyStatusEnum),
+          status: SecurityPolicyStatusEnum,
         }))
         .mutation(async ({ input }) => {
           return await this.securityPoliciesService.togglePolicyStatus(input.id, input.status);
@@ -218,8 +225,8 @@ export class SecurityPoliciesRouter {
         .input(z.object({
           projectId: z.string().uuid().optional(),
           environmentId: z.string().uuid().optional(),
-          policyType: z.enum(SecurityPolicyTypeEnum).optional(),
-          status: z.enum(SecurityPolicyStatusEnum).optional(),
+          policyType: SecurityPolicyTypeEnum.optional(),
+          status: SecurityPolicyStatusEnum.optional(),
         }))
         .query(async ({ input }) => {
           return await this.securityPoliciesService.getPolicyCount(

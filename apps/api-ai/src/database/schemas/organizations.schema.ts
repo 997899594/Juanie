@@ -1,6 +1,5 @@
 import { pgTable, text, timestamp, jsonb, decimal, index, integer, boolean, uuid, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
 // 枚举定义
@@ -45,9 +44,63 @@ export const organizationsSlugIdx = index('organizations_slug_idx').on(organizat
 export const organizationsNameIdx = index('organizations_name_idx').on(organizations.name);
 
 // Zod Schemas with detailed enums
-export const insertOrganizationSchema = createInsertSchema(organizations);
+export const insertOrganizationSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1).max(100),
+  slug: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/),
+  displayName: z.string().max(100).optional(),
+  description: z.string().max(500).optional(),
+  logoUrl: z.string().url().optional(),
+  website: z.string().url().optional(),
+  timezone: z.string().optional(),
+  language: z.string().optional(),
+  emailDomain: z.string().optional(),
+  twoFactorAuthEnabled: z.boolean().optional(),
+  billingEmail: z.string().email().optional(),
+  billingAddress: z.string().optional(),
+  taxId: z.string().optional(),
+  paymentMethod: z.string().optional(),
+  planType: PlanTypeEnum.optional(),
+  maxProjects: z.number().int().min(1).optional(),
+  maxUsers: z.number().int().min(1).optional(),
+  maxStorageGb: z.number().int().min(1).optional(),
+  maxMonthlyRuns: z.number().int().min(1).optional(),
+  currentProjects: z.number().int().min(0).optional(),
+  currentUsers: z.number().int().min(0).optional(),
+  currentStorageGb: z.number().int().min(0).optional(),
+  currentMonthlyRuns: z.number().int().min(0).optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
 
-export const selectOrganizationSchema = createSelectSchema(organizations);
+export const selectOrganizationSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  displayName: z.string().nullable(),
+  description: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  website: z.string().nullable(),
+  timezone: z.string(),
+  language: z.string(),
+  emailDomain: z.string().nullable(),
+  twoFactorAuthEnabled: z.boolean(),
+  billingEmail: z.string().nullable(),
+  billingAddress: z.string().nullable(),
+  taxId: z.string().nullable(),
+  paymentMethod: z.string().nullable(),
+  planType: z.string(),
+  maxProjects: z.number().int(),
+  maxUsers: z.number().int(),
+  maxStorageGb: z.number().int(),
+  maxMonthlyRuns: z.number().int(),
+  currentProjects: z.number().int(),
+  currentUsers: z.number().int(),
+  currentStorageGb: z.number().int(),
+  currentMonthlyRuns: z.number().int(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export const updateOrganizationSchema = selectOrganizationSchema.pick({
   name: true,

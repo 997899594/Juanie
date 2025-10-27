@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, varchar, index, uniqueIndex } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { users } from './users.schema';
 import { oauthAccounts } from './oauth-accounts.schema';
@@ -51,12 +50,38 @@ export const authSessionsIndexes = {
   sessionTokenUnique: uniqueIndex('auth_sessions_session_token_hash_unique').on(authSessions.sessionTokenHash),
 };
 
-// Zod 校验（插入与选择）
-export const insertAuthSessionSchema = createInsertSchema(authSessions, {
+// Zod Schemas
+export const insertAuthSessionSchema = z.object({
+  id: z.string().uuid().optional(),
+  userId: z.string().uuid(),
+  accountId: z.string().uuid().optional(),
   sessionTokenHash: z.string().min(20),
   refreshTokenHash: z.string().min(20).optional(),
+  accessExpiresAt: z.date().optional(),
+  refreshExpiresAt: z.date().optional(),
+  lastUsedAt: z.date().optional(),
+  ipAddress: z.string().max(45).optional(),
+  userAgent: z.string().optional(),
+  revokedAt: z.date().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 });
-export const selectAuthSessionSchema = createSelectSchema(authSessions);
+
+export const selectAuthSessionSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  accountId: z.string().uuid().nullable(),
+  sessionTokenHash: z.string(),
+  refreshTokenHash: z.string().nullable(),
+  accessExpiresAt: z.date().nullable(),
+  refreshExpiresAt: z.date().nullable(),
+  lastUsedAt: z.date().nullable(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  revokedAt: z.date().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export type AuthSession = typeof authSessions.$inferSelect;
 export type NewAuthSession = typeof authSessions.$inferInsert;

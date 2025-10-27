@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, index, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { organizations } from './organizations.schema';
 
@@ -33,8 +32,27 @@ export const teamsIndexes = {
 };
 
 // Zod 校验
-export const insertTeamSchema = createInsertSchema(teams);
-export const selectTeamSchema = createSelectSchema(teams);
+export const insertTeamSchema = z.object({
+  id: z.string().uuid().optional(),
+  organizationId: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().optional(),
+  externalId: z.string().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+
+export const selectTeamSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().nullable(),
+  externalId: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export const updateTeamSchema = selectTeamSchema.pick({
   name: true,
   slug: true,

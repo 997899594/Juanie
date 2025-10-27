@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, jsonb, index, pgEnum } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { organizations } from './organizations.schema';
 import { projects } from './projects.schema';
@@ -77,16 +76,55 @@ export const auditLogsIndexes = {
   correlationIdx: index('audit_logs_correlation_idx').on(auditLogs.correlationId),
 };
 
-export const insertAuditLogSchema = createInsertSchema(auditLogs, {
+export const insertAuditLogSchema = z.object({
+  id: z.string().uuid().optional(),
+  organizationId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
+  actorType: AuditActorTypeEnum.default('user'),
+  actorId: z.string().optional(),
   action: z.string().min(1),
+  resourceType: z.string().optional(),
+  resourceId: z.string().optional(),
+  requestId: z.string().optional(),
+  correlationId: z.string().optional(),
+  ipAddress: z.string().optional(),
+  userAgent: z.string().optional(),
+  outcome: AuditOutcomeEnum.default('success'),
+  severity: AuditSeverityEnum.default('low'),
+  reason: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+
+export const selectAuditLogSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid().nullable(),
+  projectId: z.string().uuid().nullable(),
+  userId: z.string().uuid().nullable(),
   actorType: AuditActorTypeEnum,
+  actorId: z.string().nullable(),
+  action: z.string(),
+  resourceType: z.string().nullable(),
+  resourceId: z.string().nullable(),
+  requestId: z.string().nullable(),
+  correlationId: z.string().nullable(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
   outcome: AuditOutcomeEnum,
   severity: AuditSeverityEnum,
+  reason: z.string().nullable(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
-export const selectAuditLogSchema = createSelectSchema(auditLogs);
-export const updateAuditLogSchema = selectAuditLogSchema
-  .pick({ outcome: true, severity: true, reason: true, metadata: true })
-  .partial();
+export const updateAuditLogSchema = z.object({
+  outcome: AuditOutcomeEnum.optional(),
+  severity: AuditSeverityEnum.optional(),
+  reason: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;

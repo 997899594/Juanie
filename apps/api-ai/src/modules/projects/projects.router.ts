@@ -27,7 +27,7 @@ export class ProjectsRouter {
         }),
 
       // 创建项目
-      create: this.trpc.protectedProcedure
+      create: this.trpc.organizationProcedure
         .input(insertProjectSchema.omit({ 
           id: true, 
           createdAt: true, 
@@ -42,26 +42,26 @@ export class ProjectsRouter {
         }),
 
       // 根据ID获取项目
-      getById: this.trpc.protectedProcedure
+      getById: this.trpc.organizationProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(selectProjectSchema.nullable())
         .query(async ({ input }) => {
           return await this.projectsService.findById(input.id);
         }),
 
-      // 根据组织ID和slug获取项目
-      getBySlug: this.trpc.protectedProcedure
+      // 根据Slug获取项目
+      getBySlug: this.trpc.organizationProcedure
         .input(z.object({ 
           organizationId: z.string().uuid(),
           slug: z.string()
         }))
         .output(selectProjectSchema.nullable())
         .query(async ({ input }) => {
-          return await this.projectsService.findBySlug(input.organizationId, input.slug);
+          return await this.projectsService.findBySlug(input.slug);
         }),
 
       // 更新项目
-      update: this.trpc.protectedProcedure
+      update: this.trpc.organizationProcedure
         .input(z.object({
           id: z.string().uuid(),
           data: updateProjectSchema
@@ -72,7 +72,7 @@ export class ProjectsRouter {
         }),
 
       // 删除项目
-      delete: this.trpc.protectedProcedure
+      delete: this.trpc.organizationProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(z.object({ success: z.boolean() }))
         .mutation(async ({ input }) => {
@@ -81,7 +81,7 @@ export class ProjectsRouter {
         }),
 
       // 获取组织的项目列表
-      getOrganizationProjects: this.trpc.protectedProcedure
+      getOrganizationProjects: this.trpc.organizationProcedure
         .input(z.object({
           organizationId: z.string().uuid(),
           limit: z.number().min(1).max(100).default(20),
@@ -99,33 +99,26 @@ export class ProjectsRouter {
           offset: z.number()
         }))
         .query(async ({ input }) => {
-          return await this.projectsService.getOrganizationProjects(input.organizationId, input);
+          const result = await this.projectsService.getOrganizationProjects(
+            input.organizationId, 
+            input.limit, 
+            input.offset
+          );
+          return {
+            ...result,
+            limit: input.limit,
+            offset: input.offset
+          };
         }),
 
       // 获取用户的项目列表
-      getUserProjects: this.trpc.protectedProcedure
+      getUserProjects: this.trpc.organizationProcedure
         .input(z.object({
           userId: z.string().uuid(),
           limit: z.number().min(1).max(100).default(20),
           offset: z.number().min(0).default(0)
         }))
-        .output(z.array(z.object({
-          id: z.string().nullable(),
-          name: z.string().nullable(),
-          slug: z.string().nullable(),
-          displayName: z.string().nullable(),
-          description: z.string().nullable(),
-          status: ProjectStatusEnum.nullable(),
-          visibility: ProjectVisibilityEnum.nullable(),
-          organizationId: z.string().nullable(),
-          role: z.string().nullable(),
-          joinedAt: z.date().nullable(),
-          organization: z.object({
-            id: z.string(),
-            name: z.string(),
-            slug: z.string()
-          }).nullable()
-        })))
+        .output(z.array(selectProjectSchema))
         .query(async ({ input }) => {
           return await this.projectsService.getUserProjects(input.userId);
         }),
@@ -133,7 +126,7 @@ export class ProjectsRouter {
       // 项目成员管理
       members: this.trpc.router({
         // 获取项目成员
-        list: this.trpc.protectedProcedure
+        list: this.trpc.organizationProcedure
           .input(z.object({
             projectId: z.string().uuid(),
             limit: z.number().min(1).max(100).default(20),
@@ -148,7 +141,7 @@ export class ProjectsRouter {
           }),
 
         // 添加项目成员
-        add: this.trpc.protectedProcedure
+        add: this.trpc.organizationProcedure
           .input(z.object({
             projectId: z.string().uuid(),
             userId: z.string().uuid(),
@@ -165,7 +158,7 @@ export class ProjectsRouter {
           }),
 
         // 移除项目成员
-        remove: this.trpc.protectedProcedure
+        remove: this.trpc.organizationProcedure
           .input(z.object({
             projectId: z.string().uuid(),
             userId: z.string().uuid()
@@ -177,7 +170,7 @@ export class ProjectsRouter {
           }),
 
         // 更新成员角色
-        updateRole: this.trpc.protectedProcedure
+        updateRole: this.trpc.organizationProcedure
           .input(z.object({
             projectId: z.string().uuid(),
             userId: z.string().uuid(),
@@ -197,7 +190,7 @@ export class ProjectsRouter {
       // 项目资源管理
       resources: this.trpc.router({
         // 更新项目使用情况
-        updateUsage: this.trpc.protectedProcedure
+        updateUsage: this.trpc.organizationProcedure
           .input(z.object({
             projectId: z.string().uuid(),
             usage: z.object({
@@ -212,7 +205,7 @@ export class ProjectsRouter {
           }),
 
         // 检查资源限制
-        checkLimits: this.trpc.protectedProcedure
+        checkLimits: this.trpc.organizationProcedure
           .input(z.object({ projectId: z.string().uuid() }))
           .output(z.object({
             withinLimits: z.boolean(),
@@ -225,7 +218,7 @@ export class ProjectsRouter {
           }),
 
         // 获取项目统计
-        stats: this.trpc.protectedProcedure
+        stats: this.trpc.organizationProcedure
           .input(z.object({ projectId: z.string().uuid() }))
           .query(async ({ input }) => {
             return await this.projectsService.getProjectStats(input.projectId);
@@ -233,14 +226,14 @@ export class ProjectsRouter {
       }),
 
       // 项目归档管理
-      archive: this.trpc.protectedProcedure
+      archive: this.trpc.organizationProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(selectProjectSchema)
         .mutation(async ({ input }) => {
           return await this.projectsService.archiveProject(input.id);
         }),
 
-      unarchive: this.trpc.protectedProcedure
+      unarchive: this.trpc.organizationProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(selectProjectSchema)
         .mutation(async ({ input }) => {

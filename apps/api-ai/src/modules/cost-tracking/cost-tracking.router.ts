@@ -17,24 +17,24 @@ export class CostTrackingRouter {
 
   public get costTrackingRouter() {
     return this.trpc.router({
-      // 创建成本记录
-      create: this.trpc.publicProcedure
+      // 创建成本记录 - 需要认证
+      create: this.trpc.protectedProcedure
         .input(insertCostTrackingSchema)
         .output(costTrackingPublicSchema)
         .mutation(async ({ input }) => {
           return await this.costTrackingService.create(input);
         }),
 
-      // 根据ID获取成本记录
-      findById: this.trpc.publicProcedure
+      // 根据ID获取成本记录 - 需要认证
+      findById: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(costTrackingPublicSchema.nullable())
         .query(async ({ input }) => {
           return await this.costTrackingService.findById(input.id);
         }),
 
-      // 根据项目获取成本记录
-      findByProject: this.trpc.publicProcedure
+      // 根据项目获取成本记录 - 需要认证
+      findByProject: this.trpc.protectedProcedure
         .input(z.object({
           projectId: z.string().uuid(),
           limit: z.number().int().min(1).max(100).default(50),
@@ -45,8 +45,8 @@ export class CostTrackingRouter {
           return await this.costTrackingService.findByProject(input.projectId, input.limit, input.offset);
         }),
 
-      // 根据组织获取成本记录
-      findByOrganization: this.trpc.publicProcedure
+      // 根据组织获取成本记录 - 需要认证
+      findByOrganization: this.trpc.protectedProcedure
         .input(z.object({
           organizationId: z.string().uuid(),
           limit: z.number().int().min(1).max(100).default(50),
@@ -57,8 +57,8 @@ export class CostTrackingRouter {
           return await this.costTrackingService.findByOrganization(input.organizationId, input.limit, input.offset);
         }),
 
-      // 根据时间段获取成本记录
-      findByPeriod: this.trpc.publicProcedure
+      // 根据时间段获取成本记录 - 需要认证
+      findByPeriod: this.trpc.protectedProcedure
         .input(z.object({
           organizationId: z.string().uuid(),
           period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be in YYYY-MM format'),
@@ -68,8 +68,8 @@ export class CostTrackingRouter {
           return await this.costTrackingService.findByPeriod(input.organizationId, input.period);
         }),
 
-      // 根据时间段范围获取成本记录
-      findByPeriodRange: this.trpc.publicProcedure
+      // 根据时间段范围获取成本记录 - 需要认证
+      findByPeriodRange: this.trpc.protectedProcedure
         .input(z.object({
           organizationId: z.string().uuid(),
           startPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Start period must be in YYYY-MM format'),
@@ -86,8 +86,8 @@ export class CostTrackingRouter {
           );
         }),
 
-      // 更新成本记录
-      update: this.trpc.publicProcedure
+      // 更新成本记录 - 需要认证
+      update: this.trpc.protectedProcedure
         .input(z.object({
           id: z.string().uuid(),
           data: updateCostTrackingSchema,
@@ -97,16 +97,16 @@ export class CostTrackingRouter {
           return await this.costTrackingService.update(input.id, input.data);
         }),
 
-      // 删除成本记录
-      delete: this.trpc.publicProcedure
+      // 删除成本记录 - 需要认证
+      delete: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(z.boolean())
         .mutation(async ({ input }) => {
           return await this.costTrackingService.delete(input.id);
         }),
 
-      // 批量删除成本记录
-      batchDelete: this.trpc.publicProcedure
+      // 批量删除成本记录 - 需要认证
+      batchDelete: this.trpc.protectedProcedure
         .input(z.object({
           ids: z.array(z.string().uuid()).min(1).max(100),
         }))
@@ -115,8 +115,8 @@ export class CostTrackingRouter {
           return await this.costTrackingService.batchDelete(input.ids);
         }),
 
-      // 获取成本统计信息
-      getCostStats: this.trpc.publicProcedure
+      // 获取成本统计信息 - 需要认证
+      getCostStats: this.trpc.protectedProcedure
         .input(z.object({
           organizationId: z.string().uuid(),
           projectId: z.string().uuid().optional(),
@@ -139,8 +139,8 @@ export class CostTrackingRouter {
           return await this.costTrackingService.getCostStats(input.organizationId, input.projectId);
         }),
 
-      // 获取成本趋势
-      getCostTrend: this.trpc.publicProcedure
+      // 获取成本趋势 - 需要认证
+      getCostTrend: this.trpc.protectedProcedure
         .input(z.object({
           organizationId: z.string().uuid(),
           months: z.number().int().min(1).max(24).default(12),
@@ -160,8 +160,8 @@ export class CostTrackingRouter {
           return await this.costTrackingService.getCostTrend(input.organizationId, input.months, input.projectId);
         }),
 
-      // 获取成本预算对比
-      getCostBudgetComparison: this.trpc.publicProcedure
+      // 获取成本预算对比 - 需要认证
+      getCostBudgetComparison: this.trpc.protectedProcedure
         .input(z.object({
           organizationId: z.string().uuid(),
           period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be in YYYY-MM format'),
@@ -187,8 +187,8 @@ export class CostTrackingRouter {
           );
         }),
 
-      // 生成优化建议
-      generateOptimizationTips: this.trpc.publicProcedure
+      // 生成优化建议 - 需要认证
+      generateOptimizationTips: this.trpc.protectedProcedure
         .input(z.object({
           organizationId: z.string().uuid(),
           projectId: z.string().uuid().optional(),

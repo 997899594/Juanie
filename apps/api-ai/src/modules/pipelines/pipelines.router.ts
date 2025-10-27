@@ -95,7 +95,8 @@ export class PipelinesRouter {
       /**
        * 创建流水线
        */
-      create: this.trpc.publicProcedure
+      // 创建流水线 - 需要认证
+      create: this.trpc.protectedProcedure
         .input(insertPipelineSchema)
         .output(selectPipelineSchema)
         .mutation(async ({ input }) => {
@@ -105,7 +106,8 @@ export class PipelinesRouter {
       /**
        * 根据ID获取流水线
        */
-      getById: this.trpc.publicProcedure
+      // 根据ID获取流水线 - 需要认证
+      getById: this.trpc.protectedProcedure
         .input(getPipelineByIdSchema)
         .output(selectPipelineSchema.nullable())
         .query(async ({ input }) => {
@@ -115,7 +117,8 @@ export class PipelinesRouter {
       /**
        * 获取项目的流水线列表
        */
-      getByProject: this.trpc.publicProcedure
+      // 根据项目获取流水线 - 需要认证
+      getByProject: this.trpc.protectedProcedure
         .input(getPipelinesByProjectSchema)
         .output(pipelineListResponseSchema)
         .query(async ({ input }) => {
@@ -134,7 +137,8 @@ export class PipelinesRouter {
       /**
        * 更新流水线
        */
-      update: this.trpc.publicProcedure
+      // 更新流水线 - 需要认证
+      update: this.trpc.protectedProcedure
         .input(updatePipelineParamsSchema)
         .output(selectPipelineSchema)
         .mutation(async ({ input }) => {
@@ -144,7 +148,8 @@ export class PipelinesRouter {
       /**
        * 删除流水线
        */
-      delete: this.trpc.publicProcedure
+      // 删除流水线 - 需要认证
+      delete: this.trpc.protectedProcedure
         .input(deletePipelineSchema)
         .output(z.object({ success: z.boolean() }))
         .mutation(async ({ input }) => {
@@ -155,7 +160,8 @@ export class PipelinesRouter {
       /**
        * 切换流水线状态
        */
-      toggleStatus: this.trpc.publicProcedure
+      // 切换流水线状态 - 需要认证
+      toggleStatus: this.trpc.protectedProcedure
         .input(togglePipelineStatusSchema)
         .output(selectPipelineSchema)
         .mutation(async ({ input }) => {
@@ -165,7 +171,8 @@ export class PipelinesRouter {
       /**
        * 获取流水线统计信息
        */
-      getStats: this.trpc.publicProcedure
+      // 获取流水线统计 - 需要认证
+      getStats: this.trpc.protectedProcedure
         .input(getPipelineStatsSchema)
         .output(pipelineStatsResponseSchema)
         .query(async ({ input }) => {
@@ -175,7 +182,8 @@ export class PipelinesRouter {
       /**
        * 批量更新流水线状态
        */
-      batchUpdateStatus: this.trpc.publicProcedure
+      // 批量更新流水线状态 - 需要认证
+      batchUpdateStatus: this.trpc.protectedProcedure
         .input(batchUpdatePipelineStatusSchema)
         .output(z.array(selectPipelineSchema))
         .mutation(async ({ input }) => {
@@ -188,7 +196,8 @@ export class PipelinesRouter {
       /**
        * 克隆流水线
        */
-      clone: this.trpc.publicProcedure
+      // 克隆流水线 - 需要认证
+      clone: this.trpc.protectedProcedure
         .input(clonePipelineSchema)
         .output(selectPipelineSchema)
         .mutation(async ({ input }) => {
@@ -202,7 +211,8 @@ export class PipelinesRouter {
       /**
        * 更新流水线指标
        */
-      updateMetrics: this.trpc.publicProcedure
+      // 更新流水线指标 - 需要认证
+      updateMetrics: this.trpc.protectedProcedure
         .input(updatePipelineMetricsSchema)
         .output(selectPipelineSchema)
         .mutation(async ({ input }) => {
@@ -213,7 +223,8 @@ export class PipelinesRouter {
       /**
        * 获取流水线模板
        */
-      getTemplate: this.trpc.publicProcedure
+      // 获取流水线模板 - 需要认证
+      getTemplate: this.trpc.protectedProcedure
         .input(getPipelineTemplateSchema)
         .output(pipelineTemplateResponseSchema)
         .query(async ({ input }) => {

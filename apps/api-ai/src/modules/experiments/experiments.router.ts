@@ -17,24 +17,24 @@ export class ExperimentsRouter {
 
   public get experimentsRouter() {
     return this.trpc.router({
-      // 创建实验
-      create: this.trpc.publicProcedure
+      // 创建实验 - 需要认证
+      create: this.trpc.protectedProcedure
         .input(insertExperimentSchema)
         .output(selectExperimentSchema)
         .mutation(async ({ input }) => {
           return this.experimentsService.create(input);
         }),
 
-      // 根据ID获取实验
-      findById: this.trpc.publicProcedure
+      // 根据ID获取实验 - 需要认证
+      findById: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(selectExperimentSchema.nullable())
         .query(async ({ input }) => {
           return this.experimentsService.findById(input.id);
         }),
 
-      // 根据项目获取实验列表
-      findByProject: this.trpc.publicProcedure
+      // 根据项目获取实验列表 - 需要认证
+      findByProject: this.trpc.protectedProcedure
         .input(z.object({
           projectId: z.string().uuid(),
           limit: z.number().int().min(1).max(100).default(50),
@@ -45,8 +45,8 @@ export class ExperimentsRouter {
           return this.experimentsService.findByProject(input.projectId, input.limit, input.offset);
         }),
 
-      // 根据状态获取实验列表
-      findByStatus: this.trpc.publicProcedure
+      // 根据状态获取实验列表 - 需要认证
+      findByStatus: this.trpc.protectedProcedure
         .input(z.object({
           status: z.enum(['draft', 'running', 'completed', 'stopped']),
           projectId: z.string().uuid().optional(),
@@ -58,8 +58,8 @@ export class ExperimentsRouter {
           return this.experimentsService.findByStatus(input.status, input.projectId, input.limit, input.offset);
         }),
 
-      // 搜索实验
-      search: this.trpc.publicProcedure
+      // 搜索实验 - 需要认证
+      search: this.trpc.protectedProcedure
         .input(z.object({
           query: z.string().min(1),
           projectId: z.string().uuid().optional(),
@@ -71,8 +71,8 @@ export class ExperimentsRouter {
           return this.experimentsService.search(input.query, input.projectId, input.limit, input.offset);
         }),
 
-      // 更新实验
-      update: this.trpc.publicProcedure
+      // 更新实验 - 需要认证
+      update: this.trpc.protectedProcedure
         .input(z.object({
           id: z.string().uuid(),
           data: updateExperimentSchema,
@@ -82,16 +82,16 @@ export class ExperimentsRouter {
           return this.experimentsService.update(input.id, input.data);
         }),
 
-      // 启动实验
-      start: this.trpc.publicProcedure
+      // 启动实验 - 需要认证
+      start: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(selectExperimentSchema.nullable())
         .mutation(async ({ input }) => {
           return this.experimentsService.start(input.id);
         }),
 
-      // 停止实验
-      stop: this.trpc.publicProcedure
+      // 停止实验 - 需要认证
+      stop: this.trpc.protectedProcedure
         .input(z.object({
           id: z.string().uuid(),
           conclusion: z.string().optional(),
@@ -101,8 +101,8 @@ export class ExperimentsRouter {
           return this.experimentsService.stop(input.id, input.conclusion);
         }),
 
-      // 完成实验
-      complete: this.trpc.publicProcedure
+      // 完成实验 - 需要认证
+      complete: this.trpc.protectedProcedure
         .input(z.object({
           id: z.string().uuid(),
           results: z.object({
@@ -117,16 +117,16 @@ export class ExperimentsRouter {
           return this.experimentsService.complete(input.id, input.results);
         }),
 
-      // 删除实验
-      delete: this.trpc.publicProcedure
+      // 删除实验 - 需要认证
+      delete: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(z.boolean())
         .mutation(async ({ input }) => {
           return this.experimentsService.delete(input.id);
         }),
 
-      // 批量删除实验
-      batchDelete: this.trpc.publicProcedure
+      // 批量删除实验 - 需要认证
+      batchDelete: this.trpc.protectedProcedure
         .input(z.object({
           ids: z.array(z.string().uuid()).min(1).max(100),
         }))
@@ -135,8 +135,8 @@ export class ExperimentsRouter {
           return this.experimentsService.batchDelete(input.ids);
         }),
 
-      // 获取实验统计
-      getExperimentStats: this.trpc.publicProcedure
+      // 获取实验统计 - 需要认证
+      getExperimentStats: this.trpc.protectedProcedure
         .input(z.object({
           projectId: z.string().uuid().optional(),
         }))
@@ -154,8 +154,8 @@ export class ExperimentsRouter {
           return this.experimentsService.getExperimentStats(input.projectId);
         }),
 
-      // 获取实验性能
-      getExperimentPerformance: this.trpc.publicProcedure
+      // 获取实验性能 - 需要认证
+      getExperimentPerformance: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(z.object({
           experimentId: z.string(),
@@ -179,8 +179,8 @@ export class ExperimentsRouter {
           return this.experimentsService.getExperimentPerformance(input.id);
         }),
 
-      // 获取实验趋势
-      getExperimentTrends: this.trpc.publicProcedure
+      // 获取实验趋势 - 需要认证
+      getExperimentTrends: this.trpc.protectedProcedure
         .input(z.object({
           projectId: z.string().uuid().optional(),
           days: z.number().int().min(1).max(365).default(30),
@@ -195,8 +195,8 @@ export class ExperimentsRouter {
           return this.experimentsService.getExperimentTrends(input.projectId, input.days);
         }),
 
-      // 检查自动停止条件
-      checkAutoStopConditions: this.trpc.publicProcedure
+      // 检查自动停止条件 - 需要认证
+      checkAutoStopConditions: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .output(z.object({
           shouldStop: z.boolean(),

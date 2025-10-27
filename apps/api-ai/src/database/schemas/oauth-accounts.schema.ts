@@ -1,5 +1,4 @@
 import { pgTable, uuid, varchar, text, timestamp, integer, jsonb, index, foreignKey, uniqueIndex } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { users } from './users.schema';
 
@@ -122,12 +121,41 @@ export const oauthAccountsIndexes = {
 };
 
 // Zod schemas for validation
-export const insertOAuthAccountSchema = createInsertSchema(oauthAccounts, {
+export const insertOAuthAccountSchema = z.object({
+  id: z.string().uuid().optional(),
+  userId: z.string().uuid(),
   provider: z.enum(['github', 'gitlab']),
   providerAccountId: z.string().min(1).max(255),
+  accessToken: z.string().optional(),
+  refreshToken: z.string().optional(),
+  tokenType: z.string().max(50).default('bearer'),
+  scope: z.string().optional(),
+  expiresAt: z.date().optional(),
+  githubData: z.record(z.string(), z.any()).optional(),
+  gitlabData: z.record(z.string(), z.any()).optional(),
+  permissions: z.record(z.string(), z.any()).optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+  lastUsedAt: z.date().optional(),
 });
 
-export const selectOAuthAccountSchema = createSelectSchema(oauthAccounts);
+export const selectOAuthAccountSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  provider: z.enum(['github', 'gitlab']),
+  providerAccountId: z.string(),
+  accessToken: z.string().nullable(),
+  refreshToken: z.string().nullable(),
+  tokenType: z.string().nullable(),
+  scope: z.string().nullable(),
+  expiresAt: z.date().nullable(),
+  githubData: z.record(z.string(), z.any()).nullable(),
+  gitlabData: z.record(z.string(), z.any()).nullable(),
+  permissions: z.record(z.string(), z.any()).nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  lastUsedAt: z.date().nullable(),
+});
 
 export const updateOAuthAccountSchema = selectOAuthAccountSchema.pick({
   userId: true,

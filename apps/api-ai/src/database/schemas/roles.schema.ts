@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, jsonb, index, uniqueIndex, varchar, pgEnum, boolean } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { organizations } from './organizations.schema';
 
@@ -49,12 +48,31 @@ export const rolesIndexes = {
 };
 
 // Zod 校验
-export const insertRoleSchema = createInsertSchema(roles, {
+export const insertRoleSchema = z.object({
+  id: z.string().uuid().optional(),
+  organizationId: z.string().uuid().optional(),
   name: z.string().min(1).max(100),
   slug: z.string().min(1).max(100),
-  scope: RoleScopeEnum,
+  scope: RoleScopeEnum.optional(),
+  description: z.string().optional(),
+  isSystem: z.boolean().optional(),
+  permissions: z.record(z.string(), z.object({})).optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
 });
-export const selectRoleSchema = createSelectSchema(roles);
+
+export const selectRoleSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid().nullable(),
+  name: z.string(),
+  slug: z.string(),
+  scope: RoleScopeEnum,
+  description: z.string().nullable(),
+  isSystem: z.boolean(),
+  permissions: z.record(z.string(), z.object({})).nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export const updateRoleSchema = selectRoleSchema
   .pick({ name: true, slug: true, scope: true, description: true, isSystem: true, permissions: true })
   .partial();

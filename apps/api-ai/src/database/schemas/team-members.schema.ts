@@ -1,5 +1,4 @@
 import { pgTable, uuid, text, timestamp, index, uniqueIndex, pgEnum } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { teams } from './teams.schema';
 import { users } from './users.schema';
@@ -47,9 +46,31 @@ export const teamMembersIndexes = {
 };
 
 // Zod 校验
-export const insertTeamMemberSchema = createInsertSchema(teamMembers);
-export const selectTeamMemberSchema = createSelectSchema(teamMembers);
-export const updateTeamMemberSchema = createInsertSchema(teamMembers).pick({ 
+export const insertTeamMemberSchema = z.object({
+  id: z.string().uuid().optional(),
+  teamId: z.string().uuid(),
+  userId: z.string().uuid(),
+  role: TeamMembershipRoleEnum.optional(),
+  status: TeamMembershipStatusEnum.optional(),
+  invitedBy: z.string().uuid().optional(),
+  joinedAt: z.date().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+
+export const selectTeamMemberSchema = z.object({
+  id: z.string().uuid(),
+  teamId: z.string().uuid(),
+  userId: z.string().uuid(),
+  role: TeamMembershipRoleEnum,
+  status: TeamMembershipStatusEnum,
+  invitedBy: z.string().uuid().nullable(),
+  joinedAt: z.date(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const updateTeamMemberSchema = selectTeamMemberSchema.pick({
   role: true, 
   status: true, 
   invitedBy: true 

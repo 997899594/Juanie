@@ -1,6 +1,5 @@
 import { pgTable, uuid, integer, text, timestamp, jsonb, boolean, index, decimal, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import { projects } from './projects.schema';
 import { environments } from './environments.schema';
@@ -77,12 +76,74 @@ export const monitoringConfigsRelations = relations(monitoringConfigs, ({ one })
   }),
 }));
 
-// Zod Schemas with detailed enums
-export const insertMonitoringConfigSchema = createInsertSchema(monitoringConfigs);
+// 简化的Zod Schemas
+export const insertMonitoringConfigSchema = z.object({
+  id: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
+  environmentId: z.string().uuid().optional(),
+  serviceName: z.string().optional(),
+  monitorType: MonitorTypeEnum,
+  checkInterval: z.number().int().optional(),
+  timeout: z.number().int().optional(),
+  retryCount: z.number().int().optional(),
+  checkUrl: z.string().optional(),
+  checkMethod: z.string().optional(),
+  checkHeaders: z.string().optional(),
+  checkBody: z.string().optional(),
+  expectedStatusCode: z.number().int().optional(),
+  expectedResponseContains: z.string().optional(),
+  aiAnomalyDetection: z.boolean().optional(),
+  baselineLearningEnabled: z.boolean().optional(),
+  autoThresholdAdjustment: z.boolean().optional(),
+  warningResponseTime: z.number().int().optional(),
+  warningErrorRate: z.string().optional(),
+  criticalResponseTime: z.number().int().optional(),
+  criticalErrorRate: z.string().optional(),
+  emailNotifications: z.boolean().optional(),
+  slackNotifications: z.boolean().optional(),
+  smsNotifications: z.boolean().optional(),
+  escalationEnabled: z.boolean().optional(),
+  escalationAfterMinutes: z.number().int().optional(),
+  escalationEmail: z.string().optional(),
+  isActive: z.boolean().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
 
-export const selectMonitoringConfigSchema = createSelectSchema(monitoringConfigs);
+export const selectMonitoringConfigSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid().nullable(),
+  environmentId: z.string().uuid().nullable(),
+  serviceName: z.string().nullable(),
+  monitorType: MonitorTypeEnum,
+  checkInterval: z.number().int(),
+  timeout: z.number().int(),
+  retryCount: z.number().int(),
+  checkUrl: z.string().nullable(),
+  checkMethod: z.string(),
+  checkHeaders: z.string().nullable(),
+  checkBody: z.string().nullable(),
+  expectedStatusCode: z.number().int(),
+  expectedResponseContains: z.string().nullable(),
+  aiAnomalyDetection: z.boolean(),
+  baselineLearningEnabled: z.boolean(),
+  autoThresholdAdjustment: z.boolean(),
+  warningResponseTime: z.number().int(),
+  warningErrorRate: z.string(),
+  criticalResponseTime: z.number().int(),
+  criticalErrorRate: z.string(),
+  emailNotifications: z.boolean(),
+  slackNotifications: z.boolean(),
+  smsNotifications: z.boolean(),
+  escalationEnabled: z.boolean(),
+  escalationAfterMinutes: z.number().int(),
+  escalationEmail: z.string().nullable(),
+  isActive: z.boolean(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
-export const updateMonitoringConfigSchema = selectMonitoringConfigSchema.pick({
+export const updateMonitoringConfigSchema = insertMonitoringConfigSchema.pick({
   projectId: true,
   environmentId: true,
   serviceName: true,

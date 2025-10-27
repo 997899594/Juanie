@@ -11,8 +11,40 @@ import {
   type UpdatePipelineRun,
   insertPipelineRunSchema,
   updatePipelineRunSchema,
-  selectPipelineRunSchema
+  selectPipelineRunSchema,
+  PipelineRunStatusEnum,
+  PipelineRunTriggerTypeEnum,
+  type PipelineRunStatus,
+  type PipelineRunTriggerType
 } from '../../database/schemas';
+import { z } from 'zod';
+
+// 查询参数验证schemas
+const getPipelineRunsByPipelineInputSchema = z.object({
+  pipelineId: z.string().uuid(),
+  limit: z.number().int().positive().max(100).optional().default(10),
+  offset: z.number().int().min(0).optional().default(0),
+});
+
+const getPipelineRunsByProjectInputSchema = z.object({
+  projectId: z.string().uuid(),
+  limit: z.number().int().positive().max(100).optional().default(10),
+  offset: z.number().int().min(0).optional().default(0),
+});
+
+// 扩展的返回类型schema
+const pipelineRunWithDetailsSchema = selectPipelineRunSchema.extend({
+  pipeline: z.object({
+    name: z.string(),
+    projectId: z.string().uuid().optional(),
+  }).optional(),
+  triggerUser: z.object({
+    name: z.string(),
+    email: z.string(),
+  }).optional(),
+});
+
+type PipelineRunWithDetails = z.infer<typeof pipelineRunWithDetailsSchema>;
 
 @Injectable()
 export class PipelineRunsService {
@@ -21,87 +53,55 @@ export class PipelineRunsService {
   constructor(@InjectDatabase() private readonly db: Database) {}
 
   /**
-   * 创建新的流水线运行
+   * 通用的数据库查询字段选择器
    */
-  async createPipelineRun(data: NewPipelineRun): Promise<PipelineRun> {
-    try {
-      const validatedData = insertPipelineRunSchema.parse(data);
-      
-      const [newRun] = await this.db
-        .insert(pipelineRuns)
-        .values(validatedData)
-        .returning();
-
-      this.logger.log(`Pipeline run created: ${newRun.id}`);
-      return newRun;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to create pipeline run: ${errorMessage}`);
-      throw new BadRequestException('Failed to create pipeline run');
-    }
-  }
+  private readonly selectFields = {
+    id: pipelineRuns.id,
+    pipelineId: pipelineRuns.pipelineId,
+    triggerType: pipelineRuns.triggerType,
+    triggerUserId: pipelineRuns.triggerUserId,
+    triggerSource: pipelineRuns.triggerSource,
+    triggerBranch: pipelineRuns.triggerBranch,
+    triggerCommit: pipelineRuns.triggerCommit,
+    runNumber: pipelineRuns.runNumber,
+    commitHash: pipelineRuns.commitHash,
+    branch: pipelineRuns.branch,
+    status: pipelineRuns.status,
+    startedAt: pipelineRuns.startedAt,
+    finishedAt: pipelineRuns.finishedAt,
+    duration: pipelineRuns.duration,
+    computeUnitsUsed: pipelineRuns.computeUnitsUsed,
+    estimatedCost: pipelineRuns.estimatedCost,
+    carbonFootprint: pipelineRuns.carbonFootprint,
+    failurePredictionScore: pipelineRuns.failurePredictionScore,
+    optimizationSuggestion: pipelineRuns.optimizationSuggestion,
+    performanceScore: pipelineRuns.performanceScore,
+    testsTotal: pipelineRuns.testsTotal,
+    testsPassed: pipelineRuns.testsPassed,
+    testsFailed: pipelineRuns.testsFailed,
+    testCoverage: pipelineRuns.testCoverage,
+    vulnerabilitiesCritical: pipelineRuns.vulnerabilitiesCritical,
+    vulnerabilitiesHigh: pipelineRuns.vulnerabilitiesHigh,
+    vulnerabilitiesMedium: pipelineRuns.vulnerabilitiesMedium,
+    vulnerabilitiesLow: pipelineRuns.vulnerabilitiesLow,
+    securityScore: pipelineRuns.securityScore,
+    artifactCount: pipelineRuns.artifactCount,
+    artifactSizeMb: pipelineRuns.artifactSizeMb,
+    createdAt: pipelineRuns.createdAt,
+    updatedAt: pipelineRuns.updatedAt,
+    // Related data
+    pipelineName: pipelines.name,
+    pipelineProjectId: pipelines.projectId,
+    triggerUserName: users.displayName,
+    triggerUserEmail: users.email,
+  };
 
   /**
-   * 根据ID获取流水线运行详情
+   * 通用的数据映射函数，将查询结果转换为标准格式并验证
    */
-  async getPipelineRunById(id: string): Promise<PipelineRun & {
-    pipeline?: { name: string; projectId: string };
-    triggerUser?: { name: string; email: string };
-  }> {
+  private mapPipelineRunWithDetails(run: any): PipelineRunWithDetails {
     try {
-      const result = await this.db
-        .select({
-          // Pipeline run fields
-          id: pipelineRuns.id,
-          pipelineId: pipelineRuns.pipelineId,
-          triggerType: pipelineRuns.triggerType,
-          triggerUserId: pipelineRuns.triggerUserId,
-          triggerSource: pipelineRuns.triggerSource,
-          triggerBranch: pipelineRuns.triggerBranch,
-          triggerCommit: pipelineRuns.triggerCommit,
-          runNumber: pipelineRuns.runNumber,
-          commitHash: pipelineRuns.commitHash,
-          branch: pipelineRuns.branch,
-          status: pipelineRuns.status,
-          startedAt: pipelineRuns.startedAt,
-          finishedAt: pipelineRuns.finishedAt,
-          duration: pipelineRuns.duration,
-          computeUnitsUsed: pipelineRuns.computeUnitsUsed,
-          estimatedCost: pipelineRuns.estimatedCost,
-          carbonFootprint: pipelineRuns.carbonFootprint,
-          failurePredictionScore: pipelineRuns.failurePredictionScore,
-          optimizationSuggestion: pipelineRuns.optimizationSuggestion,
-          performanceScore: pipelineRuns.performanceScore,
-          testsTotal: pipelineRuns.testsTotal,
-          testsPassed: pipelineRuns.testsPassed,
-          testsFailed: pipelineRuns.testsFailed,
-          testCoverage: pipelineRuns.testCoverage,
-          vulnerabilitiesCritical: pipelineRuns.vulnerabilitiesCritical,
-          vulnerabilitiesHigh: pipelineRuns.vulnerabilitiesHigh,
-          vulnerabilitiesMedium: pipelineRuns.vulnerabilitiesMedium,
-          vulnerabilitiesLow: pipelineRuns.vulnerabilitiesLow,
-          securityScore: pipelineRuns.securityScore,
-          artifactCount: pipelineRuns.artifactCount,
-          artifactSizeMb: pipelineRuns.artifactSizeMb,
-          createdAt: pipelineRuns.createdAt,
-          // Related data
-          pipelineName: pipelines.name,
-          pipelineProjectId: pipelines.projectId,
-          triggerUserName: users.displayName,
-          triggerUserEmail: users.email,
-        })
-        .from(pipelineRuns)
-        .leftJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
-        .leftJoin(users, eq(pipelineRuns.triggerUserId, users.id))
-        .where(eq(pipelineRuns.id, id))
-        .limit(1);
-
-      if (!result.length) {
-        throw new NotFoundException(`Pipeline run with ID ${id} not found`);
-      }
-
-      const run = result[0];
-      return {
+      const mappedRun = {
         id: run.id,
         pipelineId: run.pipelineId,
         triggerType: run.triggerType,
@@ -134,7 +134,8 @@ export class PipelineRunsService {
         artifactCount: run.artifactCount,
         artifactSizeMb: run.artifactSizeMb,
         createdAt: run.createdAt,
-        pipeline: run.pipelineName && run.pipelineProjectId ? {
+        updatedAt: run.updatedAt,
+        pipeline: run.pipelineName ? {
           name: run.pipelineName,
           projectId: run.pipelineProjectId
         } : undefined,
@@ -143,6 +144,54 @@ export class PipelineRunsService {
           email: run.triggerUserEmail
         } : undefined,
       };
+
+      // 使用schema验证输出
+      return pipelineRunWithDetailsSchema.parse(mappedRun);
+    } catch (error) {
+      this.logger.error(`Failed to map pipeline run data: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException('Invalid pipeline run data format');
+    }
+  }
+
+  /**
+   * 创建新的流水线运行
+   */
+  async createPipelineRun(data: NewPipelineRun): Promise<PipelineRun> {
+    try {
+      const validatedData = insertPipelineRunSchema.parse(data);
+      
+      const [newRun] = await this.db
+        .insert(pipelineRuns)
+        .values(validatedData)
+        .returning();
+
+      this.logger.log(`Pipeline run created: ${newRun.id}`);
+      return newRun;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to create pipeline run: ${errorMessage}`);
+      throw new BadRequestException('Failed to create pipeline run');
+    }
+  }
+
+  /**
+   * 根据ID获取流水线运行详情
+   */
+  async getPipelineRunById(id: string): Promise<PipelineRunWithDetails> {
+    try {
+      const result = await this.db
+        .select(this.selectFields)
+        .from(pipelineRuns)
+        .leftJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
+        .leftJoin(users, eq(pipelineRuns.triggerUserId, users.id))
+        .where(eq(pipelineRuns.id, id))
+        .limit(1);
+
+      if (!result.length) {
+        throw new NotFoundException(`Pipeline run with ID ${id} not found`);
+      }
+
+      return this.mapPipelineRunWithDetails(result[0]);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -242,6 +291,7 @@ export class PipelineRunsService {
           artifactCount: pipelineRuns.artifactCount,
           artifactSizeMb: pipelineRuns.artifactSizeMb,
           createdAt: pipelineRuns.createdAt,
+          updatedAt: pipelineRuns.updatedAt,
           // Related data
           pipelineName: pipelines.name,
           triggerUserName: users.displayName,
@@ -288,6 +338,7 @@ export class PipelineRunsService {
         artifactCount: run.artifactCount,
         artifactSizeMb: run.artifactSizeMb,
         createdAt: run.createdAt,
+        updatedAt: run.updatedAt,
         pipeline: run.pipelineName ? { name: run.pipelineName } : undefined,
         triggerUser: run.triggerUserName && run.triggerUserEmail ? {
           name: run.triggerUserName,
@@ -386,6 +437,7 @@ export class PipelineRunsService {
           artifactCount: pipelineRuns.artifactCount,
           artifactSizeMb: pipelineRuns.artifactSizeMb,
           createdAt: pipelineRuns.createdAt,
+          updatedAt: pipelineRuns.updatedAt,
           // Related data
           pipelineName: pipelines.name,
           triggerUserName: users.displayName,
@@ -432,6 +484,7 @@ export class PipelineRunsService {
         artifactCount: run.artifactCount,
         artifactSizeMb: run.artifactSizeMb,
         createdAt: run.createdAt,
+        updatedAt: run.updatedAt,
         pipeline: run.pipelineName ? { name: run.pipelineName } : undefined,
         triggerUser: run.triggerUserName && run.triggerUserEmail ? {
           name: run.triggerUserName,
@@ -790,105 +843,22 @@ export class PipelineRunsService {
   }
 
   /**
-   * 获取最近的流水线运行
+   * 获取最近的流水线运行记录
    */
-  async getRecentPipelineRuns(
-    projectId: string,
-    limit: number = 10
-  ): Promise<(PipelineRun & {
-    pipeline?: { name: string };
-    triggerUser?: { name: string; email: string };
-  })[]> {
+  async getRecentPipelineRuns(limit: number = 10): Promise<PipelineRunWithDetails[]> {
     try {
       const results = await this.db
-        .select({
-          // Pipeline run fields
-          id: pipelineRuns.id,
-          pipelineId: pipelineRuns.pipelineId,
-          triggerType: pipelineRuns.triggerType,
-          triggerUserId: pipelineRuns.triggerUserId,
-          triggerSource: pipelineRuns.triggerSource,
-          triggerBranch: pipelineRuns.triggerBranch,
-          triggerCommit: pipelineRuns.triggerCommit,
-          runNumber: pipelineRuns.runNumber,
-          commitHash: pipelineRuns.commitHash,
-          branch: pipelineRuns.branch,
-          status: pipelineRuns.status,
-          startedAt: pipelineRuns.startedAt,
-          finishedAt: pipelineRuns.finishedAt,
-          duration: pipelineRuns.duration,
-          computeUnitsUsed: pipelineRuns.computeUnitsUsed,
-          estimatedCost: pipelineRuns.estimatedCost,
-          carbonFootprint: pipelineRuns.carbonFootprint,
-          failurePredictionScore: pipelineRuns.failurePredictionScore,
-          optimizationSuggestion: pipelineRuns.optimizationSuggestion,
-          performanceScore: pipelineRuns.performanceScore,
-          testsTotal: pipelineRuns.testsTotal,
-          testsPassed: pipelineRuns.testsPassed,
-          testsFailed: pipelineRuns.testsFailed,
-          testCoverage: pipelineRuns.testCoverage,
-          vulnerabilitiesCritical: pipelineRuns.vulnerabilitiesCritical,
-          vulnerabilitiesHigh: pipelineRuns.vulnerabilitiesHigh,
-          vulnerabilitiesMedium: pipelineRuns.vulnerabilitiesMedium,
-          vulnerabilitiesLow: pipelineRuns.vulnerabilitiesLow,
-          securityScore: pipelineRuns.securityScore,
-          artifactCount: pipelineRuns.artifactCount,
-          artifactSizeMb: pipelineRuns.artifactSizeMb,
-          createdAt: pipelineRuns.createdAt,
-          // Related data
-          pipelineName: pipelines.name,
-          triggerUserName: users.displayName,
-          triggerUserEmail: users.email,
-        })
+        .select(this.selectFields)
         .from(pipelineRuns)
-        .innerJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
+        .leftJoin(pipelines, eq(pipelineRuns.pipelineId, pipelines.id))
         .leftJoin(users, eq(pipelineRuns.triggerUserId, users.id))
-        .where(eq(pipelines.projectId, projectId))
-        .orderBy(desc(pipelineRuns.startedAt))
+        .orderBy(desc(pipelineRuns.createdAt))
         .limit(limit);
 
-      return results.map(run => ({
-        id: run.id,
-        pipelineId: run.pipelineId,
-        triggerType: run.triggerType,
-        triggerUserId: run.triggerUserId,
-        triggerSource: run.triggerSource,
-        triggerBranch: run.triggerBranch,
-        triggerCommit: run.triggerCommit,
-        runNumber: run.runNumber,
-        commitHash: run.commitHash,
-        branch: run.branch,
-        status: run.status,
-        startedAt: run.startedAt,
-        finishedAt: run.finishedAt,
-        duration: run.duration,
-        computeUnitsUsed: run.computeUnitsUsed,
-        estimatedCost: run.estimatedCost,
-        carbonFootprint: run.carbonFootprint,
-        failurePredictionScore: run.failurePredictionScore,
-        optimizationSuggestion: run.optimizationSuggestion,
-        performanceScore: run.performanceScore,
-        testsTotal: run.testsTotal,
-        testsPassed: run.testsPassed,
-        testsFailed: run.testsFailed,
-        testCoverage: run.testCoverage,
-        vulnerabilitiesCritical: run.vulnerabilitiesCritical,
-        vulnerabilitiesHigh: run.vulnerabilitiesHigh,
-        vulnerabilitiesMedium: run.vulnerabilitiesMedium,
-        vulnerabilitiesLow: run.vulnerabilitiesLow,
-        securityScore: run.securityScore,
-        artifactCount: run.artifactCount,
-        artifactSizeMb: run.artifactSizeMb,
-        createdAt: run.createdAt,
-        pipeline: run.pipelineName ? { name: run.pipelineName } : undefined,
-        triggerUser: run.triggerUserName && run.triggerUserEmail ? {
-          name: run.triggerUserName,
-          email: run.triggerUserEmail
-        } : undefined,
-      }));
+      return results.map(result => this.mapPipelineRunWithDetails(result));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to get recent pipeline runs for project ${projectId}: ${errorMessage}`);
+      this.logger.error(`Failed to get recent pipeline runs: ${errorMessage}`);
       throw new BadRequestException('Failed to get recent pipeline runs');
     }
   }

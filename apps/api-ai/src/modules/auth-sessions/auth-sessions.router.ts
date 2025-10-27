@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { TrpcService } from '../../trpc/trpc.service';
 import { AuthSessionsService } from './auth-sessions.service';
-import { z } from 'zod';
+import {
+  insertAuthSessionSchema,
+  selectAuthSessionSchema,
+} from '../../database/schemas/auth-sessions.schema';
 
 
 @Injectable()
@@ -45,7 +50,10 @@ export class AuthSessionsRouter {
       .query(async ({ input }) => {
         const session = await this.authSessionsService.getSessionDetails(input.id);
         if (!session) {
-          throw new Error('Session not found');
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Session not found',
+          });
         }
         return session;
       }),
@@ -85,7 +93,10 @@ export class AuthSessionsRouter {
       .mutation(async ({ input }) => {
         const result = await this.authSessionsService.refreshSession(input.refreshToken);
         if (!result) {
-          throw new Error('Session not found or expired');
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Session not found or expired',
+          });
         }
         return result;
       }),
@@ -96,7 +107,10 @@ export class AuthSessionsRouter {
       .mutation(async ({ input }) => {
         const success = await this.authSessionsService.revokeSession(input.sessionToken);
         if (!success) {
-          throw new Error('Failed to revoke session');
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to revoke session',
+          });
         }
         return { success: true };
       }),
@@ -107,7 +121,10 @@ export class AuthSessionsRouter {
       .mutation(async ({ input }) => {
         const success = await this.authSessionsService.revokeSessionById(input.sessionId);
         if (!success) {
-          throw new Error('Failed to revoke session');
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to revoke session',
+          });
         }
         return { success: true };
       }),

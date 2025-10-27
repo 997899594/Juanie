@@ -17,28 +17,28 @@ export class TeamsRouter {
 
   public get teamsRouter() {
     return this.trpc.router({
-      // 创建团队
-      create: this.trpc.publicProcedure
+      // 创建团队 - 需要认证
+      create: this.trpc.protectedProcedure
         .input(insertTeamSchema)
         .output(selectTeamSchema)
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
           return this.teamsService.createTeam(input);
         }),
 
-      // 根据ID获取团队
-      getById: this.trpc.publicProcedure
+      // 根据ID获取团队 - 需要认证
+      getById: this.trpc.protectedProcedure
         .input(
           z.object({
             id: z.string().uuid(),
           })
         )
         .output(selectTeamSchema)
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
           return this.teamsService.getTeamById(input.id);
         }),
 
-      // 根据组织获取团队列表
-      getByOrganization: this.trpc.publicProcedure
+      // 根据组织获取团队列表 - 需要认证
+      getByOrganization: this.trpc.protectedProcedure
         .input(
           z.object({
             organizationId: z.string().uuid(),
@@ -52,7 +52,7 @@ export class TeamsRouter {
             total: z.number(),
           })
         )
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
           const teams = await this.teamsService.getTeamsByOrganization(
             input.organizationId,
             input.limit,
@@ -64,8 +64,8 @@ export class TeamsRouter {
           return { teams, total };
         }),
 
-      // 更新团队
-      update: this.trpc.publicProcedure
+      // 更新团队 - 需要认证
+      update: this.trpc.protectedProcedure
         .input(
           z.object({
             id: z.string().uuid(),
@@ -73,12 +73,12 @@ export class TeamsRouter {
           })
         )
         .output(selectTeamSchema)
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
           return this.teamsService.updateTeam(input.id, input.data);
         }),
 
-      // 删除团队
-      delete: this.trpc.publicProcedure
+      // 删除团队 - 需要认证
+      delete: this.trpc.protectedProcedure
         .input(
           z.object({
             id: z.string().uuid(),
@@ -89,13 +89,13 @@ export class TeamsRouter {
             success: z.boolean(),
           })
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
           await this.teamsService.deleteTeam(input.id);
           return { success: true };
         }),
 
-      // 批量删除团队
-      deleteMany: this.trpc.publicProcedure
+      // 批量删除团队 - 需要认证
+      deleteMany: this.trpc.protectedProcedure
         .input(
           z.object({
             ids: z.array(z.string().uuid()).min(1),
@@ -106,13 +106,13 @@ export class TeamsRouter {
             success: z.boolean(),
           })
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input, ctx }) => {
           await this.teamsService.deleteTeams(input.ids);
           return { success: true };
         }),
 
-      // 根据slug查找团队
-      findBySlug: this.trpc.publicProcedure
+      // 根据slug查找团队 - 需要认证
+      findBySlug: this.trpc.protectedProcedure
         .input(
           z.object({
             organizationId: z.string().uuid(),
@@ -120,15 +120,15 @@ export class TeamsRouter {
           })
         )
         .output(selectTeamSchema.nullable())
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
           return this.teamsService.findBySlugInOrganization(
             input.organizationId,
             input.slug
           );
         }),
 
-      // 搜索团队
-      search: this.trpc.publicProcedure
+      // 搜索团队 - 需要认证
+      search: this.trpc.protectedProcedure
         .input(
           z.object({
             organizationId: z.string().uuid(),
@@ -143,7 +143,7 @@ export class TeamsRouter {
             total: z.number(),
           })
         )
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
           const teams = await this.teamsService.searchTeamsInOrganization(
             input.organizationId,
             input.query,
@@ -153,8 +153,8 @@ export class TeamsRouter {
           return { teams, total: teams.length };
         }),
 
-      // 获取团队统计信息
-      getStats: this.trpc.publicProcedure
+      // 获取团队统计信息 - 需要认证
+      getStats: this.trpc.protectedProcedure
         .input(
           z.object({
             teamId: z.string().uuid(),
@@ -168,12 +168,12 @@ export class TeamsRouter {
             membersByRole: z.record(z.string(), z.number()),
           })
         )
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
           return this.teamsService.getTeamStats(input.teamId);
         }),
 
-      // 获取团队成员及用户信息
-      getMembersWithUsers: this.trpc.publicProcedure
+      // 获取团队成员及用户信息 - 需要认证
+      getMembersWithUsers: this.trpc.protectedProcedure
         .input(
           z.object({
             teamId: z.string().uuid(),
@@ -181,7 +181,7 @@ export class TeamsRouter {
             offset: z.number().min(0).default(0),
           })
         )
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
           return this.teamsService.getTeamMembersWithUsers(
             input.teamId,
             input.limit,
@@ -189,8 +189,8 @@ export class TeamsRouter {
           );
         }),
 
-      // 获取组织下团队数量
-      getCountByOrganization: this.trpc.publicProcedure
+      // 获取组织下团队数量 - 需要认证
+      getCountByOrganization: this.trpc.protectedProcedure
         .input(
           z.object({
             organizationId: z.string().uuid(),
@@ -201,7 +201,7 @@ export class TeamsRouter {
             count: z.number(),
           })
         )
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
           const count = await this.teamsService.getTeamCountByOrganization(
             input.organizationId
           );

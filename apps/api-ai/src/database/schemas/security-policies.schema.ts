@@ -1,17 +1,16 @@
 import { pgTable, uuid, varchar, text, timestamp, boolean, index, integer, pgEnum } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod'
 import { z } from 'zod'
 import { projects } from './projects.schema'
 import { environments } from './environments.schema'
 
 // 策略类型枚举（access-control/访问控制、network/网络、data-protection/数据保护、compliance/合规）
-export const SecurityPolicyTypeEnum = ['access-control', 'network', 'data-protection', 'compliance'] as const
-export const SecurityPolicyTypePgEnum = pgEnum('security_policy_type', SecurityPolicyTypeEnum)
+export const SecurityPolicyTypeEnum = z.enum(['access-control', 'network', 'data-protection', 'compliance'])
+export const SecurityPolicyTypePgEnum = pgEnum('security_policy_type', ['access-control', 'network', 'data-protection', 'compliance'])
 
 // 策略状态枚举（active/启用、inactive/停用、draft/草稿）
-export const SecurityPolicyStatusEnum = ['active', 'inactive', 'draft'] as const
-export const SecurityPolicyStatusPgEnum = pgEnum('security_policy_status', SecurityPolicyStatusEnum)
+export const SecurityPolicyStatusEnum = z.enum(['active', 'inactive', 'draft'])
+export const SecurityPolicyStatusPgEnum = pgEnum('security_policy_status', ['active', 'inactive', 'draft'])
 
 export const securityPolicies = pgTable(
   'security_policies',
@@ -63,8 +62,35 @@ export const securityPoliciesRelations = relations(securityPolicies, ({ one }) =
 }))
 
 // 简化的Zod Schemas
-export const insertSecurityPolicySchema = createInsertSchema(securityPolicies)
-export const selectSecurityPolicySchema = createSelectSchema(securityPolicies)
+export const insertSecurityPolicySchema = z.object({
+  id: z.string().uuid().optional(),
+  policyType: SecurityPolicyTypeEnum,
+  status: SecurityPolicyStatusEnum.optional(),
+  priority: z.number().int().optional(),
+  name: z.string(),
+  description: z.string().optional(),
+  rules: z.string().optional(),
+  isEnforced: z.boolean().optional(),
+  projectId: z.string().uuid().optional(),
+  environmentId: z.string().uuid().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional(),
+});
+
+export const selectSecurityPolicySchema = z.object({
+  id: z.string().uuid(),
+  policyType: SecurityPolicyTypeEnum,
+  status: SecurityPolicyStatusEnum,
+  priority: z.number().int(),
+  name: z.string(),
+  description: z.string().nullable(),
+  rules: z.string().nullable(),
+  isEnforced: z.boolean(),
+  projectId: z.string().uuid().nullable(),
+  environmentId: z.string().uuid().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export const updateSecurityPolicySchema = selectSecurityPolicySchema.pick({
   policyType: true,
   status: true,
@@ -75,10 +101,10 @@ export const updateSecurityPolicySchema = selectSecurityPolicySchema.pick({
   isEnforced: true,
   projectId: true,
   environmentId: true,
-}).partial()
+}).partial();
 
-export type SecurityPolicy = typeof securityPolicies.$inferSelect
-export type NewSecurityPolicy = typeof securityPolicies.$inferInsert
-export type UpdateSecurityPolicy = z.infer<typeof updateSecurityPolicySchema>
-export type SecurityPolicyType = typeof SecurityPolicyTypeEnum[number]
-export type SecurityPolicyStatus = typeof SecurityPolicyStatusEnum[number]
+export type SecurityPolicy = typeof securityPolicies.$inferSelect;
+export type NewSecurityPolicy = typeof securityPolicies.$inferInsert;
+export type UpdateSecurityPolicy = z.infer<typeof updateSecurityPolicySchema>;
+export type SecurityPolicyType = z.infer<typeof SecurityPolicyTypeEnum>;
+export type SecurityPolicyStatus = z.infer<typeof SecurityPolicyStatusEnum>;
