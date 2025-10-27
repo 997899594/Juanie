@@ -56,13 +56,12 @@ export const monitoringConfigs = pgTable('monitoring_configs', {
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-// Indexes
-export const monitoringConfigsProjectIdx = index('monitoring_configs_project_idx').on(monitoringConfigs.projectId);
-export const monitoringConfigsEnvironmentIdx = index('monitoring_configs_environment_idx').on(monitoringConfigs.environmentId);
-export const monitoringConfigsTypeIdx = index('monitoring_configs_type_idx').on(monitoringConfigs.monitorType);
-export const monitoringConfigsActiveIdx = index('monitoring_configs_active_idx').on(monitoringConfigs.isActive);
+}, (table) => [
+  index('monitoring_configs_project_idx').on(table.projectId),
+  index('monitoring_configs_environment_idx').on(table.environmentId),
+  index('monitoring_configs_type_idx').on(table.monitorType),
+  index('monitoring_configs_active_idx').on(table.isActive),
+]);
 
 // Relations
 export const monitoringConfigsRelations = relations(monitoringConfigs, ({ one }) => ({

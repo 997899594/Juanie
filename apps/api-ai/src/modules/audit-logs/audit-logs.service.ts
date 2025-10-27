@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { eq, and, desc, asc, count, gte, lte, ilike, inArray, sql } from 'drizzle-orm';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
+import type { Database } from '../../database/database.module';
 import { 
   auditLogs, 
   type AuditLog, 

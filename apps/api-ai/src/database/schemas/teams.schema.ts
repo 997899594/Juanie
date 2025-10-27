@@ -26,10 +26,6 @@ export const teams = pgTable('teams', {
 });
 
 // 索引与唯一约束
-export const teamsIndexes = {
-  orgIdx: index('teams_org_idx').on(teams.organizationId),
-  slugUnique: uniqueIndex('teams_org_slug_unique').on(teams.organizationId, teams.slug),
-};
 
 // Zod 校验
 export const insertTeamSchema = z.object({

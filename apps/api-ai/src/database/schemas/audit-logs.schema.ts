@@ -64,18 +64,6 @@ export const auditLogs = pgTable('audit_logs', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const auditLogsIndexes = {
-  orgIdx: index('audit_logs_org_idx').on(auditLogs.organizationId),
-  projectIdx: index('audit_logs_project_idx').on(auditLogs.projectId),
-  userIdx: index('audit_logs_user_idx').on(auditLogs.userId),
-  actionIdx: index('audit_logs_action_idx').on(auditLogs.action),
-  resourceIdx: index('audit_logs_resource_idx').on(auditLogs.resourceType, auditLogs.resourceId),
-  outcomeIdx: index('audit_logs_outcome_idx').on(auditLogs.outcome),
-  severityIdx: index('audit_logs_severity_idx').on(auditLogs.severity),
-  createdAtIdx: index('audit_logs_created_at_idx').on(auditLogs.createdAt),
-  correlationIdx: index('audit_logs_correlation_idx').on(auditLogs.correlationId),
-};
-
 export const insertAuditLogSchema = z.object({
   id: z.string().uuid().optional(),
   organizationId: z.string().uuid().optional(),

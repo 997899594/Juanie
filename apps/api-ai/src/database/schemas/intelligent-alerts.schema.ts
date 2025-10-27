@@ -141,24 +141,13 @@ export const intelligentAlerts = pgTable("intelligent_alerts", {
   escalatedAt: timestamp("escalated_at"),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Indexes
-export const intelligentAlertsMonitorConfigIdx = index(
-  "intelligent_alerts_monitor_config_idx"
-).on(intelligentAlerts.monitorConfigId);
-export const intelligentAlertsStatusIdx = index(
-  "intelligent_alerts_status_idx"
-).on(intelligentAlerts.status);
-export const intelligentAlertsSeverityIdx = index(
-  "intelligent_alerts_severity_idx"
-).on(intelligentAlerts.severity);
-export const intelligentAlertsTypeIdx = index("intelligent_alerts_type_idx").on(
-  intelligentAlerts.alertType
-);
-export const intelligentAlertsAcknowledgedByIdx = index(
-  "intelligent_alerts_acknowledged_by_idx"
-).on(intelligentAlerts.acknowledgedBy);
+}, (table) => [
+  index("intelligent_alerts_monitor_config_idx").on(table.monitorConfigId),
+  index("intelligent_alerts_status_idx").on(table.status),
+  index("intelligent_alerts_severity_idx").on(table.severity),
+  index("intelligent_alerts_type_idx").on(table.alertType),
+  index("intelligent_alerts_acknowledged_by_idx").on(table.acknowledgedBy),
+]);
 
 // Relations
 export const intelligentAlertsRelations = relations(

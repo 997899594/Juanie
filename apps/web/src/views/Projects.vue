@@ -175,12 +175,13 @@ const loadProjects = async () => {
   try {
     loading.value = true
     const result = await trpc.projects.list.query({
+      page: currentPage.value,
       limit: pageSize,
-      offset: (currentPage.value - 1) * pageSize,
       search: searchQuery.value || undefined,
+      ownedOnly: activeFilter.value === 'owned' ? true : undefined,
       isPublic: activeFilter.value === 'public' ? true : undefined,
     })
-    
+
     projects.value = result.projects
     totalProjects.value = result.pagination.total
   } catch (error) {

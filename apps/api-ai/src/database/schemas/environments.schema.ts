@@ -22,15 +22,15 @@ export const environments = pgTable('environments', {
   environmentType: EnvironmentTypePgEnum('environment_type').notNull(), // 环境类型
   cloudProvider: CloudProviderPgEnum('cloud_provider'), // 云提供商
   region: text('region'), // 区域
-  // 简化 infrastructureConfig - 保留核心配置
+  // 计算资源配置
   instanceType: text('instance_type'), // 实例类型
   clusterSize: integer('cluster_size').default(1), // 集群大小
   enableAutoScaling: boolean('enable_auto_scaling').default(false), // 是否启用自动扩展
-  // 简化 computeResources - 核心资源限制
+  // 资源限制
   cpuCores: integer('cpu_cores').default(1), // CPU核心数
   memoryGb: integer('memory_gb').default(2), // 内存GB
   storageGb: integer('storage_gb').default(10), // 存储GB
-  // 简化 networkConfig - 核心网络配置
+  // 网络配置
   vpcId: text('vpc_id'), // VPC ID
   subnetId: text('subnet_id'), // 子网ID
   securityGroupId: text('security_group_id'), // 安全组ID
@@ -38,41 +38,37 @@ export const environments = pgTable('environments', {
   status: EnvironmentStatusPgEnum('status').default('active'), // 环境状态
   healthCheckUrl: text('health_check_url'), // 健康检查 URL
   lastHealthCheck: timestamp('last_health_check'), // 最近健康检查时间
-  // 简化 accessRestrictions - 核心访问控制
+  // 访问控制
   requireVpn: boolean('require_vpn').default(false), // 是否需要VPN
   allowedIps: text('allowed_ips'), // 允许的IP列表（逗号分隔）
-  // 简化 allowedUsers 和 allowedTeams - 使用逗号分隔的ID列表
+  // 用户权限
   allowedUserIds: text('allowed_user_ids'), // 允许的用户ID列表（逗号分隔）
   allowedTeamIds: text('allowed_team_ids'), // 允许的团队ID列表（逗号分隔）
-  // 简化 resourceQuotas - 核心配额限制
+  // 资源限制
   maxCpuCores: integer('max_cpu_cores').default(8), // 最大CPU核心数
   maxMemoryGb: integer('max_memory_gb').default(32), // 最大内存GB
   maxStorageGb: integer('max_storage_gb').default(100), // 最大存储GB
   costBudget: decimal('cost_budget', { precision: 10, scale: 2 }), // 成本预算
-  // 简化 autoScalingConfig - 核心自动扩展配置
+  // 自动扩展配置
   minInstances: integer('min_instances').default(1), // 最小实例数
   maxInstances: integer('max_instances').default(5), // 最大实例数
   targetCpuUtilization: integer('target_cpu_utilization').default(70), // 目标CPU利用率
-  // 简化 complianceRequirements - 合规要求（逗号分隔）
+  // 合规性
   complianceFrameworks: text('compliance_frameworks'), // 合规框架列表（逗号分隔）
-  // 简化 securityPolicies - 核心安全策略
+  // 安全配置
   encryptionEnabled: boolean('encryption_enabled').default(true), // 是否启用加密
   backupEnabled: boolean('backup_enabled').default(true), // 是否启用备份
   monitoringEnabled: boolean('monitoring_enabled').default(true), // 是否启用监控
   dataClassification: DataClassificationPgEnum('data_classification').default('internal'), // 数据分类
   createdAt: timestamp('created_at').defaultNow().notNull(), // 创建时间
   updatedAt: timestamp('updated_at').defaultNow().notNull(), // 更新时间
-})
-
-// Indexes
-export const environmentsProjectIdx = index('environments_project_idx').on(environments.projectId);
-export const environmentsTypeIdx = index('environments_type_idx').on(environments.environmentType);
-export const environmentsStatusIdx = index('environments_status_idx').on(environments.status);
-export const environmentsProviderIdx = index('environments_provider_idx').on(environments.cloudProvider);
-export const environmentsProjectNameUnique = uniqueIndex('environments_project_name_unique').on(
-  environments.projectId,
-  environments.name,
-);
+}, (table) => [
+  index('environments_project_idx').on(table.projectId),
+  index('environments_type_idx').on(table.environmentType),
+  index('environments_status_idx').on(table.status),
+  index('environments_provider_idx').on(table.cloudProvider),
+  uniqueIndex('environments_project_name_unique').on(table.projectId, table.name),
+]);
 
 // Relations
 export const environmentsRelations = relations(environments, ({ one }) => ({

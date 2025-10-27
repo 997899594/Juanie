@@ -1,10 +1,8 @@
 import { Module } from '@nestjs/common';
-import { TrpcModule } from '../../trpc/trpc.module';
+import { TrpcService } from '../../trpc/trpc.service';
 import { SecurityPoliciesService } from './security-policies.service';
 
 @Module({
-  imports: [TrpcModule],
-  providers: [SecurityPoliciesService],
-  exports: [SecurityPoliciesService],
-})
+    providers: [SecurityPoliciesService, TrpcService],
+  exports: [SecurityPoliciesService]})
 export class SecurityPoliciesModule {}

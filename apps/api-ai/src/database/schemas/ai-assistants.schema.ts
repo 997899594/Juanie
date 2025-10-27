@@ -28,12 +28,10 @@ export const aiAssistants = pgTable("ai_assistants", {
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   avatar: text("avatar"),
-
-  // AI助手类型和专业化（简化）
+  // 助手类型和专业化
   type: AssistantTypePgEnum("type").notNull(), // 'code-reviewer', 'devops-engineer', 'security-analyst', 'cost-optimizer', 'incident-responder'
   specialization: varchar("specialization", { length: 100 }), // 'frontend', 'backend', 'infrastructure', 'security', 'performance'
-
-  // 多模型配置（核心功能，保留但简化）
+  // 模型配置
   modelType: varchar("model_type", { length: 50 }).notNull(), // 模型类型标识
   modelConfig: jsonb("model_config").notNull().$type<{
     provider: "openai" | "anthropic" | "google" | "custom";
@@ -45,50 +43,33 @@ export const aiAssistants = pgTable("ai_assistants", {
     frequencyPenalty?: number;
     presencePenalty?: number;
   }>(),
-
-  // 系统提示词
+  // 提示词配置
   systemPrompt: text("system_prompt").notNull(),
-
-  // 能力管理（简化结构）
+  // 能力配置
   capabilities: text("capabilities").array().notNull().default([]), // 能力数组，如 ['code-review', 'devops-automation', 'security-analysis']
-
-  // 基础性能指标（删除复杂JSONB结构）
+  // 使用统计
   usageCount: integer("usage_count").default(0).notNull(),
   averageRating: integer("average_rating").default(0).notNull(), // 1-5评分
-
-  // 状态控制
+  // 状态配置
   isPublic: boolean("is_public").default(false).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
-
-  // 所有权
+  // 关联关系
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
   organizationId: uuid("organization_id").references(() => organizations.id),
-
   // 时间戳
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   lastUsedAt: timestamp("last_used_at"),
-});
-
-// 简化索引定义
-export const aiAssistantsIndexes = {
-  typeIdx: index("ai_assistants_type_idx").on(aiAssistants.type),
-  specializationIdx: index("ai_assistants_specialization_idx").on(
-    aiAssistants.specialization
-  ),
-  createdByIdx: index("ai_assistants_created_by_idx").on(
-    aiAssistants.createdBy
-  ),
-  organizationIdIdx: index("ai_assistants_organization_id_idx").on(
-    aiAssistants.organizationId
-  ),
-  isActiveIdx: index("ai_assistants_is_active_idx").on(aiAssistants.isActive),
-  modelTypeIdx: index("ai_assistants_model_type_idx").on(
-    aiAssistants.modelType
-  ),
-};
+}, (table) => [
+  index("ai_assistants_type_idx").on(table.type),
+  index("ai_assistants_specialization_idx").on(table.specialization),
+  index("ai_assistants_created_by_idx").on(table.createdBy),
+  index("ai_assistants_organization_id_idx").on(table.organizationId),
+  index("ai_assistants_is_active_idx").on(table.isActive),
+  index("ai_assistants_model_type_idx").on(table.modelType),
+]);
 
 // 手动定义的 Zod schemas - 替换 drizzle-zod
 export const insertAiAssistantSchema = z.object({

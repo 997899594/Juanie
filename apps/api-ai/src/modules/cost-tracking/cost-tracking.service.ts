@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { eq, and, desc, asc, count, sql, gte, lte, inArray } from 'drizzle-orm';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
+import type { Database } from '../../database/database.module';
 import { costTracking, type CostTracking, type NewCostTracking, type UpdateCostTracking } from '../../database/schemas/cost-tracking.schema';
 
 @Injectable()

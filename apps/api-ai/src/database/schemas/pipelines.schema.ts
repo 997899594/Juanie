@@ -66,24 +66,13 @@ export const pipelines = pgTable("pipelines", {
   averageDuration: integer("average_duration"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Indexes
-export const pipelinesProjectIdx = index("pipelines_project_idx").on(
-  pipelines.projectId
-);
-export const pipelinesRepositoryIdx = index("pipelines_repository_idx").on(
-  pipelines.repositoryId
-);
-export const pipelinesActiveIdx = index("pipelines_active_idx").on(
-  pipelines.isActive
-);
-export const pipelinesConfigSourceIdx = index("pipelines_config_source_idx").on(
-  pipelines.configSource
-);
-export const pipelinesProjectNameUnique = uniqueIndex(
-  "pipelines_project_name_unique"
-).on(pipelines.projectId, pipelines.name);
+}, (table) => [
+  index("pipelines_project_idx").on(table.projectId),
+  index("pipelines_repository_idx").on(table.repositoryId),
+  index("pipelines_active_idx").on(table.isActive),
+  index("pipelines_config_source_idx").on(table.configSource),
+  uniqueIndex("pipelines_project_name_unique").on(table.projectId, table.name),
+]);
 
 // Relations
 export const pipelinesRelations = relations(pipelines, ({ one }) => ({

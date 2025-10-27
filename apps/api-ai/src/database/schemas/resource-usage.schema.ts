@@ -45,20 +45,6 @@ export const resourceUsage = pgTable("resource_usage", {
 });
 
 // 简化索引定义
-export const resourceUsageIndexes = {
-  projectIdIdx: index("resource_usage_project_id_idx").on(
-    resourceUsage.projectId
-  ),
-  environmentIdIdx: index("resource_usage_environment_id_idx").on(
-    resourceUsage.environmentId
-  ),
-  resourceTypeIdx: index("resource_usage_resource_type_idx").on(
-    resourceUsage.resourceType
-  ),
-  recordedAtIdx: index("resource_usage_recorded_at_idx").on(
-    resourceUsage.recordedAt
-  ),
-};
 
 // 关系定义
 export const resourceUsageRelations = relations(resourceUsage, ({ one }) => ({

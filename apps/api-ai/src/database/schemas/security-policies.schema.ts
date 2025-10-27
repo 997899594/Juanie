@@ -16,38 +16,31 @@ export const securityPolicies = pgTable(
   'security_policies',
   {
     id: uuid('id').primaryKey().defaultRandom(), // 策略ID，主键
-    
-    // 基础关联
+    // 关联关系
     projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }), // 项目ID（外键）
     environmentId: uuid('environment_id').references(() => environments.id, { onDelete: 'cascade' }), // 环境ID（外键）
-    
-    // 策略基本信息
+    // 基本信息
     name: varchar('name', { length: 100 }).notNull(), // 策略名称
     description: text('description'), // 策略描述
     policyType: SecurityPolicyTypePgEnum('policy_type').notNull(), // 策略类型
     status: SecurityPolicyStatusPgEnum('status').notNull().default('draft'), // 策略状态
-    
-    // 简化规则（JSON格式，但结构简单）
+    // 策略内容
     rules: text('rules'), // 简单JSON格式规则定义
-    
-    // 基础配置
+    // 执行配置
     isEnforced: boolean('is_enforced').default(false), // 是否强制执行
     priority: integer('priority').default(0), // 优先级
-    
-    // 审计字段
+    // 审计信息
     createdBy: uuid('created_by'), // 创建者用户ID
     createdAt: timestamp('created_at').defaultNow().notNull(), // 创建时间
     updatedAt: timestamp('updated_at').defaultNow().notNull(), // 更新时间
-  }
-)
-
-// 简化索引定义
-export const securityPoliciesIndexes = {
-  projectIdIdx: index('security_policies_project_id_idx').on(securityPolicies.projectId),
-  environmentIdIdx: index('security_policies_environment_id_idx').on(securityPolicies.environmentId),
-  policyTypeIdx: index('security_policies_policy_type_idx').on(securityPolicies.policyType),
-  statusIdx: index('security_policies_status_idx').on(securityPolicies.status),
-}
+  },
+  (table) => [
+    index('security_policies_project_id_idx').on(table.projectId),
+    index('security_policies_environment_id_idx').on(table.environmentId),
+    index('security_policies_policy_type_idx').on(table.policyType),
+    index('security_policies_status_idx').on(table.status),
+  ]
+);
 
 // 关系定义
 export const securityPoliciesRelations = relations(securityPolicies, ({ one }) => ({

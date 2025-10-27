@@ -52,17 +52,6 @@ export const events = pgTable('events', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const eventsIndexes = {
-  orgIdx: index('events_org_idx').on(events.organizationId),
-  projectIdx: index('events_project_idx').on(events.projectId),
-  typeIdx: index('events_type_idx').on(events.eventType),
-  sourceIdx: index('events_source_idx').on(events.source),
-  priorityIdx: index('events_priority_idx').on(events.priority),
-  statusIdx: index('events_status_idx').on(events.status),
-  createdAtIdx: index('events_created_at_idx').on(events.createdAt),
-  processedAtIdx: index('events_processed_at_idx').on(events.processedAt),
-};
-
 // Zod Schemas
 export const insertEventSchema = z.object({
   id: z.string().uuid().optional(),

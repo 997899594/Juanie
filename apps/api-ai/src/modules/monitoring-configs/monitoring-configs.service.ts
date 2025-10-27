@@ -17,7 +17,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 import { InjectDatabase } from "../../common/decorators/database.decorator";
-import { Database } from "../../database/database.module";
+import type { Database } from "../../database/database.module";
 import {
   insertMonitoringConfigSchema,
   MonitoringConfig,

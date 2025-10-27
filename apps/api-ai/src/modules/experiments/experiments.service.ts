@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { eq, and, desc, asc, sql, gte, lte, inArray, like } from 'drizzle-orm';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
+import type { Database } from '../../database/database.module';
 import { experiments, type Experiment, type NewExperiment, type UpdateExperiment } from '../../database/schemas/experiments.schema';
 
 @Injectable()

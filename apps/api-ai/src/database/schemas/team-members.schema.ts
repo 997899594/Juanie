@@ -38,12 +38,6 @@ export const teamMembers = pgTable('team_members', {
 });
 
 // 索引与唯一约束
-export const teamMembersIndexes = {
-  teamIdx: index('team_members_team_idx').on(teamMembers.teamId),
-  userIdx: index('team_members_user_idx').on(teamMembers.userId),
-  statusIdx: index('team_members_status_idx').on(teamMembers.status),
-  uniqueTeamUser: uniqueIndex('team_members_team_user_unique').on(teamMembers.teamId, teamMembers.userId),
-};
 
 // Zod 校验
 export const insertTeamMemberSchema = z.object({

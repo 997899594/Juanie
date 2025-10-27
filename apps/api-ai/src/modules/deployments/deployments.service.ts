@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { TRPCError } from "@trpc/server";
 import { and, asc, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { InjectDatabase } from "../../common/decorators/database.decorator";
-import { Database } from "../../database/database.module";
+import type { Database } from "../../database/database.module";
 import type {
   Deployment,
   DeploymentStatus,

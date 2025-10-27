@@ -7,43 +7,34 @@ export const costTracking = pgTable(
   'cost_tracking',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    
-    // 基础成本信息（大幅简化）
+    // 关联关系
     projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }),
     organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-    
-    // 成本周期（简化格式：YYYY-MM）
+    // 时间周期
     period: varchar('period', { length: 7 }).notNull(), // YYYY-MM格式
-    
-    // 总成本
+    // 成本信息
     totalCost: decimal('total_cost', { precision: 12, scale: 2 }).notNull(),
     currency: varchar('currency', { length: 3 }).notNull().default('USD'),
-    
-    // 简化的成本分类（非JSONB字段）
+    // 成本分类
     computeCost: decimal('compute_cost', { precision: 10, scale: 2 }).default('0'), // 计算成本
     storageCost: decimal('storage_cost', { precision: 10, scale: 2 }).default('0'), // 存储成本
     networkCost: decimal('network_cost', { precision: 10, scale: 2 }).default('0'), // 网络成本
     databaseCost: decimal('database_cost', { precision: 10, scale: 2 }).default('0'), // 数据库成本
     monitoringCost: decimal('monitoring_cost', { precision: 10, scale: 2 }).default('0'), // 监控成本
-    
-    // 基础优化建议（简单文本）
+    // 优化建议
     optimizationTips: text('optimization_tips'),
-    
-    // 审计字段
+    // 时间戳
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  }
+  },
+  (table) => [
+    index('cost_tracking_project_id_idx').on(table.projectId),
+    index('cost_tracking_organization_id_idx').on(table.organizationId),
+    index('cost_tracking_period_idx').on(table.period),
+    index('cost_tracking_total_cost_idx').on(table.totalCost),
+    index('cost_tracking_created_at_idx').on(table.createdAt),
+  ]
 );
-
-// 索引定义
-// 简化索引定义
-export const costTrackingIndexes = {
-  projectIdIdx: index('cost_tracking_project_id_idx').on(costTracking.projectId),
-  organizationIdIdx: index('cost_tracking_organization_id_idx').on(costTracking.organizationId),
-  periodIdx: index('cost_tracking_period_idx').on(costTracking.period),
-  totalCostIdx: index('cost_tracking_total_cost_idx').on(costTracking.totalCost),
-  createdAtIdx: index('cost_tracking_created_at_idx').on(costTracking.createdAt),
-};
 
 // Zod schemas for validation
 export const insertCostTrackingSchema = z.object({

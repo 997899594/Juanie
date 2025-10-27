@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
+import type { Database } from '../../database/database.module';
 import { eq, and, or, desc, asc, count, sql, ilike, inArray, gte, lte, isNull, gt } from 'drizzle-orm';
 import * as schema from '../../database/schemas';
 import { 

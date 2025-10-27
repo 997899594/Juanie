@@ -44,11 +44,6 @@ export const authSessions = pgTable('auth_sessions', {
 });
 
 // 索引与唯一约束
-export const authSessionsIndexes = {
-  userIdIdx: index('auth_sessions_user_id_idx').on(authSessions.userId),
-  accountIdIdx: index('auth_sessions_account_id_idx').on(authSessions.accountId),
-  sessionTokenUnique: uniqueIndex('auth_sessions_session_token_hash_unique').on(authSessions.sessionTokenHash),
-};
 
 // Zod Schemas
 export const insertAuthSessionSchema = z.object({

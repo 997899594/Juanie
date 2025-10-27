@@ -1,11 +1,9 @@
 import { Module } from '@nestjs/common';
-import { TrpcModule } from '../../trpc/trpc.module';
+import { TrpcService } from '../../trpc/trpc.service';
 import { OAuthAccountsService } from './oauth-accounts.service';
 import { OAuthAccountsRouter } from './oauth-accounts.router';
 
 @Module({
-  imports: [TrpcModule],
-  providers: [OAuthAccountsService, OAuthAccountsRouter],
-  exports: [OAuthAccountsService, OAuthAccountsRouter],
-})
+    providers: [OAuthAccountsService, OAuthAccountsRouter, TrpcService],
+  exports: [OAuthAccountsService, OAuthAccountsRouter]})
 export class OAuthAccountsModule {}

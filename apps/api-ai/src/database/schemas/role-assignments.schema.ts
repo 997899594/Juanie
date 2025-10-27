@@ -46,22 +46,6 @@ export const roleAssignments = pgTable('role_assignments', {
 });
 
 // 索引与唯一约束
-export const roleAssignmentsIndexes = {
-  userIdx: index('role_assignments_user_idx').on(roleAssignments.userId),
-  roleIdx: index('role_assignments_role_idx').on(roleAssignments.roleId),
-  scopeIdx: index('role_assignments_scope_idx').on(roleAssignments.scopeType),
-  orgIdx: index('role_assignments_org_idx').on(roleAssignments.organizationId),
-  teamIdx: index('role_assignments_team_idx').on(roleAssignments.teamId),
-  projectIdx: index('role_assignments_project_idx').on(roleAssignments.projectId),
-  uniqueUserRoleScope: uniqueIndex('role_assignments_user_role_scope_unique').on(
-    roleAssignments.userId,
-    roleAssignments.roleId,
-    roleAssignments.scopeType,
-    roleAssignments.organizationId,
-    roleAssignments.teamId,
-    roleAssignments.projectId,
-  ),
-};
 
 // Zod Schemas
 export const insertRoleAssignmentSchema = z.object({

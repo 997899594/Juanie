@@ -48,21 +48,6 @@ export const webhookEndpoints = pgTable('webhook_endpoints', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const webhookEndpointsIndexes = {
-  orgIdx: index('webhook_endpoints_org_idx').on(webhookEndpoints.organizationId),
-  projectIdx: index('webhook_endpoints_project_idx').on(webhookEndpoints.projectId),
-  enabledIdx: index('webhook_endpoints_enabled_idx').on(webhookEndpoints.enabled),
-  urlIdx: index('webhook_endpoints_url_idx').on(webhookEndpoints.url),
-  uniqueOrgUrl: uniqueIndex('webhook_endpoints_org_url_unique').on(
-    webhookEndpoints.organizationId,
-    webhookEndpoints.url,
-  ),
-  uniqueProjectUrl: uniqueIndex('webhook_endpoints_project_url_unique').on(
-    webhookEndpoints.projectId,
-    webhookEndpoints.url,
-  ),
-};
-
 export const insertWebhookEndpointSchema = z.object({
   id: z.string().uuid().optional(),
   organizationId: z.string().uuid().optional(),

@@ -22,7 +22,7 @@ export const codeAnalysisResults = pgTable('code_analysis_results', {
   commitHash: text('commit_hash').notNull(),
   branch: text('branch'),
   
-  // 分析配置
+  // 分析器信息
   analyzerType: AnalyzerTypePgEnum('analyzer_type').notNull(),
   analyzerVersion: text('analyzer_version'),
   
@@ -55,28 +55,14 @@ export const codeAnalysisResults = pgTable('code_analysis_results', {
   trendPercentage: decimal('trend_percentage', { precision: 5, scale: 2 }), // 变化百分比
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
-
-// Indexes
-export const codeAnalysisResultsRepositoryIdx = index('code_analysis_results_repository_idx').on(
-  codeAnalysisResults.repositoryId,
-)
-export const codeAnalysisResultsCommitIdx = index('code_analysis_results_commit_idx').on(
-  codeAnalysisResults.commitHash,
-)
-export const codeAnalysisResultsAnalyzerTypeIdx = index(
-  'code_analysis_results_analyzer_type_idx',
-).on(codeAnalysisResults.analyzerType)
-export const codeAnalysisResultsBranchIdx = index('code_analysis_results_branch_idx').on(
-  codeAnalysisResults.branch,
-)
-export const codeAnalysisResultsCreatedAtIdx = index('code_analysis_results_created_at_idx').on(
-  codeAnalysisResults.createdAt,
-)
-export const codeAnalysisResultsRepoCreatedIdx = index('code_analysis_results_repo_created_idx').on(
-  codeAnalysisResults.repositoryId,
-  codeAnalysisResults.createdAt,
-)
+}, (table) => [
+  index('code_analysis_results_repository_idx').on(table.repositoryId),
+  index('code_analysis_results_commit_idx').on(table.commitHash),
+  index('code_analysis_results_analyzer_type_idx').on(table.analyzerType),
+  index('code_analysis_results_branch_idx').on(table.branch),
+  index('code_analysis_results_created_at_idx').on(table.createdAt),
+  index('code_analysis_results_repo_created_idx').on(table.repositoryId, table.createdAt),
+]);
 
 // Relations
 export const codeAnalysisResultsRelations = relations(codeAnalysisResults, ({ one }) => ({

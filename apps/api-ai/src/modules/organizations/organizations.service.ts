@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { and, count, desc, eq, ilike, sql } from "drizzle-orm";
 import { InjectDatabase } from "../../common/decorators/database.decorator";
-import { Database } from "../../database/database.module";
+import type { Database } from "../../database/database.module";
 import {
   insertOrganizationSchema,
   NewOrganization,

@@ -419,6 +419,7 @@ const loadDeployments = async () => {
     // 获取部署记录
     const deploymentsResult = await trpc.deployments.listByProject.query({ 
       projectId: props.projectId,
+      page: 1,
       limit: 50 
     })
     if (deploymentsResult) {

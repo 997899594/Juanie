@@ -112,13 +112,6 @@ export const oauthAccounts = pgTable(
 );
 
 // 索引定义
-export const oauthAccountsIndexes = {
-  userIdIdx: index('oauth_accounts_user_id_idx').on(oauthAccounts.userId),
-  providerIdx: index('oauth_accounts_provider_idx').on(oauthAccounts.provider),
-  providerAccountIdx: index('oauth_accounts_provider_account_idx').on(oauthAccounts.providerAccountId),
-  uniqueProviderAccount: uniqueIndex('oauth_accounts_provider_account_unique')
-    .on(oauthAccounts.provider, oauthAccounts.providerAccountId),
-};
 
 // Zod schemas for validation
 export const insertOAuthAccountSchema = z.object({

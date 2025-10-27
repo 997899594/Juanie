@@ -12,19 +12,19 @@ export const SyncStatusPgEnum = pgEnum('repository_sync_status', ['pending', 'sy
 export const repositories = pgTable('repositories', {
   id: uuid('id').primaryKey().defaultRandom(), // 仓库唯一ID
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }), // 所属项目ID
-  // 仓库信息
+  // 基本信息
   provider: RepositoryProviderPgEnum('provider').notNull(), // 仓库提供商：github/gitlab/bitbucket
   providerId: text('provider_id').notNull(), // 提供商侧仓库ID
   name: text('name').notNull(), // 仓库名
   fullName: text('full_name').notNull(), // 全名（组织/仓库）
   cloneUrl: text('clone_url').notNull(), // 克隆地址
   webUrl: text('web_url').notNull(), // Web 访问地址
-  // 分支管理
+  description: text('description'), // 仓库描述
   defaultBranch: text('default_branch').default('main'), // 默认分支
-  // 简化 protectedBranches - 核心受保护分支
+  // 分支保护配置
   protectedBranchNames: text('protected_branch_names'), // 受保护分支名称（逗号分隔）
   mainBranchProtected: boolean('main_branch_protected').default(true), // 主分支是否受保护
-  // 简化 branchProtectionRules - 核心分支保护规则
+  // 审批配置
   requireApprovalCount: integer('require_approval_count').default(1), // 需要审批数量
   requireLinearHistory: boolean('require_linear_history').default(false), // 需要线性历史
   allowForcePushes: boolean('allow_force_pushes').default(false), // 允许强制推送
@@ -49,17 +49,13 @@ export const repositories = pgTable('repositories', {
   pullRequestsCount: integer('pull_requests_count').default(0), // PR 数
   createdAt: timestamp('created_at').defaultNow().notNull(), // 创建时间
   updatedAt: timestamp('updated_at').defaultNow().notNull(), // 更新时间
-})
-
-// Indexes
-export const repositoriesProjectIdx = index('repositories_project_idx').on(repositories.projectId);
-export const repositoriesProviderIdx = index('repositories_provider_idx').on(repositories.provider);
-export const repositoriesSyncStatusIdx = index('repositories_sync_status_idx').on(repositories.syncStatus);
-export const repositoriesProviderIdIdx = index('repositories_provider_id_idx').on(repositories.provider, repositories.providerId);
-export const repositoriesProjectFullNameUnique = uniqueIndex('repositories_project_full_name_unique').on(
-  repositories.projectId,
-  repositories.fullName,
-);
+}, (table) => [
+  index('repositories_project_idx').on(table.projectId),
+  index('repositories_provider_idx').on(table.provider),
+  index('repositories_sync_status_idx').on(table.syncStatus),
+  index('repositories_provider_id_idx').on(table.provider, table.providerId),
+  uniqueIndex('repositories_project_full_name_unique').on(table.projectId, table.fullName),
+]);
 
 // Relations
 export const repositoriesRelations = relations(repositories, ({ one }) => ({

@@ -32,12 +32,11 @@ export const aiRecommendations = pgTable('ai_recommendations', {
   feedbackNotes: text('feedback_notes'),
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
-
-// Indexes
-export const aiRecommendationsAssistantIdx = index('ai_recommendations_assistant_idx').on(aiRecommendations.assistantId);
-export const aiRecommendationsContextIdx = index('ai_recommendations_context_idx').on(aiRecommendations.contextType, aiRecommendations.contextId);
-export const aiRecommendationsPriorityIdx = index('ai_recommendations_priority_idx').on(aiRecommendations.priority);
+}, (table) => [
+  index('ai_recommendations_assistant_idx').on(table.assistantId),
+  index('ai_recommendations_context_idx').on(table.contextType, table.contextId),
+  index('ai_recommendations_priority_idx').on(table.priority),
+]);
 
 // Relations
 export const aiRecommendationsRelations = relations(aiRecommendations, ({ one }) => ({

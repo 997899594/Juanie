@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { eq, and, desc, asc, count, sql, like, inArray, gte, lte, between, or } from 'drizzle-orm';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
+import type { Database } from '../../database/database.module';
 import { 
   pipelineRuns, 
   pipelines,

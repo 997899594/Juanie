@@ -42,11 +42,6 @@ export const oauthFlows = pgTable('oauth_flows', {
 });
 
 // 索引与唯一约束
-export const oauthFlowsIndexes = {
-  providerIdx: index('oauth_flows_provider_idx').on(oauthFlows.provider),
-  usedAtIdx: index('oauth_flows_used_at_idx').on(oauthFlows.usedAt),
-  stateUnique: uniqueIndex('oauth_flows_state_unique').on(oauthFlows.state),
-};
 
 // Zod Schemas
 export const insertOAuthFlowSchema = z.object({

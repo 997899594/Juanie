@@ -47,14 +47,6 @@ export const webhookEvents = pgTable('webhook_events', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const webhookEventsIndexes = {
-  endpointIdx: index('webhook_events_endpoint_idx').on(webhookEvents.endpointId),
-  typeIdx: index('webhook_events_type_idx').on(webhookEvents.eventType),
-  statusIdx: index('webhook_events_status_idx').on(webhookEvents.status),
-  deliveredAtIdx: index('webhook_events_delivered_at_idx').on(webhookEvents.deliveredAt),
-  createdAtIdx: index('webhook_events_created_at_idx').on(webhookEvents.createdAt),
-};
-
 export const insertWebhookEventSchema = z.object({
   id: z.string().uuid().optional(),
   endpointId: z.string().uuid(),

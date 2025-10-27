@@ -15,7 +15,8 @@ export default defineConfig(({ mode }) => ({
   },
   optimizeDeps: {
     include: ['vue', 'vue-router', 'lucide-vue-next'],
-    exclude: ['@juanie/ui', '@juanie/api'],
+    // 避免预打包本地工作空间包，尤其是后端类型包，防止 esbuild 报错
+    exclude: ['@juanie/ui', '@juanie/api-new'],
   },
   server: {
     port: 1997,

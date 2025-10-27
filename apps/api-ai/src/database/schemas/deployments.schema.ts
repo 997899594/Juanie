@@ -119,21 +119,12 @@ export const deployments = pgTable("deployments", {
   rolledBackAt: timestamp("rolled_back_at"),
   rollbackDuration: integer("rollback_duration"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-// Indexes
-export const deploymentsProjectIdx = index("deployments_project_idx").on(
-  deployments.projectId
-);
-export const deploymentsEnvironmentIdx = index(
-  "deployments_environment_idx"
-).on(deployments.environmentId);
-export const deploymentsStatusIdx = index("deployments_status_idx").on(
-  deployments.status
-);
-export const deploymentsDeployedByIdx = index("deployments_deployed_by_idx").on(
-  deployments.deployedBy
-);
+}, (table) => [
+  index("deployments_project_idx").on(table.projectId),
+  index("deployments_environment_idx").on(table.environmentId),
+  index("deployments_status_idx").on(table.status),
+  index("deployments_deployed_by_idx").on(table.deployedBy),
+]);
 
 // Relations
 export const deploymentsRelations = relations(deployments, ({ one }) => ({

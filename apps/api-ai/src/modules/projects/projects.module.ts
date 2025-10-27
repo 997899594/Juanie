@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { TrpcModule } from '../../trpc/trpc.module';
+import { TrpcService } from '../../trpc/trpc.service';
 import { ProjectsService } from './projects.service';
+import { ProjectsRouter } from './projects.router';
 
 @Module({
-  imports: [TrpcModule],
-  providers: [ProjectsService],
-  exports: [ProjectsService],
+  providers: [ProjectsService, ProjectsRouter, TrpcService],
+  exports: [ProjectsService, ProjectsRouter],
 })
 export class ProjectsModule {}

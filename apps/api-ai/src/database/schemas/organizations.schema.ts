@@ -37,11 +37,10 @@ export const organizations = pgTable('organizations', {
   currentMonthlyRuns: integer('current_monthly_runs').default(0), // 当前月度运行次数
   createdAt: timestamp('created_at').defaultNow().notNull(), // 创建时间
   updatedAt: timestamp('updated_at').defaultNow().notNull(), // 更新时间
-});
-
-// Indexes
-export const organizationsSlugIdx = index('organizations_slug_idx').on(organizations.slug);
-export const organizationsNameIdx = index('organizations_name_idx').on(organizations.name);
+}, (table) => [
+  index('organizations_slug_idx').on(table.slug),
+  index('organizations_name_idx').on(table.name),
+]);
 
 // Zod Schemas with detailed enums
 export const insertOrganizationSchema = z.object({

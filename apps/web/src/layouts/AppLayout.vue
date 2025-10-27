@@ -32,6 +32,14 @@
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+                <SidebarMenuButton as-child :tooltip="'项目管理'">
+                <router-link to="/projects" class="flex items-center">
+                  <FolderOpen class="size-4" />
+                  <span>项目管理</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <SidebarMenuButton as-child :tooltip="'流水线'">
                 <router-link to="/pipelines" class="flex items-center">
                   <GitBranch class="size-4" />
@@ -44,6 +52,70 @@
                 <router-link to="/deployments" class="flex items-center">
                   <Rocket class="size-4" />
                   <span>部署记录</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <!-- AI 智能化模块 -->
+        <SidebarGroup>
+          <SidebarGroupLabel>AI 智能化</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'AI 助手'">
+                <router-link to="/ai/assistants" class="flex items-center">
+                  <Bot class="size-4" />
+                  <span>AI 助手</span>
+                  <Badge variant="secondary" class="ml-auto text-xs">Beta</Badge>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'智能推荐'">
+                <router-link to="/ai/recommendations" class="flex items-center">
+                  <Brain class="size-4" />
+                  <span>智能推荐</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'代码分析'">
+                <router-link to="/ai/code-analysis" class="flex items-center">
+                  <Code class="size-4" />
+                  <span>代码分析</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <!-- 安全与合规模块 -->
+        <SidebarGroup>
+          <SidebarGroupLabel>安全与合规</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'零信任策略'">
+                <router-link to="/security/zero-trust" class="flex items-center">
+                  <Shield class="size-4" />
+                  <span>零信任策略</span>
+                  <Badge variant="outline" class="ml-auto text-xs">New</Badge>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'漏洞扫描'">
+                <router-link to="/security/vulnerabilities" class="flex items-center">
+                  <AlertTriangle class="size-4" />
+                  <span>漏洞扫描</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'安全策略'">
+                <router-link to="/security/policies" class="flex items-center">
+                  <Lock class="size-4" />
+                  <span>安全策略</span>
                 </router-link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -62,10 +134,81 @@
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton as-child :tooltip="'监控'">
+              <SidebarMenuButton as-child :tooltip="'性能监控'">
                 <router-link to="/monitoring" class="flex items-center">
                   <Activity class="size-4" />
-                  <span>监控</span>
+                  <span>性能监控</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'智能告警'">
+                <router-link to="/monitoring/alerts" class="flex items-center">
+                  <Bell class="size-4" />
+                  <span>智能告警</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'事件管理'">
+                <router-link to="/monitoring/incidents" class="flex items-center">
+                  <AlertCircle class="size-4" />
+                  <span>事件管理</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <!-- 成本与可持续性模块 -->
+        <SidebarGroup>
+          <SidebarGroupLabel>成本与可持续性</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'成本跟踪'">
+                <router-link to="/cost/tracking" class="flex items-center">
+                  <DollarSign class="size-4" />
+                  <span>成本跟踪</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'资源优化'">
+                <router-link to="/cost/optimization" class="flex items-center">
+                  <TrendingUp class="size-4" />
+                  <span>资源优化</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'可持续性指标'">
+                <router-link to="/sustainability/metrics" class="flex items-center">
+                  <Leaf class="size-4" />
+                  <span>可持续性指标</span>
+                  <Badge variant="secondary" class="ml-auto text-xs">ESG</Badge>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <!-- 实验与创新模块 -->
+        <SidebarGroup>
+          <SidebarGroupLabel>实验与创新</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'A/B 测试'">
+                <router-link to="/experiments/ab-testing" class="flex items-center">
+                  <TestTube class="size-4" />
+                  <span>A/B 测试</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'特性开关'">
+                <router-link to="/experiments/feature-flags" class="flex items-center">
+                  <ToggleLeft class="size-4" />
+                  <span>特性开关</span>
                 </router-link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -217,10 +360,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { generateNavigationConfig } from '@/router'
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
+  Badge,
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -250,18 +395,39 @@ import {
 } from '@juanie/ui'
 import {
   Activity,
+  AlertCircle,
+  AlertTriangle,
   AppWindow,
   BarChart3,
+  Bell,
+  Bot,
+  Brain,
+  Building,
   ChevronsUpDown,
+  Code,
+  DollarSign,
+  FileSearch,
   FileText,
+  FolderOpen,
   GitBranch,
+  Leaf,
+  Lock,
   LogOut,
   Moon,
   Rocket,
+  Server,
   Settings,
+  Shield,
   Sparkles,
   Sun,
+  TestTube,
+  ToggleLeft,
+  TrendingUp,
   User,
+  UserCheck,
+  Users,
+  Webhook,
+  Zap,
 } from 'lucide-vue-next'
 import { useTheme } from '@juanie/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -273,38 +439,92 @@ const authStore = useAuthStore()
 // 使用主题功能
 const { isDark, toggleMode } = useTheme()
 
-// 页面标题映射
-const pageTitleMap: Record<string, string> = {
-  'apps': '应用列表',
-  'dashboard': '仪表盘',
-  'documents': '文档',
-  'pipelines': '流水线',
-  'deployments': '部署记录',
-  'monitoring': '监控',
-  'settings': '设置',
-  'demo': '组件演示',
+// 图标映射
+const iconMap: Record<string, any> = {
+  AppWindow,
+  FolderOpen,
+  GitBranch,
+  Rocket,
+  Bot,
+  Brain,
+  Code,
+  Shield,
+  AlertTriangle,
+  Lock,
+  FileSearch,
+  BarChart3,
+  Activity,
+  Bell,
+  AlertCircle,
+  TrendingUp,
+  DollarSign,
+  Server,
+  Leaf,
+  TestTube,
+  ToggleLeft,
+  Users,
+  UserCheck,
+  Building,
+  Webhook,
+  Zap,
+  FileText,
+  Settings,
 }
 
-// 面包屑路径映射
-const breadcrumbPathMap: Record<string, { title: string; path: string }[]> = {
-  'apps': [],
-  'dashboard': [{ title: '仪表盘', path: '/dashboard' }],
-  'documents': [{ title: '文档', path: '/documents' }],
-  'pipelines': [{ title: '流水线', path: '/pipelines' }],
-  'deployments': [{ title: '部署记录', path: '/deployments' }],
-  'monitoring': [{ title: '监控', path: '/monitoring' }],
-  'settings': [{ title: '设置', path: '/settings' }],
-  'demo': [{ title: '组件演示', path: '/demo' }],
-}
+// 从路由配置生成导航菜单
+const navigationGroups = computed(() => {
+  const config = generateNavigationConfig()
+  
+  // 转换为组件需要的格式
+  const groups: Array<{
+    title: string
+    items: Array<{
+      title: string
+      href: string
+      icon: any
+      badge?: string
+    }>
+  }> = []
 
+  Object.entries(config).forEach(([groupName, items]) => {
+    groups.push({
+      title: groupName,
+      items: items.map(item => ({
+        title: item.title,
+        href: item.path,
+        icon: iconMap[item.icon] || AppWindow,
+        badge: item.badge
+      }))
+    })
+  })
+
+  return groups
+})
+
+// 页面标题映射 - 从路由元数据获取
 const currentPageTitle = computed(() => {
-  return pageTitleMap[route.name as string] || '应用列表'
+  return route.meta?.title || '应用管理'
 })
 
 // 动态生成面包屑
 const breadcrumbItems = computed(() => {
-  const routeName = route.name as string
-  return breadcrumbPathMap[routeName] || []
+  const pathSegments = route.path.split('/').filter(Boolean)
+  const breadcrumbs: Array<{ title: string; path: string }> = []
+  
+  let currentPath = ''
+  pathSegments.forEach(segment => {
+    currentPath += `/${segment}`
+    // 这里可以根据路由配置查找对应的标题
+    const matchedRoute = router.getRoutes().find(r => r.path === currentPath)
+    if (matchedRoute?.meta?.title) {
+      breadcrumbs.push({
+        title: matchedRoute.meta.title,
+        path: currentPath
+      })
+    }
+  })
+  
+  return breadcrumbs.slice(0, -1) // 移除最后一个，因为它是当前页面
 })
 
 async function handleLogout() {

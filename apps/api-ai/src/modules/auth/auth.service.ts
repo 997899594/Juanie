@@ -1,7 +1,7 @@
 import { Injectable, Logger, UnauthorizedException, BadRequestException, ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
+import type { Database } from '../../database/database.module';
 import { eq, and, or, desc, lt, isNull } from 'drizzle-orm';
 import { GitLab } from 'arctic';
 import { generateRandomString, alphabet, sha256 } from 'oslo/crypto';

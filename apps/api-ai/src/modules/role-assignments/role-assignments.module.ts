@@ -1,10 +1,8 @@
 import { Module } from '@nestjs/common';
+import { TrpcService } from '../../trpc/trpc.service';
 import { RoleAssignmentsService } from './role-assignments.service';
-import { TrpcModule } from '../../trpc/trpc.module';
 
 @Module({
-  imports: [TrpcModule],
-  providers: [RoleAssignmentsService],
-  exports: [RoleAssignmentsService],
-})
+    providers: [RoleAssignmentsService, TrpcService],
+  exports: [RoleAssignmentsService]})
 export class RoleAssignmentsModule {}

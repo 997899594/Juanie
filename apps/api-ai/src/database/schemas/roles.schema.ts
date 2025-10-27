@@ -40,12 +40,6 @@ export const roles = pgTable('roles', {
 });
 
 // 索引与唯一约束
-export const rolesIndexes = {
-  orgIdx: index('roles_org_idx').on(roles.organizationId),
-  scopeIdx: index('roles_scope_idx').on(roles.scope),
-  uniqueOrgSlug: uniqueIndex('roles_org_slug_unique').on(roles.organizationId, roles.slug),
-  uniqueGlobalSlug: uniqueIndex('roles_global_slug_unique').on(roles.slug), // 注意：对于organizationId为NULL时，需应用层确保全局唯一
-};
 
 // Zod 校验
 export const insertRoleSchema = z.object({

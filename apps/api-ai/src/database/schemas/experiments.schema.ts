@@ -65,13 +65,12 @@ export const experiments = pgTable('experiments', {
   status: text('status').default('draft'), // 'draft', 'running', 'completed', 'stopped'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-// Indexes
-export const experimentsProjectIdx = index('experiments_project_idx').on(experiments.projectId);
-export const experimentsFeatureFlagIdx = index('experiments_feature_flag_idx').on(experiments.featureFlagId);
-export const experimentsStatusIdx = index('experiments_status_idx').on(experiments.status);
-export const experimentsDateRangeIdx = index('experiments_date_range_idx').on(experiments.startDate, experiments.endDate);
+}, (table) => [
+  index('experiments_project_idx').on(table.projectId),
+  index('experiments_feature_flag_idx').on(table.featureFlagId),
+  index('experiments_status_idx').on(table.status),
+  index('experiments_date_range_idx').on(table.startDate, table.endDate),
+]);
 
 // Relations
 export const experimentsRelations = relations(experiments, ({ one }) => ({

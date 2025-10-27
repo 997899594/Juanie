@@ -47,18 +47,18 @@ export const projects = pgTable("projects", {
   visibility: ProjectVisibilityPgEnum("visibility").default("private"), // 可见性：public / private / internal
   status: ProjectStatusPgEnum("status").default("active"), // 项目状态：active / inactive / archived / suspended
 
-  // 简化项目设置（替代复杂的settings JSONB）
+  // 配置选项
   defaultBranch: text("default_branch").default("main"),
   enableCiCd: boolean("enable_ci_cd").default(true),
   enableAiAssistant: boolean("enable_ai_assistant").default(true),
   enableMonitoring: boolean("enable_monitoring").default(true),
 
-  // 简化AI设置（替代aiSettings JSONB）
+  // AI 配置
   aiModelPreference: text("ai_model_preference").default("gpt-4"), // 首选AI模型
   aiAutoReview: boolean("ai_auto_review").default(true), // 自动代码审查
   aiCostOptimization: boolean("ai_cost_optimization").default(true), // AI成本优化
 
-  // 简化资源限制（替代resourceLimits JSONB）
+  // 资源限制
   maxComputeUnits: integer("max_compute_units").default(100), // 最大计算单元
   maxStorageGb: integer("max_storage_gb").default(100), // 最大存储GB
   maxMonthlyCost: decimal("max_monthly_cost", {
@@ -66,7 +66,7 @@ export const projects = pgTable("projects", {
     scale: 2,
   }).default("1000.00"), // 最大月度成本
 
-  // 简化当前使用统计（替代currentUsage JSONB）
+  // 当前使用情况
   currentComputeUnits: integer("current_compute_units").default(0), // 当前计算单元使用
   currentStorageGb: integer("current_storage_gb").default(0), // 当前存储使用
   currentMonthlyCost: decimal("current_monthly_cost", {
@@ -74,29 +74,20 @@ export const projects = pgTable("projects", {
     scale: 2,
   }).default("0.00"), // 当前月度成本
 
-  // 简化标签（替代tags JSONB数组）
+  // 标签和分类
   primaryTag: text("primary_tag"), // 主要标签
   secondaryTags: text("secondary_tags"), // 次要标签，逗号分隔
 
   isArchived: boolean("is_archived").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-// Indexes
-export const projectsOrganizationIdx = index("projects_organization_idx").on(
-  projects.organizationId
-);
-export const projectsSlugIdx = index("projects_slug_idx").on(projects.slug);
-export const projectsStatusIdx = index("projects_status_idx").on(
-  projects.status
-);
-export const projectsVisibilityIdx = index("projects_visibility_idx").on(
-  projects.visibility
-);
-export const projectsAiModelIdx = index("projects_ai_model_preference_idx").on(
-  projects.aiModelPreference
-);
+}, (table) => [
+  index("projects_organization_idx").on(table.organizationId),
+  index("projects_slug_idx").on(table.slug),
+  index("projects_status_idx").on(table.status),
+  index("projects_visibility_idx").on(table.visibility),
+  index("projects_ai_model_preference_idx").on(table.aiModelPreference),
+]);
 
 // Relations
 export const projectsRelations = relations(projects, ({ one }) => ({

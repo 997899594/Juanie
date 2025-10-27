@@ -54,18 +54,17 @@ export const pipelineRuns = pgTable('pipeline_runs', {
   artifactSizeMb: decimal('artifact_size_mb', { precision: 10, scale: 2 }), // 制品大小MB
   createdAt: timestamp('created_at').defaultNow().notNull(), // 创建时间
   updatedAt: timestamp('updated_at').defaultNow().notNull(), // 更新时间
-})
-
-// Indexes
-export const pipelineRunsPipelineIdx = index('pipeline_runs_pipeline_idx').on(pipelineRuns.pipelineId);
-export const pipelineRunsStatusIdx = index('pipeline_runs_status_idx').on(pipelineRuns.status);
-export const pipelineRunsTriggerUserIdx = index('pipeline_runs_trigger_user_idx').on(pipelineRuns.triggerUserId);
-export const pipelineRunsRunNumberIdx = index('pipeline_runs_run_number_idx').on(pipelineRuns.pipelineId, pipelineRuns.runNumber);
-export const pipelineRunsPipelineStatusCreatedIdx = index('pipeline_runs_pipeline_status_created_idx').on(
-  pipelineRuns.pipelineId,
-  pipelineRuns.status,
-  pipelineRuns.createdAt,
-);
+}, (table) => [
+  index('pipeline_runs_pipeline_idx').on(table.pipelineId),
+  index('pipeline_runs_status_idx').on(table.status),
+  index('pipeline_runs_trigger_user_idx').on(table.triggerUserId),
+  index('pipeline_runs_run_number_idx').on(table.pipelineId, table.runNumber),
+  index('pipeline_runs_pipeline_status_created_idx').on(
+    table.pipelineId,
+    table.status,
+    table.createdAt,
+  ),
+]);
 
 // Relations
 export const pipelineRunsRelations = relations(pipelineRuns, ({ one }) => ({

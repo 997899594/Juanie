@@ -35,35 +35,31 @@ export const users = pgTable("users", {
   preferredLanguage: text("preferred_language").default("en"), // 'en', 'zh', 'ja', 'ko', 'es', 'fr', 'de'
   timezone: text("timezone"),
   themePreference: text("theme_preference").default("system"), // 'light', 'dark', 'system'
-  // 简化notification_preferences JSONB字段
+  // Notification preferences
   emailNotifications: boolean("email_notifications").default(true),
   pushNotifications: boolean("push_notifications").default(false),
   marketingEmails: boolean("marketing_emails").default(false),
-  
-  // 简化ai_assistant_config JSONB字段
+  // AI preferences
   aiModelPreference: text("ai_model_preference").default("gpt-4"),
   aiTonePreference: text("ai_tone_preference").default("balanced"), // 'formal', 'casual', 'balanced'
   aiAutoComplete: boolean("ai_auto_complete").default(true),
-  
-  // 简化coding_style_preferences JSONB字段
+  // Code preferences
   preferredIndentation: text("preferred_indentation").default("spaces"), // 'tabs', 'spaces'
   indentSize: integer("indent_size").default(2),
   preferSemicolons: boolean("prefer_semicolons").default(true),
-  
+  // Security
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
-  
-  // 简化security_keys JSONB字段
+  twoFactorSecret: text("two_factor_secret"),
   backupCodesCount: integer("backup_codes_count").default(0),
   lastSecurityAudit: timestamp("last_security_audit"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   lastLoginAt: timestamp("last_login_at"),
   loginCount: integer("login_count").default(0),
-});
-
-// Indexes
-export const usersEmailIdx = index("users_email_idx").on(users.email);
-export const usersUsernameIdx = index("users_username_idx").on(users.username);
+}, (table) => [
+  index("users_email_idx").on(table.email),
+  index("users_username_idx").on(table.username),
+]);
 
 // Zod Schemas with detailed enums
 export const insertUserSchema = z.object({

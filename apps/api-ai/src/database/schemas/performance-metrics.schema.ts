@@ -16,16 +16,16 @@ export const performanceMetrics = pgTable('performance_metrics', {
   environmentId: uuid('environment_id').references(() => environments.id),
   serviceName: text('service_name').notNull(),
   
-  // 基础指标信息
+  // 指标定义
   metricName: text('metric_name').notNull(),
   metricType: MetricTypePgEnum('metric_type').notNull(),
   metricCategory: MetricCategoryPgEnum('metric_category').notNull(),
   
-  // 数值数据
+  // 指标值
   value: decimal('value', { precision: 15, scale: 6 }).notNull(),
   unit: text('unit'),
   
-  // 简化标签（用逗号分隔的key=value格式）
+  // 简化标签（逗号分隔的键值对）
   simpleLabels: text('simple_labels'),
   
   // 时间戳
@@ -35,18 +35,13 @@ export const performanceMetrics = pgTable('performance_metrics', {
   isAlert: boolean('is_alert').default(false),
   
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
-
-// 简化索引定义
-export const performanceMetricsTimestampIdx = index('performance_metrics_timestamp_idx').on(performanceMetrics.timestamp);
-export const performanceMetricsProjectServiceIdx = index('performance_metrics_project_service_idx').on(
-  performanceMetrics.projectId, 
-  performanceMetrics.serviceName, 
-  performanceMetrics.timestamp
-);
-export const performanceMetricsProjectIdx = index('performance_metrics_project_idx').on(performanceMetrics.projectId);
-export const performanceMetricsCategoryIdx = index('performance_metrics_category_idx').on(performanceMetrics.metricCategory);
-export const performanceMetricsAlertIdx = index('performance_metrics_alert_idx').on(performanceMetrics.isAlert);
+}, (table) => [
+  index('performance_metrics_timestamp_idx').on(table.timestamp),
+  index('performance_metrics_project_service_idx').on(table.projectId, table.serviceName, table.timestamp),
+  index('performance_metrics_project_idx').on(table.projectId),
+  index('performance_metrics_category_idx').on(table.metricCategory),
+  index('performance_metrics_alert_idx').on(table.isAlert),
+]);
 
 // Relations
 export const performanceMetricsRelations = relations(performanceMetrics, ({ one }) => ({

@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
+import type { Database } from '../../database/database.module';
 import { eq, and, or, desc, lt, isNull, gte, count, inArray, ne, isNotNull } from 'drizzle-orm';
 import { generateRandomString, alphabet, sha256 } from 'oslo/crypto';
 import { encodeBase64url } from 'oslo/encoding';

@@ -1,10 +1,8 @@
 import { Module } from '@nestjs/common';
-import { TrpcModule } from '../../trpc/trpc.module';
+import { TrpcService } from '../../trpc/trpc.service';
 import { RepositoriesService } from './repositories.service';
 
 @Module({
-  imports: [TrpcModule],
-  providers: [RepositoriesService],
-  exports: [RepositoriesService],
-})
+    providers: [RepositoriesService, TrpcService],
+  exports: [RepositoriesService]})
 export class RepositoriesModule {}

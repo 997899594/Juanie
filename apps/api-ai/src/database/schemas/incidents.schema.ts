@@ -283,15 +283,6 @@ export const incidents = pgTable("incidents", {
 });
 
 // 索引定义
-export const incidentsIndexes = {
-  projectIdIdx: index("incidents_project_id_idx").on(incidents.projectId),
-  severityIdx: index("incidents_severity_idx").on(incidents.severity),
-  statusIdx: index("incidents_status_idx").on(incidents.status),
-  reportedByIdx: index("incidents_reported_by_idx").on(incidents.reportedBy),
-  assignedToIdx: index("incidents_assigned_to_idx").on(incidents.assignedTo),
-  categoryIdx: index("incidents_category_idx").on(incidents.category),
-  reportedAtIdx: index("incidents_reported_at_idx").on(incidents.reportedAt),
-};
 
 // Zod schemas for validation - 手动维护
 export const insertIncidentSchema = z.object({

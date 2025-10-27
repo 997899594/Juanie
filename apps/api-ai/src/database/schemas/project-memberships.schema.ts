@@ -42,14 +42,6 @@ export const projectMemberships = pgTable('project_memberships', {
 });
 
 // 索引与唯一约束
-export const projectMembershipsIndexes = {
-  projectIdx: index('project_memberships_project_idx').on(projectMemberships.projectId),
-  userIdx: index('project_memberships_user_idx').on(projectMemberships.userId),
-  teamIdx: index('project_memberships_team_idx').on(projectMemberships.teamId),
-  statusIdx: index('project_memberships_status_idx').on(projectMemberships.status),
-  roleIdx: index('project_memberships_role_idx').on(projectMemberships.role),
-  uniqueProjectUser: uniqueIndex('project_memberships_project_user_unique').on(projectMemberships.projectId, projectMemberships.userId),
-};
 
 // Zod 校验
 export const insertProjectMembershipSchema = z.object({

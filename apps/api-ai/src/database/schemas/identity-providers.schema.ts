@@ -64,11 +64,6 @@ export const identityProviders = pgTable('identity_providers', {
 });
 
 // 索引与唯一约束
-export const identityProvidersIndexes = {
-  orgIdx: index('identity_providers_org_idx').on(identityProviders.organizationId),
-  typeIdx: index('identity_providers_type_idx').on(identityProviders.providerType),
-  uniqueOrgName: uniqueIndex('identity_providers_org_name_unique').on(identityProviders.organizationId, identityProviders.name),
-};
 
 // Zod Schemas
 export const insertIdentityProviderSchema = z.object({
