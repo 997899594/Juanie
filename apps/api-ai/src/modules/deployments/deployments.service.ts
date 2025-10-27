@@ -1,16 +1,16 @@
-import { Injectable } from '@nestjs/common';
-import { eq, and, desc, asc, count, sql, gte, lte, inArray } from 'drizzle-orm';
-import { InjectDatabase } from '../../common/decorators/database.decorator';
-import { Database } from '../../database/database.module';
-import { 
-  deployments, 
-  type NewDeployment, 
-  type UpdateDeployment,
+import { Injectable } from "@nestjs/common";
+import { and, asc, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { InjectDatabase } from "../../common/decorators/database.decorator";
+import { Database } from "../../database/database.module";
+import {
   type Deployment,
   type DeploymentStatus,
   type DeploymentStrategy,
-  type RollbackStrategy
-} from '../../database/schemas';
+  deployments,
+  type NewDeployment,
+  type RollbackStrategy,
+  type UpdateDeployment,
+} from "../../database/schemas";
 
 export interface DeploymentFilters {
   page?: number;
@@ -40,7 +40,7 @@ export interface DeploymentStats {
 }
 
 export interface RiskAssessment {
-  riskLevel: 'low' | 'medium' | 'high';
+  riskLevel: "low" | "medium" | "high";
   riskScore: number;
   riskFactors: string[];
   recommendations: string[];
@@ -67,7 +67,7 @@ export class DeploymentsService {
       .returning();
 
     if (!deployment) {
-      throw new Error('Failed to create deployment');
+      throw new Error("Failed to create deployment");
     }
 
     return deployment;
@@ -163,20 +163,23 @@ export class DeploymentsService {
    */
   async getDeploymentsByEnvironment(
     environmentId: string,
-    filters: Omit<DeploymentFilters, 'environmentId'> = {}
+    filters: Omit<DeploymentFilters, "environmentId"> = {}
   ): Promise<{
     deployments: Deployment[];
     total: number;
     page: number;
     limit: number;
   }> {
-    return this.getDeploymentsByProject('', { ...filters, environmentId });
+    return this.getDeploymentsByProject("", { ...filters, environmentId });
   }
 
   /**
    * 更新部署
    */
-  async updateDeployment(id: string, data: UpdateDeployment): Promise<Deployment> {
+  async updateDeployment(
+    id: string,
+    data: UpdateDeployment
+  ): Promise<Deployment> {
     const [deployment] = await this.db
       .update(deployments)
       .set(data)
@@ -184,7 +187,7 @@ export class DeploymentsService {
       .returning();
 
     if (!deployment) {
-      throw new Error('Deployment not found');
+      throw new Error("Deployment not found");
     }
 
     return deployment;
@@ -195,7 +198,7 @@ export class DeploymentsService {
    */
   async startDeployment(id: string): Promise<Deployment> {
     return this.updateDeployment(id, {
-      status: 'running',
+      status: "running",
       startedAt: new Date(),
     });
   }
@@ -205,7 +208,7 @@ export class DeploymentsService {
    */
   async finishDeployment(
     id: string,
-    status: 'success' | 'failed' | 'cancelled',
+    status: "success" | "failed" | "cancelled",
     metrics?: {
       avgResponseTime?: number;
       throughputRps?: number;
@@ -244,7 +247,7 @@ export class DeploymentsService {
     rollbackDuration?: number
   ): Promise<Deployment> {
     return this.updateDeployment(id, {
-      status: 'rolled_back',
+      status: "rolled_back",
       rollbackReason: reason,
       rolledBackAt: new Date(),
       rollbackDuration,
@@ -256,7 +259,7 @@ export class DeploymentsService {
    */
   async cancelDeployment(id: string): Promise<Deployment> {
     return this.updateDeployment(id, {
-      status: 'cancelled',
+      status: "cancelled",
       finishedAt: new Date(),
     });
   }
@@ -291,12 +294,24 @@ export class DeploymentsService {
     const [stats] = await this.db
       .select({
         total: count(),
-        success: count(sql`CASE WHEN ${deployments.status} = 'success' THEN 1 END`),
-        failed: count(sql`CASE WHEN ${deployments.status} = 'failed' THEN 1 END`),
-        cancelled: count(sql`CASE WHEN ${deployments.status} = 'cancelled' THEN 1 END`),
-        running: count(sql`CASE WHEN ${deployments.status} = 'running' THEN 1 END`),
-        pending: count(sql`CASE WHEN ${deployments.status} = 'pending' THEN 1 END`),
-        rolledBack: count(sql`CASE WHEN ${deployments.status} = 'rolled_back' THEN 1 END`),
+        success: count(
+          sql`CASE WHEN ${deployments.status} = 'success' THEN 1 END`
+        ),
+        failed: count(
+          sql`CASE WHEN ${deployments.status} = 'failed' THEN 1 END`
+        ),
+        cancelled: count(
+          sql`CASE WHEN ${deployments.status} = 'cancelled' THEN 1 END`
+        ),
+        running: count(
+          sql`CASE WHEN ${deployments.status} = 'running' THEN 1 END`
+        ),
+        pending: count(
+          sql`CASE WHEN ${deployments.status} = 'pending' THEN 1 END`
+        ),
+        rolledBack: count(
+          sql`CASE WHEN ${deployments.status} = 'rolled_back' THEN 1 END`
+        ),
         avgDeploymentTime: sql<number>`AVG(EXTRACT(EPOCH FROM (${deployments.finishedAt} - ${deployments.startedAt})))`,
         totalDeploymentCost: sql<number>`SUM(${deployments.deploymentCost})`,
       })
@@ -333,7 +348,8 @@ export class DeploymentsService {
       .where(whereClause)
       .groupBy(deployments.deploymentStrategy);
 
-    const successRate = stats.total > 0 ? (stats.success / stats.total) * 100 : 0;
+    const successRate =
+      stats.total > 0 ? (stats.success / stats.total) * 100 : 0;
 
     return {
       total: stats.total,
@@ -347,13 +363,11 @@ export class DeploymentsService {
       avgDeploymentTime: stats.avgDeploymentTime || 0,
       totalDeploymentCost: stats.totalDeploymentCost || 0,
       byEnvironment: Object.fromEntries(
-        environmentStats.map(s => [s.environmentId, s.count])
+        environmentStats.map((s) => [s.environmentId, s.count])
       ),
-      byStatus: Object.fromEntries(
-        statusStats.map(s => [s.status, s.count])
-      ),
+      byStatus: Object.fromEntries(statusStats.map((s) => [s.status, s.count])),
       byStrategy: Object.fromEntries(
-        strategyStats.map(s => [s.strategy, s.count])
+        strategyStats.map((s) => [s.strategy, s.count])
       ),
     };
   }
@@ -378,9 +392,7 @@ export class DeploymentsService {
    * 删除部署
    */
   async deleteDeployment(id: string): Promise<void> {
-    await this.db
-      .delete(deployments)
-      .where(eq(deployments.id, id));
+    await this.db.delete(deployments).where(eq(deployments.id, id));
   }
 
   /**
@@ -414,9 +426,9 @@ export class DeploymentsService {
     const whereClause = projectId
       ? and(
           eq(deployments.projectId, projectId),
-          inArray(deployments.status, ['running', 'pending'])
+          inArray(deployments.status, ["running", "pending"])
         )
-      : inArray(deployments.status, ['running', 'pending']);
+      : inArray(deployments.status, ["running", "pending"]);
 
     return this.db
       .select()
@@ -452,54 +464,60 @@ export class DeploymentsService {
     let riskScore = 0;
 
     // 检查失败率
-    const failedDeployments = recentDeployments.filter((d: any) => d.status === 'failed');
+    const failedDeployments = recentDeployments.filter(
+      (d: any) => d.status === "failed"
+    );
     const failureRate = failedDeployments.length / recentDeployments.length;
-    
+
     if (failureRate > 0.3) {
-      riskFactors.push('High failure rate in recent deployments');
+      riskFactors.push("High failure rate in recent deployments");
       riskScore += 30;
     } else if (failureRate > 0.1) {
-      riskFactors.push('Moderate failure rate in recent deployments');
+      riskFactors.push("Moderate failure rate in recent deployments");
       riskScore += 15;
     }
 
     // 检查部署频率
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const recentCount = recentDeployments.filter((d: any) => new Date(d.createdAt) > oneDayAgo).length;
-    
+    const recentCount = recentDeployments.filter(
+      (d: any) => new Date(d.createdAt) > oneDayAgo
+    ).length;
+
     if (recentCount > 5) {
-      riskFactors.push('High deployment frequency');
+      riskFactors.push("High deployment frequency");
       riskScore += 20;
     }
 
     // 检查分支
-    if (branch !== 'main' && branch !== 'master') {
-      riskFactors.push('Deploying from non-main branch');
+    if (branch !== "main" && branch !== "master") {
+      riskFactors.push("Deploying from non-main branch");
       riskScore += 10;
     }
 
     // 确定风险等级
-    let riskLevel: 'low' | 'medium' | 'high';
+    let riskLevel: "low" | "medium" | "high";
     if (riskScore >= 40) {
-      riskLevel = 'high';
+      riskLevel = "high";
     } else if (riskScore >= 20) {
-      riskLevel = 'medium';
+      riskLevel = "medium";
     } else {
-      riskLevel = 'low';
+      riskLevel = "low";
     }
 
     // 生成建议
     const recommendations: string[] = [];
-    if (riskLevel === 'high') {
-      recommendations.push('Consider running additional tests before deployment');
-      recommendations.push('Deploy during low-traffic hours');
-      recommendations.push('Have rollback plan ready');
-    } else if (riskLevel === 'medium') {
-      recommendations.push('Monitor deployment closely');
-      recommendations.push('Ensure proper testing coverage');
+    if (riskLevel === "high") {
+      recommendations.push(
+        "Consider running additional tests before deployment"
+      );
+      recommendations.push("Deploy during low-traffic hours");
+      recommendations.push("Have rollback plan ready");
+    } else if (riskLevel === "medium") {
+      recommendations.push("Monitor deployment closely");
+      recommendations.push("Ensure proper testing coverage");
     } else {
-      recommendations.push('Deployment looks safe to proceed');
+      recommendations.push("Deployment looks safe to proceed");
     }
 
     return {
@@ -525,7 +543,7 @@ export class DeploymentsService {
         and(
           eq(deployments.projectId, projectId),
           eq(deployments.environmentId, environmentId),
-          eq(deployments.status, 'success')
+          eq(deployments.status, "success")
         )
       )
       .orderBy(desc(deployments.createdAt))
@@ -541,20 +559,23 @@ export class DeploymentsService {
     }
 
     // 计算平均值
-    const avgResponseTime = recentSuccessfulDeployments.reduce(
-      (sum: number, d: any) => sum + (d.avgResponseTime || 100),
-      0
-    ) / recentSuccessfulDeployments.length;
+    const avgResponseTime =
+      recentSuccessfulDeployments.reduce(
+        (sum: number, d: any) => sum + (d.avgResponseTime || 100),
+        0
+      ) / recentSuccessfulDeployments.length;
 
-    const avgThroughput = recentSuccessfulDeployments.reduce(
-      (sum: number, d: any) => sum + (d.throughputRps || 1000),
-      0
-    ) / recentSuccessfulDeployments.length;
+    const avgThroughput =
+      recentSuccessfulDeployments.reduce(
+        (sum: number, d: any) => sum + (d.throughputRps || 1000),
+        0
+      ) / recentSuccessfulDeployments.length;
 
-    const avgAvailability = recentSuccessfulDeployments.reduce(
-      (sum: number, d: any) => sum + (parseFloat(d.availability) || 99.0),
-      0
-    ) / recentSuccessfulDeployments.length;
+    const avgAvailability =
+      recentSuccessfulDeployments.reduce(
+        (sum: number, d: any) => sum + (parseFloat(d.availability) || 99.0),
+        0
+      ) / recentSuccessfulDeployments.length;
 
     // 计算置信度
     const confidence = Math.min(recentSuccessfulDeployments.length / 5, 1);
@@ -579,7 +600,9 @@ export class DeploymentsService {
     const [stats] = await this.db
       .select({
         total: count(),
-        active: count(sql`CASE WHEN ${deployments.status} IN ('running', 'pending') THEN 1 END`),
+        active: count(
+          sql`CASE WHEN ${deployments.status} IN ('running', 'pending') THEN 1 END`
+        ),
       })
       .from(deployments)
       .where(eq(deployments.environmentId, environmentId));

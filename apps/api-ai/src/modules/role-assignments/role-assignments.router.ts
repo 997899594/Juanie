@@ -10,7 +10,7 @@ export class RoleAssignmentsRouter {
     private readonly roleAssignmentsService: RoleAssignmentsService,
   ) {}
 
-  get roleAssignmentsRouter() {
+  public get roleAssignmentsRouter() {
     return this.trpc.router({
       // TODO: Implement actual role assignment management procedures here
       hello: this.trpc.publicProcedure

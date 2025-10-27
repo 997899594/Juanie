@@ -10,7 +10,7 @@ export class CodeAnalysisResultsRouter {
     private readonly codeAnalysisResultsService: CodeAnalysisResultsService,
   ) {}
 
-  get codeAnalysisResultsRouter() {
+  public get codeAnalysisResultsRouter() {
     return this.trpc.router({
       // TODO: Implement actual code analysis results management procedures here
       hello: this.trpc.publicProcedure

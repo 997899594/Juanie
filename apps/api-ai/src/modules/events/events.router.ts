@@ -135,13 +135,13 @@ const eventStatsSchema = z.object({
 
 @Injectable()
 export class EventsRouter {
-  public router: any;
-
   constructor(
     private readonly trpc: TrpcService,
     private readonly eventsService: EventsService,
-  ) {
-    this.router = this.trpc.router({
+  ) {}
+
+  public get eventsRouter() {
+    return this.trpc.router({
       // 创建事件
       create: this.trpc.protectedProcedure
         .input(insertEventSchema)

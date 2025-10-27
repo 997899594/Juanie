@@ -83,13 +83,13 @@ const rootCauseAnalysisSchema = z.object({
 
 @Injectable()
 export class IntelligentAlertsRouter {
-  public router: any;
-
   constructor(
     private readonly trpc: TrpcService,
     private readonly intelligentAlertsService: IntelligentAlertsService,
-  ) {
-    this.router = this.trpc.router({
+  ) {}
+
+  public get intelligentAlertsRouter() {
+    return this.trpc.router({
       // 创建智能告警
       create: this.trpc.publicProcedure
         .input(createAlertSchema)

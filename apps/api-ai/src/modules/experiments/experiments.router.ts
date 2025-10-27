@@ -10,13 +10,13 @@ import {
 
 @Injectable()
 export class ExperimentsRouter {
-  public router: any;
-
   constructor(
     private readonly trpc: TrpcService,
     private readonly experimentsService: ExperimentsService,
-  ) {
-    this.router = this.trpc.router({
+  ) {}
+
+  public get experimentsRouter() {
+    return this.trpc.router({
       // 创建实验
       create: this.trpc.publicProcedure
         .input(insertExperimentSchema)

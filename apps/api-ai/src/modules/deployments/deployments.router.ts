@@ -183,13 +183,13 @@ const environmentUsageResponseSchema = z.object({
 
 @Injectable()
 export class DeploymentsRouter {
-  public router: any;
-
   constructor(
     private readonly trpc: TrpcService,
     private readonly deploymentsService: DeploymentsService,
-  ) {
-    this.router = this.trpc.router({
+  ) {}
+
+  public get deploymentsRouter() {
+    return this.trpc.router({
       // 创建部署
       create: this.trpc.publicProcedure
         .input(insertDeploymentSchema)

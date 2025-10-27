@@ -10,7 +10,7 @@ export class OAuthAccountsRouter {
     private readonly oauthAccountsService: OAuthAccountsService,
   ) {}
 
-  get oauthAccountsRouter() {
+  public get oauthAccountsRouter() {
     return this.trpc.router({
       // TODO: Implement actual OAuth account management procedures here
       hello: this.trpc.publicProcedure

@@ -136,13 +136,13 @@ const aiRecommendationsSchema = z.object({
 
 @Injectable()
 export class IncidentsRouter {
-  public router: any;
-
   constructor(
     private readonly trpc: TrpcService,
     private readonly incidentsService: IncidentsService,
-  ) {
-    this.router = this.trpc.router({
+  ) {}
+
+  public get incidentsRouter() {
+    return this.trpc.router({
       // 创建事件
       create: this.trpc.publicProcedure
         .input(createIncidentSchema)

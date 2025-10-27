@@ -85,13 +85,13 @@ const pipelineTemplateResponseSchema = z.object({
 
 @Injectable()
 export class PipelinesRouter {
-  public router: any;
-
   constructor(
     private readonly trpc: TrpcService,
     private readonly pipelinesService: PipelinesService,
-  ) {
-    this.router = this.trpc.router({
+  ) {}
+
+  public get pipelinesRouter() {
+    return this.trpc.router({
       /**
        * 创建流水线
        */
