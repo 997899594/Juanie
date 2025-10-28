@@ -98,6 +98,34 @@
               @gitlab-login="handleGitLabLogin"
             />
             
+            <!-- 加载状态 -->
+            <div v-if="isLoading" class="mt-4 text-center">
+              <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-blue-500 hover:bg-blue-400 transition ease-in-out duration-150 cursor-not-allowed">
+                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                正在跳转...
+              </div>
+            </div>
+            
+            <!-- 错误提示 -->
+            <div v-if="error" class="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div class="flex">
+                <div class="flex-shrink-0">
+                  <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="ml-3">
+                  <h3 class="text-sm font-medium text-red-800">登录失败</h3>
+                  <div class="mt-2 text-sm text-red-700">
+                    {{ error }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <!-- 错误提示 -->
             <div v-if="error" class="mt-4 bg-red-50/80 backdrop-blur-sm border border-red-200/50 text-red-600 px-4 py-3 rounded-lg text-sm">
               {{ error }}
@@ -108,7 +136,7 @@
     </div>
 
     <!-- 加载状态覆盖层 -->
-    <div v-if="loading" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+    <div v-if="isLoading" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
       <div class="bg-white/90 backdrop-blur-xl rounded-2xl p-8 flex flex-col items-center space-y-4 shadow-2xl border border-white/20">
         <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
         <span class="text-gray-700 font-medium">正在跳转到认证页面...</span>
@@ -118,53 +146,81 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { config } from '@/utils/config'
+import { trpc } from '@/lib/trpc'
 import LoginForm from '@/components/LoginForm.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
-const loading = ref(false)
+const isLoading = ref(false)
 const error = ref('')
 
+// 处理OAuth回调
+onMounted(async () => {
+  const { code, state } = route.query
+  
+  if (code && state) {
+    isLoading.value = true
+    try {
+      // 处理GitLab OAuth回调
+      const result = await trpc.auth.handleGitLabCallback.mutate({
+        code: code as string,
+        state: state as string
+      })
+      
+      // 直接使用 tRPC 返回的数据，无需手动转换
+      authStore.setUser(result.user)
+      authStore.setSession(result.session)
+      
+      // 跳转到应用主页
+      router.push('/')
+    } catch (err) {
+      console.error('OAuth回调处理失败:', err)
+      error.value = '登录失败，请重试'
+    } finally {
+      isLoading.value = false
+    }
+  }
+})
+
 const handleGitHubLogin = async () => {
-  loading.value = true
+  isLoading.value = true
   error.value = ''
   
   try {
-    // 获取当前路由的 redirect 参数，如果没有则重定向到首页
-    const redirectQuery = router.currentRoute.value.query.redirect as string
-    const redirectTo = redirectQuery ? config.getRedirectUrl(redirectQuery) : config.getRedirectUrl()
-    
-    const authUrl = await authStore.getGitHubAuthUrl(redirectTo)
-    // 直接跳转到认证页面
-    window.location.href = authUrl
+    // TODO: 实现GitHub OAuth
+    error.value = 'GitHub登录暂未实现'
   } catch (err) {
-    console.error('获取 GitHub 授权 URL 失败:', err)
-    loading.value = false
-    error.value = '获取登录链接失败，请重试'
+    console.error('GitHub登录失败:', err)
+    error.value = '登录失败，请重试'
+  } finally {
+    isLoading.value = false
   }
 }
 
 const handleGitLabLogin = async () => {
-  loading.value = true
+  isLoading.value = true
   error.value = ''
   
   try {
-    // 获取当前路由的 redirect 参数，如果没有则重定向到首页
-    const redirectQuery = router.currentRoute.value.query.redirect as string
-    const redirectTo = redirectQuery ? config.getRedirectUrl(redirectQuery) : config.getRedirectUrl()
+    // 获取当前路由的 redirect 参数
+    const redirectTo = route.query.redirect as string || '/'
     
-    const authUrl = await authStore.getGitLabAuthUrl(redirectTo)
-    // 直接跳转到认证页面
-    window.location.href = authUrl
+    // 获取GitLab OAuth授权URL
+    const result = await trpc.auth.getGitLabAuthUrl.mutate({
+      redirectTo
+    })
+    
+    // 跳转到GitLab授权页面
+    window.location.href = result.url
   } catch (err) {
-    console.error('获取 GitLab 授权 URL 失败:', err)
-    loading.value = false
+    console.error('获取GitLab授权URL失败:', err)
     error.value = '获取登录链接失败，请重试'
+    isLoading.value = false
   }
 }
 </script>

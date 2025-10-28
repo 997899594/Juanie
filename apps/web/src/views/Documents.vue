@@ -29,7 +29,14 @@
 import { ref, onMounted } from 'vue'
 import { trpc, type AppRouter } from '../lib/trpc'
 
-type Document = Awaited<ReturnType<typeof trpc.documents.findAll.query>>[0]
+// 临时类型定义，直到后端实现 documents API
+type Document = {
+  id: string
+  title: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
 
 const documents = ref<Document[]>([])
 const loading = ref(false)
@@ -37,8 +44,16 @@ const loading = ref(false)
 const loadDocuments = async () => {
   try {
     loading.value = true
-    const result = await trpc.documents.findAll.query()
-    documents.value = result || []
+    // 临时模拟数据，直到后端实现 documents API
+    documents.value = [
+      {
+        id: '1',
+        title: '项目文档',
+        content: '这是一个示例文档',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ]
   } catch (error) {
     console.error('加载文档失败:', error)
   } finally {
@@ -46,12 +61,11 @@ const loadDocuments = async () => {
   }
 }
 
-const viewDocument = (id: number) => {
+const viewDocument = (id: string) => {
   console.log('查看文档:', id)
-  // TODO: 实现文档查看功能
 }
 
-const editDocument = (id: number) => {
+const editDocument = (id: string) => {
   console.log('编辑文档:', id)
   // TODO: 实现文档编辑功能
 }

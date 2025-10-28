@@ -557,7 +557,7 @@ export const generateNavigationConfig = () => {
 
   // 对每个组内的项目按 order 排序
   Object.keys(navigationGroups).forEach((group) => {
-    navigationGroups[group].sort((a, b) => a.order - b.order);
+    navigationGroups[group]?.sort((a, b) => a.order - b.order);
   });
 
   return navigationGroups;

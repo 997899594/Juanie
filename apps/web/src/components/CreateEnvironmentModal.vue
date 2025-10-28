@@ -157,7 +157,7 @@ interface EnvironmentVariable {
 type Environment = Awaited<ReturnType<typeof trpc.environments.create.mutate>>
 
 const props = defineProps<{
-  projectId: number
+  projectId: string
 }>()
 
 const emit = defineEmits<{

@@ -29,27 +29,27 @@ export interface EnvironmentWithProject {
   cloudProvider: string | null;
   region: string | null;
   instanceType: string | null;
-  clusterSize: number;
-  enableAutoScaling: boolean;
-  cpuCores: number;
-  memoryGb: number;
-  storageGb: number;
-  status: string;
+  clusterSize: number | null;
+  enableAutoScaling: boolean | null;
+  cpuCores: number | null;
+  memoryGb: number | null;
+  storageGb: number | null;
+  status: string | null;
   healthCheckUrl: string | null;
   lastHealthCheck: Date | null;
-  requireVpn: boolean;
-  costBudget: number | null;
-  encryptionEnabled: boolean;
-  backupEnabled: boolean;
-  monitoringEnabled: boolean;
-  dataClassification: string;
+  requireVpn: boolean | null;
+  costBudget: string | null;
+  encryptionEnabled: boolean | null;
+  backupEnabled: boolean | null;
+  monitoringEnabled: boolean | null;
+  dataClassification: string | null;
   createdAt: Date;
   updatedAt: Date;
   project?: {
     id: string;
     name: string;
     slug: string;
-  };
+  } | null;
 }
 
 export interface EnvironmentStats {
@@ -101,7 +101,7 @@ export interface CreateEnvironmentRequest {
   memoryGb?: number;
   storageGb?: number;
   requireVpn?: boolean;
-  costBudget?: number;
+  costBudget?: string;
   dataClassification?: DataClassification;
 }
 
@@ -146,12 +146,7 @@ export class EnvironmentsService {
       // 创建环境
       const [environment] = await this.db
         .insert(environments)
-        .values({
-          ...validatedData,
-          status: 'provisioning',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
+        .values([validatedData])
         .returning();
 
       this.logger.log(`Environment created: ${environment.id}`);
@@ -208,49 +203,57 @@ export class EnvironmentsService {
   }
 
   /**
-   * 获取项目的环境列表
+   * 获取项目的环境列表（重构版本）
    */
-  async getProjectEnvironments(
-    projectId: string,
-    options: {
-      page?: number;
-      limit?: number;
-      environmentType?: EnvironmentType;
-      status?: EnvironmentStatus;
-      cloudProvider?: CloudProvider;
-      search?: string;
-    } = {}
-  ): Promise<{ environments: EnvironmentWithProject[]; total: number }> {
+  async getProjectEnvironments(options: {
+    projectId: string;
+    page?: number;
+    limit?: number;
+    environmentType?: EnvironmentType;
+    status?: EnvironmentStatus;
+    cloudProvider?: CloudProvider;
+    search?: string;
+  }): Promise<{ environments: EnvironmentWithProject[]; total: number }> {
+    const { projectId, page = 1, limit = 20, environmentType, status, cloudProvider, search } = options;
+    
     try {
-      const { page = 1, limit = 20, environmentType, status, cloudProvider, search } = options;
-      const offset = (page - 1) * limit;
+      // 验证项目是否存在
+      await this.validateProjectExists(projectId);
 
       // 构建查询条件
-      const whereConditions = [eq(environments.projectId, projectId)];
+      const conditions = [eq(environments.projectId, projectId)];
 
       if (environmentType) {
-        whereConditions.push(eq(environments.environmentType, environmentType));
+        conditions.push(eq(environments.environmentType, environmentType));
       }
 
       if (status) {
-        whereConditions.push(eq(environments.status, status));
+        conditions.push(eq(environments.status, status));
       }
 
       if (cloudProvider) {
-        whereConditions.push(eq(environments.cloudProvider, cloudProvider));
+        conditions.push(eq(environments.cloudProvider, cloudProvider));
       }
 
       if (search) {
-        whereConditions.push(
-          or(
-            ilike(environments.name, `%${search}%`),
-            ilike(environments.displayName, `%${search}%`),
-            ilike(environments.description, `%${search}%`)
-          )
+        const searchCondition = or(
+          ilike(environments.name, `%${search}%`),
+          ilike(environments.displayName, `%${search}%`),
+          ilike(environments.description, `%${search}%`)
         );
+        if (searchCondition) {
+          conditions.push(searchCondition);
+        }
       }
 
-      // 获取环境列表
+      // 获取总数
+      const [{ count: totalCount }] = await this.db
+        .select({ count: count() })
+        .from(environments)
+        .where(and(...conditions));
+
+      // 获取分页数据
+      const offset = (page - 1) * limit;
       const environmentList = await this.db
         .select({
           id: environments.id,
@@ -286,24 +289,17 @@ export class EnvironmentsService {
         })
         .from(environments)
         .leftJoin(projects, eq(environments.projectId, projects.id))
-        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+        .where(and(...conditions))
         .orderBy(desc(environments.createdAt))
         .limit(limit)
         .offset(offset);
 
-      // 获取总数
-      const [{ count: total }] = await this.db
-        .select({ count: count() })
-        .from(environments)
-        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
-
       return {
         environments: environmentList,
-        total,
+        total: totalCount,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Failed to get project environments: ${errorMessage}`);
+      this.logger.error(`Failed to get project environments for ${options.projectId}:`, error);
       throw new BadRequestException('Failed to get project environments');
     }
   }
@@ -325,10 +321,7 @@ export class EnvironmentsService {
       // 更新环境
       const [environment] = await this.db
         .update(environments)
-        .set({
-          ...validatedData,
-          updatedAt: new Date(),
-        })
+        .set(validatedData)
         .where(eq(environments.id, id))
         .returning();
 
@@ -725,14 +718,14 @@ export class EnvironmentsService {
         cloudProvider: sourceEnv.cloudProvider || undefined,
         region: sourceEnv.region || undefined,
         instanceType: sourceEnv.instanceType || undefined,
-        clusterSize: sourceEnv.clusterSize,
-        enableAutoScaling: sourceEnv.enableAutoScaling,
-        cpuCores: sourceEnv.cpuCores,
-        memoryGb: sourceEnv.memoryGb,
-        storageGb: sourceEnv.storageGb,
-        requireVpn: sourceEnv.requireVpn,
-        costBudget: sourceEnv.costBudget || undefined,
-        dataClassification: sourceEnv.dataClassification,
+        clusterSize: sourceEnv.clusterSize || undefined,
+        enableAutoScaling: sourceEnv.enableAutoScaling || undefined,
+        cpuCores: sourceEnv.cpuCores || undefined,
+        memoryGb: sourceEnv.memoryGb || undefined,
+        storageGb: sourceEnv.storageGb || undefined,
+        requireVpn: sourceEnv.requireVpn || undefined,
+        costBudget: typeof sourceEnv.costBudget === 'string' ? sourceEnv.costBudget : undefined,
+        dataClassification: sourceEnv.dataClassification || undefined,
       };
 
       const clonedEnv = await this.createEnvironment(cloneData);
@@ -1128,101 +1121,4 @@ export class EnvironmentsService {
   /**
    * 修复getProjectEnvironments方法的参数结构
    */
-  async getProjectEnvironments(options: {
-    projectId: string;
-    page?: number;
-    limit?: number;
-    environmentType?: EnvironmentType;
-    status?: EnvironmentStatus;
-    cloudProvider?: CloudProvider;
-    search?: string;
-  }): Promise<{ environments: EnvironmentWithProject[]; total: number }> {
-    const { projectId, page = 1, limit = 20, environmentType, status, cloudProvider, search } = options;
-    
-    try {
-      // 验证项目是否存在
-      await this.validateProjectExists(projectId);
-
-      // 构建查询条件
-      const conditions = [eq(environments.projectId, projectId)];
-
-      if (environmentType) {
-        conditions.push(eq(environments.environmentType, environmentType));
-      }
-
-      if (status) {
-        conditions.push(eq(environments.status, status));
-      }
-
-      if (cloudProvider) {
-        conditions.push(eq(environments.cloudProvider, cloudProvider));
-      }
-
-      if (search) {
-        conditions.push(
-          or(
-            ilike(environments.name, `%${search}%`),
-            ilike(environments.displayName, `%${search}%`),
-            ilike(environments.description, `%${search}%`)
-          )
-        );
-      }
-
-      // 获取总数
-      const [{ count: totalCount }] = await this.db
-        .select({ count: count() })
-        .from(environments)
-        .where(and(...conditions));
-
-      // 获取分页数据
-      const offset = (page - 1) * limit;
-      const environmentList = await this.db
-        .select({
-          id: environments.id,
-          projectId: environments.projectId,
-          name: environments.name,
-          displayName: environments.displayName,
-          description: environments.description,
-          environmentType: environments.environmentType,
-          cloudProvider: environments.cloudProvider,
-          region: environments.region,
-          instanceType: environments.instanceType,
-          clusterSize: environments.clusterSize,
-          enableAutoScaling: environments.enableAutoScaling,
-          cpuCores: environments.cpuCores,
-          memoryGb: environments.memoryGb,
-          storageGb: environments.storageGb,
-          status: environments.status,
-          healthCheckUrl: environments.healthCheckUrl,
-          lastHealthCheck: environments.lastHealthCheck,
-          requireVpn: environments.requireVpn,
-          costBudget: environments.costBudget,
-          encryptionEnabled: environments.encryptionEnabled,
-          backupEnabled: environments.backupEnabled,
-          monitoringEnabled: environments.monitoringEnabled,
-          dataClassification: environments.dataClassification,
-          createdAt: environments.createdAt,
-          updatedAt: environments.updatedAt,
-          project: {
-            id: projects.id,
-            name: projects.name,
-            slug: projects.slug,
-          },
-        })
-        .from(environments)
-        .leftJoin(projects, eq(environments.projectId, projects.id))
-        .where(and(...conditions))
-        .orderBy(desc(environments.createdAt))
-        .limit(limit)
-        .offset(offset);
-
-      return {
-        environments: environmentList,
-        total: totalCount,
-      };
-    } catch (error) {
-      this.logger.error(`Failed to get project environments for ${options.projectId}:`, error);
-      throw new BadRequestException('Failed to get project environments');
-    }
-  }
 }

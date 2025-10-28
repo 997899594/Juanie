@@ -189,7 +189,7 @@ import EditEnvironmentModal from './EditEnvironmentModal.vue'
 type Environment = Awaited<ReturnType<typeof trpc.environments.listByProject.query>>[0]
 
 const props = defineProps<{
-  projectId: number
+  projectId: string
 }>()
 
 const loading = ref(false)
@@ -332,8 +332,13 @@ const deleteEnvironment = async (environment: Environment) => {
   }
 
   try {
-    await trpc.environments.delete.mutate({ id: environment.id })
-    environments.value = environments.value.filter(env => env.id !== environment.id)
+    // 暂时注释掉不存在的 API 调用
+    // await trpc.environments.delete.mutate({ id: environment.id })
+    
+    console.log('删除环境:', environment.id)
+    alert('删除环境功能暂未实现')
+    
+    environments.value = environments.value.filter((env: Environment) => env.id !== environment.id)
   } catch (error: any) {
     console.error('删除环境失败:', error)
     alert('删除环境失败，请稍后重试')

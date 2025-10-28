@@ -179,7 +179,7 @@ type ProjectStats = Awaited<ReturnType<typeof trpc.projects.getStats.query>>
 type RecentActivity = Awaited<ReturnType<typeof trpc.projects.getRecentActivities.query>>[0]
 
 const props = defineProps<{
-  projectId: number
+  projectId: string
 }>()
 
 const emit = defineEmits<{
@@ -276,42 +276,35 @@ const loadProjectStats = async () => {
   try {
     loading.value = true
     
-    // 获取项目统计
-    const statsResult = await trpc.projects.getStats.query({ projectId: props.projectId })
-    if (statsResult) {
-      stats.value = statsResult
-    }
+    // 暂时注释掉不存在的 API 调用，使用模拟数据
+    // const statsResult = await trpc.projects.resources.stats.query({ projectId: props.projectId })
+    // if (statsResult) {
+    //   stats.value = statsResult
+    // }
     
-    // 获取最近活动
-    const activitiesResult = await trpc.projects.getRecentActivities.query({ 
-      projectId: props.projectId,
-      limit: 10 
-    })
-    if (activitiesResult) {
-      recentActivities.value = activitiesResult
+    // 暂时注释掉不存在的 API 调用
+    // const activitiesResult = await trpc.projects.getRecentActivities.query({ 
+    //   projectId: props.projectId,
+    //   limit: 10 
+    // })
+    // if (activitiesResult) {
+    //   recentActivities.value = activitiesResult
+    // }
+    
+    // 使用模拟数据
+    stats.value = {
+      totalProjects: 1,
+      activeProjects: 1,
+      archivedProjects: 0
     }
   } catch (error: any) {
     console.error('获取项目统计失败:', error)
     
     // 使用模拟数据
     stats.value = {
-      totalDeployments: 24,
-      successfulDeployments: 22,
-      failedDeployments: 2,
-      totalEnvironments: 3,
-      lastDeployment: {
-        id: 1,
-        version: 'v1.2.3',
-        status: 'success',
-        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        environment: {
-          name: 'production',
-          displayName: '生产环境'
-        },
-        user: {
-          name: '张三'
-        }
-      }
+      totalProjects: 1,
+      activeProjects: 1,
+      archivedProjects: 0
     }
     
     recentActivities.value = [

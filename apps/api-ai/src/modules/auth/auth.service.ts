@@ -79,6 +79,24 @@ export class AuthService {
   }
 
   /**
+   * 根据用户ID获取用户信息
+   */
+  async getUserById(userId: string): Promise<User | null> {
+    try {
+      const [user] = await this.db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      return user || null;
+    } catch (error) {
+      this.logger.error(`Failed to get user by ID: ${error}`);
+      return null;
+    }
+  }
+
+  /**
    * Hello method for testing
    */
   hello(): string {

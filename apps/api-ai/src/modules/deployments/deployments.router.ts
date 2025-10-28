@@ -1,20 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { z } from 'zod';
-import { TrpcService } from '../../trpc/trpc.service';
-import { DeploymentsService } from './deployments.service';
-import { 
-  insertDeploymentSchema, 
-  updateDeploymentSchema,
-  selectDeploymentSchema,
+import { Injectable } from "@nestjs/common";
+import { z } from "zod";
+import {
   DeploymentStatusEnum,
   DeploymentStrategyEnum,
-  RollbackStrategyEnum
-} from '../../database/schemas/deployments.schema';
-
-// 输入验证schemas
-const getDeploymentByIdSchema = z.object({
-  id: z.string().uuid(),
-});
+  insertDeploymentSchema,
+  RollbackStrategyEnum,
+  selectDeploymentSchema,
+  updateDeploymentSchema,
+} from "../../database/schemas/deployments.schema";
+import { TrpcService } from "../../trpc/trpc.service";
+import { DeploymentsService } from "./deployments.service";
 
 const getDeploymentsByProjectSchema = z.object({
   projectId: z.string().uuid(),
@@ -50,18 +45,20 @@ const startDeploymentSchema = z.object({
 
 const finishDeploymentSchema = z.object({
   id: z.string().uuid(),
-  status: z.enum(['success', 'failed', 'cancelled']),
-  metrics: z.object({
-    avgResponseTime: z.number().int().positive().optional(),
-    throughputRps: z.number().int().positive().optional(),
-    availability: z.number().min(0).max(100).optional(),
-    errorRate: z.number().min(0).max(1).optional(),
-    responseTimeP95: z.number().int().positive().optional(),
-    cpuUsageAvg: z.number().min(0).max(100).optional(),
-    memoryUsageAvg: z.number().min(0).max(100).optional(),
-    diskUsageGb: z.number().positive().optional(),
-    deploymentCost: z.number().positive().optional(),
-  }).optional(),
+  status: z.enum(["success", "failed", "cancelled"]),
+  metrics: z
+    .object({
+      avgResponseTime: z.number().int().positive().optional(),
+      throughputRps: z.number().int().positive().optional(),
+      availability: z.number().min(0).max(100).optional(),
+      errorRate: z.number().min(0).max(1).optional(),
+      responseTimeP95: z.number().int().positive().optional(),
+      cpuUsageAvg: z.number().min(0).max(100).optional(),
+      memoryUsageAvg: z.number().min(0).max(100).optional(),
+      diskUsageGb: z.number().positive().optional(),
+      deploymentCost: z.number().positive().optional(),
+    })
+    .optional(),
 });
 
 const rollbackDeploymentSchema = z.object({
@@ -121,21 +118,29 @@ const getEnvironmentUsageSchema = z.object({
 
 // 响应schemas
 const deploymentWithDetailsSchema = selectDeploymentSchema.extend({
-  project: z.object({
-    name: z.string(),
-  }).optional(),
-  environment: z.object({
-    name: z.string(),
-    type: z.string(),
-  }).optional(),
-  deployedByUser: z.object({
-    name: z.string(),
-    email: z.string(),
-  }).optional(),
-  approvedByUser: z.object({
-    name: z.string(),
-    email: z.string(),
-  }).optional(),
+  project: z
+    .object({
+      name: z.string(),
+    })
+    .optional(),
+  environment: z
+    .object({
+      name: z.string(),
+      type: z.string(),
+    })
+    .optional(),
+  deployedByUser: z
+    .object({
+      name: z.string(),
+      email: z.string(),
+    })
+    .optional(),
+  approvedByUser: z
+    .object({
+      name: z.string(),
+      email: z.string(),
+    })
+    .optional(),
 });
 
 const deploymentListResponseSchema = z.object({
@@ -162,7 +167,7 @@ const deploymentStatsResponseSchema = z.object({
 });
 
 const riskAssessmentResponseSchema = z.object({
-  riskLevel: z.enum(['low', 'medium', 'high']),
+  riskLevel: z.enum(["low", "medium", "high"]),
   riskScore: z.number().int().min(0).max(100),
   riskFactors: z.array(z.string()),
   recommendations: z.array(z.string()),
@@ -185,7 +190,7 @@ const environmentUsageResponseSchema = z.object({
 export class DeploymentsRouter {
   constructor(
     private readonly trpc: TrpcService,
-    private readonly deploymentsService: DeploymentsService,
+    private readonly deploymentsService: DeploymentsService
   ) {}
 
   public get deploymentsRouter() {
@@ -209,12 +214,14 @@ export class DeploymentsRouter {
       // 根据项目获取部署列表 - 需要认证
       getByProject: this.trpc.organizationProcedure
         .input(getDeploymentsByProjectSchema)
-        .output(z.object({
-          deployments: z.array(selectDeploymentSchema),
-          total: z.number(),
-          page: z.number(),
-          limit: z.number(),
-        }))
+        .output(
+          z.object({
+            deployments: z.array(selectDeploymentSchema),
+            total: z.number(),
+            page: z.number(),
+            limit: z.number(),
+          })
+        )
         .query(async ({ input }) => {
           return this.deploymentsService.getDeploymentsByProject(
             input.projectId,
@@ -234,12 +241,14 @@ export class DeploymentsRouter {
       // 根据环境获取部署列表 - 需要认证
       getByEnvironment: this.trpc.organizationProcedure
         .input(getDeploymentsByEnvironmentSchema)
-        .output(z.object({
-          deployments: z.array(selectDeploymentSchema),
-          total: z.number(),
-          page: z.number(),
-          limit: z.number(),
-        }))
+        .output(
+          z.object({
+            deployments: z.array(selectDeploymentSchema),
+            total: z.number(),
+            page: z.number(),
+            limit: z.number(),
+          })
+        )
         .query(async ({ input }) => {
           return this.deploymentsService.getDeploymentsByEnvironment(
             input.environmentId,
@@ -321,36 +330,42 @@ export class DeploymentsRouter {
         .input(batchUpdateDeploymentStatusSchema)
         .output(z.object({ updatedCount: z.number() }))
         .mutation(async ({ input }) => {
-          const updatedDeployments = await this.deploymentsService.batchUpdateDeploymentStatus(
-            input.deploymentIds,
-            input.status
-          );
+          const updatedDeployments =
+            await this.deploymentsService.batchUpdateDeploymentStatus(
+              input.deploymentIds,
+              input.status
+            );
           return { updatedCount: updatedDeployments.length };
         }),
 
       // 删除部署 - 需要认证
       delete: this.trpc.organizationProcedure
-      .input(deleteDeploymentSchema)
-      .output(z.object({ success: z.boolean() }))
-      .mutation(async ({ input }) => {
-        await this.deploymentsService.deleteDeployment(input.id);
-        return { success: true };
-      }),
+        .input(deleteDeploymentSchema)
+        .output(z.object({ success: z.boolean() }))
+        .mutation(async ({ input }) => {
+          await this.deploymentsService.deleteDeployment(input.id);
+          return { success: true };
+        }),
 
-    batchDelete: this.trpc.organizationProcedure
-      .input(batchDeleteDeploymentsSchema)
-      .output(z.object({ success: z.boolean() }))
-      .mutation(async ({ input }) => {
-        await this.deploymentsService.batchDeleteDeployments(input.deploymentIds);
-        return { success: true };
-      }),
+      batchDelete: this.trpc.organizationProcedure
+        .input(batchDeleteDeploymentsSchema)
+        .output(z.object({ success: z.boolean() }))
+        .mutation(async ({ input }) => {
+          await this.deploymentsService.batchDeleteDeployments(
+            input.deploymentIds
+          );
+          return { success: true };
+        }),
 
       // 获取最近部署 - 需要认证
       getRecent: this.trpc.organizationProcedure
         .input(getRecentDeploymentsSchema)
         .output(z.array(selectDeploymentSchema))
         .query(async ({ input }) => {
-          return this.deploymentsService.getRecentDeployments(input.projectId, input.limit);
+          return this.deploymentsService.getRecentDeployments(
+            input.projectId,
+            input.limit
+          );
         }),
 
       // 获取活跃部署 - 需要认证
@@ -387,11 +402,13 @@ export class DeploymentsRouter {
 
       // 获取环境使用情况 - 需要认证
       getEnvironmentUsage: this.trpc.organizationProcedure
-      .input(getEnvironmentUsageSchema)
-      .output(environmentUsageResponseSchema)
-      .query(async ({ input }) => {
-        return this.deploymentsService.getEnvironmentUsage(input.environmentId);
-      }),
+        .input(getEnvironmentUsageSchema)
+        .output(environmentUsageResponseSchema)
+        .query(async ({ input }) => {
+          return this.deploymentsService.getEnvironmentUsage(
+            input.environmentId
+          );
+        }),
     });
   }
 }

@@ -157,7 +157,14 @@ export class ProjectsService {
   async getOrganizationProjects(
     organizationId: string,
     limit: number = 10,
-    offset: number = 0
+    offset: number = 0,
+    filters?: {
+      status?: string;
+      visibility?: string;
+      search?: string;
+      sortBy?: "name" | "createdAt" | "updatedAt";
+      sortOrder?: "asc" | "desc";
+    }
   ): Promise<{ projects: Project[]; total: number }> {
     try {
       // 参数验证
@@ -168,19 +175,51 @@ export class ProjectsService {
         throw new BadRequestException("Offset must be non-negative");
       }
 
+      // 构建查询条件
+      const conditions = [eq(projects.organizationId, organizationId)];
+
+      if (filters?.status) {
+        conditions.push(eq(projects.status, filters.status as any));
+      }
+
+      if (filters?.visibility) {
+        conditions.push(eq(projects.visibility, filters.visibility as any));
+      }
+
+      if (filters?.search) {
+        conditions.push(ilike(projects.name, `%${filters.search}%`));
+      }
+
+      // 构建排序
+      let orderBy;
+      const sortOrder = filters?.sortOrder === "asc" ? "asc" : "desc";
+
+      switch (filters?.sortBy) {
+        case "name":
+          orderBy = sortOrder === "asc" ? projects.name : desc(projects.name);
+          break;
+        case "updatedAt":
+          orderBy =
+            sortOrder === "asc" ? projects.updatedAt : desc(projects.updatedAt);
+          break;
+        default:
+          orderBy =
+            sortOrder === "asc" ? projects.createdAt : desc(projects.createdAt);
+      }
+
       const [projectsResult, totalResult] = await Promise.all([
         this.db
           .select()
           .from(projects)
-          .where(eq(projects.organizationId, organizationId))
+          .where(and(...conditions))
           .limit(limit)
           .offset(offset)
-          .orderBy(desc(projects.createdAt)),
+          .orderBy(orderBy),
 
         this.db
           .select({ count: count() })
           .from(projects)
-          .where(eq(projects.organizationId, organizationId)),
+          .where(and(...conditions)),
       ]);
 
       return {
@@ -443,7 +482,7 @@ export class ProjectsService {
       const [updatedProject] = await this.db
         .update(projects)
         .set({
-          status: 'active',
+          status: "active",
           isArchived: false,
           updatedAt: new Date(),
         })
@@ -451,18 +490,19 @@ export class ProjectsService {
         .returning();
 
       if (!updatedProject) {
-        throw new NotFoundException('Project not found');
+        throw new NotFoundException("Project not found");
       }
 
       this.logger.log(`Unarchived project: ${id}`);
       return updatedProject;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to unarchive project: ${errorMessage}`);
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new BadRequestException('Failed to unarchive project');
+      throw new BadRequestException("Failed to unarchive project");
     }
   }
 
@@ -473,26 +513,29 @@ export class ProjectsService {
     projectId: string,
     limit: number = 50,
     offset: number = 0
-  ): Promise<Array<{
-    id: string;
-    userId: string;
-    role: 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner';
-    joinedAt: Date;
-    user: {
+  ): Promise<
+    Array<{
       id: string;
-      email: string;
-      name: string | null;
-      avatar: string | null;
-    };
-  }>> {
+      userId: string;
+      role: "guest" | "reporter" | "developer" | "maintainer" | "owner";
+      joinedAt: Date;
+      user: {
+        id: string;
+        email: string;
+        name: string | null;
+        avatar: string | null;
+      };
+    }>
+  > {
     try {
       // 这里需要根据实际的项目成员关联表来实现
       // 暂时返回空数组
       return [];
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to get project members: ${errorMessage}`);
-      throw new BadRequestException('Failed to get project members');
+      throw new BadRequestException("Failed to get project members");
     }
   }
 
@@ -502,11 +545,16 @@ export class ProjectsService {
   async addProjectMember(
     projectId: string,
     userId: string,
-    role: 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner' = 'developer'
+    role:
+      | "guest"
+      | "reporter"
+      | "developer"
+      | "maintainer"
+      | "owner" = "developer"
   ): Promise<{
     id: string;
     userId: string;
-    role: 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner';
+    role: "guest" | "reporter" | "developer" | "maintainer" | "owner";
     joinedAt: Date;
   }> {
     try {
@@ -516,31 +564,38 @@ export class ProjectsService {
         id: `member-${Date.now()}`,
         userId,
         role,
-        joinedAt: new Date()
+        joinedAt: new Date(),
       };
 
-      this.logger.log(`Added member ${userId} to project ${projectId} with role ${role}`);
+      this.logger.log(
+        `Added member ${userId} to project ${projectId} with role ${role}`
+      );
       return member;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to add project member: ${errorMessage}`);
-      throw new BadRequestException('Failed to add project member');
+      throw new BadRequestException("Failed to add project member");
     }
   }
 
   /**
    * 移除项目成员
    */
-  async removeProjectMember(projectId: string, userId: string): Promise<boolean> {
+  async removeProjectMember(
+    projectId: string,
+    userId: string
+  ): Promise<boolean> {
     try {
       // 这里需要根据实际的项目成员关联表来实现
       // 暂时返回true
       this.logger.log(`Removed member ${userId} from project ${projectId}`);
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       this.logger.error(`Failed to remove project member: ${errorMessage}`);
-      throw new BadRequestException('Failed to remove project member');
+      throw new BadRequestException("Failed to remove project member");
     }
   }
 }

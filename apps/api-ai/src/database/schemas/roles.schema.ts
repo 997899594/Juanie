@@ -67,6 +67,12 @@ export const selectRoleSchema = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
 });
+
 export const updateRoleSchema = selectRoleSchema
   .pick({ name: true, slug: true, scope: true, description: true, isSystem: true, permissions: true })
   .partial();
+
+// TypeScript 类型导出
+export type Role = typeof roles.$inferSelect;
+export type NewRole = typeof roles.$inferInsert;
+export type UpdateRole = z.infer<typeof updateRoleSchema>;

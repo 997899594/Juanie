@@ -98,11 +98,19 @@ export class ProjectsRouter {
           limit: z.number(),
           offset: z.number()
         }))
-        .query(async ({ input }) => {
+        .query(async ({ input, ctx }) => {
+          // 使用上下文中的组织ID，而不是输入参数中的
           const result = await this.projectsService.getOrganizationProjects(
-            input.organizationId, 
+            ctx.organization.id, 
             input.limit, 
-            input.offset
+            input.offset,
+            {
+              status: input.status,
+              visibility: input.visibility,
+              search: input.search,
+              sortBy: input.sortBy,
+              sortOrder: input.sortOrder
+            }
           );
           return {
             ...result,

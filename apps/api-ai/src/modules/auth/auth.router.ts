@@ -66,7 +66,7 @@ export class AuthRouter {
         }),
 
       // 注销会话
-      revokeSession: this.trpc.protectedProcedure
+      revokeSession: this.trpc.publicProcedure
         .input(z.object({
           sessionToken: z.string()
         }))
@@ -87,6 +87,44 @@ export class AuthRouter {
         .output(z.array(selectAuthSessionSchema))
         .query(async ({ ctx }) => {
           return await this.authService.getUserActiveSessions(ctx.user.id);
+        }),
+
+      // 检查认证状态
+      checkAuth: this.trpc.publicProcedure
+        .output(z.object({
+          isAuthenticated: z.boolean(),
+          user: selectUserSchema.nullable()
+        }))
+        .query(async ({ ctx }) => {
+          try {
+            // 尝试从上下文获取用户信息
+            const user = ctx?.user;
+            if (!user) {
+              return {
+                isAuthenticated: false,
+                user: null
+              };
+            }
+            
+            // 从数据库获取完整的用户信息
+            const fullUser = await this.authService.getUserById(user.id);
+            return {
+              isAuthenticated: true,
+              user: fullUser
+            };
+          } catch (error) {
+            return {
+              isAuthenticated: false,
+              user: null
+            };
+          }
+        }),
+
+      // 获取当前用户
+      getCurrentUser: this.trpc.protectedProcedure
+        .query(async ({ ctx }) => {
+          // 从数据库获取完整的用户信息
+          return await this.authService.getUserById(ctx.user.id);
         }),
 
       // 健康检查

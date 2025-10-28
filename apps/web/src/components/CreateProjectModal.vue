@@ -36,17 +36,6 @@
         </div>
 
         <div class="form-group">
-          <label for="logo" class="form-label">项目Logo</label>
-          <input
-            id="logo"
-            v-model="form.logo"
-            type="url"
-            class="form-input"
-            placeholder="输入Logo URL（可选）"
-          />
-        </div>
-
-        <div class="form-group">
           <label for="description" class="form-label">项目描述</label>
           <textarea
             id="description"
@@ -62,9 +51,9 @@
           <div class="radio-group">
             <label class="radio-item">
               <input
-                v-model="form.isPublic"
+                v-model="form.visibility"
                 type="radio"
-                :value="false"
+                value="private"
                 class="radio-input"
               />
               <div class="radio-content">
@@ -79,9 +68,9 @@
             </label>
             <label class="radio-item">
               <input
-                v-model="form.isPublic"
+                v-model="form.visibility"
                 type="radio"
-                :value="true"
+                value="public"
                 class="radio-input"
               />
               <div class="radio-content">
@@ -94,19 +83,36 @@
                 <p class="radio-description">任何人都可以查看项目</p>
               </div>
             </label>
+            <label class="radio-item">
+              <input
+                v-model="form.visibility"
+                type="radio"
+                value="internal"
+                class="radio-input"
+              />
+              <div class="radio-content">
+                <div class="radio-title">
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  内部项目
+                </div>
+                <p class="radio-description">组织内部成员可以访问</p>
+              </div>
+            </label>
           </div>
         </div>
 
         <div class="form-group">
-          <label for="gitlabProjectId" class="form-label">GitLab 项目 ID</label>
+          <label for="repositoryUrl" class="form-label">代码仓库 URL</label>
           <input
-            id="gitlabProjectId"
-            v-model.number="form.gitlabProjectId"
-            type="number"
+            id="repositoryUrl"
+            v-model="form.repositoryUrl"
+            type="url"
             class="form-input"
-            placeholder="可选：关联的 GitLab 项目 ID"
+            placeholder="https://github.com/username/repo"
           />
-          <p class="form-help">关联 GitLab 项目后可以自动同步代码和触发部署</p>
+          <p class="form-help">代码仓库的 URL 地址，用于自动化部署</p>
         </div>
 
         <div class="modal-footer">
@@ -142,9 +148,8 @@ const form = reactive({
   name: '',
   displayName: '',
   description: '',
-  logo: '',
-  isPublic: false,
-  gitlabProjectId: null as number | null
+  repositoryUrl: '',
+  visibility: 'private' as 'public' | 'private' | 'internal'
 })
 
 const validateForm = () => {
@@ -180,9 +185,8 @@ const handleSubmit = async () => {
       name: form.name.trim(),
       displayName: form.displayName.trim() || '',
       description: form.description.trim() || '',
-      logo: form.logo.trim() || '',
-      isPublic: form.isPublic,
-      gitlabProjectId: form.gitlabProjectId || undefined
+      repositoryUrl: form.repositoryUrl.trim() || '',
+      visibility: form.visibility
     }
     
     await trpc.projects.create.mutate(projectData)
@@ -191,9 +195,8 @@ const handleSubmit = async () => {
     form.name = ''
     form.displayName = ''
     form.description = ''
-    form.logo = ''
-    form.isPublic = false
-    form.gitlabProjectId = null
+    form.repositoryUrl = ''
+    form.visibility = 'private'
     
     // 通知父组件
     emit('created')

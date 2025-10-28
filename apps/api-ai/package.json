@@ -4,6 +4,14 @@
   "description": "AI-Native DevOps Platform API - 2025 Bleeding Edge Edition",
   "type": "module",
   "main": "dist/main.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
   "packageManager": "bun@1.1.38",
   "scripts": {
     "build": "bun run build:tsc",

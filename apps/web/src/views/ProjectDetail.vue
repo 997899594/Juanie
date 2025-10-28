@@ -6,16 +6,14 @@
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between">
           <div class="flex items-start space-x-4 flex-1">
             <Avatar class="w-12 h-12">
-              <AvatarImage v-if="project?.logo" :src="project.logo" :alt="project.name" />
-              <AvatarFallback>
-                <Folder class="w-6 h-6" />
-              </AvatarFallback>
+              <AvatarImage :src="''" :alt="project?.name || '项目'" />
+              <AvatarFallback>{{ project?.name?.charAt(0) || 'P' }}</AvatarFallback>
             </Avatar>
             <div class="flex-1 min-w-0">
               <div class="flex items-center space-x-3 mb-2">
                 <h1 class="text-2xl font-bold text-foreground">{{ project?.name || '加载中...' }}</h1>
                 <div class="flex items-center space-x-2">
-                  <Badge v-if="project?.isPublic" variant="secondary">
+                  <Badge v-if="project?.visibility === 'public'" variant="secondary">
                     <Globe class="w-3 h-3 mr-1" />
                     公开
                   </Badge>
@@ -23,9 +21,9 @@
                     <Lock class="w-3 h-3 mr-1" />
                     私有
                   </Badge>
-                  <Badge v-if="project?.gitlabProjectId" variant="outline">
+                  <Badge v-if="project?.repositoryUrl" variant="outline">
                     <GitBranch class="w-3 h-3 mr-1" />
-                    GitLab
+                    代码仓库
                   </Badge>
                 </div>
               </div>
@@ -33,7 +31,7 @@
               <div class="flex items-center space-x-4 text-sm text-muted-foreground">
                 <span class="flex items-center">
                   <User class="w-4 h-4 mr-1" />
-                  {{ project?.owner?.name || '未知用户' }}
+                  项目所有者
                 </span>
                 <span class="flex items-center">
                   <Clock class="w-4 h-4 mr-1" />
@@ -86,25 +84,25 @@
         <!-- 概览标签页 -->
         <ProjectOverview 
           v-if="activeTab === 'overview'" 
-          :project-id="Number(route.params.id)"
+          :project-id="route.params.id as string"
         />
 
         <!-- 环境标签页 -->
         <ProjectEnvironments 
           v-else-if="activeTab === 'environments'" 
-          :project-id="Number(route.params.id)"
+          :project-id="route.params.id as string"
         />
 
         <!-- 部署标签页 -->
         <ProjectDeployments 
           v-else-if="activeTab === 'deployments'" 
-          :project-id="Number(route.params.id)"
+          :project-id="route.params.id as string"
         />
 
         <!-- 设置标签页 -->
         <ProjectSettings 
           v-else-if="activeTab === 'settings'" 
-          :project-id="Number(route.params.id)"
+          :project-id="route.params.id as string"
         />
       </CardContent>
     </Card>
@@ -159,13 +157,13 @@ const tabs = computed(() => [
   {
     key: 'environments',
     label: '环境',
-    count: project.value?.environmentsCount || 0,
+    count: 0,
     icon: Server
   },
   {
     key: 'deployments',
     label: '部署',
-    count: project.value?.deploymentsCount || 0,
+    count: 0,
     icon: Zap
   },
   {
@@ -194,9 +192,9 @@ const formatTime = (dateString: string) => {
 const loadProject = async () => {
   try {
     loading.value = true
-    const projectId = Number(route.params.id)
+    const projectId = route.params.id as string  // 后端期望 string 类型
     
-    if (isNaN(projectId)) {
+    if (!projectId) {
       router.push('/projects')
       return
     }

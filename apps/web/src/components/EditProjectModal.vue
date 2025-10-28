@@ -33,18 +33,8 @@
           <Textarea
             id="description"
             v-model="form.description"
-            rows="3"
-            placeholder="简要描述项目用途和功能"
-          />
-        </div>
-
-        <div class="space-y-2">
-          <Label for="logo">项目Logo</Label>
-          <Input
-            id="logo"
-            v-model="form.logo"
-            type="text"
-            placeholder="输入Logo URL"
+            class="min-h-[80px]"
+            placeholder="描述项目的用途和功能（可选）"
           />
         </div>
 
@@ -52,12 +42,12 @@
           <Label>项目可见性</Label>
           <div class="space-y-3">
             <div class="flex items-start space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
-                 :class="{ 'border-primary bg-primary/5': !form.isPublic }"
-                 @click="form.isPublic = false">
+                 :class="{ 'border-primary bg-primary/5': form.visibility === 'private' }"
+                 @click="form.visibility = 'private'">
               <input
-                v-model="form.isPublic"
+                v-model="form.visibility"
                 type="radio"
-                :value="false"
+                value="private"
                 class="mt-1"
               />
               <div class="flex-1">
@@ -69,12 +59,12 @@
               </div>
             </div>
             <div class="flex items-start space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
-                 :class="{ 'border-primary bg-primary/5': form.isPublic }"
-                 @click="form.isPublic = true">
+                 :class="{ 'border-primary bg-primary/5': form.visibility === 'public' }"
+                 @click="form.visibility = 'public'">
               <input
-                v-model="form.isPublic"
+                v-model="form.visibility"
                 type="radio"
-                :value="true"
+                value="public"
                 class="mt-1"
               />
               <div class="flex-1">
@@ -85,19 +75,35 @@
                 <p class="text-sm text-muted-foreground">任何人都可以查看项目</p>
               </div>
             </div>
+            <div class="flex items-start space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                 :class="{ 'border-primary bg-primary/5': form.visibility === 'internal' }"
+                 @click="form.visibility = 'internal'">
+              <input
+                v-model="form.visibility"
+                type="radio"
+                value="internal"
+                class="mt-1"
+              />
+              <div class="flex-1">
+                <div class="flex items-center text-sm font-medium text-foreground mb-1">
+                  <Building class="w-4 h-4 mr-2" />
+                  内部项目
+                </div>
+                <p class="text-sm text-muted-foreground">组织内部成员可以访问</p>
+              </div>
+            </div>
           </div>
         </div>
 
         <div class="space-y-2">
-          <Label for="gitlabProjectId">GitLab 项目 ID</Label>
+          <Label for="repositoryUrl">代码仓库 URL</Label>
           <Input
-            id="gitlabProjectId"
-            type="number"
-            placeholder="可选：关联的 GitLab 项目 ID"
-            :value="form.gitlabProjectId || ''"
-            @input="(e: any) => form.gitlabProjectId = e.target.value ? Number(e.target.value) : null"
+            id="repositoryUrl"
+            type="url"
+            placeholder="https://github.com/username/repo"
+            v-model="form.repositoryUrl"
           />
-          <p class="text-sm text-muted-foreground">关联 GitLab 项目后可以自动同步代码和触发部署</p>
+          <p class="text-sm text-muted-foreground">代码仓库的 URL 地址，用于自动化部署</p>
         </div>
 
         <DialogFooter>
@@ -143,19 +149,25 @@ const form = reactive({
   name: '',
   displayName: '',
   description: '',
-  logo: '',
-  isPublic: false,
-  gitlabProjectId: null as number | null
+  repositoryUrl: '',
+  visibility: 'private' as 'public' | 'private' | 'internal'
 })
 
 // 初始化表单数据
 const initForm = () => {
   form.name = props.project.name
-  form.displayName = props.project.displayName
+  form.displayName = props.project.displayName || ''
   form.description = props.project.description || ''
-  form.logo = props.project.logo || ''
-  form.isPublic = props.project.isPublic
-  form.gitlabProjectId = props.project.gitlabProjectId
+  form.repositoryUrl = props.project.repositoryUrl || ''
+  form.visibility = props.project.visibility || 'private'
+}
+
+const resetForm = () => {
+  form.name = ''
+  form.displayName = ''
+  form.description = ''
+  form.repositoryUrl = ''
+  form.visibility = 'private'
 }
 
 // 监听项目变化
@@ -195,9 +207,8 @@ const handleSubmit = async () => {
       name: form.name.trim(),
       displayName: form.displayName.trim() || undefined,
       description: form.description.trim() || undefined,
-      logo: form.logo.trim() || undefined,
-      isPublic: form.isPublic,
-      gitlabProjectId: form.gitlabProjectId || undefined
+      repositoryUrl: form.repositoryUrl.trim() || undefined,
+      visibility: form.visibility
     }
     
     await trpc.projects.update.mutate(updateData)

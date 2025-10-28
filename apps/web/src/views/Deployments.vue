@@ -47,13 +47,17 @@ import {
   Button
 } from '@juanie/ui'
 
-type ProjectListResult = Awaited<ReturnType<typeof trpc.projects.list.query>>
+type ProjectListResult = Awaited<ReturnType<typeof trpc.projects.getOrganizationProjects.query>>
 const projects = ref<ProjectListResult['projects']>([])
 const selectedProjectIdString = ref<string | undefined>(undefined)
-const selectedProjectId = computed(() => selectedProjectIdString.value ? Number(selectedProjectIdString.value) : undefined)
+const selectedProjectId = computed(() => selectedProjectIdString.value || undefined)
 
 const reloadProjects = async () => {
-  const result = await trpc.projects.list.query({ page: 1, limit: 50 })
+  const result = await trpc.projects.getOrganizationProjects.query({ 
+    organizationId: 'temp-org-id', // 临时使用，需要从认证状态获取
+    limit: 50,
+    offset: 0
+  })
   projects.value = result.projects
   // 默认选择第一个项目（增加安全判断以通过类型检查）
   const first = result.projects && result.projects.length > 0 ? result.projects[0] : undefined

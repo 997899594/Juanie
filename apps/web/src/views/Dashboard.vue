@@ -9,13 +9,15 @@
           </div>
           <div class="flex items-center space-x-4">
             <div v-if="authStore.user" class="flex items-center space-x-3">
-              <img 
-                v-if="authStore.user.image" 
-                :src="authStore.user.image" 
-                :alt="authStore.user.name"
-                class="w-8 h-8 rounded-full"
-              >
-              <span class="text-sm font-medium">{{ authStore.user.name }}</span>
+              <Avatar class="h-8 w-8">
+                <AvatarImage
+                  v-if="authStore.user?.avatarUrl"
+                  :src="authStore.user.avatarUrl"
+                  :alt="authStore.user.displayName || authStore.user.username || '用户头像'"
+                />
+                <AvatarFallback>{{ (authStore.user?.displayName || authStore.user?.username || 'U').charAt(0).toUpperCase() }}</AvatarFallback>
+              </Avatar>
+              <span class="text-sm font-medium">{{ authStore.user?.displayName || authStore.user?.username || '未知用户' }}</span>
             </div>
             <Button variant="outline" size="sm" @click="handleLogout" :disabled="authStore.loading">
               登出
@@ -83,7 +85,7 @@
               </CardHeader>
               <CardContent>
                 <div class="space-y-2">
-                  <p><strong>用户名:</strong> {{ authStore.user?.name || '未知用户' }}</p>
+                  <p><strong>用户名:</strong> {{ authStore.user?.displayName || authStore.user?.username || '未知用户' }}</p>
                   <p><strong>邮箱:</strong> {{ authStore.user?.email || '未知邮箱' }}</p>
                   <p><strong>登录状态:</strong> 
                     <span class="text-green-600">已登录</span>
@@ -180,7 +182,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@juanie/ui'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Avatar, AvatarImage, AvatarFallback } from '@juanie/ui'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()

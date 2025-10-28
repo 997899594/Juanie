@@ -98,9 +98,7 @@ export class TrpcRouter {
       // 认证授权模块
       auth: this.authRouter.authRouter,
       authSessions: this.authSessionsRouter.authSessionsRouter,
-      roles: this.rolesRouter.rolesRouter,
-      roleAssignments: this.roleAssignmentsRouter.roleAssignmentsRouter,
-      projectMemberships: this.projectMembershipsRouter.router,
+      projectMemberships: this.projectMembershipsRouter.projectMembershipsRouter,
       identityProviders: this.identityProvidersRouter.identityProvidersRouter,
       oauthAccounts: this.oauthAccountsRouter.oauthAccountsRouter,
       oauthFlows: this.oauthFlowsRouter.oauthFlowsRouter,
@@ -141,6 +139,10 @@ export class TrpcRouter {
       // Webhook 集成模块
       webhookEndpoints: this.webhookEndpointsRouter.webhookEndpointsRouter,
       webhookEvents: this.webhookEventsRouter.webhookEventsRouter,
+
+      // 权限管理模块
+      roles: this.rolesRouter.rolesRouter,
+      roleAssignments: this.roleAssignmentsRouter.roleAssignmentsRouter,
     });
   }
 }
