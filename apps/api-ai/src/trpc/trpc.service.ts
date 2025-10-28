@@ -1,91 +1,90 @@
 import { Injectable } from '@nestjs/common';
 import { initTRPC, TRPCError } from '@trpc/server';
-import { z } from 'zod';
 
 export interface Context {
   req: any;
   res: any;
-  user?: any;
-  organization?: any;
+  user?: {
+    id: string;
+    email: string;
+    isAdmin?: boolean;
+  };
+  organization?: {
+    id: string;
+    name: string;
+  };
 }
 
 @Injectable()
 export class TrpcService {
-  private trpc = initTRPC.context<Context>().create();
+  private readonly trpc = initTRPC.context<Context>().create();
 
-  public router = this.trpc.router;
-  public procedure = this.trpc.procedure;
-
-  public publicProcedure = this.trpc.procedure;
-
-  public protectedProcedure = this.trpc.procedure.use(async ({ ctx, next }) => {
+  // 私有方法：统一的鉴权检查
+  private requireAuth = (ctx: Context) => {
     if (!ctx.user) {
       throw new TRPCError({
         code: 'UNAUTHORIZED',
         message: 'Authentication required',
       });
     }
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
-    });
-  });
+    return ctx.user;
+  };
 
-  public organizationProcedure = this.trpc.procedure.use(async ({ ctx, next }) => {
-    if (!ctx.user) {
-      throw new TRPCError({
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      });
-    }
-    
+  private requireOrganization = (ctx: Context) => {
     if (!ctx.organization) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Organization access required',
       });
     }
+    return ctx.organization;
+  };
 
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-        organization: ctx.organization,
-      },
-    });
-  });
-
-  public adminProcedure = this.trpc.procedure.use(async ({ ctx, next }) => {
-    if (!ctx.user) {
-      throw new TRPCError({
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      });
-    }
-
-    if (!ctx.user.isAdmin) {
+  private requireAdmin = (user: NonNullable<Context['user']>) => {
+    if (!user.isAdmin) {
       throw new TRPCError({
         code: 'FORBIDDEN',
         message: 'Admin access required',
       });
     }
-
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
-    });
-  });
-
-  public createContext = ({ req, res }: { req: any; res: any }): Context => {
-    return {
-      req,
-      res,
-      user: req.user,
-      organization: req.organization,
-    };
   };
+
+  // 公共访问器
+  public get router() {
+    return this.trpc.router;
+  }
+
+  public get publicProcedure() {
+    return this.trpc.procedure;
+  }
+
+  public get protectedProcedure() {
+    return this.trpc.procedure.use(async ({ ctx, next }) => {
+      const user = this.requireAuth(ctx);
+      return next({ ctx: { ...ctx, user } });
+    });
+  }
+
+  public get organizationProcedure() {
+    return this.trpc.procedure.use(async ({ ctx, next }) => {
+      const user = this.requireAuth(ctx);
+      const organization = this.requireOrganization(ctx);
+      return next({ ctx: { ...ctx, user, organization } });
+    });
+  }
+
+  public get adminProcedure() {
+    return this.trpc.procedure.use(async ({ ctx, next }) => {
+      const user = this.requireAuth(ctx);
+      this.requireAdmin(user);
+      return next({ ctx: { ...ctx, user } });
+    });
+  }
+
+  public createContext = ({ req, res }: { req: any; res: any }): Context => ({
+    req,
+    res,
+    user: req.user,
+    organization: req.organization,
+  });
 }

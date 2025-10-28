@@ -5,6 +5,6 @@ import { AiRecommendationsRouter } from './ai-recommendations.router';
 
 @Module({
   providers: [AiRecommendationsService, AiRecommendationsRouter, TrpcService],
-  exports: [AiRecommendationsService],
+  exports: [AiRecommendationsService, AiRecommendationsRouter],
 })
 export class AiRecommendationsModule {}

@@ -5,6 +5,6 @@ import { PerformanceMetricsRouter } from './performance-metrics.router';
 
 @Module({
   providers: [PerformanceMetricsService, PerformanceMetricsRouter, TrpcService],
-  exports: [PerformanceMetricsService],
+  exports: [PerformanceMetricsService, PerformanceMetricsRouter],
 })
 export class PerformanceMetricsModule {}

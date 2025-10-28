@@ -5,6 +5,6 @@ import { AiAssistantsRouter } from './ai-assistants.router';
 
 @Module({
   providers: [AiAssistantsService, AiAssistantsRouter, TrpcService],
-  exports: [AiAssistantsService],
+  exports: [AiAssistantsService, AiAssistantsRouter],
 })
 export class AiAssistantsModule {}

@@ -5,6 +5,6 @@ import { MonitoringConfigsRouter } from './monitoring-configs.router';
 
 @Module({
   providers: [MonitoringConfigsService, MonitoringConfigsRouter, TrpcService],
-  exports: [MonitoringConfigsService],
+  exports: [MonitoringConfigsService, MonitoringConfigsRouter],
 })
 export class MonitoringConfigsModule {}

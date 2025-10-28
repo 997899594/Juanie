@@ -1,49 +1,35 @@
-import { All, Controller, Req, Res } from '@nestjs/common';
-import { TrpcService } from './trpc.service';
-import { TrpcRouter } from './trpc.router';
+import { All, Controller, Req, Res } from "@nestjs/common";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+import { TrpcRouter } from "./trpc.router";
+import { TrpcService } from "./trpc.service";
 
-@Controller('trpc')
+@Controller("trpc")
 export class TrpcController {
-  private appRouter: ReturnType<TrpcRouter['appRouter']>;
-
   constructor(
-    private readonly trpcService: TrpcService,
     private readonly trpcRouter: TrpcRouter,
-  ) {
-    this.appRouter = this.trpcRouter.appRouter;
-  }
+    private readonly trpcService: TrpcService
+  ) {}
 
-  @All('*')
+  @All("*")
   async handle(@Req() req: any, @Res() res: any) {
-    const path = req.url.replace('/trpc/', '');
-    const context = this.trpcService.createContext({ req, res });
+    const response = await fetchRequestHandler({
+      endpoint: "/trpc",
+      req: new Request(`http://${req.headers.host}${req.url}`, {
+        method: req.method,
+        headers: req.headers,
+        body:
+          req.method !== "GET" && req.method !== "HEAD"
+            ? JSON.stringify(req.body)
+            : undefined,
+      }),
+      router: this.trpcRouter.appRouter,
+      createContext: () => this.trpcService.createContext({ req, res }),
+    });
 
-    try {
-      const caller = this.appRouter.createCaller(context);
-      const [procedure, method] = path.split('.');
-      
-      if (!procedure || !method) {
-        throw new Error('Invalid procedure path');
-      }
-
-      // 对于 void 输入，传递 undefined 而不是空对象
-      const input = req.method === 'POST' && req.body?.input !== undefined 
-        ? req.body.input 
-        : undefined;
-      
-      const result = await caller[procedure][method](input);
-      
-      res.json({
-        result: {
-          data: {
-            json: result
-          }
-        }
-      });
-    } catch (error) {
-      res.status(500).json({
-        error: error.message
-      });
-    }
+    const body = await response.text();
+    res.status(response.status);
+    // biome-ignore lint/suspicious/useIterableCallbackReturn: <explanation>
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+    res.send(body);
   }
 }

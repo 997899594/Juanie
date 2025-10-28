@@ -70,7 +70,7 @@
     "@sentry/nestjs": "^10.22.0",
     "@sentry/node": "^10.22.0",
     "@trpc/client": "^11.6.0",
-    "@trpc/server": "^11.6.0",
+    "@trpc/server": "^11.7.0",
     "@types/speakeasy": "^2.0.10",
     "ai": "^5.0.78",
     "arctic": "^3.7.0",
