@@ -21,12 +21,17 @@
               <div class="environment-status">
                 <div 
                   class="status-indicator"
-                  :class="environment.isActive ? 'bg-green-500' : 'bg-gray-400'"
+                  :class="getStatusColor(environment.status || 'inactive')"
                 ></div>
               </div>
               <div>
-                <CardTitle class="text-base">{{ environment.name }}</CardTitle>
-                <CardDescription>{{ environment.displayName || '暂无描述' }}</CardDescription>
+                <div class="flex items-center gap-2">
+                  <CardTitle class="text-base">{{ environment.name }}</CardTitle>
+                  <Badge :variant="getTypeVariant(environment.environmentType)">
+                    {{ getTypeLabel(environment.environmentType) }}
+                  </Badge>
+                </div>
+                <CardDescription>{{ environment.description || '暂无描述' }}</CardDescription>
               </div>
             </div>
             <div class="environment-actions">
@@ -67,20 +72,26 @@
             <div class="info-grid">
               <div class="info-item">
                 <span class="info-label">状态</span>
-                <Badge :variant="environment.isActive ? 'default' : 'secondary'">
-                  {{ environment.isActive ? '活跃' : '非活跃' }}
-                </Badge>
+                <div class="flex items-center gap-2">
+                  <div 
+                    class="w-2 h-2 rounded-full"
+                    :class="getStatusColor(environment.status || 'inactive')"
+                  ></div>
+                  <Badge :variant="(environment.status || 'inactive') === 'active' ? 'default' : 'secondary'">
+                      {{ (environment.status || 'inactive') === 'active' ? '活跃' : (environment.status || 'inactive') === 'inactive' ? '非活跃' : (environment.status || 'inactive') === 'provisioning' ? '部署中' : '错误' }}
+                  </Badge>
+                </div>
               </div>
               <div class="info-item">
                 <span class="info-label">URL</span>
                 <span class="info-value">
                   <a 
-                    v-if="environment.url" 
-                    :href="environment.url" 
+                    v-if="environment.healthCheckUrl" 
+                    :href="environment.healthCheckUrl" 
                     target="_blank"
                     class="text-primary hover:underline"
                   >
-                    {{ environment.url }}
+                    {{ environment.healthCheckUrl }}
                     <ExternalLink class="h-3 w-3 inline ml-1" />
                   </a>
                   <span v-else class="text-muted-foreground">未配置</span>
@@ -89,7 +100,7 @@
               <div class="info-item">
                 <span class="info-label">分支</span>
                 <span class="info-value">
-                  {{ environment.branch || '未配置' }}
+                  未配置
                 </span>
               </div>
               <div class="info-item">
@@ -186,7 +197,7 @@ import { trpc, type AppRouter } from '@/lib/trpc'
 import CreateEnvironmentModal from './CreateEnvironmentModal.vue'
 import EditEnvironmentModal from './EditEnvironmentModal.vue'
 
-type Environment = Awaited<ReturnType<typeof trpc.environments.listByProject.query>>[0]
+type Environment = Awaited<ReturnType<typeof trpc.environments.listByProject.query>>['environments'][0]
 
 const props = defineProps<{
   projectId: string
@@ -259,49 +270,10 @@ const loadEnvironments = async () => {
   try {
     loading.value = true
     const result = await trpc.environments.listByProject.query({ projectId: props.projectId })
-    environments.value = result || []
+    environments.value = result.environments || []
   } catch (error: any) {
     console.error('获取环境列表失败:', error)
-    
-    // 使用模拟数据
-    environments.value = [
-      {
-        id: 1,
-        projectId: 1,
-        name: 'production',
-        displayName: '生产环境',
-        url: 'https://app.example.com',
-        branch: 'main',
-        isActive: true,
-        config: null,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
-        updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
-      },
-      {
-        id: 2,
-        projectId: 1,
-        name: 'staging',
-        displayName: '预发布环境',
-        url: 'https://staging.example.com',
-        branch: 'develop',
-        isActive: true,
-        config: null,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 25).toISOString(),
-        updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString()
-      },
-      {
-        id: 3,
-        projectId: 1,
-        name: 'development',
-        displayName: '开发环境',
-        url: 'https://dev.example.com',
-        branch: 'develop',
-        isActive: false,
-        config: null,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString(),
-        updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString()
-      }
-    ]
+    environments.value = []
   } finally {
     loading.value = false
   }
@@ -346,14 +318,18 @@ const deleteEnvironment = async (environment: Environment) => {
 }
 
 // 处理环境创建
-const handleEnvironmentCreated = (newEnvironment: Environment) => {
-  environments.value.push(newEnvironment)
+const handleEnvironmentCreated = (newEnvironment: Environment | undefined) => {
+  if (newEnvironment) {
+    environments.value.push(newEnvironment)
+  }
   showCreateModal.value = false
 }
 
 // 处理环境更新
-const handleEnvironmentUpdated = (updatedEnvironment: Environment) => {
-  const index = environments.value.findIndex(env => env.id === updatedEnvironment.id)
+const handleEnvironmentUpdated = (updatedEnvironment: Environment | null | undefined) => {
+  if (!updatedEnvironment) return
+  
+  const index = environments.value.findIndex((env: Environment) => env.id === updatedEnvironment.id)
   if (index !== -1) {
     environments.value[index] = updatedEnvironment
   }

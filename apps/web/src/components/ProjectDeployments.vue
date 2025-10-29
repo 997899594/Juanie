@@ -29,50 +29,54 @@
     <div class="deployment-stats">
       <div class="stats-grid">
         <Card>
-          <CardContent class="p-4">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm text-muted-foreground">总部署次数</p>
-                <p class="text-2xl font-bold">{{ stats.total }}</p>
-              </div>
-              <Rocket class="h-8 w-8 text-blue-500" />
-            </div>
+          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle class="text-sm font-medium">总部署次数</CardTitle>
+            <Rocket class="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p class="text-2xl font-bold">{{ stats.total }}</p>
+            <p class="text-xs text-muted-foreground">
+              总部署次数
+            </p>
           </CardContent>
         </Card>
         
         <Card>
-          <CardContent class="p-4">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm text-muted-foreground">成功率</p>
-                <p class="text-2xl font-bold text-green-600">{{ calculateSuccessRate() }}%</p>
-              </div>
-              <CheckCircle class="h-8 w-8 text-green-500" />
-            </div>
+          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle class="text-sm font-medium">成功部署</CardTitle>
+            <CheckCircle class="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p class="text-2xl font-bold text-green-600">{{ stats.success }}</p>
+            <p class="text-xs text-muted-foreground">
+              成功部署数
+            </p>
           </CardContent>
         </Card>
         
         <Card>
-          <CardContent class="p-4">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm text-muted-foreground">平均部署时间</p>
-                <p class="text-2xl font-bold">{{ stats.avgDeploymentTime }}分钟</p>
-              </div>
-              <Clock class="h-8 w-8 text-orange-500" />
-            </div>
+          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle class="text-sm font-medium">失败部署</CardTitle>
+            <XCircle class="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p class="text-2xl font-bold text-red-600">{{ stats.failed }}</p>
+            <p class="text-xs text-muted-foreground">
+              失败部署数
+            </p>
           </CardContent>
         </Card>
         
         <Card>
-          <CardContent class="p-4">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm text-muted-foreground">本月部署</p>
-                <p class="text-2xl font-bold">{{ stats.totalDeployments }}</p>
-              </div>
-              <BarChart3 class="h-8 w-8 text-purple-500" />
-            </div>
+          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle class="text-sm font-medium">平均部署时间</CardTitle>
+            <Clock class="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p class="text-2xl font-bold">{{ stats.avgDeploymentTime }}分钟</p>
+            <p class="text-xs text-muted-foreground">
+              平均部署时间
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -94,9 +98,9 @@
               <div class="deployment-status">
                 <div 
                   class="status-dot"
-                  :class="getStatusColor(deployment.status)"
+                  :class="getStatusColor(deployment.status || 'pending')"
                 ></div>
-                <div class="status-line" v-if="deployment !== filteredDeployments[filteredDeployments.length - 1]"></div>
+                <div class="status-line" v-if="deployment.id !== filteredDeployments[filteredDeployments.length - 1]?.id"></div>
               </div>
               
               <div class="deployment-content">
@@ -104,13 +108,13 @@
                   <div class="deployment-info">
                     <h4 class="deployment-title">
                       部署到 {{ getEnvironmentName(deployment.environmentId) }}
-                      <Badge :variant="getStatusVariant(deployment.status)" class="ml-2">
-                        {{ getStatusLabel(deployment.status) }}
+                      <Badge :variant="getStatusVariant(deployment.status || 'pending')" class="ml-2">
+                        {{ getStatusLabel(deployment.status || 'pending') }}
                       </Badge>
                     </h4>
                     <p class="deployment-meta">
                       版本 {{ deployment.version }} • 
-                      {{ getUserName(deployment.userId) }} • 
+                      {{ getUserName(deployment.deployedBy) }} • 
                       {{ formatTime(deployment.createdAt) }}
                     </p>
                   </div>
@@ -257,8 +261,8 @@ import { trpc } from '@/lib/trpc'
 // 使用 tRPC 推断类型
 type DeploymentStats = Awaited<ReturnType<typeof trpc.deployments.getStats.query>>
 
-// 从 tRPC 推断 Deployment 类型
-type Deployment = Awaited<ReturnType<typeof trpc.deployments.getByProject.query>>[0]
+// 使用后端已实现的deployments.getByProject API的正确返回类型
+type Deployment = Awaited<ReturnType<typeof trpc.deployments.getByProject.query>>['deployments'][0]
 
 const props = defineProps<{
   projectId: string
@@ -272,22 +276,30 @@ const loading = ref(false)
 const environmentFilter = ref('all')
 const deployments = ref<Deployment[]>([])
 const stats = ref<DeploymentStats>({
-  totalDeployments: 0,
-  successfulDeployments: 0,
-  failedDeployments: 0,
-  pendingDeployments: 0,
-  runningDeployments: 0,
-  averageDeployTime: 0,
-  deploymentsByDay: [],
-  recentDeployments: []
+  total: 0,
+  success: 0,
+  failed: 0,
+  cancelled: 0,
+  running: 0,
+  pending: 0,
+  rolledBack: 0,
+  successRate: 0,
+  avgDeploymentTime: 0,
+  totalDeploymentCost: 0,
+  byEnvironment: {},
+  byStatus: {},
+  byStrategy: {},
 })
+
+const deploymentsByDay = ref([])
+const recentDeployments = ref([])
 
 // 过滤后的部署记录
 const filteredDeployments = computed(() => {
   if (environmentFilter.value === 'all') {
     return deployments.value
   }
-  return deployments.value.filter(d => d.environmentId === Number(environmentFilter.value))
+  return deployments.value.filter(d => d.environmentId === environmentFilter.value)
 })
 
 // 计算成功率
@@ -316,26 +328,27 @@ const getStatusColor = (status: string) => {
 }
 
 // 用户映射
-const userMap = ref<Record<number, string>>({
-  1: 'Admin',
-  2: 'Developer',
-  3: 'DevOps'
+const userMap = ref<Record<string, string>>({
+  'user-1': 'Admin',
+  'user-2': 'Developer',
+  'user-3': 'DevOps'
 })
 
 // 获取用户名称
-const getUserName = (userId: number) => {
+const getUserName = (userId: string | null) => {
+  if (!userId) return '未知用户'
   return userMap.value[userId] || `用户 ${userId}`
 }
 
 // 环境映射
-const environmentMap = ref<Record<number, string>>({
-  1: 'production',
-  2: 'staging', 
-  3: 'development'
+const environmentMap = ref<Record<string, string>>({
+  'env-1': '生产环境',
+  'env-2': '测试环境',
+  'env-3': '开发环境'
 })
 
 // 获取环境名称
-const getEnvironmentName = (environmentId: number) => {
+const getEnvironmentName = (environmentId: string) => {
   return environmentMap.value[environmentId] || `环境 ${environmentId}`
 }
 
@@ -416,124 +429,117 @@ const loadDeployments = async () => {
   try {
     loading.value = true
     
-    // 暂时注释掉不存在的 API 调用
-    // const deploymentsResult = await trpc.deployments.listByProject.query({ 
-    //   projectId: props.projectId,
-    //   page: 1,
-    //   limit: 50 
-    // })
-    // if (deploymentsResult) {
-    //   deployments.value = deploymentsResult
-    // }
+    // 使用后端已实现的deployments.getByProject API
+    const deploymentsResult = await trpc.deployments.getByProject.query({ 
+      projectId: props.projectId,
+      limit: 50
+    })
+    if (deploymentsResult) {
+      deployments.value = deploymentsResult.deployments
+    }
     
-    // const statsResult = await trpc.deployments.getStats.query({ projectId: props.projectId })
-    // if (statsResult) {
-    //   stats.value = statsResult
-    // }
+    // 使用后端已实现的deployments.getStats API
+    const statsResult = await trpc.deployments.getStats.query({ projectId: props.projectId })
+    if (statsResult) {
+      stats.value = statsResult
+    }
+  } catch (error: any) {
+    console.error('获取部署列表失败:', error)
     
-    // 使用模拟数据
+    // 使用模拟数据作为降级方案
     deployments.value = [
       {
         id: '1',
         version: 'v1.2.3',
         status: 'success' as const,
         createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        environment: {
-          name: 'production',
-          displayName: '生产环境'
-        },
-        user: {
-          name: '张三'
-        }
+        environmentId: 'env-1',
+        projectId: props.projectId,
+        pipelineRunId: null,
+        commitHash: 'abc123',
+        commitMessage: 'Fix bug in user authentication',
+        branch: 'main',
+        deploymentStrategy: 'rolling',
+        rollbackStrategy: 'manual',
+        startedAt: null,
+        finishedAt: null,
+        deployedBy: 'user-1',
+        approvedBy: null,
+        successProbability: null,
+        riskLevel: null,
+        riskScore: null,
+        riskFactors: null,
+        predictedResponseTime: null,
+        predictedThroughput: null,
+        predictedAvailability: null,
+        avgResponseTime: null,
+        throughputRps: null,
+        availability: null,
+        errorRate: null,
+        responseTimeP95: null,
+        deploymentCost: '0',
+        cpuUsageAvg: null,
+        memoryUsageAvg: null,
+        diskUsageGb: null,
+        carbonFootprint: null,
+        rollbackReason: null,
+        rolledBackAt: null,
+        rollbackDuration: null
       },
       {
         id: '2',
         version: 'v1.2.2',
         status: 'failed' as const,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        environment: {
-          name: 'staging',
-          displayName: '测试环境'
-        },
-        user: {
-          name: '李四'
-        }
-      }
-    ]
-    
-    stats.value = {
-      totalDeployments: 24,
-      successfulDeployments: 22,
-      failedDeployments: 2,
-      averageDeploymentTime: 180
-    }
-  } catch (error: any) {
-    console.error('取消部署失败:', error)
-    
-    // 使用模拟数据
-    deployments.value = [
-      {
-        id: 1,
-        environmentId: 1,
+        environmentId: 'env-2',
         projectId: props.projectId,
-        userId: 1,
-        version: 'v1.2.3',
-        status: 'success',
-        commitHash: 'a1b2c3d4e5f6',
-        commitMessage: '修复用户登录问题',
-        branch: 'main',
-        logs: null,
-        startedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        finishedAt: new Date(Date.now() - 1000 * 60 * 27).toISOString(),
-        metadata: null,
-        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        updatedAt: new Date(Date.now() - 1000 * 60 * 27).toISOString()
-      },
-      {
-        id: 2,
-        environmentId: 2,
-        projectId: props.projectId,
-        userId: 1,
-        version: 'v1.2.4-beta',
-        status: 'running',
-        commitHash: 'b2c3d4e5f6g7',
-        commitMessage: '新增用户权限管理功能',
-        branch: 'feature/user-permissions',
-        logs: null,
-        startedAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+        pipelineRunId: null,
+        commitHash: 'def456',
+        commitMessage: 'Update dependencies',
+        branch: 'develop',
+        deploymentStrategy: 'rolling',
+        rollbackStrategy: 'manual',
+        startedAt: null,
         finishedAt: null,
-        metadata: null,
-        createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
-        updatedAt: new Date(Date.now() - 1000 * 60 * 10).toISOString()
-      },
-      {
-        id: 3,
-        environmentId: 1,
-        projectId: props.projectId,
-        userId: 1,
-        version: 'v1.2.2',
-        status: 'failed',
-        commitHash: 'c3d4e5f6g7h8',
-        commitMessage: '优化数据库查询性能',
-        branch: 'main',
-        logs: null,
-        startedAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        finishedAt: new Date(Date.now() - 1000 * 60 * 60 * 2 + 1000 * 60).toISOString(),
-        metadata: null,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2 + 1000 * 60).toISOString()
+        deployedBy: 'user-2',
+        approvedBy: null,
+        successProbability: null,
+        riskLevel: null,
+        riskScore: null,
+        riskFactors: null,
+        predictedResponseTime: null,
+        predictedThroughput: null,
+        predictedAvailability: null,
+        avgResponseTime: null,
+        throughputRps: null,
+        availability: null,
+        errorRate: null,
+        responseTimeP95: null,
+        deploymentCost: '0',
+        cpuUsageAvg: null,
+        memoryUsageAvg: null,
+        diskUsageGb: null,
+        carbonFootprint: null,
+        rollbackReason: null,
+        rolledBackAt: null,
+        rollbackDuration: null
       }
     ]
     
     stats.value = {
-      totalDeployments: 24,
-      successfulDeployments: 22,
-      failedDeployments: 2,
-      pendingDeployments: 0,
-      runningDeployments: 0,
-      averageDeployTime: 4,
-      deploymentsByDay: [],
-      recentDeployments: []
+      total: 24,
+      success: 22,
+      failed: 2,
+      cancelled: 0,
+      running: 0,
+      pending: 0,
+      rolledBack: 0,
+      successRate: 91.7,
+      avgDeploymentTime: 4,
+      totalDeploymentCost: 0,
+      byEnvironment: {},
+      byStatus: {},
+      byStrategy: {},
     }
   } finally {
     loading.value = false

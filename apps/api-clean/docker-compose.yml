@@ -1,0 +1,165 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: devops-postgres
+    environment:
+      POSTGRES_DB: devops
+      POSTGRES_USER: devops_user
+      POSTGRES_PASSWORD: devops_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devops_user -d devops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PgBouncer 连接池
+  pgbouncer:
+    image: pgbouncer/pgbouncer:latest
+    container_name: devops-pgbouncer
+    environment:
+      # 数据库配置
+      DATABASES_HOST: postgres
+      DATABASES_PORT: 5432
+      DATABASES_USER: devops_user
+      DATABASES_PASSWORD: devops_password
+      DATABASES_DBNAME: devops
+      
+      # PgBouncer 配置
+      PGBOUNCER_POOL_MODE: transaction  # 事务级连接池
+      PGBOUNCER_MAX_CLIENT_CONN: 1000   # 最大客户端连接
+      PGBOUNCER_DEFAULT_POOL_SIZE: 25   # 默认连接池大小
+      PGBOUNCER_MIN_POOL_SIZE: 5        # 最小连接池大小
+      PGBOUNCER_RESERVE_POOL_SIZE: 5    # 保留连接池大小
+      PGBOUNCER_MAX_DB_CONNECTIONS: 50  # 最大数据库连接
+      
+      # 超时配置
+      PGBOUNCER_SERVER_IDLE_TIMEOUT: 600
+      PGBOUNCER_SERVER_LIFETIME: 3600
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Dragonfly (Redis 替代品，性能提升 25x)
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    container_name: devops-dragonfly
+    ulimits:
+      memlock: -1
+    ports:
+      - "6379:6379"
+    volumes:
+      - dragonfly_data:/data
+    command: >
+      --logtostderr
+      --requirepass=dragonfly_password
+      --maxmemory=2gb
+      --cache_mode=true
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "dragonfly_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO 对象存储 (用于 Logo 等文件)
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: devops-minio
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123456
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Tempo (分布式追踪)
+  tempo:
+    image: grafana/tempo:latest
+    container_name: devops-tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./config/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    ports:
+      - "4318:4318"  # OTLP HTTP
+      - "3200:3200"  # Tempo
+
+  # Loki (日志聚合)
+  loki:
+    image: grafana/loki:latest
+    container_name: devops-loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+
+  # Prometheus (指标收集)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: devops-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  # Grafana (可视化)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: devops-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - POSTGRES_DB=devops
+      - POSTGRES_USER=devops_user
+      - POSTGRES_PASSWORD=devops_password
+    ports:
+      - "3300:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - ./grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+      - postgres
+
+volumes:
+  postgres_data:
+  dragonfly_data:
+  minio_data:
+  tempo_data:
+  loki_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default:
+    name: devops-network

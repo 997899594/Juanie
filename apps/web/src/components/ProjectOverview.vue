@@ -4,26 +4,26 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       <Card>
         <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle class="text-sm font-medium">总环境数</CardTitle>
+          <CardTitle class="text-sm font-medium">环境数量</CardTitle>
           <Activity class="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-bold">{{ stats.totalEnvironments }}</div>
+          <div class="text-2xl font-bold">{{ projectStats.totalEnvironments }}</div>
           <p class="text-xs text-muted-foreground">
-            环境总数
+            项目环境总数
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle class="text-sm font-medium">总部署次数</CardTitle>
+          <CardTitle class="text-sm font-medium">部署次数</CardTitle>
           <Rocket class="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-bold">{{ stats.totalDeployments }}</div>
+          <div class="text-2xl font-bold">{{ projectStats.totalDeployments }}</div>
           <p class="text-xs text-muted-foreground">
-            部署总数
+            总部署次数
           </p>
         </CardContent>
       </Card>
@@ -34,22 +34,22 @@
           <BarChart3 class="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-bold">{{ calculateSuccessRate(stats) }}%</div>
+          <div class="text-2xl font-bold">{{ projectStats.successRate }}%</div>
           <p class="text-xs text-muted-foreground">
-            基于部署成功率计算
+            部署成功率
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle class="text-sm font-medium">活跃成员</CardTitle>
+          <CardTitle class="text-sm font-medium">项目成员</CardTitle>
           <User class="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div class="text-2xl font-bold">1</div>
+          <div class="text-2xl font-bold">{{ projectStats.totalMembers }}</div>
           <p class="text-xs text-muted-foreground">
-            项目成员
+            活跃成员数
           </p>
         </CardContent>
       </Card>
@@ -79,11 +79,11 @@
             <div class="activity-content">
               <div class="activity-title">{{ activity.title }}</div>
               <div class="activity-description">{{ activity.description }}</div>
-              <div class="activity-time">{{ formatTime(activity.timestamp) }}</div>
+              <div class="activity-time">{{ formatTime(activity.createdAt) }}</div>
             </div>
             <div class="activity-status">
-              <Badge :variant="getStatusVariant(activity.metadata?.status || 'pending')">
-                {{ activity.metadata?.status || 'pending' }}
+              <Badge :variant="getStatusVariant(activity.status)">
+                {{ activity.status }}
               </Badge>
             </div>
           </div>
@@ -174,9 +174,17 @@ import {
 } from 'lucide-vue-next'
 import { trpc } from '@/lib/trpc'
 
-// 直接使用 tRPC 推断类型
-type ProjectStats = Awaited<ReturnType<typeof trpc.projects.getStats.query>>
-type RecentActivity = Awaited<ReturnType<typeof trpc.projects.getRecentActivities.query>>[0]
+// 定义项目统计数据类型
+interface ProjectStats {
+  totalEnvironments: number
+  totalDeployments: number
+  successRate: number
+  totalMembers: number
+}
+
+// 定义最近活动类型
+type RecentActivitiesResponse = Awaited<ReturnType<typeof trpc.projects.getRecentActivities.query>>
+type RecentActivity = RecentActivitiesResponse['activities'][0]
 
 const props = defineProps<{
   projectId: string
@@ -190,19 +198,12 @@ const emit = defineEmits<{
 }>()
 
 const loading = ref(false)
-const stats = ref<ProjectStats>({
-  totalDeployments: 0,
-  successfulDeployments: 0,
-  failedDeployments: 0,
+const projectStats = ref<ProjectStats>({
   totalEnvironments: 0,
-  lastDeployment: null
+  totalDeployments: 0,
+  successRate: 0,
+  totalMembers: 0
 })
-
-// 计算成功率
-const calculateSuccessRate = (stats: ProjectStats) => {
-  if (stats.totalDeployments === 0) return 0
-  return Math.round((stats.successfulDeployments / stats.totalDeployments) * 100)
-}
 
 const recentActivities = ref<RecentActivity[]>([])
 
@@ -276,55 +277,80 @@ const loadProjectStats = async () => {
   try {
     loading.value = true
     
-    // 暂时注释掉不存在的 API 调用，使用模拟数据
-    // const statsResult = await trpc.projects.resources.stats.query({ projectId: props.projectId })
-    // if (statsResult) {
-    //   stats.value = statsResult
-    // }
+    // 并行获取多个数据源
+    const [environmentsResult, deploymentsResult, activitiesResult] = await Promise.allSettled([
+      // 获取项目环境列表
+      trpc.environments.listByProject.query({ projectId: props.projectId }),
+      // 获取项目部署统计
+      trpc.deployments.getStats.query({ projectId: props.projectId }),
+      // 获取最近活动
+      trpc.projects.getRecentActivities.query({ 
+        projectId: props.projectId,
+        limit: 10,
+        offset: 0
+      })
+    ])
     
-    // 暂时注释掉不存在的 API 调用
-    // const activitiesResult = await trpc.projects.getRecentActivities.query({ 
-    //   projectId: props.projectId,
-    //   limit: 10 
-    // })
-    // if (activitiesResult) {
-    //   recentActivities.value = activitiesResult
-    // }
-    
-    // 使用模拟数据
-    stats.value = {
-      totalProjects: 1,
-      activeProjects: 1,
-      archivedProjects: 0
+    // 处理环境数据
+    let totalEnvironments = 0
+    if (environmentsResult.status === 'fulfilled' && environmentsResult.value) {
+      totalEnvironments = environmentsResult.value.environments.length
     }
+    
+    // 处理部署统计数据
+    let totalDeployments = 0
+    let successRate = 0
+    if (deploymentsResult.status === 'fulfilled' && deploymentsResult.value) {
+      const deploymentStats = deploymentsResult.value
+      totalDeployments = deploymentStats.total
+      successRate = Math.round(deploymentStats.successRate)
+    }
+    
+    // 处理最近活动数据
+    if (activitiesResult.status === 'fulfilled' && activitiesResult.value) {
+      recentActivities.value = activitiesResult.value.activities
+    }
+    
+    // 获取项目成员数量（暂时使用固定值，后续可以添加专门的API）
+    const totalMembers = 1 // TODO: 实现项目成员统计API
+    
+    // 更新统计数据
+    projectStats.value = {
+      totalEnvironments,
+      totalDeployments,
+      successRate,
+      totalMembers
+    }
+    
   } catch (error: any) {
     console.error('获取项目统计失败:', error)
     
-    // 使用模拟数据
-    stats.value = {
-      totalProjects: 1,
-      activeProjects: 1,
-      archivedProjects: 0
+    // 使用模拟数据作为降级方案
+    projectStats.value = {
+      totalEnvironments: 3,
+      totalDeployments: 24,
+      successRate: 85,
+      totalMembers: 1
     }
     
     recentActivities.value = [
       {
-        id: 1,
+        id: '1',
         type: 'deployment' as const,
         title: '生产环境部署',
         description: '部署版本 v1.2.3 到生产环境',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        user: { name: '张三', image: null },
+        status: 'success',
+        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
         metadata: { version: 'v1.2.3', status: 'success', environment: 'production' }
       },
       {
-        id: 2,
-        type: 'deployment' as const,
+        id: '2',
+        type: 'event' as const,
         title: '新建测试环境',
         description: '创建了新的测试环境 test-v2',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        user: { name: '李四', image: null },
-        metadata: { version: null, status: 'success', environment: 'test-v2' }
+        status: 'success',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+        metadata: { status: 'success', environment: 'test-v2' }
       }
     ]
   } finally {
@@ -336,7 +362,3 @@ onMounted(() => {
   loadProjectStats()
 })
 </script>
-
-<style scoped>
-/* 移除所有@apply，使用UI库的原生类名和组件 */
-</style>

@@ -125,8 +125,8 @@ import {
   Folder 
 } from 'lucide-vue-next'
 
-// 使用 tRPC 推断类型，不再自定义 Project 接口
-type Project = NonNullable<Awaited<ReturnType<typeof trpc.projects.list.query>>>['projects'][0]
+// 使用后端实际实现的 getOrganizationProjects API 的返回类型
+type Project = Awaited<ReturnType<typeof trpc.projects.getOrganizationProjects.query>>['projects'][0]
 
 defineProps<{
   project: Project

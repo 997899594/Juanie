@@ -1,0 +1,85 @@
+groups:
+  - name: api_alerts
+    interval: 30s
+    rules:
+      # 高错误率告警
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_errors[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High HTTP error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      # 高延迟告警
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_bucket[5m])) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency detected"
+          description: "P95 latency is {{ $value }}ms (threshold: 1000ms)"
+
+      # 数据库查询慢告警
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95, rate(db_query_duration_bucket[5m])) > 500
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "P95 query duration is {{ $value }}ms (threshold: 500ms)"
+
+      # 部署失败率告警
+      - alert: HighDeploymentFailureRate
+        expr: |
+          rate(deployments_total{status="failed"}[1h]) / rate(deployments_total[1h]) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          component: deployment
+        annotations:
+          summary: "High deployment failure rate"
+          description: "Deployment failure rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+
+      # Pipeline 失败率告警
+      - alert: HighPipelineFailureRate
+        expr: |
+          rate(pipeline_runs_total{status="failed"}[1h]) / rate(pipeline_runs_total[1h]) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          component: pipeline
+        annotations:
+          summary: "High pipeline failure rate"
+          description: "Pipeline failure rate is {{ $value | humanizePercentage }} (threshold: 30%)"
+
+      # API 服务不可用
+      - alert: APIDown
+        expr: up{job="ai-devops-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API service is down"
+          description: "The AI DevOps API service has been down for more than 1 minute"
+
+      # 数据库连接池耗尽
+      - alert: DatabaseConnectionPoolExhausted
+        expr: db_connection_pool_size > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Connection pool size is {{ $value }} (threshold: 90)"

@@ -130,7 +130,7 @@ import { Textarea } from '@juanie/ui'
 import { Label } from '@juanie/ui'
 import { Lock, Globe, Loader2 } from 'lucide-vue-next'
 
-// 使用 tRPC 推断类型，不再自定义 Project 接口
+// 使用后端实际实现的getById API类型
 type Project = NonNullable<Awaited<ReturnType<typeof trpc.projects.getById.query>>>
 
 const props = defineProps<{
@@ -204,11 +204,13 @@ const handleSubmit = async () => {
     
     const updateData = {
       id: props.project.id,
-      name: form.name.trim(),
-      displayName: form.displayName.trim() || undefined,
-      description: form.description.trim() || undefined,
-      repositoryUrl: form.repositoryUrl.trim() || undefined,
-      visibility: form.visibility
+      data: {
+        name: form.name.trim(),
+        displayName: form.displayName.trim() || undefined,
+        description: form.description.trim() || undefined,
+        repositoryUrl: form.repositoryUrl.trim() || undefined,
+        visibility: form.visibility
+      }
     }
     
     await trpc.projects.update.mutate(updateData)

@@ -186,7 +186,9 @@ const handleSubmit = async () => {
       displayName: form.displayName.trim() || '',
       description: form.description.trim() || '',
       repositoryUrl: form.repositoryUrl.trim() || '',
-      visibility: form.visibility
+      visibility: form.visibility,
+      organizationId: 'org-1', // 临时硬编码，需要从上下文获取
+      slug: form.name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-')
     }
     
     await trpc.projects.create.mutate(projectData)

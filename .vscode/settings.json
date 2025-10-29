@@ -12,5 +12,8 @@
   "cSpell.words": [
     "juanie",
     "nitropack"
-  ]
+  ],
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
 }

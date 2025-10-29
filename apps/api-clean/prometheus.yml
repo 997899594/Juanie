@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ai-devops-platform'
+    environment: 'development'
+
+scrape_configs:
+  - job_name: 'ai-devops-api'
+    static_configs:
+      - targets: ['localhost:9464']
+        labels:
+          service: 'api'
+          app: 'ai-devops-platform'
+    
+    # 指标路径
+    metrics_path: '/metrics'
+    
+    # 抓取超时
+    scrape_timeout: 10s
+    
+    # 重新标记规则
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'api-server'
+
+# 告警规则文件
+rule_files:
+  - 'alerts.yml'

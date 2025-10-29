@@ -89,7 +89,7 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <!-- 部署设置暂时移除，因为项目 schema 中没有这些字段 -->
-        <!-- 
+        
         <div class="form-field">
           <div class="flex items-center justify-between">
             <div>
@@ -99,7 +99,7 @@
               </p>
             </div>
             <Switch 
-              v-model="settings.autoDeployEnabled"
+              v-model="settings.enableCiCd"
               @update:model-value="saveDeploySettings"
             />
           </div>
@@ -109,7 +109,7 @@
           <Label for="deploy-branch">部署分支</Label>
           <Input
             id="deploy-branch"
-            v-model="settings.deployBranch"
+            v-model="settings.defaultBranch!"
             placeholder="main"
           />
           <p class="text-sm text-muted-foreground mt-1">
@@ -117,6 +117,7 @@
           </p>
         </div>
 
+        <!-- 构建命令和启动命令暂时注释，等待后端schema支持
         <div class="form-field">
           <Label for="build-command">构建命令</Label>
           <Input
@@ -134,6 +135,7 @@
             placeholder="npm start"
           />
         </div>
+        -->
 
         <div class="form-actions">
           <Button @click="saveDeploySettings" :disabled="saving">
@@ -141,7 +143,7 @@
             保存部署设置
           </Button>
         </div>
-        -->
+       
       </CardContent>
     </Card>
 
@@ -373,10 +375,10 @@ import { UserPlus, UserMinus, Loader2 } from 'lucide-vue-next'
 import { trpc, type AppRouter } from '@/lib/trpc'
 import { useAuthStore } from '@/stores/auth'
 
-// 使用 tRPC 推断类型，不再自定义 ProjectSettings 接口
+// 使用后端实际实现的API类型
 type ProjectSettings = NonNullable<Awaited<ReturnType<typeof trpc.projects.getById.query>>>
-
-type Member = NonNullable<Awaited<ReturnType<typeof trpc.projects.members.list.query>>>[0]
+// 项目成员类型基于后端实际实现的members.list API
+type Member = Awaited<ReturnType<typeof trpc.projects.members.list.query>>[0]
 
 const props = defineProps<{
   projectId: string
@@ -545,28 +547,40 @@ const saveBasicSettings = async () => {
   }
 }
 
-// 保存部署设置 - 暂时注释掉，因为项目 schema 中没有这些字段
-/*
+// 保存部署设置 - 使用后端已实现的updateDeploySettings API
 const saveDeploySettings = async () => {
   try {
     saving.value = true
     
+    // 使用后端已实现的updateDeploySettings API
     await trpc.projects.updateDeploySettings.mutate({
-      id: props.projectId,
-      autoDeployEnabled: settings.autoDeployEnabled,
-      deployBranch: settings.deployBranch,
-      buildCommand: settings.buildCommand,
-      startCommand: settings.startCommand
+      projectId: props.projectId,
+      settings: {
+        enableCiCd: settings.enableCiCd || undefined,
+        defaultBranch: settings.defaultBranch || undefined,
+        enableAiAssistant: settings.enableAiAssistant || undefined,
+        enableMonitoring: settings.enableMonitoring || undefined,
+        aiModelPreference: settings.aiModelPreference || undefined,
+        aiAutoReview: settings.aiAutoReview || undefined,
+        aiCostOptimization: settings.aiCostOptimization || undefined
+      }
     })
     
     console.log('部署设置保存成功')
+    // TODO: 显示成功提示
   } catch (error: any) {
-    console.error('加载项目设置失败:', error)
+    console.error('保存部署设置失败:', error)
+    
+    if (error?.data?.zodError) {
+      const zodErrors = error.data.zodError.fieldErrors
+      Object.keys(zodErrors).forEach(field => {
+        errors.value[field] = zodErrors[field][0]
+      })
+    }
   } finally {
     saving.value = false
   }
 }
-*/
 
 // 更新成员角色
 const updateMemberRole = async (memberId: string, role: 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner') => {
@@ -585,6 +599,7 @@ const updateMemberRole = async (memberId: string, role: 'guest' | 'reporter' | '
     const member = members.value.find((m: Member) => m.id === memberId)
     if (member) {
       member.role = role
+    }
   } catch (error: any) {
     console.error('更新成员角色失败:', error)
   }
@@ -616,6 +631,7 @@ const inviteMember = async () => {
   try {
     inviting.value = true
     
+    // 恢复已实现的 API 调用
     await trpc.projects.members.add.mutate({
       projectId: props.projectId,
       userId: 'temp-user-id', // 需要根据 email 查找用户 ID
@@ -641,12 +657,13 @@ const deleteProject = async () => {
   try {
     deleting.value = true
     
+    // 恢复已实现的 API 调用
     await trpc.projects.delete.mutate({ id: props.projectId })
     
     // 跳转到项目列表
     router.push('/projects')
   } catch (error: any) {
-    console.error('获取项目成员失败:', error)
+    console.error('删除项目失败:', error)
   } finally {
     deleting.value = false
   }
