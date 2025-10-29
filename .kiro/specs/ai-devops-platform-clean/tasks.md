@@ -3,7 +3,7 @@
 ## 项目初始化
 
 - [x] 1. 创建新项目结构
-- [x] 1.1 创建 apps/api-clean 目录
+- [x] 1.1 创建 apps/api 目录
   - 复制 api-ai 的基础配置文件
   - 更新 package.json 名称和依赖
   - 配置 TypeScript 和 Drizzle

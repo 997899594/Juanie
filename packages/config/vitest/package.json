@@ -1,0 +1,12 @@
+{
+  "name": "@juanie/config-vitest",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./vitest.config.ts",
+  "files": [
+    "vitest.config.ts"
+  ],
+  "peerDependencies": {
+    "vitest": "^4.0.0"
+  }
+}

@@ -24,7 +24,7 @@ test:
     JWT_SECRET: test-secret
     NODE_ENV: test
   before_script:
-    - cd apps/api-clean
+    - cd apps/api
     - bun install --frozen-lockfile
   script:
     - bun run lint
@@ -36,9 +36,9 @@ test:
     reports:
       coverage_report:
         coverage_format: cobertura
-        path: apps/api-clean/coverage/cobertura-coverage.xml
+        path: apps/api/coverage/cobertura-coverage.xml
     paths:
-      - apps/api-clean/coverage/
+      - apps/api/coverage/
     expire_in: 1 week
   only:
     - branches
@@ -53,7 +53,7 @@ build:
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    - cd apps/api-clean
+    - cd apps/api
     - docker build -t $IMAGE_TAG .
     - docker tag $IMAGE_TAG $CI_REGISTRY_IMAGE:latest
     - docker push $IMAGE_TAG

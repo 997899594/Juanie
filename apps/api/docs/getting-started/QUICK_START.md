@@ -13,7 +13,7 @@
 
 ```bash
 git clone <your-repo-url>
-cd Juanie/apps/api-clean
+cd Juanie/apps/api
 ```
 
 ## 2. 安装依赖

@@ -46,25 +46,25 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        working-directory: apps/api-clean
+        working-directory: apps/api
         run: bun install --frozen-lockfile
 
       - name: Run linter
-        working-directory: apps/api-clean
+        working-directory: apps/api
         run: bun run lint
 
       - name: Run type check
-        working-directory: apps/api-clean
+        working-directory: apps/api
         run: bun run type-check
 
       - name: Run database migrations
-        working-directory: apps/api-clean
+        working-directory: apps/api
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/devops_test
         run: bun run db:push
 
       - name: Run tests
-        working-directory: apps/api-clean
+        working-directory: apps/api
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/devops_test
           REDIS_URL: redis://localhost:6379
@@ -76,8 +76,8 @@ jobs:
         uses: codecov/codecov-action@v3
         if: always()
         with:
-          files: ./apps/api-clean/coverage/coverage-final.json
-          flags: api-clean
+          files: ./apps/api/coverage/coverage-final.json
+          flags: api
 
   build:
     name: Build Docker Image
@@ -111,7 +111,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./apps/api-clean
+          context: ./apps/api
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
