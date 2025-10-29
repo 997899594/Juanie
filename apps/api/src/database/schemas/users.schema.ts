@@ -40,7 +40,7 @@ export const insertUserSchema = z.object({
 });
 
 export const selectUserSchema = z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     email: z.string().email(),
     username: z.string().nullable(),
     displayName: z.string().nullable(),

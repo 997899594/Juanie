@@ -259,7 +259,7 @@ export class ProjectsRouter {
       uploadLogo: this.trpc.protectedProcedure
         .input(
           z.object({
-            projectId: z.string().uuid(),
+            projectId: z.uuid(),
             file: z.string(), // Base64 编码的图片
             contentType: z.string(),
           }),
@@ -317,7 +317,7 @@ export class ProjectsRouter {
 
       // 删除项目 Logo
       deleteLogo: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string().uuid() }))
+        .input(z.object({ projectId: z.uuid() }))
         .mutation(async ({ ctx, input }) => {
           try {
             // 删除 MinIO 中的文件

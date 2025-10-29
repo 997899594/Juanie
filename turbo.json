@@ -5,28 +5,45 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**", ".next/**", "build/**"]
+      "outputs": ["dist/**", ".next/**", "build/**"],
+      "cache": true
+    },
+    "build:packages": {
+      "dependsOn": ["^build:packages"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "tsconfig.json"],
+      "outputs": ["dist/**"],
+      "cache": true
     },
     "dev": {
+      "dependsOn": ["^build:packages"],
       "cache": false,
       "persistent": true
     },
     "type-check": {
+      "dependsOn": ["^build:packages"],
       "inputs": ["$TURBO_DEFAULT$", "tsconfig*.json", "../../configs/tsconfig/**"],
-      "outputs": ["**/*.tsbuildinfo"]
+      "outputs": ["**/*.tsbuildinfo"],
+      "cache": true
+    },
+    "test": {
+      "dependsOn": ["^build:packages"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "test/**", "**/*.test.ts", "**/*.spec.ts"],
+      "outputs": ["coverage/**"],
+      "cache": true
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
     },
     "lint": {
-      "inputs": ["$TURBO_DEFAULT$", "biome.json", "../../biome.json"]
+      "inputs": ["$TURBO_DEFAULT$", "biome.json", "../../biome.json"],
+      "cache": true
     },
     "lint:fix": {
       "cache": false
     },
     "clean": {
       "cache": false
-    },
-    "build:packages": {
-      "inputs": ["$TURBO_DEFAULT$"],
-      "outputs": ["dist/**"]
     }
   },
   "globalDependencies": [
@@ -37,5 +54,16 @@
     "configs/**",
     "package.json"
   ],
-  "globalEnv": ["NODE_ENV", "VITE_*", "DATABASE_URL"]
+  "globalEnv": [
+    "NODE_ENV",
+    "PORT",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "CORS_ORIGIN",
+    "VITE_*",
+    "GITHUB_CLIENT_ID",
+    "GITHUB_CLIENT_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
+  ]
 }

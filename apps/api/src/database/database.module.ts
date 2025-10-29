@@ -1,9 +1,9 @@
+import * as schema from '@juanie/core-database/schemas'
 import { Global, Module } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import Redis from 'ioredis'
 import postgres from 'postgres'
-import * as schema from './schemas'
 
 export const DATABASE = Symbol('DATABASE')
 export const REDIS = Symbol('REDIS')

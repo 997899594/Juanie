@@ -10,47 +10,49 @@ export class AuditLogsRouter {
     private auditLogsService: AuditLogsService,
   ) {}
 
-  router = this.trpc.router({
-    list: this.trpc.protectedProcedure
-      .input(
-        z.object({
-          organizationId: z.string().uuid().optional(),
-          action: z.string().optional(),
-          resourceType: z.string().optional(),
-          startDate: z.string().optional(),
-          endDate: z.string().optional(),
+  get router() {
+    return this.trpc.router({
+      list: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            organizationId: z.uuid().optional(),
+            action: z.string().optional(),
+            resourceType: z.string().optional(),
+            startDate: z.string().optional(),
+            endDate: z.string().optional(),
+          }),
+        )
+        .query(async ({ ctx, input }) => {
+          return await this.auditLogsService.list(ctx.user.id, input)
         }),
-      )
-      .query(async ({ ctx, input }) => {
-        return await this.auditLogsService.list(ctx.user.id, input)
-      }),
 
-    search: this.trpc.protectedProcedure
-      .input(
-        z.object({
-          organizationId: z.string().uuid(),
-          query: z.string().optional(),
-          action: z.string().optional(),
-          resourceType: z.string().optional(),
-          startDate: z.string().optional(),
-          endDate: z.string().optional(),
+      search: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            organizationId: z.uuid(),
+            query: z.string().optional(),
+            action: z.string().optional(),
+            resourceType: z.string().optional(),
+            startDate: z.string().optional(),
+            endDate: z.string().optional(),
+          }),
+        )
+        .query(async ({ ctx, input }) => {
+          return await this.auditLogsService.search(ctx.user.id, input)
         }),
-      )
-      .query(async ({ ctx, input }) => {
-        return await this.auditLogsService.search(ctx.user.id, input)
-      }),
 
-    export: this.trpc.protectedProcedure
-      .input(
-        z.object({
-          organizationId: z.string().uuid(),
-          startDate: z.string().optional(),
-          endDate: z.string().optional(),
-          format: z.enum(['csv', 'json']),
+      export: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            organizationId: z.uuid(),
+            startDate: z.string().optional(),
+            endDate: z.string().optional(),
+            format: z.enum(['csv', 'json']),
+          }),
+        )
+        .query(async ({ ctx, input }) => {
+          return await this.auditLogsService.export(ctx.user.id, input)
         }),
-      )
-      .query(async ({ ctx, input }) => {
-        return await this.auditLogsService.export(ctx.user.id, input)
-      }),
-  })
+    })
+  }
 }

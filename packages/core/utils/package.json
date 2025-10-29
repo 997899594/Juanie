@@ -1,0 +1,40 @@
+{
+  "name": "@juanie/core-utils",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./id": "./dist/id.js",
+    "./date": "./dist/date.js",
+    "./validation": "./dist/validation.js",
+    "./string": "./dist/string.js"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "nanoid": "^5.0.9"
+  },
+  "devDependencies": {
+    "@juanie/config-typescript": "workspace:*",
+    "@juanie/config-vitest": "workspace:*",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.4"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "bun": ">=1.0.0"
+  }
+}

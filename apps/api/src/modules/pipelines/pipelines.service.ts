@@ -1,10 +1,10 @@
+import * as schema from '@juanie/core-database/schemas'
+import { generateId } from '@juanie/core-utils/id'
 import { Inject, Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { and, desc, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import { nanoid } from 'nanoid'
 import { DATABASE } from '@/database/database.module'
-import * as schema from '@/database/schemas'
 import { PIPELINE_QUEUE } from '@/modules/queue/queue.module'
 
 @Injectable()
@@ -171,7 +171,7 @@ export class PipelinesService {
     }
 
     // 创建 Pipeline Run
-    const runId = nanoid()
+    const runId = generateId()
     const [run] = await this.db
       .insert(schema.pipelineRuns)
       .values({

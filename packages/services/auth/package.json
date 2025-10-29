@@ -1,0 +1,48 @@
+{
+  "name": "@juanie/service-auth",
+  "version": "0.1.0",
+  "description": "Authentication service",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./service": "./dist/auth.service.js",
+    "./module": "./dist/auth.module.js"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "@juanie/core-database": "workspace:*",
+    "@juanie/core-tokens": "workspace:*",
+    "@juanie/core-types": "workspace:*",
+    "@juanie/core-utils": "workspace:*",
+    "@nestjs/common": "^11.1.7",
+    "@nestjs/config": "^4.0.2",
+    "@trpc/server": "^11.7.0",
+    "arctic": "^3.7.0",
+    "ioredis": "^5.4.2",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@juanie/config-typescript": "workspace:*",
+    "@juanie/config-vitest": "workspace:*",
+    "@types/node": "^24.7.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.4"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "bun": ">=1.0.0"
+  }
+}

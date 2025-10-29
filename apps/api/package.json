@@ -20,6 +20,9 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@juanie/core-database": "workspace:*",
+    "@juanie/core-types": "workspace:*",
+    "@juanie/core-utils": "workspace:*",
     "@bull-board/api": "^6.14.0",
     "@bull-board/fastify": "^6.14.0",
     "@kubernetes/client-node": "^1.4.0",
@@ -37,18 +40,15 @@
     "@trpc/server": "^11.7.0",
     "arctic": "^3.7.0",
     "bullmq": "^5.62.0",
-    "drizzle-orm": "^0.44.7",
     "handlebars": "^4.7.8",
     "ioredis": "^5.8.2",
     "minio": "^8.0.6",
-    "nanoid": "^5.0.9",
     "ollama": "^0.6.0",
-    "postgres": "^3.4.7",
-    "reflect-metadata": "^0.2.2",
-    "zod": "^4.1.12"
+    "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.1.0",
+    "@types/bun": "^1.2.0",
     "@types/node": "^24.9.1",
     "@vitest/coverage-v8": "^4.0.4",
     "@vitest/ui": "^4.0.4",

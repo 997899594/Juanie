@@ -2,11 +2,23 @@
   "name": "@juanie/config-vitest",
   "version": "0.1.0",
   "private": true,
-  "main": "./vitest.config.ts",
+  "type": "module",
+  "exports": {
+    ".": "./vitest.config.ts",
+    "./node": "./node.ts",
+    "./dom": "./dom.ts"
+  },
   "files": [
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "node.ts",
+    "dom.ts"
   ],
   "peerDependencies": {
     "vitest": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "jsdom": {
+      "optional": true
+    }
   }
 }

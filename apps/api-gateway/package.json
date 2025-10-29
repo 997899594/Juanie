@@ -1,0 +1,54 @@
+{
+  "name": "@juanie/api-gateway",
+  "version": "0.1.0",
+  "description": "API Gateway - Aggregates all service routers",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "bun --hot src/main.ts",
+    "build": "bun build src/main.ts --outdir dist --target bun",
+    "start": "bun run dist/main.js",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@juanie/core-database": "workspace:*",
+    "@juanie/core-tokens": "workspace:*",
+    "@juanie/core-types": "workspace:*",
+    "@juanie/core-utils": "workspace:*",
+    "@juanie/service-auth": "workspace:*",
+    "@juanie/service-deployments": "workspace:*",
+    "@juanie/service-k3s": "workspace:*",
+    "@juanie/service-organizations": "workspace:*",
+    "@juanie/service-teams": "workspace:*",
+    "@nestjs/common": "^11.1.7",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.1.7",
+    "@nestjs/platform-fastify": "^11.1.7",
+    "@trpc/server": "^11.7.0",
+    "drizzle-orm": "^0.44.7",
+    "fastify": "^5.2.0",
+    "ioredis": "^5.4.2",
+    "postgres": "^3.4.7",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@juanie/config-typescript": "workspace:*",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.52.1",
+    "@opentelemetry/exporter-prometheus": "^0.56.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.56.0",
+    "@opentelemetry/resources": "^1.29.0",
+    "@opentelemetry/sdk-node": "^0.56.0",
+    "@opentelemetry/semantic-conventions": "^1.29.0",
+    "@types/node": "^24.7.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.4"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "bun": ">=1.0.0"
+  }
+}

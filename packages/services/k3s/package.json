@@ -1,0 +1,39 @@
+{
+  "name": "@juanie/service-k3s",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./service": "./dist/k3s.service.js",
+    "./module": "./dist/k3s.module.js"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist .tsbuildinfo"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^0.22.0",
+    "@nestjs/common": "^11.1.7",
+    "@nestjs/config": "^3.3.0"
+  },
+  "devDependencies": {
+    "@juanie/config-typescript": "workspace:*",
+    "@juanie/config-vitest": "workspace:*",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.4"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "bun": ">=1.0.0"
+  }
+}

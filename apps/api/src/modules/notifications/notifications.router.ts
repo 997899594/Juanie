@@ -10,37 +10,39 @@ export class NotificationsRouter {
     private notificationsService: NotificationsService,
   ) {}
 
-  router = this.trpc.router({
-    list: this.trpc.protectedProcedure
-      .input(
-        z
-          .object({
-            status: z.string().optional(),
-          })
-          .optional(),
-      )
-      .query(async ({ ctx, input }) => {
-        return await this.notificationsService.list(ctx.user.id, input)
+  get router() {
+    return this.trpc.router({
+      list: this.trpc.protectedProcedure
+        .input(
+          z
+            .object({
+              status: z.string().optional(),
+            })
+            .optional(),
+        )
+        .query(async ({ ctx, input }) => {
+          return await this.notificationsService.list(ctx.user.id, input)
+        }),
+
+      markAsRead: this.trpc.protectedProcedure
+        .input(z.object({ id: z.uuid() }))
+        .mutation(async ({ ctx, input }) => {
+          return await this.notificationsService.markAsRead(ctx.user.id, input.id)
+        }),
+
+      markAllAsRead: this.trpc.protectedProcedure.mutation(async ({ ctx }) => {
+        return await this.notificationsService.markAllAsRead(ctx.user.id)
       }),
 
-    markAsRead: this.trpc.protectedProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .mutation(async ({ ctx, input }) => {
-        return await this.notificationsService.markAsRead(ctx.user.id, input.id)
+      delete: this.trpc.protectedProcedure
+        .input(z.object({ id: z.uuid() }))
+        .mutation(async ({ ctx, input }) => {
+          return await this.notificationsService.delete(ctx.user.id, input.id)
+        }),
+
+      getUnreadCount: this.trpc.protectedProcedure.query(async ({ ctx }) => {
+        return await this.notificationsService.getUnreadCount(ctx.user.id)
       }),
-
-    markAllAsRead: this.trpc.protectedProcedure.mutation(async ({ ctx }) => {
-      return await this.notificationsService.markAllAsRead(ctx.user.id)
-    }),
-
-    delete: this.trpc.protectedProcedure
-      .input(z.object({ id: z.string().uuid() }))
-      .mutation(async ({ ctx, input }) => {
-        return await this.notificationsService.delete(ctx.user.id, input.id)
-      }),
-
-    getUnreadCount: this.trpc.protectedProcedure.query(async ({ ctx }) => {
-      return await this.notificationsService.getUnreadCount(ctx.user.id)
-    }),
-  })
+    })
+  }
 }

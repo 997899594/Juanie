@@ -1,10 +1,10 @@
+import * as schema from '@juanie/core-database/schemas'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { Ollama } from 'ollama'
 import { DATABASE } from '@/database/database.module'
-import * as schema from '@/database/schemas'
 
 @Injectable()
 export class AiAssistantsService {

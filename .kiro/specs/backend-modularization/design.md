@@ -86,6 +86,7 @@ Juanie/
 **职责**: 
 - 提供所有 Drizzle schemas
 - 提供数据库客户端配置
+- 提供 DatabaseModule（NestJS 全局模块）
 - 导出类型推导
 
 **package.json**:
@@ -99,7 +100,8 @@ Juanie/
   "exports": {
     ".": "./dist/index.js",
     "./schemas": "./dist/schemas/index.js",
-    "./client": "./dist/client.js"
+    "./client": "./dist/client.js",
+    "./module": "./dist/database.module.js"
   },
   "scripts": {
     "build": "tsc",
@@ -107,7 +109,11 @@ Juanie/
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@juanie/core-tokens": "workspace:*",
+    "@nestjs/common": "^11.1.7",
+    "@nestjs/config": "^3.3.0",
     "drizzle-orm": "^0.44.7",
+    "ioredis": "^5.4.2",
     "postgres": "^3.4.7"
   },
   "devDependencies": {
@@ -127,17 +133,64 @@ packages/core/database/
 │   │   ├── projects.schema.ts
 │   │   └── index.ts              # 导出所有 schemas
 │   ├── client.ts                  # 数据库客户端
+│   ├── database.module.ts         # NestJS 全局模块
 │   └── index.ts                   # 主入口
 ├── package.json
 └── tsconfig.json
 ```
 
+**database.module.ts** (NestJS 全局模块):
+```typescript
+import * as schema from './schemas'
+import { DATABASE, REDIS } from '@juanie/core-tokens'
+import { Global, Module } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import { drizzle } from 'drizzle-orm/postgres-js'
+import Redis from 'ioredis'
+import postgres from 'postgres'
+
+@Global()
+@Module({
+  providers: [
+    {
+      provide: DATABASE,
+      useFactory: (config: ConfigService) => {
+        const connectionString = config.get<string>('DATABASE_URL')
+        if (!connectionString) {
+          throw new Error('DATABASE_URL 环境变量未设置')
+        }
+        const client = postgres(connectionString)
+        return drizzle(client, { schema })
+      },
+      inject: [ConfigService],
+    },
+    {
+      provide: REDIS,
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL') || 'redis://localhost:6379'
+        return new Redis(redisUrl)
+      },
+      inject: [ConfigService],
+    },
+  ],
+  exports: [DATABASE, REDIS],
+})
+export class DatabaseModule {}
+```
+
+**为什么 DatabaseModule 应该在 core/database？**
+- ✅ 基础设施代码，不是业务逻辑
+- ✅ 所有应用（api-gateway、未来的其他服务）都需要
+- ✅ 符合关注点分离原则
+- ✅ 便于统一管理数据库连接配置
+
 **迁移步骤**:
 1. 复制 `apps/api/src/database/schemas/` → `packages/core/database/src/schemas/`
-2. 复制 `apps/api/src/database/database.module.ts` → `packages/core/database/src/client.ts`
-3. 创建 package.json 和 tsconfig.json
-4. 构建包：`bun run build`
-5. 更新 `apps/api` 的导入路径
+2. 创建 `packages/core/database/src/database.module.ts`（NestJS 全局模块）
+3. 创建 `packages/core/database/src/client.ts`（可选的直接客户端访问）
+4. 创建 package.json 和 tsconfig.json
+5. 构建包：`bun run build`
+6. 更新应用层从 `@juanie/core-database/module` 导入 DatabaseModule
 
 #### packages/core/types
 
@@ -175,33 +228,64 @@ packages/core/database/
 
 **内容示例**:
 ```typescript
-// src/models.ts
+// src/models.ts - 数据模型类型（与数据库 schema 对应）
 export interface User {
-  id: string;
-  email: string;
-  username?: string;
-  displayName?: string;
+  id: string
+  email: string
+  username: string | null
+  displayName: string | null
+  avatarUrl: string | null
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
+  id: string
+  name: string
+  slug: string
+  displayName: string | null
+  quotas: OrganizationQuotas
+  createdAt: Date
+  updatedAt: Date
 }
 
-// src/api.ts
+// src/api.ts - API 通用类型
 export interface PaginationParams {
-  page?: number;
-  limit?: number;
+  page?: number
+  limit?: number
 }
 
 export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
+  data: T[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+}
+
+// src/dtos.ts - 数据传输对象（用于服务方法参数）
+export interface CreateOrganizationInput {
+  name: string
+  slug: string
+  displayName?: string
+}
+
+export interface UpdateOrganizationInput {
+  name?: string
+  slug?: string
+  displayName?: string
+}
+
+export interface SuccessResponse {
+  success: boolean
+  message?: string
 }
 ```
+
+**类型使用规范**:
+1. **服务层** - 使用 `@juanie/core-types` 的类型作为方法参数和返回值
+2. **路由层** - 使用 Zod schemas 进行运行时验证
+3. **不要** 在服务包中定义 dto/ 目录（类型集中管理）
 
 #### packages/core/utils
 
@@ -230,6 +314,39 @@ export interface PaginatedResponse<T> {
     "@juanie/config-vitest": "workspace:*",
     "typescript": "^5.9.3",
     "vitest": "^4.0.4"
+  }
+}
+```
+
+#### packages/core/observability
+
+**职责**:
+- 共享的可观测性工具
+- `@Trace` 装饰器用于方法追踪
+- OpenTelemetry 辅助函数
+
+**关键文件**:
+```typescript
+// src/trace.decorator.ts
+export function Trace(spanName?: string) {
+  // 自动创建 OpenTelemetry span
+  // 记录方法参数、执行时间、错误
+}
+
+export function withSpan<T>(name: string, fn: Function) {
+  // 手动创建 span
+}
+```
+
+**使用示例**:
+```typescript
+import { Trace } from '@juanie/core-observability'
+
+@Injectable()
+export class MyService {
+  @Trace('my-service.create')
+  async create(data: CreateInput) {
+    // 自动追踪
   }
 }
 ```
@@ -328,27 +445,29 @@ export interface PaginatedResponse<T> {
 
 ### 2.1 提取服务模块
 
-#### 服务包结构模板
+#### 服务包结构模板（最佳实践）
 
 以 `auth` 服务为例：
 
 ```
 packages/services/auth/
 ├── src/
-│   ├── auth.service.ts          # 业务逻辑
-│   ├── auth.router.ts           # tRPC 路由
+│   ├── auth.service.ts          # 业务逻辑（使用 @juanie/core-types 的类型）
 │   ├── auth.module.ts           # NestJS 模块
-│   ├── dto/                     # 数据传输对象
-│   │   ├── login.dto.ts
-│   │   └── register.dto.ts
-│   └── index.ts                 # 导出
+│   └── index.ts                 # 导出服务和模块
 ├── test/
-│   ├── auth.service.spec.ts
-│   └── auth.router.spec.ts
+│   └── auth.service.spec.ts     # 单元测试
 ├── package.json
-├── tsconfig.json
+├── tsconfig.json                # 必须启用 experimentalDecorators
 └── vitest.config.ts
 ```
+
+**重要变更：**
+- ❌ **不再包含** `auth.router.ts` - 路由在 API Gateway 中定义
+- ❌ **不再包含** `dto/` 目录 - 类型定义在 `@juanie/core-types` 中
+- ✅ **只包含** 纯业务逻辑（Service + Module）
+- ✅ **使用** `@Trace` 装饰器（来自 `@juanie/core-observability`）
+- ✅ **使用** 共享类型（来自 `@juanie/core-types`）
 
 **package.json**:
 ```json
@@ -360,7 +479,6 @@ packages/services/auth/
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
-    "./router": "./dist/auth.router.js",
     "./service": "./dist/auth.service.js",
     "./module": "./dist/auth.module.js"
   },
@@ -373,12 +491,12 @@ packages/services/auth/
   },
   "dependencies": {
     "@juanie/core-database": "workspace:*",
+    "@juanie/core-observability": "workspace:*",
     "@juanie/core-types": "workspace:*",
     "@juanie/core-utils": "workspace:*",
     "@nestjs/common": "^11.1.7",
-    "@trpc/server": "^11.7.0",
-    "arctic": "^3.7.0",
-    "zod": "^4.1.12"
+    "drizzle-orm": "^0.44.7",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@juanie/config-typescript": "workspace:*",
@@ -386,6 +504,21 @@ packages/services/auth/
     "typescript": "^5.9.3",
     "vitest": "^4.0.4"
   }
+}
+```
+
+**tsconfig.json** (必须启用装饰器):
+```json
+{
+  "extends": "@juanie/config-typescript/node.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test"]
 }
 ```
 
@@ -451,31 +584,79 @@ bootstrap();
 
 **trpc/trpc.router.ts**:
 ```typescript
-import { router } from './trpc.service';
-import { authRouter } from '@juanie/service-auth/router';
-import { organizationsRouter } from '@juanie/service-organizations/router';
-import { teamsRouter } from '@juanie/service-teams/router';
-import { projectsRouter } from '@juanie/service-projects/router';
-import { pipelinesRouter } from '@juanie/service-pipelines/router';
-import { deploymentsRouter } from '@juanie/service-deployments/router';
-// ... 其他服务
+import { Injectable } from '@nestjs/common'
+import { AuthRouter } from '../routers/auth.router'
+import { OrganizationsRouter } from '../routers/organizations.router'
+import { TrpcService } from './trpc.service'
 
-export const appRouter = router({
-  health: procedure.query(() => ({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-  })),
-  auth: authRouter,
-  organizations: organizationsRouter,
-  teams: teamsRouter,
-  projects: projectsRouter,
-  pipelines: pipelinesRouter,
-  deployments: deploymentsRouter,
-  // ... 其他路由
-});
+@Injectable()
+export class TrpcRouter {
+  constructor(
+    private readonly trpc: TrpcService,
+    private readonly authRouter: AuthRouter,
+    private readonly organizationsRouter: OrganizationsRouter,
+    // ... 其他路由
+  ) {}
 
-export type AppRouter = typeof appRouter;
+  get appRouter() {
+    return this.trpc.router({
+      health: this.trpc.procedure.query(() => ({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+      })),
+      auth: this.authRouter.router,
+      organizations: this.organizationsRouter.router,
+      // ... 其他路由
+    })
+  }
+}
+
+export type AppRouter = TrpcRouter['appRouter']
 ```
+
+**routers/auth.router.ts** (路由在 Gateway 中定义):
+```typescript
+import { Injectable } from '@nestjs/common'
+import { AuthService } from '@juanie/service-auth'
+import { TRPCError } from '@trpc/server'
+import { z } from 'zod'
+import { TrpcService } from '../trpc/trpc.service'
+
+@Injectable()
+export class AuthRouter {
+  constructor(
+    private readonly trpc: TrpcService,
+    private readonly authService: AuthService,
+  ) {}
+
+  get router() {
+    return this.trpc.router({
+      githubAuthUrl: this.trpc.procedure.query(async () => {
+        return await this.authService.getGitHubAuthUrl()
+      }),
+
+      githubCallback: this.trpc.procedure
+        .input(z.object({ 
+          code: z.string(), 
+          state: z.string() 
+        }))
+        .mutation(async ({ input }) => {
+          const user = await this.authService.handleGitHubCallback(
+            input.code, 
+            input.state
+          )
+          // ... 处理逻辑
+        }),
+    })
+  }
+}
+```
+
+**关键点**:
+- ✅ 路由定义在 API Gateway 的 `routers/` 目录
+- ✅ 注入服务包的 Service（不是 Router）
+- ✅ Zod schemas 在路由层定义（灵活验证）
+- ✅ 服务包只提供业务逻辑
 
 **package.json**:
 ```json
@@ -701,6 +882,124 @@ turbo test
 - 每个模块迁移后充分测试
 - 可以快速回滚
 
+## 架构最佳实践（实践中总结）
+
+### 1. 服务包设计原则
+
+**✅ 应该包含：**
+- Service 类（业务逻辑）
+- Module 类（NestJS 模块）
+- 使用 `@juanie/core-types` 的类型
+- 使用 `@Trace` 装饰器追踪关键方法
+
+**❌ 不应该包含：**
+- Router 类（路由在 Gateway 中定义）
+- dto/ 目录（类型集中在 core-types）
+- Zod schemas（验证在路由层）
+
+### 2. 类型架构
+
+```
+@juanie/core-types (TypeScript 类型)
+         ↓
+服务包 Service (使用类型)
+         ↓
+API Gateway Router (Zod 验证 + 调用 Service)
+         ↓
+前端 (tRPC 类型推导)
+```
+
+**示例：**
+```typescript
+// 1. 定义类型
+// packages/core/types/src/dtos.ts
+export interface CreateOrganizationInput {
+  name: string
+  slug: string
+}
+
+// 2. 服务使用类型
+// packages/services/organizations/src/organizations.service.ts
+async create(userId: string, data: CreateOrganizationInput) {
+  // 实现
+}
+
+// 3. 路由验证 + 调用
+// apps/api-gateway/src/routers/organizations.router.ts
+create: this.trpc.protectedProcedure
+  .input(z.object({
+    name: z.string().min(1).max(100),
+    slug: z.string().regex(/^[a-z0-9-]+$/),
+  }))
+  .mutation(async ({ ctx, input }) => {
+    return await this.organizationsService.create(ctx.user.id, input)
+  })
+```
+
+### 3. 可观测性
+
+**使用 `@Trace` 装饰器：**
+```typescript
+import { Trace } from '@juanie/core-observability'
+
+@Injectable()
+export class OrganizationsService {
+  @Trace('organizations.create')
+  async create(userId: string, data: CreateOrganizationInput) {
+    // 自动追踪：方法参数、执行时间、错误
+  }
+}
+```
+
+**追踪层级：**
+- HTTP 请求（自动 - OpenTelemetry）
+- tRPC Procedure（自动 - OpenTelemetry）
+- Service 方法（手动 - @Trace 装饰器）
+- 数据库查询（自动 - OpenTelemetry）
+
+### 4. 依赖注入
+
+**服务包导出注入令牌：**
+```typescript
+// packages/services/auth/src/auth.service.ts
+export const DATABASE = Symbol('DATABASE')
+export const REDIS = Symbol('REDIS')
+
+@Injectable()
+export class AuthService {
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    @Inject(REDIS) private redis: Redis,
+  ) {}
+}
+```
+
+**Gateway 提供全局依赖：**
+```typescript
+// apps/api-gateway/src/database/database.module.ts
+@Global()
+@Module({
+  providers: [
+    { provide: DATABASE, useFactory: ... },
+    { provide: REDIS, useFactory: ... },
+  ],
+  exports: [DATABASE, REDIS],
+})
+export class DatabaseModule {}
+```
+
+### 5. TypeScript 配置
+
+**服务包必须启用装饰器：**
+```json
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  }
+}
+```
+
 ## 成功指标
 
 - ✅ 所有核心包创建完成
@@ -711,6 +1010,8 @@ turbo test
 - ✅ 测试时间减少 50%+
 - ✅ 前端代码无需修改
 - ✅ API 行为完全一致
+- ✅ 完整的可观测性（追踪、指标）
+- ✅ 类型安全的端到端链路
 
 ## 下一步
 

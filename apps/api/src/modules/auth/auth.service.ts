@@ -1,12 +1,12 @@
+import * as schema from '@juanie/core-database/schemas'
+import { generateId } from '@juanie/core-utils/id'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { GitHub, GitLab } from 'arctic'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type Redis from 'ioredis'
-import { nanoid } from 'nanoid'
 import { DATABASE, REDIS } from '@/database/database.module'
-import * as schema from '@/database/schemas'
 import { Trace } from '@/observability'
 
 @Injectable()
@@ -37,7 +37,7 @@ export class AuthService {
   // GitHub OAuth 流程
   @Trace('auth.github.getAuthUrl')
   async getGitHubAuthUrl() {
-    const state = nanoid()
+    const state = generateId()
     const url = this.github.createAuthorizationURL(state, ['user:email'])
 
     // 存储 state 到 Redis（10 分钟过期）
@@ -89,7 +89,7 @@ export class AuthService {
   // GitLab OAuth 流程
   @Trace('auth.gitlab.getAuthUrl')
   async getGitLabAuthUrl() {
-    const state = nanoid()
+    const state = generateId()
     const url = this.gitlab.createAuthorizationURL(state, ['read_user'])
 
     await this.redis.setex(`oauth:gitlab:${state}`, 600, 'pending')
@@ -191,7 +191,7 @@ export class AuthService {
   // 创建会话
   @Trace('auth.createSession')
   async createSession(userId: string) {
-    const sessionId = nanoid()
+    const sessionId = generateId()
     const sessionData = { userId, createdAt: Date.now() }
 
     // 存储到 Redis（7 天过期）

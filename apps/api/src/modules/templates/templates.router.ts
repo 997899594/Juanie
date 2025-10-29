@@ -55,35 +55,37 @@ export class TemplatesRouter {
     private readonly templatesService: TemplatesService,
   ) {}
 
-  router = this.trpc.router({
-    generateDockerfile: this.trpc.protectedProcedure
-      .input(dockerfileConfigSchema)
-      .mutation(async ({ input }) => {
-        const dockerfile = await this.templatesService.generateDockerfile(input)
-        return { dockerfile }
-      }),
+  get router() {
+    return this.trpc.router({
+      generateDockerfile: this.trpc.protectedProcedure
+        .input(dockerfileConfigSchema)
+        .mutation(async ({ input }) => {
+          const dockerfile = await this.templatesService.generateDockerfile(input)
+          return { dockerfile }
+        }),
 
-    generateCICD: this.trpc.protectedProcedure
-      .input(cicdConfigSchema)
-      .mutation(async ({ input }) => {
-        const cicd = await this.templatesService.generateCICD(input)
-        return { cicd }
-      }),
+      generateCICD: this.trpc.protectedProcedure
+        .input(cicdConfigSchema)
+        .mutation(async ({ input }) => {
+          const cicd = await this.templatesService.generateCICD(input)
+          return { cicd }
+        }),
 
-    getPreset: this.trpc.protectedProcedure.input(presetSchema).query(({ input }) => {
-      let preset
-      switch (input.type) {
-        case 'nodejs':
-          preset = this.templatesService.getNodeJSPreset(input.framework as any)
-          break
-        case 'python':
-          preset = this.templatesService.getPythonPreset(input.framework as any)
-          break
-        case 'bun':
-          preset = this.templatesService.getBunPreset()
-          break
-      }
-      return { preset }
-    }),
-  })
+      getPreset: this.trpc.protectedProcedure.input(presetSchema).query(({ input }) => {
+        let preset: any
+        switch (input.type) {
+          case 'nodejs':
+            preset = this.templatesService.getNodeJSPreset(input.framework as any)
+            break
+          case 'python':
+            preset = this.templatesService.getPythonPreset(input.framework as any)
+            break
+          case 'bun':
+            preset = this.templatesService.getBunPreset()
+            break
+        }
+        return { preset }
+      }),
+    })
+  }
 }
