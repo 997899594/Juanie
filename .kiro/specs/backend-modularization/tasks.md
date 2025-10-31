@@ -352,7 +352,7 @@
 
 ### 15. 提取剩余服务
 
-- [ ] 15.1 提取 AI Assistants 服务
+- [x] 15.1 提取 AI Assistants 服务
   - 创建 `service-ai-assistants` 包
   - 迁移代码和测试
   - 集成到 Gateway
@@ -370,7 +370,7 @@
   - 集成到 Gateway
   - _需求: 2.7_
 
-- [ ] 15.4 提取 Ollama 服务
+- [x] 15.4 提取 Ollama 服务
   - 创建 `service-ollama` 包
   - 迁移代码和测试
   - 集成到 Gateway
@@ -378,13 +378,13 @@
 
 - [x] 15.5 提取其他服务 - Repositories（已完成）
   - ✅ Repositories - 已创建包并集成到 Gateway
-  - ⏳ Environments - 待迁移
-  - ⏳ Cost Tracking - 待迁移
-  - ⏳ Security Policies - 待迁移
-  - ⏳ Audit Logs - 待迁移
-  - ⏳ Notifications - 待迁移
-  - ⏳ Templates - 待迁移
-  - ⏳ Users - 待迁移
+  - ✅ Environments - 已创建包并集成到 Gateway
+  - ✅ Cost Tracking - 已创建包并集成到 Gateway
+  - ✅ Security Policies - 已创建包并集成到 Gateway
+  - ✅ Audit Logs - 已创建包并集成到 Gateway
+  - ✅ Notifications - 已创建包并集成到 Gateway
+  - ✅ Templates - 已创建包并集成到 Gateway
+  - ✅ Users - 已创建包并集成到 Gateway
   - _需求: 2.7_
 
 ### 16. 完整测试和验证
@@ -394,7 +394,7 @@
   - 确保所有测试通过
   - _需求: 4.3, 5.4_
 
-- [ ] 16.2 运行集成测试
+ [ ] 16.2 运行集成测试
   - 测试服务间交互
   - 测试完整的用户流程
   - _需求: 4.3_
@@ -411,13 +411,13 @@
 
 ### 17. 更新 CI/CD
 
-- [ ] 17.1 更新 GitHub Actions
+- [x] 17.1 更新 GitHub Actions
   - 更新构建步骤使用 Turborepo
   - 配置缓存
   - 只测试变更的包
   - _需求: 5.5_
 
-- [ ] 17.2 更新 GitLab CI
+- [x] 17.2 更新 GitLab CI
   - 更新 `.gitlab-ci.yml`
   - 配置 Turborepo 缓存
   - _需求: 5.5_

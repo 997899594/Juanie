@@ -46,38 +46,47 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        working-directory: apps/api
         run: bun install --frozen-lockfile
 
+      # Turborepo cache enables incremental builds and tests
+      # Only changed packages (and their dependents) will be rebuilt/tested
+      - name: Setup Turborepo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - name: Build packages
+        run: turbo build --filter='[HEAD^1]' --cache-dir=.turbo
+
       - name: Run linter
-        working-directory: apps/api
-        run: bun run lint
+        run: turbo lint --filter='[HEAD^1]' --cache-dir=.turbo
 
       - name: Run type check
-        working-directory: apps/api
-        run: bun run type-check
+        run: turbo type-check --filter='[HEAD^1]' --cache-dir=.turbo
 
       - name: Run database migrations
-        working-directory: apps/api
+        working-directory: apps/api-gateway
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/devops_test
         run: bun run db:push
 
       - name: Run tests
-        working-directory: apps/api
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/devops_test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret
           NODE_ENV: test
-        run: bun run test
+        run: turbo test --filter='[HEAD^1]' --cache-dir=.turbo
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
         if: always()
         with:
-          files: ./apps/api/coverage/coverage-final.json
-          flags: api
+          files: ./packages/*/coverage/coverage-final.json,./apps/*/coverage/coverage-final.json
+          flags: monorepo
 
   build:
     name: Build Docker Image
@@ -111,7 +120,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./apps/api
+          context: ./apps/api-gateway
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
