@@ -450,7 +450,7 @@
 
 ## 可观测性模块 (OpenTelemetry)
 
-- [ ] 17. 实现 OpenTelemetry 分布式追踪
+- [x] 17. 实现 OpenTelemetry 分布式追踪
 - [x] 17.1 修复 OpenTelemetry 配置
   - 修复 src/observability/tracing.ts 中的类型错误
   - 安装缺失的 OpenTelemetry 依赖包
@@ -584,29 +584,29 @@
 
 ## CI/CD 和部署
 
-- [ ] 19. 配置 CI/CD 流程
-- [ ] 19.1 配置 GitHub Actions
+- [x] 19. 配置 CI/CD 流程
+- [x] 19.1 配置 GitHub Actions
   - 创建 .github/workflows/test.yml
   - 配置测试运行
   - 配置覆盖率上传
   - 配置 PR 检查
   - _需求: 18.10_
 
-- [ ] 19.2 配置 Docker
+- [x] 19.2 配置 Docker
   - 编写 Dockerfile
   - 编写 docker-compose.yml
   - 配置环境变量
   - 测试容器构建和运行
   - _需求: 19.1_
 
-- [ ] 19.3 编写部署文档
+- [x] 19.3 编写部署文档
   - 编写 README.md
   - 编写部署指南
   - 文档化环境变量
   - 提供故障排查指南
   - _需求: 19.2_
 
-- [ ] 19.4 配置生产监控
+- [x] 19.4 配置生产监控
   - 配置 Prometheus 抓取
   - 配置 Grafana 仪表板
   - 配置告警规则

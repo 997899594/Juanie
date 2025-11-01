@@ -1,0 +1,3 @@
+// Queue 注入令牌
+export const PIPELINE_QUEUE = 'PIPELINE_QUEUE'
+export const DEPLOYMENT_QUEUE = 'DEPLOYMENT_QUEUE'

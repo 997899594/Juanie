@@ -3,17 +3,36 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
+  "main": "./dist/index.es.js",
+  "module": "./dist/index.es.js",
+  "types": "./dist/index.es.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.es.d.ts",
+      "import": "./dist/index.es.js",
       "default": "./dist/index.es.js"
     },
     "./styles": {
       "default": "./dist/ui.css"
+    },
+    "./theme": {
+      "types": "./dist/theme/index.d.ts",
+      "import": "./dist/theme/index.js",
+      "default": "./dist/theme/index.js"
+    },
+    "./components/*": {
+      "types": "./dist/components/*/index.d.ts",
+      "import": "./dist/components/*/index.js",
+      "default": "./dist/components/*/index.js"
     }
   },
   "files": [
     "dist",
     "src"
+  ],
+  "sideEffects": [
+    "*.css",
+    "*.vue"
   ],
   "scripts": {
     "dev": "vue-tsc --noEmit && vite build --watch",

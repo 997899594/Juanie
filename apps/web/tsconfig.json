@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": ["../../configs/tsconfig/dom-lib.json"],
+  "extends": "@juanie/config-typescript/dom-lib.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {

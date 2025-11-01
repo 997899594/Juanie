@@ -7,38 +7,18 @@ on:
     branches: [main, develop]
 
 jobs:
-  test:
-    name: Test
+  # 测试任务已移至 test.yml
+  # 这里只保留构建和部署相关的任务
+  
+  build-check:
+    name: Build Check
     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: devops_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -48,8 +28,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Turborepo cache enables incremental builds and tests
-      # Only changed packages (and their dependents) will be rebuilt/tested
       - name: Setup Turborepo cache
         uses: actions/cache@v4
         with:
@@ -58,35 +36,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - name: Build packages
-        run: turbo build --filter='[HEAD^1]' --cache-dir=.turbo
+      - name: Build all packages
+        run: bun run build
 
-      - name: Run linter
-        run: turbo lint --filter='[HEAD^1]' --cache-dir=.turbo
-
-      - name: Run type check
-        run: turbo type-check --filter='[HEAD^1]' --cache-dir=.turbo
-
-      - name: Run database migrations
-        working-directory: apps/api-gateway
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/devops_test
-        run: bun run db:push
-
-      - name: Run tests
-        env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/devops_test
-          REDIS_URL: redis://localhost:6379
-          JWT_SECRET: test-secret
-          NODE_ENV: test
-        run: turbo test --filter='[HEAD^1]' --cache-dir=.turbo
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        if: always()
-        with:
-          files: ./packages/*/coverage/coverage-final.json,./apps/*/coverage/coverage-final.json
-          flags: monorepo
+      - name: Check build artifacts
+        run: |
+          echo "Checking build artifacts..."
+          ls -la apps/api-gateway/dist || echo "No dist folder found"
+          ls -la packages/*/dist || echo "No package dist folders found"
 
   build:
     name: Build Docker Image

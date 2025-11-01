@@ -1,6 +1,7 @@
 import * as schema from '@juanie/core-database/schemas'
 import { Trace } from '@juanie/core-observability'
 import { DATABASE } from '@juanie/core-tokens'
+import type { CreateProjectInput, UpdateProjectInput } from '@juanie/core-types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -11,16 +12,7 @@ export class ProjectsService {
 
   // 创建项目
   @Trace('projects.create')
-  async create(
-    userId: string,
-    data: {
-      organizationId: string
-      name: string
-      slug: string
-      description?: string
-      logoUrl?: string
-    },
-  ) {
+  async create(userId: string, data: CreateProjectInput) {
     // 检查用户是否是组织成员
     const member = await this.getOrgMember(data.organizationId, userId)
     if (!member) {
@@ -132,20 +124,7 @@ export class ProjectsService {
 
   // 更新项目
   @Trace('projects.update')
-  async update(
-    userId: string,
-    projectId: string,
-    data: {
-      name?: string
-      slug?: string
-      description?: string
-      config?: {
-        defaultBranch?: string
-        enableCiCd?: boolean
-        enableAi?: boolean
-      }
-    },
-  ) {
+  async update(userId: string, projectId: string, data: UpdateProjectInput) {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {

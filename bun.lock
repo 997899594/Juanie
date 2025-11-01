@@ -98,14 +98,23 @@
       "version": "0.1.0",
       "dependencies": {
         "@juanie/core-database": "workspace:*",
+        "@juanie/core-queue": "workspace:*",
         "@juanie/core-tokens": "workspace:*",
         "@juanie/core-types": "workspace:*",
         "@juanie/core-utils": "workspace:*",
+        "@juanie/service-ai-assistants": "workspace:*",
+        "@juanie/service-audit-logs": "workspace:*",
         "@juanie/service-auth": "workspace:*",
+        "@juanie/service-cost-tracking": "workspace:*",
         "@juanie/service-deployments": "workspace:*",
         "@juanie/service-k3s": "workspace:*",
+        "@juanie/service-notifications": "workspace:*",
+        "@juanie/service-ollama": "workspace:*",
         "@juanie/service-organizations": "workspace:*",
+        "@juanie/service-security-policies": "workspace:*",
         "@juanie/service-teams": "workspace:*",
+        "@juanie/service-templates": "workspace:*",
+        "@juanie/service-users": "workspace:*",
         "@nestjs/common": "^11.1.7",
         "@nestjs/config": "^4.0.2",
         "@nestjs/core": "^11.1.7",
@@ -206,6 +215,22 @@
         "typescript": "^5.9.3",
       },
     },
+    "packages/core/queue": {
+      "name": "@juanie/core-queue",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-tokens": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "@nestjs/config": "^3.3.0",
+        "bullmq": "^5.28.2",
+        "ioredis": "^5.4.2",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "@types/node": "^22.0.0",
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/core/tokens": {
       "name": "@juanie/core-tokens",
       "version": "0.1.0",
@@ -236,6 +261,42 @@
         "vitest": "^4.0.4",
       },
     },
+    "packages/services/ai-assistants": {
+      "name": "@juanie/service-ai-assistants",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-database": "workspace:*",
+        "@juanie/core-observability": "workspace:*",
+        "@juanie/core-tokens": "workspace:*",
+        "@juanie/service-ollama": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "@nestjs/config": "^3.3.0",
+        "drizzle-orm": "^0.44.7",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "@juanie/config-vitest": "workspace:*",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.4",
+      },
+    },
+    "packages/services/audit-logs": {
+      "name": "@juanie/service-audit-logs",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-database": "workspace:*",
+        "@juanie/core-observability": "workspace:*",
+        "@juanie/core-tokens": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "drizzle-orm": "^0.44.7",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "@juanie/config-vitest": "workspace:*",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.4",
+      },
+    },
     "packages/services/auth": {
       "name": "@juanie/service-auth",
       "version": "0.1.0",
@@ -257,6 +318,21 @@
         "@types/node": "^24.7.0",
         "typescript": "^5.9.3",
         "vitest": "^4.0.4",
+      },
+    },
+    "packages/services/cost-tracking": {
+      "name": "@juanie/service-cost-tracking",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-database": "workspace:*",
+        "@juanie/core-observability": "workspace:*",
+        "@juanie/core-tokens": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "drizzle-orm": "^0.44.7",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "typescript": "^5.9.3",
       },
     },
     "packages/services/deployments": {
@@ -311,6 +387,39 @@
         "vitest": "^4.0.4",
       },
     },
+    "packages/services/notifications": {
+      "name": "@juanie/service-notifications",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-database": "workspace:*",
+        "@juanie/core-observability": "workspace:*",
+        "@juanie/core-tokens": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "drizzle-orm": "^0.44.7",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "@juanie/config-vitest": "workspace:*",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.4",
+      },
+    },
+    "packages/services/ollama": {
+      "name": "@juanie/service-ollama",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-observability": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "@nestjs/config": "^3.3.0",
+        "ollama": "^0.5.11",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "@juanie/config-vitest": "workspace:*",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.4",
+      },
+    },
     "packages/services/organizations": {
       "name": "@juanie/service-organizations",
       "version": "0.1.0",
@@ -337,6 +446,7 @@
       "dependencies": {
         "@juanie/core-database": "workspace:*",
         "@juanie/core-observability": "workspace:*",
+        "@juanie/core-queue": "workspace:*",
         "@juanie/core-tokens": "workspace:*",
         "@juanie/core-types": "workspace:*",
         "@juanie/core-utils": "workspace:*",
@@ -390,6 +500,21 @@
         "vitest": "^4.0.4",
       },
     },
+    "packages/services/security-policies": {
+      "name": "@juanie/service-security-policies",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-database": "workspace:*",
+        "@juanie/core-observability": "workspace:*",
+        "@juanie/core-tokens": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "drizzle-orm": "^0.44.7",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/services/storage": {
       "name": "@juanie/service-storage",
       "version": "0.1.0",
@@ -416,6 +541,39 @@
         "@juanie/core-types": "workspace:*",
         "@juanie/core-utils": "workspace:*",
         "@nestjs/common": "^11.1.7",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "@juanie/config-vitest": "workspace:*",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.4",
+      },
+    },
+    "packages/services/templates": {
+      "name": "@juanie/service-templates",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-observability": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "handlebars": "^4.7.8",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "@juanie/config-vitest": "workspace:*",
+        "@types/node": "^24.7.0",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.4",
+      },
+    },
+    "packages/services/users": {
+      "name": "@juanie/service-users",
+      "version": "0.1.0",
+      "dependencies": {
+        "@juanie/core-database": "workspace:*",
+        "@juanie/core-observability": "workspace:*",
+        "@juanie/core-tokens": "workspace:*",
+        "@nestjs/common": "^11.1.7",
+        "drizzle-orm": "^0.44.7",
       },
       "devDependencies": {
         "@juanie/config-typescript": "workspace:*",
@@ -710,19 +868,31 @@
 
     "@juanie/core-observability": ["@juanie/core-observability@workspace:packages/core/observability"],
 
+    "@juanie/core-queue": ["@juanie/core-queue@workspace:packages/core/queue"],
+
     "@juanie/core-tokens": ["@juanie/core-tokens@workspace:packages/core/tokens"],
 
     "@juanie/core-types": ["@juanie/core-types@workspace:packages/core/types"],
 
     "@juanie/core-utils": ["@juanie/core-utils@workspace:packages/core/utils"],
 
+    "@juanie/service-ai-assistants": ["@juanie/service-ai-assistants@workspace:packages/services/ai-assistants"],
+
+    "@juanie/service-audit-logs": ["@juanie/service-audit-logs@workspace:packages/services/audit-logs"],
+
     "@juanie/service-auth": ["@juanie/service-auth@workspace:packages/services/auth"],
+
+    "@juanie/service-cost-tracking": ["@juanie/service-cost-tracking@workspace:packages/services/cost-tracking"],
 
     "@juanie/service-deployments": ["@juanie/service-deployments@workspace:packages/services/deployments"],
 
     "@juanie/service-environments": ["@juanie/service-environments@workspace:packages/services/environments"],
 
     "@juanie/service-k3s": ["@juanie/service-k3s@workspace:packages/services/k3s"],
+
+    "@juanie/service-notifications": ["@juanie/service-notifications@workspace:packages/services/notifications"],
+
+    "@juanie/service-ollama": ["@juanie/service-ollama@workspace:packages/services/ollama"],
 
     "@juanie/service-organizations": ["@juanie/service-organizations@workspace:packages/services/organizations"],
 
@@ -732,9 +902,15 @@
 
     "@juanie/service-repositories": ["@juanie/service-repositories@workspace:packages/services/repositories"],
 
+    "@juanie/service-security-policies": ["@juanie/service-security-policies@workspace:packages/services/security-policies"],
+
     "@juanie/service-storage": ["@juanie/service-storage@workspace:packages/services/storage"],
 
     "@juanie/service-teams": ["@juanie/service-teams@workspace:packages/services/teams"],
+
+    "@juanie/service-templates": ["@juanie/service-templates@workspace:packages/services/templates"],
+
+    "@juanie/service-users": ["@juanie/service-users@workspace:packages/services/users"],
 
     "@juanie/shared": ["@juanie/shared@workspace:packages/shared"],
 
@@ -2642,9 +2818,19 @@
 
     "@juanie/core-database/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
 
+    "@juanie/core-queue/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
+
+    "@juanie/core-queue/@types/node": ["@types/node@22.18.13", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-Bo45YKIjnmFtv6I1TuC8AaHBbqXtIo+Om5fE4QiU1Tj8QR/qt+8O3BAtOimG5IFmwaWiPmB3Mv3jtYzBA4Us2A=="],
+
+    "@juanie/service-ai-assistants/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
+
     "@juanie/service-k3s/@kubernetes/client-node": ["@kubernetes/client-node@0.22.3", "https://repo.huaweicloud.com/repository/npm/@kubernetes/client-node/-/client-node-0.22.3.tgz", { "dependencies": { "byline": "^5.0.0", "isomorphic-ws": "^5.0.0", "js-yaml": "^4.1.0", "jsonpath-plus": "^10.2.0", "request": "^2.88.0", "rfc4648": "^1.3.0", "stream-buffers": "^3.0.2", "tar": "^7.0.0", "tslib": "^2.4.1", "ws": "^8.18.0" }, "optionalDependencies": { "openid-client": "^6.1.3" } }, "sha512-dG8uah3+HDJLpJEESshLRZlAZ4PgDeV9mZXT0u1g7oy4KMRzdZ7n5g0JEIlL6QhK51/2ztcIqURAnjfjJt6Z+g=="],
 
     "@juanie/service-k3s/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
+
+    "@juanie/service-ollama/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
+
+    "@juanie/service-ollama/ollama": ["ollama@0.5.18", "", { "dependencies": { "whatwg-fetch": "^3.6.20" } }, "sha512-lTFqTf9bo7Cd3hpF6CviBe/DEhewjoZYd9N/uCe7O20qYTvGqrNOFOBDj3lbZgFWHUgDv5EeyusYxsZSLS8nvg=="],
 
     "@juanie/web/lucide-vue-next": ["lucide-vue-next@0.460.0", "https://repo.huaweicloud.com/repository/npm/lucide-vue-next/-/lucide-vue-next-0.460.0.tgz", { "peerDependencies": { "vue": ">=3.0.1" } }, "sha512-IhM1tm3gPhc3u6RagNra4W6Oe48Mz0l3fAJzk0oSLzsRQqt3WU3XiX5ngRyjIs8fzCtvgzu7fC6Qk7XVhS00DQ=="],
 
@@ -3118,6 +3304,20 @@
 
     "@juanie/core-database/@nestjs/config/dotenv-expand": ["dotenv-expand@10.0.0", "https://repo.huaweicloud.com/repository/npm/dotenv-expand/-/dotenv-expand-10.0.0.tgz", {}, "sha512-GopVGCpVS1UKH75VKHGuQFqS1Gusej0z4FyQkPdwjil2gNIv+LNsqBlboOzpJFZKVT95GkCyWJbBSdFEFUWI2A=="],
 
+    "@juanie/core-queue/@nestjs/config/@nestjs/common": ["@nestjs/common@10.4.20", "https://repo.huaweicloud.com/repository/npm/@nestjs/common/-/common-10.4.20.tgz", { "dependencies": { "file-type": "20.4.1", "iterare": "1.2.1", "tslib": "2.8.1", "uid": "2.0.2" }, "peerDependencies": { "class-transformer": "*", "class-validator": "*", "reflect-metadata": "^0.1.12 || ^0.2.0", "rxjs": "^7.1.0" }, "optionalPeers": ["class-transformer", "class-validator"] }, "sha512-hxJxZF7jcKGuUzM9EYbuES80Z/36piJbiqmPy86mk8qOn5gglFebBTvcx7PWVbRNSb4gngASYnefBj/Y2HAzpQ=="],
+
+    "@juanie/core-queue/@nestjs/config/dotenv": ["dotenv@16.4.5", "https://repo.huaweicloud.com/repository/npm/dotenv/-/dotenv-16.4.5.tgz", {}, "sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg=="],
+
+    "@juanie/core-queue/@nestjs/config/dotenv-expand": ["dotenv-expand@10.0.0", "https://repo.huaweicloud.com/repository/npm/dotenv-expand/-/dotenv-expand-10.0.0.tgz", {}, "sha512-GopVGCpVS1UKH75VKHGuQFqS1Gusej0z4FyQkPdwjil2gNIv+LNsqBlboOzpJFZKVT95GkCyWJbBSdFEFUWI2A=="],
+
+    "@juanie/core-queue/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+
+    "@juanie/service-ai-assistants/@nestjs/config/@nestjs/common": ["@nestjs/common@10.4.20", "https://repo.huaweicloud.com/repository/npm/@nestjs/common/-/common-10.4.20.tgz", { "dependencies": { "file-type": "20.4.1", "iterare": "1.2.1", "tslib": "2.8.1", "uid": "2.0.2" }, "peerDependencies": { "class-transformer": "*", "class-validator": "*", "reflect-metadata": "^0.1.12 || ^0.2.0", "rxjs": "^7.1.0" }, "optionalPeers": ["class-transformer", "class-validator"] }, "sha512-hxJxZF7jcKGuUzM9EYbuES80Z/36piJbiqmPy86mk8qOn5gglFebBTvcx7PWVbRNSb4gngASYnefBj/Y2HAzpQ=="],
+
+    "@juanie/service-ai-assistants/@nestjs/config/dotenv": ["dotenv@16.4.5", "https://repo.huaweicloud.com/repository/npm/dotenv/-/dotenv-16.4.5.tgz", {}, "sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg=="],
+
+    "@juanie/service-ai-assistants/@nestjs/config/dotenv-expand": ["dotenv-expand@10.0.0", "https://repo.huaweicloud.com/repository/npm/dotenv-expand/-/dotenv-expand-10.0.0.tgz", {}, "sha512-GopVGCpVS1UKH75VKHGuQFqS1Gusej0z4FyQkPdwjil2gNIv+LNsqBlboOzpJFZKVT95GkCyWJbBSdFEFUWI2A=="],
+
     "@juanie/service-k3s/@kubernetes/client-node/tslib": ["tslib@2.8.1", "https://repo.huaweicloud.com/repository/npm/tslib/-/tslib-2.8.1.tgz", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@juanie/service-k3s/@nestjs/config/@nestjs/common": ["@nestjs/common@10.4.20", "https://repo.huaweicloud.com/repository/npm/@nestjs/common/-/common-10.4.20.tgz", { "dependencies": { "file-type": "20.4.1", "iterare": "1.2.1", "tslib": "2.8.1", "uid": "2.0.2" }, "peerDependencies": { "class-transformer": "*", "class-validator": "*", "reflect-metadata": "^0.1.12 || ^0.2.0", "rxjs": "^7.1.0" }, "optionalPeers": ["class-transformer", "class-validator"] }, "sha512-hxJxZF7jcKGuUzM9EYbuES80Z/36piJbiqmPy86mk8qOn5gglFebBTvcx7PWVbRNSb4gngASYnefBj/Y2HAzpQ=="],
@@ -3125,6 +3325,12 @@
     "@juanie/service-k3s/@nestjs/config/dotenv": ["dotenv@16.4.5", "https://repo.huaweicloud.com/repository/npm/dotenv/-/dotenv-16.4.5.tgz", {}, "sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg=="],
 
     "@juanie/service-k3s/@nestjs/config/dotenv-expand": ["dotenv-expand@10.0.0", "https://repo.huaweicloud.com/repository/npm/dotenv-expand/-/dotenv-expand-10.0.0.tgz", {}, "sha512-GopVGCpVS1UKH75VKHGuQFqS1Gusej0z4FyQkPdwjil2gNIv+LNsqBlboOzpJFZKVT95GkCyWJbBSdFEFUWI2A=="],
+
+    "@juanie/service-ollama/@nestjs/config/@nestjs/common": ["@nestjs/common@10.4.20", "https://repo.huaweicloud.com/repository/npm/@nestjs/common/-/common-10.4.20.tgz", { "dependencies": { "file-type": "20.4.1", "iterare": "1.2.1", "tslib": "2.8.1", "uid": "2.0.2" }, "peerDependencies": { "class-transformer": "*", "class-validator": "*", "reflect-metadata": "^0.1.12 || ^0.2.0", "rxjs": "^7.1.0" }, "optionalPeers": ["class-transformer", "class-validator"] }, "sha512-hxJxZF7jcKGuUzM9EYbuES80Z/36piJbiqmPy86mk8qOn5gglFebBTvcx7PWVbRNSb4gngASYnefBj/Y2HAzpQ=="],
+
+    "@juanie/service-ollama/@nestjs/config/dotenv": ["dotenv@16.4.5", "https://repo.huaweicloud.com/repository/npm/dotenv/-/dotenv-16.4.5.tgz", {}, "sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg=="],
+
+    "@juanie/service-ollama/@nestjs/config/dotenv-expand": ["dotenv-expand@10.0.0", "https://repo.huaweicloud.com/repository/npm/dotenv-expand/-/dotenv-expand-10.0.0.tgz", {}, "sha512-GopVGCpVS1UKH75VKHGuQFqS1Gusej0z4FyQkPdwjil2gNIv+LNsqBlboOzpJFZKVT95GkCyWJbBSdFEFUWI2A=="],
 
     "@juanie/web/pinia/@vue/devtools-api": ["@vue/devtools-api@6.6.4", "https://repo.huaweicloud.com/repository/npm/@vue/devtools-api/-/devtools-api-6.6.4.tgz", {}, "sha512-sGhTPMuXqZ1rVOk32RylztWkfXTRhuS7vgAKv0zjqk8gbsHkJ7xfFf+jbySxt7tWObEJwyKaHMikV/WGDiQm8g=="],
 
@@ -3384,9 +3590,21 @@
 
     "@juanie/core-database/@nestjs/config/@nestjs/common/tslib": ["tslib@2.8.1", "https://repo.huaweicloud.com/repository/npm/tslib/-/tslib-2.8.1.tgz", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
+    "@juanie/core-queue/@nestjs/config/@nestjs/common/file-type": ["file-type@20.4.1", "https://repo.huaweicloud.com/repository/npm/file-type/-/file-type-20.4.1.tgz", { "dependencies": { "@tokenizer/inflate": "^0.2.6", "strtok3": "^10.2.0", "token-types": "^6.0.0", "uint8array-extras": "^1.4.0" } }, "sha512-hw9gNZXUfZ02Jo0uafWLaFVPter5/k2rfcrjFJJHX/77xtSDOfJuEFb6oKlFV86FLP1SuyHMW1PSk0U9M5tKkQ=="],
+
+    "@juanie/core-queue/@nestjs/config/@nestjs/common/tslib": ["tslib@2.8.1", "https://repo.huaweicloud.com/repository/npm/tslib/-/tslib-2.8.1.tgz", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "@juanie/service-ai-assistants/@nestjs/config/@nestjs/common/file-type": ["file-type@20.4.1", "https://repo.huaweicloud.com/repository/npm/file-type/-/file-type-20.4.1.tgz", { "dependencies": { "@tokenizer/inflate": "^0.2.6", "strtok3": "^10.2.0", "token-types": "^6.0.0", "uint8array-extras": "^1.4.0" } }, "sha512-hw9gNZXUfZ02Jo0uafWLaFVPter5/k2rfcrjFJJHX/77xtSDOfJuEFb6oKlFV86FLP1SuyHMW1PSk0U9M5tKkQ=="],
+
+    "@juanie/service-ai-assistants/@nestjs/config/@nestjs/common/tslib": ["tslib@2.8.1", "https://repo.huaweicloud.com/repository/npm/tslib/-/tslib-2.8.1.tgz", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
     "@juanie/service-k3s/@nestjs/config/@nestjs/common/file-type": ["file-type@20.4.1", "https://repo.huaweicloud.com/repository/npm/file-type/-/file-type-20.4.1.tgz", { "dependencies": { "@tokenizer/inflate": "^0.2.6", "strtok3": "^10.2.0", "token-types": "^6.0.0", "uint8array-extras": "^1.4.0" } }, "sha512-hw9gNZXUfZ02Jo0uafWLaFVPter5/k2rfcrjFJJHX/77xtSDOfJuEFb6oKlFV86FLP1SuyHMW1PSk0U9M5tKkQ=="],
 
     "@juanie/service-k3s/@nestjs/config/@nestjs/common/tslib": ["tslib@2.8.1", "https://repo.huaweicloud.com/repository/npm/tslib/-/tslib-2.8.1.tgz", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "@juanie/service-ollama/@nestjs/config/@nestjs/common/file-type": ["file-type@20.4.1", "https://repo.huaweicloud.com/repository/npm/file-type/-/file-type-20.4.1.tgz", { "dependencies": { "@tokenizer/inflate": "^0.2.6", "strtok3": "^10.2.0", "token-types": "^6.0.0", "uint8array-extras": "^1.4.0" } }, "sha512-hw9gNZXUfZ02Jo0uafWLaFVPter5/k2rfcrjFJJHX/77xtSDOfJuEFb6oKlFV86FLP1SuyHMW1PSk0U9M5tKkQ=="],
+
+    "@juanie/service-ollama/@nestjs/config/@nestjs/common/tslib": ["tslib@2.8.1", "https://repo.huaweicloud.com/repository/npm/tslib/-/tslib-2.8.1.tgz", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@opentelemetry/auto-instrumentations-node/@opentelemetry/sdk-node/@opentelemetry/exporter-logs-otlp-grpc/@opentelemetry/otlp-exporter-base": ["@opentelemetry/otlp-exporter-base@0.206.0", "https://repo.huaweicloud.com/repository/npm/@opentelemetry/otlp-exporter-base/-/otlp-exporter-base-0.206.0.tgz", { "dependencies": { "@opentelemetry/core": "2.1.0", "@opentelemetry/otlp-transformer": "0.206.0" }, "peerDependencies": { "@opentelemetry/api": "^1.3.0" } }, "sha512-Rv54oSNKMHYS5hv+H5EGksfBUtvPQWFTK+Dk6MjJun9tOijCsFJrhRFvAqg5d67TWSMn+ZQYRKIeXh5oLVrpAQ=="],
 

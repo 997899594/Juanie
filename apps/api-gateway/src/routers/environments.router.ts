@@ -1,3 +1,11 @@
+import {
+  createEnvironmentSchema,
+  environmentIdSchema,
+  grantEnvironmentPermissionSchema,
+  projectIdQuerySchema,
+  revokeEnvironmentPermissionSchema,
+  updateEnvironmentSchema,
+} from '@juanie/core-types'
 import { EnvironmentsService } from '@juanie/service-environments'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -14,21 +22,7 @@ export class EnvironmentsRouter {
   get router() {
     return this.trpc.router({
       create: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string(),
-            name: z.string().min(1).max(100),
-            type: z.enum(['development', 'staging', 'production']),
-            config: z
-              .object({
-                cloudProvider: z.enum(['aws', 'gcp', 'azure']).optional(),
-                region: z.string().optional(),
-                approvalRequired: z.boolean().optional(),
-                minApprovals: z.number().optional(),
-              })
-              .optional(),
-          }),
-        )
+        .input(createEnvironmentSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.environmentsService.create(ctx.user.id, input)
@@ -41,7 +35,7 @@ export class EnvironmentsRouter {
         }),
 
       list: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string() }))
+        .input(projectIdQuerySchema)
         .query(async ({ ctx, input }) => {
           try {
             return await this.environmentsService.list(ctx.user.id, input.projectId)
@@ -53,38 +47,23 @@ export class EnvironmentsRouter {
           }
         }),
 
-      get: this.trpc.protectedProcedure
-        .input(z.object({ environmentId: z.string() }))
-        .query(async ({ ctx, input }) => {
-          try {
-            const environment = await this.environmentsService.get(ctx.user.id, input.environmentId)
-            if (!environment) {
-              throw new TRPCError({ code: 'NOT_FOUND', message: '环境不存在' })
-            }
-            return environment
-          } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取环境详情失败',
-            })
+      get: this.trpc.protectedProcedure.input(environmentIdSchema).query(async ({ ctx, input }) => {
+        try {
+          const environment = await this.environmentsService.get(ctx.user.id, input.environmentId)
+          if (!environment) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: '环境不存在' })
           }
-        }),
+          return environment
+        } catch (error) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: error instanceof Error ? error.message : '获取环境详情失败',
+          })
+        }
+      }),
 
       update: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            environmentId: z.string(),
-            name: z.string().min(1).max(100).optional(),
-            config: z
-              .object({
-                cloudProvider: z.enum(['aws', 'gcp', 'azure']).optional(),
-                region: z.string().optional(),
-                approvalRequired: z.boolean().optional(),
-                minApprovals: z.number().optional(),
-              })
-              .optional(),
-          }),
-        )
+        .input(updateEnvironmentSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             const { environmentId, ...data } = input
@@ -98,7 +77,7 @@ export class EnvironmentsRouter {
         }),
 
       delete: this.trpc.protectedProcedure
-        .input(z.object({ environmentId: z.string() }))
+        .input(environmentIdSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.environmentsService.delete(ctx.user.id, input.environmentId)

@@ -1,0 +1,25 @@
+{
+  "name": "@juanie/service-security-policies",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@juanie/core-database": "workspace:*",
+    "@juanie/core-observability": "workspace:*",
+    "@juanie/core-tokens": "workspace:*",
+    "@nestjs/common": "^11.1.7",
+    "drizzle-orm": "^0.44.7"
+  },
+  "devDependencies": {
+    "@juanie/config-typescript": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

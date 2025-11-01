@@ -1,230 +1,410 @@
-# 环境变量管理
+# 环境变量配置指南
 
-本文档说明 Juanie Monorepo 中的环境变量管理策略。
+本文档详细说明了 AI DevOps 平台所需的所有环境变量。
 
-## 架构
+## 📋 目录
 
-我们使用 **Turborepo 的 globalEnv** 功能来管理环境变量：
+- [必需变量](#必需变量)
+- [数据库配置](#数据库配置)
+- [认证配置](#认证配置)
+- [AI 服务配置](#ai-服务配置)
+- [存储配置](#存储配置)
+- [监控配置](#监控配置)
+- [邮件配置](#邮件配置)
+- [其他配置](#其他配置)
 
-```
-Juanie/
-├── .env.local              # 统一的环境变量文件（根目录）
-├── .env.example            # 环境变量模板
-├── turbo.json              # 配置 globalEnv
-├── apps/
-│   ├── api-gateway/        # 不需要单独的 .env
-│   └── web/                # 不需要单独的 .env
-└── packages/
-    └── services/           # 不需要 .env（它们是库）
-```
+## 必需变量
 
-## 设置环境变量
+这些变量是应用运行的最低要求。
 
-### 1. 创建 .env.local
+### NODE_ENV
 
-在**项目根目录**创建 `.env.local` 文件：
+- **说明**: 运行环境
+- **类型**: `string`
+- **可选值**: `development` | `test` | `production`
+- **默认值**: `development`
+- **示例**: `NODE_ENV=production`
 
-```bash
-cp .env.example .env.local
-```
+### PORT
 
-### 2. 编辑配置
+- **说明**: API 服务器监听端口
+- **类型**: `number`
+- **默认值**: `3001`
+- **示例**: `PORT=3001`
 
-```env
-# 环境
-NODE_ENV=development
+### DATABASE_URL
 
-# 服务器
-PORT=3001
+- **说明**: PostgreSQL 数据库连接字符串
+- **类型**: `string`
+- **格式**: `postgresql://[user]:[password]@[host]:[port]/[database]`
+- **示例**: `DATABASE_URL=postgresql://postgres:password@localhost:5432/devops`
+- **注意**: 
+  - 生产环境必须使用强密码
+  - 建议使用连接池参数: `?pool_timeout=30&connection_limit=10`
 
-# 数据库
-DATABASE_URL=postgresql://user:password@localhost:5432/juanie
+### REDIS_URL
 
-# Redis
-REDIS_URL=redis://localhost:6379
+- **说明**: Redis 连接字符串
+- **类型**: `string`
+- **格式**: `redis://[password]@[host]:[port]/[db]`
+- **示例**: `REDIS_URL=redis://localhost:6379`
+- **注意**: 
+  - 如果 Redis 有密码: `redis://:password@localhost:6379`
+  - 可以指定数据库: `redis://localhost:6379/0`
 
-# CORS
-CORS_ORIGIN=http://localhost:5173
+### JWT_SECRET
 
-# OAuth
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-```
+- **说明**: JWT 令牌签名密钥
+- **类型**: `string`
+- **要求**: 至少 32 字符的随机字符串
+- **示例**: `JWT_SECRET=your-super-secret-jwt-key-change-this-in-production`
+- **生成方法**:
+  ```bash
+  # 使用 openssl 生成
+  openssl rand -base64 32
+  
+  # 使用 Node.js 生成
+  node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+  ```
+- **安全建议**:
+  - 每个环境使用不同的密钥
+  - 定期轮换密钥
+  - 不要提交到版本控制
 
-### 3. 运行应用
+### JWT_EXPIRES_IN
 
-环境变量会自动传递给所有 Turborepo 任务：
+- **说明**: JWT 令牌过期时间
+- **类型**: `string`
+- **格式**: 时间字符串 (如 `7d`, `24h`, `30m`)
+- **默认值**: `7d`
+- **示例**: `JWT_EXPIRES_IN=7d`
 
-```bash
-turbo dev
-# 或
-turbo dev --filter="@juanie/api-gateway"
-```
+## 数据库配置
 
-## 工作原理
+### POSTGRES_PASSWORD
 
-### Turborepo globalEnv
+- **说明**: PostgreSQL 数据库密码（Docker Compose 使用）
+- **类型**: `string`
+- **示例**: `POSTGRES_PASSWORD=strong-password-here`
+- **要求**: 
+  - 至少 16 字符
+  - 包含大小写字母、数字和特殊字符
 
-在 `turbo.json` 中配置：
+### REDIS_PASSWORD
 
-```json
-{
-  "globalEnv": [
-    "NODE_ENV",
-    "PORT",
-    "DATABASE_URL",
-    "REDIS_URL",
-    "CORS_ORIGIN",
-    "VITE_*"
-  ]
-}
-```
+- **说明**: Redis 密码（Docker Compose 使用）
+- **类型**: `string`
+- **示例**: `REDIS_PASSWORD=redis-password-here`
+- **注意**: 如果设置了密码，需要在 `REDIS_URL` 中包含
 
-Turborepo 会：
-1. 从根目录的 `.env.local` 读取这些变量
-2. 自动传递给所有任务（dev、build、test 等）
-3. 在缓存键中包含这些变量（环境变化会触发重新构建）
+## 认证配置
 
-### 应用访问
+### GitHub OAuth
 
-在应用代码中正常访问：
+#### GITHUB_CLIENT_ID
 
-```typescript
-// apps/api-gateway/src/main.ts
-const port = process.env.PORT || 3001
-const dbUrl = process.env.DATABASE_URL
-```
+- **说明**: GitHub OAuth 应用的 Client ID
+- **类型**: `string`
+- **获取方式**: https://github.com/settings/developers
+- **示例**: `GITHUB_CLIENT_ID=Iv1.1234567890abcdef`
 
-## 环境变量列表
+#### GITHUB_CLIENT_SECRET
 
-### 通用
+- **说明**: GitHub OAuth 应用的 Client Secret
+- **类型**: `string`
+- **示例**: `GITHUB_CLIENT_SECRET=1234567890abcdef1234567890abcdef12345678`
 
-| 变量 | 说明 | 默认值 | 必需 |
-|------|------|--------|------|
-| `NODE_ENV` | 运行环境 | `development` | ✅ |
-| `PORT` | API 端口 | `3001` | ❌ |
+#### GITHUB_CALLBACK_URL
 
-### 数据库
+- **说明**: GitHub OAuth 回调 URL
+- **类型**: `string`
+- **格式**: `https://[domain]/auth/github/callback`
+- **示例**: `GITHUB_CALLBACK_URL=http://localhost:3001/auth/github/callback`
+- **注意**: 必须与 GitHub OAuth 应用配置中的回调 URL 一致
 
-| 变量 | 说明 | 默认值 | 必需 |
-|------|------|--------|------|
-| `DATABASE_URL` | PostgreSQL 连接字符串 | - | ✅ |
-| `REDIS_URL` | Redis 连接字符串 | - | ❌ |
+### GitLab OAuth
 
-### 安全
+#### GITLAB_CLIENT_ID
 
-| 变量 | 说明 | 默认值 | 必需 |
-|------|------|--------|------|
-| `CORS_ORIGIN` | CORS 允许的源 | `http://localhost:5173` | ❌ |
+- **说明**: GitLab OAuth 应用的 Application ID
+- **类型**: `string`
+- **获取方式**: https://gitlab.com/-/profile/applications
+- **示例**: `GITLAB_CLIENT_ID=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef`
 
-### OAuth
+#### GITLAB_CLIENT_SECRET
 
-| 变量 | 说明 | 默认值 | 必需 |
-|------|------|--------|------|
-| `GITHUB_CLIENT_ID` | GitHub OAuth Client ID | - | ❌ |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth Secret | - | ❌ |
-| `GOOGLE_CLIENT_ID` | Google OAuth Client ID | - | ❌ |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth Secret | - | ❌ |
+- **说明**: GitLab OAuth 应用的 Secret
+- **类型**: `string`
+- **示例**: `GITLAB_CLIENT_SECRET=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef`
 
-### 前端（VITE_* 前缀）
+#### GITLAB_CALLBACK_URL
 
-| 变量 | 说明 | 默认值 | 必需 |
-|------|------|--------|------|
-| `VITE_API_URL` | API 地址 | `http://localhost:3001` | ❌ |
+- **说明**: GitLab OAuth 回调 URL
+- **类型**: `string`
+- **格式**: `https://[domain]/auth/gitlab/callback`
+- **示例**: `GITLAB_CALLBACK_URL=http://localhost:3001/auth/gitlab/callback`
 
-## 不同环境
+## AI 服务配置
 
-### 开发环境
+### OpenAI
 
-使用 `.env.local`（已在 .gitignore 中）：
+#### OPENAI_API_KEY
 
-```bash
-NODE_ENV=development
-DATABASE_URL=postgresql://localhost:5432/juanie_dev
-```
+- **说明**: OpenAI API 密钥
+- **类型**: `string`
+- **获取方式**: https://platform.openai.com/api-keys
+- **示例**: `OPENAI_API_KEY=sk-1234567890abcdef1234567890abcdef1234567890abcdef`
+- **注意**: 
+  - 保护好 API 密钥，不要泄露
+  - 设置使用限额避免超支
 
-### 测试环境
+### Anthropic
 
-创建 `.env.test.local`：
+#### ANTHROPIC_API_KEY
 
-```bash
-NODE_ENV=test
-DATABASE_URL=postgresql://localhost:5432/juanie_test
-```
+- **说明**: Anthropic (Claude) API 密钥
+- **类型**: `string`
+- **获取方式**: https://console.anthropic.com/
+- **示例**: `ANTHROPIC_API_KEY=sk-ant-1234567890abcdef1234567890abcdef`
 
-运行测试时指定：
+### Google AI
 
-```bash
-NODE_ENV=test turbo test
-```
+#### GOOGLE_AI_API_KEY
 
-### 生产环境
+- **说明**: Google AI (Gemini) API 密钥
+- **类型**: `string`
+- **获取方式**: https://makersuite.google.com/app/apikey
+- **示例**: `GOOGLE_AI_API_KEY=AIzaSy1234567890abcdef1234567890abcdef`
 
-在部署平台（如 Vercel、Railway）设置环境变量，不要提交 `.env.production`。
+### Ollama (本地)
 
-## 最佳实践
+#### OLLAMA_HOST
 
-### ✅ 推荐
+- **说明**: Ollama 服务地址
+- **类型**: `string`
+- **默认值**: `http://localhost:11434`
+- **示例**: `OLLAMA_HOST=http://localhost:11434`
+- **注意**: 
+  - 需要先安装 Ollama: https://ollama.ai/
+  - 可以使用远程 Ollama 服务
 
-- 在根目录维护一个 `.env.local` 文件
-- 使用 `.env.example` 作为模板
-- 敏感信息不要提交到 Git
-- 在 `turbo.json` 的 `globalEnv` 中声明所有环境变量
+## 存储配置
 
-### ❌ 避免
+### MinIO / S3
 
-- 不要在每个应用/包中创建单独的 .env 文件
-- 不要在代码中硬编码配置
-- 不要提交 `.env.local` 到 Git
-- 不要在 `globalEnv` 中遗漏环境变量（会导致缓存问题）
+#### MINIO_ENDPOINT
 
-## 服务包不需要 .env
+- **说明**: MinIO 服务器地址
+- **类型**: `string`
+- **示例**: `MINIO_ENDPOINT=localhost`
 
-服务包（`packages/services/*`）是库，不是独立应用：
+#### MINIO_PORT
 
-```
-packages/services/auth/     # 不需要 .env
-packages/services/projects/ # 不需要 .env
-```
+- **说明**: MinIO 服务器端口
+- **类型**: `number`
+- **默认值**: `9000`
+- **示例**: `MINIO_PORT=9000`
 
-它们：
-- 被 API Gateway 导入
-- 在 API Gateway 的进程中运行
-- 使用 API Gateway 的环境变量
-- 通过依赖注入获取配置
+#### MINIO_ACCESS_KEY
+
+- **说明**: MinIO 访问密钥
+- **类型**: `string`
+- **示例**: `MINIO_ACCESS_KEY=minioadmin`
+
+#### MINIO_SECRET_KEY
+
+- **说明**: MinIO 密钥
+- **类型**: `string`
+- **示例**: `MINIO_SECRET_KEY=minioadmin`
+
+#### MINIO_USE_SSL
+
+- **说明**: 是否使用 SSL
+- **类型**: `boolean`
+- **默认值**: `false`
+- **示例**: `MINIO_USE_SSL=true`
+
+## 监控配置
+
+### OTEL_EXPORTER_OTLP_ENDPOINT
+
+- **说明**: OpenTelemetry OTLP 导出器端点
+- **类型**: `string`
+- **默认值**: `http://localhost:4318/v1/traces`
+- **示例**: `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces`
+
+### OTEL_SERVICE_NAME
+
+- **说明**: OpenTelemetry 服务名称
+- **类型**: `string`
+- **默认值**: `api-gateway`
+- **示例**: `OTEL_SERVICE_NAME=api-gateway`
+
+### OTEL_SERVICE_VERSION
+
+- **说明**: OpenTelemetry 服务版本
+- **类型**: `string`
+- **默认值**: `1.0.0`
+- **示例**: `OTEL_SERVICE_VERSION=1.0.0`
+
+### PROMETHEUS_PORT
+
+- **说明**: Prometheus 指标导出端口
+- **类型**: `number`
+- **默认值**: `9465`
+- **示例**: `PROMETHEUS_PORT=9465`
+
+### METRICS_ENABLED
+
+- **说明**: 是否启用指标收集
+- **类型**: `boolean`
+- **默认值**: `true`
+- **示例**: `METRICS_ENABLED=true`
+
+## 邮件配置
+
+### SMTP_HOST
+
+- **说明**: SMTP 服务器地址
+- **类型**: `string`
+- **示例**: `SMTP_HOST=smtp.gmail.com`
+
+### SMTP_PORT
+
+- **说明**: SMTP 服务器端口
+- **类型**: `number`
+- **常用值**: 
+  - `25` (不加密)
+  - `587` (STARTTLS)
+  - `465` (SSL/TLS)
+- **示例**: `SMTP_PORT=587`
+
+### SMTP_USER
+
+- **说明**: SMTP 用户名
+- **类型**: `string`
+- **示例**: `SMTP_USER=your-email@gmail.com`
+
+### SMTP_PASSWORD
+
+- **说明**: SMTP 密码
+- **类型**: `string`
+- **示例**: `SMTP_PASSWORD=your-app-password`
+- **注意**: 
+  - Gmail 需要使用应用专用密码
+  - 不要使用账户密码
+
+### SMTP_FROM
+
+- **说明**: 发件人地址
+- **类型**: `string`
+- **示例**: `SMTP_FROM=noreply@yourdomain.com`
+
+## 其他配置
+
+### CORS_ORIGIN
+
+- **说明**: CORS 允许的源
+- **类型**: `string`
+- **默认值**: `http://localhost:3000`
+- **示例**: `CORS_ORIGIN=https://yourdomain.com`
+- **注意**: 
+  - 多个源用逗号分隔: `http://localhost:3000,https://yourdomain.com`
+  - 生产环境不要使用 `*`
+
+### LOG_LEVEL
+
+- **说明**: 日志级别
+- **类型**: `string`
+- **可选值**: `error` | `warn` | `info` | `debug` | `trace`
+- **默认值**: `info`
+- **示例**: `LOG_LEVEL=info`
+
+### LOG_PRETTY
+
+- **说明**: 是否使用美化的日志输出
+- **类型**: `boolean`
+- **默认值**: `true` (开发环境), `false` (生产环境)
+- **示例**: `LOG_PRETTY=true`
+
+### K3S_KUBECONFIG_PATH
+
+- **说明**: K3s Kubeconfig 文件路径
+- **类型**: `string`
+- **示例**: `K3S_KUBECONFIG_PATH=/etc/rancher/k3s/k3s.yaml`
+
+## 环境变量优先级
+
+环境变量的加载优先级（从高到低）：
+
+1. 系统环境变量
+2. `.env.local` 文件（不应提交到版本控制）
+3. `.env.[NODE_ENV]` 文件（如 `.env.production`）
+4. `.env` 文件
+5. 默认值
+
+## 安全最佳实践
+
+1. **不要提交敏感信息到版本控制**
+   - 使用 `.gitignore` 忽略 `.env` 文件
+   - 只提交 `.env.example` 模板
+
+2. **使用强密码和密钥**
+   - 至少 16 字符
+   - 包含大小写字母、数字和特殊字符
+   - 使用密码生成器
+
+3. **定期轮换密钥**
+   - JWT 密钥每 3-6 个月轮换一次
+   - API 密钥定期检查和更新
+
+4. **限制访问权限**
+   - 只给必要的人员访问生产环境变量
+   - 使用密钥管理服务（如 AWS Secrets Manager, HashiCorp Vault）
+
+5. **监控和审计**
+   - 记录环境变量的访问和修改
+   - 定期审查配置
 
 ## 故障排查
 
 ### 环境变量未生效
 
-1. 确认 `.env.local` 在**根目录**
-2. 确认变量在 `turbo.json` 的 `globalEnv` 中声明
-3. 重启开发服务器
-4. 清除 Turborepo 缓存：`rm -rf .turbo`
+```bash
+# 检查环境变量是否加载
+echo $DATABASE_URL
 
-### 缓存问题
+# 在应用中打印环境变量（仅开发环境）
+console.log(process.env.DATABASE_URL)
 
-如果修改环境变量后缓存未失效：
+# 检查 .env 文件是否存在
+ls -la .env
+
+# 检查文件权限
+chmod 600 .env
+```
+
+### 数据库连接失败
 
 ```bash
-# 清除缓存
-rm -rf .turbo
+# 测试数据库连接
+psql $DATABASE_URL
 
-# 重新构建
-turbo build --force
+# 检查连接字符串格式
+echo $DATABASE_URL | grep -E "postgresql://.*:.*@.*:.*/.*"
 ```
 
-### 变量未传递给子进程
+### OAuth 认证失败
 
-确保在 `turbo.json` 中声明：
+```bash
+# 检查回调 URL 是否正确
+echo $GITHUB_CALLBACK_URL
 
-```json
-{
-  "globalEnv": ["YOUR_VAR"]
-}
+# 确认 Client ID 和 Secret 是否正确
+echo $GITHUB_CLIENT_ID
+echo $GITHUB_CLIENT_SECRET | wc -c  # 应该是 40 字符
 ```
 
-## 相关文档
+---
 
-- [Turborepo Environment Variables](https://turbo.build/repo/docs/core-concepts/caching#environment-variables)
-- [开发环境设置](../apps/api/docs/development/SETUP.md)
+**最后更新**: 2024-10-31

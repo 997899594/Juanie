@@ -1,4 +1,12 @@
-import { REDIS } from '@juanie/core-database/module'
+import { REDIS } from '@juanie/core-tokens'
+import {
+  createPipelineSchema,
+  pipelineIdSchema,
+  pipelineRunIdSchema,
+  projectIdQuerySchema,
+  triggerPipelineSchema,
+  updatePipelineSchema,
+} from '@juanie/core-types'
 import { PipelinesService } from '@juanie/service-pipelines'
 import { Inject, Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -18,14 +26,7 @@ export class PipelinesRouter {
   get router() {
     return this.trpc.router({
       create: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string(),
-            name: z.string(),
-            description: z.string().optional(),
-            config: z.any(),
-          }),
-        )
+        .input(createPipelineSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.pipelinesService.create(ctx.user.id, input)
@@ -38,7 +39,7 @@ export class PipelinesRouter {
         }),
 
       list: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string() }))
+        .input(projectIdQuerySchema)
         .query(async ({ ctx, input }) => {
           try {
             return await this.pipelinesService.list(ctx.user.id, input.projectId)
@@ -50,63 +51,48 @@ export class PipelinesRouter {
           }
         }),
 
-      get: this.trpc.protectedProcedure
-        .input(z.object({ pipelineId: z.string() }))
-        .query(async ({ ctx, input }) => {
-          const pipeline = await this.pipelinesService.get(ctx.user.id, input.pipelineId)
-          if (!pipeline) {
-            throw new TRPCError({ code: 'NOT_FOUND', message: 'Pipeline 不存在' })
-          }
-          return pipeline
-        }),
+      get: this.trpc.protectedProcedure.input(pipelineIdSchema).query(async ({ ctx, input }) => {
+        const pipeline = await this.pipelinesService.get(ctx.user.id, input.pipelineId)
+        if (!pipeline) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Pipeline 不存在' })
+        }
+        return pipeline
+      }),
 
       update: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            pipelineId: z.string(),
-            name: z.string().optional(),
-            description: z.string().optional(),
-            config: z.any().optional(),
-          }),
-        )
+        .input(updatePipelineSchema)
         .mutation(async ({ ctx, input }) => {
           const { pipelineId, ...data } = input
           return await this.pipelinesService.update(ctx.user.id, pipelineId, data)
         }),
 
       delete: this.trpc.protectedProcedure
-        .input(z.object({ pipelineId: z.string() }))
+        .input(pipelineIdSchema)
         .mutation(async ({ ctx, input }) => {
           return await this.pipelinesService.delete(ctx.user.id, input.pipelineId)
         }),
 
       trigger: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            pipelineId: z.string(),
-            branch: z.string().optional(),
-            commit: z.string().optional(),
-          }),
-        )
+        .input(triggerPipelineSchema)
         .mutation(async ({ ctx, input }) => {
           const { pipelineId, ...data } = input
           return await this.pipelinesService.trigger(ctx.user.id, pipelineId, data)
         }),
 
       cancel: this.trpc.protectedProcedure
-        .input(z.object({ runId: z.string() }))
+        .input(pipelineRunIdSchema)
         .mutation(async ({ ctx, input }) => {
           return await this.pipelinesService.cancel(ctx.user.id, input.runId)
         }),
 
       listRuns: this.trpc.protectedProcedure
-        .input(z.object({ pipelineId: z.string() }))
+        .input(pipelineIdSchema)
         .query(async ({ ctx, input }) => {
           return await this.pipelinesService.listRuns(ctx.user.id, input.pipelineId)
         }),
 
       getRun: this.trpc.protectedProcedure
-        .input(z.object({ runId: z.string() }))
+        .input(pipelineRunIdSchema)
         .query(async ({ ctx, input }) => {
           const run = await this.pipelinesService.getRun(ctx.user.id, input.runId)
           if (!run) {
@@ -116,14 +102,14 @@ export class PipelinesRouter {
         }),
 
       getLogs: this.trpc.protectedProcedure
-        .input(z.object({ runId: z.string() }))
+        .input(pipelineRunIdSchema)
         .query(async ({ ctx, input }) => {
           return await this.pipelinesService.getLogs(ctx.user.id, input.runId)
         }),
 
       // SSE 实时日志流
       streamLogs: this.trpc.protectedProcedure
-        .input(z.object({ runId: z.string() }))
+        .input(pipelineRunIdSchema)
         .subscription(({ input }) => {
           return observable<{ timestamp: string; message: string }>((emit) => {
             // 从 Dragonfly 订阅日志
@@ -154,7 +140,7 @@ export class PipelinesRouter {
 
       // SSE Pipeline 运行状态
       watchRun: this.trpc.protectedProcedure
-        .input(z.object({ runId: z.string() }))
+        .input(pipelineRunIdSchema)
         .subscription(({ input }) => {
           return observable<{ status: string; progress?: number }>((emit) => {
             // 从 Dragonfly 订阅状态更新

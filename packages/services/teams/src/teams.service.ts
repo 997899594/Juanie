@@ -1,6 +1,13 @@
 import * as schema from '@juanie/core-database/schemas'
 import { Trace } from '@juanie/core-observability'
 import { DATABASE } from '@juanie/core-tokens'
+import type {
+  AddTeamMemberInput,
+  CreateTeamInput,
+  RemoveTeamMemberInput,
+  UpdateTeamInput,
+  UpdateTeamMemberRoleInput,
+} from '@juanie/core-types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -11,15 +18,7 @@ export class TeamsService {
 
   // 创建团队
   @Trace('teams.create')
-  async create(
-    userId: string,
-    data: {
-      organizationId: string
-      name: string
-      slug: string
-      description?: string
-    },
-  ) {
+  async create(userId: string, data: CreateTeamInput) {
     // 检查用户是否是组织成员
     const member = await this.getOrgMember(data.organizationId, userId)
     if (!member) {
@@ -100,15 +99,7 @@ export class TeamsService {
 
   // 更新团队
   @Trace('teams.update')
-  async update(
-    userId: string,
-    teamId: string,
-    data: {
-      name?: string
-      slug?: string
-      description?: string
-    },
-  ) {
+  async update(userId: string, teamId: string, data: UpdateTeamInput) {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
@@ -160,14 +151,7 @@ export class TeamsService {
 
   // 添加成员
   @Trace('teams.addMember')
-  async addMember(
-    userId: string,
-    teamId: string,
-    data: {
-      memberId: string
-      role: 'lead' | 'member'
-    },
-  ) {
+  async addMember(userId: string, teamId: string, data: AddTeamMemberInput) {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
@@ -181,13 +165,13 @@ export class TeamsService {
     }
 
     // 检查被添加的用户是否是组织成员
-    const targetOrgMember = await this.getOrgMember(team.organizationId, data.memberId)
+    const targetOrgMember = await this.getOrgMember(team.organizationId, data.userId)
     if (!targetOrgMember) {
       throw new Error('用户不是组织成员')
     }
 
     // 检查是否已经是团队成员
-    const existing = await this.getTeamMember(teamId, data.memberId)
+    const existing = await this.getTeamMember(teamId, data.userId)
     if (existing) {
       throw new Error('用户已经是团队成员')
     }
@@ -196,7 +180,7 @@ export class TeamsService {
       .insert(schema.teamMembers)
       .values({
         teamId,
-        userId: data.memberId,
+        userId: data.userId,
         role: data.role,
       })
       .returning()
@@ -235,14 +219,7 @@ export class TeamsService {
 
   // 更新成员角色
   @Trace('teams.updateMemberRole')
-  async updateMemberRole(
-    userId: string,
-    teamId: string,
-    data: {
-      memberId: string
-      role: 'lead' | 'member'
-    },
-  ) {
+  async updateMemberRole(userId: string, teamId: string, data: UpdateTeamMemberRoleInput) {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
@@ -268,13 +245,7 @@ export class TeamsService {
 
   // 移除成员
   @Trace('teams.removeMember')
-  async removeMember(
-    userId: string,
-    teamId: string,
-    data: {
-      memberId: string
-    },
-  ) {
+  async removeMember(userId: string, teamId: string, data: RemoveTeamMemberInput) {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {

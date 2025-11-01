@@ -19,7 +19,9 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist .tsbuildinfo"
   },
-  "dependencies": {},
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
   "devDependencies": {
     "@juanie/config-typescript": "workspace:*",
     "typescript": "^5.9.3"

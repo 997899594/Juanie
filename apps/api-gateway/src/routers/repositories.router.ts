@@ -1,3 +1,8 @@
+import {
+  connectRepositorySchema,
+  projectIdQuerySchema,
+  repositoryIdSchema,
+} from '@juanie/core-types'
 import { RepositoriesService } from '@juanie/service-repositories'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -15,15 +20,7 @@ export class RepositoriesRouter {
     return this.trpc.router({
       // 连接仓库
       connect: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string(),
-            provider: z.enum(['github', 'gitlab']),
-            fullName: z.string(),
-            cloneUrl: z.url(),
-            defaultBranch: z.string().optional(),
-          }),
-        )
+        .input(connectRepositorySchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.repositoriesService.connect(ctx.user.id, input)
@@ -37,7 +34,7 @@ export class RepositoriesRouter {
 
       // 列出项目的仓库
       list: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string() }))
+        .input(projectIdQuerySchema)
         .query(async ({ ctx, input }) => {
           try {
             return await this.repositoriesService.list(ctx.user.id, input.projectId)
@@ -50,31 +47,29 @@ export class RepositoriesRouter {
         }),
 
       // 获取仓库详情
-      get: this.trpc.protectedProcedure
-        .input(z.object({ repositoryId: z.string() }))
-        .query(async ({ ctx, input }) => {
-          try {
-            const repository = await this.repositoriesService.get(ctx.user.id, input.repositoryId)
+      get: this.trpc.protectedProcedure.input(repositoryIdSchema).query(async ({ ctx, input }) => {
+        try {
+          const repository = await this.repositoriesService.get(ctx.user.id, input.repositoryId)
 
-            if (!repository) {
-              throw new TRPCError({
-                code: 'NOT_FOUND',
-                message: '仓库不存在',
-              })
-            }
-
-            return repository
-          } catch (error) {
+          if (!repository) {
             throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取仓库详情失败',
+              code: 'NOT_FOUND',
+              message: '仓库不存在',
             })
           }
-        }),
+
+          return repository
+        } catch (error) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: error instanceof Error ? error.message : '获取仓库详情失败',
+          })
+        }
+      }),
 
       // 同步仓库元数据
       sync: this.trpc.protectedProcedure
-        .input(z.object({ repositoryId: z.string() }))
+        .input(repositoryIdSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.repositoriesService.sync(ctx.user.id, input.repositoryId)
@@ -88,7 +83,7 @@ export class RepositoriesRouter {
 
       // 断开仓库连接
       disconnect: this.trpc.protectedProcedure
-        .input(z.object({ repositoryId: z.string() }))
+        .input(repositoryIdSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.repositoriesService.disconnect(ctx.user.id, input.repositoryId)

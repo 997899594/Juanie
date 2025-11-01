@@ -21,7 +21,7 @@
     },
     "type-check": {
       "dependsOn": ["^build:packages"],
-      "inputs": ["$TURBO_DEFAULT$", "tsconfig*.json", "../../configs/tsconfig/**"],
+      "inputs": ["$TURBO_DEFAULT$", "tsconfig*.json"],
       "outputs": ["**/*.tsbuildinfo"],
       "cache": true
     },
@@ -51,7 +51,6 @@
     "tsconfig.json",
     "biome.json",
     "bun.config.ts",
-    "configs/**",
     "package.json"
   ],
   "globalEnv": [

@@ -1,3 +1,10 @@
+import {
+  approveDeploymentSchema,
+  createDeploymentSchema,
+  deploymentIdSchema,
+  rejectDeploymentSchema,
+  rollbackDeploymentSchema,
+} from '@juanie/core-types'
 import { DeploymentsService } from '@juanie/service-deployments'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'
@@ -13,17 +20,7 @@ export class DeploymentsRouter {
   get router() {
     return this.trpc.router({
       create: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string().uuid(),
-            environmentId: z.string().uuid(),
-            pipelineRunId: z.string().uuid().optional(),
-            version: z.string(),
-            commitHash: z.string(),
-            branch: z.string(),
-            strategy: z.enum(['rolling', 'blue_green', 'canary']).optional(),
-          }),
-        )
+        .input(createDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
           return await this.deploymentsService.create(ctx.user.id, input)
         }),
@@ -40,46 +37,28 @@ export class DeploymentsRouter {
           return await this.deploymentsService.list(ctx.user.id, input)
         }),
 
-      get: this.trpc.protectedProcedure
-        .input(z.object({ id: z.string().uuid() }))
-        .query(async ({ ctx, input }) => {
-          return await this.deploymentsService.get(ctx.user.id, input.id)
-        }),
+      get: this.trpc.protectedProcedure.input(deploymentIdSchema).query(async ({ ctx, input }) => {
+        return await this.deploymentsService.get(ctx.user.id, input.deploymentId)
+      }),
 
       rollback: this.trpc.protectedProcedure
-        .input(z.object({ id: z.string().uuid() }))
+        .input(rollbackDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
-          return await this.deploymentsService.rollback(ctx.user.id, input.id)
+          return await this.deploymentsService.rollback(ctx.user.id, input.deploymentId)
         }),
 
       approve: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            deploymentId: z.string().uuid(),
-            comments: z.string().optional(),
-          }),
-        )
+        .input(approveDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
-          return await this.deploymentsService.approve(
-            ctx.user.id,
-            input.deploymentId,
-            input.comments,
-          )
+          const { deploymentId, ...data } = input
+          return await this.deploymentsService.approve(ctx.user.id, deploymentId, data)
         }),
 
       reject: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            deploymentId: z.string().uuid(),
-            comments: z.string().optional(),
-          }),
-        )
+        .input(rejectDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
-          return await this.deploymentsService.reject(
-            ctx.user.id,
-            input.deploymentId,
-            input.comments,
-          )
+          const { deploymentId, ...data } = input
+          return await this.deploymentsService.reject(ctx.user.id, deploymentId, data)
         }),
     })
   }

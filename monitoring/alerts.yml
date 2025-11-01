@@ -1,0 +1,298 @@
+# Prometheus 告警规则
+
+groups:
+  # ============================================
+  # API 服务告警
+  # ============================================
+  - name: api_alerts
+    interval: 30s
+    rules:
+      # 服务宕机告警
+      - alert: APIServiceDown
+        expr: up{job="api-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API Gateway 服务宕机"
+          description: "API Gateway ({{ $labels.instance }}) 已宕机超过 1 分钟"
+          
+      # 高错误率告警
+      - alert: HighErrorRate
+        expr: |
+          (
+            rate(http_requests_total{status=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API 错误率过高"
+          description: "API 错误率为 {{ $value | humanizePercentage }}，超过 5% 阈值"
+          
+      # 高延迟告警
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "API 响应延迟过高"
+          description: "API P95 延迟为 {{ $value }}s，超过 1s 阈值"
+          
+      # 请求量异常告警
+      - alert: RequestRateAnomaly
+        expr: |
+          abs(
+            rate(http_requests_total[5m])
+            -
+            rate(http_requests_total[5m] offset 1h)
+          ) / rate(http_requests_total[5m] offset 1h) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "API 请求量异常"
+          description: "API 请求量与 1 小时前相比变化超过 50%"
+
+  # ============================================
+  # 数据库告警
+  # ============================================
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # 数据库连接数过高
+      - alert: HighDatabaseConnections
+        expr: pg_stat_database_numbackends > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "数据库连接数过高"
+          description: "数据库 {{ $labels.datname }} 当前连接数为 {{ $value }}，接近上限"
+          
+      # 数据库查询缓慢
+      - alert: SlowDatabaseQueries
+        expr: pg_stat_statements_mean_exec_time_seconds > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "数据库查询缓慢"
+          description: "数据库平均查询时间为 {{ $value }}s，超过 1s 阈值"
+          
+      # 数据库磁盘使用率高
+      - alert: HighDatabaseDiskUsage
+        expr: |
+          (
+            pg_database_size_bytes
+            /
+            node_filesystem_size_bytes{mountpoint="/var/lib/postgresql/data"}
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "数据库磁盘使用率过高"
+          description: "数据库磁盘使用率为 {{ $value | humanizePercentage }}，超过 80%"
+
+  # ============================================
+  # Redis 告警
+  # ============================================
+  - name: redis_alerts
+    interval: 30s
+    rules:
+      # Redis 内存使用率高
+      - alert: HighRedisMemoryUsage
+        expr: |
+          (
+            redis_memory_used_bytes
+            /
+            redis_memory_max_bytes
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis 内存使用率过高"
+          description: "Redis 内存使用率为 {{ $value | humanizePercentage }}，超过 80%"
+          
+      # Redis 连接数过高
+      - alert: HighRedisConnections
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis 连接数过高"
+          description: "Redis 当前连接数为 {{ $value }}，超过 100"
+          
+      # Redis 键过期率异常
+      - alert: HighRedisEvictionRate
+        expr: rate(redis_evicted_keys_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis 键过期率异常"
+          description: "Redis 键过期率为 {{ $value }}/s，可能内存不足"
+
+  # ============================================
+  # 系统资源告警
+  # ============================================
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # CPU 使用率过高
+      - alert: HighCPUUsage
+        expr: |
+          (
+            100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+          ) > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "CPU 使用率过高"
+          description: "实例 {{ $labels.instance }} CPU 使用率为 {{ $value }}%，超过 80%"
+          
+      # 内存使用率过高
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+            /
+            node_memory_MemTotal_bytes
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "内存使用率过高"
+          description: "实例 {{ $labels.instance }} 内存使用率为 {{ $value | humanizePercentage }}，超过 85%"
+          
+      # 磁盘使用率过高
+      - alert: HighDiskUsage
+        expr: |
+          (
+            (node_filesystem_size_bytes - node_filesystem_avail_bytes)
+            /
+            node_filesystem_size_bytes
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "磁盘使用率过高"
+          description: "实例 {{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 使用率为 {{ $value | humanizePercentage }}，超过 85%"
+          
+      # 磁盘 I/O 过高
+      - alert: HighDiskIO
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "磁盘 I/O 过高"
+          description: "实例 {{ $labels.instance }} 磁盘 I/O 使用率为 {{ $value | humanizePercentage }}"
+
+  # ============================================
+  # 业务指标告警
+  # ============================================
+  - name: business_alerts
+    interval: 1m
+    rules:
+      # 部署失败率过高
+      - alert: HighDeploymentFailureRate
+        expr: |
+          (
+            rate(deployments_total{status="failed"}[1h])
+            /
+            rate(deployments_total[1h])
+          ) > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "部署失败率过高"
+          description: "最近 1 小时部署失败率为 {{ $value | humanizePercentage }}，超过 20%"
+          
+      # Pipeline 失败率过高
+      - alert: HighPipelineFailureRate
+        expr: |
+          (
+            rate(pipeline_runs_total{status="failed"}[1h])
+            /
+            rate(pipeline_runs_total[1h])
+          ) > 0.3
+        for: 30m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "Pipeline 失败率过高"
+          description: "最近 1 小时 Pipeline 失败率为 {{ $value | humanizePercentage }}，超过 30%"
+          
+      # 用户活跃度异常下降
+      - alert: UserActivityDrop
+        expr: |
+          (
+            rate(http_requests_total{path=~"/api/.*"}[1h])
+            /
+            rate(http_requests_total{path=~"/api/.*"}[1h] offset 24h)
+          ) < 0.5
+        for: 1h
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "用户活跃度异常下降"
+          description: "用户活跃度比 24 小时前下降超过 50%"
+
+  # ============================================
+  # 安全告警
+  # ============================================
+  - name: security_alerts
+    interval: 1m
+    rules:
+      # 异常登录尝试
+      - alert: HighFailedLoginAttempts
+        expr: rate(auth_login_attempts_total{status="failed"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "异常登录尝试"
+          description: "最近 5 分钟失败登录尝试为 {{ $value }}/s，可能存在暴力破解"
+          
+      # 异常 API 调用
+      - alert: UnauthorizedAPIAccess
+        expr: rate(http_requests_total{status="401"}[5m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "异常 API 调用"
+          description: "最近 5 分钟未授权 API 调用为 {{ $value }}/s"

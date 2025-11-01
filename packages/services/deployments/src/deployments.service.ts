@@ -1,5 +1,10 @@
 import * as schema from '@juanie/core-database/schemas'
 import { DATABASE } from '@juanie/core-tokens'
+import type {
+  ApproveDeploymentInput,
+  CreateDeploymentInput,
+  RejectDeploymentInput,
+} from '@juanie/core-types'
 import { K3sService } from '@juanie/service-k3s'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq, isNull } from 'drizzle-orm'
@@ -10,18 +15,7 @@ export class DeploymentsService {
   constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
 
   // 创建部署
-  async create(
-    userId: string,
-    data: {
-      projectId: string
-      environmentId: string
-      pipelineRunId?: string
-      version: string
-      commitHash: string
-      branch: string
-      strategy?: 'rolling' | 'blue_green' | 'canary'
-    },
-  ) {
+  async create(userId: string, data: CreateDeploymentInput) {
     // 检查权限
     const hasPermission = await this.checkDeployPermission(
       userId,
@@ -215,7 +209,7 @@ export class DeploymentsService {
   }
 
   // 批准部署
-  async approve(userId: string, deploymentId: string, comments?: string) {
+  async approve(userId: string, deploymentId: string, data: ApproveDeploymentInput) {
     const deployment = await this.get(userId, deploymentId)
     if (!deployment) {
       throw new Error('部署不存在')
@@ -243,7 +237,7 @@ export class DeploymentsService {
       .update(schema.deploymentApprovals)
       .set({
         status: 'approved',
-        comments,
+        comments: data.comment,
         decidedAt: new Date(),
       })
       .where(eq(schema.deploymentApprovals.id, approval.id))
@@ -265,7 +259,7 @@ export class DeploymentsService {
   }
 
   // 拒绝部署
-  async reject(userId: string, deploymentId: string, comments?: string) {
+  async reject(userId: string, deploymentId: string, data: RejectDeploymentInput) {
     const deployment = await this.get(userId, deploymentId)
     if (!deployment) {
       throw new Error('部署不存在')
@@ -293,7 +287,7 @@ export class DeploymentsService {
       .update(schema.deploymentApprovals)
       .set({
         status: 'rejected',
-        comments,
+        comments: data.reason,
         decidedAt: new Date(),
       })
       .where(eq(schema.deploymentApprovals.id, approval.id))

@@ -1,5 +1,6 @@
 import * as schema from '@juanie/core-database/schemas'
 import { DATABASE } from '@juanie/core-tokens'
+import type { ConnectRepositoryInput } from '@juanie/core-types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -9,16 +10,7 @@ export class RepositoriesService {
   constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
 
   // 连接仓库
-  async connect(
-    userId: string,
-    data: {
-      projectId: string
-      provider: 'github' | 'gitlab'
-      fullName: string
-      cloneUrl: string
-      defaultBranch?: string
-    },
-  ) {
+  async connect(userId: string, data: ConnectRepositoryInput) {
     // 检查用户是否有项目权限
     const [project] = await this.db
       .select()

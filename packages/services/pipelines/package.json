@@ -24,6 +24,7 @@
   "dependencies": {
     "@juanie/core-database": "workspace:*",
     "@juanie/core-observability": "workspace:*",
+    "@juanie/core-queue": "workspace:*",
     "@juanie/core-tokens": "workspace:*",
     "@juanie/core-types": "workspace:*",
     "@juanie/core-utils": "workspace:*",

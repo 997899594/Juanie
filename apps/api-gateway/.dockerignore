@@ -1,0 +1,48 @@
+# 依赖
+node_modules
+npm-debug.log
+yarn-error.log
+bun.lock
+
+# 构建输出
+dist
+build
+.next
+.turbo
+
+# 测试
+coverage
+*.test.ts
+*.spec.ts
+test
+
+# 开发文件
+.env.local
+.env.development
+.env.test
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# 文档
+README.md
+CHANGELOG.md
+docs
+
+# 其他
+.DS_Store
+Thumbs.db
+*.log

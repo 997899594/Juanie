@@ -1,5 +1,6 @@
 import * as schema from '@juanie/core-database/schemas'
 import { DATABASE } from '@juanie/core-tokens'
+import type { CreateEnvironmentInput, UpdateEnvironmentInput } from '@juanie/core-types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -8,20 +9,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 export class EnvironmentsService {
   constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
 
-  async create(
-    userId: string,
-    data: {
-      projectId: string
-      name: string
-      type: 'development' | 'staging' | 'production'
-      config?: {
-        cloudProvider?: 'aws' | 'gcp' | 'azure'
-        region?: string
-        approvalRequired?: boolean
-        minApprovals?: number
-      }
-    },
-  ) {
+  async create(userId: string, data: CreateEnvironmentInput) {
     const hasPermission = await this.checkProjectPermission(userId, data.projectId, 'admin')
     if (!hasPermission) {
       throw new Error('没有权限创建环境')
@@ -82,19 +70,7 @@ export class EnvironmentsService {
     return environment
   }
 
-  async update(
-    userId: string,
-    environmentId: string,
-    data: {
-      name?: string
-      config?: {
-        cloudProvider?: 'aws' | 'gcp' | 'azure'
-        region?: string
-        approvalRequired?: boolean
-        minApprovals?: number
-      }
-    },
-  ) {
+  async update(userId: string, environmentId: string, data: UpdateEnvironmentInput) {
     const environment = await this.get(userId, environmentId)
     if (!environment) {
       throw new Error('环境不存在')

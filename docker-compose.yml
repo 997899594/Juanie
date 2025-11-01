@@ -1,27 +1,34 @@
+# 开发环境 Docker Compose 配置
 version: '3.8'
 
 services:
+  # ============================================
+  # 数据库服务
+  # ============================================
   postgres:
-    image: postgres:15-alpine
-    container_name: juanie-postgres
+    image: postgres:17-alpine
+    container_name: ai-devops-postgres-dev
     restart: unless-stopped
     environment:
-      POSTGRES_DB: juanie
+      POSTGRES_DB: devops_dev
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d juanie"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d devops_dev"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - dev-network
 
   redis:
     image: redis:7-alpine
-    container_name: juanie-redis
+    container_name: ai-devops-redis-dev
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -32,7 +39,63 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - dev-network
+
+  # ============================================
+  # 监控服务（开发环境可选）
+  # ============================================
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: ai-devops-jaeger-dev
+    restart: unless-stopped
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - dev-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ai-devops-prometheus-dev
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - dev-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ai-devops-grafana-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    driver: bridge
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local

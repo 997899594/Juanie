@@ -1,3 +1,15 @@
+import {
+  addProjectMemberSchema,
+  assignTeamToProjectSchema,
+  createProjectSchema,
+  organizationIdQuerySchema,
+  projectIdSchema,
+  removeProjectMemberSchema,
+  removeTeamFromProjectSchema,
+  updateProjectMemberRoleSchema,
+  updateProjectSchema,
+  uploadLogoSchema,
+} from '@juanie/core-types'
 import { ProjectsService } from '@juanie/service-projects'
 import { StorageService } from '@juanie/service-storage'
 import { Injectable } from '@nestjs/common'
@@ -17,18 +29,7 @@ export class ProjectsRouter {
     return this.trpc.router({
       // 创建项目
       create: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            organizationId: z.string(),
-            name: z.string().min(1).max(100),
-            slug: z
-              .string()
-              .min(3)
-              .max(50)
-              .regex(/^[a-z0-9-]+$/),
-            description: z.string().max(500).optional(),
-          }),
-        )
+        .input(createProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.projectsService.create(ctx.user.id, input)
@@ -42,7 +43,7 @@ export class ProjectsRouter {
 
       // 列出组织的项目
       list: this.trpc.protectedProcedure
-        .input(z.object({ organizationId: z.string() }))
+        .input(organizationIdQuerySchema)
         .query(async ({ ctx, input }) => {
           try {
             return await this.projectsService.list(ctx.user.id, input.organizationId)
@@ -55,27 +56,25 @@ export class ProjectsRouter {
         }),
 
       // 获取项目详情
-      get: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string() }))
-        .query(async ({ ctx, input }) => {
-          try {
-            const project = await this.projectsService.get(ctx.user.id, input.projectId)
+      get: this.trpc.protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => {
+        try {
+          const project = await this.projectsService.get(ctx.user.id, input.projectId)
 
-            if (!project) {
-              throw new TRPCError({
-                code: 'NOT_FOUND',
-                message: '项目不存在',
-              })
-            }
-
-            return project
-          } catch (error) {
+          if (!project) {
             throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取项目详情失败',
+              code: 'NOT_FOUND',
+              message: '项目不存在',
             })
           }
-        }),
+
+          return project
+        } catch (error) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: error instanceof Error ? error.message : '获取项目详情失败',
+          })
+        }
+      }),
 
       // 更新项目
       update: this.trpc.protectedProcedure
@@ -113,7 +112,7 @@ export class ProjectsRouter {
 
       // 删除项目
       delete: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string() }))
+        .input(projectIdSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.projectsService.delete(ctx.user.id, input.projectId)
@@ -148,7 +147,7 @@ export class ProjectsRouter {
 
       // 列出项目成员
       listMembers: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string() }))
+        .input(projectIdSchema)
         .query(async ({ ctx, input }) => {
           try {
             return await this.projectsService.listMembers(ctx.user.id, input.projectId)
@@ -223,7 +222,7 @@ export class ProjectsRouter {
 
       // 列出项目的团队
       listTeams: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string() }))
+        .input(projectIdSchema)
         .query(async ({ ctx, input }) => {
           try {
             return await this.projectsService.listTeams(ctx.user.id, input.projectId)
@@ -317,7 +316,7 @@ export class ProjectsRouter {
 
       // 删除项目 Logo
       deleteLogo: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string().uuid() }))
+        .input(projectIdSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             // 删除 MinIO 中的文件

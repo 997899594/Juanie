@@ -1,66 +1,10 @@
 /**
  * 数据传输对象（DTO）类型
  * 用于服务方法的输入参数
+ *
+ * 注意：大部分输入类型现在从 Zod schemas 推导（见 schemas.ts）
+ * 这里只保留响应类型和特殊的输入类型
  */
-
-// ============ 组织相关 DTO ============
-
-export interface CreateOrganizationInput {
-  name: string
-  slug: string
-  displayName?: string
-}
-
-export interface UpdateOrganizationInput {
-  name?: string
-  slug?: string
-  displayName?: string
-}
-
-export interface InviteMemberInput {
-  invitedUserId: string
-  role: 'admin' | 'member'
-}
-
-export interface UpdateMemberRoleInput {
-  memberId: string
-  role: 'admin' | 'member'
-}
-
-export interface RemoveMemberInput {
-  memberId: string
-}
-
-// ============ 团队相关 DTO ============
-
-export interface CreateTeamInput {
-  name: string
-  slug: string
-  description?: string
-}
-
-export interface UpdateTeamInput {
-  name?: string
-  slug?: string
-  description?: string
-}
-
-// ============ 项目相关 DTO ============
-
-export interface CreateProjectInput {
-  name: string
-  slug: string
-  description?: string
-  visibility?: 'public' | 'private' | 'internal'
-}
-
-export interface UpdateProjectInput {
-  name?: string
-  slug?: string
-  description?: string
-  visibility?: 'public' | 'private' | 'internal'
-  status?: 'active' | 'inactive' | 'archived'
-}
 
 // ============ 认证相关 DTO ============
 

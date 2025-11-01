@@ -1,12 +1,16 @@
 import * as schema from '@juanie/core-database/schemas'
+import { PIPELINE_QUEUE } from '@juanie/core-queue/tokens'
 import { DATABASE } from '@juanie/core-tokens'
+import type {
+  CreatePipelineInput,
+  TriggerPipelineInput,
+  UpdatePipelineInput,
+} from '@juanie/core-types'
 import { generateId } from '@juanie/core-utils/id'
 import { Inject, Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { and, desc, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-
-export const PIPELINE_QUEUE = 'PIPELINE_QUEUE'
 
 @Injectable()
 export class PipelinesService {
@@ -16,27 +20,7 @@ export class PipelinesService {
   ) {}
 
   // 创建 Pipeline
-  async create(
-    userId: string,
-    data: {
-      projectId: string
-      name: string
-      config: {
-        triggers: {
-          onPush: boolean
-          onPr: boolean
-          onSchedule: boolean
-          schedule?: string
-        }
-        stages: Array<{
-          name: string
-          type: 'build' | 'test' | 'deploy'
-          command: string
-          timeout: number
-        }>
-      }
-    },
-  ) {
+  async create(userId: string, data: CreatePipelineInput) {
     // 检查权限
     const hasPermission = await this.checkProjectPermission(userId, data.projectId)
     if (!hasPermission) {
@@ -91,28 +75,7 @@ export class PipelinesService {
   }
 
   // 更新 Pipeline
-  async update(
-    userId: string,
-    pipelineId: string,
-    data: {
-      name?: string
-      config?: {
-        triggers: {
-          onPush: boolean
-          onPr: boolean
-          onSchedule: boolean
-          schedule?: string
-        }
-        stages: Array<{
-          name: string
-          type: 'build' | 'test' | 'deploy'
-          command: string
-          timeout: number
-        }>
-      }
-      isActive?: boolean
-    },
-  ) {
+  async update(userId: string, pipelineId: string, data: UpdatePipelineInput) {
     const pipeline = await this.get(userId, pipelineId)
     if (!pipeline) {
       throw new Error('Pipeline 不存在')
@@ -123,12 +86,20 @@ export class PipelinesService {
       throw new Error('没有权限更新 Pipeline')
     }
 
+    const updateData: any = {
+      updatedAt: new Date(),
+    }
+
+    if (data.name !== undefined) updateData.name = data.name
+
+    // 只有当 config 完整时才更新
+    if (data.config && data.config.triggers && data.config.stages) {
+      updateData.config = data.config
+    }
+
     const [updated] = await this.db
       .update(schema.pipelines)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(schema.pipelines.id, pipelineId))
       .returning()
 
@@ -153,14 +124,7 @@ export class PipelinesService {
   }
 
   // 手动触发 Pipeline
-  async trigger(
-    userId: string,
-    pipelineId: string,
-    data: {
-      branch?: string
-      commitHash?: string
-    },
-  ) {
+  async trigger(userId: string, pipelineId: string, data: TriggerPipelineInput) {
     const pipeline = await this.get(userId, pipelineId)
     if (!pipeline) {
       throw new Error('Pipeline 不存在')

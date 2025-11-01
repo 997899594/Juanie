@@ -1,3 +1,12 @@
+import {
+  addTeamMemberSchema,
+  createTeamSchema,
+  organizationIdQuerySchema,
+  removeTeamMemberSchema,
+  teamIdSchema,
+  updateTeamMemberRoleSchema,
+  updateTeamSchema,
+} from '@juanie/core-types'
 import { TeamsService } from '@juanie/service-teams'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -19,18 +28,7 @@ export class TeamsRouter {
     return this.trpc.router({
       // 创建团队
       create: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            organizationId: z.string(),
-            name: z.string().min(1).max(100),
-            slug: z
-              .string()
-              .min(3)
-              .max(50)
-              .regex(/^[a-z0-9-]+$/),
-            description: z.string().max(500).optional(),
-          }),
-        )
+        .input(createTeamSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.teamsService.create(ctx.user.id, input)
@@ -44,7 +42,7 @@ export class TeamsRouter {
 
       // 列出组织的团队
       list: this.trpc.protectedProcedure
-        .input(z.object({ organizationId: z.string() }))
+        .input(organizationIdQuerySchema)
         .query(async ({ ctx, input }) => {
           try {
             return await this.teamsService.list(ctx.user.id, input.organizationId)
@@ -57,43 +55,29 @@ export class TeamsRouter {
         }),
 
       // 获取团队详情
-      get: this.trpc.protectedProcedure
-        .input(z.object({ teamId: z.string() }))
-        .query(async ({ ctx, input }) => {
-          try {
-            const team = await this.teamsService.get(ctx.user.id, input.teamId)
+      get: this.trpc.protectedProcedure.input(teamIdSchema).query(async ({ ctx, input }) => {
+        try {
+          const team = await this.teamsService.get(ctx.user.id, input.teamId)
 
-            if (!team) {
-              throw new TRPCError({
-                code: 'NOT_FOUND',
-                message: '团队不存在',
-              })
-            }
-
-            return team
-          } catch (error) {
+          if (!team) {
             throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取团队详情失败',
+              code: 'NOT_FOUND',
+              message: '团队不存在',
             })
           }
-        }),
+
+          return team
+        } catch (error) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: error instanceof Error ? error.message : '获取团队详情失败',
+          })
+        }
+      }),
 
       // 更新团队
       update: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            teamId: z.string(),
-            name: z.string().min(1).max(100).optional(),
-            slug: z
-              .string()
-              .min(3)
-              .max(50)
-              .regex(/^[a-z0-9-]+$/)
-              .optional(),
-            description: z.string().max(500).optional(),
-          }),
-        )
+        .input(updateTeamSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             const { teamId, ...data } = input
@@ -107,28 +91,20 @@ export class TeamsRouter {
         }),
 
       // 删除团队
-      delete: this.trpc.protectedProcedure
-        .input(z.object({ teamId: z.string() }))
-        .mutation(async ({ ctx, input }) => {
-          try {
-            return await this.teamsService.delete(ctx.user.id, input.teamId)
-          } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '删除团队失败',
-            })
-          }
-        }),
+      delete: this.trpc.protectedProcedure.input(teamIdSchema).mutation(async ({ ctx, input }) => {
+        try {
+          return await this.teamsService.delete(ctx.user.id, input.teamId)
+        } catch (error) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: error instanceof Error ? error.message : '删除团队失败',
+          })
+        }
+      }),
 
       // 添加成员
       addMember: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            teamId: z.string(),
-            memberId: z.string(),
-            role: z.enum(['lead', 'member']),
-          }),
-        )
+        .input(addTeamMemberSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             const { teamId, ...data } = input
@@ -143,7 +119,7 @@ export class TeamsRouter {
 
       // 列出团队成员
       listMembers: this.trpc.protectedProcedure
-        .input(z.object({ teamId: z.string() }))
+        .input(teamIdSchema)
         .query(async ({ ctx, input }) => {
           try {
             return await this.teamsService.listMembers(ctx.user.id, input.teamId)
@@ -157,13 +133,7 @@ export class TeamsRouter {
 
       // 更新成员角色
       updateMemberRole: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            teamId: z.string(),
-            memberId: z.string(),
-            role: z.enum(['lead', 'member']),
-          }),
-        )
+        .input(updateTeamMemberRoleSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             const { teamId, ...data } = input
@@ -178,12 +148,7 @@ export class TeamsRouter {
 
       // 移除成员
       removeMember: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            teamId: z.string(),
-            memberId: z.string(),
-          }),
-        )
+        .input(removeTeamMemberSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             const { teamId, ...data } = input
