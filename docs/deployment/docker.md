@@ -254,7 +254,7 @@ sudo systemctl status ai-devops-api
 
 ### 方式 3: Kubernetes 部署
 
-参见 [docs/KUBERNETES.md](./KUBERNETES.md)
+参见 [K3s 部署指南](./k3s.md)
 
 ## 环境变量配置
 
@@ -558,15 +558,15 @@ upstream api_backend {
 
 ### 数据库主从复制
 
-参见 [docs/DATABASE_REPLICATION.md](./DATABASE_REPLICATION.md)
+数据库主从复制配置请参考 [数据库设计文档](../architecture/database.md)
 
 ## 支持
 
 如有问题，请：
 
-1. 查看 [FAQ](./FAQ.md)
+1. 查看 [常见问题](../troubleshooting/common-issues.md)
 2. 搜索 [GitHub Issues](https://github.com/your-org/ai-devops-platform/issues)
-3. 加入 [Discord 社区](https://discord.gg/your-invite)
+3. 查看 [文档中心](../README.md)
 4. 发送邮件至 support@yourdomain.com
 
 ---

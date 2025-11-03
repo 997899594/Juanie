@@ -1,250 +1,222 @@
 <template>
-  <Dialog :open="open" @update:open="$emit('update:open', $event)">
-    <DialogContent class="sm:max-w-[600px]">
-      <DialogHeader>
-        <DialogTitle>{{ isEdit ? '编辑项目' : '创建项目' }}</DialogTitle>
-        <DialogDescription>
-          {{ isEdit ? '更新项目信息和配置' : '创建一个新项目来管理应用和服务' }}
-        </DialogDescription>
-      </DialogHeader>
+  <div class="modal-overlay" @click="$emit('close')">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h3 class="modal-title">创建新项目</h3>
+        <button @click="$emit('close')" class="close-btn">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
 
-      <form @submit.prevent="handleSubmit" class="space-y-4">
-        <!-- 基本信息 -->
-        <div class="space-y-4">
-          <div class="space-y-2">
-            <Label for="name">项目名称</Label>
-            <Input
-              id="name"
-              v-model="formData.name"
-              placeholder="例如：我的应用"
-              required
-            />
-          </div>
+      <form @submit.prevent="handleSubmit" class="modal-body">
+        <div class="form-group">
+          <label for="name" class="form-label">项目名称 *</label>
+          <input
+            id="name"
+            v-model="form.name"
+            type="text"
+            class="form-input"
+            placeholder="输入项目名称"
+            required
+          />
+          <p v-if="errors.name" class="form-error">{{ errors.name }}</p>
+        </div>
 
-          <div class="space-y-2">
-            <Label for="slug">项目标识</Label>
-            <Input
-              id="slug"
-              v-model="formData.slug"
-              placeholder="例如：my-app"
-              required
-              pattern="[a-z0-9-]+"
-              @input="handleSlugInput"
-            />
-            <p class="text-xs text-muted-foreground">
-              只能包含小写字母、数字和连字符
-            </p>
-          </div>
+        <div class="form-group">
+          <label for="displayName" class="form-label">显示名称</label>
+          <input
+            id="displayName"
+            v-model="form.displayName"
+            type="text"
+            class="form-input"
+            placeholder="输入项目显示名称（可选）"
+          />
+        </div>
 
-          <div class="space-y-2">
-            <Label for="description">描述（可选）</Label>
-            <Input
-              id="description"
-              v-model="formData.description"
-              placeholder="项目描述"
-            />
+        <div class="form-group">
+          <label for="description" class="form-label">项目描述</label>
+          <textarea
+            id="description"
+            v-model="form.description"
+            class="form-textarea"
+            rows="3"
+            placeholder="简要描述项目用途和功能"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">项目可见性</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input
+                v-model="form.visibility"
+                type="radio"
+                value="private"
+                class="radio-input"
+              />
+              <div class="radio-content">
+                <div class="radio-title">
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  私有项目
+                </div>
+                <p class="radio-description">只有项目成员可以访问</p>
+              </div>
+            </label>
+            <label class="radio-item">
+              <input
+                v-model="form.visibility"
+                type="radio"
+                value="public"
+                class="radio-input"
+              />
+              <div class="radio-content">
+                <div class="radio-title">
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  公开项目
+                </div>
+                <p class="radio-description">任何人都可以查看项目</p>
+              </div>
+            </label>
+            <label class="radio-item">
+              <input
+                v-model="form.visibility"
+                type="radio"
+                value="internal"
+                class="radio-input"
+              />
+              <div class="radio-content">
+                <div class="radio-title">
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  内部项目
+                </div>
+                <p class="radio-description">组织内部成员可以访问</p>
+              </div>
+            </label>
           </div>
         </div>
 
-        <!-- 项目配置 -->
-        <div class="space-y-4 pt-4 border-t">
-          <h4 class="text-sm font-semibold">项目配置</h4>
-
-          <div class="space-y-2">
-            <Label for="defaultBranch">默认分支</Label>
-            <Input
-              id="defaultBranch"
-              v-model="formData.config.defaultBranch"
-              placeholder="main"
-            />
-          </div>
-
-          <div class="flex items-center space-x-2">
-            <Checkbox
-              id="enableCiCd"
-              v-model:checked="formData.config.enableCiCd"
-            />
-            <Label for="enableCiCd" class="cursor-pointer">
-              启用 CI/CD 流水线
-            </Label>
-          </div>
-
-          <div class="flex items-center space-x-2">
-            <Checkbox
-              id="enableAi"
-              v-model:checked="formData.config.enableAi"
-            />
-            <Label for="enableAi" class="cursor-pointer">
-              启用 AI 辅助功能
-            </Label>
-          </div>
+        <div class="form-group">
+          <label for="repositoryUrl" class="form-label">代码仓库 URL</label>
+          <input
+            id="repositoryUrl"
+            v-model="form.repositoryUrl"
+            type="url"
+            class="form-input"
+            placeholder="https://github.com/username/repo"
+          />
+          <p class="form-help">代码仓库的 URL 地址，用于自动化部署</p>
         </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" @click="$emit('update:open', false)">
+        <div class="modal-footer">
+          <button type="button" @click="$emit('close')" class="btn btn-secondary">
             取消
-          </Button>
-          <Button type="submit" :disabled="loading">
-            <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-            {{ isEdit ? '更新' : '创建' }}
-          </Button>
-        </DialogFooter>
+          </button>
+          <button type="submit" :disabled="loading" class="btn btn-primary">
+            <svg v-if="loading" class="w-4 h-4 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {{ loading ? '创建中...' : '创建项目' }}
+          </button>
+        </div>
       </form>
-    </DialogContent>
-  </Dialog>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Button,
-  Input,
-  Label,
-  Checkbox,
-} from '@juanie/ui'
-import { Loader2 } from 'lucide-vue-next'
-
-interface Project {
-  id: string
-  name: string
-  slug: string
-  description: string | null
-  config: {
-    defaultBranch?: string
-    enableCiCd?: boolean
-    enableAi?: boolean
-  } | null
-}
-
-interface Props {
-  open: boolean
-  loading?: boolean
-  project?: Project | null
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  loading: false,
-  project: null,
-})
+import { ref, reactive } from 'vue'
+import { trpc, type AppRouter } from '@/lib/trpc'
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-  submit: [
-    data: {
-      name: string
-      slug: string
-      description?: string
-      config?: {
-        defaultBranch?: string
-        enableCiCd?: boolean
-        enableAi?: boolean
-      }
-    }
-  ]
+  close: []
+  created: []
 }>()
 
-const isEdit = ref(false)
-const formData = ref({
+const loading = ref(false)
+const errors = ref<Record<string, string>>({})
+
+const form = reactive({
   name: '',
-  slug: '',
+  displayName: '',
   description: '',
-  config: {
-    defaultBranch: 'main',
-    enableCiCd: true,
-    enableAi: false,
-  },
+  repositoryUrl: '',
+  visibility: 'private' as 'public' | 'private' | 'internal'
 })
 
-// 监听 project 变化，用于编辑模式
-watch(
-  () => props.project,
-  (project) => {
-    if (project) {
-      isEdit.value = true
-      formData.value = {
-        name: project.name,
-        slug: project.slug,
-        description: project.description || '',
-        config: {
-          defaultBranch: project.config?.defaultBranch || 'main',
-          enableCiCd: project.config?.enableCiCd ?? true,
-          enableAi: project.config?.enableAi ?? false,
-        },
-      }
-    } else {
-      isEdit.value = false
-      formData.value = {
-        name: '',
-        slug: '',
-        description: '',
-        config: {
-          defaultBranch: 'main',
-          enableCiCd: true,
-          enableAi: false,
-        },
-      }
-    }
-  },
-  { immediate: true }
-)
-
-// 监听 open 变化，关闭时重置表单
-watch(
-  () => props.open,
-  (isOpen) => {
-    if (!isOpen && !props.project) {
-      formData.value = {
-        name: '',
-        slug: '',
-        description: '',
-        config: {
-          defaultBranch: 'main',
-          enableCiCd: true,
-          enableAi: false,
-        },
-      }
-    }
+const validateForm = () => {
+  errors.value = {}
+  
+  if (!form.name.trim()) {
+    errors.value.name = '项目名称不能为空'
+    return false
   }
-)
-
-function handleSlugInput(event: Event) {
-  const input = event.target as HTMLInputElement
-  // 自动转换为小写并替换空格为连字符
-  input.value = input.value.toLowerCase().replace(/\s+/g, '-')
-  formData.value.slug = input.value
+  
+  if (form.name.length < 2) {
+    errors.value.name = '项目名称至少需要2个字符'
+    return false
+  }
+  
+  if (form.name.length > 50) {
+    errors.value.name = '项目名称不能超过50个字符'
+    return false
+  }
+  
+  return true
 }
 
-function handleSubmit() {
-  const data: any = {
-    name: formData.value.name,
-    slug: formData.value.slug,
+const handleSubmit = async () => {
+  if (!validateForm()) {
+    return
   }
-
-  if (formData.value.description) {
-    data.description = formData.value.description
-  }
-
-  // 只在有配置时添加 config
-  if (
-    formData.value.config.defaultBranch ||
-    formData.value.config.enableCiCd !== undefined ||
-    formData.value.config.enableAi !== undefined
-  ) {
-    data.config = {
-      ...(formData.value.config.defaultBranch && {
-        defaultBranch: formData.value.config.defaultBranch,
-      }),
-      enableCiCd: formData.value.config.enableCiCd,
-      enableAi: formData.value.config.enableAi,
+  
+  try {
+    loading.value = true
+    
+    const projectData = {
+      data: {
+        name: form.name.trim(),
+        displayName: form.displayName.trim() || '',
+        description: form.description.trim() || '',
+        repositoryUrl: form.repositoryUrl.trim() || '',
+        visibility: form.visibility
+      }
     }
+    
+    await trpc.projects.create.mutate(projectData)
+    
+    // 重置表单
+    form.name = ''
+    form.displayName = ''
+    form.description = ''
+    form.repositoryUrl = ''
+    form.visibility = 'private'
+    
+    // 通知父组件
+    emit('created')
+  } catch (error: any) {
+    console.error('创建项目失败:', error)
+    
+    // 处理特定错误
+    if (error?.message?.includes('name')) {
+      errors.value.name = '项目名称已存在或不符合要求'
+    } else {
+      // 显示通用错误提示
+      alert('创建项目失败，请稍后重试')
+    }
+  } finally {
+    loading.value = false
   }
-
-  emit('submit', data)
 }
 </script>
+<style scoped>
+/* 移除所有@apply，使用UI库的原生类名和组件 */
+</style>

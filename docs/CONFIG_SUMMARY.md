@@ -273,10 +273,10 @@ DATABASE_URL=postgresql://findbiao:secret@localhost:5432/mydb
 ## 🔗 相关资源
 
 - [详细配置指南](./CONFIGURATION.md)
-- [快速启动指南](../QUICK_START.md)
+- [快速启动指南](./getting-started/quick-start.md)
 - [环境变量列表](./ENVIRONMENT_VARIABLES.md)
-- [故障排查](./TROUBLESHOOTING.md)
-- [部署指南](./DEPLOYMENT.md)
+- [常见问题](./troubleshooting/common-issues.md)
+- [Docker 部署](./deployment/docker.md)
 
 ## 📞 获取帮助
 

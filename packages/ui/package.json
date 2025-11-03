@@ -13,25 +13,7 @@
       "default": "./dist/index.js"
     },
     "./styles": {
-      "default": "./dist/styles/globals.css"
-    },
-    "./styles/*": {
-      "default": "./dist/styles/*"
-    },
-    "./theme": {
-      "types": "./dist/theme/index.d.ts",
-      "import": "./dist/theme/index.js",
-      "default": "./dist/theme/index.js"
-    },
-    "./components/*": {
-      "types": "./dist/components/*/index.d.ts",
-      "import": "./dist/components/*/index.js",
-      "default": "./dist/components/*/index.js"
-    },
-    "./utils": {
-      "types": "./dist/utils/index.d.ts",
-      "import": "./dist/utils/index.js",
-      "default": "./dist/utils/index.js"
+      "default": "./dist/index.css"
     }
   },
   "files": [

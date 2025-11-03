@@ -67,8 +67,7 @@
 │   │   └── users/            # 用户管理
 │   └── config/               # 配置包
 ├── docs/                     # 文档
-├── infra/                    # 基础设施配置
-└── scripts/                  # 脚本工具
+└── infra/                    # 基础设施配置
 ```
 
 ## 🚀 快速开始
@@ -140,13 +139,18 @@ cd packages/services/projects && bun run build
 
 ## 📚 文档
 
-- [架构文档](./docs/ARCHITECTURE.md) - 系统架构和设计
-- [后端开发指南](./docs/BACKEND_GUIDE.md) - 后端开发最佳实践
-- [项目结构](./PROJECT_STRUCTURE.md) - 详细的项目结构说明
-- [部署指南](./docs/DEPLOYMENT.md) - 部署和运维指南
-- [监控指南](./docs/MONITORING.md) - 监控和告警配置
-- [故障排查](./docs/TROUBLESHOOTING.md) - 常见问题和解决方案
+- [文档中心](./docs/README.md) - 完整的文档导航和索引
+- [快速开始](./docs/getting-started/quick-start.md) - 5 分钟快速启动项目
+- [系统架构](./docs/architecture/overview.md) - 系统架构和设计
+- [服务说明](./docs/architecture/services.md) - 微服务架构和职责
+- [数据库设计](./docs/architecture/database.md) - 数据库 Schema 和配置
+- [开发指南](./docs/development/setup.md) - 开发环境搭建和工作流程
+- [Docker 部署](./docs/deployment/docker.md) - Docker Compose 部署方案
+- [K3s 部署](./docs/deployment/k3s.md) - Kubernetes 集群部署
+- [监控配置](./docs/deployment/monitoring.md) - Prometheus 和 Grafana 配置
+- [常见问题](./docs/troubleshooting/common-issues.md) - 故障排查和解决方案
 - [环境变量](./docs/ENVIRONMENT_VARIABLES.md) - 环境变量配置说明
+- [配置指南](./docs/CONFIGURATION.md) - 系统配置详解
 
 ## 🔧 开发工具
 
@@ -255,11 +259,11 @@ K3S_TOKEN=your_k3s_token
 - **Grafana** - 可视化仪表板 (http://localhost:3001)
 - **OpenTelemetry** - 分布式追踪
 
-详细配置请参考 [监控指南](./docs/MONITORING.md)
+详细配置请参考 [监控配置](./docs/deployment/monitoring.md)
 
 ## 🤝 贡献
 
-欢迎贡献！请查看 [贡献指南](./CONTRIBUTING.md)
+欢迎贡献！
 
 ### 开发流程
 
@@ -272,9 +276,13 @@ K3S_TOKEN=your_k3s_token
 ### 代码规范
 
 - 使用 TypeScript
-- 遵循 ESLint 规则
+- 遵循 Biome 规则
 - 编写单元测试
 - 更新文档
+
+### 文档贡献
+
+请参考 [文档贡献指南](./docs/README.md#-文档贡献指南) 了解如何贡献文档。
 
 ## 📄 许可证
 

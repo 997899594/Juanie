@@ -16,13 +16,13 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      'tslib': 'tslib/tslib.es6.js',
     },
     // 确保 UI 库与应用使用同一份 Vue 实例，避免运行时冲突
-    dedupe: ['vue', 'vue-router', '@vueuse/core'],
+    dedupe: ['vue', 'vue-router', '@vueuse/core', '@vueuse/motion'],
     conditions: mode === 'development' ? ['development'] : ['default'],
   },
   optimizeDeps: {
-    // 预构建这些依赖以提升开发体验
     include: [
       'vue',
       'vue-router',
@@ -32,18 +32,18 @@ export default defineConfig(({ mode }) => ({
       '@vueuse/motion',
       'date-fns',
       'zod',
+      'tslib',
     ],
-    // 关键改动：不排除 UI 包，让 Vite 预构建它
-    // 这样就不需要单独构建 UI 包了
     exclude: ['@juanie/core-types', '@juanie/api-new'],
-    // 强制预构建，避免首次启动卡住
-    force: false,
-    // 设置 esbuild 选项
+    // Vite 6 兼容性修复：确保 tslib 被正确处理
     esbuildOptions: {
       target: 'esnext',
-      // 增加内存限制（如果需要）
-      // 注意：这可能需要 Node.js 环境变量 NODE_OPTIONS=--max-old-space-size=4096
     },
+  },
+  // Vite 6 兼容性修复：为 @vueuse/motion 添加特殊处理
+  define: {
+    // 确保 tslib 的 __extends 等函数可用
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
   },
   server: {
     port: 1997,

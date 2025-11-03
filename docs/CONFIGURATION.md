@@ -218,5 +218,5 @@ bun run dev
 ## 📚 相关文档
 
 - [环境变量列表](./ENVIRONMENT_VARIABLES.md)
-- [部署指南](./DEPLOYMENT.md)
-- [故障排查](./TROUBLESHOOTING.md)
+- [Docker 部署](./deployment/docker.md)
+- [常见问题](./troubleshooting/common-issues.md)

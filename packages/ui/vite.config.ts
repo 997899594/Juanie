@@ -51,14 +51,14 @@ export default defineConfig({
         'clsx',
         'tailwind-merge',
         'lucide-vue-next',
-        // 重要：不要 external tslib，让它被内联到代码中
       ],
+      // 注意：tslib 不在 external 列表中，会被内联
       output: {
-        // 保留模块结构以支持 tree-shaking
-        preserveModules: true,
-        preserveModulesRoot: 'src',
+        // 不保留模块结构，打包成单个文件以避免模块解析问题
+        // preserveModules: false,
         // 使用相对路径导入，确保模块解析正确
         entryFileNames: '[name].js',
+        chunkFileNames: 'chunks/[name]-[hash].js',
         // 为外部依赖提供全局变量名（用于 UMD 格式，这里不需要）
         globals: {
           vue: 'Vue',
@@ -67,8 +67,8 @@ export default defineConfig({
         exports: 'named',
         // 样式文件命名
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'style.css') return 'styles/globals.css'
-          if (assetInfo.name?.endsWith('.css')) return 'styles/[name][extname]'
+          if (assetInfo.name === 'style.css') return 'globals.css'
+          if (assetInfo.name?.endsWith('.css')) return '[name][extname]'
           return 'assets/[name][extname]'
         },
       },

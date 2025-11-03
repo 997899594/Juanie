@@ -285,11 +285,13 @@ const handleSubmit = async () => {
     
     const updateData = {
       id: props.environment?.id || '',
-      data: {
-        displayName: form.description.trim() || form.name.trim(),
-        description: form.description.trim() || undefined,
-        status: form.status === 'active' ? 'active' as const : 'inactive' as const
-      }
+      displayName: form.description.trim() || form.name.trim(),
+      url: form.url.trim() || undefined,
+      branch: undefined,
+      isActive: form.status === 'active',
+      config: Object.keys(environmentVariables).length > 0 ? {
+        environmentVariables
+      } : undefined
     }
     
     // 暂时注释掉不存在的 API 调用
@@ -300,7 +302,7 @@ const handleSubmit = async () => {
     
     // 模拟返回更新后的环境数据
     const result = {
-      ...props.environment!,
+      ...props.environment,
       displayName: form.description.trim() || form.name.trim(),
       status: form.status as 'active' | 'inactive' | 'error',
       updatedAt: new Date().toISOString()

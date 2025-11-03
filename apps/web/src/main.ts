@@ -1,15 +1,14 @@
 // 应用组件与路由
 
-import { MotionPlugin } from '@vueuse/motion'
 import { createPinia } from 'pinia'
 import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import { createApp } from 'vue'
+import { MotionPlugin } from '@vueuse/motion'
 import App from './App.vue'
 import router from './router'
 
 // 导入样式
 import './styles/main.css'
-import '@juanie/ui/styles'
 
 // 创建应用实例
 const app = createApp(App)

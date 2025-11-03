@@ -369,7 +369,7 @@ docker-compose exec -T postgres psql -U findbiao juanie_ai_devops < backup.sql
 
 ## 📚 相关文档
 
-- [配置管理](./CONFIGURATION.md)
-- [Docker 配置共享](./DOCKER_ENV_SHARING.md)
-- [快速启动](../QUICK_START.md)
-- [K3s 安装](../K3S_SETUP.md)
+- [配置管理](../CONFIGURATION.md)
+- [Docker 配置共享](../DOCKER_ENV_SHARING.md)
+- [快速启动](../getting-started/quick-start.md)
+- [K3s 部署](../deployment/k3s.md)

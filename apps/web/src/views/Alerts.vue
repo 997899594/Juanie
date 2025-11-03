@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useMotion } from '@vueuse/motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@juanie/ui'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@juanie/ui'
 import { Badge } from '@juanie/ui'

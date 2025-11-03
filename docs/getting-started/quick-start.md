@@ -1,6 +1,10 @@
-# 启动服务指南
+# 快速启动指南
 
-## 快速启动
+## 🎯 概述
+
+本指南将帮助你快速启动整个 AI DevOps 平台，包括前端、后端和基础服务。
+
+## 🚀 快速启动
 
 ### 1. 启动基础服务（数据库 + 缓存）
 
@@ -48,7 +52,7 @@ bun run dev
 
 前端应该运行在: `http://localhost:5173`
 
-## 服务端口
+## 📋 服务端口
 
 | 服务 | 端口 | 说明 |
 |------|------|------|
@@ -62,7 +66,7 @@ bun run dev
 | Prometheus | 9090 | 指标收集 |
 | Grafana | 3000 | 监控可视化 |
 
-## 环境变量
+## ⚙️ 环境变量配置
 
 ### 后端 (.env)
 ```env
@@ -96,7 +100,7 @@ CORS_ORIGIN=http://localhost:5173
 VITE_API_URL=http://localhost:3000
 ```
 
-## 验证服务
+## ✅ 验证服务
 
 ### 检查 PostgreSQL
 ```bash
@@ -118,7 +122,55 @@ curl http://localhost:3000/health
 ### 检查前端
 访问: http://localhost:5173
 
-## 常见问题
+## 🎯 前端开发特别说明
+
+### 核心改变
+
+**不再构建 UI 包！** Vite 会直接处理 UI 包的源码。
+
+### 前端启动步骤
+
+```bash
+# 1. 清理（如果之前卡死过）
+bun run fix:vite
+
+# 2. 启动 Web 应用
+cd apps/web
+bun run dev
+
+# 或者从根目录
+bun run dev:web
+```
+
+### 优点
+
+- ⚡ **极快启动**：不需要构建 UI 包
+- 🔥 **热更新**：修改 UI 组件立即生效
+- 🎨 **易于定制**：直接修改 shadcn 组件源码
+- 🐛 **易于调试**：直接调试源码，不是构建产物
+
+### 架构说明
+
+```
+packages/ui/
+  src/components/ui/  ← shadcn 组件源码
+  (不需要构建！)
+
+apps/web/
+  ↓ 直接导入
+  import { Button } from '@juanie/ui'
+  ↓ Vite 自动处理
+  (预构建 + HMR)
+```
+
+### 关键理解
+
+1. **shadcn-vue 不是 npm 包**，是源码
+2. **不需要构建**，Vite 会处理
+3. **修改即生效**，有 HMR
+4. **397 个文件**不是问题，Vite 只处理用到的
+
+## 🔧 常见问题
 
 ### 1. 端口被占用
 ```bash
@@ -168,7 +220,57 @@ docker-compose restart dragonfly
 docker-compose exec dragonfly redis-cli ping
 ```
 
-### 6. GitLab 启动慢
+### 5. 后端启动失败
+```bash
+# 检查依赖
+cd apps/api-gateway
+bun install
+
+# 检查数据库迁移
+bun run db:push
+
+# 查看详细错误
+bun run dev
+```
+
+### 6. 前端 Vite 卡死
+
+#### 方案 1：清理并重试
+
+```bash
+bun run clean:stuck
+bun run dev:web
+```
+
+#### 方案 2：完全重置
+
+```bash
+# 1. 杀死所有进程
+pkill -9 -f "vite|esbuild|node"
+
+# 2. 清理所有缓存
+rm -rf node_modules/.vite
+rm -rf apps/web/node_modules/.vite
+rm -rf packages/ui/dist
+
+# 3. 重新启动
+bun run dev:web
+```
+
+#### 方案 3：使用轮询模式
+
+如果文件监听有问题，编辑 `apps/web/vite.config.ts`：
+
+```typescript
+server: {
+  watch: {
+    usePolling: true,  // 改为 true
+    interval: 1000,
+  },
+}
+```
+
+### 7. GitLab 启动慢
 ```bash
 # GitLab 首次启动需要 5-10 分钟
 # 查看启动进度
@@ -181,7 +283,7 @@ docker-compose ps gitlab
 docker-compose restart gitlab
 ```
 
-### 7. GitLab 内存不足
+### 8. GitLab 内存不足
 ```bash
 # 当前配置已经是轻量级 GitLab
 # - 禁用了内置监控、容器注册表等不必要服务
@@ -196,37 +298,23 @@ docker-compose stop gitlab
 # deploy.resources.limits.memory: 4G -> 2G
 ```
 
-### 5. 后端启动失败
-```bash
-# 检查依赖
-cd apps/api-gateway
-bun install
+## 🚫 前端开发注意事项
 
-# 检查数据库迁移
-bun run db:push
+### 不要做的事
 
-# 查看详细错误
-bun run dev
-```
+- ❌ 不要运行 `bun run ui:build`
+- ❌ 不要尝试构建 UI 包
+- ❌ 不要担心 `packages/ui/dist` 不存在
+- ❌ 不要在 turbo.json 中依赖 UI 构建
 
-## 停止服务
+### 要做的事
 
-### 停止所有服务
-```bash
-# 停止但保留数据
-docker-compose down
+- ✅ 直接启动 Web 应用
+- ✅ 直接修改 UI 组件源码
+- ✅ 享受快速的开发体验
+- ✅ 需要新组件时用 `shadcn-vue add`
 
-# 停止并删除数据（谨慎）
-docker-compose down -v
-```
-
-### 停止特定服务
-```bash
-docker-compose stop postgres
-docker-compose stop dragonfly
-```
-
-## 启动 GitLab 私服（可选）
+## 🔌 启动 GitLab 私服（可选）
 
 ### 轻量级配置说明
 当前 GitLab 配置已优化为轻量级：
@@ -301,7 +389,7 @@ CREATE DATABASE gitlab_dev;
 GRANT ALL PRIVILEGES ON DATABASE gitlab_dev TO findbiao;
 ```
 
-## 启动监控服务（可选）
+## 📊 启动监控服务（可选）
 
 ```bash
 # 启动所有监控服务
@@ -313,7 +401,25 @@ docker-compose up -d jaeger prometheus grafana
 # Grafana: http://localhost:3000 (admin/admin)
 ```
 
-## 生产环境部署
+## 🛑 停止服务
+
+### 停止所有服务
+```bash
+# 停止但保留数据
+docker-compose down
+
+# 停止并删除数据（谨慎）
+docker-compose down -v
+```
+
+### 停止特定服务
+```bash
+docker-compose stop postgres
+docker-compose stop dragonfly
+docker-compose stop gitlab
+```
+
+## 🚀 生产环境部署
 
 ```bash
 # 使用生产配置
@@ -323,10 +429,20 @@ docker-compose -f docker-compose.prod.yml up -d
 docker-compose -f docker-compose.prod.yml logs -f
 ```
 
-## 下一步
+## 📖 相关文档
 
-服务启动后，参考 `E2E_TEST_PLAN.md` 开始测试应用流程。
+- [架构概述](../architecture/overview.md) - 系统架构说明
+- [开发环境搭建](../development/setup.md) - 详细的开发环境配置
+- [Docker 部署](../deployment/docker.md) - Docker 部署指南
+- [常见问题](../troubleshooting/common-issues.md) - 故障排查指南
 
----
+## 💡 提示
 
-**提示**: 首次启动可能需要几分钟来下载 Docker 镜像和安装依赖。
+- 首次启动可能需要几分钟来下载 Docker 镜像和安装依赖
+- GitLab 首次启动需要 5-10 分钟，请耐心等待
+- 建议先启动基础服务，确认正常后再启动应用服务
+- 开发时只需要启动 PostgreSQL、Dragonfly、后端和前端即可
+
+## 🎉 开始开发
+
+所有服务启动后，访问 http://localhost:5173 开始使用平台！

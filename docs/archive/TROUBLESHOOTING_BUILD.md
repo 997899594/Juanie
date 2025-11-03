@@ -181,6 +181,3 @@ bun -v >> build-diagnosis.txt
 ## 相关配置文件
 
 - `packages/ui/vite.config.ts` - UI 包构建配置
-- `packages/ui/scripts/clean-build.sh` - UI 包清理脚本
-- `scripts/kill-stuck-processes.sh` - 全局进程清理脚本
-- `scripts/diagnose-build.sh` - 诊断脚本

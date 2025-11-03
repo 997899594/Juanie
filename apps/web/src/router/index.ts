@@ -1,7 +1,9 @@
+import { Home } from 'lucide-vue-next'
 import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHistory } from 'vue-router'
 // 只导入布局组件和登录页（需要立即加载）
 import AppLayout from '@/layouts/AppLayout.vue'
+import Apps from '@/views/Apps.vue'
 import Login from '@/views/Login.vue'
 
 // 扩展路由元数据类型
@@ -44,7 +46,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'projects',
         name: 'projects',
-        component: Projects,
+        component: () => import('@/views/Projects.vue'),
         meta: {
           title: '项目管理',
           navigation: {
@@ -57,7 +59,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'projects/:id',
         name: 'project-detail',
-        component: ProjectDetail,
+        component: () => import('@/views/ProjectDetail.vue'),
         props: true,
         meta: {
           title: '项目详情',
@@ -67,7 +69,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'pipelines',
         name: 'pipelines',
-        component: Pipelines,
+        component: () => import('@/views/Pipelines.vue'),
         meta: {
           title: '流水线',
           navigation: {
@@ -80,7 +82,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'deployments',
         name: 'deployments',
-        component: Deployments,
+        component: () => import('@/views/Deployments.vue'),
         meta: {
           title: '部署记录',
           navigation: {
@@ -105,7 +107,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'ai/assistants',
         name: 'ai-assistants',
-        component: AIAssistants,
+        component: () => import('@/views/ai/AIAssistants.vue'),
         meta: {
           title: 'AI 助手',
           navigation: {
@@ -147,7 +149,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'security/zero-trust',
         name: 'security-zero-trust',
-        component: ZeroTrust,
+        component: () => import('@/views/security/ZeroTrust.vue'),
         meta: {
           title: '零信任策略',
           navigation: {
@@ -202,7 +204,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard',
         name: 'dashboard',
-        component: Dashboard,
+        component: () => import('@/views/Dashboard.vue'),
         meta: {
           title: '仪表盘',
           navigation: {
@@ -215,7 +217,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'monitoring',
         name: 'monitoring',
-        component: Monitoring,
+        component: () => import('@/views/Monitoring.vue'),
         meta: {
           title: '性能监控',
           navigation: {
@@ -295,7 +297,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'cost/tracking',
         name: 'cost-tracking',
-        component: CostTracking,
+        component: () => import('@/views/cost/CostTracking.vue'),
         meta: {
           title: '成本跟踪',
           navigation: {
@@ -485,7 +487,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'documents',
         name: 'documents',
-        component: Documents,
+        component: () => import('@/views/Documents.vue'),
         meta: {
           title: '文档',
           navigation: {
@@ -498,7 +500,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'settings',
         name: 'settings',
-        component: Settings,
+        component: () => import('@/views/Settings.vue'),
         meta: {
           title: '设置',
           navigation: {

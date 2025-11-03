@@ -211,8 +211,8 @@ docker-compose restart gitlab
 ## 📚 相关文档
 
 - [配置管理指南](./CONFIGURATION.md)
-- [数据库配置](./DATABASE_CONFIG.md)
-- [快速启动指南](../QUICK_START.md)
+- [数据库设计](./architecture/database.md)
+- [快速启动指南](./getting-started/quick-start.md)
 
 ## 🔗 Docker Compose 文档
 

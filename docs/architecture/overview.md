@@ -298,7 +298,8 @@ K3s Cluster
 
 ## 相关文档
 
-- [后端开发指南](./BACKEND_GUIDE.md)
-- [部署指南](./DEPLOYMENT.md)
-- [监控指南](./MONITORING.md)
-- [故障排查](./TROUBLESHOOTING.md)
+- [服务说明](./services.md)
+- [数据库设计](./database.md)
+- [Docker 部署](../deployment/docker.md)
+- [监控配置](../deployment/monitoring.md)
+- [常见问题](../troubleshooting/common-issues.md)

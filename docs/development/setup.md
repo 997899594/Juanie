@@ -656,10 +656,9 @@ docker run -p 3001:3001 \
 
 ### 文档
 
-- [架构文档](../../ARCHITECTURE_ANALYSIS.md)
-- [迁移指南](./MIGRATION_GUIDE.md)
-- [需求文档](./requirements.md)
-- [设计文档](./design.md)
+- [系统架构](../architecture/overview.md)
+- [服务说明](../architecture/services.md)
+- [包开发指南](../PACKAGE_DEVELOPMENT.md)
 
 ### 工具
 

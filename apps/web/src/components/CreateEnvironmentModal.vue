@@ -173,7 +173,6 @@ const form = reactive({
   description: '',
   type: '' as 'development' | 'staging' | 'production' | '',
   url: '',
-  status: 'active' as 'active' | 'inactive',
   variables: [] as EnvironmentVariable[]
 })
 
@@ -255,11 +254,11 @@ const handleSubmit = async () => {
       projectId: props.projectId,
       name: form.name.trim(),
       displayName: form.description.trim() || form.name.trim(),
-      description: form.description.trim() || undefined,
-      environmentType: 'development' as const,
-      status: form.status === 'active' ? 'active' as const : 'inactive' as const,
-      cloudProvider: 'aws' as const,
-      region: 'us-east-1'
+      url: form.url.trim() || undefined,
+      branch: undefined,
+      config: Object.keys(environmentVariables).length > 0 ? {
+        environmentVariables
+      } : undefined
     }
     
     const result = await trpc.environments.create.mutate(createData)

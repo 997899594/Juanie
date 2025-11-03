@@ -144,6 +144,6 @@ bun dev
 
 ## 📚 相关文档
 
-- [配置管理指南](./CONFIGURATION.md)
-- [快速启动指南](../QUICK_START.md)
-- [故障排查](./TROUBLESHOOTING.md)
+- [配置管理指南](../CONFIGURATION.md)
+- [快速启动指南](../getting-started/quick-start.md)
+- [常见问题](../troubleshooting/common-issues.md)

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useMotion } from '@vueuse/motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@juanie/ui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@juanie/ui'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@juanie/ui'
