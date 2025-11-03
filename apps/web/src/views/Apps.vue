@@ -1,18 +1,13 @@
 <template>
-  <div class="flex flex-col h-full">
-    <!-- 页面头部 -->
-    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
-      <div class="space-y-1">
-        <h1 class="text-2xl font-bold tracking-tight text-foreground">我的应用</h1>
-        <p class="text-sm text-muted-foreground">
-          管理和部署你的应用程序
-        </p>
-      </div>
-      <Button @click="showCreateDialog = true" class="gap-2 shadow-sm self-start lg:self-auto">
+  <PageContainer title="我的应用" description="管理和部署你的应用程序">
+    <template #actions>
+      <Button @click="showCreateDialog = true" class="gap-2 shadow-sm">
         <Plus class="h-4 w-4" />
         创建应用
       </Button>
-    </div>
+    </template>
+    
+    <div class="flex flex-col h-full">
 
     <!-- 应用统计卡片 -->
     <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-8">
@@ -244,10 +239,12 @@
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  </div>
+    </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/PageContainer.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {

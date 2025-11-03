@@ -85,9 +85,11 @@ function importTheme() {
     const matches = importText.value.matchAll(/--[\w-]+:\s*([^;]+);/g)
     for (const match of matches) {
       const [full, value] = match
-      const varName = full.split(':')[0].trim()
+      if (!full || !value) continue
+      const varName = full.split(':')[0]?.trim()
+      if (!varName) continue
       const color = editableColors.value.find((c) => c.var === varName)
-      if (color) {
+      if (color && value) {
         color.value = value.trim()
         updateColor(varName, value.trim())
       }
@@ -106,7 +108,10 @@ const groupedColors = computed(() => {
     if (!groups[color.category]) {
       groups[color.category] = []
     }
-    groups[color.category].push(color)
+    const group = groups[color.category]
+    if (group) {
+      group.push(color)
+    }
   })
   return groups
 })

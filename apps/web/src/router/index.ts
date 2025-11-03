@@ -1,148 +1,143 @@
-import type { RouteRecordRaw } from "vue-router";
-import { createRouter, createWebHistory } from "vue-router";
-import AppLayout from "@/layouts/AppLayout.vue";
-import Apps from "@/views/Apps.vue";
-// AI 智能化模块
-import AIAssistants from "@/views/ai/AIAssistants.vue";
-// 成本与可持续性模块
-import CostTracking from "@/views/cost/CostTracking.vue";
-import Dashboard from "@/views/Dashboard.vue";
-import Deployments from "@/views/Deployments.vue";
-import Documents from "@/views/Documents.vue";
-import Home from "@/views/Home.vue";
-import Login from "@/views/Login.vue";
-import Monitoring from "@/views/Monitoring.vue";
-import Pipelines from "@/views/Pipelines.vue";
-import ProjectDetail from "@/views/ProjectDetail.vue";
-import Projects from "@/views/Projects.vue";
-import Settings from "@/views/Settings.vue";
-// 安全与合规模块
-import ZeroTrust from "@/views/security/ZeroTrust.vue";
+import type { RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
+// 只导入布局组件和登录页（需要立即加载）
+import AppLayout from '@/layouts/AppLayout.vue'
+import Login from '@/views/Login.vue'
 
 // 扩展路由元数据类型
-declare module "vue-router" {
+declare module 'vue-router' {
   interface RouteMeta {
-    title?: string;
-    requiresAuth?: boolean;
+    title?: string
+    requiresAuth?: boolean
     // 导航菜单配置
     navigation?: {
-      group: string;
-      icon: string;
-      order: number;
-      badge?: string;
-      hidden?: boolean;
-    };
+      group: string
+      icon: string
+      order: number
+      badge?: string
+      hidden?: boolean
+    }
   }
 }
 
 // 路由配置
 const routes: RouteRecordRaw[] = [
   {
-    path: "/",
+    path: '/',
     component: AppLayout,
     meta: { requiresAuth: true },
     children: [
       // 应用管理模块
       {
-        path: "",
-        name: "apps",
+        path: '',
+        name: 'apps',
         component: Apps,
         meta: {
-          title: "应用管理",
+          title: '应用管理',
           navigation: {
-            group: "应用管理",
-            icon: "AppWindow",
+            group: '应用管理',
+            icon: 'AppWindow',
             order: 1,
           },
         },
       },
       {
-        path: "projects",
-        name: "projects",
+        path: 'projects',
+        name: 'projects',
         component: Projects,
         meta: {
-          title: "项目管理",
+          title: '项目管理',
           navigation: {
-            group: "应用管理",
-            icon: "FolderOpen",
+            group: '应用管理',
+            icon: 'FolderOpen',
             order: 2,
           },
         },
       },
       {
-        path: "projects/:id",
-        name: "project-detail",
+        path: 'projects/:id',
+        name: 'project-detail',
         component: ProjectDetail,
         props: true,
         meta: {
-          title: "项目详情",
-          navigation: { hidden: true, group: "", icon: "", order: 0 },
+          title: '项目详情',
+          navigation: { hidden: true, group: '', icon: '', order: 0 },
         },
       },
       {
-        path: "pipelines",
-        name: "pipelines",
+        path: 'pipelines',
+        name: 'pipelines',
         component: Pipelines,
         meta: {
-          title: "流水线",
+          title: '流水线',
           navigation: {
-            group: "应用管理",
-            icon: "GitBranch",
+            group: '应用管理',
+            icon: 'GitBranch',
             order: 3,
           },
         },
       },
       {
-        path: "deployments",
-        name: "deployments",
+        path: 'deployments',
+        name: 'deployments',
         component: Deployments,
         meta: {
-          title: "部署记录",
+          title: '部署记录',
           navigation: {
-            group: "应用管理",
-            icon: "Rocket",
+            group: '应用管理',
+            icon: 'Rocket',
             order: 4,
           },
+        },
+      },
+      {
+        path: 'deployments/:id',
+        name: 'deployment-detail',
+        component: () => import('@/views/DeploymentDetail.vue'),
+        props: true,
+        meta: {
+          title: '部署详情',
+          navigation: { hidden: true, group: '', icon: '', order: 0 },
         },
       },
 
       // AI 智能化模块
       {
-        path: "ai/assistants",
-        name: "ai-assistants",
+        path: 'ai/assistants',
+        name: 'ai-assistants',
         component: AIAssistants,
         meta: {
-          title: "AI 助手",
+          title: 'AI 助手',
           navigation: {
-            group: "AI 智能化",
-            icon: "Bot",
+            group: 'AI 智能化',
+            icon: 'Bot',
             order: 1,
-            badge: "Beta",
+            badge: 'Beta',
           },
         },
       },
       {
-        path: "ai/recommendations",
-        name: "ai-recommendations",
-        component: () => import("@/views/ai/AIRecommendations.vue"),
+        path: 'ai/recommendations',
+        name: 'ai-recommendations',
+        component: () => import('@/views/ai/AIRecommendations.vue'),
         meta: {
-          title: "智能推荐",
+          title: '智能推荐',
           navigation: {
-            group: "AI 智能化",
-            icon: "Brain",
+            group: 'AI 智能化',
+            icon: 'Brain',
             order: 2,
           },
         },
       },
       {
-        path: "ai/code-analysis",
-        name: "ai-code-analysis",
-        component: () => import("@/views/ai/CodeAnalysis.vue"),
+        path: 'ai/code-analysis',
+        name: 'ai-code-analysis',
+        component: () => import('@/views/ai/CodeAnalysis.vue'),
         meta: {
-          title: "代码分析",
+          title: '代码分析',
           navigation: {
-            group: "AI 智能化",
-            icon: "Code",
+            group: 'AI 智能化',
+            icon: 'Code',
             order: 3,
           },
         },
@@ -150,54 +145,54 @@ const routes: RouteRecordRaw[] = [
 
       // 安全与合规模块
       {
-        path: "security/zero-trust",
-        name: "security-zero-trust",
+        path: 'security/zero-trust',
+        name: 'security-zero-trust',
         component: ZeroTrust,
         meta: {
-          title: "零信任策略",
+          title: '零信任策略',
           navigation: {
-            group: "安全与合规",
-            icon: "Shield",
+            group: '安全与合规',
+            icon: 'Shield',
             order: 1,
-            badge: "New",
+            badge: 'New',
           },
         },
       },
       {
-        path: "security/vulnerabilities",
-        name: "security-vulnerabilities",
-        component: () => import("@/views/security/Vulnerabilities.vue"),
+        path: 'security/vulnerabilities',
+        name: 'security-vulnerabilities',
+        component: () => import('@/views/security/Vulnerabilities.vue'),
         meta: {
-          title: "漏洞扫描",
+          title: '漏洞扫描',
           navigation: {
-            group: "安全与合规",
-            icon: "AlertTriangle",
+            group: '安全与合规',
+            icon: 'AlertTriangle',
             order: 2,
           },
         },
       },
       {
-        path: "security/policies",
-        name: "security-policies",
-        component: () => import("@/views/security/SecurityPolicies.vue"),
+        path: 'security/policies',
+        name: 'security-policies',
+        component: () => import('@/views/security/SecurityPolicies.vue'),
         meta: {
-          title: "安全策略",
+          title: '安全策略',
           navigation: {
-            group: "安全与合规",
-            icon: "Lock",
+            group: '安全与合规',
+            icon: 'Lock',
             order: 3,
           },
         },
       },
       {
-        path: "security/audit-logs",
-        name: "security-audit-logs",
-        component: () => import("@/views/security/AuditLogs.vue"),
+        path: 'security/audit-logs',
+        name: 'security-audit-logs',
+        component: () => import('@/views/security/AuditLogs.vue'),
         meta: {
-          title: "审计日志",
+          title: '审计日志',
           navigation: {
-            group: "安全与合规",
-            icon: "FileSearch",
+            group: '安全与合规',
+            icon: 'FileSearch',
             order: 4,
           },
         },
@@ -205,150 +200,175 @@ const routes: RouteRecordRaw[] = [
 
       // 监控与分析模块
       {
-        path: "dashboard",
-        name: "dashboard",
+        path: 'dashboard',
+        name: 'dashboard',
         component: Dashboard,
         meta: {
-          title: "仪表盘",
+          title: '仪表盘',
           navigation: {
-            group: "监控与分析",
-            icon: "BarChart3",
+            group: '监控与分析',
+            icon: 'BarChart3',
             order: 1,
           },
         },
       },
       {
-        path: "monitoring",
-        name: "monitoring",
+        path: 'monitoring',
+        name: 'monitoring',
         component: Monitoring,
         meta: {
-          title: "性能监控",
+          title: '性能监控',
           navigation: {
-            group: "监控与分析",
-            icon: "Activity",
+            group: '监控与分析',
+            icon: 'Activity',
             order: 2,
           },
         },
       },
       {
-        path: "monitoring/alerts",
-        name: "monitoring-alerts",
-        component: () => import("@/views/monitoring/IntelligentAlerts.vue"),
+        path: 'monitoring/alerts',
+        name: 'monitoring-alerts',
+        component: () => import('@/views/monitoring/IntelligentAlerts.vue'),
         meta: {
-          title: "智能告警",
+          title: '智能告警',
           navigation: {
-            group: "监控与分析",
-            icon: "Bell",
+            group: '监控与分析',
+            icon: 'Bell',
             order: 3,
           },
         },
       },
       {
-        path: "monitoring/incidents",
-        name: "monitoring-incidents",
-        component: () => import("@/views/monitoring/IncidentManagement.vue"),
+        path: 'monitoring/incidents',
+        name: 'monitoring-incidents',
+        component: () => import('@/views/monitoring/IncidentManagement.vue'),
         meta: {
-          title: "事件管理",
+          title: '事件管理',
           navigation: {
-            group: "监控与分析",
-            icon: "AlertCircle",
+            group: '监控与分析',
+            icon: 'AlertCircle',
             order: 4,
           },
         },
       },
       {
-        path: "monitoring/performance-metrics",
-        name: "monitoring-performance-metrics",
-        component: () => import("@/views/monitoring/PerformanceMetrics.vue"),
+        path: 'monitoring/performance-metrics',
+        name: 'monitoring-performance-metrics',
+        component: () => import('@/views/monitoring/PerformanceMetrics.vue'),
         meta: {
-          title: "性能指标",
+          title: '性能指标',
           navigation: {
-            group: "监控与分析",
-            icon: "TrendingUp",
+            group: '监控与分析',
+            icon: 'TrendingUp',
             order: 5,
+          },
+        },
+      },
+      {
+        path: 'observability',
+        name: 'observability',
+        component: () => import('@/views/Observability.vue'),
+        meta: {
+          title: '可观测性',
+          navigation: {
+            group: '监控与分析',
+            icon: 'Eye',
+            order: 6,
+          },
+        },
+      },
+      {
+        path: 'alerts',
+        name: 'alerts',
+        component: () => import('@/views/Alerts.vue'),
+        meta: {
+          title: '监控告警',
+          navigation: {
+            group: '监控与分析',
+            icon: 'AlertCircle',
+            order: 7,
           },
         },
       },
 
       // 成本与可持续性模块
       {
-        path: "cost/tracking",
-        name: "cost-tracking",
+        path: 'cost/tracking',
+        name: 'cost-tracking',
         component: CostTracking,
         meta: {
-          title: "成本跟踪",
+          title: '成本跟踪',
           navigation: {
-            group: "成本与可持续性",
-            icon: "DollarSign",
+            group: '成本与可持续性',
+            icon: 'DollarSign',
             order: 1,
           },
         },
       },
       {
-        path: "cost/optimization",
-        name: "cost-optimization",
-        component: () => import("@/views/cost/ResourceOptimization.vue"),
+        path: 'cost/optimization',
+        name: 'cost-optimization',
+        component: () => import('@/views/cost/ResourceOptimization.vue'),
         meta: {
-          title: "资源优化",
+          title: '资源优化',
           navigation: {
-            group: "成本与可持续性",
-            icon: "TrendingUp",
+            group: '成本与可持续性',
+            icon: 'TrendingUp',
             order: 2,
           },
         },
       },
       {
-        path: "cost/resource-usage",
-        name: "cost-resource-usage",
-        component: () => import("@/views/cost/ResourceUsage.vue"),
+        path: 'cost/resource-usage',
+        name: 'cost-resource-usage',
+        component: () => import('@/views/cost/ResourceUsage.vue'),
         meta: {
-          title: "资源使用",
+          title: '资源使用',
           navigation: {
-            group: "成本与可持续性",
-            icon: "Server",
+            group: '成本与可持续性',
+            icon: 'Server',
             order: 3,
           },
         },
       },
       {
-        path: "sustainability/metrics",
-        name: "sustainability-metrics",
-        component: () =>
-          import("@/views/sustainability/SustainabilityMetrics.vue"),
+        path: 'sustainability/metrics',
+        name: 'sustainability-metrics',
+        component: () => import('@/views/sustainability/SustainabilityMetrics.vue'),
         meta: {
-          title: "可持续性指标",
+          title: '可持续性指标',
           navigation: {
-            group: "成本与可持续性",
-            icon: "Leaf",
+            group: '成本与可持续性',
+            icon: 'Leaf',
             order: 4,
-            badge: "ESG",
+            badge: 'ESG',
           },
         },
       },
 
       // 实验与创新模块
       {
-        path: "experiments/ab-testing",
-        name: "experiments-ab-testing",
-        component: () => import("@/views/experiments/ABTesting.vue"),
+        path: 'experiments/ab-testing',
+        name: 'experiments-ab-testing',
+        component: () => import('@/views/experiments/ABTesting.vue'),
         meta: {
-          title: "A/B 测试",
+          title: 'A/B 测试',
           navigation: {
-            group: "实验与创新",
-            icon: "TestTube",
+            group: '实验与创新',
+            icon: 'TestTube',
             order: 1,
           },
         },
       },
       {
-        path: "experiments/feature-flags",
-        name: "experiments-feature-flags",
-        component: () => import("@/views/experiments/FeatureFlags.vue"),
+        path: 'experiments/feature-flags',
+        name: 'experiments-feature-flags',
+        component: () => import('@/views/experiments/FeatureFlags.vue'),
         meta: {
-          title: "特性开关",
+          title: '特性开关',
           navigation: {
-            group: "实验与创新",
-            icon: "ToggleLeft",
+            group: '实验与创新',
+            icon: 'ToggleLeft',
             order: 2,
           },
         },
@@ -356,109 +376,134 @@ const routes: RouteRecordRaw[] = [
 
       // 团队与权限管理模块
       {
-        path: "teams",
-        name: "teams",
-        component: () => import("@/views/teams/Teams.vue"),
+        path: 'teams',
+        name: 'teams',
+        component: () => import('@/views/teams/Teams.vue'),
         meta: {
-          title: "团队管理",
+          title: '团队管理',
           navigation: {
-            group: "团队与权限",
-            icon: "Users",
+            group: '团队与权限',
+            icon: 'Users',
             order: 1,
           },
         },
       },
       {
-        path: "roles",
-        name: "roles",
-        component: () => import("@/views/teams/Roles.vue"),
+        path: 'roles',
+        name: 'roles',
+        component: () => import('@/views/teams/Roles.vue'),
         meta: {
-          title: "角色管理",
+          title: '角色管理',
           navigation: {
-            group: "团队与权限",
-            icon: "UserCheck",
+            group: '团队与权限',
+            icon: 'UserCheck',
             order: 2,
           },
         },
       },
       {
-        path: "organizations",
-        name: "organizations",
-        component: () => import("@/views/organizations/Organizations.vue"),
+        path: 'organizations',
+        name: 'organizations',
+        component: () => import('@/views/organizations/Organizations.vue'),
         meta: {
-          title: "组织管理",
+          title: '组织管理',
           navigation: {
-            group: "团队与权限",
-            icon: "Building",
+            group: '团队与权限',
+            icon: 'Building',
             order: 3,
           },
+        },
+      },
+      {
+        path: 'organizations/:id',
+        name: 'organization-detail',
+        component: () => import('@/views/organizations/OrganizationDetail.vue'),
+        props: true,
+        meta: {
+          title: '组织详情',
+          navigation: { hidden: true, group: '', icon: '', order: 0 },
         },
       },
 
       // 集成与自动化模块
       {
-        path: "repositories",
-        name: "repositories",
-        component: () => import("@/views/repositories/Repositories.vue"),
+        path: 'repositories',
+        name: 'repositories',
+        component: () => import('@/views/repositories/Repositories.vue'),
         meta: {
-          title: "代码仓库",
+          title: '代码仓库',
           navigation: {
-            group: "集成与自动化",
-            icon: "GitBranch",
+            group: '集成与自动化',
+            icon: 'GitBranch',
             order: 1,
           },
         },
       },
       {
-        path: "webhooks",
-        name: "webhooks",
-        component: () => import("@/views/integrations/Webhooks.vue"),
+        path: 'webhooks',
+        name: 'webhooks',
+        component: () => import('@/views/integrations/Webhooks.vue'),
         meta: {
-          title: "Webhook 管理",
+          title: 'Webhook 管理',
           navigation: {
-            group: "集成与自动化",
-            icon: "Webhook",
+            group: '集成与自动化',
+            icon: 'Webhook',
             order: 2,
           },
         },
       },
       {
-        path: "events",
-        name: "events",
-        component: () => import("@/views/integrations/Events.vue"),
+        path: 'events',
+        name: 'events',
+        component: () => import('@/views/integrations/Events.vue'),
         meta: {
-          title: "事件管理",
+          title: '事件管理',
           navigation: {
-            group: "集成与自动化",
-            icon: "Zap",
+            group: '集成与自动化',
+            icon: 'Zap',
             order: 3,
+          },
+        },
+      },
+
+      // 通知中心
+      {
+        path: 'notifications',
+        name: 'notifications',
+        component: () => import('@/views/Notifications.vue'),
+        meta: {
+          title: '通知中心',
+          navigation: {
+            group: '监控与分析',
+            icon: 'Bell',
+            order: 8,
           },
         },
       },
 
       // 文档与设置模块
       {
-        path: "documents",
-        name: "documents",
+        path: 'documents',
+        name: 'documents',
         component: Documents,
         meta: {
-          title: "文档",
+          title: '文档',
           navigation: {
-            group: "文档与设置",
-            icon: "FileText",
+            group: '文档与设置',
+            icon: 'FileText',
             order: 1,
           },
         },
       },
       {
-        path: "settings",
-        name: "settings",
+        path: 'settings',
+        name: 'settings',
         component: Settings,
         meta: {
-          title: "设置",
+          title: '设置',
           navigation: {
-            group: "文档与设置",
-            icon: "Settings",
+            group: '文档与设置',
+            icon: 'Settings',
             order: 2,
           },
         },
@@ -466,101 +511,113 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    path: "/login",
-    name: "login",
+    path: '/login',
+    name: 'login',
     component: Login,
   },
   {
-    path: "/home",
-    name: "home",
+    path: '/home',
+    name: 'home',
     component: Home,
   },
-];
+]
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-});
+})
 
 // 路由守卫：设置页面标题和认证检查
 router.beforeEach(async (to, from, next) => {
+  // 设置页面标题
   if (to.meta?.title) {
-    document.title = to.meta.title as string;
+    document.title = `${to.meta.title} - Juanie`
+  } else {
+    document.title = 'Juanie - AI DevOps 平台'
   }
 
   // 检查是否需要认证
   if (to.meta?.requiresAuth) {
     // 动态导入 auth store 以避免循环依赖
-    const { useAuthStore } = await import("@/stores/auth");
-    const authStore = useAuthStore();
+    const { useAuthStore } = await import('@/stores/auth')
+    const authStore = useAuthStore()
 
     // 如果还没有初始化，先初始化认证状态
     if (!authStore.initialized) {
-      await authStore.initialize();
+      await authStore.initialize()
     }
 
     // 如果未认证，跳转到登录页
     if (!authStore.isAuthenticated) {
-      next({ name: "login", query: { redirect: to.fullPath } });
-      return;
+      next({ name: 'login', query: { redirect: to.fullPath } })
+      return
     }
   }
 
-  next();
-});
+  // 如果已认证且访问登录页，重定向到首页
+  if (to.name === 'login') {
+    const { useAuthStore } = await import('@/stores/auth')
+    const authStore = useAuthStore()
+
+    if (authStore.isAuthenticated) {
+      next({ name: 'apps' })
+      return
+    }
+  }
+
+  next()
+})
 
 // 导出导航菜单配置生成函数
 export const generateNavigationConfig = () => {
   const navigationGroups: Record<
     string,
     Array<{
-      name: string;
-      path: string;
-      title: string;
-      icon: string;
-      badge?: string;
-      order: number;
+      name: string
+      path: string
+      title: string
+      icon: string
+      badge?: string
+      order: number
     }>
-  > = {};
+  > = {}
 
   // 遍历路由，提取导航配置
-  const extractNavigation = (routes: RouteRecordRaw[], parentPath = "") => {
+  const extractNavigation = (routes: RouteRecordRaw[], parentPath = '') => {
     routes.forEach((route) => {
       if (route.meta?.navigation && !route.meta.navigation.hidden) {
-        const { group, icon, order, badge } = route.meta.navigation;
-        const fullPath =
-          parentPath +
-          (route.path.startsWith("/") ? route.path : `/${route.path}`);
+        const { group, icon, order, badge } = route.meta.navigation
+        const fullPath = parentPath + (route.path.startsWith('/') ? route.path : `/${route.path}`)
 
         if (!navigationGroups[group]) {
-          navigationGroups[group] = [];
+          navigationGroups[group] = []
         }
 
         navigationGroups[group].push({
           name: route.name as string,
           path: fullPath,
-          title: route.meta.title || "",
+          title: route.meta.title || '',
           icon,
           badge,
           order,
-        });
+        })
       }
 
       // 递归处理子路由
       if (route.children) {
-        extractNavigation(route.children, parentPath + route.path);
+        extractNavigation(route.children, parentPath + route.path)
       }
-    });
-  };
+    })
+  }
 
-  extractNavigation(routes);
+  extractNavigation(routes)
 
   // 对每个组内的项目按 order 排序
   Object.keys(navigationGroups).forEach((group) => {
-    navigationGroups[group]?.sort((a, b) => a.order - b.order);
-  });
+    navigationGroups[group]?.sort((a, b) => a.order - b.order)
+  })
 
-  return navigationGroups;
-};
+  return navigationGroups
+}
 
-export default router;
+export default router

@@ -19,14 +19,46 @@ export class K3sService implements OnModuleInit {
 
   private async connect() {
     try {
-      const kubeconfigPath = this.config.get<string>('KUBECONFIG_PATH')
+      // 支持多个环境变量名
+      let kubeconfigPath =
+        this.config.get<string>('KUBECONFIG_PATH') || this.config.get<string>('K3S_KUBECONFIG_PATH')
 
-      if (kubeconfigPath) {
+      if (!kubeconfigPath) {
+        // 尝试使用默认路径
+        try {
+          this.kc.loadFromDefault()
+        } catch (_error) {
+          // 默认路径不存在，静默跳过
+          this.isConnected = false
+          console.log('ℹ️  K3s 未配置（可选功能）')
+          return
+        }
+      } else {
+        // 展开 ~ 符号
+        if (kubeconfigPath.startsWith('~')) {
+          const homeDir = process.env.HOME || process.env.USERPROFILE
+          kubeconfigPath = kubeconfigPath.replace('~', homeDir || '')
+        }
         // 从文件加载配置
         this.kc.loadFromFile(kubeconfigPath)
-      } else {
-        // 尝试从默认位置加载
-        this.kc.loadFromDefault()
+      }
+
+      // 开发环境或配置了跳过 TLS 验证时，禁用证书验证
+      // 这对于 k3d 等本地开发集群是必需的（它们使用 0.0.0.0 导致证书验证失败）
+      const skipTLSVerify =
+        this.config.get<string>('NODE_ENV') === 'development' ||
+        this.config.get<string>('K3S_SKIP_TLS_VERIFY') === 'true'
+
+      if (skipTLSVerify) {
+        const cluster = this.kc.getCurrentCluster()
+        if (cluster) {
+          // 使用 Object.defineProperty 修改只读属性
+          Object.defineProperty(cluster, 'skipTLSVerify', {
+            value: true,
+            writable: true,
+            configurable: true,
+          })
+        }
       }
 
       this.k8sApi = this.kc.makeApiClient(k8s.CoreV1Api)
@@ -36,10 +68,10 @@ export class K3sService implements OnModuleInit {
       await this.k8sApi.listNamespace()
       this.isConnected = true
       console.log('✅ K3s 连接成功')
-    } catch {
+    } catch (error: any) {
       this.isConnected = false
-      console.warn('⚠️ K3s 连接失败，部署功能将不可用')
-      console.warn('配置 KUBECONFIG_PATH 环境变量以启用 K3s')
+      console.warn('⚠️ K3s 连接失败:', error.message || error)
+      console.log('提示: 确保 K3s 集群正在运行，并且 kubeconfig 配置正确')
     }
   }
 

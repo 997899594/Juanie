@@ -1,76 +1,113 @@
 <template>
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="mb-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-      <div>
-        <h1 class="text-3xl font-bold text-foreground mb-2">部署记录</h1>
-        <p class="text-muted-foreground">选择项目以查看其部署历史与统计</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <Select v-model="selectedProjectIdString">
-          <SelectTrigger class="w-64">
-            <SelectValue placeholder="选择项目" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem 
-              v-for="p in projects"
-              :key="p.id"
-              :value="String(p.id)"
-            >
-              {{ p.displayName || p.name }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" @click="reloadProjects">刷新项目</Button>
-      </div>
-    </div>
+  <PageContainer title="部署记录" description="查看和管理所有部署记录">
+    <template #actions>
+      <Select v-model="selectedEnvironment">
+        <SelectTrigger class="w-40">
+          <SelectValue placeholder="筛选环境" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">所有环境</SelectItem>
+          <SelectItem value="development">开发环境</SelectItem>
+          <SelectItem value="staging">测试环境</SelectItem>
+          <SelectItem value="production">生产环境</SelectItem>
+        </SelectContent>
+      </Select>
+    </template>
 
-    <div v-if="projects.length === 0" class="text-center py-20">
-      <p class="text-muted-foreground">暂未找到项目，请先创建项目。</p>
-    </div>
+    <!-- 错误状态 -->
+    <ErrorState
+      v-if="error && !loading"
+      title="加载失败"
+      :message="error"
+      @retry="fetchDeployments"
+    />
 
-    <div v-else-if="!selectedProjectId" class="text-center py-20">
-      <p class="text-muted-foreground">请选择一个项目以查看部署记录。</p>
-    </div>
+    <!-- 加载状态 -->
+    <LoadingState v-else-if="loading" message="加载部署记录中..." />
 
-    <div v-else>
-      <ProjectDeployments :project-id="selectedProjectId" />
-    </div>
-  </div>
+    <!-- 空状态 -->
+    <EmptyState
+      v-else-if="deployments.length === 0 && !error"
+      :icon="Rocket"
+      title="暂无部署记录"
+      description="开始第一次部署"
+    />
+
+    <Card v-else>
+      <CardHeader>
+        <CardTitle>部署列表</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div class="space-y-3">
+          <div
+            v-for="deployment in deployments"
+            :key="deployment.id"
+            class="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors cursor-pointer"
+            @click="router.push(`/deployments/${deployment.id}`)"
+          >
+            <div class="flex items-center space-x-4 flex-1">
+              <Rocket class="h-5 w-5 text-muted-foreground" />
+              <div class="flex-1">
+                <div class="flex items-center space-x-2">
+                  <h3 class="font-semibold">{{ deployment.version }}</h3>
+                  <DeploymentStatusBadge :status="deployment.status" />
+                </div>
+                <p class="text-sm text-muted-foreground">
+                  部署到 {{ deployment.environmentId }} · {{ formatDate(deployment.createdAt) }}
+                </p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm">
+              <ChevronRight class="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { trpc } from '@/lib/trpc'
-import ProjectDeployments from '@/components/ProjectDeployments.vue'
-import { 
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-  Button
+import { ref, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useDeployments } from '@/composables/useDeployments'
+import DeploymentStatusBadge from '@/components/DeploymentStatusBadge.vue'
+import PageContainer from '@/components/PageContainer.vue'
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@juanie/ui'
+import { Rocket, ChevronRight } from 'lucide-vue-next'
+import LoadingState from '@/components/LoadingState.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import ErrorState from '@/components/ErrorState.vue'
 
-type ProjectListResult = Awaited<ReturnType<typeof trpc.projects.getOrganizationProjects.query>>
-const projects = ref<ProjectListResult['projects']>([])
-const selectedProjectIdString = ref<string | undefined>(undefined)
-const selectedProjectId = computed(() => selectedProjectIdString.value || undefined)
+const router = useRouter()
+const { deployments, loading, error, fetchDeployments } = useDeployments()
 
-const reloadProjects = async () => {
-  const result = await trpc.projects.getOrganizationProjects.query({ 
-    organizationId: 'temp-org-id', // 临时使用，需要从认证状态获取
-    limit: 50,
-    offset: 0
-  })
-  projects.value = result.projects
-  // 默认选择第一个项目（增加安全判断以通过类型检查）
-  const first = result.projects && result.projects.length > 0 ? result.projects[0] : undefined
-  if (!selectedProjectIdString.value && first) {
-    selectedProjectIdString.value = String(first.id)
+const selectedEnvironment = ref('all')
+
+onMounted(async () => {
+  await fetchDeployments()
+})
+
+watch(selectedEnvironment, async (newValue) => {
+  const filters: any = {}
+  if (newValue !== 'all') {
+    filters.environmentId = newValue
   }
+  await fetchDeployments(filters)
+})
+
+const formatDate = (date: string) => {
+  return new Date(date).toLocaleString('zh-CN')
 }
-
-onMounted(() => {
-  reloadProjects()
-})
-
-watch(selectedProjectIdString, () => {
-  // 响应式监听选择变化，这里无需额外逻辑，ProjectDeployments 会根据 props 拉取数据
-})
 </script>

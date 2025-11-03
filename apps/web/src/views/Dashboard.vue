@@ -1,205 +1,293 @@
 <template>
-  <div class="space-y-8">
-    <!-- 导航栏 -->
-    <nav class="border-b bg-card">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16">
-          <div class="flex items-center">
-            <h1 class="text-xl font-semibold">Juanie Dashboard</h1>
+  <div
+    v-motion
+    :initial="{ opacity: 0, y: 20 }"
+    :enter="{ opacity: 1, y: 0, transition: { duration: 300 } }"
+    class="space-y-6"
+  >
+    <!-- 页面标题 -->
+    <div class="space-y-2">
+      <h1 class="text-3xl font-bold tracking-tight">仪表盘</h1>
+      <p class="text-muted-foreground">
+        欢迎回来！这里是您的项目概览。
+      </p>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <StatsCard
+        title="总项目数"
+        :value="stats.totalProjects"
+        :description="stats.activeProjects > 0 ? `${stats.activeProjects} 个活跃项目` : '暂无活跃项目'"
+        :icon="FolderKanban"
+      />
+      <StatsCard
+        title="本月部署"
+        :value="stats.totalDeployments"
+        :description="stats.successfulDeployments > 0 ? `${stats.successfulDeployments} 次成功` : '暂无部署'"
+        :icon="Rocket"
+      />
+      <StatsCard
+        title="运行中 Pipeline"
+        :value="stats.runningPipelines"
+        :description="stats.totalPipelines > 0 ? `共 ${stats.totalPipelines} 个 Pipeline` : '暂无 Pipeline'"
+        :icon="GitBranch"
+      />
+      <StatsCard
+        title="本月成本"
+        :value="`$${stats.monthlyCost.toFixed(2)}`"
+        :description="stats.costTrend > 0 ? `+${stats.costTrend}% 较上月` : stats.costTrend < 0 ? `${stats.costTrend}% 较上月` : '与上月持平'"
+        :icon="DollarSign"
+      />
+    </div>
+
+    <!-- 最近部署 -->
+    <Card v-if="recentDeployments.length > 0">
+      <CardHeader>
+        <div class="flex items-center justify-between">
+          <div>
+            <CardTitle>最近部署</CardTitle>
+            <CardDescription>最近 5 次部署记录</CardDescription>
           </div>
-          <div class="flex items-center space-x-4">
-            <div v-if="authStore.user" class="flex items-center space-x-3">
-              <Avatar class="h-8 w-8">
-                <AvatarImage
-                  v-if="authStore.user?.avatarUrl"
-                  :src="authStore.user.avatarUrl"
-                  :alt="authStore.user.displayName || authStore.user.username || '用户头像'"
-                />
-                <AvatarFallback>{{ (authStore.user?.displayName || authStore.user?.username || 'U').charAt(0).toUpperCase() }}</AvatarFallback>
-              </Avatar>
-              <span class="text-sm font-medium">{{ authStore.user?.displayName || authStore.user?.username || '未知用户' }}</span>
+          <Button variant="outline" size="sm" @click="$router.push('/deployments')">
+            查看全部
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div class="space-y-4">
+          <div
+            v-for="(deployment, index) in recentDeployments"
+            :key="deployment.id"
+            v-motion
+            :initial="{ opacity: 0, x: -20 }"
+            :enter="{
+              opacity: 1,
+              x: 0,
+              transition: {
+                delay: index * 50,
+                duration: 300,
+              },
+            }"
+            class="flex items-center justify-between border-b last:border-0 pb-4 last:pb-0"
+          >
+            <div class="space-y-1">
+              <p class="text-sm font-medium">{{ deployment.version }}</p>
+              <p class="text-xs text-muted-foreground">
+                {{ formatDate(deployment.createdAt) }}
+              </p>
             </div>
-            <Button variant="outline" size="sm" @click="handleLogout" :disabled="authStore.loading">
-              登出
-            </Button>
+            <Badge :variant="getDeploymentStatusVariant(deployment.status)">
+              {{ getDeploymentStatusText(deployment.status) }}
+            </Badge>
           </div>
         </div>
-      </div>
-    </nav>
+      </CardContent>
+    </Card>
 
-    <!-- 主内容区 -->
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div class="px-4 py-6 sm:px-0">
-        <!-- 主要内容 -->
-        <div class="space-y-6">
-          <div class="space-y-2">
-            <h1 class="text-3xl font-bold tracking-tight">仪表盘</h1>
-            <p class="text-muted-foreground">
-              欢迎回来！这里是您的应用概览。
-            </p>
-          </div>
+    <!-- 空状态 -->
+    <Card v-else>
+      <CardContent class="flex flex-col items-center justify-center py-12">
+        <Rocket class="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 class="text-lg font-semibold mb-2">暂无部署记录</h3>
+        <p class="text-sm text-muted-foreground mb-4">开始创建项目并部署您的应用</p>
+        <Button @click="$router.push('/projects')">
+          创建项目
+        </Button>
+      </CardContent>
+    </Card>
 
-          <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle class="text-sm font-medium">总应用数</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div class="text-2xl font-bold">12</div>
-                <p class="text-xs text-muted-foreground">
-                  +2 较上月
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle class="text-sm font-medium">运行中应用</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div class="text-2xl font-bold">8</div>
-                <p class="text-xs text-muted-foreground">
-                  66.7% 运行率
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle class="text-sm font-medium">本月部署</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div class="text-2xl font-bold">24</div>
-                <p class="text-xs text-muted-foreground">
-                  +12 较上月
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+    <!-- 快速操作 -->
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <Card class="cursor-pointer hover:shadow-lg transition-shadow" @click="$router.push('/projects')">
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2">
+            <FolderKanban class="h-5 w-5" />
+            项目管理
+          </CardTitle>
+          <CardDescription>创建和管理您的项目</CardDescription>
+        </CardHeader>
+      </Card>
 
-          <div class="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>用户信息</CardTitle>
-                <CardDescription>当前登录用户的基本信息</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div class="space-y-2">
-                  <p><strong>用户名:</strong> {{ authStore.user?.displayName || authStore.user?.username || '未知用户' }}</p>
-                  <p><strong>邮箱:</strong> {{ authStore.user?.email || '未知邮箱' }}</p>
-                  <p><strong>登录状态:</strong> 
-                    <span class="text-green-600">已登录</span>
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>快速操作</CardTitle>
-                <CardDescription>常用功能快捷入口</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div class="space-y-2">
-                  <Button class="w-full" @click="$router.push('/apps')">
-                    管理应用
-                  </Button>
-                  <Button variant="outline" class="w-full">
-                    查看日志
-                  </Button>
-                  <Button variant="outline" class="w-full">
-                    系统设置
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+      <Card class="cursor-pointer hover:shadow-lg transition-shadow" @click="$router.push('/pipelines')">
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2">
+            <GitBranch class="h-5 w-5" />
+            Pipeline
+          </CardTitle>
+          <CardDescription>配置和运行 CI/CD 流水线</CardDescription>
+        </CardHeader>
+      </Card>
 
-          <!-- 添加更多内容来测试滚动效果 -->
-          <div class="space-y-6">
-            <h2 class="text-2xl font-bold tracking-tight">最近活动</h2>
-            
-            <div class="space-y-4">
-              <Card v-for="i in 10" :key="i">
-                <CardHeader>
-                  <CardTitle class="text-lg">活动 {{ i }}</CardTitle>
-                  <CardDescription>{{ new Date().toLocaleDateString() }}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p class="text-sm text-muted-foreground">
-                    这是第 {{ i }} 个活动的详细描述。这里可以显示应用部署、更新、错误等各种活动信息。
-                    为了测试滚动效果，我们添加了更多的内容来确保页面有足够的高度。
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          <!-- 更多测试内容 -->
-          <div class="space-y-6">
-            <h2 class="text-2xl font-bold tracking-tight">系统监控</h2>
-            
-            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              <Card v-for="metric in ['CPU使用率', '内存使用率', '磁盘使用率', '网络流量']" :key="metric">
-                <CardHeader class="pb-2">
-                  <CardTitle class="text-sm font-medium">{{ metric }}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div class="text-2xl font-bold">{{ Math.floor(Math.random() * 100) }}%</div>
-                  <div class="h-2 bg-muted rounded-full mt-2">
-                    <div class="h-2 bg-primary rounded-full" :style="{ width: Math.floor(Math.random() * 100) + '%' }"></div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          <!-- 底部内容 -->
-          <div class="space-y-6 pb-20">
-            <h2 class="text-2xl font-bold tracking-tight">应用列表</h2>
-            
-            <div class="space-y-4">
-              <Card v-for="app in ['Web应用', 'API服务', '数据库', '缓存服务', '消息队列']" :key="app">
-                <CardHeader>
-                  <CardTitle class="text-lg">{{ app }}</CardTitle>
-                  <CardDescription>运行状态：正常</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div class="flex justify-between items-center">
-                    <span class="text-sm text-muted-foreground">最后更新：{{ new Date().toLocaleString() }}</span>
-                    <Button size="sm" variant="outline">查看详情</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
+      <Card class="cursor-pointer hover:shadow-lg transition-shadow" @click="$router.push('/environments')">
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2">
+            <Server class="h-5 w-5" />
+            环境管理
+          </CardTitle>
+          <CardDescription>管理部署环境配置</CardDescription>
+        </CardHeader>
+      </Card>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Avatar, AvatarImage, AvatarFallback } from '@juanie/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@juanie/ui'
+import { DollarSign, FolderKanban, GitBranch, Rocket, Server } from 'lucide-vue-next'
+import StatsCard from '@/components/StatsCard.vue'
+import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useDeployments } from '@/composables/useDeployments'
+import { usePipelines } from '@/composables/usePipelines'
+import { useProjects } from '@/composables/useProjects'
 
 const router = useRouter()
+const appStore = useAppStore()
 const authStore = useAuthStore()
+const { fetchProjects, projects } = useProjects()
+const { fetchDeployments, deployments } = useDeployments()
+const { fetchPipelines, pipelines } = usePipelines()
 
-const handleLogout = async () => {
-  await authStore.logout()
-  router.push({ name: 'Login' })
+// 统计数据
+const stats = ref({
+  totalProjects: 0,
+  activeProjects: 0,
+  totalDeployments: 0,
+  successfulDeployments: 0,
+  runningPipelines: 0,
+  totalPipelines: 0,
+  monthlyCost: 0,
+  costTrend: 0,
+})
+
+// 最近部署（最多显示 5 条）
+const recentDeployments = computed(() => {
+  return deployments.value.slice(0, 5)
+})
+
+// 格式化日期
+function formatDate(date: string | Date) {
+  const d = new Date(date)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes} 分钟前`
+  if (hours < 24) return `${hours} 小时前`
+  if (days < 7) return `${days} 天前`
+  return d.toLocaleDateString('zh-CN')
+}
+
+// 获取部署状态的 Badge 变体
+function getDeploymentStatusVariant(status: string) {
+  switch (status) {
+    case 'success':
+      return 'default'
+    case 'failed':
+      return 'destructive'
+    case 'pending':
+    case 'running':
+      return 'secondary'
+    default:
+      return 'outline'
+  }
+}
+
+// 获取部署状态文本
+function getDeploymentStatusText(status: string) {
+  switch (status) {
+    case 'success':
+      return '成功'
+    case 'failed':
+      return '失败'
+    case 'pending':
+      return '等待中'
+    case 'running':
+      return '运行中'
+    case 'cancelled':
+      return '已取消'
+    default:
+      return status
+  }
+}
+
+// 加载数据
+async function loadData() {
+  try {
+    // 如果有当前组织，加载该组织的数据
+    if (appStore.currentOrganizationId) {
+      // 加载项目
+      await fetchProjects(appStore.currentOrganizationId)
+
+      // 计算项目统计
+      stats.value.totalProjects = projects.value.length
+      stats.value.activeProjects = projects.value.length
+
+      // 加载部署（所有项目）
+      await fetchDeployments()
+
+      // 计算部署统计
+      const now = new Date()
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const monthlyDeployments = deployments.value.filter(
+        (d) => new Date(d.createdAt) >= firstDayOfMonth,
+      )
+
+      stats.value.totalDeployments = monthlyDeployments.length
+      stats.value.successfulDeployments = monthlyDeployments.filter(
+        (d) => d.status === 'success',
+      ).length
+
+      // 加载所有项目的 Pipeline 并统计
+      let allPipelines: any[] = []
+      for (const project of projects.value) {
+        try {
+          await fetchPipelines(project.id)
+          allPipelines = [...allPipelines, ...pipelines.value]
+        } catch (err) {
+          console.error(`Failed to fetch pipelines for project ${project.id}:`, err)
+        }
+      }
+
+      stats.value.totalPipelines = allPipelines.length
+      stats.value.runningPipelines = allPipelines.filter(
+        (p) => p.status === 'running',
+      ).length
+
+      // 模拟成本数据（实际应该从后端获取）
+      stats.value.monthlyCost = Math.random() * 1000
+      stats.value.costTrend = Math.floor(Math.random() * 40) - 20
+    }
+  } catch (err) {
+    console.error('Failed to load dashboard data:', err)
+  }
 }
 
 onMounted(async () => {
   // 初始化认证状态
   await authStore.initialize()
-  
+
   // 如果未登录，跳转到登录页
   if (!authStore.isAuthenticated) {
     router.replace({ name: 'Login' })
+    return
   }
+
+  // 加载数据
+  await loadData()
 })
 </script>

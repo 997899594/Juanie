@@ -31,7 +31,8 @@
     "removeComments": false,
     "useDefineForClassFields": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "importHelpers": true
   },
   "exclude": [
     "**/node_modules",

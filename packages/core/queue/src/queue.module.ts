@@ -1,11 +1,12 @@
 import { Global, Module } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
+import { ConfigModule, ConfigService } from '@nestjs/config'
 import { Queue } from 'bullmq'
 import { DEPLOYMENT_QUEUE, PIPELINE_QUEUE } from './tokens'
 import { PipelineWorker } from './workers/pipeline.worker'
 
 @Global()
 @Module({
+  imports: [ConfigModule],
   providers: [
     {
       provide: PIPELINE_QUEUE,

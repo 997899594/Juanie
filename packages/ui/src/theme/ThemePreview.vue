@@ -34,7 +34,10 @@ const groupedColors = computed(() => {
     if (!groups[color.category]) {
       groups[color.category] = []
     }
-    groups[color.category].push(color)
+    const group = groups[color.category]
+    if (group) {
+      group.push(color)
+    }
   })
   return groups
 })

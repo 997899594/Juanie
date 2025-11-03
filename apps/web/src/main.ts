@@ -1,22 +1,27 @@
 // 应用组件与路由
-import { createPinia } from "pinia";
-import { createApp } from "vue";
-import App from "./App.vue";
-import router from "./router";
+
+import { MotionPlugin } from '@vueuse/motion'
+import { createPinia } from 'pinia'
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
+import { createApp } from 'vue'
+import App from './App.vue'
+import router from './router'
 
 // 导入样式
-import "./styles/main.css";
-import "@juanie/ui/styles";
+import './styles/main.css'
+import '@juanie/ui/styles'
 
 // 创建应用实例
-const app = createApp(App);
+const app = createApp(App)
 
 // 创建状态管理
-const pinia = createPinia();
+const pinia = createPinia()
+pinia.use(piniaPluginPersistedstate)
 
 // 注册插件
-app.use(router);
-app.use(pinia);
+app.use(router)
+app.use(pinia)
+app.use(MotionPlugin)
 
 // 挂载应用
-app.mount("#app");
+app.mount('#app')

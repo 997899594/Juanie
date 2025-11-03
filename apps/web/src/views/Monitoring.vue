@@ -1,9 +1,5 @@
 <template>
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold text-foreground mb-2">监控与分析</h1>
-      <p class="text-muted-foreground">性能监控与智能告警模块正在建设中。</p>
-    </div>
+  <PageContainer title="监控与分析" description="性能监控与智能告警模块正在建设中。">
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <Card>
@@ -27,9 +23,10 @@
         </CardContent>
       </Card>
     </div>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/PageContainer.vue'
 import { Card, CardHeader, CardTitle, CardContent } from '@juanie/ui'
 </script>

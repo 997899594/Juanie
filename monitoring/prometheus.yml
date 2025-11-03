@@ -2,7 +2,7 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'ai-devops-platform'
+    cluster: 'juanie-platform'
     environment: 'production'
 
 # 告警规则文件

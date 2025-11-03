@@ -1,136 +1,111 @@
 <template>
-  <Card 
-    class="cursor-pointer hover:shadow-md transition-shadow relative"
+  <Card
+    class="group cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]"
+    v-motion
+    :initial="{ opacity: 0, y: 20 }"
+    :enter="{ opacity: 1, y: 0, transition: { duration: 300, delay: index * 50 } }"
     @click="$emit('click')"
   >
-    <!-- 项目头部 -->
-    <CardHeader class="flex flex-row items-start justify-between space-y-0 pb-2">
-      <div class="flex items-start space-x-3 flex-1">
-        <Avatar class="flex-shrink-0">
-          <AvatarImage :src="''" :alt="project.displayName || project.name" />
-          <AvatarFallback>{{ (project.displayName || project.name)?.charAt(0) || 'P' }}</AvatarFallback>
-        </Avatar>
-        <div class="flex-1 min-w-0">
-          <h3 class="text-lg font-semibold text-foreground truncate">{{ project.displayName }}</h3>
-          <p class="text-sm text-muted-foreground mt-1 line-clamp-2">{{ project.description || '暂无描述' }}</p>
+    <CardHeader>
+      <div class="flex items-start justify-between">
+        <div class="flex items-center space-x-3">
+          <div
+            class="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl"
+          >
+            {{ getInitials(project.name) }}
+          </div>
+          <div>
+            <CardTitle class="text-lg">{{ project.name }}</CardTitle>
+            <CardDescription>@{{ project.slug }}</CardDescription>
+          </div>
         </div>
       </div>
-      
-      <!-- 项目操作菜单 -->
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child @click.stop>
-          <Button variant="ghost" size="icon-sm" class="flex-shrink-0">
-            <MoreVertical class="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem @click="$emit('edit', project)">
-            <Edit class="h-4 w-4 mr-2" />
-            编辑
-          </DropdownMenuItem>
-          <DropdownMenuItem @click="$emit('delete', project)" class="text-destructive">
-            <Trash2 class="h-4 w-4 mr-2" />
-            删除
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </CardHeader>
+    <CardContent>
+      <p class="text-sm text-muted-foreground line-clamp-2 mb-4">
+        {{ project.description || '暂无描述' }}
+      </p>
 
-    <CardContent class="space-y-4">
-      <!-- 项目标签 -->
-      <div class="flex flex-wrap gap-2">
-        <Badge v-if="project.visibility === 'public'" variant="secondary" class="text-xs">
-          <Globe class="h-3 w-3 mr-1" />
-          公开
-        </Badge>
-        <Badge v-else variant="outline" class="text-xs">
-          <Lock class="h-3 w-3 mr-1" />
-          私有
-        </Badge>
-        
-        <Badge v-if="project.repositoryUrl" variant="outline" class="text-xs">
+      <!-- 项目配置标签 -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <Badge v-if="project.config?.enableCiCd" variant="secondary" class="text-xs">
           <GitBranch class="h-3 w-3 mr-1" />
-          代码仓库
+          CI/CD
+        </Badge>
+        <Badge v-if="project.config?.enableAi" variant="secondary" class="text-xs">
+          <Bot class="h-3 w-3 mr-1" />
+          AI
+        </Badge>
+        <Badge v-if="project.config?.defaultBranch" variant="outline" class="text-xs">
+          {{ project.config.defaultBranch }}
         </Badge>
       </div>
 
       <!-- 项目统计 -->
-      <div class="grid grid-cols-3 gap-4 py-3 border-t border-b">
-        <div class="text-center">
-          <span class="block text-xs text-muted-foreground mb-1">环境</span>
-          <span class="block text-lg font-semibold text-foreground">0</span>
+      <div class="grid grid-cols-3 gap-4 text-center text-sm">
+        <div>
+          <div class="text-muted-foreground">环境</div>
+          <div class="font-semibold">{{ environmentCount }}</div>
         </div>
-        <div class="text-center">
-          <span class="block text-xs text-muted-foreground mb-1">部署</span>
-          <span class="block text-lg font-semibold text-foreground">0</span>
+        <div>
+          <div class="text-muted-foreground">部署</div>
+          <div class="font-semibold">{{ deploymentCount }}</div>
         </div>
-        <div class="text-center">
-          <span class="block text-xs text-muted-foreground mb-1">成员</span>
-          <span class="block text-lg font-semibold text-foreground">1</span>
+        <div>
+          <div class="text-muted-foreground">成员</div>
+          <div class="font-semibold">{{ memberCount }}</div>
         </div>
       </div>
 
-      <!-- 项目信息 -->
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Badge variant="secondary">
-            0 次部署
-          </Badge>
-          <span>•</span>
-          <span>{{ formatTime(project.updatedAt) }}</span>
+      <div class="mt-4 flex items-center justify-between">
+        <span class="text-xs text-muted-foreground">
+          更新于 {{ formatDate(project.updatedAt) }}
+        </span>
+        <div class="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button size="sm" variant="ghost" @click.stop="$emit('edit', project)">
+            <Edit class="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="ghost" @click.stop="$emit('delete', project)">
+            <Trash2 class="h-4 w-4" />
+          </Button>
         </div>
+      </div>
     </CardContent>
-
-    <CardFooter class="flex items-center justify-between text-sm text-muted-foreground pt-4">
-        <div class="flex items-center">
-          <Avatar class="h-6 w-6 mr-2">
-            <AvatarImage :src="''" :alt="'项目所有者'" />
-            <AvatarFallback class="text-xs">P</AvatarFallback>
-          </Avatar>
-          <span>项目所有者</span>
-        </div>
-      <span class="text-xs">
-        {{ formatTime(project.updatedAt) }}
-      </span>
-    </CardFooter>
   </Card>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { formatDistanceToNow } from 'date-fns'
-import { zhCN } from 'date-fns/locale'
-import { trpc } from '@/lib/trpc'
-import { 
-  Card, 
-  CardContent, 
-  CardFooter, 
-  CardHeader,
-  Badge,
-  Button,
-  Avatar,
-  AvatarImage,
-  AvatarFallback,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@juanie/ui'
-import { 
-  MoreVertical, 
-  Edit, 
-  Trash2, 
-  Globe, 
-  Lock, 
-  GitBranch, 
-  Folder 
-} from 'lucide-vue-next'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@juanie/ui'
+import { GitBranch, Bot, Edit, Trash2 } from 'lucide-vue-next'
+import { format } from 'date-fns'
 
-// 使用后端实际实现的 getOrganizationProjects API 的返回类型
-type Project = Awaited<ReturnType<typeof trpc.projects.getOrganizationProjects.query>>['projects'][0]
+interface Project {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  config: {
+    defaultBranch?: string
+    enableCiCd?: boolean
+    enableAi?: boolean
+  } | null
+  updatedAt: string
+}
 
-defineProps<{
+interface Props {
   project: Project
-}>()
+  index?: number
+  environmentCount?: number
+  deploymentCount?: number
+  memberCount?: number
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  index: 0,
+  environmentCount: 0,
+  deploymentCount: 0,
+  memberCount: 0,
+})
 
 defineEmits<{
   click: []
@@ -138,30 +113,21 @@ defineEmits<{
   delete: [project: Project]
 }>()
 
-// 格式化时间
-const formatTime = (dateString: string) => {
-  return formatDistanceToNow(new Date(dateString), {
-    addSuffix: true,
-    locale: zhCN
-  })
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 }
 
-// 获取状态文本
-const getStatusText = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    success: '部署成功',
-    failed: '部署失败',
-    running: '部署中',
-    pending: '等待部署'
-  }
-  return statusMap[status] || status
+function formatDate(dateString: string): string {
+  return format(new Date(dateString), 'yyyy-MM-dd')
 }
 </script>
 
 <style scoped>
-/* 使用UI库组件，无需自定义样式 */
-
-/* 多行文本截断 */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

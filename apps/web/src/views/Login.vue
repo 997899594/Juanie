@@ -70,7 +70,12 @@
 
       <!-- 右侧登录表单区域 -->
       <div class="w-full lg:w-1/2 flex items-center justify-center px-4 sm:px-6 lg:px-8">
-        <div class="w-full max-w-md">
+        <div 
+          class="w-full max-w-md"
+          v-motion
+          :initial="{ opacity: 0, y: 20 }"
+          :enter="{ opacity: 1, y: 0, transition: { duration: 500, delay: 200 } }"
+        >
           <!-- 玻璃拟态登录卡片 -->
           <div class="backdrop-blur-xl bg-white/30 border border-white/20 rounded-2xl shadow-xl p-8">
             <!-- 移动端品牌标题 -->
@@ -148,22 +153,28 @@ onMounted(async () => {
   
   if (code && state) {
     isLoading.value = true
+    const { useToast } = await import('@/composables/useToast')
+    const toast = useToast()
+    
     try {
       // 处理GitLab OAuth回调
-      const result = await trpc.auth.handleGitLabCallback.mutate({
+      const result = await trpc.auth.gitlabCallback.mutate({
         code: code as string,
         state: state as string
       })
       
-      // 直接使用 tRPC 返回的数据，无需手动转换
-      authStore.setUser(result.user)
-      authStore.setSession(result.session)
+      // 设置认证信息
+      authStore.setAuth(result.user, result.sessionId)
       
-      // 跳转到应用主页
-      router.push('/')
+      toast.success('登录成功', '欢迎回来！')
+      
+      // 跳转到应用主页或重定向地址
+      const redirectTo = route.query.redirect as string || '/'
+      router.push(redirectTo)
     } catch (err) {
       console.error('OAuth回调处理失败:', err)
       error.value = '登录失败，请重试'
+      toast.error('登录失败', '请重试或联系管理员')
     } finally {
       isLoading.value = false
     }
@@ -190,13 +201,8 @@ const handleGitLabLogin = async () => {
   error.value = ''
   
   try {
-    // 获取当前路由的 redirect 参数
-    const redirectTo = route.query.redirect as string || '/'
-    
     // 获取GitLab OAuth授权URL
-    const result = await trpc.auth.getGitLabAuthUrl.mutate({
-      redirectTo
-    })
+    const result = await trpc.auth.gitlabAuthUrl.query()
     
     // 跳转到GitLab授权页面
     window.location.href = result.url
@@ -204,6 +210,11 @@ const handleGitLabLogin = async () => {
     console.error('获取GitLab授权URL失败:', err)
     error.value = '获取登录链接失败，请重试'
     isLoading.value = false
+    
+    // 使用 toast 显示错误
+    const { useToast } = await import('@/composables/useToast')
+    const toast = useToast()
+    toast.error('登录失败', '获取登录链接失败，请重试')
   }
 }
 </script>

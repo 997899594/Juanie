@@ -17,6 +17,10 @@
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <!-- 组织切换器 -->
+        <div class="px-2 py-2">
+          <OrganizationSwitcher />
+        </div>
       </SidebarHeader>
       
       <SidebarContent>
@@ -146,6 +150,17 @@
                 <router-link to="/monitoring/alerts" class="flex items-center">
                   <Bell class="size-4" />
                   <span>智能告警</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'通知中心'">
+                <router-link to="/notifications" class="flex items-center">
+                  <Bell class="size-4" />
+                  <span>通知中心</span>
+                  <Badge v-if="notificationUnreadCount > 0" variant="destructive" class="ml-auto">
+                    {{ notificationUnreadCount }}
+                  </Badge>
                 </router-link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -297,10 +312,10 @@
                     <Settings />
                     账户设置
                   </DropdownMenuItem>
-                  <DropdownMenuItem @click="toggleMode">
+                  <DropdownMenuItem @click="toggleTheme">
                     <Moon v-if="!isDark" class="h-4 w-4" />
                     <Sun v-else class="h-4 w-4" />
-                    <span>切换主题</span>
+                    <span>切换主题 ({{ preferencesStore.theme === 'system' ? '跟随系统' : preferencesStore.theme === 'dark' ? '深色' : '浅色' }})</span>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
@@ -358,7 +373,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { generateNavigationConfig } from '@/router'
 import {
@@ -429,15 +444,22 @@ import {
   Webhook,
   Zap,
 } from 'lucide-vue-next'
-import { useTheme } from '@juanie/ui'
 import { useAuthStore } from '@/stores/auth'
+import { usePreferencesStore } from '@/stores/preferences'
+import { useNotifications } from '@/composables/useNotifications'
+import OrganizationSwitcher from '@/components/OrganizationSwitcher.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const preferencesStore = usePreferencesStore()
+const { fetchUnreadCount } = useNotifications()
+
+// 通知未读数量
+const notificationUnreadCount = ref(0)
 
 // 使用主题功能
-const { isDark, toggleMode } = useTheme()
+const { isDark, toggleTheme } = preferencesStore
 
 // 图标映射
 const iconMap: Record<string, any> = {
@@ -535,4 +557,29 @@ async function handleLogout() {
     console.error('Logout failed:', error)
   }
 }
+
+// 加载未读通知数量
+async function loadUnreadCount() {
+  try {
+    notificationUnreadCount.value = await fetchUnreadCount()
+  } catch (error) {
+    console.error('Failed to fetch unread count:', error)
+  }
+}
+
+// 定期刷新未读数量（每30秒）
+let unreadCountInterval: number | undefined
+
+onMounted(() => {
+  loadUnreadCount()
+  unreadCountInterval = window.setInterval(loadUnreadCount, 30000)
+})
+
+// 清理定时器
+import { onUnmounted } from 'vue'
+onUnmounted(() => {
+  if (unreadCountInterval) {
+    clearInterval(unreadCountInterval)
+  }
+})
 </script>

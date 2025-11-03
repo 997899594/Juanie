@@ -1,78 +1,75 @@
-import type { AppRouter } from '@juanie/api-ai'
-import { createTRPCProxyClient, httpBatchLink, loggerLink, type TRPCClient } from '@trpc/client'
+import { createTRPCProxyClient, httpBatchLink, TRPCClientError } from '@trpc/client'
+import type { AppRouter } from '@/../../api-gateway/src/trpc/trpc.router'
 
-const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+// 获取 API 基础 URL
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
+  }
+  // 开发环境默认
+  return 'http://localhost:3000'
+}
 
 // 创建 tRPC 客户端
-const trpcClient = createTRPCProxyClient<AppRouter>({
+export const trpc = createTRPCProxyClient<AppRouter>({
   links: [
-    loggerLink({
-      enabled: () => import.meta.env.DEV,
-    }),
     httpBatchLink({
-      url: `${baseUrl}/trpc`,
-      fetch: (url: RequestInfo | URL, options?: RequestInit) =>
-        fetch(url, {
-          ...options,
-          credentials: 'include',
-        }),
-      // headers() {
-      //   const token = localStorage.getItem('token')
-      //   return token ? { authorization: `Bearer ${token}` } : {}
-      // },
+      url: `${getBaseUrl()}/trpc`,
+      // 请求头配置
+      headers() {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        }
+
+        // 添加认证 Token
+        const sessionToken = localStorage.getItem('sessionToken')
+        if (sessionToken) {
+          headers['Authorization'] = `Bearer ${sessionToken}`
+        }
+
+        // 添加 session ID（兼容旧版）
+        const sessionId = localStorage.getItem('sessionId')
+        if (sessionId) {
+          headers['x-session-id'] = sessionId
+        }
+
+        return headers
+      },
+      // 请求拦截器 - 全局错误处理
+      async fetch(url, options) {
+        try {
+          const response = await fetch(url, {
+            ...options,
+            credentials: 'include', // 包含 cookies
+          })
+
+          // 处理认证错误
+          if (response.status === 401) {
+            // 清除本地认证信息
+            localStorage.removeItem('sessionToken')
+            localStorage.removeItem('sessionId')
+
+            // 如果不在登录页，跳转到登录页
+            if (!window.location.pathname.includes('/login')) {
+              window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`
+            }
+          }
+
+          return response
+        } catch (error) {
+          // 网络错误处理
+          console.error('Network error:', error)
+          throw error
+        }
+      },
     }),
   ],
 })
 
-// 数据提取工具函数 - 简化多层嵌套的响应结构
-export const extractData = <T>(response: any): T => {
-  // 处理 tRPC 的标准响应格式: { success: true, data: T, timestamp: string }
-  if (response && typeof response === 'object' && 'success' in response && 'data' in response) {
-    return response.data as T
-  }
-  // 如果已经是纯数据，直接返回
-  return response as T
-}
-
-// 创建简化的 tRPC 客户端包装器
-export const createSimplifiedTrpc = () => {
-  const originalTrpc = trpcClient
-  
-  // 创建代理，自动提取 data 字段
-  return new Proxy(originalTrpc, {
-    get(target: any, prop: string) {
-      const value = target[prop]
-      if (typeof value === 'object' && value !== null) {
-        return new Proxy(value, {
-          get(nestedTarget: any, nestedProp: string) {
-            const nestedValue = nestedTarget[nestedProp]
-            if (typeof nestedValue === 'object' && nestedValue !== null) {
-              return new Proxy(nestedValue, {
-                get(methodTarget: any, methodProp: string) {
-                  const method = methodTarget[methodProp]
-                  if (typeof method === 'function') {
-                    return async (...args: any[]) => {
-                      const result = await method.apply(methodTarget, args)
-                      return extractData(result)
-                    }
-                  }
-                  return method
-                }
-              })
-            }
-            return nestedValue
-          }
-        })
-      }
-      return value
-    }
-  })
-}
-
-// 导出简化的 tRPC 客户端
-export const trpc = createSimplifiedTrpc() as TRPCClient<AppRouter>
-
-// 导出原始客户端（如果需要完整响应格式）
-export const trpcRaw: TRPCClient<AppRouter> = trpcClient
-
+// 导出类型
 export type { AppRouter }
+
+// 导出错误类型判断工具
+export function isTRPCClientError(error: unknown): error is TRPCClientError<AppRouter> {
+  return error instanceof TRPCClientError
+}

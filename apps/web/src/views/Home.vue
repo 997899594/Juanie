@@ -1,8 +1,18 @@
 <template>
-  <div class="min-h-screen bg-background text-foreground p-8">
+  <div
+    v-motion
+    :initial="{ opacity: 0, y: 20 }"
+    :enter="{ opacity: 1, y: 0, transition: { duration: 300, ease: 'easeOut' } }"
+    class="min-h-screen bg-background text-foreground p-8"
+  >
     <div class="max-w-6xl mx-auto space-y-8">
       <!-- 页面标题 -->
-      <div class="text-center">
+      <div
+        v-motion
+        :initial="{ opacity: 0, scale: 0.9 }"
+        :enter="{ opacity: 1, scale: 1, transition: { duration: 300, delay: 100 } }"
+        class="text-center"
+      >
         <h1 class="text-4xl font-bold mb-2">Juanie UI 组件测试</h1>
         <p class="text-muted-foreground">测试 shadcn-vue 组件和主题功能</p>
         <div class="mt-4">

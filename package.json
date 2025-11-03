@@ -10,13 +10,30 @@
     "packages/services/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --concurrency=50",
     "dev:web": "turbo dev --filter='@juanie/web'",
     "dev:ui": "turbo dev --filter='@juanie/ui'",
     "build": "turbo build",
     "type-check": "turbo type-check",
+    "check:env": "./scripts/check-env.sh",
+    "check:config": "./scripts/check-config-deps.sh",
+    "setup": "cp .env.example .env && echo '✅ 已创建 .env 文件,请编辑并填入实际值'",
+    "docker:up": "docker-compose up -d postgres dragonfly ollama minio",
+    "docker:up:all": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:ps": "docker-compose ps",
     "clean:processes": "pkill -f vite; pkill -f node; pkill -f bun; echo '进程已清理'",
-    "dev:clean": "bun run clean:processes && bun run dev:web"
+    "clean:stuck": "./scripts/kill-stuck-processes.sh",
+    "diagnose": "./scripts/diagnose-build.sh",
+    "fix:vite": "./scripts/fix-vite-freeze.sh",
+    "dev:clean": "bun run clean:processes && bun run dev:web",
+    "dev:safe": "./scripts/dev-web-safe.sh",
+    "ui:build": "turbo build --filter='@juanie/ui'",
+    "ui:build:fast": "cd packages/ui && bun run build:fast",
+    "ui:build:ultra": "cd packages/ui && bun run build:ultra-fast",
+    "ui:build:timeout": "cd packages/ui && ./scripts/build-with-timeout.sh",
+    "ui:clean": "cd packages/ui && ./scripts/clean-build.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",

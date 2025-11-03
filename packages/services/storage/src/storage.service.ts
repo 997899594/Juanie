@@ -5,7 +5,7 @@ import { Client } from 'minio'
 @Injectable()
 export class StorageService {
   private minioClient: Client
-  private bucketName = 'logos'
+  private bucketName = 'juanie'
 
   constructor(private config: ConfigService) {
     this.minioClient = new Client({
@@ -40,9 +40,16 @@ export class StorageService {
           ],
         }
         await this.minioClient.setBucketPolicy(this.bucketName, JSON.stringify(policy))
+      } else {
+        console.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
       }
-    } catch (error) {
-      console.error('MinIO bucket setup error:', error)
+    } catch (error: any) {
+      // 忽略 bucket 已存在的错误
+      if (error.code === 'BucketAlreadyOwnedByYou' || error.code === 'BucketAlreadyExists') {
+        console.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
+      } else {
+        console.error('MinIO bucket setup error:', error)
+      }
     }
   }
 

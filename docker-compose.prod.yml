@@ -9,7 +9,7 @@ services:
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
-    container_name: ai-devops-api-gateway
+    container_name: juanie-api-gateway
     restart: unless-stopped
     ports:
       - "3001:3001"
@@ -17,7 +17,7 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/devops
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://dragonfly:6379
       - JWT_SECRET=${JWT_SECRET}
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
@@ -28,7 +28,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      dragonfly:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "bun", "run", "-e", "fetch('http://localhost:3001/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
@@ -49,7 +49,7 @@ services:
   # ============================================
   postgres:
     image: postgres:17-alpine
-    container_name: ai-devops-postgres
+    container_name: juanie-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: devops
@@ -74,17 +74,20 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  redis:
-    image: redis:7-alpine
-    container_name: ai-devops-redis
+  # Dragonfly - Redis 兼容的高性能缓存 (25x faster)
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
+    container_name: juanie-dragonfly
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    command: --requirepass ${REDIS_PASSWORD}
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - dragonfly_data:/data
+    ulimits:
+      memlock: -1
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -101,7 +104,7 @@ services:
   # ============================================
   prometheus:
     image: prom/prometheus:latest
-    container_name: ai-devops-prometheus
+    container_name: juanie-prometheus
     restart: unless-stopped
     ports:
       - "9090:9090"
@@ -124,7 +127,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: ai-devops-grafana
+    container_name: juanie-grafana
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -148,7 +151,7 @@ services:
 
   jaeger:
     image: jaegertracing/all-in-one:latest
-    container_name: ai-devops-jaeger
+    container_name: juanie-jaeger
     restart: unless-stopped
     ports:
       - "16686:16686"  # Jaeger UI
@@ -175,7 +178,7 @@ services:
   # ============================================
   nginx:
     image: nginx:alpine
-    container_name: ai-devops-nginx
+    container_name: juanie-nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -200,7 +203,7 @@ networks:
 volumes:
   postgres_data:
     driver: local
-  redis_data:
+  dragonfly_data:
     driver: local
   prometheus_data:
     driver: local
