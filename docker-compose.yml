@@ -1,5 +1,5 @@
 # 开发环境 Docker Compose 配置
-version: '3.8'
+version: "3.8"
 
 services:
   # ============================================
@@ -75,8 +75,8 @@ services:
     container_name: juanie-minio-dev
     restart: unless-stopped
     ports:
-      - "${MINIO_PORT:-9000}:9000"      # API
-      - "9001:9001"                      # Console
+      - "${MINIO_PORT:-9000}:9000" # API
+      - "9001:9001" # Console
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
@@ -99,8 +99,8 @@ services:
     container_name: juanie-jaeger-dev
     restart: unless-stopped
     ports:
-      - "16686:16686"  # Jaeger UI
-      - "4318:4318"    # OTLP HTTP receiver
+      - "16686:16686" # Jaeger UI
+      - "4318:4318" # OTLP HTTP receiver
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     networks:
@@ -115,8 +115,8 @@ services:
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
     networks:
       - dev-network
 
@@ -151,7 +151,7 @@ services:
       GITLAB_OMNIBUS_CONFIG: |
         external_url 'http://${GITLAB_HOSTNAME:-gitlab.local}:8080'
         gitlab_rails['gitlab_shell_ssh_port'] = 2222
-        
+
         # ===== 轻量级配置：禁用不需要的服务 =====
         prometheus_monitoring['enable'] = false
         alertmanager['enable'] = false
@@ -159,11 +159,10 @@ services:
         redis_exporter['enable'] = false
         postgres_exporter['enable'] = false
         gitlab_exporter['enable'] = false
-        grafana['enable'] = false
         registry['enable'] = false
         mattermost['enable'] = false
         sentinel['enable'] = false
-        
+
         # ===== 使用外部数据库（PostgreSQL）=====
         postgresql['enable'] = false
         gitlab_rails['db_adapter'] = 'postgresql'
@@ -173,41 +172,41 @@ services:
         gitlab_rails['db_database'] = '${GITLAB_DB:-gitlab_dev}'
         gitlab_rails['db_username'] = '${POSTGRES_USER:-findbiao}'
         gitlab_rails['db_password'] = '${POSTGRES_PASSWORD:-biao1996.}'
-        
+
         # ===== 使用外部缓存（Dragonfly）=====
         redis['enable'] = false
         gitlab_rails['redis_host'] = 'dragonfly'
         gitlab_rails['redis_port'] = 6379
-        
+
         # ===== 性能优化 =====
         puma['worker_processes'] = 2
         puma['min_threads'] = 1
         puma['max_threads'] = 4
         sidekiq['max_concurrency'] = 10
-        
+
         # 禁用不需要的功能
         gitlab_pages['enable'] = false
         pages_nginx['enable'] = false
         gitlab_kas['enable'] = false
-        
+
         # ===== 其他配置 =====
         gitlab_rails['smtp_enable'] = false
         gitlab_rails['gitlab_email_enabled'] = false
         gitlab_rails['initial_root_password'] = '${GITLAB_ROOT_PASSWORD:-admin123456}'
         gitlab_rails['time_zone'] = 'Asia/Shanghai'
     ports:
-      - "8080:8080"   # HTTP
-      - "2222:22"     # SSH
+      - "8080:8080" # HTTP
+      - "2222:22" # SSH
     volumes:
       - gitlab_config:/etc/gitlab
       - gitlab_logs:/var/log/gitlab
       - gitlab_data:/var/opt/gitlab
-    shm_size: '256m'
+    shm_size: "256m"
     # 资源限制（可选，防止占用过多资源）
     deploy:
       resources:
         limits:
-          cpus: '2'
+          cpus: "2"
           memory: 4G
         reservations:
           memory: 2G
@@ -221,7 +220,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 180s  # GitLab 启动需要时间
+      start_period: 180s # GitLab 启动需要时间
 
 networks:
   dev-network:

@@ -18,7 +18,7 @@
     "check:env": "./scripts/check-env.sh",
     "check:config": "./scripts/check-config-deps.sh",
     "setup": "cp .env.example .env && echo '✅ 已创建 .env 文件,请编辑并填入实际值'",
-    "docker:up": "docker-compose up -d postgres dragonfly ollama minio",
+    "docker:up": "docker-compose up -d postgres dragonfly ollama minio gitlab",
     "docker:up:all": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",

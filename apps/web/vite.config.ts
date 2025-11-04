@@ -1,9 +1,9 @@
 import { resolve } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vite'
+import { defineConfig, type PluginOption } from 'vite'
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig({
   plugins: [
     vue({
       script: {
@@ -11,16 +11,16 @@ export default defineConfig(({ mode }) => ({
         propsDestructure: true,
       },
     }),
-    tailwindcss(),
+    tailwindcss() as unknown as PluginOption,
   ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
-      'tslib': 'tslib/tslib.es6.js',
+      tslib: 'tslib/tslib.es6.js',
     },
     // 确保 UI 库与应用使用同一份 Vue 实例，避免运行时冲突
-    dedupe: ['vue', 'vue-router', '@vueuse/core', '@vueuse/motion'],
-    conditions: mode === 'development' ? ['development'] : ['default'],
+    dedupe: ['vue', 'vue-router', 'pinia', '@vueuse/core', '@vueuse/motion'],
+    conditions: process.env.NODE_ENV === 'development' ? ['development'] : ['default'],
   },
   optimizeDeps: {
     include: [
@@ -48,6 +48,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 1997,
     host: true,
+    // 通过代理把 /trpc 请求转发到后端，避免 CORS
+    proxy: {
+      '/trpc': {
+        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:3002',
+        changeOrigin: true,
+        // tRPC endpoint 不需要重写路径，保持原样
+      },
+    },
     // 严格的文件监听配置，防止卡死
     watch: {
       // 忽略这些目录，减少文件监听负担
@@ -85,10 +93,8 @@ export default defineConfig(({ mode }) => ({
     // 启用 CSS 代码分割
     cssCodeSplit: true,
     // 生成 sourcemap
-    sourcemap: mode === 'development',
+    sourcemap: process.env.NODE_ENV === 'development',
     rollupOptions: {
-      // 限制并行文件操作，防止资源耗尽
-      maxParallelFileOps: 20,
       output: {
         // 手动分包策略，优化加载性能
         manualChunks: (id) => {
@@ -119,6 +125,7 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('node_modules/')) {
             return 'vendor'
           }
+          return undefined
         },
         // 优化 chunk 文件名
         chunkFileNames: 'assets/js/[name]-[hash].js',
@@ -133,4 +140,4 @@ export default defineConfig(({ mode }) => ({
   logLevel: 'info',
   // 清除屏幕
   clearScreen: false,
-}))
+})

@@ -3,11 +3,12 @@ import type { AppRouter } from '@/../../api-gateway/src/trpc/trpc.router'
 
 // 获取 API 基础 URL
 const getBaseUrl = () => {
+  // 如果显式指定了 API 地址，则使用该地址（适用于生产或非代理场景）
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL
   }
-  // 开发环境默认
-  return 'http://localhost:3000'
+  // 开发环境走同源 + Vite 代理，避免 CORS；返回空串以构建相对路径
+  return ''
 }
 
 // 创建 tRPC 客户端
