@@ -26,11 +26,18 @@ export class AuthService {
       `${config.get('APP_URL')}/auth/github/callback`,
     )
 
+    const gitlabBase = (config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com').replace(
+      /\/+$/,
+      '',
+    )
+    const gitlabCallback =
+      config.get<string>('GITLAB_REDIRECT_URI') || `${config.get('APP_URL')}/auth/gitlab/callback`
+
     this.gitlab = new GitLab(
-      'https://gitlab.com',
+      gitlabBase,
       config.get('GITLAB_CLIENT_ID')!,
       config.get('GITLAB_CLIENT_SECRET')!,
-      `${config.get('APP_URL')}/auth/gitlab/callback`,
+      gitlabCallback,
     )
   }
 
@@ -102,7 +109,9 @@ export class AuthService {
 
     const tokens = await this.gitlab.validateAuthorizationCode(code)
 
-    const response = await fetch('https://gitlab.com/api/v4/user', {
+    // 根据配置的 GitLab 基址请求用户信息
+    const gitlabBase = (process.env.GITLAB_BASE_URL || 'https://gitlab.com').replace(/\/+$/, '')
+    const response = await fetch(`${gitlabBase}/api/v4/user`, {
       headers: { Authorization: `Bearer ${tokens.accessToken()}` },
     })
     const gitlabUser = (await response.json()) as {

@@ -2,12 +2,16 @@ import * as schema from '@juanie/core-database/schemas'
 import { DATABASE } from '@juanie/core-tokens'
 import type { ConnectRepositoryInput } from '@juanie/core-types'
 import { Inject, Injectable } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 @Injectable()
 export class RepositoriesService {
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private readonly config: ConfigService,
+  ) {}
 
   // 连接仓库
   async connect(userId: string, data: ConnectRepositoryInput) {
@@ -183,7 +187,10 @@ export class RepositoriesService {
       } else if (repository.provider === 'gitlab') {
         // GitLab API: 需要先获取项目 ID
         const projectPath = encodeURIComponent(repository.fullName)
-        const response = await fetch(`https://gitlab.com/api/v4/projects/${projectPath}`, {
+        const gitlabBase = (
+          this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+        ).replace(/\/+$/, '')
+        const response = await fetch(`${gitlabBase}/api/v4/projects/${projectPath}`, {
           headers: {
             Authorization: `Bearer ${oauthAccount.accessToken}`,
             'User-Agent': 'AI-DevOps-Platform',

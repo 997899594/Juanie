@@ -19,7 +19,7 @@ export default defineConfig({
       tslib: 'tslib/tslib.es6.js',
     },
     // 确保 UI 库与应用使用同一份 Vue 实例，避免运行时冲突
-    dedupe: ['vue', 'vue-router', 'pinia', '@vueuse/core', '@vueuse/motion'],
+    dedupe: ['vue', 'vue-router', '@vueuse/core', '@vueuse/motion'],
     conditions: process.env.NODE_ENV === 'development' ? ['development'] : ['default'],
   },
   optimizeDeps: {

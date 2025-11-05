@@ -137,12 +137,20 @@
 - **类型**: `string`
 - **示例**: `GITLAB_CLIENT_SECRET=1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef`
 
-#### GITLAB_CALLBACK_URL
+#### GITLAB_REDIRECT_URI
 
 - **说明**: GitLab OAuth 回调 URL
 - **类型**: `string`
 - **格式**: `https://[domain]/auth/gitlab/callback`
-- **示例**: `GITLAB_CALLBACK_URL=http://localhost:3001/auth/gitlab/callback`
+- **示例**: `GITLAB_REDIRECT_URI=http://localhost:3001/auth/gitlab/callback`
+
+#### GITLAB_BASE_URL
+
+- **说明**: GitLab 实例的基址（支持私有部署）
+- **类型**: `string`
+- **默认**: `https://gitlab.com`
+- **示例（私服）**: `GITLAB_BASE_URL=http://127.0.0.1:8080`
+- **注意**: 将用于构建 OAuth 端点以及 API 调用（如 `/api/v4/user`、`/api/v4/projects/...`）。必须与创建 OAuth 应用的实例一致。
 
 ## AI 服务配置
 
