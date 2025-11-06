@@ -12,7 +12,10 @@ export class ProjectsService {
 
   // 创建项目
   @Trace('projects.create')
-  async create(userId: string, data: CreateProjectInput) {
+  async create(
+    userId: string,
+    data: CreateProjectInput,
+  ): Promise<typeof schema.projects.$inferSelect> {
     // 检查用户是否是组织成员
     const member = await this.getOrgMember(data.organizationId, userId)
     if (!member) {
@@ -32,15 +35,24 @@ export class ProjectsService {
         slug: data.slug,
         description: data.description,
         logoUrl: data.logoUrl,
+        visibility: (data as any).visibility ?? 'private',
       })
       .returning()
+
+    if (!project) {
+      throw new Error('创建项目失败')
+    }
 
     return project
   }
 
   // 上传项目 Logo
   @Trace('projects.uploadLogo')
-  async uploadLogo(userId: string, projectId: string, logoUrl: string | null) {
+  async uploadLogo(
+    userId: string,
+    projectId: string,
+    logoUrl: string | null,
+  ): Promise<typeof schema.projects.$inferSelect> {
     const project = await this.get(userId, projectId)
     if (!project) {
       throw new Error('项目不存在')
@@ -61,6 +73,10 @@ export class ProjectsService {
       .where(eq(schema.projects.id, projectId))
       .returning()
 
+    if (!updated) {
+      throw new Error('更新 Logo 失败')
+    }
+
     return updated
   }
 
@@ -79,6 +95,9 @@ export class ProjectsService {
         name: schema.projects.name,
         slug: schema.projects.slug,
         description: schema.projects.description,
+        logoUrl: schema.projects.logoUrl,
+        visibility: schema.projects.visibility,
+        status: schema.projects.status,
         config: schema.projects.config,
         createdAt: schema.projects.createdAt,
         updatedAt: schema.projects.updatedAt,
@@ -101,6 +120,9 @@ export class ProjectsService {
         slug: schema.projects.slug,
         description: schema.projects.description,
         organizationId: schema.projects.organizationId,
+        logoUrl: schema.projects.logoUrl,
+        visibility: schema.projects.visibility,
+        status: schema.projects.status,
         config: schema.projects.config,
         createdAt: schema.projects.createdAt,
         updatedAt: schema.projects.updatedAt,
@@ -124,7 +146,11 @@ export class ProjectsService {
 
   // 更新项目
   @Trace('projects.update')
-  async update(userId: string, projectId: string, data: UpdateProjectInput) {
+  async update(
+    userId: string,
+    projectId: string,
+    data: UpdateProjectInput,
+  ): Promise<typeof schema.projects.$inferSelect> {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
@@ -145,6 +171,8 @@ export class ProjectsService {
     if (data.name !== undefined) updateData.name = data.name
     if (data.slug !== undefined) updateData.slug = data.slug
     if (data.description !== undefined) updateData.description = data.description
+    if (data.visibility !== undefined) updateData.visibility = data.visibility
+    if (data.status !== undefined) updateData.status = data.status
 
     if (data.config) {
       updateData.config = {
@@ -159,6 +187,10 @@ export class ProjectsService {
       .set(updateData)
       .where(eq(schema.projects.id, projectId))
       .returning()
+
+    if (!updated) {
+      throw new Error('更新项目失败')
+    }
 
     return updated
   }

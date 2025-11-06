@@ -1,6 +1,5 @@
 import { NestFactory } from '@nestjs/core'
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify'
-import fastifyCookie from '@fastify/cookie'
 import { AppModule } from './app.module'
 import { setupObservability } from './observability'
 import { setupTrpc } from './trpc/trpc.adapter'
@@ -18,11 +17,6 @@ async function bootstrap() {
   app.enableCors({
     origin: process.env.CORS_ORIGIN,
     credentials: true,
-  })
-
-  // 注册 Cookie 插件（用于 HTTP-only 会话）
-  await fastifyAdapter.getInstance().register(fastifyCookie, {
-    secret: process.env.COOKIE_SECRET || 'dev-secret',
   })
 
   // 设置 tRPC
@@ -49,7 +43,7 @@ async function bootstrap() {
     })
   })
 
-  const port = process.env.PORT || 3002
+  const port = process.env.PORT || 3000
   await app.listen(port, '0.0.0.0')
 
   console.log(`🚀 API Gateway running on http://localhost:${port}`)

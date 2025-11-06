@@ -78,26 +78,7 @@ export class ProjectsRouter {
 
       // 更新项目
       update: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string(),
-            name: z.string().min(1).max(100).optional(),
-            slug: z
-              .string()
-              .min(3)
-              .max(50)
-              .regex(/^[a-z0-9-]+$/)
-              .optional(),
-            description: z.string().max(500).optional(),
-            config: z
-              .object({
-                defaultBranch: z.string().optional(),
-                enableCiCd: z.boolean().optional(),
-                enableAi: z.boolean().optional(),
-              })
-              .optional(),
-          }),
-        )
+        .input(updateProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             const { projectId, ...data } = input

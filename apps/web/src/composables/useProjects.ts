@@ -1,10 +1,11 @@
-import type { inferRouterOutputs } from '@trpc/server'
+import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import type { AppRouter } from '@/lib/trpc'
 import { isTRPCClientError, trpc } from '@/lib/trpc'
 
 type RouterOutput = inferRouterOutputs<AppRouter>
+type RouterInput = inferRouterInputs<AppRouter>
 type Project = RouterOutput['projects']['list'][number]
 type ProjectDetail = RouterOutput['projects']['get']
 type ProjectMember = RouterOutput['projects']['listMembers'][number]
@@ -80,22 +81,20 @@ export function useProjects() {
   /**
    * 创建项目
    */
-  async function createProject(data: {
-    organizationId: string
-    name: string
-    slug: string
-    description?: string
-    config?: {
-      defaultBranch?: string
-      enableCiCd?: boolean
-      enableAi?: boolean
-    }
-  }) {
+  async function createProject(
+    data: RouterInput['projects']['create'] & { repositoryUrl?: string },
+  ) {
     loading.value = true
     error.value = null
 
     try {
-      const result = await trpc.projects.create.mutate(data)
+      const { repositoryUrl, ...createInput } = data
+      const result = await trpc.projects.create.mutate(createInput)
+
+      // 如提供仓库URL，尝试连接仓库
+      if (repositoryUrl) {
+        await connectRepositoryIfNeeded(result.id, repositoryUrl)
+      }
 
       // 刷新项目列表
       await fetchProjects(data.organizationId)
@@ -120,25 +119,22 @@ export function useProjects() {
    */
   async function updateProject(
     projectId: string,
-    data: {
-      name?: string
-      slug?: string
-      description?: string
-      config?: {
-        defaultBranch?: string
-        enableCiCd?: boolean
-        enableAi?: boolean
-      }
-    },
+    data: Omit<RouterInput['projects']['update'], 'projectId'> & { repositoryUrl?: string },
   ) {
     loading.value = true
     error.value = null
 
     try {
+      const { repositoryUrl, ...updateInput } = data
       const result = await trpc.projects.update.mutate({
         projectId,
-        ...data,
+        ...updateInput,
       })
+
+      // 如提供仓库URL，尝试连接仓库
+      if (repositoryUrl) {
+        await connectRepositoryIfNeeded(projectId, repositoryUrl)
+      }
 
       // 更新本地数据
       if (currentProject.value?.id === projectId) {
@@ -164,6 +160,41 @@ export function useProjects() {
     } finally {
       loading.value = false
     }
+  }
+
+  // 解析仓库URL，返回provider与fullName
+  function parseRepositoryUrl(
+    url: string,
+  ): { provider: 'github' | 'gitlab'; fullName: string; cloneUrl: string } | null {
+    const raw = url.trim()
+    if (!raw) return null
+    const match = raw
+      .replace(/\.git$/i, '')
+      .match(/(?:https?:\/\/|git@)?(github\.com|gitlab\.com)(?::|\/)([^?#]+?)(?:\/+)?(?:[?#].*)?$/i)
+    if (!match) return null
+    const host = match[1]
+    const repoPath = match[2]?.replace(/\/+$/, '')
+    if (!host || !repoPath || !repoPath.includes('/')) return null
+    const provider = host.toLowerCase().includes('github') ? 'github' : 'gitlab'
+    return { provider, fullName: repoPath, cloneUrl: raw }
+  }
+
+  // 若仓库未连接则连接
+  async function connectRepositoryIfNeeded(projectId: string, repositoryUrl: string) {
+    const parsed = parseRepositoryUrl(repositoryUrl)
+    if (!parsed) {
+      toast.error('仓库URL不合法', '无法解析仓库地址')
+      return
+    }
+    const existing = await trpc.repositories.list.query({ projectId })
+    const already = existing.some((r) => r.fullName === parsed.fullName)
+    if (already) return
+    await trpc.repositories.connect.mutate({
+      projectId,
+      provider: parsed.provider,
+      fullName: parsed.fullName,
+      cloneUrl: parsed.cloneUrl,
+    })
   }
 
   /**

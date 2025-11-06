@@ -1,22 +1,50 @@
 <template>
   <PageContainer title="Pipeline 管理" description="管理和监控 CI/CD Pipeline">
     <template #actions>
-      <Button @click="showCreateDialog = true">
-        <Plus class="mr-2 h-4 w-4" />
-        创建 Pipeline
-      </Button>
+      <div class="flex items-center gap-3">
+        <div class="w-56">
+          <Select v-model="selectedProjectId">
+            <SelectTrigger>
+              <SelectValue :placeholder="projectSelectPlaceholder" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="p in projects"
+                :key="p.id"
+                :value="p.id"
+              >
+                {{ p.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button :disabled="!selectedProjectId" @click="showCreateDialog = true">
+          <Plus class="mr-2 h-4 w-4" />
+          创建 Pipeline
+        </Button>
+      </div>
     </template>
 
     <!-- 错误状态 -->
     <ErrorState
-      v-if="error && !loading"
+      v-if="error && !loading && selectedProjectId"
       title="加载失败"
       :message="error"
-      @retry="() => projectId && fetchPipelines(projectId)"
+      @retry="() => selectedProjectId && fetchPipelines(selectedProjectId)"
     />
 
     <!-- 加载状态 -->
     <LoadingState v-else-if="loading" message="加载 Pipeline 中..." />
+
+    <!-- 未选择项目提示 -->
+    <Card v-else-if="!selectedProjectId">
+      <CardContent class="flex items-center justify-between py-4">
+        <div>
+          <h3 class="font-semibold">请选择项目</h3>
+          <p class="text-sm text-muted-foreground">先选择一个项目以查看和管理其 Pipeline</p>
+        </div>
+      </CardContent>
+    </Card>
 
     <!-- 空状态 -->
     <EmptyState
@@ -78,6 +106,23 @@
         </DialogHeader>
         <form @submit.prevent="handleSubmit" class="space-y-4">
           <div class="space-y-2">
+            <Label for="project">所属项目</Label>
+            <Select id="project" v-model="form.projectId">
+              <SelectTrigger>
+                <SelectValue placeholder="选择项目" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="p in projects"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  {{ p.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-2">
             <Label for="name">Pipeline 名称</Label>
             <Input id="name" v-model="form.name" required />
           </div>
@@ -85,7 +130,7 @@
             <Button type="button" variant="outline" @click="showCreateDialog = false">
               取消
             </Button>
-            <Button type="submit" :disabled="loading">
+            <Button type="submit" :disabled="loading || !form.projectId">
               <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
               {{ isEditing ? '更新' : '创建' }}
             </Button>
@@ -97,9 +142,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePipelines } from '@/composables/usePipelines'
+import { useProjects } from '@/composables/useProjects'
+import { useAppStore } from '@/stores/app'
+import { useToast } from '@/composables/useToast'
 import {
   Button,
   Card,
@@ -114,6 +162,11 @@ import {
   DialogTitle,
   Input,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@juanie/ui'
 import { Plus, GitBranch, Play, Settings, Loader2 } from 'lucide-vue-next'
 import PageContainer from '@/components/PageContainer.vue'
@@ -122,7 +175,16 @@ import EmptyState from '@/components/EmptyState.vue'
 import ErrorState from '@/components/ErrorState.vue'
 
 const route = useRoute()
-const projectId = route.params.projectId as string
+const toast = useToast()
+const appStore = useAppStore()
+const { projects, fetchProjects } = useProjects()
+const currentOrganizationId = computed(() => appStore.currentOrganizationId)
+const initialProjectId = (route.query.projectId as string | undefined) ?? null
+const selectedProjectId = ref<string | null>(initialProjectId)
+
+const projectSelectPlaceholder = computed(() =>
+  currentOrganizationId.value ? '选择项目' : '请先选择组织',
+)
 
 const {
   pipelines,
@@ -140,12 +202,31 @@ const editingPipeline = ref<any>(null)
 
 const form = ref({
   name: '',
-  projectId: projectId,
+  projectId: selectedProjectId.value || '',
 })
 
 onMounted(async () => {
-  if (projectId) {
-    await fetchPipelines(projectId)
+  if (currentOrganizationId.value) {
+    await fetchProjects(currentOrganizationId.value)
+  }
+  if (selectedProjectId.value) {
+    await fetchPipelines(selectedProjectId.value)
+  }
+})
+
+watch(currentOrganizationId, async (orgId) => {
+  if (orgId) {
+    await fetchProjects(orgId)
+    // 重置选择，避免跨组织误选
+    selectedProjectId.value = null
+    form.value.projectId = ''
+  }
+})
+
+watch(selectedProjectId, async (pid) => {
+  form.value.projectId = pid || ''
+  if (pid) {
+    await fetchPipelines(pid)
   }
 })
 
@@ -154,24 +235,32 @@ const openEditDialog = (pipeline: any) => {
   editingPipeline.value = pipeline
   form.value = {
     name: pipeline.name,
-    projectId: projectId,
+    projectId: selectedProjectId.value || '',
   }
   showCreateDialog.value = true
 }
 
 const handleSubmit = async () => {
+  if (!form.value.projectId) {
+    toast.error('创建失败', '请先选择项目')
+    return
+  }
   if (isEditing.value && editingPipeline.value) {
     await updatePipeline(editingPipeline.value.id, { name: form.value.name })
   } else {
     await createPipeline(form.value)
   }
   showCreateDialog.value = false
-  await fetchPipelines(projectId)
+  if (selectedProjectId.value) {
+    await fetchPipelines(selectedProjectId.value)
+  }
 }
 
 const handleTrigger = async (pipelineId: string) => {
   await triggerPipeline(pipelineId)
-  await fetchPipelines(projectId)
+  if (selectedProjectId.value) {
+    await fetchPipelines(selectedProjectId.value)
+  }
 }
 
 const formatDate = (date: string) => {

@@ -1,4 +1,4 @@
-import { oauthCallbackSchema } from '@juanie/core-types'
+import { oauthCallbackSchema, sessionSchema } from '@juanie/core-types'
 import { AuthService } from '@juanie/service-auth'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -22,7 +22,7 @@ export class AuthRouter {
         return await this.authService.getGitHubAuthUrl()
       }),
 
-      githubCallback: this.trpc.procedure.input(oauthCallbackSchema).mutation(async ({ ctx, input }) => {
+      githubCallback: this.trpc.procedure.input(oauthCallbackSchema).mutation(async ({ input }) => {
         try {
           const user = await this.authService.handleGitHubCallback(input.code, input.state)
 
@@ -32,15 +32,6 @@ export class AuthRouter {
 
           const sessionId = await this.authService.createSession(user.id)
 
-          // 设置 HTTP-only Cookie
-          ctx.reply?.setCookie('sessionId', sessionId, {
-            path: '/',
-            httpOnly: true,
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 7 * 24 * 60 * 60, // 7 天
-          })
-
           return {
             user: {
               id: user.id,
@@ -49,6 +40,7 @@ export class AuthRouter {
               displayName: user.displayName,
               avatarUrl: user.avatarUrl,
             },
+            sessionId,
           }
         } catch (error) {
           throw new TRPCError({
@@ -63,7 +55,7 @@ export class AuthRouter {
         return await this.authService.getGitLabAuthUrl()
       }),
 
-      gitlabCallback: this.trpc.procedure.input(oauthCallbackSchema).mutation(async ({ ctx, input }) => {
+      gitlabCallback: this.trpc.procedure.input(oauthCallbackSchema).mutation(async ({ input }) => {
         try {
           const user = await this.authService.handleGitLabCallback(input.code, input.state)
 
@@ -73,15 +65,6 @@ export class AuthRouter {
 
           const sessionId = await this.authService.createSession(user.id)
 
-          // 设置 HTTP-only Cookie
-          ctx.reply?.setCookie('sessionId', sessionId, {
-            path: '/',
-            httpOnly: true,
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 7 * 24 * 60 * 60, // 7 天
-          })
-
           return {
             user: {
               id: user.id,
@@ -90,6 +73,7 @@ export class AuthRouter {
               displayName: user.displayName,
               avatarUrl: user.avatarUrl,
             },
+            sessionId,
           }
         } catch (error) {
           throw new TRPCError({
@@ -107,19 +91,13 @@ export class AuthRouter {
         }
       }),
 
-      logout: this.trpc.procedure.mutation(async ({ ctx }) => {
-        if (ctx.sessionId) {
-          await this.authService.deleteSession(ctx.sessionId)
-        }
-        // 清除 Cookie
-        ctx.reply?.clearCookie('sessionId', { path: '/' })
+      logout: this.trpc.procedure.input(sessionSchema).mutation(async ({ input }) => {
+        await this.authService.deleteSession(input.sessionId)
         return { success: true }
       }),
 
-      validateSession: this.trpc.procedure.query(async ({ ctx }) => {
-        const user = ctx.sessionId
-          ? await this.authService.validateSession(ctx.sessionId)
-          : null
+      validateSession: this.trpc.procedure.input(sessionSchema).query(async ({ input }) => {
+        const user = await this.authService.validateSession(input.sessionId)
 
         if (!user) {
           throw new TRPCError({
