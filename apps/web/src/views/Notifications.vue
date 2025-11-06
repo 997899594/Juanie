@@ -183,8 +183,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Skeleton,
 } from '@juanie/ui'
-import Skeleton from '@juanie/ui'
 import {
   AlertCircle,
   Bell,

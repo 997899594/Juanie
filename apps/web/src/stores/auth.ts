@@ -16,12 +16,11 @@ export const useAuthStore = defineStore(
 
     // 状态
     const user = ref<User | null>(null)
-    const sessionId = ref<string | null>(null)
     const loading = ref(false)
     const initialized = ref(false)
 
     // 计算属性
-    const isAuthenticated = computed(() => !!user.value && !!sessionId.value)
+    const isAuthenticated = computed(() => !!user.value)
 
     // 初始化认证状态
     async function initialize() {
@@ -29,23 +28,12 @@ export const useAuthStore = defineStore(
 
       loading.value = true
       try {
-        // 从localStorage获取会话ID
-        const storedSessionId = localStorage.getItem('sessionId')
-        if (storedSessionId) {
-          const result = await trpc.auth.validateSession.query({
-            sessionId: storedSessionId,
-          })
-
-          if (result?.valid && result?.user) {
-            user.value = result.user
-            sessionId.value = storedSessionId
-          }
+        const result = await trpc.auth.validateSession.query()
+        if (result?.valid && result?.user) {
+          user.value = result.user
         }
       } catch (error) {
         console.error('Failed to validate session:', error)
-        // 清除无效的session
-        localStorage.removeItem('sessionId')
-
         // 显示错误提示（仅在非认证错误时）
         if (isTRPCClientError(error) && error.data?.code !== 'UNAUTHORIZED') {
           toast.error('会话验证失败', '请重新登录')
@@ -57,22 +45,15 @@ export const useAuthStore = defineStore(
     }
 
     // 设置用户信息和会话
-    function setAuth(userData: User, session: string) {
+    function setAuth(userData: User) {
       user.value = userData
-      sessionId.value = session
-      // 保存session ID到localStorage
-      localStorage.setItem('sessionId', session)
     }
 
     // 登出
     async function logout() {
       loading.value = true
       try {
-        if (sessionId.value) {
-          await trpc.auth.logout.mutate({
-            sessionId: sessionId.value,
-          })
-        }
+        await trpc.auth.logout.mutate()
         toast.success('已退出登录')
       } catch (error) {
         console.error('Logout failed:', error)
@@ -88,15 +69,12 @@ export const useAuthStore = defineStore(
     // 清除状态（用于登出后清理）
     function clearAuth() {
       user.value = null
-      sessionId.value = null
       initialized.value = false
-      localStorage.removeItem('sessionId')
     }
 
     return {
       // 状态
       user,
-      sessionId,
       loading,
       initialized,
 
@@ -111,9 +89,7 @@ export const useAuthStore = defineStore(
     }
   },
   {
-    // 持久化配置 - 只持久化 sessionId
-    persist: {
-      paths: ['sessionId'],
-    },
+    // 不持久化会话（由 HTTP-only Cookie 管理）
+    persist: false,
   },
 )

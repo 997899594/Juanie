@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common'
+import type { FastifyReply } from 'fastify'
 import { initTRPC, TRPCError } from '@trpc/server'
+import { AuthService } from '@juanie/service-auth'
 
 // tRPC 上下文类型
 export interface Context {
@@ -8,10 +10,13 @@ export interface Context {
     id: string
     email: string
   }
+  reply?: FastifyReply
 }
 
 @Injectable()
 export class TrpcService {
+  constructor(private readonly authService: AuthService) {}
+
   trpc = initTRPC.context<Context>().create()
 
   // 公开的 procedure（无需认证）
@@ -23,12 +28,13 @@ export class TrpcService {
     if (ctx.user) {
       return next({
         ctx: {
+          ...ctx,
           user: ctx.user,
         },
       })
     }
 
-    // 从 sessionId 获取用户信息
+    // 必须有 sessionId
     if (!ctx.sessionId) {
       throw new TRPCError({
         code: 'UNAUTHORIZED',
@@ -36,11 +42,23 @@ export class TrpcService {
       })
     }
 
-    // TODO: 从 Redis 或其他存储获取会话
-    // 现在暂时抛出错误
-    throw new TRPCError({
-      code: 'UNAUTHORIZED',
-      message: '会话验证未实现',
+    // 验证会话并获取用户
+    const user = await this.authService.validateSession(ctx.sessionId)
+    if (!user) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: '会话无效或已过期',
+      })
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: {
+          id: user.id,
+          email: user.email,
+        },
+      },
     })
   })
 

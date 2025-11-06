@@ -1,222 +1,252 @@
 <template>
-  <div class="modal-overlay" @click="$emit('close')">
-    <div class="modal-content" @click.stop>
-      <div class="modal-header">
-        <h3 class="modal-title">创建新项目</h3>
-        <button @click="$emit('close')" class="close-btn">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+  <Dialog :open="open" @update:open="$emit('update:open', $event)">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>{{ isEdit ? '编辑项目' : '创建项目' }}</DialogTitle>
+        <DialogDescription>
+          {{ isEdit ? '更新项目信息' : '填写项目信息以创建新项目' }}
+        </DialogDescription>
+      </DialogHeader>
 
-      <form @submit.prevent="handleSubmit" class="modal-body">
-        <div class="form-group">
-          <label for="name" class="form-label">项目名称 *</label>
-          <input
+      <form @submit.prevent="handleSubmit" class="space-y-4">
+        <div class="space-y-2">
+          <Label for="name">项目名称 *</Label>
+          <Input
             id="name"
             v-model="form.name"
-            type="text"
-            class="form-input"
-            placeholder="输入项目名称"
+            placeholder="例如：web-dashboard"
+            :class="{ 'border-destructive': errors.name }"
             required
           />
-          <p v-if="errors.name" class="form-error">{{ errors.name }}</p>
+          <p v-if="errors.name" class="text-sm text-destructive">{{ errors.name }}</p>
         </div>
 
-        <div class="form-group">
-          <label for="displayName" class="form-label">显示名称</label>
-          <input
+        <div class="space-y-2">
+          <Label for="slug">项目标识（slug） *</Label>
+          <Input
+            id="slug"
+            v-model="form.slug"
+            placeholder="例如：web-dashboard"
+            pattern="^[a-z0-9\-]+$"
+            @input="handleSlugInput"
+            required
+          />
+          <p class="text-xs text-muted-foreground">
+            只能包含小写字母、数字和连字符，长度 3-50。
+          </p>
+          <p v-if="errors.slug" class="text-sm text-destructive">{{ errors.slug }}</p>
+        </div>
+
+        <div class="space-y-2">
+          <Label for="displayName">显示名称</Label>
+          <Input
             id="displayName"
             v-model="form.displayName"
-            type="text"
-            class="form-input"
-            placeholder="输入项目显示名称（可选）"
+            placeholder="例如：Juanie Web 控制台"
           />
         </div>
 
-        <div class="form-group">
-          <label for="description" class="form-label">项目描述</label>
-          <textarea
+        <div class="space-y-2">
+          <Label for="description">项目描述</Label>
+          <Textarea
             id="description"
             v-model="form.description"
-            class="form-textarea"
+            placeholder="项目的用途与简介（可选）"
             rows="3"
-            placeholder="简要描述项目用途和功能"
-          ></textarea>
+          />
         </div>
 
-        <div class="form-group">
-          <label class="form-label">项目可见性</label>
-          <div class="radio-group">
-            <label class="radio-item">
-              <input
-                v-model="form.visibility"
-                type="radio"
-                value="private"
-                class="radio-input"
-              />
-              <div class="radio-content">
-                <div class="radio-title">
-                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  私有项目
-                </div>
-                <p class="radio-description">只有项目成员可以访问</p>
-              </div>
-            </label>
-            <label class="radio-item">
-              <input
-                v-model="form.visibility"
-                type="radio"
-                value="public"
-                class="radio-input"
-              />
-              <div class="radio-content">
-                <div class="radio-title">
-                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  公开项目
-                </div>
-                <p class="radio-description">任何人都可以查看项目</p>
-              </div>
-            </label>
-            <label class="radio-item">
-              <input
-                v-model="form.visibility"
-                type="radio"
-                value="internal"
-                class="radio-input"
-              />
-              <div class="radio-content">
-                <div class="radio-title">
-                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                  内部项目
-                </div>
-                <p class="radio-description">组织内部成员可以访问</p>
-              </div>
-            </label>
-          </div>
+        <div class="space-y-2">
+          <Label for="visibility">可见性</Label>
+          <Select v-model="form.visibility">
+            <SelectTrigger>
+              <SelectValue placeholder="选择可见性" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="private">私有</SelectItem>
+              <SelectItem value="internal">内部</SelectItem>
+              <SelectItem value="public">公开</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div class="form-group">
-          <label for="repositoryUrl" class="form-label">代码仓库 URL</label>
-          <input
+        <div class="space-y-2">
+          <Label for="repositoryUrl">代码仓库 URL</Label>
+          <Input
             id="repositoryUrl"
             v-model="form.repositoryUrl"
             type="url"
-            class="form-input"
             placeholder="https://github.com/username/repo"
           />
-          <p class="form-help">代码仓库的 URL 地址，用于自动化部署</p>
+          <p class="text-xs text-muted-foreground">用于自动化部署与集成</p>
         </div>
 
-        <div class="modal-footer">
-          <button type="button" @click="$emit('close')" class="btn btn-secondary">
+        <DialogFooter>
+          <Button type="button" variant="outline" @click="$emit('update:open', false)">
             取消
-          </button>
-          <button type="submit" :disabled="loading" class="btn btn-primary">
-            <svg v-if="loading" class="w-4 h-4 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            {{ loading ? '创建中...' : '创建项目' }}
-          </button>
-        </div>
+          </Button>
+          <Button type="submit" :disabled="loading">
+            <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
+            {{ isEdit ? '更新' : '创建' }}
+          </Button>
+        </DialogFooter>
       </form>
-    </div>
-  </div>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { trpc, type AppRouter } from '@/lib/trpc'
+import { ref, reactive, watch, computed } from 'vue'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Label,
+  Textarea,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Button,
+} from '@juanie/ui'
+import { Loader2 } from 'lucide-vue-next'
+
+interface ProjectLike {
+  id?: string
+  name?: string
+  displayName?: string | null
+  description?: string | null
+  repositoryUrl?: string | null
+  visibility?: 'public' | 'private' | 'internal'
+}
+
+const props = withDefaults(defineProps<{
+  open: boolean
+  loading?: boolean
+  project?: ProjectLike | null
+}>(), {
+  loading: false,
+  project: null,
+})
 
 const emit = defineEmits<{
-  close: []
-  created: []
+  'update:open': [value: boolean]
+  submit: [data: { name: string; displayName?: string; description?: string; repositoryUrl?: string; visibility: 'public' | 'private' | 'internal' }]
 }>()
 
-const loading = ref(false)
 const errors = ref<Record<string, string>>({})
+const isEdit = computed(() => !!props.project)
 
 const form = reactive({
   name: '',
+  slug: '',
   displayName: '',
   description: '',
   repositoryUrl: '',
-  visibility: 'private' as 'public' | 'private' | 'internal'
+  visibility: 'private' as 'public' | 'private' | 'internal',
 })
 
-const validateForm = () => {
-  errors.value = {}
-  
-  if (!form.name.trim()) {
-    errors.value.name = '项目名称不能为空'
-    return false
-  }
-  
-  if (form.name.length < 2) {
-    errors.value.name = '项目名称至少需要2个字符'
-    return false
-  }
-  
-  if (form.name.length > 50) {
-    errors.value.name = '项目名称不能超过50个字符'
-    return false
-  }
-  
-  return true
-}
-
-const handleSubmit = async () => {
-  if (!validateForm()) {
-    return
-  }
-  
-  try {
-    loading.value = true
-    
-    const projectData = {
-      data: {
-        name: form.name.trim(),
-        displayName: form.displayName.trim() || '',
-        description: form.description.trim() || '',
-        repositoryUrl: form.repositoryUrl.trim() || '',
-        visibility: form.visibility
-      }
-    }
-    
-    await trpc.projects.create.mutate(projectData)
-    
-    // 重置表单
+watch(() => props.project, (p) => {
+  if (p) {
+    form.name = p.name || ''
+    // 编辑模式下 slug 仅在存在时显示，避免强制修改
+    form.slug = (p.name || '').toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').replace(/-+/g, '-')
+    form.displayName = p.displayName || ''
+    form.description = p.description || ''
+    form.repositoryUrl = p.repositoryUrl || ''
+    form.visibility = p.visibility || 'private'
+  } else {
     form.name = ''
+    form.slug = ''
     form.displayName = ''
     form.description = ''
     form.repositoryUrl = ''
     form.visibility = 'private'
-    
-    // 通知父组件
-    emit('created')
-  } catch (error: any) {
-    console.error('创建项目失败:', error)
-    
-    // 处理特定错误
-    if (error?.message?.includes('name')) {
-      errors.value.name = '项目名称已存在或不符合要求'
-    } else {
-      // 显示通用错误提示
-      alert('创建项目失败，请稍后重试')
-    }
-  } finally {
-    loading.value = false
   }
+}, { immediate: true })
+
+watch(() => props.open, (isOpen) => {
+  if (!isOpen && !props.project) {
+    form.name = ''
+    form.slug = ''
+    form.displayName = ''
+    form.description = ''
+    form.repositoryUrl = ''
+    form.visibility = 'private'
+    errors.value = {}
+  }
+})
+
+const validateForm = () => {
+  errors.value = {}
+  if (!form.name.trim()) {
+    errors.value.name = '项目名称不能为空'
+    return false
+  }
+  if (form.name.length < 2) {
+    errors.value.name = '项目名称至少需要2个字符'
+    return false
+  }
+  if (form.name.length > 50) {
+    errors.value.name = '项目名称不能超过50个字符'
+    return false
+  }
+  const slug = form.slug.trim()
+  if (!slug) {
+    errors.value.slug = '项目标识（slug）不能为空'
+    return false
+  }
+  if (slug.length < 3 || slug.length > 50) {
+    errors.value.slug = 'slug 长度需在 3-50 之间'
+    return false
+  }
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    errors.value.slug = 'slug 只能包含小写字母、数字和连字符'
+    return false
+  }
+  return true
 }
+
+function handleSubmit() {
+  if (!validateForm()) return
+  emit('submit', {
+    name: form.name.trim(),
+    slug: form.slug.trim(),
+    ...(form.displayName && { displayName: form.displayName.trim() }),
+    ...(form.description && { description: form.description.trim() }),
+    ...(form.repositoryUrl && { repositoryUrl: form.repositoryUrl.trim() }),
+    visibility: form.visibility,
+  })
+}
+
+function handleSlugInput() {
+  form.slug = form.slug
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
+// 根据名称自动生成 slug（仅在 slug 为空时）
+watch(() => form.name, (newName) => {
+  if (!form.slug) {
+    const auto = String(newName || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+    form.slug = auto
+  }
+})
 </script>
+
 <style scoped>
-/* 移除所有@apply，使用UI库的原生类名和组件 */
+/* 统一使用 UI 库组件与类名 */
 </style>

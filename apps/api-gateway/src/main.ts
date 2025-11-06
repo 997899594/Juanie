@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core'
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify'
+import fastifyCookie from '@fastify/cookie'
 import { AppModule } from './app.module'
 import { setupObservability } from './observability'
 import { setupTrpc } from './trpc/trpc.adapter'
@@ -15,8 +16,13 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN,
     credentials: true,
+  })
+
+  // 注册 Cookie 插件（用于 HTTP-only 会话）
+  await fastifyAdapter.getInstance().register(fastifyCookie, {
+    secret: process.env.COOKIE_SECRET || 'dev-secret',
   })
 
   // 设置 tRPC

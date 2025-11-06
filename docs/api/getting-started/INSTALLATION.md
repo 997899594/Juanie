@@ -177,11 +177,13 @@ curl -X POST http://localhost:3000/trpc/aiAssistants.getAvailableModels
 
 1. 访问 https://gitlab.com/-/profile/applications
 2. 创建新的 Application
-3. 配置回调 URL: `http://localhost:3000/auth/gitlab/callback`
+3. 配置回调 URL: `http://localhost:5173/login`（前端接收回调）
 4. 选择 scopes: `read_user`
 5. 复制 Application ID 和 Secret 到 `.env`
 
-> 使用私有 GitLab 实例时：将 `.env` 中的 `GITLAB_BASE_URL` 设置为你的实例地址（例如 `http://127.0.0.1:8080`），并在该实例上创建 OAuth 应用，保持回调地址与 `GITLAB_REDIRECT_URI` 一致。
+> 使用私有 GitLab 实例时：将 `.env` 中的 `GITLAB_BASE_URL` 设置为你的实例地址（例如 `http://127.0.0.1:8080`），并在该实例上创建 OAuth 应用，保持回调地址与 `.env` 的 `GITLAB_REDIRECT_URI`（或别名 `GITLAB_CALLBACK_URL`）一致。
+
+> 开发环境建议：将 `.env` 设置为 `APP_URL=http://localhost:5173`、`CORS_ORIGIN=http://localhost:5173`、`GITLAB_REDIRECT_URI=http://localhost:5173/login`，并保持 `VITE_API_URL=http://localhost:3000`。
 
 ---
 

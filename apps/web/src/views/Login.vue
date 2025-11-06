@@ -163,8 +163,8 @@ onMounted(async () => {
         state: state as string
       })
       
-      // 设置认证信息
-      authStore.setAuth(result.user, result.sessionId)
+      // 设置认证信息（Cookie 已由后端设置）
+      authStore.setAuth(result.user)
       
       toast.success('登录成功', '欢迎回来！')
       

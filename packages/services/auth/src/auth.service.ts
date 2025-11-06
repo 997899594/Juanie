@@ -30,8 +30,7 @@ export class AuthService {
       /\/+$/,
       '',
     )
-    const gitlabCallback =
-      config.get<string>('GITLAB_REDIRECT_URI') || `${config.get('APP_URL')}/auth/gitlab/callback`
+    const gitlabCallback = config.get<string>('GITLAB_REDIRECT_URI') || ''
 
     this.gitlab = new GitLab(
       gitlabBase,

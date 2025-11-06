@@ -26,7 +26,7 @@
             v-model="formData.slug"
             placeholder="例如：my-company"
             required
-            pattern="[a-z0-9-]+"
+            pattern="^[a-z0-9\-]+$"
             @input="handleSlugInput"
           />
           <p class="text-xs text-muted-foreground">

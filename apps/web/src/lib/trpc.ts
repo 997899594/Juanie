@@ -15,25 +15,9 @@ export const trpc = createTRPCProxyClient<AppRouter>({
   links: [
     httpBatchLink({
       url: `${getBaseUrl()}/trpc`,
-      // 请求头配置
+      // Cookie 模式无需手动注入头部
       headers() {
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        }
-
-        // 添加认证 Token
-        const sessionToken = localStorage.getItem('sessionToken')
-        if (sessionToken) {
-          headers['Authorization'] = `Bearer ${sessionToken}`
-        }
-
-        // 添加 session ID（兼容旧版）
-        const sessionId = localStorage.getItem('sessionId')
-        if (sessionId) {
-          headers['x-session-id'] = sessionId
-        }
-
-        return headers
+        return {}
       },
       // 请求拦截器 - 全局错误处理
       async fetch(url, options) {
@@ -45,10 +29,6 @@ export const trpc = createTRPCProxyClient<AppRouter>({
 
           // 处理认证错误
           if (response.status === 401) {
-            // 清除本地认证信息
-            localStorage.removeItem('sessionToken')
-            localStorage.removeItem('sessionId')
-
             // 如果不在登录页，跳转到登录页
             if (!window.location.pathname.includes('/login')) {
               window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`

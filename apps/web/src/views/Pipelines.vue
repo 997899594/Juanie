@@ -115,7 +115,7 @@ import {
   Input,
   Label,
 } from '@juanie/ui'
-import { Plus, GitBranch, Play, Settings } from 'lucide-vue-next'
+import { Plus, GitBranch, Play, Settings, Loader2 } from 'lucide-vue-next'
 import PageContainer from '@/components/PageContainer.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import EmptyState from '@/components/EmptyState.vue'

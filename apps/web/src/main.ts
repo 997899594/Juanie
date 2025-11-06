@@ -9,6 +9,7 @@ import router from './router'
 
 // 导入样式
 import './styles/main.css'
+import '@juanie/ui/styles'
 
 // 创建应用实例
 const app = createApp(App)

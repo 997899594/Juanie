@@ -18,7 +18,11 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist .tsbuildinfo"
+    "clean": "rm -rf dist .tsbuildinfo",
+    "db:generate": "bun x drizzle-kit generate",
+    "db:push": "bun x drizzle-kit push",
+    "db:migrate": "bun x drizzle-kit migrate",
+    "db:studio": "bun x drizzle-kit studio"
   },
   "dependencies": {
     "@juanie/core-tokens": "workspace:*",
