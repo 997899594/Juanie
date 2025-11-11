@@ -569,11 +569,21 @@ export const updateUserSchema = z.object({
 
 export const updateUserPreferencesSchema = z.object({
   language: z.enum(['en', 'zh']).optional(),
-  theme: z.enum(['light', 'dark', 'system']).optional(),
+  // 新增：主题风格与模式
+  themeId: z.enum(['default', 'github', 'bilibili']).optional(),
+  themeMode: z.enum(['light', 'dark', 'system']).optional(),
   notifications: z
     .object({
       email: z.boolean().optional(),
       inApp: z.boolean().optional(),
+    })
+    .optional(),
+  // 可选 UI 偏好
+  ui: z
+    .object({
+      radius: z.number().optional(),
+      compactMode: z.boolean().optional(),
+      animationsEnabled: z.boolean().optional(),
     })
     .optional(),
 })

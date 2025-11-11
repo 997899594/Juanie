@@ -157,18 +157,16 @@ onMounted(async () => {
     const toast = useToast()
     
     try {
-      // 处理GitLab OAuth回调
       const result = await trpc.auth.gitlabCallback.mutate({
         code: code as string,
         state: state as string
       })
       
-      // 设置认证信息
-      authStore.setAuth(result.user, result.sessionId)
+      // Cookie-only：只设置用户信息，不保存 sessionId
+      authStore.setUser(result.user)
       
       toast.success('登录成功', '欢迎回来！')
       
-      // 跳转到应用主页或重定向地址
       const redirectTo = route.query.redirect as string || '/'
       router.push(redirectTo)
     } catch (err) {

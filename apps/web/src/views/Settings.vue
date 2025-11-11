@@ -26,8 +26,8 @@
               <div class="grid gap-3">
                 <Button
                   variant="outline"
-                  :class="{ 'border-primary': preferencesStore.theme === 'light' }"
-                  @click="preferencesStore.setTheme('light')"
+                  :class="{ 'border-primary': preferencesStore.themeMode === 'light' }"
+                  @click="preferencesStore.setThemeMode('light')"
                   class="justify-start"
                 >
                   <Sun class="mr-2 h-4 w-4" />
@@ -35,8 +35,8 @@
                 </Button>
                 <Button
                   variant="outline"
-                  :class="{ 'border-primary': preferencesStore.theme === 'dark' }"
-                  @click="preferencesStore.setTheme('dark')"
+                  :class="{ 'border-primary': preferencesStore.themeMode === 'dark' }"
+                  @click="preferencesStore.setThemeMode('dark')"
                   class="justify-start"
                 >
                   <Moon class="mr-2 h-4 w-4" />
@@ -44,8 +44,8 @@
                 </Button>
                 <Button
                   variant="outline"
-                  :class="{ 'border-primary': preferencesStore.theme === 'system' }"
-                  @click="preferencesStore.setTheme('system')"
+                  :class="{ 'border-primary': preferencesStore.themeMode === 'system' }"
+                  @click="preferencesStore.setThemeMode('system')"
                   class="justify-start"
                 >
                   <Monitor class="mr-2 h-4 w-4" />
@@ -57,14 +57,30 @@
             <Separator />
 
             <div class="space-y-2">
+              <Label>主题风格</Label>
+              <Select :model-value="preferencesStore.themeId" @update:model-value="(value) => preferencesStore.setThemeStyle(value as 'default' | 'github' | 'bilibili')">
+                <SelectTrigger class="w-full">
+                  <SelectValue placeholder="选择主题风格" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="github">GitHub</SelectItem>
+                  <SelectItem value="bilibili">Bilibili</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Separator />
+
+            <div class="space-y-2">
               <Label>语言</Label>
-              <Select :model-value="preferencesStore.language" @update:model-value="(value) => preferencesStore.setLanguage(value as 'zh-CN' | 'en-US')">
+              <Select :model-value="preferencesStore.language" @update:model-value="(value) => preferencesStore.setLanguage(value as 'zh' | 'en')">
                 <SelectTrigger class="w-full">
                   <SelectValue placeholder="选择语言" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="zh-CN">简体中文</SelectItem>
-                  <SelectItem value="en-US">English</SelectItem>
+                  <SelectItem value="zh">简体中文</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
                 </SelectContent>
               </Select>
             </div>

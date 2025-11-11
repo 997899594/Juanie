@@ -65,17 +65,11 @@ export class UsersService {
       .where(eq(schema.users.id, userId))
       .limit(1)
 
-    // 合并偏好设置
-    const mergedPreferences: {
-      language: 'en' | 'zh'
-      theme: 'light' | 'dark' | 'system'
-      notifications: {
-        email: boolean
-        inApp: boolean
-      }
-    } = {
-      language: preferences.language || currentUser?.preferences?.language || 'en',
-      theme: preferences.theme || currentUser?.preferences?.theme || 'light',
+    // 合并偏好设置（仅使用新字段）
+    const mergedPreferences = {
+      language: preferences.language ?? currentUser?.preferences?.language ?? 'en',
+      themeMode: preferences.themeMode ?? currentUser?.preferences?.themeMode ?? 'system',
+      themeId: preferences.themeId ?? currentUser?.preferences?.themeId ?? 'default',
       notifications: {
         email:
           preferences.notifications?.email ??
@@ -86,6 +80,7 @@ export class UsersService {
           currentUser?.preferences?.notifications?.inApp ??
           true,
       },
+      ui: preferences.ui ?? currentUser?.preferences?.ui ?? undefined,
     }
 
     const [user] = await this.db

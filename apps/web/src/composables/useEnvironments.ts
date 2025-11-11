@@ -1,60 +1,89 @@
-import { computed, type Ref } from 'vue'
+import { computed, type Ref, ref, watch } from 'vue'
 import { trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 
 export function useEnvironments(projectId: Ref<string>) {
   const toast = useToast()
 
-  const {
-    data: environments,
-    isLoading,
-    error,
-    refetch,
-  } = trpc.environments.list.useQuery(
-    computed(() => ({ projectId: projectId.value })),
-    { enabled: computed(() => !!projectId.value) },
+  const environments = ref<any[]>([])
+  const isLoading = ref(false)
+  const error = ref<Error | null>(null)
+
+  const fetchEnvironments = async () => {
+    if (!projectId.value) return
+    isLoading.value = true
+    try {
+      const result = await trpc.environments.list.query({ projectId: projectId.value })
+      environments.value = Array.isArray(result) ? result : []
+      error.value = null
+    } catch (e) {
+      error.value = e as Error
+      toast.error('获取环境列表失败', (e as Error)?.message || '未知错误')
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  watch(
+    projectId,
+    (id) => {
+      if (id) fetchEnvironments()
+    },
+    { immediate: true },
   )
 
-  const createMutation = trpc.environments.create.useMutation({
-    onSuccess: () => {
+  const isCreating = ref(false)
+  const create = async (input: any) => {
+    isCreating.value = true
+    try {
+      await trpc.environments.create.mutate(input)
       toast.success('环境创建成功')
-      refetch()
-    },
-    onError: (error) => {
-      toast.error('创建失败', error.message)
-    },
-  })
+      await fetchEnvironments()
+    } catch (e) {
+      toast.error('创建失败', (e as Error)?.message || '未知错误')
+    } finally {
+      isCreating.value = false
+    }
+  }
 
-  const updateMutation = trpc.environments.update.useMutation({
-    onSuccess: () => {
+  const isUpdating = ref(false)
+  const update = async (input: any) => {
+    isUpdating.value = true
+    try {
+      await trpc.environments.update.mutate(input)
       toast.success('环境更新成功')
-      refetch()
-    },
-    onError: (error) => {
-      toast.error('更新失败', error.message)
-    },
-  })
+      await fetchEnvironments()
+    } catch (e) {
+      toast.error('更新失败', (e as Error)?.message || '未知错误')
+    } finally {
+      isUpdating.value = false
+    }
+  }
 
-  const deleteMutation = trpc.environments.delete.useMutation({
-    onSuccess: () => {
+  const isDeleting = ref(false)
+  const remove = async (payload: { environmentId: string }) => {
+    isDeleting.value = true
+    try {
+      await trpc.environments.delete.mutate(payload)
       toast.success('环境删除成功')
-      refetch()
-    },
-    onError: (error) => {
-      toast.error('删除失败', error.message)
-    },
-  })
+      await fetchEnvironments()
+    } catch (e) {
+      toast.error('删除失败', (e as Error)?.message || '未知错误')
+    } finally {
+      isDeleting.value = false
+    }
+  }
 
   return {
     environments: computed(() => environments.value || []),
     isLoading,
     error,
-    refetch,
-    create: createMutation.mutate,
-    update: updateMutation.mutate,
-    delete: deleteMutation.mutate,
-    isCreating: createMutation.isLoading,
-    isUpdating: updateMutation.isLoading,
-    isDeleting: deleteMutation.isLoading,
+    refetch: fetchEnvironments,
+    create,
+    update,
+    delete: remove,
+    isCreating,
+    isUpdating,
+    isDeleting,
   }
 }

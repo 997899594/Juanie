@@ -22,66 +22,80 @@ export class AuthRouter {
         return await this.authService.getGitHubAuthUrl()
       }),
 
-      githubCallback: this.trpc.procedure.input(oauthCallbackSchema).mutation(async ({ input }) => {
-        try {
-          const user = await this.authService.handleGitHubCallback(input.code, input.state)
+      githubCallback: this.trpc.procedure
+        .input(oauthCallbackSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const user = await this.authService.handleGitHubCallback(input.code, input.state)
+            if (!user) throw new Error('用户创建失败')
+            const sessionId = await this.authService.createSession(user.id)
 
-          if (!user) {
-            throw new Error('用户创建失败')
+            // 设置 HttpOnly 会话 Cookie（Cookie-only）
+            ctx.reply?.setCookie('sessionId', sessionId, {
+              path: '/',
+              httpOnly: true,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+              maxAge: 7 * 24 * 60 * 60,
+            })
+
+            return {
+              user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
+              },
+              sessionId,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : 'GitHub 登录失败',
+            })
           }
-
-          const sessionId = await this.authService.createSession(user.id)
-
-          return {
-            user: {
-              id: user.id,
-              email: user.email,
-              username: user.username,
-              displayName: user.displayName,
-              avatarUrl: user.avatarUrl,
-            },
-            sessionId,
-          }
-        } catch (error) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: error instanceof Error ? error.message : 'GitHub 登录失败',
-          })
-        }
-      }),
+        }),
 
       // GitLab OAuth
       gitlabAuthUrl: this.trpc.procedure.query(async () => {
         return await this.authService.getGitLabAuthUrl()
       }),
 
-      gitlabCallback: this.trpc.procedure.input(oauthCallbackSchema).mutation(async ({ input }) => {
-        try {
-          const user = await this.authService.handleGitLabCallback(input.code, input.state)
+      gitlabCallback: this.trpc.procedure
+        .input(oauthCallbackSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const user = await this.authService.handleGitLabCallback(input.code, input.state)
+            if (!user) throw new Error('用户创建失败')
+            const sessionId = await this.authService.createSession(user.id)
 
-          if (!user) {
-            throw new Error('用户创建失败')
+            // 设置 HttpOnly 会话 Cookie（Cookie-only）
+            ctx.reply?.setCookie('sessionId', sessionId, {
+              path: '/',
+              httpOnly: true,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+              maxAge: 7 * 24 * 60 * 60,
+            })
+
+            return {
+              user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
+              },
+              sessionId,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : 'GitLab 登录失败',
+            })
           }
-
-          const sessionId = await this.authService.createSession(user.id)
-
-          return {
-            user: {
-              id: user.id,
-              email: user.email,
-              username: user.username,
-              displayName: user.displayName,
-              avatarUrl: user.avatarUrl,
-            },
-            sessionId,
-          }
-        } catch (error) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: error instanceof Error ? error.message : 'GitLab 登录失败',
-          })
-        }
-      }),
+        }),
 
       // 会话管理
       me: this.trpc.protectedProcedure.query(async ({ ctx }) => {
@@ -90,14 +104,23 @@ export class AuthRouter {
           email: ctx.user.email,
         }
       }),
-
-      logout: this.trpc.procedure.input(sessionSchema).mutation(async ({ input }) => {
-        await this.authService.deleteSession(input.sessionId)
+      // 登出改为受保护路由，无输入，清 Redis + 清 Cookie
+      logout: this.trpc.protectedProcedure.mutation(async ({ ctx }) => {
+        if (ctx.sessionId) {
+          await this.authService.deleteSession(ctx.sessionId)
+        }
+        ctx.reply?.setCookie('sessionId', '', {
+          path: '/',
+          httpOnly: true,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 0,
+        })
         return { success: true }
       }),
-
-      validateSession: this.trpc.procedure.input(sessionSchema).query(async ({ input }) => {
-        const user = await this.authService.validateSession(input.sessionId)
+      // 会话校验改为受保护路由，无输入（依赖 Cookie）
+      validateSession: this.trpc.protectedProcedure.query(async ({ ctx }) => {
+        const user = ctx.sessionId ? await this.authService.validateSession(ctx.sessionId) : null
 
         if (!user) {
           throw new TRPCError({

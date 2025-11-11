@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common'
-import type { FastifyReply } from 'fastify'
-import { initTRPC, TRPCError } from '@trpc/server'
 import { AuthService } from '@juanie/service-auth'
+import { Injectable } from '@nestjs/common'
+import { initTRPC, TRPCError } from '@trpc/server'
+import type { FastifyReply } from 'fastify'
 
 // tRPC 上下文类型
 export interface Context {

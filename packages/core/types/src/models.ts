@@ -7,10 +7,16 @@
 
 export interface UserPreferences {
   language: 'en' | 'zh'
-  theme: 'light' | 'dark' | 'system'
+  themeMode: 'light' | 'dark' | 'system'
+  themeId: 'default' | 'github' | 'bilibili'
   notifications: {
     email: boolean
     inApp: boolean
+  }
+  ui?: {
+    radius?: number
+    compactMode?: boolean
+    animationsEnabled?: boolean
   }
 }
 

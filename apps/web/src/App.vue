@@ -16,11 +16,8 @@ const authStore = useAuthStore()
 const preferencesStore = usePreferencesStore()
 
 onMounted(async () => {
-  // 应用启动时初始化认证状态
   await authStore.initialize()
-  
-  // 初始化主题（从持久化存储恢复）
-  preferencesStore.applyTheme()
+  await preferencesStore.initialize()
 })
 </script>
 

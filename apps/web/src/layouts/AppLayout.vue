@@ -312,10 +312,10 @@
                     <Settings />
                     账户设置
                   </DropdownMenuItem>
-                  <DropdownMenuItem @click="toggleTheme">
+                  <DropdownMenuItem @click="toggleMode">
                     <Moon v-if="!isDark" class="h-4 w-4" />
                     <Sun v-else class="h-4 w-4" />
-                    <span>切换主题 ({{ preferencesStore.theme === 'system' ? '跟随系统' : preferencesStore.theme === 'dark' ? '深色' : '浅色' }})</span>
+                    <span>主题模式 ({{ preferencesStore.themeMode === 'system' ? '跟随系统' : preferencesStore.themeMode === 'dark' ? '深色' : '浅色' }})</span>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
@@ -459,7 +459,7 @@ const { fetchUnreadCount } = useNotifications()
 const notificationUnreadCount = ref(0)
 
 // 使用主题功能
-const { isDark, toggleTheme } = preferencesStore
+const { isDark, toggleMode } = preferencesStore
 
 // 图标映射
 const iconMap: Record<string, any> = {
