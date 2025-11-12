@@ -43,9 +43,17 @@
               />
               <CardTitle class="text-lg">{{ repo.name }}</CardTitle>
             </div>
-            <Badge :variant="repo.syncStatus === 'synced' ? 'default' : 'secondary'">
-              {{ getSyncStatusText(repo.syncStatus) }}
-            </Badge>
+            <div class="flex items-center gap-2">
+              <Badge :variant="repo.syncStatus === 'synced' ? 'default' : 'secondary'">
+                {{ getSyncStatusText(repo.syncStatus) }}
+              </Badge>
+              <Badge 
+                v-if="repo.gitopsConfig?.enabled && repo.fluxSyncStatus"
+                :variant="getFluxStatusVariant(repo.fluxSyncStatus)"
+              >
+                Flux: {{ getFluxStatusText(repo.fluxSyncStatus) }}
+              </Badge>
+            </div>
           </div>
           <CardDescription>{{ repo.url }}</CardDescription>
         </CardHeader>
@@ -62,6 +70,21 @@
             <div class="flex items-center justify-between">
               <span class="text-muted-foreground">最后同步</span>
               <span>{{ formatDate(repo.lastSyncAt) }}</span>
+            </div>
+            <div v-if="repo.gitopsConfig?.enabled" class="flex items-center justify-between">
+              <span class="text-muted-foreground">GitOps</span>
+              <div class="flex items-center gap-2">
+                <Switch 
+                  :checked="repo.gitopsConfig.enabled" 
+                  @update:checked="(val) => toggleGitOps(repo.id, val)"
+                  :disabled="isTogglingGitOps"
+                />
+                <span class="text-xs">{{ repo.gitopsConfig.enabled ? '已启用' : '已禁用' }}</span>
+              </div>
+            </div>
+            <div v-if="repo.gitopsConfig?.enabled && repo.fluxLastSyncTime" class="flex items-center justify-between">
+              <span class="text-muted-foreground">Flux 同步</span>
+              <span>{{ formatDate(repo.fluxLastSyncTime) }}</span>
             </div>
           </div>
         </CardContent>
@@ -210,6 +233,7 @@ import {
   Unplug,
   Loader2,
 } from 'lucide-vue-next'
+import { Switch } from '@juanie/ui'
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
@@ -272,5 +296,37 @@ const getSyncStatusText = (status: string) => {
 const formatDate = (date: string | null) => {
   if (!date) return '从未同步'
   return new Date(date).toLocaleString('zh-CN')
+}
+
+const getFluxStatusText = (status: string) => {
+  const statusMap: Record<string, string> = {
+    ready: '就绪',
+    reconciling: '同步中',
+    failed: '失败',
+  }
+  return statusMap[status] || status
+}
+
+const getFluxStatusVariant = (status: string): 'default' | 'secondary' | 'destructive' => {
+  const variantMap: Record<string, 'default' | 'secondary' | 'destructive'> = {
+    ready: 'default',
+    reconciling: 'secondary',
+    failed: 'destructive',
+  }
+  return variantMap[status] || 'secondary'
+}
+
+const isTogglingGitOps = ref(false)
+const toggleGitOps = async (repositoryId: string, enabled: boolean) => {
+  isTogglingGitOps.value = true
+  try {
+    // TODO: Implement GitOps toggle API call
+    // await trpc.repositories.toggleGitOps.mutate({ repositoryId, enabled })
+    console.log('Toggle GitOps:', repositoryId, enabled)
+  } catch (error) {
+    console.error('Failed to toggle GitOps:', error)
+  } finally {
+    isTogglingGitOps.value = false
+  }
 }
 </script>

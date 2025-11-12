@@ -26,7 +26,8 @@
     "@juanie/core-tokens": "workspace:*",
     "@juanie/core-types": "workspace:*",
     "@juanie/core-utils": "workspace:*",
-    "@nestjs/common": "^11.1.7"
+    "@nestjs/common": "^11.1.7",
+    "simple-git": "^3.27.0"
   },
   "devDependencies": {
     "@juanie/config-typescript": "workspace:*",

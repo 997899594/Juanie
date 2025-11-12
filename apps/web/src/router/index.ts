@@ -442,6 +442,33 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'gitops/settings',
+        name: 'gitops-settings',
+        component: () => import('@/views/gitops/GitOpsSettings.vue'),
+        meta: {
+          title: 'GitOps 设置',
+          navigation: {
+            group: '集成与自动化',
+            icon: 'GitMerge',
+            order: 2,
+            badge: 'New',
+          },
+        },
+      },
+      {
+        path: 'gitops/resources',
+        name: 'gitops-resources',
+        component: () => import('@/views/gitops/GitOpsResources.vue'),
+        meta: {
+          title: 'GitOps 资源',
+          navigation: {
+            group: '集成与自动化',
+            icon: 'Boxes',
+            order: 3,
+          },
+        },
+      },
+      {
         path: 'webhooks',
         name: 'webhooks',
         component: () => import('@/views/integrations/Webhooks.vue'),
@@ -450,7 +477,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '集成与自动化',
             icon: 'Webhook',
-            order: 2,
+            order: 4,
           },
         },
       },
@@ -463,7 +490,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '集成与自动化',
             icon: 'Zap',
-            order: 3,
+            order: 5,
           },
         },
       },

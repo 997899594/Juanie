@@ -43,7 +43,17 @@ FROM oven/bun:1-alpine AS runner
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
+    curl \
+    bash \
     && rm -rf /var/cache/apk/*
+
+# 安装 Flux CLI（用于管理 K3s 集群中的 Flux）
+RUN curl -s https://fluxcd.io/install.sh | bash
+
+# 安装 kubectl（用于与 K3s 集群通信）
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
+    rm kubectl
 
 # 设置时区
 ENV TZ=Asia/Shanghai

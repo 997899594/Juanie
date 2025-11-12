@@ -1,2 +1,2 @@
 export { DeploymentsModule } from './deployments.module'
-export { DeploymentsService } from './deployments.service'
+export { DeploymentsService, type DeployWithGitOpsInput } from './deployments.service'

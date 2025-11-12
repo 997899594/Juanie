@@ -5,6 +5,7 @@ import { AuthRouter } from '../routers/auth.router'
 import { CostTrackingRouter } from '../routers/cost-tracking.router'
 import { DeploymentsRouter } from '../routers/deployments.router'
 import { EnvironmentsRouter } from '../routers/environments.router'
+import { GitOpsRouter } from '../routers/gitops.router'
 import { NotificationsRouter } from '../routers/notifications.router'
 import { OrganizationsRouter } from '../routers/organizations.router'
 import { PipelinesRouter } from '../routers/pipelines.router'
@@ -35,6 +36,7 @@ export class TrpcRouter {
     private readonly environmentsRouter: EnvironmentsRouter,
     private readonly deploymentsRouter: DeploymentsRouter,
     private readonly pipelinesRouter: PipelinesRouter,
+    private readonly gitOpsRouter: GitOpsRouter,
   ) {}
 
   get appRouter() {
@@ -58,6 +60,7 @@ export class TrpcRouter {
       environments: this.environmentsRouter.router,
       deployments: this.deploymentsRouter.router,
       pipelines: this.pipelinesRouter.router,
+      gitops: this.gitOpsRouter.router,
       // 其他服务路由将在这里添加
     })
   }

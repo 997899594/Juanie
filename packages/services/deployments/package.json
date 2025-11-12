@@ -27,6 +27,7 @@
     "@juanie/core-tokens": "workspace:*",
     "@juanie/core-types": "workspace:*",
     "@juanie/core-utils": "workspace:*",
+    "@juanie/service-git-ops": "workspace:*",
     "@juanie/service-k3s": "workspace:*",
     "@nestjs/common": "^11.1.7"
   },

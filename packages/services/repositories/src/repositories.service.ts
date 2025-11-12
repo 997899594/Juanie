@@ -274,7 +274,233 @@ export class RepositoriesService {
     return { success: true }
   }
 
-  // 检查用户是否有项目访问权限
+  // ==================== GitOps 相关方法 ====================
+
+  /**
+   * 为仓库启用 GitOps
+   * 需求: 2.1, 2.2, 2.3, 2.4, 2.5
+   */
+  async enableGitOps(
+    userId: string,
+    repositoryId: string,
+    config: {
+      fluxNamespace?: string
+      fluxResourceName?: string
+      syncInterval?: string
+      secretRef?: string
+      timeout?: string
+    },
+  ) {
+    const repository = await this.get(userId, repositoryId)
+    if (!repository) {
+      throw new Error('仓库不存在')
+    }
+
+    // 检查用户是否有权限（需要 maintainer 或更高权限）
+    const hasPermission = await this.checkMaintainerPermission(userId, repository.projectId)
+    if (!hasPermission) {
+      throw new Error('没有权限启用 GitOps，需要 maintainer 或更高权限')
+    }
+
+    // 构建 GitOps 配置
+    const gitopsConfig = {
+      enabled: true,
+      fluxNamespace: config.fluxNamespace || 'flux-system',
+      fluxResourceName: config.fluxResourceName || `${repository.fullName.replace('/', '-')}-repo`,
+      syncInterval: config.syncInterval || '1m',
+      secretRef: config.secretRef,
+      timeout: config.timeout || '60s',
+    }
+
+    // 更新仓库配置
+    const [updated] = await this.db
+      .update(schema.repositories)
+      .set({
+        gitopsConfig,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.repositories.id, repositoryId))
+      .returning()
+
+    return updated
+  }
+
+  /**
+   * 禁用仓库的 GitOps
+   * 需求: 2.1, 2.2
+   */
+  async disableGitOps(userId: string, repositoryId: string) {
+    const repository = await this.get(userId, repositoryId)
+    if (!repository) {
+      throw new Error('仓库不存在')
+    }
+
+    // 检查用户是否有权限
+    const hasPermission = await this.checkMaintainerPermission(userId, repository.projectId)
+    if (!hasPermission) {
+      throw new Error('没有权限禁用 GitOps，需要 maintainer 或更高权限')
+    }
+
+    // 更新配置，将 enabled 设为 false，保留其他配置
+    const currentConfig = repository.gitopsConfig
+    if (!currentConfig) {
+      throw new Error('仓库未启用 GitOps')
+    }
+
+    const [updated] = await this.db
+      .update(schema.repositories)
+      .set({
+        gitopsConfig: {
+          ...currentConfig,
+          enabled: false,
+        },
+        fluxSyncStatus: null,
+        fluxErrorMessage: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.repositories.id, repositoryId))
+      .returning()
+
+    return updated
+  }
+
+  /**
+   * 获取仓库的 Flux 同步状态
+   * 需求: 2.3, 2.4, 2.5
+   */
+  async getFluxStatus(userId: string, repositoryId: string) {
+    const repository = await this.get(userId, repositoryId)
+    if (!repository) {
+      throw new Error('仓库不存在')
+    }
+
+    // 检查是否启用了 GitOps
+    if (!repository.gitopsConfig?.enabled) {
+      return {
+        enabled: false,
+        status: null,
+        lastSyncCommit: null,
+        lastSyncTime: null,
+        errorMessage: null,
+      }
+    }
+
+    return {
+      enabled: true,
+      status: repository.fluxSyncStatus || 'pending',
+      lastSyncCommit: repository.fluxLastSyncCommit,
+      lastSyncTime: repository.fluxLastSyncTime,
+      errorMessage: repository.fluxErrorMessage,
+      config: repository.gitopsConfig,
+    }
+  }
+
+  /**
+   * 更新 Flux 同步状态（由 Flux Watcher 调用）
+   * 需求: 2.3, 2.4, 2.5
+   */
+  async updateFluxStatus(
+    repositoryId: string,
+    status: {
+      syncStatus: 'ready' | 'reconciling' | 'failed'
+      lastSyncCommit?: string
+      errorMessage?: string
+    },
+  ) {
+    const [repository] = await this.db
+      .select()
+      .from(schema.repositories)
+      .where(eq(schema.repositories.id, repositoryId))
+      .limit(1)
+
+    if (!repository) {
+      throw new Error('仓库不存在')
+    }
+
+    // 更新 Flux 状态
+    const [updated] = await this.db
+      .update(schema.repositories)
+      .set({
+        fluxSyncStatus: status.syncStatus,
+        fluxLastSyncCommit: status.lastSyncCommit || repository.fluxLastSyncCommit,
+        fluxLastSyncTime: new Date(),
+        fluxErrorMessage: status.errorMessage || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.repositories.id, repositoryId))
+      .returning()
+
+    return updated
+  }
+
+  /**
+   * 通过 Flux 资源名称查找仓库
+   * 用于 Flux Watcher 根据 K8s 资源名称更新状态
+   */
+  async findByFluxResourceName(fluxResourceName: string, fluxNamespace: string) {
+    const repositories = await this.db
+      .select()
+      .from(schema.repositories)
+      .where(eq(schema.repositories.gitopsConfig, { fluxResourceName, fluxNamespace } as any))
+
+    // 由于 JSONB 查询的限制，我们需要在应用层过滤
+    return repositories.find(
+      (repo) =>
+        repo.gitopsConfig?.fluxResourceName === fluxResourceName &&
+        repo.gitopsConfig?.fluxNamespace === fluxNamespace,
+    )
+  }
+
+  // ==================== 私有辅助方法 ====================
+
+  /**
+   * 检查用户是否有 maintainer 或更高权限
+   */
+  private async checkMaintainerPermission(userId: string, projectId: string): Promise<boolean> {
+    const [project] = await this.db
+      .select()
+      .from(schema.projects)
+      .where(eq(schema.projects.id, projectId))
+      .limit(1)
+
+    if (!project) {
+      return false
+    }
+
+    // 检查组织成员角色
+    const [orgMember] = await this.db
+      .select()
+      .from(schema.organizationMembers)
+      .where(
+        and(
+          eq(schema.organizationMembers.organizationId, project.organizationId),
+          eq(schema.organizationMembers.userId, userId),
+        ),
+      )
+      .limit(1)
+
+    if (orgMember && ['owner', 'admin'].includes(orgMember.role)) {
+      return true
+    }
+
+    // 检查项目成员角色
+    const [projectMember] = await this.db
+      .select()
+      .from(schema.projectMembers)
+      .where(
+        and(
+          eq(schema.projectMembers.projectId, projectId),
+          eq(schema.projectMembers.userId, userId),
+        ),
+      )
+      .limit(1)
+
+    return projectMember ? ['owner', 'maintainer'].includes(projectMember.role) : false
+  }
+
+  /**
+   * 检查用户是否有项目访问权限
+   */
   private async checkProjectAccess(userId: string, projectId: string): Promise<boolean> {
     const [project] = await this.db
       .select()

@@ -1,15 +1,15 @@
 import {
+  configureGitOpsSchema,
   createEnvironmentSchema,
+  disableEnvironmentGitOpsSchema,
   environmentIdSchema,
-  grantEnvironmentPermissionSchema,
+  getGitOpsConfigSchema,
   projectIdQuerySchema,
-  revokeEnvironmentPermissionSchema,
   updateEnvironmentSchema,
 } from '@juanie/core-types'
 import { EnvironmentsService } from '@juanie/service-environments'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
-import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'
 
 @Injectable()
@@ -85,6 +85,55 @@ export class EnvironmentsRouter {
             throw new TRPCError({
               code: 'FORBIDDEN',
               message: error instanceof Error ? error.message : '删除环境失败',
+            })
+          }
+        }),
+
+      // ==================== GitOps 相关端点 ====================
+
+      // 配置环境的 GitOps
+      configureGitOps: this.trpc.protectedProcedure
+        .input(configureGitOpsSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const { environmentId, config } = input
+            return await this.environmentsService.configureGitOps(
+              ctx.user.id,
+              environmentId,
+              config,
+            )
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '配置 GitOps 失败',
+            })
+          }
+        }),
+
+      // 获取环境的 GitOps 配置
+      getGitOpsConfig: this.trpc.protectedProcedure
+        .input(getGitOpsConfigSchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            return await this.environmentsService.getGitOpsConfig(ctx.user.id, input.environmentId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取 GitOps 配置失败',
+            })
+          }
+        }),
+
+      // 禁用环境的 GitOps
+      disableGitOps: this.trpc.protectedProcedure
+        .input(disableEnvironmentGitOpsSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.environmentsService.disableGitOps(ctx.user.id, input.environmentId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '禁用 GitOps 失败',
             })
           }
         }),

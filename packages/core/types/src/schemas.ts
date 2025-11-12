@@ -231,6 +231,26 @@ export const repositoryIdSchema = z.object({
   repositoryId: uuidSchema,
 })
 
+// GitOps 配置 for Repositories
+export const enableGitOpsSchema = z.object({
+  repositoryId: uuidSchema,
+  config: z.object({
+    fluxNamespace: z.string().optional(),
+    fluxResourceName: z.string().optional(),
+    syncInterval: z.string().optional(),
+    secretRef: z.string().optional(),
+    timeout: z.string().optional(),
+  }),
+})
+
+export const disableGitOpsSchema = z.object({
+  repositoryId: uuidSchema,
+})
+
+export const getFluxStatusSchema = z.object({
+  repositoryId: uuidSchema,
+})
+
 // ============================================
 // 环境 Schemas
 // ============================================
@@ -278,6 +298,26 @@ export const revokeEnvironmentPermissionSchema = z.object({
   environmentId: uuidSchema,
   subjectType: z.enum(['user', 'team']),
   subjectId: uuidSchema,
+})
+
+// GitOps 配置 for Environments
+export const configureGitOpsSchema = z.object({
+  environmentId: uuidSchema,
+  config: z.object({
+    enabled: z.boolean(),
+    autoSync: z.boolean().optional(),
+    gitBranch: z.string().min(1),
+    gitPath: z.string().min(1),
+    syncInterval: z.string().optional(),
+  }),
+})
+
+export const getGitOpsConfigSchema = z.object({
+  environmentId: uuidSchema,
+})
+
+export const disableEnvironmentGitOpsSchema = z.object({
+  environmentId: uuidSchema,
 })
 
 // ============================================
@@ -638,6 +678,197 @@ export const cicdConfigSchema = z.object({
 })
 
 // ============================================
+// GitOps Schemas
+// ============================================
+
+// Flux 安装
+export const installFluxSchema = z.object({
+  namespace: z.string().optional(),
+  version: z.string().optional(),
+})
+
+export const checkFluxHealthSchema = z.object({})
+
+export const uninstallFluxSchema = z.object({})
+
+// GitOps 资源
+export const createGitOpsResourceSchema = z.object({
+  projectId: uuidSchema,
+  environmentId: uuidSchema,
+  repositoryId: uuidSchema,
+  type: z.enum(['kustomization', 'helm']),
+  name: z.string().min(1).max(100),
+  namespace: z.string().min(1).max(100),
+  config: z.object({
+    // Kustomization 配置
+    gitRepositoryName: z.string().optional(),
+    path: z.string().optional(),
+    prune: z.boolean().optional(),
+    healthChecks: z
+      .array(
+        z.object({
+          apiVersion: z.string(),
+          kind: z.string(),
+          name: z.string(),
+          namespace: z.string().optional(),
+        }),
+      )
+      .optional(),
+    dependsOn: z
+      .array(
+        z.object({
+          name: z.string(),
+          namespace: z.string().optional(),
+        }),
+      )
+      .optional(),
+    interval: z.string().optional(),
+    timeout: z.string().optional(),
+    retryInterval: z.string().optional(),
+    // Helm 配置
+    chartName: z.string().optional(),
+    chartVersion: z.string().optional(),
+    sourceType: z.enum(['GitRepository', 'HelmRepository']).optional(),
+    sourceName: z.string().optional(),
+    sourceNamespace: z.string().optional(),
+    values: z.record(z.string(), z.any()).optional(),
+    valuesFrom: z
+      .array(
+        z.object({
+          kind: z.string(),
+          name: z.string(),
+          valuesKey: z.string().optional(),
+        }),
+      )
+      .optional(),
+    install: z
+      .object({
+        remediation: z.object({ retries: z.number() }).optional(),
+        createNamespace: z.boolean().optional(),
+      })
+      .optional(),
+    upgrade: z
+      .object({
+        remediation: z
+          .object({ retries: z.number(), remediateLastFailure: z.boolean() })
+          .optional(),
+        cleanupOnFail: z.boolean().optional(),
+      })
+      .optional(),
+  }),
+})
+
+export const listGitOpsResourcesSchema = z.object({
+  projectId: uuidSchema,
+})
+
+export const gitOpsResourceIdSchema = z.object({
+  resourceId: uuidSchema,
+})
+
+export const updateGitOpsResourceSchema = z.object({
+  resourceId: uuidSchema,
+  config: z.record(z.string(), z.any()).optional(),
+  status: z.string().optional(),
+  errorMessage: z.string().optional(),
+})
+
+export const deleteGitOpsResourceSchema = z.object({
+  resourceId: uuidSchema,
+})
+
+export const triggerSyncSchema = z.object({
+  kind: z.enum(['GitRepository', 'Kustomization', 'HelmRelease']),
+  name: z.string(),
+  namespace: z.string(),
+})
+
+// 双向部署 API
+export const deployWithGitOpsSchema = z.object({
+  projectId: uuidSchema,
+  environmentId: uuidSchema,
+  changes: z.object({
+    image: z.string().optional(),
+    replicas: z.number().int().positive().optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    resources: z
+      .object({
+        requests: z
+          .object({
+            cpu: z.string().optional(),
+            memory: z.string().optional(),
+          })
+          .optional(),
+        limits: z
+          .object({
+            cpu: z.string().optional(),
+            memory: z.string().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
+  }),
+  commitMessage: z.string().optional(),
+})
+
+export const commitConfigChangesSchema = z.object({
+  projectId: uuidSchema,
+  environmentId: uuidSchema,
+  changes: z.object({
+    image: z.string().optional(),
+    replicas: z.number().int().positive().optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    resources: z
+      .object({
+        requests: z
+          .object({
+            cpu: z.string().optional(),
+            memory: z.string().optional(),
+          })
+          .optional(),
+        limits: z
+          .object({
+            cpu: z.string().optional(),
+            memory: z.string().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
+  }),
+  commitMessage: z.string().optional(),
+})
+
+export const previewChangesSchema = z.object({
+  projectId: uuidSchema,
+  environmentId: uuidSchema,
+  changes: z.object({
+    image: z.string().optional(),
+    replicas: z.number().int().positive().optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    resources: z
+      .object({
+        requests: z
+          .object({
+            cpu: z.string().optional(),
+            memory: z.string().optional(),
+          })
+          .optional(),
+        limits: z
+          .object({
+            cpu: z.string().optional(),
+            memory: z.string().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
+  }),
+})
+
+export const validateYAMLSchema = z.object({
+  content: z.string(),
+})
+
+// ============================================
 // 类型推导 - 从 Zod Schemas 推导 TypeScript 类型
 // ============================================
 
@@ -673,6 +904,9 @@ export type UploadLogoInput = Omit<z.infer<typeof uploadLogoSchema>, 'projectId'
 
 // 仓库相关类型
 export type ConnectRepositoryInput = z.infer<typeof connectRepositorySchema>
+export type EnableGitOpsInput = Omit<z.infer<typeof enableGitOpsSchema>, 'repositoryId'>
+export type DisableGitOpsInput = Omit<z.infer<typeof disableGitOpsSchema>, 'repositoryId'>
+export type GetFluxStatusInput = Omit<z.infer<typeof getFluxStatusSchema>, 'repositoryId'>
 
 // 环境相关类型
 export type CreateEnvironmentInput = z.infer<typeof createEnvironmentSchema>
@@ -683,6 +917,12 @@ export type GrantEnvironmentPermissionInput = Omit<
 >
 export type RevokeEnvironmentPermissionInput = Omit<
   z.infer<typeof revokeEnvironmentPermissionSchema>,
+  'environmentId'
+>
+export type ConfigureGitOpsInput = Omit<z.infer<typeof configureGitOpsSchema>, 'environmentId'>
+export type GetGitOpsConfigInput = Omit<z.infer<typeof getGitOpsConfigSchema>, 'environmentId'>
+export type DisableEnvironmentGitOpsInput = Omit<
+  z.infer<typeof disableEnvironmentGitOpsSchema>,
   'environmentId'
 >
 
@@ -729,3 +969,15 @@ export type UpdateUserPreferencesInput = z.infer<typeof updateUserPreferencesSch
 // 模板相关类型
 export type DockerfileConfig = z.infer<typeof dockerfileConfigSchema>
 export type CICDConfig = z.infer<typeof cicdConfigSchema>
+
+// GitOps 相关类型
+export type InstallFluxInput = z.infer<typeof installFluxSchema>
+export type CreateGitOpsResourceInput = z.infer<typeof createGitOpsResourceSchema>
+export type UpdateGitOpsResourceInput = Omit<
+  z.infer<typeof updateGitOpsResourceSchema>,
+  'resourceId'
+>
+export type DeployWithGitOpsInput = z.infer<typeof deployWithGitOpsSchema>
+export type CommitConfigChangesInput = z.infer<typeof commitConfigChangesSchema>
+export type PreviewChangesInput = z.infer<typeof previewChangesSchema>
+export type ValidateYAMLInput = z.infer<typeof validateYAMLSchema>

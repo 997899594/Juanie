@@ -296,3 +296,159 @@ groups:
         annotations:
           summary: "异常 API 调用"
           description: "最近 5 分钟未授权 API 调用为 {{ $value }}/s"
+
+  # ============================================
+  # GitOps / Flux 告警
+  # ============================================
+  - name: gitops_alerts
+    interval: 30s
+    rules:
+      # Flux 同步失败告警
+      - alert: FluxSyncFailed
+        expr: rate(flux_git_repository_sync_errors[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: gitops
+        annotations:
+          summary: "Flux GitRepository 同步失败"
+          description: "GitRepository {{ $labels.resource_name }} ({{ $labels.resource_namespace }}) 同步失败，错误率为 {{ $value }}/s"
+          
+      # Kustomization 应用失败告警
+      - alert: KustomizationApplyFailed
+        expr: rate(flux_kustomization_apply_errors[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: gitops
+        annotations:
+          summary: "Kustomization 应用失败"
+          description: "Kustomization {{ $labels.resource_name }} ({{ $labels.resource_namespace }}) 应用失败，错误率为 {{ $value }}/s"
+          
+      # HelmRelease 失败告警
+      - alert: HelmReleaseFailed
+        expr: rate(flux_helm_release_errors[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: gitops
+        annotations:
+          summary: "HelmRelease 操作失败"
+          description: "HelmRelease {{ $labels.resource_name }} ({{ $labels.resource_namespace }}) 操作失败，错误率为 {{ $value }}/s"
+          
+      # Flux 组件不健康告警
+      - alert: FluxComponentUnhealthy
+        expr: flux_component_health < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: gitops
+        annotations:
+          summary: "Flux 组件不健康"
+          description: "Flux 组件 {{ $labels.component_name }} 不健康，请检查组件状态"
+          
+      # GitOps 部署失败率过高
+      - alert: HighGitOpsDeploymentFailureRate
+        expr: |
+          (
+            rate(flux_deployments_failure_total[1h])
+            /
+            rate(flux_deployments_total[1h])
+          ) > 0.3
+        for: 30m
+        labels:
+          severity: warning
+          component: gitops
+        annotations:
+          summary: "GitOps 部署失败率过高"
+          description: "最近 1 小时 GitOps 部署失败率为 {{ $value | humanizePercentage }}，超过 30%"
+          
+      # Git 操作失败率过高
+      - alert: HighGitOperationFailureRate
+        expr: |
+          (
+            rate(flux_git_operations_errors[5m])
+            /
+            rate(flux_git_operations_total[5m])
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          component: gitops
+        annotations:
+          summary: "Git 操作失败率过高"
+          description: "Git 操作 {{ $labels.git_operation }} 失败率为 {{ $value | humanizePercentage }}，超过 20%"
+          
+      # Kustomization 应用延迟过高
+      - alert: HighKustomizationApplyLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(flux_kustomization_apply_duration_bucket[5m])
+          ) > 60
+        for: 10m
+        labels:
+          severity: warning
+          component: gitops
+        annotations:
+          summary: "Kustomization 应用延迟过高"
+          description: "Kustomization {{ $labels.resource_name }} P95 应用延迟为 {{ $value }}s，超过 60s"
+          
+      # GitRepository 同步延迟过高
+      - alert: HighGitRepositorySyncLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(flux_git_repository_sync_duration_bucket[5m])
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+          component: gitops
+        annotations:
+          summary: "GitRepository 同步延迟过高"
+          description: "GitRepository {{ $labels.resource_name }} P95 同步延迟为 {{ $value }}s，超过 30s"
+          
+      # Reconciliation 失败率过高
+      - alert: HighReconciliationFailureRate
+        expr: |
+          (
+            rate(flux_reconciliation_total{reconciliation_status="failed"}[10m])
+            /
+            rate(flux_reconciliation_total[10m])
+          ) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+          component: gitops
+        annotations:
+          summary: "Reconciliation 失败率过高"
+          description: "{{ $labels.resource_kind }} reconciliation 失败率为 {{ $value | humanizePercentage }}，超过 20%"
+          
+      # GitOps 资源数量异常增长
+      - alert: UnexpectedGitOpsResourceGrowth
+        expr: |
+          (
+            sum(flux_resources_active)
+            -
+            sum(flux_resources_active offset 1h)
+          ) > 20
+        for: 30m
+        labels:
+          severity: info
+          component: gitops
+        annotations:
+          summary: "GitOps 资源数量异常增长"
+          description: "最近 1 小时 GitOps 资源数量增长超过 20 个，当前总数为 {{ $value }}"
+          
+      # 部署持续时间异常
+      - alert: AbnormalDeploymentDuration
+        expr: |
+          histogram_quantile(0.95,
+            rate(flux_deployment_duration_bucket[5m])
+          ) > 300
+        for: 15m
+        labels:
+          severity: warning
+          component: gitops
+        annotations:
+          summary: "部署持续时间异常"
+          description: "{{ $labels.deployment_method }} 部署 P95 持续时间为 {{ $value }}s，超过 5 分钟"

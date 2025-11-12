@@ -51,10 +51,36 @@
                 <div class="flex items-center space-x-2">
                   <h3 class="font-semibold">{{ deployment.version }}</h3>
                   <DeploymentStatusBadge :status="deployment.status" />
+                  <Badge 
+                    v-if="deployment.deploymentMethod"
+                    :variant="getDeploymentMethodVariant(deployment.deploymentMethod)"
+                  >
+                    {{ getDeploymentMethodText(deployment.deploymentMethod) }}
+                  </Badge>
                 </div>
                 <p class="text-sm text-muted-foreground">
                   部署到 {{ deployment.environmentId }} · {{ formatDate(deployment.createdAt) }}
                 </p>
+                <div 
+                  v-if="deployment.gitCommitSha && (deployment.deploymentMethod === 'gitops-ui' || deployment.deploymentMethod === 'gitops-git')"
+                  class="flex items-center gap-2 mt-1"
+                >
+                  <GitCommit class="h-3 w-3 text-muted-foreground" />
+                  <code class="text-xs text-muted-foreground font-mono">
+                    {{ deployment.gitCommitSha.slice(0, 7) }}
+                  </code>
+                  <a 
+                    v-if="deployment.gitCommitUrl"
+                    :href="deployment.gitCommitUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    @click.stop
+                  >
+                    查看提交
+                    <ExternalLink class="h-3 w-3" />
+                  </a>
+                </div>
               </div>
             </div>
             <Button variant="ghost" size="sm">
@@ -85,7 +111,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@juanie/ui'
-import { Rocket, ChevronRight } from 'lucide-vue-next'
+import { Rocket, ChevronRight, GitCommit, ExternalLink } from 'lucide-vue-next'
 import LoadingState from '@/components/LoadingState.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ErrorState from '@/components/ErrorState.vue'
@@ -109,5 +135,25 @@ watch(selectedEnvironment, async (newValue) => {
 
 const formatDate = (date: string) => {
   return new Date(date).toLocaleString('zh-CN')
+}
+
+const getDeploymentMethodText = (method: string) => {
+  const methodMap: Record<string, string> = {
+    manual: '手动部署',
+    'gitops-ui': 'GitOps (UI)',
+    'gitops-git': 'GitOps (Git)',
+    pipeline: '流水线',
+  }
+  return methodMap[method] || method
+}
+
+const getDeploymentMethodVariant = (method: string): 'default' | 'secondary' | 'outline' => {
+  const variantMap: Record<string, 'default' | 'secondary' | 'outline'> = {
+    manual: 'outline',
+    'gitops-ui': 'default',
+    'gitops-git': 'default',
+    pipeline: 'secondary',
+  }
+  return variantMap[method] || 'outline'
 }
 </script>

@@ -92,6 +92,75 @@
             />
           </div>
 
+          <!-- GitOps 配置 -->
+          <div class="space-y-4 pt-4 border-t">
+            <div class="flex items-center justify-between">
+              <div>
+                <Label class="text-base">GitOps 配置</Label>
+                <p class="text-sm text-muted-foreground">
+                  启用 GitOps 自动部署
+                </p>
+              </div>
+              <Switch 
+                v-model="form.gitopsEnabled"
+              />
+            </div>
+
+            <div v-if="form.gitopsEnabled" class="space-y-4 pl-4 border-l-2">
+              <div class="space-y-2">
+                <Label for="gitBranch">Git 分支</Label>
+                <Input
+                  id="gitBranch"
+                  v-model="form.gitBranch"
+                  placeholder="main"
+                />
+                <p class="text-xs text-muted-foreground">
+                  此环境对应的 Git 分支
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <Label for="gitPath">配置路径</Label>
+                <Input
+                  id="gitPath"
+                  v-model="form.gitPath"
+                  placeholder="./k8s/overlays/production"
+                />
+                <p class="text-xs text-muted-foreground">
+                  K8s 配置文件在仓库中的路径
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <Label for="syncInterval">同步间隔</Label>
+                <Select v-model="form.syncInterval">
+                  <SelectTrigger id="syncInterval">
+                    <SelectValue placeholder="选择同步间隔" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1m">1 分钟</SelectItem>
+                    <SelectItem value="5m">5 分钟</SelectItem>
+                    <SelectItem value="10m">10 分钟</SelectItem>
+                    <SelectItem value="30m">30 分钟</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div class="flex items-center space-x-2">
+                <Switch 
+                  v-model="form.autoSync"
+                  id="autoSync"
+                />
+                <Label for="autoSync" class="cursor-pointer">
+                  自动同步
+                </Label>
+                <p class="text-xs text-muted-foreground">
+                  （检测到 Git 变更时自动部署）
+                </p>
+              </div>
+            </div>
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" @click="showDialog = false">
               取消
@@ -152,6 +221,7 @@ import {
   Textarea,
 } from '@juanie/ui'
 import { Plus, Server, Loader2 } from 'lucide-vue-next'
+import { Switch } from '@juanie/ui'
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
@@ -178,6 +248,11 @@ const form = ref({
   type: 'development' as 'development' | 'staging' | 'production',
   description: '',
   url: '',
+  gitopsEnabled: false,
+  gitBranch: 'main',
+  gitPath: './k8s',
+  syncInterval: '5m',
+  autoSync: true,
 })
 
 const openCreateDialog = () => {
@@ -188,6 +263,11 @@ const openCreateDialog = () => {
     type: 'development',
     description: '',
     url: '',
+    gitopsEnabled: false,
+    gitBranch: 'main',
+    gitPath: './k8s',
+    syncInterval: '5m',
+    autoSync: true,
   }
   showDialog.value = true
 }
@@ -195,11 +275,17 @@ const openCreateDialog = () => {
 const openEditDialog = (environment: any) => {
   isEditing.value = true
   editingEnvironment.value = environment
+  const gitopsConfig = environment.config?.gitops || {}
   form.value = {
     name: environment.name,
     type: environment.type,
     description: environment.description || '',
     url: environment.url || '',
+    gitopsEnabled: gitopsConfig.enabled || false,
+    gitBranch: gitopsConfig.gitBranch || 'main',
+    gitPath: gitopsConfig.gitPath || './k8s',
+    syncInterval: gitopsConfig.syncInterval || '5m',
+    autoSync: gitopsConfig.autoSync !== false,
   }
   showDialog.value = true
 }
@@ -210,15 +296,30 @@ const confirmDelete = (id: string) => {
 }
 
 const handleSubmit = () => {
+  const { gitopsEnabled, gitBranch, gitPath, syncInterval, autoSync, ...baseForm } = form.value
+  
+  const payload = {
+    ...baseForm,
+    config: {
+      gitops: gitopsEnabled ? {
+        enabled: true,
+        gitBranch,
+        gitPath,
+        syncInterval,
+        autoSync,
+      } : undefined,
+    },
+  }
+  
   if (isEditing.value && editingEnvironment.value) {
     update({
       environmentId: editingEnvironment.value.id,
-      ...form.value,
+      ...payload,
     })
   } else {
     create({
       projectId: projectId.value,
-      ...form.value,
+      ...payload,
     })
   }
   showDialog.value = false

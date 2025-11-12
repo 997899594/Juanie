@@ -1,12 +1,31 @@
 import * as schema from '@juanie/core-database/schemas'
 import { DATABASE } from '@juanie/core-tokens'
 import type { CreateEnvironmentInput, UpdateEnvironmentInput } from '@juanie/core-types'
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import simpleGit from 'simple-git'
+
+export interface GitOpsConfig {
+  enabled: boolean
+  autoSync: boolean
+  gitBranch: string
+  gitPath: string
+  syncInterval: string
+}
+
+export interface ConfigureGitOpsInput {
+  enabled: boolean
+  autoSync?: boolean
+  gitBranch: string
+  gitPath: string
+  syncInterval?: string
+}
 
 @Injectable()
 export class EnvironmentsService {
+  private readonly logger = new Logger(EnvironmentsService.name)
+
   constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
 
   async create(userId: string, data: CreateEnvironmentInput) {
@@ -217,5 +236,194 @@ export class EnvironmentsService {
     }
 
     return ['admin', 'developer'].includes(projectMember.role)
+  }
+
+  /**
+   * Configure GitOps for an environment
+   * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5
+   */
+  async configureGitOps(
+    userId: string,
+    environmentId: string,
+    gitopsConfig: ConfigureGitOpsInput,
+  ): Promise<schema.Environment> {
+    this.logger.log(`Configuring GitOps for environment ${environmentId}`)
+
+    // Get environment and check permissions
+    const environment = await this.get(userId, environmentId)
+    if (!environment) {
+      throw new Error('环境不存在')
+    }
+
+    const hasPermission = await this.checkProjectPermission(userId, environment.projectId, 'admin')
+    if (!hasPermission) {
+      throw new Error('没有权限配置 GitOps')
+    }
+
+    // Validate Git branch and path exist
+    if (gitopsConfig.enabled) {
+      await this.validateGitBranchAndPath(
+        environment.projectId,
+        gitopsConfig.gitBranch,
+        gitopsConfig.gitPath,
+      )
+    }
+
+    // Update environment config with GitOps settings
+    const currentConfig = (environment.config as any) || {}
+    const updatedConfig = {
+      ...currentConfig,
+      gitops: {
+        enabled: gitopsConfig.enabled,
+        autoSync: gitopsConfig.autoSync ?? true,
+        gitBranch: gitopsConfig.gitBranch,
+        gitPath: gitopsConfig.gitPath,
+        syncInterval: gitopsConfig.syncInterval || '5m',
+      },
+    }
+
+    const [updated] = await this.db
+      .update(schema.environments)
+      .set({
+        config: updatedConfig,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.environments.id, environmentId))
+      .returning()
+
+    if (!updated) {
+      throw new Error('更新环境配置失败')
+    }
+
+    this.logger.log(`GitOps configured for environment ${environmentId}`)
+
+    return updated
+  }
+
+  /**
+   * Get GitOps configuration for an environment
+   * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5
+   */
+  async getGitOpsConfig(userId: string, environmentId: string): Promise<GitOpsConfig | null> {
+    this.logger.log(`Getting GitOps config for environment ${environmentId}`)
+
+    const environment = await this.get(userId, environmentId)
+    if (!environment) {
+      throw new Error('环境不存在')
+    }
+
+    const config = environment.config as any
+    const gitopsConfig = config?.gitops
+
+    if (!gitopsConfig) {
+      return null
+    }
+
+    return {
+      enabled: gitopsConfig.enabled ?? false,
+      autoSync: gitopsConfig.autoSync ?? true,
+      gitBranch: gitopsConfig.gitBranch || 'main',
+      gitPath: gitopsConfig.gitPath || `k8s/overlays/${environment.name}`,
+      syncInterval: gitopsConfig.syncInterval || '5m',
+    }
+  }
+
+  /**
+   * Validate that Git branch and path exist in the repository
+   * Requirements: 8.1, 8.2, 8.3
+   */
+  private async validateGitBranchAndPath(
+    projectId: string,
+    gitBranch: string,
+    gitPath: string,
+  ): Promise<void> {
+    this.logger.log(
+      `Validating Git branch ${gitBranch} and path ${gitPath} for project ${projectId}`,
+    )
+
+    // Get repository for the project
+    const [repository] = await this.db
+      .select()
+      .from(schema.repositories)
+      .where(eq(schema.repositories.projectId, projectId))
+      .limit(1)
+
+    if (!repository) {
+      throw new Error('项目没有关联的 Git 仓库')
+    }
+
+    try {
+      // Create a temporary git instance to validate
+      const git = simpleGit()
+
+      // Use ls-remote to check if branch exists without cloning
+      const remoteRefs = await git.listRemote([repository.cloneUrl])
+
+      // Check if branch exists in remote
+      const branchExists = remoteRefs.includes(`refs/heads/${gitBranch}`)
+
+      if (!branchExists) {
+        throw new Error(`Git 分支 '${gitBranch}' 不存在于仓库中`)
+      }
+
+      // Note: We cannot validate the path without cloning the repository
+      // Path validation will be done during actual GitOps operations
+      this.logger.log(`Git branch ${gitBranch} validated successfully`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      this.logger.error(`Failed to validate Git branch and path:`, error)
+
+      // If it's already our custom error, rethrow it
+      if (error instanceof Error && error.message.includes('Git 分支')) {
+        throw error
+      }
+
+      // Otherwise, throw a generic validation error
+      throw new Error(`无法验证 Git 配置: ${errorMessage}`)
+    }
+  }
+
+  /**
+   * Disable GitOps for an environment
+   * Requirements: 8.1, 8.2
+   */
+  async disableGitOps(userId: string, environmentId: string): Promise<schema.Environment> {
+    this.logger.log(`Disabling GitOps for environment ${environmentId}`)
+
+    const environment = await this.get(userId, environmentId)
+    if (!environment) {
+      throw new Error('环境不存在')
+    }
+
+    const hasPermission = await this.checkProjectPermission(userId, environment.projectId, 'admin')
+    if (!hasPermission) {
+      throw new Error('没有权限配置 GitOps')
+    }
+
+    const currentConfig = (environment.config as any) || {}
+    const updatedConfig = {
+      ...currentConfig,
+      gitops: {
+        ...(currentConfig.gitops || {}),
+        enabled: false,
+      },
+    }
+
+    const [updated] = await this.db
+      .update(schema.environments)
+      .set({
+        config: updatedConfig,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.environments.id, environmentId))
+      .returning()
+
+    if (!updated) {
+      throw new Error('更新环境配置失败')
+    }
+
+    this.logger.log(`GitOps disabled for environment ${environmentId}`)
+
+    return updated
   }
 }

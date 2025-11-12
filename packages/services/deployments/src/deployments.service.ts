@@ -5,14 +5,30 @@ import type {
   CreateDeploymentInput,
   RejectDeploymentInput,
 } from '@juanie/core-types'
+import type { DeploymentChanges } from '@juanie/service-git-ops'
+import { GitOpsService } from '@juanie/service-git-ops'
 import { K3sService } from '@juanie/service-k3s'
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
+export interface DeployWithGitOpsInput {
+  projectId: string
+  environmentId: string
+  gitopsResourceId?: string
+  version: string
+  changes: DeploymentChanges
+  commitMessage?: string
+}
+
 @Injectable()
 export class DeploymentsService {
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  private readonly logger = new Logger(DeploymentsService.name)
+
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private gitOpsService: GitOpsService,
+  ) {}
 
   // 创建部署
   async create(userId: string, data: CreateDeploymentInput) {
@@ -173,6 +189,220 @@ export class DeploymentsService {
       .where(eq(schema.deployments.id, deploymentId))
 
     return rollbackDeployment
+  }
+
+  /**
+   * Deploy with GitOps - UI to Git workflow
+   * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 6.1, 6.2, 6.3
+   */
+  async deployWithGitOps(userId: string, data: DeployWithGitOpsInput) {
+    this.logger.log(
+      `Starting GitOps deployment for project ${data.projectId}, environment ${data.environmentId}`,
+    )
+
+    // 1. Check permissions
+    const hasPermission = await this.checkDeployPermission(
+      userId,
+      data.projectId,
+      data.environmentId,
+    )
+    if (!hasPermission) {
+      throw new Error('没有权限创建部署')
+    }
+
+    // 2. Check if environment requires approval
+    const [environment] = await this.db
+      .select()
+      .from(schema.environments)
+      .where(eq(schema.environments.id, data.environmentId))
+      .limit(1)
+
+    if (!environment) {
+      throw new Error('环境不存在')
+    }
+
+    // 3. Verify GitOps is enabled for this environment
+    const envConfig = environment.config as any
+    const gitopsConfig = envConfig?.gitops
+
+    if (!gitopsConfig?.enabled) {
+      throw new Error('该环境未启用 GitOps')
+    }
+
+    // 4. Call GitOpsService to commit changes to Git
+    let gitCommitSha: string
+    try {
+      gitCommitSha = await this.gitOpsService.commitFromUI({
+        projectId: data.projectId,
+        environmentId: data.environmentId,
+        changes: data.changes,
+        userId,
+        commitMessage: data.commitMessage,
+      })
+
+      this.logger.log(`Git commit created: ${gitCommitSha}`)
+    } catch (error: any) {
+      this.logger.error('Failed to commit changes to Git:', error)
+      throw new Error(`GitOps commit 失败: ${error.message}`)
+    }
+
+    // 5. Extract version from changes (use image tag or provided version)
+    let version = data.version
+    if (data.changes.image && !version) {
+      // Extract version from image tag (e.g., "myapp:v1.2.3" -> "v1.2.3")
+      const imageParts = data.changes.image.split(':')
+      version = imageParts.length > 1 ? imageParts[1]! : 'latest'
+    }
+
+    // 6. Create deployment record with gitops-ui method
+    const [deployment] = await this.db
+      .insert(schema.deployments)
+      .values({
+        projectId: data.projectId,
+        environmentId: data.environmentId,
+        gitopsResourceId: data.gitopsResourceId || null,
+        version,
+        commitHash: gitCommitSha.substring(0, 7), // Short SHA for display
+        branch: gitopsConfig.gitBranch || 'main',
+        deploymentMethod: 'gitops-ui',
+        gitCommitSha, // Full SHA for GitOps tracking
+        deployedBy: userId,
+        status: 'pending',
+      })
+      .returning()
+
+    if (!deployment) {
+      throw new Error('创建部署记录失败')
+    }
+
+    this.logger.log(`Deployment record created: ${deployment.id}`)
+
+    // 7. If environment requires approval, create approval request
+    const requiresApproval = environment.type === 'production'
+    if (requiresApproval) {
+      await this.createApprovalRequest(deployment.id, data.projectId)
+      this.logger.log(`Approval request created for deployment ${deployment.id}`)
+    } else {
+      // For non-production environments, mark as running immediately
+      // Flux will handle the actual deployment
+      await this.db
+        .update(schema.deployments)
+        .set({
+          status: 'running',
+          startedAt: new Date(),
+        })
+        .where(eq(schema.deployments.id, deployment.id))
+
+      this.logger.log(`Deployment ${deployment.id} marked as running, waiting for Flux`)
+    }
+
+    return deployment
+  }
+
+  /**
+   * Create deployment record from Git push (Flux reconciliation)
+   * This is called by the Flux watcher when a reconciliation completes
+   * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2
+   */
+  async createDeploymentFromGit(data: {
+    projectId: string
+    environmentId: string
+    gitopsResourceId: string
+    gitCommitSha: string
+    version?: string
+    status: 'success' | 'failed'
+    errorMessage?: string
+  }) {
+    this.logger.log(
+      `Creating deployment record from Git for project ${data.projectId}, commit ${data.gitCommitSha}`,
+    )
+
+    // 1. Check if deployment record already exists for this commit
+    const [existingDeployment] = await this.db
+      .select()
+      .from(schema.deployments)
+      .where(
+        and(
+          eq(schema.deployments.projectId, data.projectId),
+          eq(schema.deployments.environmentId, data.environmentId),
+          eq(schema.deployments.gitCommitSha, data.gitCommitSha),
+          isNull(schema.deployments.deletedAt),
+        ),
+      )
+      .limit(1)
+
+    if (existingDeployment) {
+      // Update existing deployment status
+      await this.db
+        .update(schema.deployments)
+        .set({
+          status: data.status,
+          finishedAt: data.status === 'success' || data.status === 'failed' ? new Date() : null,
+        })
+        .where(eq(schema.deployments.id, existingDeployment.id))
+
+      this.logger.log(`Updated existing deployment ${existingDeployment.id} to ${data.status}`)
+      return existingDeployment
+    }
+
+    // 2. Get environment info for branch
+    const [environment] = await this.db
+      .select()
+      .from(schema.environments)
+      .where(eq(schema.environments.id, data.environmentId))
+      .limit(1)
+
+    if (!environment) {
+      throw new Error('环境不存在')
+    }
+
+    const envConfig = environment.config as any
+    const gitopsConfig = envConfig?.gitops
+    const branch = gitopsConfig?.gitBranch || 'main'
+
+    // 3. Extract version from commit SHA or use provided version
+    const version = data.version || data.gitCommitSha.substring(0, 7)
+
+    // 4. Create new deployment record with gitops-git method
+    const [deployment] = await this.db
+      .insert(schema.deployments)
+      .values({
+        projectId: data.projectId,
+        environmentId: data.environmentId,
+        gitopsResourceId: data.gitopsResourceId,
+        version,
+        commitHash: data.gitCommitSha.substring(0, 7),
+        branch,
+        deploymentMethod: 'gitops-git',
+        gitCommitSha: data.gitCommitSha,
+        deployedBy: null, // No specific user for Git-triggered deployments
+        status: data.status,
+        startedAt: new Date(),
+        finishedAt: data.status === 'success' || data.status === 'failed' ? new Date() : null,
+      })
+      .returning()
+
+    if (!deployment) {
+      throw new Error('创建部署记录失败')
+    }
+
+    this.logger.log(
+      `Deployment record created from Git: ${deployment.id} with status ${data.status}`,
+    )
+
+    // 5. Record to audit log (TODO: integrate with audit service)
+    // await this.auditService.log({
+    //   action: 'gitops.deployment.created',
+    //   resourceType: 'deployment',
+    //   resourceId: deployment.id,
+    //   metadata: {
+    //     method: 'gitops-git',
+    //     commitSha: data.gitCommitSha,
+    //     status: data.status,
+    //   },
+    // })
+
+    return deployment
   }
 
   // 创建审批请求

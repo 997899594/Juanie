@@ -37,6 +37,31 @@
           <span class="text-muted-foreground">创建时间</span>
           <span>{{ formatDate(environment.createdAt) }}</span>
         </div>
+        <div v-if="environment.config?.gitops?.enabled" class="pt-2 border-t">
+          <div class="flex items-center justify-between text-sm mb-2">
+            <span class="text-muted-foreground flex items-center gap-1">
+              <GitBranch class="h-3 w-3" />
+              GitOps
+            </span>
+            <Badge variant="default" class="text-xs">
+              已启用
+            </Badge>
+          </div>
+          <div class="space-y-1 text-xs text-muted-foreground">
+            <div class="flex items-center justify-between">
+              <span>分支:</span>
+              <code class="font-mono">{{ environment.config.gitops.gitBranch }}</code>
+            </div>
+            <div class="flex items-center justify-between">
+              <span>路径:</span>
+              <code class="font-mono">{{ environment.config.gitops.gitPath }}</code>
+            </div>
+            <div class="flex items-center justify-between">
+              <span>同步:</span>
+              <span>{{ environment.config.gitops.autoSync ? '自动' : '手动' }} ({{ environment.config.gitops.syncInterval }})</span>
+            </div>
+          </div>
+        </div>
       </div>
     </CardContent>
     <CardFooter class="flex justify-end space-x-2">
@@ -63,7 +88,7 @@ import {
   Badge,
   Button,
 } from '@juanie/ui'
-import { Server, ExternalLink, Edit, Trash2 } from 'lucide-vue-next'
+import { Server, ExternalLink, Edit, Trash2, GitBranch } from 'lucide-vue-next'
 
 interface Environment {
   id: string
@@ -73,6 +98,15 @@ interface Environment {
   status: string
   url?: string
   createdAt: string
+  config?: {
+    gitops?: {
+      enabled: boolean
+      gitBranch: string
+      gitPath: string
+      syncInterval: string
+      autoSync: boolean
+    }
+  }
 }
 
 defineProps<{

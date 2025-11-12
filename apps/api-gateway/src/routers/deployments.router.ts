@@ -2,11 +2,13 @@ import {
   approveDeploymentSchema,
   createDeploymentSchema,
   deploymentIdSchema,
+  deployWithGitOpsSchema,
   rejectDeploymentSchema,
   rollbackDeploymentSchema,
 } from '@juanie/core-types'
 import { DeploymentsService } from '@juanie/service-deployments'
 import { Injectable } from '@nestjs/common'
+import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'
 
@@ -59,6 +61,35 @@ export class DeploymentsRouter {
         .mutation(async ({ ctx, input }) => {
           const { deploymentId, ...data } = input
           return await this.deploymentsService.reject(ctx.user.id, deploymentId, data)
+        }),
+
+      // ==================== GitOps 相关端点 ====================
+
+      // 通过 GitOps 部署（UI → Git 工作流）
+      deployWithGitOps: this.trpc.protectedProcedure
+        .input(deployWithGitOpsSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            // Extract version from image if not provided
+            let version = 'latest'
+            if (input.changes.image) {
+              const imageParts = input.changes.image.split(':')
+              version = imageParts.length > 1 ? imageParts[1]! : 'latest'
+            }
+
+            return await this.deploymentsService.deployWithGitOps(ctx.user.id, {
+              projectId: input.projectId,
+              environmentId: input.environmentId,
+              version,
+              changes: input.changes,
+              commitMessage: input.commitMessage,
+            })
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : 'GitOps 部署失败',
+            })
+          }
         }),
     })
   }
