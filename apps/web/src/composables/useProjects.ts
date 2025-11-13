@@ -79,16 +79,48 @@ export function useProjects() {
   }
 
   /**
-   * 创建项目
+   * 创建项目（支持模板和仓库配置）
    */
   async function createProject(
-    data: RouterInput['projects']['create'] & { repositoryUrl?: string },
+    data: RouterInput['projects']['create'] & {
+      repositoryUrl?: string
+      templateId?: string
+      templateConfig?: Record<string, any>
+      repository?: {
+        mode: 'existing' | 'create'
+        provider: 'github' | 'gitlab'
+        url?: string
+        name?: string
+        accessToken: string
+        visibility?: 'public' | 'private'
+        defaultBranch?: string
+        includeAppCode?: boolean
+      }
+    },
   ) {
     loading.value = true
     error.value = null
 
     try {
-      const { repositoryUrl, ...createInput } = data
+      const { repositoryUrl, templateId, templateConfig, repository, ...createInput } = data
+
+      // 如果提供了模板和仓库配置，使用扩展的创建方法
+      if (templateId || repository) {
+        const result = await trpc.projects.createWithTemplate.mutate({
+          ...createInput,
+          templateId,
+          templateConfig,
+          repository,
+        })
+
+        // 刷新项目列表
+        await fetchProjects(data.organizationId)
+
+        toast.success('创建成功', `项目 "${data.name}" 已创建并初始化`)
+        return result
+      }
+
+      // 否则使用标准创建方法
       const result = await trpc.projects.create.mutate(createInput)
 
       // 如提供仓库URL，尝试连接仓库
@@ -503,6 +535,112 @@ export function useProjects() {
     }
   }
 
+  /**
+   * 获取项目完整状态
+   */
+  async function getStatus(projectId: string) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const result = await trpc.projects.getStatus.query({ projectId })
+      return result
+    } catch (err) {
+      console.error('Failed to get project status:', err)
+      error.value = '获取项目状态失败'
+
+      if (isTRPCClientError(err)) {
+        toast.error('获取项目状态失败', err.message)
+      }
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * 获取项目健康度
+   */
+  async function getHealth(projectId: string) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const result = await trpc.projects.getHealth.query({ projectId })
+      return result
+    } catch (err) {
+      console.error('Failed to get project health:', err)
+      error.value = '获取项目健康度失败'
+
+      if (isTRPCClientError(err)) {
+        toast.error('获取项目健康度失败', err.message)
+      }
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * 归档项目
+   */
+  async function archiveProject(projectId: string) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const result = await trpc.projects.archive.mutate({ projectId })
+
+      // 更新本地项目数据
+      if (currentProject.value?.id === projectId) {
+        currentProject.value = { ...currentProject.value, status: 'archived' }
+      }
+
+      toast.success('归档成功', '项目已归档')
+      return result
+    } catch (err) {
+      console.error('Failed to archive project:', err)
+      error.value = '归档项目失败'
+
+      if (isTRPCClientError(err)) {
+        toast.error('归档项目失败', err.message)
+      }
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * 恢复项目
+   */
+  async function restoreProject(projectId: string) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const result = await trpc.projects.restore.mutate({ projectId })
+
+      // 更新本地项目数据
+      if (currentProject.value?.id === projectId) {
+        currentProject.value = { ...currentProject.value, status: 'active' }
+      }
+
+      toast.success('恢复成功', '项目已恢复')
+      return result
+    } catch (err) {
+      console.error('Failed to restore project:', err)
+      error.value = '恢复项目失败'
+
+      if (isTRPCClientError(err)) {
+        toast.error('恢复项目失败', err.message)
+      }
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     // 状态
     projects,
@@ -537,5 +675,11 @@ export function useProjects() {
     // 方法 - Logo 管理
     uploadLogo,
     deleteLogo,
+
+    // 方法 - 项目状态和健康度
+    getStatus,
+    getHealth,
+    archiveProject,
+    restoreProject,
   }
 }

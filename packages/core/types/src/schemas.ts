@@ -265,6 +265,15 @@ export const createEnvironmentSchema = z.object({
       region: z.string().optional(),
       approvalRequired: z.boolean().default(false),
       minApprovals: z.number().int().min(0).default(0),
+      gitops: z
+        .object({
+          enabled: z.boolean(),
+          autoSync: z.boolean().optional(),
+          gitBranch: z.string().optional(),
+          gitPath: z.string().optional(),
+          syncInterval: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
 })
@@ -279,6 +288,15 @@ export const updateEnvironmentSchema = z.object({
       region: z.string().optional(),
       approvalRequired: z.boolean().optional(),
       minApprovals: z.number().int().min(0).optional(),
+      gitops: z
+        .object({
+          enabled: z.boolean(),
+          autoSync: z.boolean().optional(),
+          gitBranch: z.string().optional(),
+          gitPath: z.string().optional(),
+          syncInterval: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
 })
@@ -981,3 +999,352 @@ export type DeployWithGitOpsInput = z.infer<typeof deployWithGitOpsSchema>
 export type CommitConfigChangesInput = z.infer<typeof commitConfigChangesSchema>
 export type PreviewChangesInput = z.infer<typeof previewChangesSchema>
 export type ValidateYAMLInput = z.infer<typeof validateYAMLSchema>
+
+// ============================================
+// 项目生产就绪 - 扩展的项目 Schemas
+// ============================================
+
+// 项目配额 Schema
+export const projectQuotaSchema = z.object({
+  maxEnvironments: z.number().int().positive(),
+  maxRepositories: z.number().int().positive(),
+  maxPods: z.number().int().positive(),
+  maxCpu: z.string(),
+  maxMemory: z.string(),
+})
+
+// 仓库配置 Schema - 关联现有仓库
+export const existingRepositoryConfigSchema = z.object({
+  mode: z.literal('existing'),
+  provider: z.enum(['github', 'gitlab']),
+  url: z.string().url(),
+  accessToken: z.string().min(1),
+  defaultBranch: z.string().optional(),
+})
+
+// 仓库配置 Schema - 创建新仓库
+export const newRepositoryConfigSchema = z.object({
+  mode: z.literal('create'),
+  provider: z.enum(['github', 'gitlab']),
+  name: z.string().min(1).max(100),
+  visibility: z.enum(['public', 'private']),
+  accessToken: z.string().min(1),
+  includeAppCode: z.boolean().optional(),
+})
+
+// 仓库配置联合 Schema
+export const repositoryConfigSchema = z.discriminatedUnion('mode', [
+  existingRepositoryConfigSchema,
+  newRepositoryConfigSchema,
+])
+
+// 扩展的创建项目 Schema（包含模板和仓库配置）
+export const createProjectWithTemplateSchema = z.object({
+  organizationId: uuidSchema,
+  name: z.string().min(1).max(100),
+  slug: slugSchema,
+  description: z.string().max(1000).optional(),
+  visibility: z.enum(['public', 'private', 'internal']).default('private'),
+  logoUrl: z.string().url().optional(),
+
+  // 模板相关
+  templateId: z.string().optional(),
+  templateConfig: z.record(z.string(), z.any()).optional(),
+
+  // 仓库配置
+  repository: repositoryConfigSchema.optional(),
+})
+
+// 项目状态查询 Schema
+export const getProjectStatusSchema = z.object({
+  projectId: uuidSchema,
+})
+
+// 项目健康度查询 Schema
+export const getProjectHealthSchema = z.object({
+  projectId: uuidSchema,
+})
+
+// 归档项目 Schema
+export const archiveProjectSchema = z.object({
+  projectId: uuidSchema,
+  reason: z.string().max(500).optional(),
+  pauseGitOpsSync: z.boolean().default(true),
+})
+
+// 恢复项目 Schema
+export const restoreProjectSchema = z.object({
+  projectId: uuidSchema,
+  resumeGitOpsSync: z.boolean().default(true),
+})
+
+// ============================================
+// 模板 Schemas
+// ============================================
+
+// 资源配置 Schema
+export const resourceTemplateSchema = z.object({
+  requests: z.object({
+    cpu: z.string(),
+    memory: z.string(),
+  }),
+  limits: z.object({
+    cpu: z.string(),
+    memory: z.string(),
+  }),
+})
+
+// 健康检查 Schema
+export const healthCheckTemplateSchema = z.object({
+  enabled: z.boolean(),
+  httpGet: z
+    .object({
+      path: z.string(),
+      port: z.number().int().positive(),
+      scheme: z.enum(['HTTP', 'HTTPS']).optional(),
+    })
+    .optional(),
+  tcpSocket: z
+    .object({
+      port: z.number().int().positive(),
+    })
+    .optional(),
+  exec: z
+    .object({
+      command: z.array(z.string()),
+    })
+    .optional(),
+  initialDelaySeconds: z.number().int().nonnegative().optional(),
+  periodSeconds: z.number().int().positive().optional(),
+  timeoutSeconds: z.number().int().positive().optional(),
+  successThreshold: z.number().int().positive().optional(),
+  failureThreshold: z.number().int().positive().optional(),
+})
+
+// GitOps 配置模板 Schema
+export const gitopsTemplateSchema = z.object({
+  enabled: z.boolean(),
+  autoSync: z.boolean(),
+  syncInterval: z.string(),
+  prune: z.boolean(),
+  selfHeal: z.boolean(),
+})
+
+// 环境模板 Schema
+export const environmentTemplateSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(['development', 'staging', 'production', 'testing']),
+  replicas: z.number().int().positive(),
+  resources: resourceTemplateSchema,
+  envVars: z.record(z.string(), z.string()),
+  gitops: gitopsTemplateSchema.extend({
+    gitBranch: z.string(),
+    gitPath: z.string(),
+  }),
+})
+
+// 默认配置模板 Schema
+export const defaultConfigTemplateSchema = z.object({
+  environments: z.array(environmentTemplateSchema),
+  resources: resourceTemplateSchema,
+  healthCheck: healthCheckTemplateSchema,
+  readinessProbe: healthCheckTemplateSchema.optional(),
+  gitops: gitopsTemplateSchema,
+})
+
+// K8s 配置模板 Schema
+export const k8sTemplatesSchema = z.object({
+  deployment: z.string().min(1),
+  service: z.string().min(1),
+  ingress: z.string().optional(),
+  configMap: z.string().optional(),
+  secret: z.string().optional(),
+  hpa: z.string().optional(),
+  pdb: z.string().optional(),
+  networkPolicy: z.string().optional(),
+})
+
+// CI/CD 配置模板 Schema
+export const cicdTemplatesSchema = z.object({
+  githubActions: z.string().optional(),
+  gitlabCI: z.string().optional(),
+  jenkinsfile: z.string().optional(),
+})
+
+// 技术栈 Schema
+export const techStackSchema = z.object({
+  language: z.string(),
+  framework: z.string(),
+  runtime: z.string(),
+})
+
+// 创建模板 Schema
+export const createTemplateSchema = z.object({
+  name: z.string().min(1).max(100),
+  slug: slugSchema,
+  description: z.string().max(1000),
+  category: z.enum(['web', 'api', 'microservice', 'static', 'fullstack', 'mobile', 'data']),
+  techStack: techStackSchema,
+  defaultConfig: defaultConfigTemplateSchema,
+  k8sTemplates: k8sTemplatesSchema,
+  cicdTemplates: cicdTemplatesSchema.optional(),
+  tags: z.array(z.string()).optional(),
+  icon: z.string().optional(),
+  isPublic: z.boolean().default(true),
+  organizationId: uuidSchema.optional(),
+})
+
+// 更新模板 Schema
+export const updateTemplateSchema = z.object({
+  templateId: z.string(),
+  name: z.string().min(1).max(100).optional(),
+  slug: slugSchema.optional(),
+  description: z.string().max(1000).optional(),
+  category: z
+    .enum(['web', 'api', 'microservice', 'static', 'fullstack', 'mobile', 'data'])
+    .optional(),
+  techStack: techStackSchema.optional(),
+  defaultConfig: defaultConfigTemplateSchema.optional(),
+  k8sTemplates: k8sTemplatesSchema.optional(),
+  cicdTemplates: cicdTemplatesSchema.optional(),
+  tags: z.array(z.string()).optional(),
+  icon: z.string().optional(),
+  isPublic: z.boolean().optional(),
+})
+
+// 模板 ID Schema
+export const templateIdSchema = z.object({
+  templateId: z.string(),
+})
+
+// 模板筛选 Schema
+export const listTemplatesSchema = z.object({
+  category: z
+    .enum(['web', 'api', 'microservice', 'static', 'fullstack', 'mobile', 'data'])
+    .optional(),
+  tags: z.array(z.string()).optional(),
+  language: z.string().optional(),
+  framework: z.string().optional(),
+  isPublic: z.boolean().optional(),
+  organizationId: uuidSchema.optional(),
+  search: z.string().optional(),
+})
+
+// 渲染模板 Schema
+export const renderTemplateSchema = z.object({
+  templateId: z.string(),
+  variables: z
+    .object({
+      projectName: z.string(),
+      projectSlug: z.string(),
+      namespace: z.string(),
+      image: z.string(),
+      imageTag: z.string(),
+      imagePullPolicy: z.enum(['Always', 'IfNotPresent', 'Never']).optional(),
+      replicas: z.number().int().positive(),
+      resources: resourceTemplateSchema,
+      envVars: z.record(z.string(), z.string()),
+      healthCheck: healthCheckTemplateSchema.optional(),
+      readinessProbe: healthCheckTemplateSchema.optional(),
+      servicePort: z.number().int().positive(),
+      serviceType: z.enum(['ClusterIP', 'NodePort', 'LoadBalancer']).optional(),
+      ingressEnabled: z.boolean().optional(),
+      ingressHost: z.string().optional(),
+      ingressPath: z.string().optional(),
+      ingressTls: z.boolean().optional(),
+      gitRepository: z.string().optional(),
+      gitBranch: z.string().optional(),
+      gitPath: z.string().optional(),
+    })
+    .passthrough(), // 允许额外的自定义变量
+})
+
+// 验证模板 Schema
+export const validateTemplateSchema = z.object({
+  templateId: z.string(),
+})
+
+// ============================================
+// 审批 Schemas
+// ============================================
+
+// 创建审批请求 Schema
+export const createApprovalRequestSchema = z.object({
+  deploymentId: uuidSchema,
+  approvers: z.array(uuidSchema).min(1),
+})
+
+// 审批 ID Schema
+export const approvalIdSchema = z.object({
+  approvalId: uuidSchema,
+})
+
+// 批准部署 Schema（扩展版本）
+export const approveDeploymentExtendedSchema = z.object({
+  approvalId: uuidSchema,
+  approverId: uuidSchema,
+  comment: z.string().max(500).optional(),
+})
+
+// 拒绝部署 Schema（扩展版本）
+export const rejectDeploymentExtendedSchema = z.object({
+  approvalId: uuidSchema,
+  approverId: uuidSchema,
+  reason: z.string().min(1).max(500),
+})
+
+// 查询待审批列表 Schema
+export const listPendingApprovalsSchema = z.object({
+  projectId: uuidSchema.optional(),
+  environmentId: uuidSchema.optional(),
+  approverId: uuidSchema.optional(),
+})
+
+// ============================================
+// 事件 Schemas
+// ============================================
+
+// 查询事件 Schema
+export const queryEventsSchema = z.object({
+  projectId: uuidSchema.optional(),
+  eventType: z.union([z.string(), z.array(z.string())]).optional(),
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+  limit: z.number().int().positive().max(100).default(50),
+  offset: z.number().int().nonnegative().default(0),
+})
+
+// 事件统计 Schema
+export const getEventStatsSchema = z.object({
+  projectId: uuidSchema,
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+})
+
+// ============================================
+// 类型推导 - 项目生产就绪相关
+// ============================================
+
+// 项目相关类型
+export type CreateProjectWithTemplateInput = z.infer<typeof createProjectWithTemplateSchema>
+export type GetProjectStatusInput = z.infer<typeof getProjectStatusSchema>
+export type GetProjectHealthInput = z.infer<typeof getProjectHealthSchema>
+export type ArchiveProjectInput = z.infer<typeof archiveProjectSchema>
+export type RestoreProjectInput = z.infer<typeof restoreProjectSchema>
+
+// 模板相关类型
+export type CreateTemplateInput = z.infer<typeof createTemplateSchema>
+export type UpdateTemplateInput = Omit<z.infer<typeof updateTemplateSchema>, 'templateId'>
+export type ListTemplatesInput = z.infer<typeof listTemplatesSchema>
+export type RenderTemplateInput = z.infer<typeof renderTemplateSchema>
+export type ValidateTemplateInput = z.infer<typeof validateTemplateSchema>
+
+// 审批相关类型
+export type CreateApprovalRequestInput = z.infer<typeof createApprovalRequestSchema>
+export type ApproveDeploymentExtendedInput = z.infer<typeof approveDeploymentExtendedSchema>
+export type RejectDeploymentExtendedInput = z.infer<typeof rejectDeploymentExtendedSchema>
+export type ListPendingApprovalsInput = z.infer<typeof listPendingApprovalsSchema>
+
+// 事件相关类型
+export type QueryEventsInput = z.infer<typeof queryEventsSchema>
+export type GetEventStatsInput = z.infer<typeof getEventStatsSchema>

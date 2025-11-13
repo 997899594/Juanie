@@ -15,7 +15,7 @@ export class PipelineWorker implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    const redisUrl = this.config.get<string>('REDIS_URL')!
+    const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
 
     this.worker = new Worker(
       'pipeline',
@@ -66,6 +66,8 @@ export class PipelineWorker implements OnModuleInit {
       {
         connection: {
           url: redisUrl,
+          // Worker 需要独立的连接，避免与 Queue 冲突
+          maxRetriesPerRequest: null,
         },
         concurrency: 5, // 同时处理 5 个任务
       },

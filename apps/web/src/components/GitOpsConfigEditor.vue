@@ -271,7 +271,7 @@
               <Button
                 variant="ghost"
                 size="sm"
-                @click="validateYAML"
+                @click="validateYAMLContent"
                 :disabled="validating"
               >
                 <Loader2 v-if="validating" class="h-4 w-4 mr-1 animate-spin" />
@@ -310,7 +310,7 @@
             <span class="text-sm font-medium">配置变更对比</span>
           </div>
           
-          <ScrollArea class="flex-1">
+          <div class="flex-1 overflow-auto">
             <div v-if="diffContent" class="p-4">
               <pre class="text-sm font-mono whitespace-pre-wrap"><code v-html="diffContent"></code></pre>
             </div>
@@ -318,7 +318,7 @@
               <GitCompare class="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>暂无变更</p>
             </div>
-          </ScrollArea>
+          </div>
         </div>
       </TabsContent>
     </Tabs>
@@ -346,7 +346,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  ScrollArea,
   Alert,
   AlertDescription,
 } from '@juanie/ui'
@@ -361,7 +360,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-vue-next'
-import { trpc } from '@/lib/trpc'
+import { useGitOps } from '@/composables/useGitOps'
 import { useToast } from '@/composables/useToast'
 
 interface Props {
@@ -387,6 +386,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const { validateYAML } = useGitOps()
 const activeTab = ref('visual')
 const validating = ref(false)
 const validationResult = ref<{ valid: boolean; message: string } | null>(null)
@@ -562,14 +562,12 @@ const formatYAML = () => {
 }
 
 // 验证 YAML
-const validateYAML = async () => {
+const validateYAMLContent = async () => {
   validating.value = true
   validationResult.value = null
 
   try {
-    const result = await trpc.gitops.validateYAML.query({
-      content: yamlContent.value,
-    })
+    const result = await validateYAML(yamlContent.value)
 
     validationResult.value = {
       valid: result.valid,
@@ -586,7 +584,6 @@ const validateYAML = async () => {
       valid: false,
       message: error.message || '验证失败',
     }
-    toast.error('验证失败', error.message)
   } finally {
     validating.value = false
   }

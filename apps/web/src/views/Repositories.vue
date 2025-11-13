@@ -76,7 +76,7 @@
               <div class="flex items-center gap-2">
                 <Switch 
                   :checked="repo.gitopsConfig.enabled" 
-                  @update:checked="(val) => toggleGitOps(repo.id, val)"
+                  @update:checked="(val: boolean) => toggleGitOps(repo.id, val)"
                   :disabled="isTogglingGitOps"
                 />
                 <span class="text-xs">{{ repo.gitopsConfig.enabled ? '已启用' : '已禁用' }}</span>
@@ -92,16 +92,16 @@
           <Button
             variant="outline"
             size="sm"
-            :disabled="isSyncing"
+            :disabled="isLoading"
             @click="handleSync(repo.id)"
           >
-            <RefreshCw :class="['h-4 w-4 mr-2', isSyncing && 'animate-spin']" />
+            <RefreshCw :class="['h-4 w-4 mr-2', isLoading && 'animate-spin']" />
             同步
           </Button>
           <Button
             variant="destructive"
             size="sm"
-            :disabled="isDisconnecting"
+            :disabled="isLoading"
             @click="handleDisconnect(repo.id)"
           >
             <Unplug class="h-4 w-4 mr-2" />
@@ -155,20 +155,6 @@
           </div>
 
           <div class="space-y-2">
-            <Label for="accessToken">访问令牌</Label>
-            <Input
-              id="accessToken"
-              v-model="connectForm.accessToken"
-              type="password"
-              placeholder="ghp_xxxxxxxxxxxx"
-              required
-            />
-            <p class="text-xs text-muted-foreground">
-              需要具有读取仓库权限的个人访问令牌
-            </p>
-          </div>
-
-          <div class="space-y-2">
             <Label for="defaultBranch">默认分支（可选）</Label>
             <Input
               id="defaultBranch"
@@ -185,8 +171,8 @@
             >
               取消
             </Button>
-            <Button type="submit" :disabled="isConnecting">
-              <Loader2 v-if="isConnecting" class="mr-2 h-4 w-4 animate-spin" />
+            <Button type="submit" :disabled="isLoading">
+              <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
               连接
             </Button>
           </DialogFooter>
@@ -198,7 +184,7 @@
 
 <script setup lang="ts">
 import PageContainer from '@/components/PageContainer.vue'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useRepositories } from '@/composables/useRepositories'
 import {
@@ -241,45 +227,78 @@ const projectId = computed(() => route.params.projectId as string)
 const {
   repositories,
   isLoading,
+  fetchRepositories,
   connect,
   sync,
   disconnect,
-  isConnecting,
-  isSyncing,
-  isDisconnecting,
-} = useRepositories(projectId)
+} = useRepositories()
+
+// 组件挂载时获取仓库列表
+onMounted(() => {
+  if (projectId.value) {
+    fetchRepositories(projectId.value)
+  }
+})
 
 const showConnectDialog = ref(false)
 const connectForm = ref({
-  projectId: projectId.value,
   provider: 'github' as 'github' | 'gitlab',
   url: '',
-  accessToken: '',
   defaultBranch: '',
 })
 
-const handleConnect = () => {
-  connect({
-    ...connectForm.value,
-    projectId: projectId.value,
-  })
-  showConnectDialog.value = false
-  connectForm.value = {
-    projectId: projectId.value,
-    provider: 'github',
-    url: '',
-    accessToken: '',
-    defaultBranch: '',
+// 解析仓库 URL
+const parseRepoUrl = (url: string) => {
+  const match = url.match(/(?:https?:\/\/|git@)?(?:github|gitlab)\.com[:/](.+?)(?:\.git)?$/)
+  return match ? match[1] : ''
+}
+
+const handleConnect = async () => {
+  try {
+    const fullName = parseRepoUrl(connectForm.value.url)
+    if (!fullName) {
+      throw new Error('无效的仓库 URL')
+    }
+    
+    await connect({
+      projectId: projectId.value,
+      provider: connectForm.value.provider,
+      fullName,
+      cloneUrl: connectForm.value.url,
+      defaultBranch: connectForm.value.defaultBranch || undefined,
+    })
+    showConnectDialog.value = false
+    connectForm.value = {
+      provider: 'github',
+      url: '',
+      defaultBranch: '',
+    }
+    // 重新获取仓库列表
+    await fetchRepositories(projectId.value)
+  } catch (error) {
+    console.error('Failed to connect repository:', error)
   }
 }
 
-const handleSync = (repositoryId: string) => {
-  sync({ repositoryId })
+const handleSync = async (repositoryId: string) => {
+  try {
+    await sync({ repositoryId })
+    // 重新获取仓库列表
+    await fetchRepositories(projectId.value)
+  } catch (error) {
+    console.error('Failed to sync repository:', error)
+  }
 }
 
-const handleDisconnect = (repositoryId: string) => {
+const handleDisconnect = async (repositoryId: string) => {
   if (confirm('确定要断开此仓库连接吗？')) {
-    disconnect({ repositoryId })
+    try {
+      await disconnect({ repositoryId })
+      // 重新获取仓库列表
+      await fetchRepositories(projectId.value)
+    } catch (error) {
+      console.error('Failed to disconnect repository:', error)
+    }
   }
 }
 

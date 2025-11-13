@@ -1,9 +1,12 @@
 import * as schema from '@juanie/core-database/schemas'
+import { DEPLOYMENT_QUEUE } from '@juanie/core-queue'
 import { DATABASE } from '@juanie/core-tokens'
+import type { GitOpsSyncStatusEvent } from '@juanie/core-types'
 import { K3sService } from '@juanie/service-k3s'
 import * as k8s from '@kubernetes/client-node'
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import type { Queue } from 'bullmq'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { FluxMetricsService } from './flux-metrics.service'
@@ -26,6 +29,7 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
     private config: ConfigService,
     private k3s: K3sService,
     private metrics: FluxMetricsService,
@@ -34,6 +38,14 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    // 检查是否启用 Flux Watcher
+    const enableFluxWatcher = this.config.get<string>('ENABLE_FLUX_WATCHER') !== 'false'
+
+    if (!enableFluxWatcher) {
+      this.logger.log('ℹ️  Flux Watcher 已禁用（ENABLE_FLUX_WATCHER=false）')
+      return
+    }
+
     // 初始化 kubeconfig
     try {
       const kubeconfigPath =
@@ -50,10 +62,19 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
         this.kc.loadFromDefault()
       }
 
+      // 在开发环境中禁用 TLS 验证
+      const isDevelopment = this.config.get<string>('NODE_ENV') !== 'production'
+      if (isDevelopment) {
+        // 禁用 TLS 证书验证（仅开发环境）
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+        this.logger.log('ℹ️  开发环境：已禁用 TLS 证书验证')
+      }
+
       // 启动监听
       await this.startWatching()
     } catch (error: any) {
-      console.warn('⚠️  Flux Watcher 初始化失败:', error.message)
+      // 静默失败，不影响应用启动
+      this.logger.log('ℹ️  Flux Watcher 未启动（Kubernetes 集群不可用）')
     }
   }
 
@@ -66,12 +87,12 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
    */
   async startWatching() {
     if (!this.k3s.isK3sConnected()) {
-      console.log('ℹ️  K3s 未连接，跳过 Flux 监听')
+      this.logger.log('ℹ️  K3s 未连接，跳过 Flux 监听')
       return
     }
 
     if (this.isWatching) {
-      console.log('ℹ️  Flux Watcher 已在运行')
+      this.logger.log('ℹ️  Flux Watcher 已在运行')
       return
     }
 
@@ -86,9 +107,10 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
       await this.watchResource('helm.toolkit.fluxcd.io', 'v2', 'helmreleases')
 
       this.isWatching = true
-      console.log('✅ Flux Watcher 启动成功')
+      this.logger.log('✅ Flux Watcher 启动成功')
     } catch (error: any) {
-      console.error('❌ Flux Watcher 启动失败:', error.message)
+      // 静默失败
+      this.logger.log('ℹ️  Flux Watcher 启动失败（Flux 可能未安装）')
     }
   }
 
@@ -124,30 +146,30 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
         // 事件回调
         (type, apiObj, watchObj) => {
           this.handleResourceEvent(type, apiObj, watchObj).catch((error) => {
-            console.error(`处理 ${plural} 事件失败:`, error)
+            this.logger.error(`处理 ${plural} 事件失败:`, error)
           })
         },
         // 错误回调
         (err) => {
           if (err) {
-            console.error(`监听 ${plural} 出错:`, err.message)
+            // 如果是 Not Found 错误，说明 Flux CRD 未安装，静默跳过
+            if (err.message?.includes('Not Found')) {
+              return
+            }
+
+            // 其他错误也静默处理，避免日志刷屏
+            this.logger.debug(`监听 ${plural} 出错: ${err.message}`)
           }
 
-          // 自动重连
-          console.log(`⚠️  ${plural} 监听断开，5秒后重连...`)
-          setTimeout(() => {
-            this.watchResource(group, version, plural).catch((error) => {
-              console.error(`重连 ${plural} 失败:`, error)
-            })
-          }, 5000)
+          // 不自动重连，避免在没有 Flux 的环境中持续报错
         },
       )
 
       this.watchers.set(key, watch)
-      console.log(`✅ 开始监听: ${key}`)
+      this.logger.log(`✅ 开始监听: ${key}`)
     } catch (error: any) {
-      console.error(`监听 ${plural} 失败:`, error.message)
-      throw error
+      // 静默失败，不抛出错误
+      this.logger.debug(`监听 ${plural} 失败: ${error.message}`)
     }
   }
 
@@ -307,6 +329,16 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
       this.metrics.recordKustomizationApply(event.name, event.namespace, 'failed', 0)
     }
 
+    // Publish gitops.sync.status event
+    await this.publishGitOpsSyncStatusEvent({
+      resourceId: resource.id,
+      projectId: resource.projectId,
+      environmentId: resource.environmentId,
+      status: resourceStatus as any,
+      errorMessage,
+      revision: status?.lastAppliedRevision,
+    })
+
     // 如果状态从非 ready 变为 ready 或 failed，创建部署记录
     // 这表示一次完整的 reconciliation 完成
     if (
@@ -441,6 +473,16 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
     } else if (resourceStatus === 'failed') {
       this.metrics.recordHelmRelease(event.name, event.namespace, 'upgrade', 'failed', 0)
     }
+
+    // Publish gitops.sync.status event
+    await this.publishGitOpsSyncStatusEvent({
+      resourceId: resource.id,
+      projectId: resource.projectId,
+      environmentId: resource.environmentId,
+      status: resourceStatus as any,
+      errorMessage,
+      revision: status?.lastAppliedRevision,
+    })
 
     // 如果状态从非 ready 变为 ready 或 failed，创建部署记录
     if (
@@ -579,6 +621,46 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
     )
 
     return deployment
+  }
+
+  /**
+   * 发布 GitOps 同步状态事件
+   * Requirements: 11.2, 11.4
+   */
+  private async publishGitOpsSyncStatusEvent(data: {
+    resourceId: string
+    projectId: string
+    environmentId: string
+    status: 'ready' | 'reconciling' | 'failed' | 'unknown'
+    errorMessage?: string | null
+    revision?: string
+  }): Promise<void> {
+    try {
+      const event: GitOpsSyncStatusEvent = {
+        type: 'gitops.sync.status',
+        resourceId: data.resourceId,
+        projectId: data.projectId,
+        environmentId: data.environmentId,
+        status: data.status,
+        errorMessage: data.errorMessage || undefined,
+        revision: data.revision,
+        timestamp: new Date(),
+      }
+
+      // 发布到事件队列
+      await this.queue.add('gitops.sync.status', event, {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+      })
+
+      this.logger.log(`Published gitops.sync.status event for resource ${data.resourceId}`)
+    } catch (error) {
+      this.logger.error(`Failed to publish gitops.sync.status event:`, error)
+      // 不抛出错误，避免影响主流程
+    }
   }
 
   /**

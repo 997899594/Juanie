@@ -6,10 +6,11 @@
     </div>
 
     <Tabs default-value="appearance" class="w-full">
-      <TabsList class="grid w-full grid-cols-4">
+      <TabsList class="grid w-full grid-cols-5">
         <TabsTrigger value="appearance">外观</TabsTrigger>
         <TabsTrigger value="notifications">通知</TabsTrigger>
         <TabsTrigger value="display">显示</TabsTrigger>
+        <TabsTrigger value="gitops">GitOps</TabsTrigger>
         <TabsTrigger value="account">账户</TabsTrigger>
       </TabsList>
 
@@ -159,6 +160,89 @@
         </Card>
       </TabsContent>
 
+      <!-- GitOps 设置 -->
+      <TabsContent value="gitops" class="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Flux 管理</CardTitle>
+            <CardDescription>管理 Flux v2 GitOps 工具的安装和配置</CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <div class="flex gap-3">
+                <GitBranch class="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div class="space-y-1">
+                  <p class="text-sm font-medium text-blue-900">什么是 Flux？</p>
+                  <p class="text-sm text-blue-700">
+                    Flux 是一个 GitOps 工具，用于自动化 Kubernetes 集群的配置管理和部署。
+                    它会持续监控 Git 仓库的变更，并自动将变更应用到集群中。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="fluxLoading" class="flex items-center justify-center py-8">
+              <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+
+            <div v-else-if="fluxHealth" class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="space-y-0.5">
+                  <Label>Flux 状态</Label>
+                  <p class="text-sm text-muted-foreground">
+                    {{ fluxHealth.overall === 'healthy' ? '运行正常' : '异常' }}
+                  </p>
+                </div>
+                <Badge :variant="fluxHealth.overall === 'healthy' ? 'default' : 'destructive'">
+                  {{ fluxHealth.overall === 'healthy' ? '健康' : '异常' }}
+                </Badge>
+              </div>
+
+              <Separator />
+
+              <div class="space-y-2">
+                <Label>组件状态</Label>
+                <div class="space-y-2">
+                  <div
+                    v-for="component in fluxHealth.components"
+                    :key="component.name"
+                    class="flex items-center justify-between text-sm"
+                  >
+                    <span>{{ component.name }}</span>
+                    <Badge :variant="component.ready ? 'default' : 'destructive'" class="text-xs">
+                      {{ component.ready ? '就绪' : '异常' }}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div class="flex gap-2">
+                <Button variant="outline" @click="checkFlux" :disabled="fluxLoading">
+                  <RefreshCw :class="['h-4 w-4 mr-2', fluxLoading && 'animate-spin']" />
+                  刷新状态
+                </Button>
+                <Button variant="destructive" @click="handleUninstallFlux" :disabled="fluxLoading">
+                  <Trash2 class="h-4 w-4 mr-2" />
+                  卸载 Flux
+                </Button>
+              </div>
+            </div>
+
+            <div v-else class="space-y-4">
+              <p class="text-sm text-muted-foreground">
+                Flux 尚未安装。安装 Flux 后，您可以使用 GitOps 功能进行自动化部署。
+              </p>
+              <Button @click="handleInstallFlux" :disabled="fluxLoading">
+                <Download class="h-4 w-4 mr-2" />
+                安装 Flux
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
       <!-- 账户设置 -->
       <TabsContent value="account" class="space-y-4">
         <Card>
@@ -212,6 +296,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Badge,
@@ -235,13 +320,63 @@ import {
   TabsList,
   TabsTrigger,
 } from '@juanie/ui'
-import { LogOut, Monitor, Moon, Sun } from 'lucide-vue-next'
+import { LogOut, Monitor, Moon, Sun, GitBranch, Loader2, RefreshCw, Download, Trash2 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useGitOps } from '@/composables/useGitOps'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const preferencesStore = usePreferencesStore()
+const toast = useToast()
+const { fluxHealth, installFlux, checkFluxHealth, uninstallFlux } = useGitOps()
+
+const fluxLoading = ref(false)
+
+onMounted(async () => {
+  await checkFlux()
+})
+
+async function checkFlux() {
+  fluxLoading.value = true
+  try {
+    await checkFluxHealth()
+  } catch (error) {
+    // Flux 未安装或检查失败
+    console.log('Flux not installed or check failed')
+  } finally {
+    fluxLoading.value = false
+  }
+}
+
+async function handleInstallFlux() {
+  fluxLoading.value = true
+  try {
+    await installFlux({ namespace: 'flux-system' })
+    await checkFlux()
+  } catch (error) {
+    console.error('Failed to install Flux:', error)
+  } finally {
+    fluxLoading.value = false
+  }
+}
+
+async function handleUninstallFlux() {
+  if (!confirm('确定要卸载 Flux 吗？这将停止所有 GitOps 自动化部署。')) {
+    return
+  }
+
+  fluxLoading.value = true
+  try {
+    await uninstallFlux()
+    await checkFlux()
+  } catch (error) {
+    console.error('Failed to uninstall Flux:', error)
+  } finally {
+    fluxLoading.value = false
+  }
+}
 
 async function handleLogout() {
   try {

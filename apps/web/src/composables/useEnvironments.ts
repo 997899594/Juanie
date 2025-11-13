@@ -1,89 +1,101 @@
-import { computed, type Ref, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 
-export function useEnvironments(projectId: Ref<string>) {
+/**
+ * 环境管理组合式函数
+ * 提供环境的 CRUD 操作
+ */
+export function useEnvironments() {
   const toast = useToast()
 
   const environments = ref<any[]>([])
   const isLoading = ref(false)
   const error = ref<Error | null>(null)
 
-  const fetchEnvironments = async () => {
-    if (!projectId.value) return
+  /**
+   * 获取项目的环境列表
+   */
+  const fetchEnvironments = async (projectId: string) => {
+    if (!projectId) return
+
     isLoading.value = true
+    error.value = null
     try {
-      const result = await trpc.environments.list.query({ projectId: projectId.value })
+      const result = await trpc.environments.list.query({ projectId })
       environments.value = Array.isArray(result) ? result : []
-      error.value = null
     } catch (e) {
       error.value = e as Error
       toast.error('获取环境列表失败', (e as Error)?.message || '未知错误')
+      throw e
     } finally {
       isLoading.value = false
     }
   }
 
-  watch(
-    projectId,
-    (id) => {
-      if (id) fetchEnvironments()
-    },
-    { immediate: true },
-  )
-
-  const isCreating = ref(false)
+  /**
+   * 创建环境
+   */
   const create = async (input: any) => {
-    isCreating.value = true
+    isLoading.value = true
+    error.value = null
     try {
-      await trpc.environments.create.mutate(input)
+      const result = await trpc.environments.create.mutate(input)
       toast.success('环境创建成功')
-      await fetchEnvironments()
+      return result
     } catch (e) {
+      error.value = e as Error
       toast.error('创建失败', (e as Error)?.message || '未知错误')
+      throw e
     } finally {
-      isCreating.value = false
+      isLoading.value = false
     }
   }
 
-  const isUpdating = ref(false)
+  /**
+   * 更新环境
+   */
   const update = async (input: any) => {
-    isUpdating.value = true
+    isLoading.value = true
+    error.value = null
     try {
-      await trpc.environments.update.mutate(input)
+      const result = await trpc.environments.update.mutate(input)
       toast.success('环境更新成功')
-      await fetchEnvironments()
+      return result
     } catch (e) {
+      error.value = e as Error
       toast.error('更新失败', (e as Error)?.message || '未知错误')
+      throw e
     } finally {
-      isUpdating.value = false
+      isLoading.value = false
     }
   }
 
-  const isDeleting = ref(false)
+  /**
+   * 删除环境
+   */
   const remove = async (payload: { environmentId: string }) => {
-    isDeleting.value = true
+    isLoading.value = true
+    error.value = null
     try {
       await trpc.environments.delete.mutate(payload)
       toast.success('环境删除成功')
-      await fetchEnvironments()
     } catch (e) {
+      error.value = e as Error
       toast.error('删除失败', (e as Error)?.message || '未知错误')
+      throw e
     } finally {
-      isDeleting.value = false
+      isLoading.value = false
     }
   }
 
   return {
-    environments: computed(() => environments.value || []),
-    isLoading,
-    error,
-    refetch: fetchEnvironments,
+    environments: computed(() => environments.value),
+    isLoading: computed(() => isLoading.value),
+    error: computed(() => error.value),
+    fetchEnvironments,
     create,
     update,
     delete: remove,
-    isCreating,
-    isUpdating,
-    isDeleting,
   }
 }

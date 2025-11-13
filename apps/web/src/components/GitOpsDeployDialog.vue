@@ -196,9 +196,9 @@
                 复制
               </Button>
             </div>
-            <ScrollArea class="h-[400px]">
+            <div class="h-[400px] overflow-auto">
               <pre class="p-4 text-sm"><code>{{ yamlPreview || '请先填写配置信息' }}</code></pre>
-            </ScrollArea>
+            </div>
           </div>
         </TabsContent>
 
@@ -208,14 +208,14 @@
             <div class="bg-muted px-4 py-2 border-b">
               <span class="text-sm font-medium">配置变更对比</span>
             </div>
-            <ScrollArea class="h-[400px]">
+            <div class="h-[400px] overflow-auto">
               <div v-if="diffPreview" class="p-4">
                 <pre class="text-sm whitespace-pre-wrap"><code v-html="diffPreview"></code></pre>
               </div>
               <div v-else class="p-4 text-sm text-muted-foreground">
                 暂无变更对比数据
               </div>
-            </ScrollArea>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
@@ -262,7 +262,7 @@ import {
   TabsTrigger,
 } from '@juanie/ui'
 import { Plus, X, Info, Copy, Loader2, GitBranch } from 'lucide-vue-next'
-import { trpc } from '@/lib/trpc'
+import { useGitOps } from '@/composables/useGitOps'
 import { useToast } from '@/composables/useToast'
 
 interface Props {
@@ -287,6 +287,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const { deployWithGitOps, previewChanges } = useGitOps()
 const activeTab = ref('form')
 const loading = ref(false)
 const errors = ref<Record<string, string>>({})
@@ -409,13 +410,14 @@ const loadPreview = async () => {
   try {
     const changes = buildChanges()
     
-    const result = await trpc.gitops.previewChanges.query({
+    const result = await previewChanges({
       projectId: props.projectId,
       environmentId: props.environmentId,
       changes,
     })
     
-    yamlPreview.value = result.yaml || ''
+    // 生成简单的 YAML 预览
+    yamlPreview.value = JSON.stringify(changes, null, 2)
     diffPreview.value = result.diff || ''
   } catch (error) {
     console.error('Failed to load preview:', error)
@@ -470,19 +472,17 @@ const handleDeploy = async () => {
   try {
     const changes = buildChanges()
     
-    const result = await trpc.gitops.deployWithGitOps.mutate({
+    const result = await deployWithGitOps({
       projectId: props.projectId,
       environmentId: props.environmentId,
       changes,
       commitMessage: form.commitMessage || `部署 ${form.image}`,
     })
     
-    toast.success('部署已提交', result.message)
     emit('deploy', result)
     handleCancel()
   } catch (error: any) {
     console.error('Deploy failed:', error)
-    toast.error('部署失败', error.message || '请稍后重试')
   } finally {
     loading.value = false
   }

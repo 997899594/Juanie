@@ -9,6 +9,7 @@ import { GitOpsRouter } from '../routers/gitops.router'
 import { NotificationsRouter } from '../routers/notifications.router'
 import { OrganizationsRouter } from '../routers/organizations.router'
 import { PipelinesRouter } from '../routers/pipelines.router'
+import { ProjectTemplatesRouter } from '../routers/project-templates.router'
 import { ProjectsRouter } from '../routers/projects.router'
 import { RepositoriesRouter } from '../routers/repositories.router'
 import { SecurityPoliciesRouter } from '../routers/security-policies.router'
@@ -31,6 +32,7 @@ export class TrpcRouter {
     private readonly organizationsRouter: OrganizationsRouter,
     private readonly teamsRouter: TeamsRouter,
     private readonly projectsRouter: ProjectsRouter,
+    private readonly projectTemplatesRouter: ProjectTemplatesRouter,
     private readonly repositoriesRouter: RepositoriesRouter,
     private readonly securityPoliciesRouter: SecurityPoliciesRouter,
     private readonly environmentsRouter: EnvironmentsRouter,
@@ -55,6 +57,7 @@ export class TrpcRouter {
       organizations: this.organizationsRouter.router,
       teams: this.teamsRouter.router,
       projects: this.projectsRouter.router,
+      projectTemplates: this.projectTemplatesRouter.router,
       repositories: this.repositoriesRouter.router,
       securityPolicies: this.securityPoliciesRouter.router,
       environments: this.environmentsRouter.router,

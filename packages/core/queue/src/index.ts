@@ -3,6 +3,6 @@
 // 导出 module
 export { QueueModule } from './queue.module'
 export * from './tokens'
-
+export { EventWorker } from './workers/event.worker'
 // 导出 workers
 export { PipelineWorker } from './workers/pipeline.worker'

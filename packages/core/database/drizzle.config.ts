@@ -1,6 +1,6 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'drizzle-kit'
-import path from 'path'
-import { fileURLToPath } from 'url'
 
 // 优先使用 DATABASE_URL；否则按 POSTGRES_* 变量拼接（缺失即报错）
 const envUrl = process.env.DATABASE_URL

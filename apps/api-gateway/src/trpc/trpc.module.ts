@@ -26,6 +26,7 @@ import { GitOpsRouter } from '../routers/gitops.router'
 import { NotificationsRouter } from '../routers/notifications.router'
 import { OrganizationsRouter } from '../routers/organizations.router'
 import { PipelinesRouter } from '../routers/pipelines.router'
+import { ProjectTemplatesRouter } from '../routers/project-templates.router'
 import { ProjectsRouter } from '../routers/projects.router'
 import { RepositoriesRouter } from '../routers/repositories.router'
 import { SecurityPoliciesRouter } from '../routers/security-policies.router'
@@ -68,6 +69,7 @@ import { TrpcService } from './trpc.service'
     OrganizationsRouter,
     TeamsRouter,
     ProjectsRouter,
+    ProjectTemplatesRouter,
     RepositoriesRouter,
     SecurityPoliciesRouter,
     EnvironmentsRouter,

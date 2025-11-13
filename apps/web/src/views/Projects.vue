@@ -76,13 +76,25 @@
       </div>
     </template>
 
-    <!-- 创建/编辑项目对话框 -->
-    <CreateProjectModal
-      v-model:open="isModalOpen"
-      :loading="loading"
-      :project="editingProject"
-      @submit="handleSubmit"
-    />
+    <!-- 创建项目向导 -->
+    <Dialog v-model:open="isModalOpen">
+      <DialogContent class="max-w-6xl max-h-[90vh] overflow-y-auto p-0">
+        <div class="sr-only">
+          <DialogTitle>创建新项目</DialogTitle>
+          <DialogDescription>
+            通过向导快速创建生产可用的项目
+          </DialogDescription>
+        </div>
+        <ProjectWizard v-if="!editingProject" @close="isModalOpen = false" />
+        <CreateProjectModal
+          v-else
+          v-model:open="isModalOpen"
+          :loading="loading"
+          :project="editingProject"
+          @submit="handleSubmit"
+        />
+      </DialogContent>
+    </Dialog>
 
     <!-- 删除确认对话框 -->
     <ConfirmDialog
@@ -105,12 +117,17 @@ import {
   Card,
   CardContent,
   Input,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
 } from '@juanie/ui'
 import { Plus, FolderOpen, Building, Search } from 'lucide-vue-next'
 import { useProjects } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
 import ProjectCard from '@/components/ProjectCard.vue'
 import CreateProjectModal from '@/components/CreateProjectModal.vue'
+import ProjectWizard from '@/components/ProjectWizard.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import EmptyState from '@/components/EmptyState.vue'

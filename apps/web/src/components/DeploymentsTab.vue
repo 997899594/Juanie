@@ -5,6 +5,16 @@
         <h3 class="text-lg font-semibold">部署记录</h3>
         <p class="text-sm text-muted-foreground">查看项目的部署历史</p>
       </div>
+      <div class="flex gap-2">
+        <Button variant="outline" @click="showGitOpsDeployDialog = true">
+          <GitBranch class="mr-2 h-4 w-4" />
+          GitOps 部署
+        </Button>
+        <Button @click="showDeployDialog = true">
+          <Rocket class="mr-2 h-4 w-4" />
+          新建部署
+        </Button>
+      </div>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
@@ -39,27 +49,58 @@
         </div>
       </div>
     </div>
+
+    <!-- GitOps 部署对话框 -->
+    <GitOpsDeployDialog
+      v-if="selectedEnvironmentId"
+      :open="showGitOpsDeployDialog"
+      :project-id="projectId"
+      :environment-id="selectedEnvironmentId"
+      @update:open="showGitOpsDeployDialog = $event"
+      @deploy="handleGitOpsDeploy"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useDeployments } from '@/composables/useDeployments'
+import { useEnvironments } from '@/composables/useEnvironments'
 import DeploymentStatusBadge from '@/components/DeploymentStatusBadge.vue'
-import { Card, CardContent } from '@juanie/ui'
-import { Rocket, Loader2 } from 'lucide-vue-next'
+import GitOpsDeployDialog from '@/components/GitOpsDeployDialog.vue'
+import { Card, CardContent, Button } from '@juanie/ui'
+import { Rocket, Loader2, GitBranch } from 'lucide-vue-next'
 
 const props = defineProps<{
   projectId: string
 }>()
 
 const { deployments, loading, fetchDeployments } = useDeployments()
+const { environments, fetchEnvironments } = useEnvironments()
+
+const showGitOpsDeployDialog = ref(false)
+const showDeployDialog = ref(false)
+const selectedEnvironmentId = ref<string>('')
 
 onMounted(async () => {
-  await fetchDeployments({ projectId: props.projectId })
+  await Promise.all([
+    fetchDeployments({ projectId: props.projectId }),
+    fetchEnvironments(props.projectId)
+  ])
+  
+  // 选择第一个环境
+  if (environments.value.length > 0) {
+    selectedEnvironmentId.value = environments.value[0].id
+  }
 })
 
 const formatDate = (date: string) => {
   return new Date(date).toLocaleString('zh-CN')
+}
+
+const handleGitOpsDeploy = async (result: any) => {
+  showGitOpsDeployDialog.value = false
+  // 刷新部署列表
+  await fetchDeployments({ projectId: props.projectId })
 }
 </script>

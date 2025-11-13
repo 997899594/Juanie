@@ -173,7 +173,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { trpc } from '@/lib/trpc'
+import { useGitOps } from '@/composables/useGitOps'
 import PageContainer from '@/components/PageContainer.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -195,12 +195,10 @@ import {
   Server,
   Trash2,
 } from 'lucide-vue-next'
-import { useToast } from '@/composables/useToast'
 
-const toast = useToast()
+const { loading, fluxHealth, installFlux, checkFluxHealth, uninstallFlux } = useGitOps()
 
 // 状态
-const loading = ref(false)
 const installing = ref(false)
 const uninstalling = ref(false)
 const error = ref<string | null>(null)
@@ -208,16 +206,13 @@ const fluxStatus = ref<any>(null)
 
 // 加载 Flux 状态
 async function loadFluxStatus() {
-  loading.value = true
   error.value = null
   try {
-    const result = await trpc.gitops.checkFluxHealth.query()
+    const result = await checkFluxHealth()
     fluxStatus.value = result
   } catch (err: any) {
     error.value = err.message || '加载 Flux 状态失败'
     console.error('Failed to load Flux status:', err)
-  } finally {
-    loading.value = false
   }
 }
 
@@ -225,13 +220,9 @@ async function loadFluxStatus() {
 async function handleInstallFlux() {
   installing.value = true
   try {
-    await trpc.gitops.installFlux.mutate({
-      namespace: 'flux-system',
-    })
-    toast.success('安装成功', 'Flux v2 已成功安装')
+    await installFlux({ namespace: 'flux-system' })
     await loadFluxStatus()
   } catch (err: any) {
-    toast.error('安装失败', err.message || '安装 Flux 时发生错误')
     console.error('Failed to install Flux:', err)
   } finally {
     installing.value = false
@@ -246,11 +237,9 @@ async function handleUninstallFlux() {
 
   uninstalling.value = true
   try {
-    await trpc.gitops.uninstallFlux.mutate()
-    toast.success('卸载成功', 'Flux v2 已成功卸载')
+    await uninstallFlux()
     await loadFluxStatus()
   } catch (err: any) {
-    toast.error('卸载失败', err.message || '卸载 Flux 时发生错误')
     console.error('Failed to uninstall Flux:', err)
   } finally {
     uninstalling.value = false

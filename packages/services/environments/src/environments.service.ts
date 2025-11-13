@@ -1,7 +1,13 @@
 import * as schema from '@juanie/core-database/schemas'
+import { DEPLOYMENT_QUEUE } from '@juanie/core-queue'
 import { DATABASE } from '@juanie/core-tokens'
-import type { CreateEnvironmentInput, UpdateEnvironmentInput } from '@juanie/core-types'
+import type {
+  CreateEnvironmentInput,
+  EnvironmentUpdatedEvent,
+  UpdateEnvironmentInput,
+} from '@juanie/core-types'
 import { Inject, Injectable, Logger } from '@nestjs/common'
+import type { Queue } from 'bullmq'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import simpleGit from 'simple-git'
@@ -26,7 +32,10 @@ export interface ConfigureGitOpsInput {
 export class EnvironmentsService {
   private readonly logger = new Logger(EnvironmentsService.name)
 
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
+  ) {}
 
   async create(userId: string, data: CreateEnvironmentInput) {
     const hasPermission = await this.checkProjectPermission(userId, data.projectId, 'admin')
@@ -121,6 +130,12 @@ export class EnvironmentsService {
       .set(updateData)
       .where(eq(schema.environments.id, environmentId))
       .returning()
+
+    // Publish environment.updated event
+    if (updated) {
+      const updatedFields = Object.keys(updateData).filter((key) => key !== 'updatedAt')
+      await this.publishEnvironmentUpdatedEvent(updated, updatedFields, userId)
+    }
 
     return updated
   }
@@ -297,6 +312,9 @@ export class EnvironmentsService {
 
     this.logger.log(`GitOps configured for environment ${environmentId}`)
 
+    // Publish environment.updated event
+    await this.publishEnvironmentUpdatedEvent(updated, ['gitops'], userId)
+
     return updated
   }
 
@@ -424,6 +442,44 @@ export class EnvironmentsService {
 
     this.logger.log(`GitOps disabled for environment ${environmentId}`)
 
+    // Publish environment.updated event
+    await this.publishEnvironmentUpdatedEvent(updated, ['gitops'], userId)
+
     return updated
+  }
+
+  /**
+   * 发布环境更新事件
+   * Requirements: 11.2, 11.4
+   */
+  private async publishEnvironmentUpdatedEvent(
+    environment: typeof schema.environments.$inferSelect,
+    updatedFields: string[],
+    userId: string,
+  ): Promise<void> {
+    try {
+      const event: EnvironmentUpdatedEvent = {
+        type: 'environment.updated',
+        environmentId: environment.id,
+        projectId: environment.projectId,
+        updatedFields,
+        updatedBy: userId,
+        timestamp: new Date(),
+      }
+
+      // 发布到事件队列
+      await this.queue.add('environment.updated', event, {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+      })
+
+      this.logger.log(`Published environment.updated event for environment ${environment.id}`)
+    } catch (error) {
+      this.logger.error(`Failed to publish environment.updated event:`, error)
+      // 不抛出错误，避免影响主流程
+    }
   }
 }

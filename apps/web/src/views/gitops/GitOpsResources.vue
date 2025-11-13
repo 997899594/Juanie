@@ -185,7 +185,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { trpc } from '@/lib/trpc'
+import { useGitOps } from '@/composables/useGitOps'
 import { useProjects } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
 import PageContainer from '@/components/PageContainer.vue'
@@ -214,16 +214,13 @@ import {
   GitCommit,
   RefreshCw,
 } from 'lucide-vue-next'
-import { useToast } from '@/composables/useToast'
 
-const toast = useToast()
 const appStore = useAppStore()
 const { projects, fetchProjects } = useProjects()
+const { loading, resources, listGitOpsResources, triggerSync } = useGitOps()
 
 // 状态
-const loading = ref(false)
 const error = ref<string | null>(null)
-const resources = ref<any[]>([])
 const selectedProject = ref<string>('')
 const syncingResources = ref(new Set<string>())
 
@@ -247,18 +244,12 @@ async function loadResources() {
     return
   }
 
-  loading.value = true
   error.value = null
   try {
-    const result = await trpc.gitops.listGitOpsResources.query({
-      projectId: selectedProject.value,
-    })
-    resources.value = result
+    await listGitOpsResources(selectedProject.value)
   } catch (err: any) {
     error.value = err.message || '加载 GitOps 资源失败'
     console.error('Failed to load GitOps resources:', err)
-  } finally {
-    loading.value = false
   }
 }
 
@@ -266,18 +257,16 @@ async function loadResources() {
 async function handleSyncResource(resource: any) {
   syncingResources.value.add(resource.id)
   try {
-    await trpc.gitops.triggerSync.mutate({
+    await triggerSync({
       kind: resource.type === 'kustomization' ? 'Kustomization' : 'HelmRelease',
       name: resource.name,
       namespace: resource.namespace,
     })
-    toast.success('同步已触发', `${resource.name} 的同步已开始`)
     // 等待一会儿后刷新状态
     setTimeout(() => {
       loadResources()
     }, 2000)
   } catch (err: any) {
-    toast.error('同步失败', err.message || '触发同步时发生错误')
     console.error('Failed to sync resource:', err)
   } finally {
     syncingResources.value.delete(resource.id)
@@ -287,7 +276,7 @@ async function handleSyncResource(resource: any) {
 // 查看资源详情
 function handleViewDetails(resource: any) {
   // TODO: 实现资源详情页面
-  toast.info('功能开发中', '资源详情页面即将上线')
+  console.log('View resource details:', resource)
 }
 
 // 获取状态颜色
@@ -352,10 +341,19 @@ onMounted(async () => {
   // 获取当前组织的项目列表
   if (appStore.currentOrganizationId) {
     await fetchProjects(appStore.currentOrganizationId)
-    // 选择第一个项目
-    const firstProject = projects.value[0]
-    if (firstProject) {
-      selectedProject.value = firstProject.id
+    
+    // 从 URL 参数获取项目 ID
+    const urlParams = new URLSearchParams(window.location.search)
+    const projectIdFromUrl = urlParams.get('project')
+    
+    if (projectIdFromUrl && projects.value.some(p => p.id === projectIdFromUrl)) {
+      selectedProject.value = projectIdFromUrl
+    } else {
+      // 选择第一个项目
+      const firstProject = projects.value[0]
+      if (firstProject) {
+        selectedProject.value = firstProject.id
+      }
     }
   }
 })

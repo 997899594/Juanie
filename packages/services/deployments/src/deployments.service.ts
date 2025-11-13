@@ -1,14 +1,16 @@
 import * as schema from '@juanie/core-database/schemas'
+import { DEPLOYMENT_QUEUE } from '@juanie/core-queue'
 import { DATABASE } from '@juanie/core-tokens'
 import type {
   ApproveDeploymentInput,
   CreateDeploymentInput,
+  DeploymentCompletedEvent,
   RejectDeploymentInput,
 } from '@juanie/core-types'
 import type { DeploymentChanges } from '@juanie/service-git-ops'
 import { GitOpsService } from '@juanie/service-git-ops'
-import { K3sService } from '@juanie/service-k3s'
 import { Inject, Injectable, Logger } from '@nestjs/common'
+import type { Queue } from 'bullmq'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
@@ -27,6 +29,7 @@ export class DeploymentsService {
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
     private gitOpsService: GitOpsService,
   ) {}
 
@@ -402,6 +405,11 @@ export class DeploymentsService {
     //   },
     // })
 
+    // 6. Publish deployment.completed event if deployment is finished
+    if (data.status === 'success' || data.status === 'failed') {
+      await this.publishDeploymentCompletedEvent(deployment, data.status)
+    }
+
     return deployment
   }
 
@@ -561,6 +569,17 @@ export class DeploymentsService {
     // 模拟部署延迟
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
+    // 获取部署信息
+    const [deployment] = await this.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.id, deploymentId))
+      .limit(1)
+
+    if (!deployment) {
+      return
+    }
+
     // 更新为成功状态
     await this.db
       .update(schema.deployments)
@@ -569,6 +588,44 @@ export class DeploymentsService {
         finishedAt: new Date(),
       })
       .where(eq(schema.deployments.id, deploymentId))
+
+    // 发布 deployment.completed 事件
+    await this.publishDeploymentCompletedEvent(deployment, 'success')
+  }
+
+  /**
+   * 发布部署完成事件
+   * Requirements: 11.2, 11.4
+   */
+  private async publishDeploymentCompletedEvent(
+    deployment: typeof schema.deployments.$inferSelect,
+    status: 'success' | 'failed',
+  ): Promise<void> {
+    try {
+      const event: DeploymentCompletedEvent = {
+        type: 'deployment.completed',
+        deploymentId: deployment.id,
+        projectId: deployment.projectId,
+        environmentId: deployment.environmentId,
+        status,
+        timestamp: new Date(),
+        errorMessage: status === 'failed' ? 'Deployment failed' : undefined,
+      }
+
+      // 发布到事件队列
+      await this.queue.add('deployment.completed', event, {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+      })
+
+      this.logger.log(`Published deployment.completed event for deployment ${deployment.id}`)
+    } catch (error) {
+      this.logger.error(`Failed to publish deployment.completed event:`, error)
+      // 不抛出错误，避免影响主流程
+    }
   }
 
   // 辅助方法：检查项目访问权限

@@ -1,14 +1,12 @@
 import {
-  addProjectMemberSchema,
-  assignTeamToProjectSchema,
+  archiveProjectSchema,
   createProjectSchema,
+  getProjectHealthSchema,
+  getProjectStatusSchema,
   organizationIdQuerySchema,
   projectIdSchema,
-  removeProjectMemberSchema,
-  removeTeamFromProjectSchema,
-  updateProjectMemberRoleSchema,
+  restoreProjectSchema,
   updateProjectSchema,
-  uploadLogoSchema,
 } from '@juanie/core-types'
 import { ProjectsService } from '@juanie/service-projects'
 import { StorageService } from '@juanie/service-storage'
@@ -318,6 +316,62 @@ export class ProjectsRouter {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message: error instanceof Error ? error.message : '删除 Logo 失败',
+            })
+          }
+        }),
+
+      // 获取项目完整状态
+      getStatus: this.trpc.protectedProcedure
+        .input(getProjectStatusSchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.getStatus(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取项目状态失败',
+            })
+          }
+        }),
+
+      // 获取项目健康度
+      getHealth: this.trpc.protectedProcedure
+        .input(getProjectHealthSchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.getHealth(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取项目健康度失败',
+            })
+          }
+        }),
+
+      // 归档项目
+      archive: this.trpc.protectedProcedure
+        .input(archiveProjectSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.archive(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '归档项目失败',
+            })
+          }
+        }),
+
+      // 恢复项目
+      restore: this.trpc.protectedProcedure
+        .input(restoreProjectSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.restore(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '恢复项目失败',
             })
           }
         }),

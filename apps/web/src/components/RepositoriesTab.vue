@@ -76,16 +76,16 @@
           <Button
             variant="outline"
             size="sm"
-            :disabled="isSyncing"
+            :disabled="isLoading"
             @click="handleSync(repo.id)"
           >
-            <RefreshCw :class="['h-3 w-3 mr-1', isSyncing && 'animate-spin']" />
+            <RefreshCw :class="['h-3 w-3 mr-1', isLoading && 'animate-spin']" />
             同步
           </Button>
           <Button
             variant="destructive"
             size="sm"
-            :disabled="isDisconnecting"
+            :disabled="isLoading"
             @click="handleDisconnect(repo.id)"
           >
             <Unplug class="h-3 w-3 mr-1" />
@@ -139,20 +139,6 @@
           </div>
 
           <div class="space-y-2">
-            <Label for="accessToken">访问令牌</Label>
-            <Input
-              id="accessToken"
-              v-model="connectForm.accessToken"
-              type="password"
-              placeholder="ghp_xxxxxxxxxxxx"
-              required
-            />
-            <p class="text-xs text-muted-foreground">
-              需要具有读取仓库权限的个人访问令牌
-            </p>
-          </div>
-
-          <div class="space-y-2">
             <Label for="defaultBranch">默认分支（可选）</Label>
             <Input
               id="defaultBranch"
@@ -169,8 +155,8 @@
             >
               取消
             </Button>
-            <Button type="submit" :disabled="isConnecting">
-              <Loader2 v-if="isConnecting" class="mr-2 h-4 w-4 animate-spin" />
+            <Button type="submit" :disabled="isLoading">
+              <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
               连接
             </Button>
           </DialogFooter>
@@ -181,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRepositories } from '@/composables/useRepositories'
 import {
   Button,
@@ -220,50 +206,81 @@ const props = defineProps<{
   projectId: string
 }>()
 
-const projectIdRef = computed(() => props.projectId)
-
 const {
   repositories,
   isLoading,
+  fetchRepositories,
   connect,
   sync,
   disconnect,
-  isConnecting,
-  isSyncing,
-  isDisconnecting,
-} = useRepositories(projectIdRef)
+} = useRepositories()
+
+// 组件挂载时获取仓库列表
+onMounted(() => {
+  if (props.projectId) {
+    fetchRepositories(props.projectId)
+  }
+})
 
 const showConnectDialog = ref(false)
 const connectForm = ref({
-  projectId: props.projectId,
   provider: 'github' as 'github' | 'gitlab',
   url: '',
-  accessToken: '',
   defaultBranch: '',
 })
 
-const handleConnect = () => {
-  connect({
-    ...connectForm.value,
-    projectId: props.projectId,
-  })
-  showConnectDialog.value = false
-  connectForm.value = {
-    projectId: props.projectId,
-    provider: 'github',
-    url: '',
-    accessToken: '',
-    defaultBranch: '',
+// 解析仓库 URL
+const parseRepoUrl = (url: string) => {
+  const match = url.match(/(?:https?:\/\/|git@)?(?:github|gitlab)\.com[:/](.+?)(?:\.git)?$/)
+  return match ? match[1] : ''
+}
+
+const handleConnect = async () => {
+  try {
+    const fullName = parseRepoUrl(connectForm.value.url)
+    if (!fullName) {
+      throw new Error('无效的仓库 URL')
+    }
+    
+    await connect({
+      projectId: props.projectId,
+      provider: connectForm.value.provider,
+      fullName,
+      cloneUrl: connectForm.value.url,
+      defaultBranch: connectForm.value.defaultBranch || undefined,
+    })
+    showConnectDialog.value = false
+    connectForm.value = {
+      provider: 'github',
+      url: '',
+      defaultBranch: '',
+    }
+    // 重新获取仓库列表
+    await fetchRepositories(props.projectId)
+  } catch (error) {
+    console.error('Failed to connect repository:', error)
   }
 }
 
-const handleSync = (repositoryId: string) => {
-  sync({ repositoryId })
+const handleSync = async (repositoryId: string) => {
+  try {
+    await sync({ repositoryId })
+    // 重新获取仓库列表
+    await fetchRepositories(props.projectId)
+  } catch (error) {
+    console.error('Failed to sync repository:', error)
+  }
 }
 
-const handleDisconnect = (repositoryId: string) => {
+const handleDisconnect = async (repositoryId: string) => {
   if (confirm('确定要断开此仓库连接吗？')) {
-    disconnect({ repositoryId })
+    try {
+      await disconnect({ repositoryId })
+      // 重新获取仓库列表
+      await fetchRepositories(props.projectId)
+    } catch (error) {
+      console.error('Failed to disconnect repository:', error)
+    }
   }
 }
 

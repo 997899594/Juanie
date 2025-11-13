@@ -4,6 +4,7 @@ import {
   userIdSchema,
   userIdsSchema,
 } from '@juanie/core-types'
+import { OAuthAccountsService } from '@juanie/service-auth'
 import { UsersService } from '@juanie/service-users'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -15,6 +16,7 @@ export class UsersRouter {
   constructor(
     private readonly trpc: TrpcService,
     private readonly usersService: UsersService,
+    private readonly oauthAccountsService: OAuthAccountsService,
   ) {}
 
   get router() {
@@ -82,6 +84,40 @@ export class UsersRouter {
       // 列出用户
       listUsers: this.trpc.protectedProcedure.input(userIdsSchema).query(async ({ input }) => {
         return await this.usersService.listUsers(input.userIds)
+      }),
+
+      // OAuth 账户管理
+      oauthAccounts: this.trpc.router({
+        // 获取当前用户的 OAuth 账户列表
+        list: this.trpc.protectedProcedure.query(async ({ ctx }) => {
+          return await this.oauthAccountsService.listUserAccounts(ctx.user.id)
+        }),
+
+        // 检查是否已连接指定提供商
+        hasProvider: this.trpc.protectedProcedure
+          .input(
+            z.object({
+              provider: z.enum(['github', 'gitlab']),
+            }),
+          )
+          .query(async ({ ctx, input }) => {
+            const hasProvider = await this.oauthAccountsService.hasProvider(
+              ctx.user.id,
+              input.provider,
+            )
+            return { hasProvider }
+          }),
+
+        // 断开 OAuth 连接
+        disconnect: this.trpc.protectedProcedure
+          .input(
+            z.object({
+              provider: z.enum(['github', 'gitlab']),
+            }),
+          )
+          .mutation(async ({ ctx, input }) => {
+            return await this.oauthAccountsService.disconnect(ctx.user.id, input.provider)
+          }),
       }),
     })
   }

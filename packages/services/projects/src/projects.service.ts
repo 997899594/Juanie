@@ -1,20 +1,33 @@
 import * as schema from '@juanie/core-database/schemas'
 import { Trace } from '@juanie/core-observability'
 import { DATABASE } from '@juanie/core-tokens'
-import type { CreateProjectInput, UpdateProjectInput } from '@juanie/core-types'
+import type {
+  CreateProjectInput,
+  CreateProjectWithTemplateInputType,
+  ProjectStatus,
+  UpdateProjectInput,
+} from '@juanie/core-types'
+import { AuditLogsService } from '@juanie/service-audit-logs'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { HealthMonitorService } from './health-monitor.service'
+import { ProjectOrchestrator } from './project-orchestrator.service'
 
 @Injectable()
 export class ProjectsService {
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private orchestrator: ProjectOrchestrator,
+    private healthMonitor: HealthMonitorService,
+    private auditLogs: AuditLogsService,
+  ) {}
 
   // 创建项目
   @Trace('projects.create')
   async create(
     userId: string,
-    data: CreateProjectInput,
+    data: CreateProjectInput | CreateProjectWithTemplateInputType,
   ): Promise<typeof schema.projects.$inferSelect> {
     // 检查用户是否是组织成员
     const member = await this.getOrgMember(data.organizationId, userId)
@@ -27,21 +40,64 @@ export class ProjectsService {
       throw new Error('没有权限创建项目')
     }
 
+    // 类型守卫：检查是否是扩展输入类型
+    const extendedData = data as CreateProjectWithTemplateInputType
+
+    // 如果提供了模板或仓库配置，使用 orchestrator 进行完整初始化
+    if (extendedData.templateId || extendedData.repository) {
+      // 确保 visibility 有默认值
+      const dataWithDefaults = {
+        ...extendedData,
+        visibility: extendedData.visibility ?? ('private' as const),
+      }
+      const result = await this.orchestrator.createAndInitialize(userId, dataWithDefaults)
+
+      // 记录审计日志
+      await this.auditLogs.log({
+        userId,
+        organizationId: data.organizationId,
+        action: 'project.created',
+        resourceType: 'project',
+        resourceId: result.id,
+        metadata: {
+          templateId: extendedData.templateId,
+          hasRepository: !!extendedData.repository,
+        },
+      })
+
+      return result
+    }
+
+    // 否则使用简单创建（向后兼容）
+    const baseData = data as CreateProjectInput
     const [project] = await this.db
       .insert(schema.projects)
       .values({
-        organizationId: data.organizationId,
-        name: data.name,
-        slug: data.slug,
-        description: data.description,
-        logoUrl: data.logoUrl,
-        visibility: (data as any).visibility ?? 'private',
+        organizationId: baseData.organizationId,
+        name: baseData.name,
+        slug: baseData.slug,
+        description: baseData.description,
+        logoUrl: baseData.logoUrl,
+        visibility: baseData.visibility ?? 'private',
       })
       .returning()
 
     if (!project) {
       throw new Error('创建项目失败')
     }
+
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: data.organizationId,
+      action: 'project.created',
+      resourceType: 'project',
+      resourceId: project.id,
+      metadata: {
+        name: project.name,
+        slug: project.slug,
+      },
+    })
 
     return project
   }
@@ -144,6 +200,19 @@ export class ProjectsService {
     return project
   }
 
+  // 获取项目完整状态（包括所有关联资源）
+  @Trace('projects.getStatus')
+  async getStatus(userId: string, projectId: string): Promise<ProjectStatus> {
+    // 先检查基本权限
+    const project = await this.get(userId, projectId)
+    if (!project) {
+      throw new Error('项目不存在')
+    }
+
+    // 使用 orchestrator 获取完整状态
+    return await this.orchestrator.getProjectStatus(userId, projectId)
+  }
+
   // 更新项目
   @Trace('projects.update')
   async update(
@@ -192,6 +261,25 @@ export class ProjectsService {
       throw new Error('更新项目失败')
     }
 
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.updated',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        changes: data,
+        previousValues: {
+          name: project.name,
+          slug: project.slug,
+          description: project.description,
+          visibility: project.visibility,
+          status: project.status,
+        },
+      },
+    })
+
     return updated
   }
 
@@ -217,7 +305,155 @@ export class ProjectsService {
       })
       .where(eq(schema.projects.id, projectId))
 
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.deleted',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        projectName: project.name,
+        projectSlug: project.slug,
+      },
+    })
+
     return { success: true }
+  }
+
+  // 归档项目
+  @Trace('projects.archive')
+  async archive(userId: string, projectId: string) {
+    // 获取项目信息
+    const project = await this.get(userId, projectId)
+    if (!project) {
+      throw new Error('项目不存在')
+    }
+
+    // 检查权限
+    const member = await this.getOrgMember(project.organizationId, userId)
+    if (!member || !['owner', 'admin'].includes(member.role)) {
+      throw new Error('没有权限归档项目')
+    }
+
+    // 使用 orchestrator 归档项目
+    await this.orchestrator.archiveProject(userId, projectId)
+
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.archived',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        projectName: project.name,
+      },
+    })
+
+    return { success: true }
+  }
+
+  // 恢复项目
+  @Trace('projects.restore')
+  async restore(userId: string, projectId: string) {
+    // 获取项目信息（需要特殊查询，因为归档的项目 status 是 archived）
+    const [project] = await this.db
+      .select()
+      .from(schema.projects)
+      .where(and(eq(schema.projects.id, projectId), isNull(schema.projects.deletedAt)))
+      .limit(1)
+
+    if (!project) {
+      throw new Error('项目不存在')
+    }
+
+    // 检查权限
+    const member = await this.getOrgMember(project.organizationId, userId)
+    if (!member || !['owner', 'admin'].includes(member.role)) {
+      throw new Error('没有权限恢复项目')
+    }
+
+    // 使用 orchestrator 恢复项目
+    await this.orchestrator.restoreProject(userId, projectId)
+
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.restored',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        projectName: project.name,
+      },
+    })
+
+    return { success: true }
+  }
+
+  // 获取项目健康度
+  @Trace('projects.getHealth')
+  async getHealth(userId: string, projectId: string) {
+    // 先检查权限
+    const project = await this.get(userId, projectId)
+    if (!project) {
+      throw new Error('项目不存在')
+    }
+
+    // 使用 HealthMonitor 计算健康度
+    return await this.healthMonitor.calculateHealth(projectId)
+  }
+
+  // 更新项目健康度（定时任务调用）
+  @Trace('projects.updateHealth')
+  async updateHealth(projectId: string) {
+    // 计算健康度
+    const health = await this.healthMonitor.calculateHealth(projectId)
+
+    // 更新数据库
+    await this.db
+      .update(schema.projects)
+      .set({
+        healthScore: health.score,
+        healthStatus: health.status,
+        lastHealthCheck: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.projects.id, projectId))
+
+    return health
+  }
+
+  // 批量更新所有活跃项目的健康度（定时任务调用）
+  @Trace('projects.updateAllHealth')
+  async updateAllHealth() {
+    // 获取所有活跃项目
+    const activeProjects = await this.db
+      .select({ id: schema.projects.id })
+      .from(schema.projects)
+      .where(and(eq(schema.projects.status, 'active'), isNull(schema.projects.deletedAt)))
+
+    const results = []
+    for (const project of activeProjects) {
+      try {
+        const health = await this.updateHealth(project.id)
+        results.push({ projectId: project.id, success: true, health })
+      } catch (error) {
+        results.push({
+          projectId: project.id,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    }
+
+    return {
+      total: activeProjects.length,
+      successful: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length,
+      results,
+    }
   }
 
   // 添加项目成员
@@ -262,6 +498,19 @@ export class ProjectsService {
         role: data.role,
       })
       .returning()
+
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.member.added',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        memberId: data.memberId,
+        role: data.role,
+      },
+    })
 
     return member
   }
@@ -317,6 +566,13 @@ export class ProjectsService {
       throw new Error('没有权限更新成员角色')
     }
 
+    // 获取当前成员信息用于审计
+    const [currentMember] = await this.db
+      .select()
+      .from(schema.projectMembers)
+      .where(eq(schema.projectMembers.id, data.memberId))
+      .limit(1)
+
     const [updated] = await this.db
       .update(schema.projectMembers)
       .set({
@@ -324,6 +580,20 @@ export class ProjectsService {
       })
       .where(eq(schema.projectMembers.id, data.memberId))
       .returning()
+
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.member.role_updated',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        memberId: data.memberId,
+        previousRole: currentMember?.role,
+        newRole: data.role,
+      },
+    })
 
     return updated
   }
@@ -349,7 +619,28 @@ export class ProjectsService {
       throw new Error('没有权限移除成员')
     }
 
+    // 获取成员信息用于审计
+    const [member] = await this.db
+      .select()
+      .from(schema.projectMembers)
+      .where(eq(schema.projectMembers.id, data.memberId))
+      .limit(1)
+
     await this.db.delete(schema.projectMembers).where(eq(schema.projectMembers.id, data.memberId))
+
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.member.removed',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        memberId: data.memberId,
+        memberUserId: member?.userId,
+        memberRole: member?.role,
+      },
+    })
 
     return { success: true }
   }
@@ -410,6 +701,19 @@ export class ProjectsService {
       })
       .returning()
 
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.team.assigned',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        teamId: data.teamId,
+        teamName: team.name,
+      },
+    })
+
     return assignment
   }
 
@@ -462,6 +766,13 @@ export class ProjectsService {
       throw new Error('没有权限移除团队')
     }
 
+    // 获取团队信息用于审计
+    const [team] = await this.db
+      .select()
+      .from(schema.teams)
+      .where(eq(schema.teams.id, data.teamId))
+      .limit(1)
+
     await this.db
       .delete(schema.teamProjects)
       .where(
@@ -470,6 +781,19 @@ export class ProjectsService {
           eq(schema.teamProjects.projectId, projectId),
         ),
       )
+
+    // 记录审计日志
+    await this.auditLogs.log({
+      userId,
+      organizationId: project.organizationId,
+      action: 'project.team.removed',
+      resourceType: 'project',
+      resourceId: projectId,
+      metadata: {
+        teamId: data.teamId,
+        teamName: team?.name,
+      },
+    })
 
     return { success: true }
   }
