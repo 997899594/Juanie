@@ -6,10 +6,11 @@
     </div>
 
     <Tabs default-value="appearance" class="w-full">
-      <TabsList class="grid w-full grid-cols-5">
+      <TabsList class="grid w-full grid-cols-6">
         <TabsTrigger value="appearance">外观</TabsTrigger>
         <TabsTrigger value="notifications">通知</TabsTrigger>
         <TabsTrigger value="display">显示</TabsTrigger>
+        <TabsTrigger value="oauth">OAuth</TabsTrigger>
         <TabsTrigger value="gitops">GitOps</TabsTrigger>
         <TabsTrigger value="account">账户</TabsTrigger>
       </TabsList>
@@ -158,6 +159,11 @@
             </div>
           </CardContent>
         </Card>
+      </TabsContent>
+
+      <!-- OAuth 账户管理 -->
+      <TabsContent value="oauth" class="space-y-4">
+        <OAuthAccountsManager />
       </TabsContent>
 
       <!-- GitOps 设置 -->
@@ -321,6 +327,7 @@ import {
   TabsTrigger,
 } from '@juanie/ui'
 import { LogOut, Monitor, Moon, Sun, GitBranch, Loader2, RefreshCw, Download, Trash2 } from 'lucide-vue-next'
+import OAuthAccountsManager from '@/components/OAuthAccountsManager.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useGitOps } from '@/composables/useGitOps'

@@ -1029,6 +1029,7 @@ export const newRepositoryConfigSchema = z.object({
   name: z.string().min(1).max(100),
   visibility: z.enum(['public', 'private']),
   accessToken: z.string().min(1),
+  defaultBranch: z.string().optional(),
   includeAppCode: z.boolean().optional(),
 })
 

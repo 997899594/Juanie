@@ -71,16 +71,16 @@
               <span class="text-muted-foreground">最后同步</span>
               <span>{{ formatDate(repo.lastSyncAt) }}</span>
             </div>
-            <div v-if="repo.gitopsConfig?.enabled" class="flex items-center justify-between">
+            <div class="flex items-center justify-between">
               <span class="text-muted-foreground">GitOps</span>
-              <div class="flex items-center gap-2">
-                <Switch 
-                  :checked="repo.gitopsConfig.enabled" 
-                  @update:checked="(val: boolean) => toggleGitOps(repo.id, val)"
-                  :disabled="isTogglingGitOps"
-                />
-                <span class="text-xs">{{ repo.gitopsConfig.enabled ? '已启用' : '已禁用' }}</span>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                @click="openGitOpsConfig(repo)"
+              >
+                <Settings class="h-4 w-4 mr-1" />
+                {{ repo.gitopsConfig?.enabled ? '已启用' : '配置' }}
+              </Button>
             </div>
             <div v-if="repo.gitopsConfig?.enabled && repo.fluxLastSyncTime" class="flex items-center justify-between">
               <span class="text-muted-foreground">Flux 同步</span>
@@ -110,6 +110,13 @@
         </CardFooter>
       </Card>
     </div>
+
+    <!-- GitOps Config Dialog -->
+    <RepositoryGitOpsConfig
+      v-model:open="showGitOpsConfig"
+      :repository="selectedRepository"
+      @saved="handleGitOpsConfigSaved"
+    />
 
     <!-- Connect Repository Dialog -->
     <Dialog v-model:open="showConnectDialog">
@@ -218,8 +225,9 @@ import {
   RefreshCw,
   Unplug,
   Loader2,
+  Settings,
 } from 'lucide-vue-next'
-import { Switch } from '@juanie/ui'
+import RepositoryGitOpsConfig from '@/components/RepositoryGitOpsConfig.vue'
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
@@ -241,6 +249,9 @@ onMounted(() => {
 })
 
 const showConnectDialog = ref(false)
+const showGitOpsConfig = ref(false)
+const selectedRepository = ref<any>(null)
+
 const connectForm = ref({
   provider: 'github' as 'github' | 'gitlab',
   url: '',
@@ -335,17 +346,16 @@ const getFluxStatusVariant = (status: string): 'default' | 'secondary' | 'destru
   return variantMap[status] || 'secondary'
 }
 
-const isTogglingGitOps = ref(false)
-const toggleGitOps = async (repositoryId: string, enabled: boolean) => {
-  isTogglingGitOps.value = true
-  try {
-    // TODO: Implement GitOps toggle API call
-    // await trpc.repositories.toggleGitOps.mutate({ repositoryId, enabled })
-    console.log('Toggle GitOps:', repositoryId, enabled)
-  } catch (error) {
-    console.error('Failed to toggle GitOps:', error)
-  } finally {
-    isTogglingGitOps.value = false
+// 打开GitOps配置对话框
+const openGitOpsConfig = (repo: any) => {
+  selectedRepository.value = repo
+  showGitOpsConfig.value = true
+}
+
+// GitOps配置保存后刷新列表
+const handleGitOpsConfigSaved = async () => {
+  if (projectId.value) {
+    await fetchRepositories(projectId.value)
   }
 }
 </script>

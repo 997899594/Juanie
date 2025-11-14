@@ -89,6 +89,71 @@ export function useEnvironments() {
     }
   }
 
+  /**
+   * 配置环境的 GitOps
+   */
+  const configureGitOps = async (payload: {
+    environmentId: string
+    config: {
+      repositoryId: string
+      branch: string
+      path: string
+      autoSync?: boolean
+      syncInterval?: string
+    }
+  }) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const result = await trpc.environments.configureGitOps.mutate(payload)
+      toast.success('GitOps 配置成功')
+      return result
+    } catch (e) {
+      error.value = e as Error
+      toast.error('配置 GitOps 失败', (e as Error)?.message || '未知错误')
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * 获取环境的 GitOps 配置
+   */
+  const getGitOpsConfig = async (payload: { environmentId: string }) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const result = await trpc.environments.getGitOpsConfig.query(payload)
+      return result
+    } catch (e) {
+      error.value = e as Error
+      toast.error('获取 GitOps 配置失败', (e as Error)?.message || '未知错误')
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * 禁用环境的 GitOps
+   */
+  const disableGitOps = async (payload: { environmentId: string }) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const result = await trpc.environments.disableGitOps.mutate(payload)
+      toast.success('GitOps 已禁用')
+      return result
+    } catch (e) {
+      error.value = e as Error
+      toast.error('禁用 GitOps 失败', (e as Error)?.message || '未知错误')
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     environments: computed(() => environments.value),
     isLoading: computed(() => isLoading.value),
@@ -97,5 +162,8 @@ export function useEnvironments() {
     create,
     update,
     delete: remove,
+    configureGitOps,
+    getGitOpsConfig,
+    disableGitOps,
   }
 }

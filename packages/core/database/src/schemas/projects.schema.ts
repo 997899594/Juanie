@@ -9,6 +9,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import { organizations } from './organizations.schema'
+import { projectTemplates } from './project-templates.schema'
 
 export const projects = pgTable(
   'projects',
@@ -35,7 +36,7 @@ export const projects = pgTable(
     }>(),
 
     // 模板信息
-    templateId: text('template_id'), // 使用的模板 ID
+    templateId: uuid('template_id').references(() => projectTemplates.id, { onDelete: 'set null' }), // 使用的模板 ID
     templateConfig: jsonb('template_config'), // 模板配置
 
     // 健康度信息

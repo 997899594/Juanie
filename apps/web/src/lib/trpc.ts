@@ -1,4 +1,4 @@
-import { createTRPCProxyClient, httpBatchLink, TRPCClientError } from '@trpc/client'
+import { createTRPCProxyClient, httpBatchLink, loggerLink, TRPCClientError } from '@trpc/client'
 import type { AppRouter } from '@/../../api-gateway/src/trpc/trpc.router'
 
 // 获取 API 基础 URL
@@ -13,6 +13,11 @@ const getBaseUrl = () => {
 // 创建 tRPC 客户端
 export const trpc = createTRPCProxyClient<AppRouter>({
   links: [
+    // tRPC 官方 logger - 开发环境启用
+    loggerLink({
+      enabled: (opts) =>
+        import.meta.env.DEV || (opts.direction === 'down' && opts.result instanceof Error),
+    }),
     httpBatchLink({
       url: `${getBaseUrl()}/trpc`,
       // 请求头配置

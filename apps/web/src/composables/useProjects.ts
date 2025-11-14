@@ -86,60 +86,98 @@ export function useProjects() {
       repositoryUrl?: string
       templateId?: string
       templateConfig?: Record<string, any>
-      repository?: {
-        mode: 'existing' | 'create'
-        provider: 'github' | 'gitlab'
-        url?: string
-        name?: string
-        accessToken: string
-        visibility?: 'public' | 'private'
-        defaultBranch?: string
-        includeAppCode?: boolean
-      }
+      repository?:
+        | {
+            mode: 'existing'
+            provider: 'github' | 'gitlab'
+            url: string
+            accessToken: string
+            defaultBranch?: string
+          }
+        | {
+            mode: 'create'
+            provider: 'github' | 'gitlab'
+            name: string
+            visibility: 'public' | 'private'
+            accessToken: string
+            defaultBranch?: string
+            includeAppCode?: boolean
+          }
     },
   ) {
     loading.value = true
     error.value = null
 
     try {
-      const { repositoryUrl, templateId, templateConfig, repository, ...createInput } = data
-
-      // 如果提供了模板和仓库配置，使用扩展的创建方法
-      if (templateId || repository) {
-        const result = await trpc.projects.createWithTemplate.mutate({
-          ...createInput,
-          templateId,
-          templateConfig,
-          repository,
-        })
-
-        // 刷新项目列表
-        await fetchProjects(data.organizationId)
-
-        toast.success('创建成功', `项目 "${data.name}" 已创建并初始化`)
-        return result
+      // 验证基本字段
+      if (!data.name || !data.slug) {
+        throw new Error('项目名称和标识不能为空')
       }
 
-      // 否则使用标准创建方法
+      // 验证仓库配置（如果提供）
+      if (data.repository) {
+        if (data.repository.mode === 'existing') {
+          if (!data.repository.url) {
+            throw new Error('请输入仓库 URL')
+          }
+        } else if (data.repository.mode === 'create') {
+          if (!data.repository.name) {
+            throw new Error('请输入仓库名称')
+          }
+        }
+
+        // 确保有访问令牌
+        if (!data.repository.accessToken) {
+          throw new Error('请提供访问令牌或连接 OAuth 账户')
+        }
+      }
+
+      const { repositoryUrl, ...createInput } = data
+
+      // 统一使用 create 方法（现在支持模板和仓库配置）
       const result = await trpc.projects.create.mutate(createInput)
-
-      // 如提供仓库URL，尝试连接仓库
-      if (repositoryUrl) {
-        await connectRepositoryIfNeeded(result.id, repositoryUrl)
-      }
 
       // 刷新项目列表
       await fetchProjects(data.organizationId)
 
-      toast.success('创建成功', `项目 "${data.name}" 已创建`)
+      // 根据是否配置了仓库显示不同的提示
+      if (createInput.repository || createInput.templateId) {
+        toast.success('创建成功', '项目正在初始化，请稍候...')
+      } else {
+        toast.success('创建成功', `项目 "${data.name}" 已创建`)
+      }
       return result
     } catch (err) {
       console.error('Failed to create project:', err)
       error.value = '创建项目失败'
 
+      // 提供友好的错误提示
       if (isTRPCClientError(err)) {
-        toast.error('创建项目失败', err.message)
+        const message = err.message
+
+        // OAuth 相关错误
+        if (message.includes('OAuth') || message.includes('未找到') || message.includes('连接')) {
+          toast.error(
+            'OAuth 授权失败',
+            '请前往"设置 > 账户连接"页面连接您的 GitHub/GitLab 账户，或手动输入访问令牌',
+          )
+        }
+        // 仓库相关错误
+        else if (message.includes('仓库') || message.includes('repository')) {
+          toast.error('仓库操作失败', message)
+        }
+        // 权限错误
+        else if (message.includes('权限')) {
+          toast.error('权限不足', message)
+        }
+        // 其他错误
+        else {
+          toast.error('创建项目失败', message)
+        }
+      } else {
+        toast.error('创建项目失败', '请稍后重试')
       }
+
       throw err
     } finally {
       loading.value = false

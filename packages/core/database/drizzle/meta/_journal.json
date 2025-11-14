@@ -15,6 +15,13 @@
       "when": 1763004147990,
       "tag": "0001_blushing_groot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1763115778878,
+      "tag": "0002_sad_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

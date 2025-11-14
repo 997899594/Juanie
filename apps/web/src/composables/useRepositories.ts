@@ -95,6 +95,71 @@ export function useRepositories() {
     }
   }
 
+  /**
+   * 启用仓库的 GitOps
+   */
+  const enableGitOps = async (payload: {
+    repositoryId: string
+    config?: {
+      fluxNamespace?: string
+      fluxResourceName?: string
+      syncInterval?: string
+      secretRef?: string
+      timeout?: string
+    }
+  }) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const result = await trpc.repositories.enableGitOps.mutate(payload)
+      toast.success('GitOps 已启用')
+      return result
+    } catch (e) {
+      error.value = e as Error
+      toast.error('启用 GitOps 失败', (e as Error)?.message || '未知错误')
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * 禁用仓库的 GitOps
+   */
+  const disableGitOps = async (payload: { repositoryId: string }) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const result = await trpc.repositories.disableGitOps.mutate(payload)
+      toast.success('GitOps 已禁用')
+      return result
+    } catch (e) {
+      error.value = e as Error
+      toast.error('禁用 GitOps 失败', (e as Error)?.message || '未知错误')
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * 获取仓库的 Flux 同步状态
+   */
+  const getFluxStatus = async (payload: { repositoryId: string }) => {
+    isLoading.value = true
+    error.value = null
+    try {
+      const result = await trpc.repositories.getFluxStatus.query(payload)
+      return result
+    } catch (e) {
+      error.value = e as Error
+      toast.error('获取 Flux 状态失败', (e as Error)?.message || '未知错误')
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     repositories: computed(() => repositories.value),
     isLoading: computed(() => isLoading.value),
@@ -103,5 +168,8 @@ export function useRepositories() {
     connect,
     sync,
     disconnect,
+    enableGitOps,
+    disableGitOps,
+    getFluxStatus,
   }
 }

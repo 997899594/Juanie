@@ -93,7 +93,13 @@ export class AuthService {
   // GitLab OAuth 流程
   async getGitLabAuthUrl(): Promise<OAuthUrlResponse> {
     const state = generateId()
-    const url = this.gitlab.createAuthorizationURL(state, ['read_user'])
+    // 请求完整的 scopes 以支持仓库创建和管理
+    const url = this.gitlab.createAuthorizationURL(state, [
+      'api', // 完整 API 访问
+      'read_user', // 读取用户信息
+      'read_repository', // 读取仓库
+      'write_repository', // 写入仓库（创建、推送等）
+    ])
 
     await this.redis.setex(`oauth:gitlab:${state}`, 600, 'pending')
 

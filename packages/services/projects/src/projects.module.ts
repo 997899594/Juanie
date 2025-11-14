@@ -4,6 +4,7 @@ import { AuthModule } from '@juanie/service-auth'
 import { DeploymentsModule } from '@juanie/service-deployments'
 import { EnvironmentsModule } from '@juanie/service-environments'
 import { FluxModule } from '@juanie/service-flux'
+import { GitProvidersModule } from '@juanie/service-git-providers'
 import { K3sModule } from '@juanie/service-k3s'
 import { NotificationsModule } from '@juanie/service-notifications'
 import { RepositoriesModule } from '@juanie/service-repositories'
@@ -23,6 +24,7 @@ import { TemplateManager } from './template-manager.service'
     EnvironmentsModule,
     RepositoriesModule,
     FluxModule,
+    GitProvidersModule,
     K3sModule,
     DeploymentsModule,
     AuditLogsModule,

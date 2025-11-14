@@ -511,6 +511,7 @@ async function handleCreateProject() {
   loading.value = true
 
   try {
+    // 构建项目数据
     const projectData = {
       organizationId: appStore.currentOrganizationId!,
       name: formData.value.name,
@@ -518,8 +519,30 @@ async function handleCreateProject() {
       description: formData.value.description,
       visibility: formData.value.visibility,
       templateId: formData.value.templateId || undefined,
-      templateConfig: formData.value.templateConfig,
+      templateConfig: formData.value.templateConfig || undefined,
       repository: formData.value.repository || undefined,
+    }
+
+    // 验证数据
+    if (!projectData.name || !projectData.slug) {
+      toast.error('验证失败', '请填写项目名称和标识')
+      return
+    }
+
+    // 如果有仓库配置，验证必填字段
+    if (projectData.repository) {
+      if (projectData.repository.mode === 'existing' && !projectData.repository.url) {
+        toast.error('验证失败', '请输入仓库 URL')
+        return
+      }
+      if (projectData.repository.mode === 'create' && !projectData.repository.name) {
+        toast.error('验证失败', '请输入仓库名称')
+        return
+      }
+      if (!projectData.repository.accessToken) {
+        toast.error('验证失败', '请提供访问令牌或连接 OAuth 账户')
+        return
+      }
     }
 
     const project = await createProject(projectData)
@@ -533,7 +556,8 @@ async function handleCreateProject() {
     // 跳转到项目详情页，显示初始化进度
     router.push(`/projects/${project.id}`)
   } catch (error: any) {
-    toast.error('创建失败', error.message)
+    // 错误已经在 useProjects 中处理，这里只记录
+    console.error('Project creation failed:', error)
   } finally {
     loading.value = false
   }

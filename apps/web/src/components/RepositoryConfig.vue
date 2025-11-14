@@ -184,11 +184,17 @@
           </div>
 
           <div class="space-y-2">
-            <Label for="repo-name">仓库名称 *</Label>
+            <Label for="repo-name">
+              仓库名称 *
+              <span v-if="isRepoNameAutoFilled" class="text-xs text-muted-foreground font-normal ml-2">
+                (已自动填充，可修改)
+              </span>
+            </Label>
             <Input
               id="repo-name"
               v-model="newRepo.name"
-              :placeholder="projectName ? `${projectName.toLowerCase().replace(/\s+/g, '-')}` : 'my-project'"
+              placeholder="my-project"
+              @focus="isRepoNameAutoFilled = false"
             />
             <p class="text-xs text-muted-foreground">
               只能包含字母、数字、连字符和下划线
@@ -266,7 +272,7 @@
             </p>
           </div>
 
-          <div class="space-y-3 p-4 border rounded-lg bg-muted/30">
+          <div v-if="props.template" class="space-y-3 p-4 border rounded-lg bg-muted/30">
             <div class="flex items-start space-x-3">
               <Checkbox
                 id="include-app-code"
@@ -278,10 +284,10 @@
                   for="include-app-code"
                   class="text-sm font-medium cursor-pointer"
                 >
-                  生成应用代码模板
+                  同时生成应用代码示例
                 </Label>
                 <p class="text-xs text-muted-foreground mt-1">
-                  根据您选择的项目模板（如 Node.js、Python 等）自动生成对应的应用代码框架
+                  为您生成可直接运行的 {{ props.template?.name || '应用' }} 代码示例。如果您已有代码，可以不勾选。
                 </p>
               </div>
             </div>
@@ -294,8 +300,8 @@
               <ul class="text-sm space-y-1 ml-4 list-disc">
                 <li>README.md - 项目说明文档</li>
                 <li>.gitignore - Git 忽略规则</li>
-                <li>Kubernetes 配置文件 - 部署配置</li>
-                <li v-if="newRepo.includeAppCode">应用代码模板 - 可直接运行的示例代码</li>
+                <li>Kubernetes 配置 - 基于{{ props.template?.name || '模板' }}的部署配置</li>
+                <li v-if="newRepo.includeAppCode && props.template">{{ props.template.name }} 应用代码示例 - 可直接运行</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -358,6 +364,7 @@ import { trpc } from '@/lib/trpc'
 const props = defineProps<{
   modelValue: any
   projectName?: string
+  template?: any
 }>()
 
 const emit = defineEmits<{
@@ -375,6 +382,7 @@ const connectionStatus = ref<{ success: boolean; message: string } | null>(null)
 const loadingOAuthAccounts = ref(false)
 const oauthAccounts = ref<Array<{ provider: string }>>([])
 const useOAuthToken = ref(true) // 默认使用 OAuth 令牌
+const isRepoNameAutoFilled = ref(false) // 标记仓库名称是否自动填充
 
 // 关联现有仓库
 const existingRepo = ref({
@@ -458,6 +466,20 @@ function getTokenHelpUrl(provider: string): string {
   return 'https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html'
 }
 
+// 监听项目名称变化，自动填充仓库名称
+watch(
+  () => props.projectName,
+  (newProjectName) => {
+    // 只在创建新仓库模式下，且仓库名称为空或未被用户修改时自动填充
+    if (repositoryMode.value === 'create' && newProjectName && !newRepo.value.name) {
+      const suggestedName = newProjectName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-_]/g, '')
+      newRepo.value.name = suggestedName
+      isRepoNameAutoFilled.value = true
+    }
+  },
+  { immediate: true }
+)
+
 // 始终允许继续（仓库配置是可选的）
 watch(
   () => true,
@@ -469,39 +491,60 @@ watch(
 
 // 监听变化并更新父组件
 watch(
-  [repositoryMode, existingRepo, newRepo],
+  [repositoryMode, existingRepo, newRepo, useOAuthToken],
   () => {
     // 检查是否填写了必要信息并构建配置
     let config: any = null
 
     if (repositoryMode.value === 'existing') {
+      // 关联现有仓库：必须有 URL 和 provider
       if (existingRepo.value.url && existingRepo.value.provider) {
-        config = {
-          mode: 'existing',
-          provider: existingRepo.value.provider,
-          url: existingRepo.value.url,
-          accessToken: (hasCurrentProviderOAuth.value && useOAuthToken.value) 
-            ? '__USE_OAUTH__'
-            : existingRepo.value.accessToken,
-          defaultBranch: existingRepo.value.defaultBranch || undefined,
+        // 确定访问令牌
+        let accessToken: string
+        if (hasCurrentProviderOAuth.value && useOAuthToken.value) {
+          accessToken = '__USE_OAUTH__'
+        } else {
+          accessToken = existingRepo.value.accessToken
+        }
+
+        // 只有在有访问令牌时才构建配置
+        if (accessToken) {
+          config = {
+            mode: 'existing' as const,
+            provider: existingRepo.value.provider,
+            url: existingRepo.value.url,
+            accessToken,
+            defaultBranch: existingRepo.value.defaultBranch || 'main',
+          }
         }
       }
     } else {
+      // 创建新仓库：必须有 name 和 provider
       if (newRepo.value.name && newRepo.value.provider) {
-        config = {
-          mode: 'create',
-          provider: newRepo.value.provider,
-          name: newRepo.value.name,
-          visibility: newRepo.value.visibility,
-          accessToken: (hasCurrentProviderOAuth.value && useOAuthToken.value)
-            ? '__USE_OAUTH__'
-            : newRepo.value.accessToken,
-          includeAppCode: newRepo.value.includeAppCode,
+        // 确定访问令牌
+        let accessToken: string
+        if (hasCurrentProviderOAuth.value && useOAuthToken.value) {
+          accessToken = '__USE_OAUTH__'
+        } else {
+          accessToken = newRepo.value.accessToken
+        }
+
+        // 只有在有访问令牌时才构建配置
+        if (accessToken) {
+          config = {
+            mode: 'create' as const,
+            provider: newRepo.value.provider,
+            name: newRepo.value.name,
+            visibility: newRepo.value.visibility,
+            accessToken,
+            defaultBranch: 'main',
+            includeAppCode: newRepo.value.includeAppCode,
+          }
         }
       }
     }
 
-    // 不填写就返回 null（表示跳过）
+    // 不填写就返回 null（表示跳过仓库配置）
     emit('update:modelValue', config)
   },
   { deep: true, immediate: true }

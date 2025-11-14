@@ -36,7 +36,10 @@ import * as schema from './schemas'
         }
 
         const client = postgres(connectionString)
-        return drizzle(client, { schema })
+        return drizzle(client, {
+          schema,
+          logger: process.env.NODE_ENV === 'development',
+        })
       },
       inject: [ConfigService],
     },

@@ -1,242 +1,204 @@
 <template>
-  <Dialog :open="open" @update:open="handleOpenChange">
-    <DialogContent class="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+  <Dialog :open="open" @update:open="$emit('update:open', $event)">
+    <DialogContent class="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>GitOps 部署</DialogTitle>
         <DialogDescription>
-          通过可视化表单配置部署参数，系统将自动生成 Git commit 并触发 Flux 同步
+          通过 Git 提交配置变更，Flux 将自动同步到 Kubernetes
         </DialogDescription>
       </DialogHeader>
 
-      <Tabs v-model="activeTab" class="flex-1 overflow-hidden flex flex-col">
+      <Tabs v-model="activeTab" class="w-full">
         <TabsList class="grid w-full grid-cols-3">
-          <TabsTrigger value="form">可视化配置</TabsTrigger>
-          <TabsTrigger value="yaml">YAML 预览</TabsTrigger>
-          <TabsTrigger value="diff">变更对比</TabsTrigger>
+          <TabsTrigger value="config">配置变更</TabsTrigger>
+          <TabsTrigger value="preview">预览</TabsTrigger>
+          <TabsTrigger value="yaml">YAML</TabsTrigger>
         </TabsList>
 
-        <!-- 可视化表单 -->
-        <TabsContent value="form" class="flex-1 overflow-y-auto space-y-6 mt-4">
-          <div class="space-y-4">
-            <!-- 镜像配置 -->
-            <div class="space-y-2">
-              <Label for="image">容器镜像 *</Label>
-              <Input
-                id="image"
-                v-model="form.image"
-                placeholder="例如：nginx:1.21.0"
-                :class="{ 'border-destructive': errors.image }"
-              />
-              <p v-if="errors.image" class="text-sm text-destructive">{{ errors.image }}</p>
-              <p class="text-xs text-muted-foreground">
-                完整的镜像地址，包含仓库、名称和标签
-              </p>
-            </div>
+        <!-- 配置变更标签 -->
+        <TabsContent value="config" class="space-y-4 mt-4">
+          <div class="space-y-2">
+            <Label for="image">镜像</Label>
+            <Input
+              id="image"
+              v-model="formData.image"
+              placeholder="registry.example.com/app:v1.0.0"
+            />
+          </div>
 
-            <!-- 副本数 -->
-            <div class="space-y-2">
-              <Label for="replicas">副本数</Label>
-              <Input
-                id="replicas"
-                v-model.number="form.replicas"
-                type="number"
-                min="1"
-                placeholder="例如：3"
-              />
-              <p class="text-xs text-muted-foreground">
-                Pod 副本数量，建议生产环境至少 2 个
-              </p>
-            </div>
+          <div class="space-y-2">
+            <Label for="replicas">副本数</Label>
+            <Input
+              id="replicas"
+              v-model.number="formData.replicas"
+              type="number"
+              min="1"
+            />
+          </div>
 
-            <!-- 环境变量 -->
+          <div class="space-y-2">
+            <Label>环境变量</Label>
             <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <Label>环境变量</Label>
+              <div
+                v-for="(env, index) in formData.env"
+                :key="index"
+                class="flex gap-2"
+              >
+                <Input
+                  v-model="env.name"
+                  placeholder="KEY"
+                  class="flex-1"
+                />
+                <Input
+                  v-model="env.value"
+                  placeholder="value"
+                  class="flex-1"
+                />
                 <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  @click="addEnvVar"
+                  variant="ghost"
+                  size="icon"
+                  @click="removeEnv(index)"
                 >
-                  <Plus class="h-4 w-4 mr-1" />
-                  添加
+                  <X class="h-4 w-4" />
                 </Button>
               </div>
-              <div v-if="envVars.length === 0" class="text-sm text-muted-foreground">
-                暂无环境变量
-              </div>
-              <div v-else class="space-y-2">
-                <div
-                  v-for="(env, index) in envVars"
-                  :key="index"
-                  class="flex gap-2 items-start"
-                >
-                  <Input
-                    v-model="env.key"
-                    placeholder="KEY"
-                    class="flex-1"
-                  />
-                  <Input
-                    v-model="env.value"
-                    placeholder="value"
-                    class="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    @click="removeEnvVar(index)"
-                  >
-                    <X class="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <!-- 资源限制 -->
-            <div class="space-y-4">
-              <Label>资源配置</Label>
-              
-              <!-- CPU 请求 -->
-              <div class="grid grid-cols-2 gap-4">
-                <div class="space-y-2">
-                  <Label for="cpu-request" class="text-sm">CPU 请求</Label>
-                  <Input
-                    id="cpu-request"
-                    v-model="form.resources.requests.cpu"
-                    placeholder="例如：100m"
-                  />
-                  <p class="text-xs text-muted-foreground">
-                    最小 CPU 保证（如 100m, 0.5, 1）
-                  </p>
-                </div>
-                <div class="space-y-2">
-                  <Label for="cpu-limit" class="text-sm">CPU 限制</Label>
-                  <Input
-                    id="cpu-limit"
-                    v-model="form.resources.limits.cpu"
-                    placeholder="例如：500m"
-                  />
-                  <p class="text-xs text-muted-foreground">
-                    最大 CPU 使用（如 500m, 1, 2）
-                  </p>
-                </div>
-              </div>
-
-              <!-- 内存请求 -->
-              <div class="grid grid-cols-2 gap-4">
-                <div class="space-y-2">
-                  <Label for="memory-request" class="text-sm">内存请求</Label>
-                  <Input
-                    id="memory-request"
-                    v-model="form.resources.requests.memory"
-                    placeholder="例如：128Mi"
-                  />
-                  <p class="text-xs text-muted-foreground">
-                    最小内存保证（如 128Mi, 1Gi）
-                  </p>
-                </div>
-                <div class="space-y-2">
-                  <Label for="memory-limit" class="text-sm">内存限制</Label>
-                  <Input
-                    id="memory-limit"
-                    v-model="form.resources.limits.memory"
-                    placeholder="例如：512Mi"
-                  />
-                  <p class="text-xs text-muted-foreground">
-                    最大内存使用（如 512Mi, 2Gi）
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Commit 消息 -->
-            <div class="space-y-2">
-              <Label for="commitMessage">Commit 消息</Label>
-              <Textarea
-                id="commitMessage"
-                v-model="form.commitMessage"
-                placeholder="描述本次部署的变更内容..."
-                rows="3"
-              />
-              <p class="text-xs text-muted-foreground">
-                将记录在 Git 历史中，建议描述清楚变更内容
-              </p>
-            </div>
-
-            <!-- GitOps 模式提示 -->
-            <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
-              <div class="flex gap-3">
-                <Info class="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                <div class="space-y-1">
-                  <p class="text-sm font-medium text-blue-900">GitOps 部署模式</p>
-                  <p class="text-sm text-blue-700">
-                    您的配置将自动转换为 Kubernetes YAML 并提交到 Git 仓库。
-                    Flux 会检测到变更并自动应用到集群中。整个过程可追溯、可审计。
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <!-- YAML 预览 -->
-        <TabsContent value="yaml" class="flex-1 overflow-hidden mt-4">
-          <div class="h-full border rounded-lg overflow-hidden">
-            <div class="bg-muted px-4 py-2 border-b flex items-center justify-between">
-              <span class="text-sm font-medium">生成的 YAML 配置</span>
               <Button
-                type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                @click="copyYAML"
-                :disabled="!yamlPreview"
+                @click="addEnv"
               >
-                <Copy class="h-4 w-4 mr-1" />
-                复制
+                <Plus class="h-4 w-4 mr-2" />
+                添加环境变量
               </Button>
             </div>
-            <div class="h-[400px] overflow-auto">
-              <pre class="p-4 text-sm"><code>{{ yamlPreview || '请先填写配置信息' }}</code></pre>
+          </div>
+
+          <div class="space-y-2">
+            <Label>资源限制</Label>
+            <div class="grid grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <Label for="cpuLimit" class="text-xs">CPU 限制</Label>
+                <Input
+                  id="cpuLimit"
+                  v-model="formData.resources.limits.cpu"
+                  placeholder="1000m"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label for="memoryLimit" class="text-xs">内存限制</Label>
+                <Input
+                  id="memoryLimit"
+                  v-model="formData.resources.limits.memory"
+                  placeholder="512Mi"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label for="cpuRequest" class="text-xs">CPU 请求</Label>
+                <Input
+                  id="cpuRequest"
+                  v-model="formData.resources.requests.cpu"
+                  placeholder="100m"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label for="memoryRequest" class="text-xs">内存请求</Label>
+                <Input
+                  id="memoryRequest"
+                  v-model="formData.resources.requests.memory"
+                  placeholder="128Mi"
+                />
+              </div>
             </div>
           </div>
         </TabsContent>
 
-        <!-- 变更对比 -->
-        <TabsContent value="diff" class="flex-1 overflow-hidden mt-4">
-          <div class="h-full border rounded-lg overflow-hidden">
-            <div class="bg-muted px-4 py-2 border-b">
-              <span class="text-sm font-medium">配置变更对比</span>
-            </div>
-            <div class="h-[400px] overflow-auto">
-              <div v-if="diffPreview" class="p-4">
-                <pre class="text-sm whitespace-pre-wrap"><code v-html="diffPreview"></code></pre>
+        <!-- 预览标签 -->
+        <TabsContent value="preview" class="mt-4">
+          <div v-if="previewLoading" class="flex items-center justify-center py-8">
+            <Loader2 class="h-6 w-6 animate-spin" />
+          </div>
+          <div v-else-if="preview" class="space-y-4">
+            <Alert>
+              <AlertCircle class="h-4 w-4" />
+              <AlertTitle>变更预览</AlertTitle>
+              <AlertDescription>
+                以下是将要提交到 Git 的配置变更
+              </AlertDescription>
+            </Alert>
+            <pre class="p-4 bg-muted rounded-lg text-sm overflow-x-auto">{{ preview }}</pre>
+          </div>
+          <div v-else class="text-center py-8 text-muted-foreground">
+            点击"生成预览"查看变更
+          </div>
+          <Button
+            v-if="!previewLoading"
+            variant="outline"
+            class="w-full mt-4"
+            @click="handlePreview"
+          >
+            生成预览
+          </Button>
+        </TabsContent>
+
+        <!-- YAML 标签 -->
+        <TabsContent value="yaml" class="mt-4">
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <Label>YAML 配置</Label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  @click="handleValidateYAML"
+                  :disabled="validating"
+                >
+                  <Loader2 v-if="validating" class="h-4 w-4 mr-2 animate-spin" />
+                  <CheckCircle v-else class="h-4 w-4 mr-2" />
+                  验证
+                </Button>
               </div>
-              <div v-else class="p-4 text-sm text-muted-foreground">
-                暂无变更对比数据
-              </div>
+              <Textarea
+                v-model="yamlContent"
+                class="font-mono text-sm min-h-[300px]"
+                placeholder="粘贴或编辑 YAML 配置..."
+              />
             </div>
+            <Alert v-if="yamlValidation" :variant="yamlValidation.valid ? 'default' : 'destructive'">
+              <AlertCircle class="h-4 w-4" />
+              <AlertTitle>
+                {{ yamlValidation.valid ? '验证通过' : '验证失败' }}
+              </AlertTitle>
+              <AlertDescription v-if="!yamlValidation.valid">
+                {{ yamlValidation.error }}
+              </AlertDescription>
+            </Alert>
           </div>
         </TabsContent>
       </Tabs>
 
-      <DialogFooter class="mt-4">
-        <Button
-          type="button"
-          variant="outline"
-          @click="handleCancel"
-          :disabled="loading"
-        >
+      <div class="space-y-4 pt-4 border-t">
+        <div class="space-y-2">
+          <Label for="commitMessage">提交信息</Label>
+          <Textarea
+            id="commitMessage"
+            v-model="commitMessage"
+            placeholder="描述本次配置变更..."
+            rows="3"
+          />
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" @click="$emit('update:open', false)">
           取消
         </Button>
         <Button
-          type="button"
+          :disabled="loading || !canDeploy"
           @click="handleDeploy"
-          :disabled="loading || !isFormValid"
         >
           <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-          <GitBranch v-else class="mr-2 h-4 w-4" />
-          提交部署
+          <GitCommit class="mr-2 h-4 w-4" />
+          提交并部署
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -244,276 +206,160 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useGitOps } from '@/composables/useGitOps'
 import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Button,
   Input,
   Label,
-  Textarea,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
+  Textarea,
 } from '@juanie/ui'
-import { Plus, X, Info, Copy, Loader2, GitBranch } from 'lucide-vue-next'
-import { useGitOps } from '@/composables/useGitOps'
-import { useToast } from '@/composables/useToast'
+import {
+  AlertCircle,
+  CheckCircle,
+  GitCommit,
+  Loader2,
+  Plus,
+  X,
+} from 'lucide-vue-next'
 
 interface Props {
   open: boolean
   projectId: string
   environmentId: string
-  loading?: boolean
 }
 
-interface EnvVar {
-  key: string
-  value: string
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  loading: false,
-})
-
+const props = defineProps<Props>()
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  'deploy': [data: any]
+  'deployed': []
 }>()
 
-const toast = useToast()
-const { deployWithGitOps, previewChanges } = useGitOps()
-const activeTab = ref('form')
-const loading = ref(false)
-const errors = ref<Record<string, string>>({})
+const { deployWithGitOps, previewChanges, validateYAML } = useGitOps()
 
-// 表单数据
-const form = reactive({
+const activeTab = ref('config')
+const loading = ref(false)
+const previewLoading = ref(false)
+const validating = ref(false)
+const preview = ref<any>(null)
+const yamlContent = ref('')
+const yamlValidation = ref<any>(null)
+const commitMessage = ref('')
+
+const formData = ref({
   image: '',
-  replicas: undefined as number | undefined,
-  commitMessage: '',
+  replicas: 1,
+  env: [] as Array<{ name: string; value: string }>,
   resources: {
-    requests: {
-      cpu: '',
-      memory: '',
-    },
     limits: {
       cpu: '',
       memory: '',
     },
+    requests: {
+      cpu: '',
+      memory: '',
+    },
   },
 })
 
-// 环境变量列表
-const envVars = ref<EnvVar[]>([])
-
-// YAML 预览
-const yamlPreview = ref('')
-const diffPreview = ref('')
-
-// 表单验证
-const isFormValid = computed(() => {
-  return form.image.trim().length > 0
+const canDeploy = computed(() => {
+  return !!(
+    (formData.value.image || yamlContent.value) &&
+    commitMessage.value
+  )
 })
 
-// 添加环境变量
-const addEnvVar = () => {
-  envVars.value.push({ key: '', value: '' })
+const addEnv = () => {
+  formData.value.env.push({ name: '', value: '' })
 }
 
-// 删除环境变量
-const removeEnvVar = (index: number) => {
-  envVars.value.splice(index, 1)
+const removeEnv = (index: number) => {
+  formData.value.env.splice(index, 1)
 }
 
-// 复制 YAML
-const copyYAML = async () => {
-  if (!yamlPreview.value) return
-  
+const handlePreview = async () => {
+  previewLoading.value = true
   try {
-    await navigator.clipboard.writeText(yamlPreview.value)
-    toast.success('已复制到剪贴板')
-  } catch (error) {
-    toast.error('复制失败', '请手动复制')
-  }
-}
-
-// 构建变更对象
-const buildChanges = () => {
-  const changes: any = {}
-  
-  if (form.image) {
-    changes.image = form.image
-  }
-  
-  if (form.replicas) {
-    changes.replicas = form.replicas
-  }
-  
-  // 环境变量
-  if (envVars.value.length > 0) {
-    changes.env = {}
-    envVars.value.forEach(env => {
-      if (env.key && env.value) {
-        changes.env[env.key] = env.value
-      }
-    })
-  }
-  
-  // 资源配置
-  const hasResources = 
-    form.resources.requests.cpu ||
-    form.resources.requests.memory ||
-    form.resources.limits.cpu ||
-    form.resources.limits.memory
-  
-  if (hasResources) {
-    changes.resources = {}
-    
-    if (form.resources.requests.cpu || form.resources.requests.memory) {
-      changes.resources.requests = {}
-      if (form.resources.requests.cpu) {
-        changes.resources.requests.cpu = form.resources.requests.cpu
-      }
-      if (form.resources.requests.memory) {
-        changes.resources.requests.memory = form.resources.requests.memory
-      }
-    }
-    
-    if (form.resources.limits.cpu || form.resources.limits.memory) {
-      changes.resources.limits = {}
-      if (form.resources.limits.cpu) {
-        changes.resources.limits.cpu = form.resources.limits.cpu
-      }
-      if (form.resources.limits.memory) {
-        changes.resources.limits.memory = form.resources.limits.memory
-      }
-    }
-  }
-  
-  return changes
-}
-
-// 加载预览
-const loadPreview = async () => {
-  if (!isFormValid.value) {
-    yamlPreview.value = ''
-    diffPreview.value = ''
-    return
-  }
-  
-  try {
-    const changes = buildChanges()
-    
-    const result = await previewChanges({
+    const changes = yamlContent.value || formData.value
+    preview.value = await previewChanges({
       projectId: props.projectId,
       environmentId: props.environmentId,
       changes,
     })
-    
-    // 生成简单的 YAML 预览
-    yamlPreview.value = JSON.stringify(changes, null, 2)
-    diffPreview.value = result.diff || ''
   } catch (error) {
-    console.error('Failed to load preview:', error)
+    console.error('Failed to preview changes:', error)
+  } finally {
+    previewLoading.value = false
   }
 }
 
-// 监听表单变化，自动更新预览
-watch(
-  () => [form.image, form.replicas, form.resources, envVars.value],
-  () => {
-    if (activeTab.value === 'yaml' || activeTab.value === 'diff') {
-      loadPreview()
-    }
-  },
-  { deep: true }
-)
+const handleValidateYAML = async () => {
+  if (!yamlContent.value) return
 
-// 切换标签页时加载预览
-watch(activeTab, (newTab) => {
-  if ((newTab === 'yaml' || newTab === 'diff') && isFormValid.value) {
-    loadPreview()
+  validating.value = true
+  try {
+    yamlValidation.value = await validateYAML(yamlContent.value)
+  } catch (error) {
+    console.error('Failed to validate YAML:', error)
+  } finally {
+    validating.value = false
   }
-})
-
-// 验证表单
-const validateForm = () => {
-  errors.value = {}
-  
-  if (!form.image.trim()) {
-    errors.value.image = '请输入容器镜像'
-    return false
-  }
-  
-  // 验证镜像格式（简单验证）
-  if (!form.image.includes(':')) {
-    errors.value.image = '镜像格式不正确，应包含标签（如 nginx:1.21.0）'
-    return false
-  }
-  
-  return true
 }
 
-// 处理部署
 const handleDeploy = async () => {
-  if (!validateForm()) {
-    activeTab.value = 'form'
-    return
-  }
-  
   loading.value = true
-  
   try {
-    const changes = buildChanges()
-    
-    const result = await deployWithGitOps({
+    const changes = yamlContent.value || formData.value
+    await deployWithGitOps({
       projectId: props.projectId,
       environmentId: props.environmentId,
       changes,
-      commitMessage: form.commitMessage || `部署 ${form.image}`,
+      commitMessage: commitMessage.value,
     })
-    
-    emit('deploy', result)
-    handleCancel()
-  } catch (error: any) {
-    console.error('Deploy failed:', error)
+
+    emit('deployed')
+    emit('update:open', false)
+
+    // 重置表单
+    formData.value = {
+      image: '',
+      replicas: 1,
+      env: [],
+      resources: {
+        limits: { cpu: '', memory: '' },
+        requests: { cpu: '', memory: '' },
+      },
+    }
+    yamlContent.value = ''
+    commitMessage.value = ''
+    preview.value = null
+    yamlValidation.value = null
+  } catch (error) {
+    console.error('Failed to deploy:', error)
   } finally {
     loading.value = false
   }
 }
 
-// 处理取消
-const handleCancel = () => {
-  emit('update:open', false)
-}
-
-// 处理对话框关闭
-const handleOpenChange = (value: boolean) => {
-  emit('update:open', value)
-}
-
-// 重置表单
+// 重置表单当对话框关闭时
 watch(() => props.open, (isOpen) => {
   if (!isOpen) {
-    // 重置表单
-    form.image = ''
-    form.replicas = undefined
-    form.commitMessage = ''
-    form.resources.requests.cpu = ''
-    form.resources.requests.memory = ''
-    form.resources.limits.cpu = ''
-    form.resources.limits.memory = ''
-    envVars.value = []
-    errors.value = {}
-    activeTab.value = 'form'
-    yamlPreview.value = ''
-    diffPreview.value = ''
+    activeTab.value = 'config'
+    preview.value = null
+    yamlValidation.value = null
   }
 })
 </script>

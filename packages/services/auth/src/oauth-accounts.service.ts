@@ -2,7 +2,7 @@ import * as schema from '@juanie/core-database/schemas'
 import { Trace } from '@juanie/core-observability'
 import { DATABASE } from '@juanie/core-tokens'
 import { Inject, Injectable } from '@nestjs/common'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 @Injectable()
@@ -35,7 +35,9 @@ export class OAuthAccountsService {
     const [account] = await this.db
       .select()
       .from(schema.oauthAccounts)
-      .where(eq(schema.oauthAccounts.userId, userId) && eq(schema.oauthAccounts.provider, provider))
+      .where(
+        and(eq(schema.oauthAccounts.userId, userId), eq(schema.oauthAccounts.provider, provider)),
+      )
       .limit(1)
 
     return account || null
@@ -57,7 +59,9 @@ export class OAuthAccountsService {
   async disconnect(userId: string, provider: 'github' | 'gitlab') {
     await this.db
       .delete(schema.oauthAccounts)
-      .where(eq(schema.oauthAccounts.userId, userId) && eq(schema.oauthAccounts.provider, provider))
+      .where(
+        and(eq(schema.oauthAccounts.userId, userId), eq(schema.oauthAccounts.provider, provider)),
+      )
 
     return { success: true }
   }

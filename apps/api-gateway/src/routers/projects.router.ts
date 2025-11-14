@@ -1,6 +1,7 @@
 import {
   archiveProjectSchema,
   createProjectSchema,
+  createProjectWithTemplateSchema,
   getProjectHealthSchema,
   getProjectStatusSchema,
   organizationIdQuerySchema,
@@ -25,9 +26,23 @@ export class ProjectsRouter {
 
   get router() {
     return this.trpc.router({
-      // 创建项目
+      // 创建项目（统一接口，支持基础创建和带模板/仓库配置）
       create: this.trpc.protectedProcedure
-        .input(createProjectSchema)
+        .input(createProjectWithTemplateSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.create(ctx.user.id, input)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '创建项目失败',
+            })
+          }
+        }),
+
+      // 创建项目（带模板和仓库配置）- 保留向后兼容
+      createWithTemplate: this.trpc.protectedProcedure
+        .input(createProjectWithTemplateSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.projectsService.create(ctx.user.id, input)

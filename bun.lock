@@ -390,6 +390,18 @@
         "vitest": "^4.0.4",
       },
     },
+    "packages/services/git-providers": {
+      "name": "@juanie/service-git-providers",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nestjs/common": "^11.1.7",
+        "@nestjs/config": "^3.0.0",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/services/k3s": {
       "name": "@juanie/service-k3s",
       "version": "0.1.0",
@@ -490,6 +502,7 @@
         "@juanie/core-tokens": "workspace:*",
         "@juanie/core-types": "workspace:*",
         "@juanie/core-utils": "workspace:*",
+        "@juanie/service-git-providers": "workspace:*",
         "@nestjs/common": "^11.1.7",
         "handlebars": "^4.7.8",
         "js-yaml": "^4.1.1",
@@ -908,6 +921,8 @@
     "@juanie/service-flux": ["@juanie/service-flux@workspace:packages/services/flux"],
 
     "@juanie/service-git-ops": ["@juanie/service-git-ops@workspace:packages/services/git-ops"],
+
+    "@juanie/service-git-providers": ["@juanie/service-git-providers@workspace:packages/services/git-providers"],
 
     "@juanie/service-k3s": ["@juanie/service-k3s@workspace:packages/services/k3s"],
 
@@ -2827,6 +2842,8 @@
 
     "@juanie/service-git-ops/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
 
+    "@juanie/service-git-providers/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
+
     "@juanie/service-k3s/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
 
     "@juanie/service-ollama/@nestjs/config": ["@nestjs/config@3.3.0", "https://repo.huaweicloud.com/repository/npm/@nestjs/config/-/config-3.3.0.tgz", { "dependencies": { "dotenv": "16.4.5", "dotenv-expand": "10.0.0", "lodash": "4.17.21" }, "peerDependencies": { "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0", "rxjs": "^7.1.0" } }, "sha512-pdGTp8m9d0ZCrjTpjkUbZx6gyf2IKf+7zlkrPNMsJzYZ4bFRRTpXrnj+556/5uiI6AfL5mMrJc2u7dB6bvM+VA=="],
@@ -3321,6 +3338,12 @@
 
     "@juanie/service-git-ops/@nestjs/config/dotenv-expand": ["dotenv-expand@10.0.0", "https://repo.huaweicloud.com/repository/npm/dotenv-expand/-/dotenv-expand-10.0.0.tgz", {}, "sha512-GopVGCpVS1UKH75VKHGuQFqS1Gusej0z4FyQkPdwjil2gNIv+LNsqBlboOzpJFZKVT95GkCyWJbBSdFEFUWI2A=="],
 
+    "@juanie/service-git-providers/@nestjs/config/@nestjs/common": ["@nestjs/common@10.4.20", "https://repo.huaweicloud.com/repository/npm/@nestjs/common/-/common-10.4.20.tgz", { "dependencies": { "file-type": "20.4.1", "iterare": "1.2.1", "tslib": "2.8.1", "uid": "2.0.2" }, "peerDependencies": { "class-transformer": "*", "class-validator": "*", "reflect-metadata": "^0.1.12 || ^0.2.0", "rxjs": "^7.1.0" }, "optionalPeers": ["class-transformer", "class-validator"] }, "sha512-hxJxZF7jcKGuUzM9EYbuES80Z/36piJbiqmPy86mk8qOn5gglFebBTvcx7PWVbRNSb4gngASYnefBj/Y2HAzpQ=="],
+
+    "@juanie/service-git-providers/@nestjs/config/dotenv": ["dotenv@16.4.5", "https://repo.huaweicloud.com/repository/npm/dotenv/-/dotenv-16.4.5.tgz", {}, "sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg=="],
+
+    "@juanie/service-git-providers/@nestjs/config/dotenv-expand": ["dotenv-expand@10.0.0", "https://repo.huaweicloud.com/repository/npm/dotenv-expand/-/dotenv-expand-10.0.0.tgz", {}, "sha512-GopVGCpVS1UKH75VKHGuQFqS1Gusej0z4FyQkPdwjil2gNIv+LNsqBlboOzpJFZKVT95GkCyWJbBSdFEFUWI2A=="],
+
     "@juanie/service-k3s/@nestjs/config/@nestjs/common": ["@nestjs/common@10.4.20", "https://repo.huaweicloud.com/repository/npm/@nestjs/common/-/common-10.4.20.tgz", { "dependencies": { "file-type": "20.4.1", "iterare": "1.2.1", "tslib": "2.8.1", "uid": "2.0.2" }, "peerDependencies": { "class-transformer": "*", "class-validator": "*", "reflect-metadata": "^0.1.12 || ^0.2.0", "rxjs": "^7.1.0" }, "optionalPeers": ["class-transformer", "class-validator"] }, "sha512-hxJxZF7jcKGuUzM9EYbuES80Z/36piJbiqmPy86mk8qOn5gglFebBTvcx7PWVbRNSb4gngASYnefBj/Y2HAzpQ=="],
 
     "@juanie/service-k3s/@nestjs/config/dotenv": ["dotenv@16.4.5", "https://repo.huaweicloud.com/repository/npm/dotenv/-/dotenv-16.4.5.tgz", {}, "sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg=="],
@@ -3616,6 +3639,8 @@
     "@juanie/service-flux/@nestjs/config/@nestjs/common/file-type": ["file-type@20.4.1", "https://repo.huaweicloud.com/repository/npm/file-type/-/file-type-20.4.1.tgz", { "dependencies": { "@tokenizer/inflate": "^0.2.6", "strtok3": "^10.2.0", "token-types": "^6.0.0", "uint8array-extras": "^1.4.0" } }, "sha512-hw9gNZXUfZ02Jo0uafWLaFVPter5/k2rfcrjFJJHX/77xtSDOfJuEFb6oKlFV86FLP1SuyHMW1PSk0U9M5tKkQ=="],
 
     "@juanie/service-git-ops/@nestjs/config/@nestjs/common/file-type": ["file-type@20.4.1", "https://repo.huaweicloud.com/repository/npm/file-type/-/file-type-20.4.1.tgz", { "dependencies": { "@tokenizer/inflate": "^0.2.6", "strtok3": "^10.2.0", "token-types": "^6.0.0", "uint8array-extras": "^1.4.0" } }, "sha512-hw9gNZXUfZ02Jo0uafWLaFVPter5/k2rfcrjFJJHX/77xtSDOfJuEFb6oKlFV86FLP1SuyHMW1PSk0U9M5tKkQ=="],
+
+    "@juanie/service-git-providers/@nestjs/config/@nestjs/common/file-type": ["file-type@20.4.1", "https://repo.huaweicloud.com/repository/npm/file-type/-/file-type-20.4.1.tgz", { "dependencies": { "@tokenizer/inflate": "^0.2.6", "strtok3": "^10.2.0", "token-types": "^6.0.0", "uint8array-extras": "^1.4.0" } }, "sha512-hw9gNZXUfZ02Jo0uafWLaFVPter5/k2rfcrjFJJHX/77xtSDOfJuEFb6oKlFV86FLP1SuyHMW1PSk0U9M5tKkQ=="],
 
     "@juanie/service-k3s/@nestjs/config/@nestjs/common/file-type": ["file-type@20.4.1", "https://repo.huaweicloud.com/repository/npm/file-type/-/file-type-20.4.1.tgz", { "dependencies": { "@tokenizer/inflate": "^0.2.6", "strtok3": "^10.2.0", "token-types": "^6.0.0", "uint8array-extras": "^1.4.0" } }, "sha512-hw9gNZXUfZ02Jo0uafWLaFVPter5/k2rfcrjFJJHX/77xtSDOfJuEFb6oKlFV86FLP1SuyHMW1PSk0U9M5tKkQ=="],
 

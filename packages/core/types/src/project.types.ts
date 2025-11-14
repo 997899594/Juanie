@@ -27,7 +27,7 @@ export interface NewRepositoryConfig {
   name: string
   visibility: 'public' | 'private'
   accessToken: string
-  includeAppCode?: boolean
+  defaultBranch?: string
 }
 
 /**
@@ -67,6 +67,7 @@ export interface CreateProjectWithTemplateInputType {
   slug: string
   description?: string
   visibility?: 'public' | 'private' | 'internal'
+  logoUrl?: string
 
   // 模板相关
   templateId?: string
@@ -84,6 +85,8 @@ export interface InitializationStatus {
   progress: number // 0-100
   error?: string
   completedSteps: string[]
+  currentAction?: string // 用户友好的当前操作描述
+  timestamp?: Date
 }
 
 /**

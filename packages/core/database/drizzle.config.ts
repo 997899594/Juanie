@@ -1,5 +1,3 @@
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'drizzle-kit'
 
 // 优先使用 DATABASE_URL；否则按 POSTGRES_* 变量拼接（缺失即报错）
@@ -18,9 +16,8 @@ const composedUrl = `postgresql://${requireEnv('POSTGRES_USER')}:${encodeURIComp
 const url = envUrl ?? composedUrl
 
 export default defineConfig({
-  // 以配置文件所在目录为基准，避免从根目录运行时路径失效
-  schema: path.join(path.dirname(fileURLToPath(import.meta.url)), 'src', 'schemas', 'index.ts'),
-  out: path.join(path.dirname(fileURLToPath(import.meta.url)), 'drizzle'),
+  schema: 'packages/core/database/src/schemas/index.ts',
+  out: 'packages/core/database/drizzle',
   dialect: 'postgresql',
   dbCredentials: {
     url,
