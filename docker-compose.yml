@@ -9,7 +9,7 @@ services:
     container_name: juanie-postgres-dev
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-juanie_ai_devops}
+      POSTGRES_DB: ${POSTGRES_DB:-juanie_devops}
       POSTGRES_USER: ${POSTGRES_USER:-findbiao}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-biao1996.}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
@@ -21,7 +21,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-findbiao} -d ${POSTGRES_DB:-juanie_ai_devops}",
+          "pg_isready -U ${POSTGRES_USER:-findbiao} -d ${POSTGRES_DB:-juanie_devops}",
         ]
       interval: 10s
       timeout: 5s

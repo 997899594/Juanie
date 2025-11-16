@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, isRef, watch, onMounted } from 'vue'
 import { trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 
@@ -6,12 +6,16 @@ import { useToast } from './useToast'
  * 环境管理组合式函数
  * 提供环境的 CRUD 操作
  */
-export function useEnvironments() {
+export function useEnvironments(projectId?: string | ReturnType<typeof ref<string>>) {
   const toast = useToast()
 
   const environments = ref<any[]>([])
   const isLoading = ref(false)
   const error = ref<Error | null>(null)
+  const isCreating = ref(false)
+  const isUpdating = ref(false)
+  const isDeleting = ref(false)
+  const currentProjectId = ref<string>('')
 
   /**
    * 获取项目的环境列表
@@ -33,22 +37,37 @@ export function useEnvironments() {
     }
   }
 
+  const initWatcher = () => {
+    if (!projectId) return
+    if (isRef(projectId)) {
+      watch(projectId, (val) => {
+        currentProjectId.value = val || ''
+        if (currentProjectId.value) fetchEnvironments(currentProjectId.value)
+      }, { immediate: true })
+    } else {
+      currentProjectId.value = projectId
+      if (currentProjectId.value) fetchEnvironments(currentProjectId.value)
+    }
+  }
+  onMounted(() => initWatcher())
+
   /**
    * 创建环境
    */
   const create = async (input: any) => {
-    isLoading.value = true
+    isCreating.value = true
     error.value = null
     try {
       const result = await trpc.environments.create.mutate(input)
       toast.success('环境创建成功')
+      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
       return result
     } catch (e) {
       error.value = e as Error
       toast.error('创建失败', (e as Error)?.message || '未知错误')
       throw e
     } finally {
-      isLoading.value = false
+      isCreating.value = false
     }
   }
 
@@ -56,18 +75,19 @@ export function useEnvironments() {
    * 更新环境
    */
   const update = async (input: any) => {
-    isLoading.value = true
+    isUpdating.value = true
     error.value = null
     try {
       const result = await trpc.environments.update.mutate(input)
       toast.success('环境更新成功')
+      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
       return result
     } catch (e) {
       error.value = e as Error
       toast.error('更新失败', (e as Error)?.message || '未知错误')
       throw e
     } finally {
-      isLoading.value = false
+      isUpdating.value = false
     }
   }
 
@@ -75,17 +95,18 @@ export function useEnvironments() {
    * 删除环境
    */
   const remove = async (payload: { environmentId: string }) => {
-    isLoading.value = true
+    isDeleting.value = true
     error.value = null
     try {
       await trpc.environments.delete.mutate(payload)
       toast.success('环境删除成功')
+      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
     } catch (e) {
       error.value = e as Error
       toast.error('删除失败', (e as Error)?.message || '未知错误')
       throw e
     } finally {
-      isLoading.value = false
+      isDeleting.value = false
     }
   }
 
@@ -102,18 +123,19 @@ export function useEnvironments() {
       syncInterval?: string
     }
   }) => {
-    isLoading.value = true
+    isUpdating.value = true
     error.value = null
     try {
       const result = await trpc.environments.configureGitOps.mutate(payload)
       toast.success('GitOps 配置成功')
+      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
       return result
     } catch (e) {
       error.value = e as Error
       toast.error('配置 GitOps 失败', (e as Error)?.message || '未知错误')
       throw e
     } finally {
-      isLoading.value = false
+      isUpdating.value = false
     }
   }
 
@@ -139,18 +161,19 @@ export function useEnvironments() {
    * 禁用环境的 GitOps
    */
   const disableGitOps = async (payload: { environmentId: string }) => {
-    isLoading.value = true
+    isUpdating.value = true
     error.value = null
     try {
       const result = await trpc.environments.disableGitOps.mutate(payload)
       toast.success('GitOps 已禁用')
+      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
       return result
     } catch (e) {
       error.value = e as Error
       toast.error('禁用 GitOps 失败', (e as Error)?.message || '未知错误')
       throw e
     } finally {
-      isLoading.value = false
+      isUpdating.value = false
     }
   }
 
@@ -158,6 +181,9 @@ export function useEnvironments() {
     environments: computed(() => environments.value),
     isLoading: computed(() => isLoading.value),
     error: computed(() => error.value),
+    isCreating: computed(() => isCreating.value),
+    isUpdating: computed(() => isUpdating.value),
+    isDeleting: computed(() => isDeleting.value),
     fetchEnvironments,
     create,
     update,

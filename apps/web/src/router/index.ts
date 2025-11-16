@@ -456,6 +456,19 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'gitops/settings',
+        name: 'gitops-settings',
+        component: () => import('@/views/gitops/GitOpsSettings.vue'),
+        meta: {
+          title: 'GitOps 设置',
+          navigation: {
+            group: '集成与自动化',
+            icon: 'Settings',
+            order: 3,
+          },
+        },
+      },
+      {
         path: 'webhooks',
         name: 'webhooks',
         component: () => import('@/views/integrations/Webhooks.vue'),

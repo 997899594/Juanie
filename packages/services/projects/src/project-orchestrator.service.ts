@@ -172,14 +172,11 @@ export class ProjectOrchestrator implements OnModuleInit {
 
       for (const envType of environmentTypes) {
         const envTemplate = template.defaultConfig.environments.find((e) => e.type === envType)
-        if (!envTemplate) {
-          this.logger.warn(`No template found for environment type: ${envType}`)
-          continue
-        }
+        const fallbackName = envType === 'development' ? 'Development' : envType === 'staging' ? 'Staging' : 'Production'
 
         const environment = await this.environments.create(userId, {
           projectId,
-          name: envTemplate.name,
+          name: envTemplate?.name ?? fallbackName,
           type: envType,
           config: {
             approvalRequired: envType === 'production',
@@ -1567,26 +1564,30 @@ export class ProjectOrchestrator implements OnModuleInit {
       }
     }
 
-    // 3. 删除环境
-    this.logger.log(`Rolling back ${resources.environments.length} environments`)
-    for (const environmentId of resources.environments) {
-      try {
-        await this.environments.delete('system', environmentId)
-        successCount++
-        this.logger.log(`Successfully deleted environment: ${environmentId}`)
-      } catch (error) {
-        failureCount++
-        const errorMessage = error instanceof Error ? error.message : '未知错误'
-        this.logger.error(`Failed to delete environment ${environmentId}:`, {
-          error: errorMessage,
-          stack: error instanceof Error ? error.stack : undefined,
-        })
-        rollbackErrors.push({
-          type: 'environment',
-          id: environmentId,
-          error: errorMessage,
-        })
+    const shouldRollbackEnvironments = resources.repositories.length > 0
+    if (shouldRollbackEnvironments) {
+      this.logger.log(`Rolling back ${resources.environments.length} environments`)
+      for (const environmentId of resources.environments) {
+        try {
+          await this.environments.delete('system', environmentId)
+          successCount++
+          this.logger.log(`Successfully deleted environment: ${environmentId}`)
+        } catch (error) {
+          failureCount++
+          const errorMessage = error instanceof Error ? error.message : '未知错误'
+          this.logger.error(`Failed to delete environment ${environmentId}:`, {
+            error: errorMessage,
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+          rollbackErrors.push({
+            type: 'environment',
+            id: environmentId,
+            error: errorMessage,
+          })
+        }
       }
+    } else {
+      this.logger.log('Skipping environment rollback because no repository was created')
     }
 
     // 记录回滚结果摘要
