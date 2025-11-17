@@ -22,6 +22,20 @@
       "when": 1763115778878,
       "tag": "0002_sad_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1763356822553,
+      "tag": "0003_dry_korg",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1763361986036,
+      "tag": "0004_stormy_the_renegades",
+      "breakpoints": true
     }
   ]
 }

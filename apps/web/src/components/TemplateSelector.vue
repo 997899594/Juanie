@@ -166,7 +166,7 @@ const toast = useToast()
 // 状态
 const templates = ref<any[]>([])
 const loading = ref(false)
-const selectedTemplateId = ref<string | null>(props.modelValue || null)
+const selectedTemplateId = ref<string>(props.modelValue || 'blank') // 默认选择空白模板
 
 
 // 计算属性

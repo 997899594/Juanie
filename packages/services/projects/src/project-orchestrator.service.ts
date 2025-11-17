@@ -172,7 +172,12 @@ export class ProjectOrchestrator implements OnModuleInit {
 
       for (const envType of environmentTypes) {
         const envTemplate = template.defaultConfig.environments.find((e) => e.type === envType)
-        const fallbackName = envType === 'development' ? 'Development' : envType === 'staging' ? 'Staging' : 'Production'
+        const fallbackName =
+          envType === 'development'
+            ? 'Development'
+            : envType === 'staging'
+              ? 'Staging'
+              : 'Production'
 
         const environment = await this.environments.create(userId, {
           projectId,
@@ -334,37 +339,63 @@ export class ProjectOrchestrator implements OnModuleInit {
     userId: string,
     data: CreateProjectWithTemplateInput,
   ): Promise<typeof schema.projects.$inferSelect> {
-    const [project] = await this.db
-      .insert(schema.projects)
-      .values({
-        organizationId: data.organizationId,
-        name: data.name,
-        slug: data.slug,
-        description: data.description,
-        logoUrl: data.logoUrl,
-        visibility: data.visibility ?? 'private',
-        status: 'initializing',
-        templateId: data.templateId,
-        templateConfig: data.templateConfig,
-        initializationStatus: {
-          step: 'create_project',
-          progress: 10,
-          completedSteps: [],
-        },
-        config: {
-          defaultBranch: 'main',
-          enableCiCd: true,
-          enableAi: true,
-        },
-      })
-      .returning()
+    try {
+      const [project] = await this.db
+        .insert(schema.projects)
+        .values({
+          organizationId: data.organizationId,
+          name: data.name,
+          slug: data.slug,
+          description: data.description,
+          logoUrl: data.logoUrl,
+          visibility: data.visibility ?? 'private',
+          status: 'initializing',
+          templateId: data.templateId,
+          templateConfig: data.templateConfig,
+          initializationStatus: {
+            step: 'create_project',
+            progress: 10,
+            completedSteps: [],
+          },
+          config: {
+            defaultBranch: 'main',
+            enableCiCd: true,
+            enableAi: true,
+          },
+        })
+        .returning()
 
-    if (!project) {
-      throw new Error('创建项目记录失败')
+      if (!project) {
+        throw new Error('创建项目记录失败')
+      }
+
+      this.logger.log(`Project record created: ${project.id}`)
+      return project
+    } catch (error: any) {
+      // 处理唯一约束冲突
+      const pgError = error.cause || error
+      const errorCode = pgError.code || error.code
+      const constraintName = pgError.constraint_name || error.constraint
+
+      if (
+        errorCode === '23505' ||
+        error.message?.includes('unique') ||
+        error.message?.includes('duplicate')
+      ) {
+        if (
+          error.message?.includes('slug') ||
+          constraintName?.includes('slug') ||
+          pgError.detail?.includes('slug')
+        ) {
+          throw new Error(`项目标识 "${data.slug}" 已存在，请使用其他标识`)
+        }
+        throw new Error('项目名称或标识已存在，请使用其他名称')
+      }
+
+      // 处理其他数据库错误
+      this.logger.error('Failed to create project record:', error)
+      throw new Error(`创建项目失败: ${error.message || '数据库错误'}`)
     }
-
-    this.logger.log(`Project record created: ${project.id}`)
-    return project
   }
 
   /**
@@ -408,22 +439,51 @@ export class ProjectOrchestrator implements OnModuleInit {
     const userFriendlyMessage = this.getUserFriendlyErrorMessage(error)
 
     try {
-      // 更新项目状态
-      await this.db
-        .update(schema.projects)
-        .set({
-          status: 'failed',
-          initializationStatus: {
-            step: 'failed',
-            progress: 0,
-            error: userFriendlyMessage,
-            completedSteps: [],
-          },
-          updatedAt: new Date(),
-        })
+      // 检查项目是否有任何成功创建的资源
+      const [project] = await this.db
+        .select()
+        .from(schema.projects)
         .where(eq(schema.projects.id, projectId))
+        .limit(1)
 
-      this.logger.log(`Project ${projectId} status updated to failed`)
+      const hasResources = (project?.initializationStatus?.completedSteps?.length ?? 0) > 1 // 除了 create_project
+
+      if (hasResources) {
+        // 如果已经创建了一些资源，保留项目但标记为失败
+        await this.db
+          .update(schema.projects)
+          .set({
+            status: 'failed',
+            initializationStatus: {
+              step: 'failed',
+              progress: 0,
+              error: userFriendlyMessage,
+              completedSteps: project?.initializationStatus?.completedSteps || [],
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.projects.id, projectId))
+
+        this.logger.log(`Project ${projectId} status updated to failed (resources exist)`)
+      } else {
+        // 如果没有创建任何资源，直接软删除项目记录，避免占用 slug
+        await this.db
+          .update(schema.projects)
+          .set({
+            deletedAt: new Date(),
+            status: 'failed',
+            initializationStatus: {
+              step: 'failed',
+              progress: 0,
+              error: userFriendlyMessage,
+              completedSteps: [],
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.projects.id, projectId))
+
+        this.logger.log(`Project ${projectId} soft deleted (no resources created)`)
+      }
     } catch (updateError) {
       this.logger.error(`Failed to update project status for ${projectId}:`, updateError)
       // 继续执行，不要因为状态更新失败而中断错误处理
@@ -735,18 +795,12 @@ export class ProjectOrchestrator implements OnModuleInit {
         )
       }
 
-      if (!oauthAccount.accessToken) {
+      if (!oauthAccount.accessToken || oauthAccount.status !== 'active') {
         const providerName = repositoryConfig.provider === 'github' ? 'GitHub' : 'GitLab'
-        throw new Error(`${providerName} OAuth 令牌无效。请重新连接您的账户。`)
+        throw new Error(`${providerName} 访问令牌无效，请重新连接账户`)
       }
 
-      // TODO: 检查令牌是否过期（如果有 expiresAt 字段）
-      if (oauthAccount.expiresAt && new Date(oauthAccount.expiresAt) < new Date()) {
-        const providerName = repositoryConfig.provider === 'github' ? 'GitHub' : 'GitLab'
-        throw new Error(`${providerName} OAuth 令牌已过期。请重新连接您的账户。`)
-      }
-
-      this.logger.log(`Successfully resolved OAuth token for ${repositoryConfig.provider}`)
+      // GitHub token 永久有效，GitLab token 已在 getAccountByProvider 中自动刷新
 
       return {
         ...repositoryConfig,
@@ -1657,14 +1711,20 @@ export class ProjectOrchestrator implements OnModuleInit {
       this.logger.log(`Repository created successfully: ${repoInfo.fullName}`)
       return repoInfo
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
       this.logger.error(`Failed to create ${provider} repository:`, {
         name: options.name,
         visibility: options.visibility,
-        error: error instanceof Error ? error.message : '未知错误',
+        error: errorMessage,
       })
 
-      // 重新抛出错误，让上层处理
-      // GitProviderService 已经提供了用户友好的错误信息
+      // 如果是 token 无效错误，标记 OAuth 账户状态
+      if (errorMessage.includes('访问令牌无效') || errorMessage.includes('令牌权限不足')) {
+        // 注意：这里的 accessToken 可能是手动输入的，不一定是 OAuth
+        // 只有当使用 OAuth 时才需要标记状态
+        // 由于我们无法在这里判断，所以在 resolveAccessToken 中处理更合适
+      }
+
       throw error
     }
   }

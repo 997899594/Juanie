@@ -60,10 +60,18 @@ export class GitProviderService {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        `GitHub API 错误: ${response.status} ${response.statusText} - ${JSON.stringify(error)}`,
-      )
+      const error: any = await response.json().catch(() => ({}))
+      const message = error.message || error.errors?.[0]?.message || response.statusText
+
+      if (response.status === 401) {
+        throw new Error('GitHub 访问令牌无效，请重新连接账户')
+      }
+
+      if (response.status === 403) {
+        throw new Error('GitHub 令牌权限不足，需要 repo 权限')
+      }
+
+      throw new Error(`GitHub API 错误: ${message}`)
     }
 
     const data = (await response.json()) as any
@@ -109,10 +117,30 @@ export class GitProviderService {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        `GitLab API 错误: ${response.status} ${response.statusText} - ${JSON.stringify(error)}`,
-      )
+      const error: any = await response.json().catch(() => ({}))
+      const message = error.message || error.error || response.statusText
+
+      if (response.status === 401) {
+        throw new Error('GitLab 访问令牌无效，请重新连接账户')
+      }
+
+      if (response.status === 403) {
+        throw new Error('GitLab 令牌权限不足，需要 api 权限')
+      }
+
+      if (response.status === 422) {
+        throw new Error(`仓库名称 "${options.name}" 已存在或不符合命名规范`)
+      }
+
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        throw new Error('GitLab 服务暂时不可用，请稍后重试')
+      }
+
+      if (response.status >= 500) {
+        throw new Error(`GitLab 服务器错误 (${response.status})，请稍后重试`)
+      }
+
+      throw new Error(`GitLab API 错误: ${message}`)
     }
 
     const data = (await response.json()) as any
@@ -406,16 +434,36 @@ export class GitProviderService {
         const message = err.message
 
         // 检查常见错误
-        if (message.includes('422') || message.includes('already exists')) {
+        if (
+          message.includes('422') ||
+          message.includes('already exists') ||
+          message.includes('已存在')
+        ) {
           throw new Error(`仓库名称 "${options.name}" 已存在，请使用其他名称`)
         }
 
-        if (message.includes('401') || message.includes('403')) {
-          throw new Error('访问令牌无效或权限不足，请检查令牌权限')
+        if (message.includes('401') || message.includes('403') || message.includes('令牌')) {
+          throw new Error('访问令牌无效或权限不足，请重新连接账户')
         }
 
         if (message.includes('404')) {
           throw new Error('API 端点不存在，请检查配置')
+        }
+
+        if (
+          message.includes('502') ||
+          message.includes('503') ||
+          message.includes('504') ||
+          message.includes('Bad Gateway') ||
+          message.includes('不可用')
+        ) {
+          throw new Error(
+            `${provider === 'github' ? 'GitHub' : 'GitLab'} 服务暂时不可用，请稍后重试`,
+          )
+        }
+
+        if (message.includes('500') || message.includes('服务器错误')) {
+          throw new Error(`${provider === 'github' ? 'GitHub' : 'GitLab'} 服务器错误，请稍后重试`)
         }
 
         // 返回原始错误

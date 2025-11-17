@@ -127,6 +127,7 @@ export class AuthService {
       avatar_url: string
     }
 
+    // 保存完整的 token 信息（包括 refresh token 和过期时间）
     const user = await this.findOrCreateUser({
       email: gitlabUser.email,
       username: gitlabUser.username,
@@ -135,6 +136,8 @@ export class AuthService {
       provider: 'gitlab',
       providerAccountId: gitlabUser.id.toString(),
       accessToken: tokens.accessToken(),
+      refreshToken: tokens.refreshToken(),
+      expiresAt: tokens.accessTokenExpiresAt(),
     })
 
     await this.redis.del(`oauth:gitlab:${state}`)
@@ -143,7 +146,12 @@ export class AuthService {
   }
 
   // 创建或更新用户
-  private async findOrCreateUser(data: CreateUserFromOAuthInput) {
+  private async findOrCreateUser(
+    data: CreateUserFromOAuthInput & {
+      refreshToken?: string
+      expiresAt?: Date
+    },
+  ) {
     return await this.db.transaction(async (tx) => {
       // 查找或创建用户
       let [user] = await tx
@@ -177,7 +185,7 @@ export class AuthService {
         throw new Error('用户创建失败')
       }
 
-      // 创建或更新 OAuth 账号
+      // 创建或更新 OAuth 账号（保存完整的 token 信息）
       await tx
         .insert(schema.oauthAccounts)
         .values({
@@ -185,10 +193,19 @@ export class AuthService {
           provider: data.provider,
           providerAccountId: data.providerAccountId,
           accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+          expiresAt: data.expiresAt,
+          status: 'active',
         })
         .onConflictDoUpdate({
           target: [schema.oauthAccounts.provider, schema.oauthAccounts.providerAccountId],
-          set: { accessToken: data.accessToken },
+          set: {
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+            expiresAt: data.expiresAt,
+            status: 'active',
+            updatedAt: new Date(),
+          },
         })
 
       return user
@@ -226,5 +243,124 @@ export class AuthService {
   // 删除会话
   async deleteSession(sessionId: string) {
     await this.redis.del(`session:${sessionId}`)
+  }
+
+  // 连接 GitHub 账户（用于已登录用户）
+  async connectGitHubAccount(userId: string, code: string, state: string) {
+    // 验证 state
+    const storedState = await this.redis.get(`oauth:github:connect:${state}`)
+    if (!storedState || storedState !== userId) {
+      throw new Error('Invalid state or user mismatch')
+    }
+
+    // 交换 access token
+    const tokens = await this.github.validateAuthorizationCode(code)
+
+    // 获取 GitHub 用户信息
+    const response = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${tokens.accessToken()}` },
+    })
+    const githubUser = (await response.json()) as {
+      id: number
+      login: string
+    }
+
+    // 保存或更新 OAuth 账户
+    await this.db
+      .insert(schema.oauthAccounts)
+      .values({
+        userId,
+        provider: 'github',
+        providerAccountId: githubUser.id.toString(),
+        accessToken: tokens.accessToken(),
+        status: 'active',
+      })
+      .onConflictDoUpdate({
+        target: [schema.oauthAccounts.provider, schema.oauthAccounts.providerAccountId],
+        set: {
+          accessToken: tokens.accessToken(),
+          status: 'active',
+          updatedAt: new Date(),
+        },
+      })
+
+    // 清理 state
+    await this.redis.del(`oauth:github:connect:${state}`)
+
+    return { success: true }
+  }
+
+  // 连接 GitLab 账户（用于已登录用户）
+  async connectGitLabAccount(userId: string, code: string, state: string) {
+    // 验证 state
+    const storedState = await this.redis.get(`oauth:gitlab:connect:${state}`)
+    if (!storedState || storedState !== userId) {
+      throw new Error('Invalid state or user mismatch')
+    }
+
+    // 交换 access token
+    const tokens = await this.gitlab.validateAuthorizationCode(code)
+
+    // 获取 GitLab 用户信息
+    const gitlabBase = (process.env.GITLAB_BASE_URL || 'https://gitlab.com').replace(/\/+$/, '')
+    const response = await fetch(`${gitlabBase}/api/v4/user`, {
+      headers: { Authorization: `Bearer ${tokens.accessToken()}` },
+    })
+    const gitlabUser = (await response.json()) as {
+      id: number
+      username: string
+    }
+
+    // 保存或更新 OAuth 账户（包含 refresh token）
+    await this.db
+      .insert(schema.oauthAccounts)
+      .values({
+        userId,
+        provider: 'gitlab',
+        providerAccountId: gitlabUser.id.toString(),
+        accessToken: tokens.accessToken(),
+        refreshToken: tokens.refreshToken(),
+        expiresAt: tokens.accessTokenExpiresAt(),
+        status: 'active',
+      })
+      .onConflictDoUpdate({
+        target: [schema.oauthAccounts.provider, schema.oauthAccounts.providerAccountId],
+        set: {
+          accessToken: tokens.accessToken(),
+          refreshToken: tokens.refreshToken(),
+          expiresAt: tokens.accessTokenExpiresAt(),
+          status: 'active',
+          updatedAt: new Date(),
+        },
+      })
+
+    // 清理 state
+    await this.redis.del(`oauth:gitlab:connect:${state}`)
+
+    return { success: true }
+  }
+
+  // 获取连接账户的授权 URL
+  async getConnectAuthUrl(
+    provider: 'github' | 'gitlab',
+    userId: string,
+  ): Promise<OAuthUrlResponse> {
+    const state = generateId()
+
+    if (provider === 'github') {
+      const url = this.github.createAuthorizationURL(state, ['repo', 'user'])
+      // 存储 state 和 userId 的关联
+      await this.redis.setex(`oauth:github:connect:${state}`, 600, userId)
+      return { url: url.toString(), state }
+    } else {
+      const url = this.gitlab.createAuthorizationURL(state, [
+        'api',
+        'read_user',
+        'read_repository',
+        'write_repository',
+      ])
+      await this.redis.setex(`oauth:gitlab:connect:${state}`, 600, userId)
+      return { url: url.toString(), state }
+    }
   }
 }

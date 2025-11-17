@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import {
   index,
   integer,
@@ -66,7 +67,10 @@ export const projects = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('projects_org_slug_unique').on(table.organizationId, table.slug),
+    // 部分唯一索引：只对未删除的项目生效
+    uniqueIndex('projects_org_slug_unique')
+      .on(table.organizationId, table.slug)
+      .where(sql`deleted_at IS NULL`),
     index('projects_status_idx').on(table.status),
     index('projects_deleted_idx').on(table.deletedAt),
     index('projects_template_idx').on(table.templateId),

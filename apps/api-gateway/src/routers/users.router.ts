@@ -4,7 +4,7 @@ import {
   userIdSchema,
   userIdsSchema,
 } from '@juanie/core-types'
-import { OAuthAccountsService } from '@juanie/service-auth'
+import { AuthService, OAuthAccountsService } from '@juanie/service-auth'
 import { UsersService } from '@juanie/service-users'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -17,6 +17,7 @@ export class UsersRouter {
     private readonly trpc: TrpcService,
     private readonly usersService: UsersService,
     private readonly oauthAccountsService: OAuthAccountsService,
+    private readonly authService: AuthService,
   ) {}
 
   get router() {
@@ -106,6 +107,42 @@ export class UsersRouter {
               input.provider,
             )
             return { hasProvider }
+          }),
+
+        // 获取 OAuth 授权 URL（用于连接账户）
+        getAuthUrl: this.trpc.protectedProcedure
+          .input(
+            z.object({
+              provider: z.enum(['github', 'gitlab']),
+            }),
+          )
+          .query(async ({ ctx, input }) => {
+            return await this.authService.getConnectAuthUrl(input.provider, ctx.user.id)
+          }),
+
+        // 处理 OAuth 回调（连接账户）
+        connectCallback: this.trpc.protectedProcedure
+          .input(
+            z.object({
+              provider: z.enum(['github', 'gitlab']),
+              code: z.string(),
+              state: z.string(),
+            }),
+          )
+          .mutation(async ({ ctx, input }) => {
+            if (input.provider === 'github') {
+              return await this.authService.connectGitHubAccount(
+                ctx.user.id,
+                input.code,
+                input.state,
+              )
+            } else {
+              return await this.authService.connectGitLabAccount(
+                ctx.user.id,
+                input.code,
+                input.state,
+              )
+            }
           }),
 
         // 断开 OAuth 连接

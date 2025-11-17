@@ -155,8 +155,20 @@ export function useProjects() {
       if (isTRPCClientError(err)) {
         const message = err.message
 
+        // 重复/冲突错误
+        if (
+          message.includes('已存在') ||
+          message.includes('duplicate') ||
+          message.includes('unique')
+        ) {
+          toast.error('创建失败', message)
+        }
         // OAuth 相关错误
-        if (message.includes('OAuth') || message.includes('未找到') || message.includes('连接')) {
+        else if (
+          message.includes('OAuth') ||
+          message.includes('未找到') ||
+          message.includes('连接')
+        ) {
           toast.error(
             'OAuth 授权失败',
             '请前往"设置 > 账户连接"页面连接您的 GitHub/GitLab 账户，或手动输入访问令牌',

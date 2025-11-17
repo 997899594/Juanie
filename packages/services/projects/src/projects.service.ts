@@ -136,16 +136,15 @@ export class ProjectsService {
     return updated
   }
 
-  // 列出组织的项目
+  // 列出组织的项目（基于 visibility 过滤）
   @Trace('projects.list')
   async list(userId: string, organizationId: string) {
-    // 检查用户是否是组织成员
+    // 获取用户的组织成员信息
     const member = await this.getOrgMember(organizationId, userId)
-    if (!member) {
-      throw new Error('不是组织成员')
-    }
+    const isOrgAdmin = member && ['owner', 'admin'].includes(member.role)
 
-    const projects = await this.db
+    // 获取所有项目
+    const allProjects = await this.db
       .select({
         id: schema.projects.id,
         name: schema.projects.name,
@@ -163,7 +162,55 @@ export class ProjectsService {
         and(eq(schema.projects.organizationId, organizationId), isNull(schema.projects.deletedAt)),
       )
 
-    return projects
+    // 根据 visibility 过滤项目
+    const filteredProjects = []
+    for (const project of allProjects) {
+      // public 项目：所有人可见
+      if (project.visibility === 'public') {
+        filteredProjects.push(project)
+        continue
+      }
+
+      // internal 项目：组织成员可见
+      if (project.visibility === 'internal' && member) {
+        filteredProjects.push(project)
+        continue
+      }
+
+      // private 项目：需要检查具体权限
+      if (project.visibility === 'private') {
+        // 组织管理员可以看到所有 private 项目
+        if (isOrgAdmin) {
+          filteredProjects.push(project)
+          continue
+        }
+
+        // 检查是否是项目成员
+        const projectMember = await this.getProjectMember(project.id, userId)
+        if (projectMember) {
+          filteredProjects.push(project)
+          continue
+        }
+
+        // 检查是否通过团队访问
+        const [teamAccess] = await this.db
+          .select({ count: sql<number>`count(*)` })
+          .from(schema.teamProjects)
+          .innerJoin(schema.teamMembers, eq(schema.teamProjects.teamId, schema.teamMembers.teamId))
+          .where(
+            and(
+              eq(schema.teamProjects.projectId, project.id),
+              eq(schema.teamMembers.userId, userId),
+            ),
+          )
+
+        if ((teamAccess?.count || 0) > 0) {
+          filteredProjects.push(project)
+        }
+      }
+    }
+
+    return filteredProjects
   }
 
   // 获取项目详情
@@ -191,8 +238,13 @@ export class ProjectsService {
       return null
     }
 
-    // 检查用户是否有权限访问（组织成员或项目成员）
-    const hasAccess = await this.checkAccess(userId, projectId, project.organizationId)
+    // 检查用户是否有权限访问（基于 visibility）
+    const hasAccess = await this.checkAccess(
+      userId,
+      projectId,
+      project.organizationId,
+      project.visibility,
+    )
     if (!hasAccess) {
       throw new Error('没有权限访问该项目')
     }
@@ -798,34 +850,64 @@ export class ProjectsService {
     return { success: true }
   }
 
-  // 检查用户是否有权限访问项目
+  // 检查用户是否有权限访问项目（基于 visibility）
   private async checkAccess(
     userId: string,
     projectId: string,
     organizationId: string,
+    visibility?: string,
   ): Promise<boolean> {
-    // 检查是否是组织成员
-    const orgMember = await this.getOrgMember(organizationId, userId)
-    if (orgMember) {
+    // 获取项目的 visibility（如果没有传入）
+    let projectVisibility = visibility
+    if (!projectVisibility) {
+      const [project] = await this.db
+        .select({ visibility: schema.projects.visibility })
+        .from(schema.projects)
+        .where(eq(schema.projects.id, projectId))
+        .limit(1)
+      projectVisibility = project?.visibility || 'private'
+    }
+
+    // public 项目：所有人都可以访问
+    if (projectVisibility === 'public') {
       return true
     }
 
-    // 检查是否是项目成员
-    const projectMember = await this.getProjectMember(projectId, userId)
-    if (projectMember) {
-      return true
+    // internal 项目：组织内所有成员都可以访问
+    if (projectVisibility === 'internal') {
+      const orgMember = await this.getOrgMember(organizationId, userId)
+      if (orgMember) {
+        return true
+      }
     }
 
-    // 检查是否通过团队访问
-    const [teamAccess] = await this.db
-      .select({ count: sql<number>`count(*)` })
-      .from(schema.teamProjects)
-      .innerJoin(schema.teamMembers, eq(schema.teamProjects.teamId, schema.teamMembers.teamId))
-      .where(
-        and(eq(schema.teamProjects.projectId, projectId), eq(schema.teamMembers.userId, userId)),
-      )
+    // private 项目：只有项目成员、团队成员或组织管理员可以访问
+    if (projectVisibility === 'private') {
+      // 检查是否是组织管理员
+      const orgMember = await this.getOrgMember(organizationId, userId)
+      if (orgMember && ['owner', 'admin'].includes(orgMember.role)) {
+        return true
+      }
 
-    return (teamAccess?.count || 0) > 0
+      // 检查是否是项目成员
+      const projectMember = await this.getProjectMember(projectId, userId)
+      if (projectMember) {
+        return true
+      }
+
+      // 检查是否通过团队访问
+      const [teamAccess] = await this.db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.teamProjects)
+        .innerJoin(schema.teamMembers, eq(schema.teamProjects.teamId, schema.teamMembers.teamId))
+        .where(
+          and(eq(schema.teamProjects.projectId, projectId), eq(schema.teamMembers.userId, userId)),
+        )
+
+      return (teamAccess?.count || 0) > 0
+    }
+
+    return false
   }
 
   // 辅助方法：获取组织成员信息

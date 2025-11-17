@@ -1,13 +1,13 @@
 <template>
   <div id="app" class="min-h-screen">
     <router-view />
-    <Toaster position="top-right" :duration="3000" />
+    <Toaster position="top-right" rich-colors close-button />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { Toaster } from 'vue-sonner'
+import { Toaster, toast } from '@juanie/ui'
 import { useAuthStore } from '@/stores/auth'
 import { usePreferencesStore } from '@/stores/preferences'
 
@@ -19,6 +19,7 @@ onMounted(async () => {
   await authStore.initialize()
   await preferencesStore.initialize()
 })
+
 </script>
 
 

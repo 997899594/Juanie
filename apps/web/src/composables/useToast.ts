@@ -1,4 +1,4 @@
-import { toast } from 'vue-sonner'
+import { toast } from '@juanie/ui'
 
 /**
  * Toast 通知组合式函数
@@ -21,7 +21,10 @@ export function useToast() {
      * @param description 详细描述（可选）
      */
     error: (message: string, description?: string) => {
-      toast.error(message, { description })
+      if (description) {
+        return toast.error(message, { description })
+      }
+      return toast.error(message)
     },
 
     /**

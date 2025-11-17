@@ -145,150 +145,69 @@
           </div>
 
           <!-- 步骤 4: 确认创建 -->
-          <div v-if="currentStep === 3" class="space-y-6">
-            <div class="text-center space-y-4">
-              <div class="flex justify-center">
-                <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <CheckCircle2 class="h-8 w-8 text-primary" />
+          <div v-if="currentStep === 3">
+            <div class="border rounded-lg divide-y">
+              <!-- 基本信息 -->
+              <div class="p-4 space-y-2">
+                <h4 class="text-sm font-semibold mb-3">基本信息</h4>
+                <div class="grid grid-cols-[120px_1fr] gap-2 text-sm">
+                  <span class="text-muted-foreground">项目名称</span>
+                  <span class="font-medium truncate">{{ formData.name }}</span>
+                  
+                  <span class="text-muted-foreground">项目标识</span>
+                  <span class="font-medium truncate">{{ formData.slug }}</span>
+                  
+                  <span class="text-muted-foreground">项目可见性</span>
+                  <Badge class="w-fit">{{ visibilityLabel }}</Badge>
                 </div>
               </div>
-              <h3 class="text-xl font-semibold">确认项目配置</h3>
-              <p class="text-muted-foreground">
-                请检查以下配置，确认无误后点击"创建项目"
-              </p>
-            </div>
 
-            <div class="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle class="text-base">基本信息</CardTitle>
-                </CardHeader>
-                <CardContent class="space-y-2">
-                  <div class="flex justify-between">
-                    <span class="text-muted-foreground">项目名称:</span>
-                    <span class="font-medium">{{ formData.name }}</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-muted-foreground">项目标识:</span>
-                    <span class="font-medium">{{ formData.slug }}</span>
-                  </div>
-                  <div class="flex justify-between">
-                    <span class="text-muted-foreground">可见性:</span>
-                    <Badge>{{ visibilityLabel }}</Badge>
-                  </div>
-                </CardContent>
-              </Card>
+              <!-- 项目模板 -->
+              <div class="p-4 space-y-2">
+                <h4 class="text-sm font-semibold mb-3">项目模板</h4>
+                <div v-if="selectedTemplate" class="text-sm">
+                  <p class="font-medium">{{ selectedTemplate.name }}</p>
+                  <p class="text-muted-foreground text-xs mt-1">{{ selectedTemplate.description }}</p>
+                </div>
+                <div v-else class="text-sm">
+                  <p class="font-medium">空白项目</p>
+                  <p class="text-muted-foreground text-xs mt-1">从零开始，手动配置所有内容</p>
+                </div>
+              </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle class="text-base">项目模板</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div v-if="selectedTemplate" class="flex items-start space-x-3">
-                    <div class="flex-1">
-                      <h4 class="font-semibold">{{ selectedTemplate.name }}</h4>
-                      <p class="text-sm text-muted-foreground">{{ selectedTemplate.description }}</p>
-                      <div class="flex flex-wrap gap-1 mt-2">
-                        <Badge
-                          v-for="tech in selectedTemplate.techStack"
-                          :key="tech"
-                          variant="outline"
-                          class="text-xs"
-                        >
-                          {{ tech }}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="flex items-start space-x-3">
-                    <div class="flex-1">
-                      <h4 class="font-semibold">空白项目</h4>
-                      <p class="text-sm text-muted-foreground">从零开始，手动配置所有内容</p>
-                      <div class="flex flex-wrap gap-1 mt-2">
-                        <Badge variant="outline" class="text-xs">
-                          自定义配置
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <!-- Git 仓库 -->
+              <div v-if="formData.repository" class="p-4 space-y-2">
+                <h4 class="text-sm font-semibold mb-3">Git 仓库</h4>
+                <div class="grid grid-cols-[120px_1fr] gap-2 text-sm">
+                  <span class="text-muted-foreground">模式</span>
+                  <span class="font-medium">
+                    {{ formData.repository.mode === 'existing' ? '关联现有仓库' : '创建新仓库' }}
+                  </span>
+                  
+                  <span class="text-muted-foreground">提供商</span>
+                  <Badge class="w-fit">{{ formData.repository.provider }}</Badge>
+                  
+                  <template v-if="formData.repository.mode === 'existing'">
+                    <span class="text-muted-foreground">仓库 URL</span>
+                    <span class="font-medium text-xs truncate">{{ formData.repository.url }}</span>
+                  </template>
+                  <template v-else>
+                    <span class="text-muted-foreground">仓库名称</span>
+                    <span class="font-medium truncate">{{ formData.repository.name }}</span>
+                  </template>
+                </div>
+              </div>
 
-              <Card v-if="formData.repository">
-                <CardHeader>
-                  <CardTitle class="text-base">Git 仓库</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div class="space-y-2">
-                    <div class="flex justify-between">
-                      <span class="text-muted-foreground">模式:</span>
-                      <span class="font-medium">
-                        {{ formData.repository.mode === 'existing' ? '关联现有仓库' : '创建新仓库' }}
-                      </span>
-                    </div>
-                    <div class="flex justify-between">
-                      <span class="text-muted-foreground">提供商:</span>
-                      <Badge>{{ formData.repository.provider }}</Badge>
-                    </div>
-                    <div v-if="formData.repository.mode === 'existing'" class="flex justify-between">
-                      <span class="text-muted-foreground">仓库 URL:</span>
-                      <span class="font-medium text-sm">{{ formData.repository.url }}</span>
-                    </div>
-                    <div v-else class="flex justify-between">
-                      <span class="text-muted-foreground">仓库名称:</span>
-                      <span class="font-medium">{{ formData.repository.name }}</span>
-                    </div>
-                    <div v-if="formData.repository.mode === 'create' && formData.repository.includeAppCode" class="flex justify-between">
-                      <span class="text-muted-foreground">包含代码模板:</span>
-                      <Badge variant="outline">是</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle class="text-base">环境配置</CardTitle>
-                  <CardDescription class="text-xs">
-                    {{ selectedTemplate ? '系统将根据模板自动创建 3 个环境' : '系统将创建默认的 3 个环境' }}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div v-if="selectedTemplate && selectedTemplate.defaultConfig?.environments" class="space-y-3">
-                    <div
-                      v-for="env in selectedTemplate.defaultConfig.environments"
-                      :key="env.type"
-                      class="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div>
-                        <div class="font-medium">{{ env.name }}</div>
-                        <div class="text-sm text-muted-foreground">
-                          副本数: {{ env.replicas }} | CPU: {{ env.resources.requests.cpu }} | 内存: {{ env.resources.requests.memory }}
-                        </div>
-                      </div>
-                      <Badge>{{ env.type }}</Badge>
-                    </div>
-                  </div>
-                  <div v-else class="space-y-3">
-                    <div
-                      v-for="env in defaultEnvironments"
-                      :key="env.type"
-                      class="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div>
-                        <div class="font-medium">{{ env.name }}</div>
-                        <div class="text-sm text-muted-foreground">
-                          {{ env.description }}
-                        </div>
-                      </div>
-                      <Badge>{{ env.type }}</Badge>
-                    </div>
-                  </div>
-                  <p class="text-xs text-muted-foreground mt-3">
-                    💡 创建后可在项目设置中调整环境配置
+              <!-- 环境配置 -->
+              <div class="p-4 space-y-2">
+                <h4 class="text-sm font-semibold mb-3">环境配置</h4>
+                <div class="text-sm">
+                  <p class="text-muted-foreground">将创建 3 个默认环境：Development、Staging、Production</p>
+                  <p class="text-xs text-muted-foreground mt-2">
+                    💡 创建后可在项目设置中调整
                   </p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -556,7 +475,7 @@ async function handleCreateProject() {
     // 跳转到项目详情页，显示初始化进度
     router.push(`/projects/${project.id}`)
   } catch (error: any) {
-    // 错误已经在 useProjects 中处理，这里只记录
+    // 错误已经在 useProjects 中通过 toast 显示
     console.error('Project creation failed:', error)
   } finally {
     loading.value = false
