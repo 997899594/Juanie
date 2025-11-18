@@ -1,6 +1,8 @@
 import * as schema from '@juanie/core-database/schemas'
 import { DATABASE } from '@juanie/core-tokens'
 import type { ConnectRepositoryInput } from '@juanie/core-types'
+import { OAuthAccountsService } from '@juanie/service-auth'
+import { GitProviderService } from '@juanie/service-git-providers'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { and, eq } from 'drizzle-orm'
@@ -11,6 +13,8 @@ export class RepositoriesService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly config: ConfigService,
+    private readonly gitProvider: GitProviderService,
+    private readonly oauthAccounts: OAuthAccountsService,
   ) {}
 
   // 连接仓库
@@ -541,5 +545,29 @@ export class RepositoriesService {
       .limit(1)
 
     return !!projectMember
+  }
+
+  // 获取用户在 Git 平台上的仓库列表
+  async listUserRepositories(provider: 'github' | 'gitlab', accessToken: string) {
+    return await this.gitProvider.listUserRepositories(provider, accessToken)
+  }
+
+  // 从 OAuth 账户解析访问令牌
+  async resolveOAuthToken(userId: string, provider: 'github' | 'gitlab'): Promise<string> {
+    const oauthAccount = await this.oauthAccounts.getAccountByProvider(userId, provider)
+
+    if (!oauthAccount) {
+      const providerName = provider === 'github' ? 'GitHub' : 'GitLab'
+      throw new Error(
+        `未找到 ${providerName} OAuth 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
+      )
+    }
+
+    if (!oauthAccount.accessToken || oauthAccount.status !== 'active') {
+      const providerName = provider === 'github' ? 'GitHub' : 'GitLab'
+      throw new Error(`${providerName} 访问令牌无效，请重新连接账户`)
+    }
+
+    return oauthAccount.accessToken
   }
 }

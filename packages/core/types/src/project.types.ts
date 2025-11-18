@@ -101,6 +101,7 @@ export interface InitializationResult {
     gitopsResources: string[]
   }
   errors?: string[]
+  jobIds?: string[] // 异步任务 ID 列表（用于 SSE 监听）
 }
 
 // ============================================

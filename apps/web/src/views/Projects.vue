@@ -97,15 +97,126 @@
     </Dialog>
 
     <!-- 删除确认对话框 -->
-    <ConfirmDialog
-      v-model:open="isDeleteDialogOpen"
-      title="确认删除项目？"
-      :description="`此操作将永久删除项目 &quot;${deletingProject?.name}&quot; 及其所有数据。此操作无法撤销。`"
-      confirm-label="删除"
-      variant="destructive"
-      :loading="loading"
-      @confirm="handleDelete"
-    />
+    <Dialog v-model:open="isDeleteDialogOpen">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>确认删除项目？</DialogTitle>
+          <DialogDescription>
+            此操作将永久删除项目 "{{ deletingProject?.name }}" 及其所有数据。此操作无法撤销。
+          </DialogDescription>
+        </DialogHeader>
+        
+        <!-- 删除进度显示 -->
+        <div v-if="showDeleteProgress" class="mb-4 p-4 border rounded-lg bg-muted/50">
+          <div class="flex items-center gap-3 mb-3">
+            <Loader2 class="h-5 w-5 animate-spin text-primary" />
+            <div class="flex-1">
+              <p class="text-sm font-medium">{{ deleteProgressMessage }}</p>
+              <p v-if="jobProgress" class="text-xs text-muted-foreground mt-1">
+                进度: {{ jobProgress.progress }}% - {{ jobProgress.state }}
+              </p>
+            </div>
+          </div>
+          <Progress v-if="jobProgress" :value="jobProgress.progress" class="h-2" />
+        </div>
+
+        <div class="space-y-3 py-4">
+          <label class="text-sm font-medium text-foreground">Git 仓库处理</label>
+          <div class="grid gap-2">
+            <button
+              type="button"
+              @click="repositoryAction = 'keep'"
+              :class="[
+                'relative flex items-start gap-3 p-4 text-left rounded-lg border-2 transition-all',
+                repositoryAction === 'keep'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50 hover:bg-accent/50'
+              ]"
+            >
+              <div class="flex h-5 items-center">
+                <div :class="[
+                  'h-4 w-4 rounded-full border-2 flex items-center justify-center transition-colors',
+                  repositoryAction === 'keep' ? 'border-primary' : 'border-muted-foreground'
+                ]">
+                  <div v-if="repositoryAction === 'keep'" class="h-2 w-2 rounded-full bg-primary" />
+                </div>
+              </div>
+              <div class="flex-1 space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium">保留仓库</span>
+                  <Badge variant="secondary" class="text-xs">推荐</Badge>
+                </div>
+                <p class="text-sm text-muted-foreground">项目删除后，Git 仓库将保留，可继续访问</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              @click="repositoryAction = 'archive'"
+              :class="[
+                'relative flex items-start gap-3 p-4 text-left rounded-lg border-2 transition-all',
+                repositoryAction === 'archive'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:border-primary/50 hover:bg-accent/50'
+              ]"
+            >
+              <div class="flex h-5 items-center">
+                <div :class="[
+                  'h-4 w-4 rounded-full border-2 flex items-center justify-center transition-colors',
+                  repositoryAction === 'archive' ? 'border-primary' : 'border-muted-foreground'
+                ]">
+                  <div v-if="repositoryAction === 'archive'" class="h-2 w-2 rounded-full bg-primary" />
+                </div>
+              </div>
+              <div class="flex-1 space-y-1">
+                <span class="font-medium">归档仓库</span>
+                <p class="text-sm text-muted-foreground">Git 仓库将被归档，只读状态</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              @click="repositoryAction = 'delete'"
+              class="relative flex items-start gap-3 p-4 text-left rounded-lg border-2 transition-all"
+              :class="[
+                repositoryAction === 'delete'
+                  ? 'border-destructive bg-destructive/5'
+                  : 'border-border hover:border-destructive/50 hover:bg-destructive/5'
+              ]"
+            >
+              <div class="flex h-5 items-center">
+                <div 
+                  :class="[
+                    'h-4 w-4 rounded-full border-2 flex items-center justify-center transition-colors',
+                    repositoryAction === 'delete' ? 'border-destructive' : 'border-muted-foreground'
+                  ]"
+                >
+                  <div 
+                    v-if="repositoryAction === 'delete'" 
+                    class="h-2 w-2 rounded-full bg-destructive"
+                  />
+                </div>
+              </div>
+              <div class="flex-1 space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-destructive">删除仓库</span>
+                  <Badge variant="destructive" class="text-xs">不可恢复</Badge>
+                </div>
+                <p class="text-sm text-muted-foreground">⚠️ Git 仓库将被永久删除，无法恢复</p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="isDeleteDialogOpen = false" :disabled="showDeleteProgress">取消</Button>
+          <Button variant="destructive" :disabled="loading || showDeleteProgress" @click="handleDelete">
+            <Loader2 v-if="loading || showDeleteProgress" class="mr-2 h-4 w-4 animate-spin" />
+            {{ showDeleteProgress ? '删除中...' : '删除项目' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </PageContainer>
 </template>
 
@@ -121,10 +232,15 @@ import {
   DialogContent,
   DialogTitle,
   DialogDescription,
+  DialogHeader,
+  DialogFooter,
+  Badge,
+  Progress,
 } from '@juanie/ui'
-import { Plus, FolderOpen, Building, Search } from 'lucide-vue-next'
+import { Plus, FolderOpen, Building, Search, Loader2 } from 'lucide-vue-next'
 import { useProjects } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
+import { useJobProgress } from '@/composables/useJobProgress'
 import ProjectCard from '@/components/ProjectCard.vue'
 import CreateProjectModal from '@/components/CreateProjectModal.vue'
 import ProjectWizard from '@/components/ProjectWizard.vue'
@@ -132,7 +248,6 @@ import PageContainer from '@/components/PageContainer.vue'
 import LoadingState from '@/components/LoadingState.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ErrorState from '@/components/ErrorState.vue'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
@@ -147,6 +262,8 @@ const {
   deleteProject,
 } = useProjects()
 
+const { progress: jobProgress, connect: connectToJob, disconnect: disconnectJob } = useJobProgress()
+
 const currentOrganizationId = computed(() => appStore.currentOrganizationId)
 
 // 搜索
@@ -157,6 +274,16 @@ const isModalOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 const editingProject = ref<any>(null)
 const deletingProject = ref<any>(null)
+const repositoryAction = ref<'keep' | 'archive' | 'delete'>('keep')
+const showDeleteProgress = ref(false)
+const deleteProgressMessage = ref('')
+
+// 监听删除任务进度
+watch(jobProgress, (newProgress) => {
+  if (newProgress && showDeleteProgress.value) {
+    deleteProgressMessage.value = newProgress.logs[newProgress.logs.length - 1] || '处理中...'
+  }
+})
 
 // 过滤后的项目列表
 const filteredProjects = computed(() => {
@@ -227,11 +354,35 @@ async function handleDelete() {
   if (!deletingProject.value) return
 
   try {
-    await deleteProject(deletingProject.value.id)
-    isDeleteDialogOpen.value = false
-    deletingProject.value = null
+    const jobIds = await deleteProject(deletingProject.value.id, { repositoryAction: repositoryAction.value })
+    
+    // 如果有异步任务（删除/归档仓库），显示进度
+    if (jobIds && jobIds.length > 0 && repositoryAction.value !== 'keep') {
+      showDeleteProgress.value = true
+      deleteProgressMessage.value = repositoryAction.value === 'archive' ? '正在归档仓库...' : '正在删除仓库...'
+      
+      // 连接到第一个任务的 SSE 流
+      const firstJobId = jobIds[0]
+      if (firstJobId) {
+        connectToJob(firstJobId)
+      }
+      
+      // 等待一段时间后关闭对话框
+      setTimeout(() => {
+        isDeleteDialogOpen.value = false
+        deletingProject.value = null
+        repositoryAction.value = 'keep'
+        showDeleteProgress.value = false
+        disconnectJob()
+      }, 3000)
+    } else {
+      isDeleteDialogOpen.value = false
+      deletingProject.value = null
+      repositoryAction.value = 'keep'
+    }
   } catch (error) {
     console.error('Failed to delete project:', error)
+    showDeleteProgress.value = false
   }
 }
 

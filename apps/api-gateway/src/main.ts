@@ -1,4 +1,5 @@
 import cookie from '@fastify/cookie'
+
 import { NestFactory } from '@nestjs/core'
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify'
 import { AppModule } from './app.module'
@@ -11,22 +12,22 @@ const otelSdk = setupObservability()
 
 async function bootstrap() {
   const fastifyAdapter = new FastifyAdapter({ logger: true })
+  const fastify = fastifyAdapter.getInstance()
 
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, fastifyAdapter)
-
-  // CORS
-  app.enableCors({
-    origin: process.env.CORS_ORIGIN,
+  // CORS 配置（统一在这里配置）
+  await fastify.register(import('@fastify/cors'), {
+    origin: process.env.CORS_ORIGIN || 'http://localhost:1997',
     credentials: true,
   })
 
-  // 注册 Cookie 插件（Cookie-only 模式必须）
-  const fastify = fastifyAdapter.getInstance()
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, fastifyAdapter)
+
+  // Cookie 插件
   await fastify.register(cookie, {
     secret: process.env.COOKIE_SECRET || 'juanie-secret',
   })
 
-  // 设置 tRPC
+  // 设置 tRPC（包括 WebSocket）
   const trpcRouter = app.get(TrpcRouter)
   await setupTrpc(fastifyAdapter.getInstance(), trpcRouter)
 

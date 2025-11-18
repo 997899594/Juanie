@@ -146,6 +146,20 @@
 
           <!-- 步骤 4: 确认创建 -->
           <div v-if="currentStep === 3">
+            <!-- 进度显示 -->
+            <div v-if="showProgress" class="mb-6 p-4 border rounded-lg bg-muted/50">
+              <div class="flex items-center gap-3 mb-3">
+                <Loader2 class="h-5 w-5 animate-spin text-primary" />
+                <div class="flex-1">
+                  <p class="text-sm font-medium">{{ progressMessage }}</p>
+                  <p v-if="jobProgress" class="text-xs text-muted-foreground mt-1">
+                    进度: {{ jobProgress.progress }}% - {{ jobProgress.state }}
+                  </p>
+                </div>
+              </div>
+              <Progress v-if="jobProgress" :value="jobProgress.progress" class="h-2" />
+            </div>
+
             <div class="border rounded-lg divide-y">
               <!-- 基本信息 -->
               <div class="p-4 space-y-2">
@@ -248,10 +262,10 @@
             <Button
               v-else-if="currentStep === 3"
               @click="handleCreateProject"
-              :disabled="loading"
+              :disabled="loading || showProgress"
             >
-              <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-              创建项目
+              <Loader2 v-if="loading || showProgress" class="mr-2 h-4 w-4 animate-spin" />
+              {{ showProgress ? '创建中...' : '创建项目' }}
             </Button>
           </div>
         </div>
@@ -261,7 +275,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Button,
@@ -279,6 +293,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Progress,
 } from '@juanie/ui'
 import {
   CheckCircle2,
@@ -291,11 +306,13 @@ import RepositoryConfig from './RepositoryConfig.vue'
 import { useProjects } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
+import { useJobProgress } from '@/composables/useJobProgress'
 
 const router = useRouter()
 const toast = useToast()
 const appStore = useAppStore()
 const { createProject } = useProjects()
+const { progress: jobProgress, connect: connectToJob, disconnect: disconnectJob } = useJobProgress()
 
 const emit = defineEmits<{
   close: []
@@ -313,6 +330,15 @@ const currentStep = ref(0)
 const loading = ref(false)
 const createdProjectId = ref<string | null>(null)
 const repositoryCanProceed = ref(false)
+const showProgress = ref(false)
+const progressMessage = ref('')
+
+// 监听任务进度
+watch(jobProgress, (newProgress) => {
+  if (newProgress) {
+    progressMessage.value = newProgress.logs[newProgress.logs.length - 1] || '处理中...'
+  }
+})
 
 // 表单数据
 const formData = ref({
@@ -322,16 +348,24 @@ const formData = ref({
   visibility: 'private' as 'private' | 'internal' | 'public',
   templateId: null as string | null,
   templateConfig: {} as Record<string, any>,
-  repository: null as {
-    mode: 'existing' | 'create'
-    provider: 'github' | 'gitlab'
-    url?: string
-    name?: string
-    accessToken: string
-    visibility?: 'public' | 'private'
-    defaultBranch?: string
-    includeAppCode?: boolean
-  } | null,
+  repository: null as (
+    | {
+        mode: 'existing'
+        provider: 'github' | 'gitlab'
+        url: string
+        accessToken: string
+        defaultBranch?: string
+      }
+    | {
+        mode: 'create'
+        provider: 'github' | 'gitlab'
+        name: string
+        accessToken: string
+        visibility: 'public' | 'private'
+        defaultBranch?: string
+        includeAppCode?: boolean
+      }
+  ) | null,
 })
 
 const selectedTemplate = ref<any>(null)
@@ -464,16 +498,34 @@ async function handleCreateProject() {
       }
     }
 
-    const project = await createProject(projectData)
+    const { project, jobIds } = await createProject(projectData)
     createdProjectId.value = project.id
 
-    toast.success('项目创建成功', '正在初始化项目资源，请稍候...')
-    
-    // 关闭弹窗
-    emit('close')
-    
-    // 跳转到项目详情页，显示初始化进度
-    router.push(`/projects/${project.id}`)
+    // 如果有异步任务（创建仓库），显示进度
+    if (jobIds && jobIds.length > 0 && projectData.repository?.mode === 'create') {
+      showProgress.value = true
+      progressMessage.value = '正在创建仓库...'
+      
+      // 连接到第一个任务的 SSE 流
+      const firstJobId = jobIds[0]
+      if (firstJobId) {
+        connectToJob(firstJobId)
+      }
+      
+      // 等待一段时间后关闭弹窗并跳转
+      setTimeout(() => {
+        emit('close')
+        router.push(`/projects/${project.id}`)
+      }, 2000)
+    } else {
+      toast.success('项目创建成功', '正在初始化项目资源，请稍候...')
+      
+      // 关闭弹窗
+      emit('close')
+      
+      // 跳转到项目详情页
+      router.push(`/projects/${project.id}`)
+    }
   } catch (error: any) {
     // 错误已经在 useProjects 中通过 toast 显示
     console.error('Project creation failed:', error)

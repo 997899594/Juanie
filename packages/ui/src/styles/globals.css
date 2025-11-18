@@ -299,6 +299,8 @@
 /* ===== Tailwind v4 主题定义 ===== */
 @theme {
   --radius: var(--radius);
+  
+  /* 颜色定义 - Tailwind v4 格式 */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -324,8 +326,6 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
-
-  /* 新增交互式元素 */
   --color-surface-elevated: var(--surface-elevated);
   --color-outline: var(--outline);
 }
@@ -365,6 +365,15 @@
 
 /* ===== 通用交互式元素样式 ===== */
 @layer components {
+  /* 修复 destructive 边框颜色类 */
+  .border-destructive {
+    border-color: var(--destructive) !important;
+  }
+  
+  .border-destructive\/50 {
+    border-color: color-mix(in oklch, var(--destructive) 50%, transparent) !important;
+  }
+
   /* 交互式元素基础样式 */
   .interactive {
     transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;

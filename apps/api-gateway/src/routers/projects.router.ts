@@ -2,6 +2,7 @@ import {
   archiveProjectSchema,
   createProjectSchema,
   createProjectWithTemplateSchema,
+  deleteProjectSchema,
   getProjectHealthSchema,
   getProjectStatusSchema,
   organizationIdQuerySchema,
@@ -106,10 +107,12 @@ export class ProjectsRouter {
 
       // 删除项目
       delete: this.trpc.protectedProcedure
-        .input(projectIdSchema)
+        .input(deleteProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
-            return await this.projectsService.delete(ctx.user.id, input.projectId)
+            return await this.projectsService.delete(ctx.user.id, input.projectId, {
+              repositoryAction: input.repositoryAction,
+            })
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -389,6 +392,13 @@ export class ProjectsRouter {
               message: error instanceof Error ? error.message : '恢复项目失败',
             })
           }
+        }),
+
+      // 订阅项目初始化进度（使用 procedure 因为 subscription 的认证处理不同）
+      onInitProgress: this.trpc.procedure
+        .input(z.object({ projectId: z.string() }))
+        .subscription(async ({ input }) => {
+          return this.projectsService.subscribeToProgress(input.projectId)
         }),
     })
   }

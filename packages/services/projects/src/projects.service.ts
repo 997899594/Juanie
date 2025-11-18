@@ -28,7 +28,7 @@ export class ProjectsService {
   async create(
     userId: string,
     data: CreateProjectInput | CreateProjectWithTemplateInputType,
-  ): Promise<typeof schema.projects.$inferSelect> {
+  ): Promise<typeof schema.projects.$inferSelect & { jobIds?: string[] }> {
     // 检查用户是否是组织成员
     const member = await this.getOrgMember(data.organizationId, userId)
     if (!member) {
@@ -337,27 +337,35 @@ export class ProjectsService {
 
   // 软删除项目
   @Trace('projects.delete')
-  async delete(userId: string, projectId: string) {
-    // 获取项目信息
+  async delete(
+    userId: string,
+    projectId: string,
+    options?: { repositoryAction?: 'keep' | 'archive' | 'delete' },
+  ) {
     const project = await this.get(userId, projectId)
     if (!project) {
       throw new Error('项目不存在')
     }
 
-    // 检查权限（只有 owner 和 admin 可以删除）
     const member = await this.getOrgMember(project.organizationId, userId)
     if (!member || !['owner', 'admin'].includes(member.role)) {
       throw new Error('没有权限删除项目')
     }
 
+    // 软删除项目
     await this.db
       .update(schema.projects)
-      .set({
-        deletedAt: new Date(),
-      })
+      .set({ deletedAt: new Date() })
       .where(eq(schema.projects.id, projectId))
 
-    // 记录审计日志
+    // 处理关联的 Git 仓库
+    const repositoryAction = options?.repositoryAction || 'keep'
+    let jobIds: string[] = []
+
+    if (repositoryAction !== 'keep') {
+      jobIds = await this.orchestrator.handleRepositoryOnDelete(userId, projectId, repositoryAction)
+    }
+
     await this.auditLogs.log({
       userId,
       organizationId: project.organizationId,
@@ -367,10 +375,12 @@ export class ProjectsService {
       metadata: {
         projectName: project.name,
         projectSlug: project.slug,
+        repositoryAction,
+        jobIds,
       },
     })
 
-    return { success: true }
+    return { success: true, jobIds }
   }
 
   // 归档项目
@@ -940,5 +950,71 @@ export class ProjectsService {
       .limit(1)
 
     return member || null
+  }
+
+  /**
+   * 订阅项目初始化进度
+   * 使用 tRPC subscription 实时推送进度
+   */
+  async *subscribeToProgress(projectId: string) {
+    const channel = `project:${projectId}`
+    const eventQueue: any[] = []
+    let resolve: ((value: any) => void) | null = null
+    let isActive = true
+
+    const handler = (event: any) => {
+      if (resolve) {
+        resolve(event)
+        resolve = null
+      } else {
+        eventQueue.push(event)
+      }
+    }
+
+    const eventBus = this.orchestrator.eventBus
+    await eventBus.subscribe(channel, handler)
+
+    try {
+      // 1. 先发送当前项目状态
+      const [project] = await this.db
+        .select()
+        .from(schema.projects)
+        .where(eq(schema.projects.id, projectId))
+        .limit(1)
+
+      if (project) {
+        yield {
+          type: 'init',
+          data: {
+            status: project.status,
+            progress: (project.initializationStatus as any)?.progress || 0,
+          },
+        }
+
+        // 2. 如果已经完成或失败，直接结束
+        if (project.status === 'active' || project.status === 'failed') {
+          return
+        }
+      }
+
+      // 3. 持续监听事件
+      while (isActive) {
+        const event =
+          eventQueue.length > 0
+            ? eventQueue.shift()
+            : await new Promise<any>((r) => {
+                resolve = r
+              })
+
+        yield event
+
+        // 收到完成或失败事件后结束
+        if (event.type === 'job.completed' || event.type === 'job.failed') {
+          isActive = false
+        }
+      }
+    } finally {
+      await eventBus.unsubscribe(channel, handler)
+    }
   }
 }

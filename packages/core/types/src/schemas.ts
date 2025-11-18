@@ -1079,6 +1079,12 @@ export const restoreProjectSchema = z.object({
   resumeGitOpsSync: z.boolean().default(true),
 })
 
+// 删除项目 Schema
+export const deleteProjectSchema = z.object({
+  projectId: uuidSchema,
+  repositoryAction: z.enum(['keep', 'archive', 'delete']).default('keep'),
+})
+
 // ============================================
 // 模板 Schemas
 // ============================================
@@ -1332,6 +1338,7 @@ export type GetProjectStatusInput = z.infer<typeof getProjectStatusSchema>
 export type GetProjectHealthInput = z.infer<typeof getProjectHealthSchema>
 export type ArchiveProjectInput = z.infer<typeof archiveProjectSchema>
 export type RestoreProjectInput = z.infer<typeof restoreProjectSchema>
+export type DeleteProjectInput = z.infer<typeof deleteProjectSchema>
 
 // 模板相关类型
 export type CreateTemplateInput = z.infer<typeof createTemplateSchema>

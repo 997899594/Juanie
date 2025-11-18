@@ -76,8 +76,53 @@
         </Alert>
 
         <div class="space-y-4">
+          <!-- 仓库选择 -->
           <div class="space-y-2">
-            <Label for="repo-url">仓库 URL *</Label>
+            <Label>选择仓库</Label>
+            <Button
+              type="button"
+              variant="outline"
+              class="w-full justify-start"
+              :disabled="loadingRepos"
+              @click="loadUserRepositories"
+            >
+              <Loader2 v-if="loadingRepos" class="mr-2 h-4 w-4 animate-spin" />
+              <GitBranch v-else class="mr-2 h-4 w-4" />
+              {{ selectedRepo ? selectedRepo.fullName : '从您的账户选择仓库' }}
+            </Button>
+            
+            <!-- 仓库列表 -->
+            <div v-if="showRepoList && userRepos.length > 0" class="border rounded-lg max-h-64 overflow-y-auto">
+              <button
+                v-for="repo in userRepos"
+                :key="repo.id"
+                type="button"
+                @click="selectRepository(repo)"
+                class="w-full px-4 py-3 text-left hover:bg-accent transition-colors flex items-center justify-between"
+              >
+                <div class="flex-1">
+                  <div class="font-medium">{{ repo.fullName }}</div>
+                  <div class="text-xs text-muted-foreground">{{ repo.url }}</div>
+                </div>
+                <Badge v-if="repo.private" variant="secondary" class="ml-2">私有</Badge>
+              </button>
+            </div>
+
+            <p v-if="repoError" class="text-xs text-destructive">{{ repoError }}</p>
+          </div>
+
+          <!-- 或手动输入 -->
+          <div class="relative">
+            <div class="absolute inset-0 flex items-center">
+              <span class="w-full border-t" />
+            </div>
+            <div class="relative flex justify-center text-xs uppercase">
+              <span class="bg-background px-2 text-muted-foreground">或手动输入</span>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="repo-url">仓库 URL</Label>
             <Input
               id="repo-url"
               v-model="existingRepo.url"
@@ -138,6 +183,8 @@ import {
   SelectValue,
   Alert,
   AlertDescription,
+  Button,
+  Badge,
 } from '@juanie/ui'
 import {
   GitBranch,
@@ -145,7 +192,10 @@ import {
   Info,
   Lock,
   Globe,
+  Loader2,
 } from 'lucide-vue-next'
+import { trpc } from '@/lib/trpc'
+import { useToast } from '@/composables/useToast'
 
 const props = defineProps<{
   modelValue: any
@@ -158,11 +208,18 @@ const emit = defineEmits<{
   'update:canProceed': [value: boolean]
 }>()
 
+const toast = useToast()
+
 // 状态
-const repositoryMode = ref<'existing' | 'create'>('create') // 默认创建新仓库
+const repositoryMode = ref<'existing' | 'create'>('create')
 const urlError = ref<string | null>(null)
 const isRepoNameAutoFilled = ref(false)
-const userProvider = ref<'github' | 'gitlab'>('gitlab') // 默认 GitLab，后面从用户信息获取
+const userProvider = ref<'github' | 'gitlab'>('gitlab')
+const loadingRepos = ref(false)
+const showRepoList = ref(false)
+const repoError = ref<string | null>(null)
+const userRepos = ref<Array<{ id: string; name: string; fullName: string; url: string; private: boolean }>>([])
+const selectedRepo = ref<{ id: string; name: string; fullName: string; url: string; private: boolean } | null>(null)
 
 // 关联现有仓库
 const existingRepo = ref({
@@ -176,16 +233,38 @@ const newRepo = ref({
   visibility: 'private' as 'private' | 'public',
 })
 
-// 获取用户登录的提供商
-onMounted(async () => {
+// 用户可以选择使用 OAuth 或手动输入 token
+// 如果 accessToken 为空，后端会自动从 OAuth 账户获取
+// 这样更安全，不需要在前端暴露 token
+
+// 加载用户仓库列表
+async function loadUserRepositories() {
+  loadingRepos.value = true
+  repoError.value = null
+  showRepoList.value = false
+
   try {
-    // TODO: 从用户信息中获取登录提供商
-    // const user = await trpc.auth.me.query()
-    // userProvider.value = user.provider
-  } catch (error) {
-    console.error('Failed to get user provider:', error)
+    // 使用特殊标记，后端会自动从 OAuth 账户获取 token
+    userRepos.value = await trpc.repositories.listUserRepositories.query({
+      provider: userProvider.value,
+      accessToken: '__USE_OAUTH__', // 后端自动处理
+    })
+    showRepoList.value = true
+  } catch (error: any) {
+    repoError.value = error.message || '获取仓库列表失败'
+    toast.error('获取仓库列表失败', error.message)
+  } finally {
+    loadingRepos.value = false
   }
-})
+}
+
+// 选择仓库
+function selectRepository(repo: typeof userRepos.value[0]) {
+  selectedRepo.value = repo
+  existingRepo.value.url = repo.url
+  showRepoList.value = false
+  urlError.value = null
+}
 
 // 验证仓库 URL
 function validateRepoUrl() {
@@ -252,7 +331,7 @@ watch(
           mode: 'existing' as const,
           provider: userProvider.value,
           url: existingRepo.value.url,
-          accessToken: '__USE_OAUTH__', // 自动使用 OAuth
+          accessToken: '__USE_OAUTH__', // 后端自动从 OAuth 获取
           defaultBranch: existingRepo.value.defaultBranch || 'main',
         }
       }
@@ -263,7 +342,7 @@ watch(
           provider: userProvider.value,
           name: newRepo.value.name,
           visibility: newRepo.value.visibility,
-          accessToken: '__USE_OAUTH__', // 自动使用 OAuth
+          accessToken: '__USE_OAUTH__', // 后端自动从 OAuth 获取
           defaultBranch: 'main',
           includeAppCode: false,
         }

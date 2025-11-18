@@ -117,9 +117,6 @@ export class GitProviderService {
     })
 
     if (!response.ok) {
-      const error: any = await response.json().catch(() => ({}))
-      const message = error.message || error.error || response.statusText
-
       if (response.status === 401) {
         throw new Error('GitLab 访问令牌无效，请重新连接账户')
       }
@@ -128,19 +125,15 @@ export class GitProviderService {
         throw new Error('GitLab 令牌权限不足，需要 api 权限')
       }
 
-      if (response.status === 422) {
+      if (response.status === 400 || response.status === 422) {
         throw new Error(`仓库名称 "${options.name}" 已存在或不符合命名规范`)
       }
 
-      if (response.status === 502 || response.status === 503 || response.status === 504) {
-        throw new Error('GitLab 服务暂时不可用，请稍后重试')
-      }
-
       if (response.status >= 500) {
-        throw new Error(`GitLab 服务器错误 (${response.status})，请稍后重试`)
+        throw new Error(`GitLab 服务器错误，请稍后重试`)
       }
 
-      throw new Error(`GitLab API 错误: ${message}`)
+      throw new Error(`GitLab API 请求失败 (${response.status})`)
     }
 
     const data = (await response.json()) as any
@@ -471,6 +464,124 @@ export class GitProviderService {
       }
 
       throw new Error(`创建仓库失败: ${err}`)
+    }
+  }
+
+  /**
+   * 归档仓库
+   */
+  async archiveRepository(
+    provider: 'github' | 'gitlab',
+    fullName: string,
+    accessToken: string,
+  ): Promise<void> {
+    if (provider === 'github') {
+      const url = `https://api.github.com/repos/${fullName}`
+      await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+        body: JSON.stringify({ archived: true }),
+      })
+    } else {
+      const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+      const projectId = encodeURIComponent(fullName)
+      const url = `${gitlabUrl}/api/v4/projects/${projectId}`
+      await fetch(url, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ archived: true }),
+      })
+    }
+  }
+
+  /**
+   * 删除仓库
+   */
+  async deleteRepository(
+    provider: 'github' | 'gitlab',
+    fullName: string,
+    accessToken: string,
+  ): Promise<void> {
+    if (provider === 'github') {
+      const url = `https://api.github.com/repos/${fullName}`
+      await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      })
+    } else {
+      const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+      const projectId = encodeURIComponent(fullName)
+      const url = `${gitlabUrl}/api/v4/projects/${projectId}`
+      await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+    }
+  }
+
+  /**
+   * 获取用户有权限的仓库列表
+   */
+  async listUserRepositories(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+  ): Promise<Array<{ id: string; name: string; fullName: string; url: string; private: boolean }>> {
+    if (provider === 'github') {
+      const url = 'https://api.github.com/user/repos?per_page=100&sort=updated'
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('获取 GitHub 仓库列表失败')
+      }
+
+      const repos = (await response.json()) as any[]
+      return repos.map((repo: any) => ({
+        id: String(repo.id),
+        name: repo.name,
+        fullName: repo.full_name,
+        url: repo.clone_url,
+        private: repo.private,
+      }))
+    } else {
+      const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+      const url = `${gitlabUrl}/api/v4/projects?membership=true&per_page=100&order_by=updated_at`
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('获取 GitLab 仓库列表失败')
+      }
+
+      const repos = (await response.json()) as any[]
+      return repos.map((repo: any) => ({
+        id: String(repo.id),
+        name: repo.name,
+        fullName: repo.path_with_namespace,
+        url: repo.http_url_to_repo,
+        private: repo.visibility === 'private',
+      }))
     }
   }
 }

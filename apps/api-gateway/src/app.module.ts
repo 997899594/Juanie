@@ -1,5 +1,6 @@
 import { DatabaseModule } from '@juanie/core-database/module'
 import { QueueModule } from '@juanie/core-queue/module'
+import { SseModule } from '@juanie/core-sse'
 import { AiAssistantsModule } from '@juanie/service-ai-assistants'
 import { AuditLogsModule } from '@juanie/service-audit-logs'
 import { AuthModule } from '@juanie/service-auth'
@@ -30,6 +31,7 @@ import { TrpcModule } from './trpc/trpc.module'
     }),
     DatabaseModule,
     QueueModule,
+    SseModule,
     StorageModule,
     K3sModule,
     OllamaModule,

@@ -34,6 +34,7 @@ export const projects = pgTable(
       progress: number // 0-100
       error?: string // 错误信息
       completedSteps: string[] // 已完成的步骤
+      jobId?: string // 异步任务 ID，用于 SSE 连接
     }>(),
 
     // 模板信息

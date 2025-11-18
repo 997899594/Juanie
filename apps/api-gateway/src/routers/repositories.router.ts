@@ -9,6 +9,7 @@ import {
 import { RepositoriesService } from '@juanie/service-repositories'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
+import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'
 
 @Injectable()
@@ -43,6 +44,31 @@ export class RepositoriesRouter {
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取仓库列表失败',
+            })
+          }
+        }),
+
+      // 获取用户在 Git 平台上的仓库列表
+      listUserRepositories: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            provider: z.enum(['github', 'gitlab']),
+            accessToken: z.string(),
+          }),
+        )
+        .query(async ({ ctx, input }) => {
+          try {
+            // 如果是特殊标记，从 OAuth 账户获取真实 token
+            let token = input.accessToken
+            if (token === '__USE_OAUTH__') {
+              token = await this.repositoriesService.resolveOAuthToken(ctx.user.id, input.provider)
+            }
+
+            return await this.repositoriesService.listUserRepositories(input.provider, token)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
               message: error instanceof Error ? error.message : '获取仓库列表失败',
             })
           }

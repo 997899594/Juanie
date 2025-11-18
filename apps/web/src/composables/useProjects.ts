@@ -80,10 +80,10 @@ export function useProjects() {
 
   /**
    * 创建项目（支持模板和仓库配置）
+   * 返回项目信息和任务 ID（如果有异步任务）
    */
   async function createProject(
     data: RouterInput['projects']['create'] & {
-      repositoryUrl?: string
       templateId?: string
       templateConfig?: Record<string, any>
       repository?:
@@ -104,7 +104,7 @@ export function useProjects() {
             includeAppCode?: boolean
           }
     },
-  ) {
+  ): Promise<{ project: Project; jobIds?: string[] }> {
     loading.value = true
     error.value = null
 
@@ -132,21 +132,20 @@ export function useProjects() {
         }
       }
 
-      const { repositoryUrl, ...createInput } = data
-
       // 统一使用 create 方法（现在支持模板和仓库配置）
-      const result = await trpc.projects.create.mutate(createInput)
+      const result = await trpc.projects.create.mutate(data)
 
       // 刷新项目列表
       await fetchProjects(data.organizationId)
 
       // 根据是否配置了仓库显示不同的提示
-      if (createInput.repository || createInput.templateId) {
+      if (data.repository || data.templateId) {
         toast.success('创建成功', '项目正在初始化，请稍候...')
       } else {
         toast.success('创建成功', `项目 "${data.name}" 已创建`)
       }
-      return result
+
+      return { project: result, jobIds: [] }
     } catch (err) {
       console.error('Failed to create project:', err)
       error.value = '创建项目失败'
@@ -281,22 +280,38 @@ export function useProjects() {
 
   /**
    * 删除项目
+   * 返回任务 ID 列表供监听进度
    */
-  async function deleteProject(projectId: string) {
+  async function deleteProject(
+    projectId: string,
+    options?: { repositoryAction?: 'keep' | 'archive' | 'delete' },
+  ): Promise<string[]> {
     loading.value = true
     error.value = null
 
     try {
-      await trpc.projects.delete.mutate({ projectId })
+      const result = await trpc.projects.delete.mutate({
+        projectId,
+        repositoryAction: options?.repositoryAction || 'keep',
+      })
 
-      // 更新本地列表
       projects.value = projects.value.filter((p) => p.id !== projectId)
 
       if (currentProject.value?.id === projectId) {
         currentProject.value = null
       }
 
-      toast.success('删除成功', '项目已删除')
+      const action = options?.repositoryAction || 'keep'
+      if (action === 'keep') {
+        toast.success('删除成功', '项目已删除')
+      } else {
+        toast.success(
+          '删除成功',
+          `项目已删除，正在${action === 'archive' ? '归档' : '删除'}仓库...`,
+        )
+      }
+
+      return result.jobIds || []
     } catch (err) {
       console.error('Failed to delete project:', err)
       error.value = '删除项目失败'

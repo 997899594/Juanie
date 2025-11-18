@@ -1,6 +1,11 @@
 import * as schema from '@juanie/core-database/schemas'
 import { Trace } from '@juanie/core-observability'
-import { DEPLOYMENT_QUEUE } from '@juanie/core-queue'
+import {
+  DEPLOYMENT_QUEUE,
+  PROJECT_INITIALIZATION_QUEUE,
+  REPOSITORY_QUEUE,
+} from '@juanie/core-queue'
+import { EventBusService } from '@juanie/core-sse'
 import { DATABASE, REDIS } from '@juanie/core-tokens'
 import type {
   CreateProjectWithTemplateInput,
@@ -40,6 +45,8 @@ export class ProjectOrchestrator implements OnModuleInit {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
+    @Inject(REPOSITORY_QUEUE) private repositoryQueue: Queue,
+    @Inject(PROJECT_INITIALIZATION_QUEUE) private projectInitQueue: Queue,
     @Inject(REDIS) private redis: Redis,
     private environments: EnvironmentsService,
     private repositories: RepositoriesService,
@@ -49,6 +56,7 @@ export class ProjectOrchestrator implements OnModuleInit {
     private notifications: NotificationsService,
     private oauthAccounts: OAuthAccountsService,
     private gitProvider: GitProviderService,
+    public eventBus: EventBusService, // 公开以供 ProjectsService 访问
   ) {}
 
   onModuleInit() {
@@ -68,7 +76,7 @@ export class ProjectOrchestrator implements OnModuleInit {
   async createAndInitialize(
     userId: string,
     data: CreateProjectWithTemplateInput,
-  ): Promise<typeof schema.projects.$inferSelect> {
+  ): Promise<typeof schema.projects.$inferSelect & { jobIds?: string[] }> {
     this.logger.log(`Creating project: ${data.name}`)
 
     // 1. 创建项目记录
@@ -105,21 +113,35 @@ export class ProjectOrchestrator implements OnModuleInit {
 
       this.logger.log(`Initialization path: template=${hasTemplate}, repository=${hasRepository}`)
 
+      let jobIds: string[] | undefined
+
       if (hasTemplate) {
         // 路径 A: 使用模板初始化（可能包含仓库）
-        await this.initializeFromTemplate(userId, project.id, data.templateId!, {
-          repository: data.repository,
-          templateConfig: data.templateConfig,
-        })
+        const result = await this.initializeFromTemplate(
+          userId,
+          project.id,
+          project.organizationId,
+          data.templateId!,
+          {
+            repository: data.repository,
+            templateConfig: data.templateConfig,
+          },
+        )
+        jobIds = result.jobIds
       } else if (hasRepository) {
         // 路径 B: 无模板但有仓库
-        await this.initializeWithRepository(userId, project.id, data.repository!)
+        await this.initializeWithRepository(
+          userId,
+          project.id,
+          project.organizationId,
+          data.repository!,
+        )
       } else {
         // 路径 C: 空项目（仍需创建默认环境）
         await this.initializeEmptyProject(userId, project.id)
       }
 
-      return project
+      return { ...project, jobIds }
     } catch (error) {
       // 统一错误处理
       await this.handleInitializationError(project.id, error as Error, userId)
@@ -135,6 +157,7 @@ export class ProjectOrchestrator implements OnModuleInit {
   async initializeFromTemplate(
     userId: string,
     projectId: string,
+    organizationId: string,
     templateId: string,
     config: {
       repository?: CreateProjectWithTemplateInput['repository']
@@ -148,6 +171,7 @@ export class ProjectOrchestrator implements OnModuleInit {
       repositories: [],
       gitopsResources: [],
     }
+    const jobIds: string[] = [] // 跟踪异步任务 ID
 
     try {
       // 1. 获取模板配置
@@ -162,7 +186,7 @@ export class ProjectOrchestrator implements OnModuleInit {
         completedSteps: ['create_project'],
       })
 
-      // 2. 创建环境（development, staging, production）
+      // 2. 创建环境（development, staging, production）- 并行创建
       this.logger.log(`Creating environments for project ${projectId}`)
       const environmentTypes: Array<'development' | 'staging' | 'production'> = [
         'development',
@@ -170,7 +194,7 @@ export class ProjectOrchestrator implements OnModuleInit {
         'production',
       ]
 
-      for (const envType of environmentTypes) {
+      const environmentPromises = environmentTypes.map(async (envType) => {
         const envTemplate = template.defaultConfig.environments.find((e) => e.type === envType)
         const fallbackName =
           envType === 'development'
@@ -190,10 +214,16 @@ export class ProjectOrchestrator implements OnModuleInit {
         })
 
         if (environment) {
-          createdResources.environments.push(environment.id)
           this.logger.log(`Created environment: ${environment.name} (${environment.id})`)
+          return environment.id
         }
-      }
+        return null
+      })
+
+      const environmentIds = (await Promise.all(environmentPromises)).filter(
+        (id): id is string => id !== null,
+      )
+      createdResources.environments.push(...environmentIds)
 
       await this.updateInitializationStatus(projectId, {
         step: 'create_environments',
@@ -206,70 +236,118 @@ export class ProjectOrchestrator implements OnModuleInit {
         this.logger.log(`Processing repository for project ${projectId}`)
         this.logger.log(`Repository config: ${JSON.stringify(config.repository)}`)
 
-        // 处理 OAuth 令牌
-        const repositoryConfig = await this.resolveAccessToken(userId, config.repository)
-        this.logger.log(
-          `Resolved repository config: ${JSON.stringify({ ...repositoryConfig, accessToken: '***' })}`,
-        )
-
-        const repository = await this.handleRepository(userId, projectId, repositoryConfig)
-        this.logger.log(`Repository created/connected: ${repository.id}`)
-        createdResources.repositories.push(repository.id)
-
-        await this.updateInitializationStatus(projectId, {
-          step: 'setup_repository',
-          progress: 60,
-          completedSteps: ['create_project', 'load_template', 'create_environments'],
-        })
-
-        // 4. 生成 K8s 配置文件并提交到 Git
-        this.logger.log(`Generating K8s configurations for project ${projectId}`)
-        await this.generateAndCommitK8sConfigs(
-          userId,
-          projectId,
-          repository.id,
-          template,
-          config.templateConfig,
-        )
-
-        await this.updateInitializationStatus(projectId, {
-          step: 'generate_k8s_configs',
-          progress: 80,
-          completedSteps: [
-            'create_project',
-            'load_template',
-            'create_environments',
-            'setup_repository',
-          ],
-        })
-
-        // 5. 创建 GitOps 资源
-        this.logger.log(`Creating GitOps resources for project ${projectId}`)
-        const environments = await this.environments.list(userId, projectId)
-
-        for (const environment of environments) {
-          const gitopsResource = await this.flux.createGitOpsResource({
+        // 区分快速路径和慢速路径
+        if (config.repository.mode === 'existing') {
+          // 快速路径也需要解析 token，但这是必要的同步操作
+          const repositoryConfig = await this.resolveAccessToken(userId, config.repository)
+          this.logger.log(
+            `Resolved repository config: ${JSON.stringify({ ...repositoryConfig, accessToken: '***' })}`,
+          )
+          // 快速路径：关联现有仓库（同步，很快）
+          const repository = await this.connectExistingRepository(
+            userId,
             projectId,
-            environmentId: environment.id,
-            repositoryId: repository.id,
-            type: 'kustomization',
-            name: `${projectId}-${environment.type}`,
-            namespace: 'default',
-            config: {
-              gitRepositoryName: repository.fullName,
-              path: `k8s/overlays/${environment.type}`,
-              interval: '5m',
-              prune: true,
-              timeout: '2m',
-            },
+            repositoryConfig as Extract<typeof repositoryConfig, { mode: 'existing' }>,
+          )
+          this.logger.log(`Repository connected: ${repository.id}`)
+          createdResources.repositories.push(repository.id)
+
+          await this.updateInitializationStatus(projectId, {
+            step: 'setup_repository',
+            progress: 60,
+            completedSteps: ['create_project', 'load_template', 'create_environments'],
           })
 
-          createdResources.gitopsResources.push(gitopsResource.id)
-          this.logger.log(`Created GitOps resource for environment: ${environment.type}`)
+          // 创建 GitOps 资源
+          this.logger.log(`Creating GitOps resources for project ${projectId}`)
+          const environments = await this.environments.list(userId, projectId)
+
+          for (const environment of environments) {
+            try {
+              const gitopsResource = await this.flux.createGitOpsResource({
+                projectId,
+                environmentId: environment.id,
+                repositoryId: repository.id,
+                type: 'kustomization',
+                name: `${projectId}-${environment.type}`,
+                namespace: 'default',
+                config: {
+                  gitRepositoryName: repository.fullName,
+                  path: `k8s/overlays/${environment.type}`,
+                  interval: '5m',
+                  prune: true,
+                  timeout: '2m',
+                },
+              })
+
+              createdResources.gitopsResources.push(gitopsResource.id)
+              this.logger.log(`Created GitOps resource for environment: ${environment.type}`)
+            } catch (error) {
+              this.logger.error(
+                `Failed to create GitOps resource for environment ${environment.type}:`,
+                error,
+              )
+              // 继续创建其他环境的资源
+            }
+          }
+
+          await this.updateInitializationStatus(projectId, {
+            step: 'create_gitops_resources',
+            progress: 80,
+            completedSteps: [
+              'create_project',
+              'load_template',
+              'create_environments',
+              'setup_repository',
+            ],
+          })
+        } else {
+          // 慢速路径：创建新仓库（异步）
+          // 不在这里解析 token，让 worker 去做
+          // 传递已知的信息，避免重复查询
+          const { jobId, repositoryName } = await this.createNewRepositoryAndConnect(
+            userId,
+            projectId,
+            organizationId,
+            createdResources.environments, // 传递已创建的环境 ID
+            config.repository,
+          )
+
+          jobIds.push(jobId) // 保存 jobId 供前端 SSE 监听
+          this.logger.log(`Repository creation queued: ${repositoryName} (job: ${jobId})`)
+
+          // 更新项目状态，标记为等待仓库创建，并保存 jobId
+          await this.db
+            .update(schema.projects)
+            .set({
+              status: 'initializing',
+              initializationStatus: {
+                step: 'creating_repository',
+                progress: 50,
+                completedSteps: ['create_project', 'load_template', 'create_environments'],
+                jobId, // 保存 jobId 供前端 SSE 连接使用
+              },
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.projects.id, projectId))
+
+          // 注意：后续的 K8s 配置和 GitOps 资源创建将在 worker 完成后通过事件触发
+          // 这里不再继续执行，避免阻塞
+          this.logger.log(
+            `Project ${projectId} initialization will continue after repository creation`,
+          )
+
+          // 早期返回，避免执行后面的状态更新
+          return {
+            success: true,
+            projectId,
+            createdResources,
+            jobIds: [jobId],
+          }
         }
       }
 
-      // 6. 更新项目状态为 active
+      // 6. 更新项目状态为 active（只有快速路径会到这里）
       await this.db
         .update(schema.projects)
         .set({
@@ -282,7 +360,6 @@ export class ProjectOrchestrator implements OnModuleInit {
               'load_template',
               'create_environments',
               'setup_repository',
-              'generate_k8s_configs',
               'create_gitops_resources',
             ],
           },
@@ -313,6 +390,7 @@ export class ProjectOrchestrator implements OnModuleInit {
         success: true,
         projectId,
         createdResources,
+        jobIds: jobIds.length > 0 ? jobIds : undefined,
       }
     } catch (error) {
       this.logger.error(`Failed to initialize project ${projectId}:`, error)
@@ -686,6 +764,7 @@ export class ProjectOrchestrator implements OnModuleInit {
   private async initializeWithRepository(
     userId: string,
     projectId: string,
+    organizationId: string,
     repositoryConfig: NonNullable<CreateProjectWithTemplateInput['repository']>,
   ): Promise<void> {
     this.logger.log(`Initializing project ${projectId} with repository only`)
@@ -735,23 +814,90 @@ export class ProjectOrchestrator implements OnModuleInit {
       })
 
       const resolvedConfig = await this.resolveAccessToken(userId, repositoryConfig)
-      const repository = await this.handleRepository(userId, projectId, resolvedConfig)
-      createdResources.repositories.push(repository.id)
 
-      await this.markAsActive(projectId, [
-        'create_project',
-        'create_environments',
-        'setup_repository',
-      ])
+      // 区分快速路径和慢速路径
+      if (resolvedConfig.mode === 'existing') {
+        // 快速路径：关联现有仓库
+        const repository = await this.connectExistingRepository(userId, projectId, resolvedConfig)
+        createdResources.repositories.push(repository.id)
 
-      // 发送通知
-      await this.notifications.create({
-        userId,
-        type: 'system',
-        title: '项目创建完成',
-        message: `项目已成功创建，包含 3 个环境和关联的仓库`,
-        priority: 'normal',
-      })
+        // 创建 GitOps 资源（如果 K3s 可用）
+        try {
+          if (this.flux.isInstalled()) {
+            this.logger.log(`Creating GitOps resources for project ${projectId}`)
+            const environments = await this.environments.list(userId, projectId)
+
+            for (const environment of environments) {
+              try {
+                const gitopsResource = await this.flux.createGitOpsResource({
+                  projectId,
+                  environmentId: environment.id,
+                  repositoryId: repository.id,
+                  type: 'kustomization',
+                  name: `${projectId}-${environment.type}`,
+                  namespace: 'default',
+                  config: {
+                    gitRepositoryName: repository.fullName,
+                    path: `k8s/overlays/${environment.type}`,
+                    interval: '5m',
+                    prune: true,
+                    timeout: '2m',
+                  },
+                })
+
+                createdResources.gitopsResources.push(gitopsResource.id)
+                this.logger.log(`Created GitOps resource for environment: ${environment.type}`)
+              } catch (error) {
+                this.logger.error(
+                  `Failed to create GitOps resource for environment ${environment.type}:`,
+                  error,
+                )
+                // 继续创建其他环境的资源
+              }
+            }
+          } else {
+            this.logger.log(`Flux not installed, skipping GitOps resource creation`)
+          }
+        } catch (error) {
+          this.logger.error(`Failed to create GitOps resources (non-fatal):`, error)
+          // GitOps 资源创建失败不应该导致项目创建失败
+        }
+
+        await this.markAsActive(projectId, [
+          'create_project',
+          'create_environments',
+          'setup_repository',
+        ])
+
+        // 发送通知
+        await this.notifications.create({
+          userId,
+          type: 'system',
+          title: '项目创建完成',
+          message: `项目已成功创建，包含 3 个环境和关联的仓库`,
+          priority: 'normal',
+        })
+      } else {
+        // 慢速路径：创建新仓库（异步）
+        const { jobId } = await this.createNewRepositoryAndConnect(
+          userId,
+          projectId,
+          organizationId,
+          createdResources.environments,
+          resolvedConfig,
+        )
+
+        // 项目保持 initializing 状态，等待仓库创建完成
+        await this.updateInitializationStatus(projectId, {
+          step: 'creating_repository',
+          progress: 50,
+          completedSteps: ['create_project', 'create_environments'],
+        })
+
+        this.logger.log(
+          `Project ${projectId} will be activated after repository creation (job: ${jobId})`,
+        )
+      }
     } catch (error) {
       this.logger.error(`Failed to initialize project ${projectId} with repository:`, error)
 
@@ -809,24 +955,6 @@ export class ProjectOrchestrator implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Failed to resolve OAuth token:`, error)
       throw error
-    }
-  }
-
-  /**
-   * 处理 Git 仓库（关联现有或创建新仓库）
-   * Requirements: 1.2
-   */
-  private async handleRepository(
-    userId: string,
-    projectId: string,
-    repositoryConfig: NonNullable<CreateProjectWithTemplateInput['repository']>,
-  ): Promise<typeof schema.repositories.$inferSelect> {
-    this.logger.log(`Handling repository for project ${projectId}, mode: ${repositoryConfig.mode}`)
-
-    if (repositoryConfig.mode === 'existing') {
-      return await this.connectExistingRepository(userId, projectId, repositoryConfig)
-    } else {
-      return await this.createNewRepositoryAndConnect(userId, projectId, repositoryConfig)
     }
   }
 
@@ -890,79 +1018,62 @@ export class ProjectOrchestrator implements OnModuleInit {
   }
 
   /**
-   * 创建新仓库并连接
+   * 创建新仓库并初始化项目（异步）
    * Requirements: 4.1, 4.2, 4.3, 4.4
+   *
+   * 使用完整的项目初始化 Worker，负责：
+   * 1. 创建 Git 仓库
+   * 2. 推送初始代码（包含 K8s overlays）
+   * 3. 创建 GitOps 资源
+   * 4. 更新项目状态
+   *
+   * 前端通过 SSE 监听整个流程的进度
    */
   private async createNewRepositoryAndConnect(
     userId: string,
     projectId: string,
+    organizationId: string,
+    environmentIds: string[], // 直接传递环境 ID，避免查询
     config: Extract<NonNullable<CreateProjectWithTemplateInput['repository']>, { mode: 'create' }>,
-  ): Promise<typeof schema.repositories.$inferSelect> {
-    this.logger.log(`Creating new repository: ${config.name}`)
+  ): Promise<{ jobId: string; repositoryName: string }> {
+    this.logger.log(`Queueing project initialization: ${config.name}`)
 
     try {
-      // 调用 Git Provider API 创建仓库
-      const repoInfo = await this.createNewRepository(config.provider, config.accessToken, {
-        name: config.name,
-        description: `Repository for project ${projectId}`,
-        visibility: config.visibility || 'private',
-        defaultBranch: config.defaultBranch || 'main',
-        autoInit: true,
-      })
-
-      this.logger.log(`Repository created on ${config.provider}: ${repoInfo.fullName}`)
-
-      // 连接到数据库
-      const repository = await this.repositories.connect(userId, {
-        projectId,
-        provider: config.provider,
-        fullName: repoInfo.fullName,
-        cloneUrl: repoInfo.cloneUrl,
-        defaultBranch: repoInfo.defaultBranch,
-      })
-
-      if (!repository) {
-        throw new Error('连接仓库失败，请稍后重试')
-      }
-
-      this.logger.log(`Repository connected to database: ${repository.id}`)
-
-      // 推送初始代码（模板项目总是推送）
-      this.logger.log(`Pushing initial app code...`)
-      const pushResult = await this.pushInitialAppCode(
-        config.provider,
-        config.accessToken,
-        repoInfo.fullName,
-        repoInfo.defaultBranch,
+      // 将完整的项目初始化任务加入队列
+      const job = await this.projectInitQueue.add(
+        'initialize-project',
+        {
+          projectId,
+          userId,
+          organizationId,
+          repository: {
+            provider: config.provider,
+            name: config.name,
+            visibility: config.visibility || 'private',
+            defaultBranch: config.defaultBranch || 'main',
+            accessToken: config.accessToken,
+          },
+          environmentIds,
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 2000,
+          },
+          removeOnComplete: 100,
+          removeOnFail: 500,
+        },
       )
 
-      if (pushResult.success) {
-        this.logger.log(`Initial code pushed successfully`)
-      } else {
-        // 推送失败不应该导致整个流程失败（非致命错误）
-        this.logger.error(`Failed to push initial code (non-fatal):`, {
-          error: pushResult.error,
-          repository: repoInfo.fullName,
-          branch: repoInfo.defaultBranch,
-        })
+      this.logger.log(`Project initialization queued: ${config.name} (job: ${job.id})`)
 
-        // 发送通知给用户
-        try {
-          await this.notifications.create({
-            userId,
-            type: 'system',
-            title: '初始代码推送失败',
-            message: `仓库 "${repoInfo.fullName}" 已创建，但初始代码推送失败: ${pushResult.error || '未知错误'}。您可以手动推送代码。`,
-            priority: 'normal',
-          })
-        } catch (notificationError) {
-          this.logger.error(`Failed to send push failure notification:`, notificationError)
-        }
+      return {
+        jobId: job.id!,
+        repositoryName: config.name,
       }
-
-      return repository
     } catch (error) {
-      this.logger.error(`Failed to create and connect repository:`, {
+      this.logger.error(`Failed to queue repository creation:`, {
         name: config.name,
         provider: config.provider,
         error: error instanceof Error ? error.message : '未知错误',
@@ -991,28 +1102,6 @@ export class ProjectOrchestrator implements OnModuleInit {
     const provider = host.includes('github') ? ('github' as const) : ('gitlab' as const)
 
     return { fullName, provider }
-  }
-
-  /**
-   * 生成 K8s 配置文件并提交到 Git
-   * Requirements: 1.2, 1.3
-   */
-  private async generateAndCommitK8sConfigs(
-    _userId: string,
-    projectId: string,
-    _repositoryId: string,
-    _template: any,
-    _templateConfig?: Record<string, any>,
-  ): Promise<void> {
-    this.logger.log(`Generating K8s configs for project ${projectId}`)
-
-    // TODO: 实现完整的 K8s 配置生成和提交逻辑
-    // 这需要：
-    // 1. 获取环境列表
-    // 2. 为每个环境渲染模板
-    // 3. 使用 GitOpsService 提交文件到 Git 仓库
-
-    this.logger.log(`K8s configs generation placeholder for project ${projectId}`)
   }
 
   /**
@@ -1203,6 +1292,120 @@ export class ProjectOrchestrator implements OnModuleInit {
     })
 
     this.logger.log(`Project ${projectId} restored successfully`)
+  }
+
+  /**
+   * 删除项目时处理关联的 Git 仓库
+   * 返回任务 ID 列表供前端监听进度
+   */
+  @Trace('project-orchestrator.handleRepositoryOnDelete')
+  async handleRepositoryOnDelete(
+    userId: string,
+    projectId: string,
+    action: 'archive' | 'delete',
+  ): Promise<string[]> {
+    this.logger.log(`Starting repository ${action} for project ${projectId}`)
+
+    const repositories = await this.repositories.list(userId, projectId)
+    this.logger.log(`Found ${repositories.length} repositories to ${action}`)
+
+    if (repositories.length === 0) {
+      this.logger.log(`No repositories found for project ${projectId}`)
+      return []
+    }
+
+    // 获取用户的 OAuth 账户 token
+    // 需要分别获取每个 provider 的账户（因为 listUserAccounts 不返回 token）
+    const githubAccount = await this.oauthAccounts.getAccountByProvider(userId, 'github')
+    const gitlabAccount = await this.oauthAccounts.getAccountByProvider(userId, 'gitlab')
+
+    const tokenMap = new Map<string, string>()
+    if (githubAccount?.accessToken) {
+      tokenMap.set('github', githubAccount.accessToken)
+    }
+    if (gitlabAccount?.accessToken) {
+      tokenMap.set('gitlab', gitlabAccount.accessToken)
+    }
+
+    this.logger.log(`Found ${tokenMap.size} OAuth accounts with tokens for user ${userId}`)
+
+    // 将每个仓库操作加入队列
+    const jobIds: string[] = []
+    const failedRepos: string[] = []
+
+    for (const repo of repositories) {
+      this.logger.log(`Processing repository: ${repo.fullName} (${repo.provider})`)
+
+      const accessToken = tokenMap.get(repo.provider)
+      if (!accessToken) {
+        const providerName = repo.provider === 'github' ? 'GitHub' : 'GitLab'
+        this.logger.error(
+          `No access token found for ${repo.provider}, cannot ${action} ${repo.fullName}`,
+        )
+        failedRepos.push(repo.fullName)
+
+        // 发送通知给用户
+        try {
+          await this.notifications.create({
+            userId,
+            type: 'system',
+            title: `仓库${action === 'delete' ? '删除' : '归档'}失败`,
+            message: `无法${action === 'delete' ? '删除' : '归档'}仓库 ${repo.fullName}：未找到 ${providerName} 访问令牌。请前往"设置 > 账户连接"连接您的 ${providerName} 账户。`,
+            priority: 'high',
+          })
+        } catch (notificationError) {
+          this.logger.error(`Failed to send notification:`, notificationError)
+        }
+
+        continue
+      }
+
+      const jobName = action === 'archive' ? 'archive-repository' : 'delete-repository'
+
+      const job = await this.repositoryQueue.add(
+        jobName,
+        {
+          provider: repo.provider,
+          fullName: repo.fullName,
+          accessToken,
+          userId,
+          repositoryId: repo.id,
+          projectId,
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 2000,
+          },
+          removeOnComplete: 100,
+          removeOnFail: 500,
+        },
+      )
+
+      if (job.id) {
+        jobIds.push(job.id)
+        this.logger.log(
+          `Successfully queued ${action} for repository ${repo.fullName} (job: ${job.id})`,
+        )
+      } else {
+        this.logger.error(
+          `Failed to queue ${action} for repository ${repo.fullName}: no job ID returned`,
+        )
+        failedRepos.push(repo.fullName)
+      }
+    }
+
+    // 记录总结
+    this.logger.log(
+      `Repository ${action} summary: ${jobIds.length} queued, ${failedRepos.length} failed`,
+    )
+
+    if (failedRepos.length > 0) {
+      this.logger.warn(`Failed repositories: ${failedRepos.join(', ')}`)
+    }
+
+    return jobIds
   }
 
   /**
@@ -1518,6 +1721,7 @@ export class ProjectOrchestrator implements OnModuleInit {
       progress: number
       completedSteps: string[]
       error?: string
+      jobId?: string
     },
   ): Promise<void> {
     await this.db
@@ -1527,30 +1731,6 @@ export class ProjectOrchestrator implements OnModuleInit {
         updatedAt: new Date(),
       })
       .where(eq(schema.projects.id, projectId))
-  }
-
-  /**
-   * 回滚项目
-   * Requirements: 1.5
-   */
-  private async rollbackProject(projectId: string, error: Error): Promise<void> {
-    this.logger.error(`Rolling back project ${projectId}:`, error)
-
-    try {
-      // 软删除项目
-      await this.db
-        .update(schema.projects)
-        .set({
-          status: 'failed',
-          deletedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.projects.id, projectId))
-
-      this.logger.log(`Project ${projectId} rolled back`)
-    } catch (rollbackError) {
-      this.logger.error(`Failed to rollback project ${projectId}:`, rollbackError)
-    }
   }
 
   /**
@@ -1678,209 +1858,6 @@ export class ProjectOrchestrator implements OnModuleInit {
         })
       } catch (auditError) {
         this.logger.error(`Failed to log rollback audit:`, auditError)
-      }
-    }
-  }
-
-  /**
-   * 创建新仓库（GitHub/GitLab）
-   * Requirements: 4.1, 4.2, 4.3
-   */
-  private async createNewRepository(
-    provider: 'github' | 'gitlab',
-    accessToken: string,
-    options: {
-      name: string
-      description?: string
-      visibility: 'public' | 'private'
-      defaultBranch?: string
-      autoInit?: boolean
-    },
-  ): Promise<{
-    id: string | number
-    name: string
-    fullName: string
-    cloneUrl: string
-    defaultBranch: string
-  }> {
-    this.logger.log(`Creating ${provider} repository: ${options.name}`)
-
-    try {
-      // 使用统一的 createRepository 接口
-      const repoInfo = await this.gitProvider.createRepository(provider, accessToken, options)
-      this.logger.log(`Repository created successfully: ${repoInfo.fullName}`)
-      return repoInfo
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '未知错误'
-      this.logger.error(`Failed to create ${provider} repository:`, {
-        name: options.name,
-        visibility: options.visibility,
-        error: errorMessage,
-      })
-
-      // 如果是 token 无效错误，标记 OAuth 账户状态
-      if (errorMessage.includes('访问令牌无效') || errorMessage.includes('令牌权限不足')) {
-        // 注意：这里的 accessToken 可能是手动输入的，不一定是 OAuth
-        // 只有当使用 OAuth 时才需要标记状态
-        // 由于我们无法在这里判断，所以在 resolveAccessToken 中处理更合适
-      }
-
-      throw error
-    }
-  }
-
-  /**
-   * 推送初始应用代码到仓库
-   * Requirements: 4.4
-   *
-   * 注意：此方法失败不会导致整个流程失败（非致命错误）
-   * 失败时会记录详细日志并通知用户
-   */
-  private async pushInitialAppCode(
-    provider: 'github' | 'gitlab',
-    accessToken: string,
-    fullName: string,
-    branch: string,
-  ): Promise<{ success: boolean; error?: string }> {
-    this.logger.log(`Pushing initial app code to ${provider} repository: ${fullName}`)
-
-    // 准备初始文件
-    const files = [
-      {
-        path: '.gitignore',
-        content: `# Dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# Testing
-coverage/
-
-# Production
-build/
-dist/
-
-# Misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-`,
-      },
-      {
-        path: 'README.md',
-        content: `# Project
-
-This repository was created by AI DevOps Platform.
-
-## Getting Started
-
-Add your application code here.
-
-## Deployment
-
-This project is configured for GitOps deployment with Flux.
-`,
-      },
-      {
-        path: 'k8s/base/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - deployment.yaml
-  - service.yaml
-`,
-      },
-      {
-        path: 'k8s/base/deployment.yaml',
-        content: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: app
-  template:
-    metadata:
-      labels:
-        app: app
-    spec:
-      containers:
-      - name: app
-        image: nginx:latest
-        ports:
-        - containerPort: 80
-`,
-      },
-      {
-        path: 'k8s/base/service.yaml',
-        content: `apiVersion: v1
-kind: Service
-metadata:
-  name: app
-spec:
-  selector:
-    app: app
-  ports:
-  - port: 80
-    targetPort: 80
-`,
-      },
-    ]
-
-    try {
-      await this.gitProvider.pushInitialFiles(provider, accessToken, fullName, files, branch)
-      this.logger.log(`Initial app code pushed successfully to ${fullName}`, {
-        fileCount: files.length,
-        branch,
-      })
-      return { success: true }
-    } catch (error) {
-      // 记录详细的错误日志（非致命错误）
-      const errorMessage = error instanceof Error ? error.message : '未知错误'
-      const errorStack = error instanceof Error ? error.stack : undefined
-
-      this.logger.error(`Failed to push initial app code (non-fatal):`, {
-        error: errorMessage,
-        stack: errorStack,
-        provider,
-        fullName,
-        branch,
-        fileCount: files.length,
-        files: files.map((f) => f.path),
-      })
-
-      // 记录审计日志，便于后续排查
-      try {
-        await this.audit.log({
-          userId: 'system',
-          action: 'repository.push_initial_code.failed',
-          resourceType: 'repository',
-          resourceId: fullName,
-          metadata: {
-            provider,
-            branch,
-            error: errorMessage,
-            fileCount: files.length,
-          },
-        })
-      } catch (auditError) {
-        this.logger.error(`Failed to log push failure audit:`, auditError)
-      }
-
-      // 返回错误信息，但不抛出异常（非致命错误）
-      return {
-        success: false,
-        error: errorMessage,
       }
     }
   }
