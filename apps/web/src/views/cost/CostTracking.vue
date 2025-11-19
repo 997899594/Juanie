@@ -30,12 +30,15 @@ import {
   HardDrive,
   Loader2,
   AlertTriangle,
+  Download,
 } from 'lucide-vue-next'
+import { useProjects } from '@/composables/useProjects'
 import { VisXYContainer, VisLine, VisArea, VisAxis, VisTooltip } from '@unovis/vue'
 import { VisDonut, VisSingleContainer } from '@unovis/vue'
 
 const route = useRoute()
 const appStore = useAppStore()
+const { projects, fetchProjects } = useProjects()
 
 const {
   costs,
@@ -151,8 +154,44 @@ const costTrend = computed(() => {
   }
 })
 
+// 导出数据
+function exportData() {
+  if (!hasCosts.value) return
+
+  // 准备 CSV 数据
+  const headers = ['日期', '总成本', '计算', '存储', '网络', '数据库']
+  const rows = costs.value.map(c => [
+    c.date,
+    c.costs.total.toFixed(2),
+    c.costs.compute.toFixed(2),
+    c.costs.storage.toFixed(2),
+    c.costs.network.toFixed(2),
+    c.costs.database.toFixed(2),
+  ])
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.join(','))
+  ].join('\n')
+
+  // 下载文件
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', `cost-report-${new Date().toISOString().split('T')[0]}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 // 初始化
 onMounted(async () => {
+  // 加载项目列表
+  if (appStore.currentOrganizationId) {
+    await fetchProjects(appStore.currentOrganizationId)
+  }
   await loadData()
 })
 </script>
@@ -178,9 +217,20 @@ onMounted(async () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部项目</SelectItem>
-            <!-- TODO: 添加项目列表 -->
+            <SelectItem
+              v-for="project in projects"
+              :key="project.id"
+              :value="project.id"
+            >
+              {{ project.name }}
+            </SelectItem>
           </SelectContent>
         </Select>
+
+        <Button variant="outline" @click="exportData" :disabled="!hasCosts">
+          <Download class="mr-2 h-4 w-4" />
+          导出报告
+        </Button>
       </div>
     </template>
 

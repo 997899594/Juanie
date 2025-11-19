@@ -1,4 +1,4 @@
-// import type { BunPlugin } from 'bun'
+import type { BunPlugin } from 'bun'
 
 /**
  * Bun 运行时优化配置
@@ -18,7 +18,7 @@ export const bunConfig = {
   },
 
   // 插件配置
-  plugins: [] as any[],
+  plugins: [] as BunPlugin[],
 
   // 性能优化
   define: {

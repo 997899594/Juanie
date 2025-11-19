@@ -48,12 +48,15 @@ packages/
 docs/              # 文档
 ```
 
-## 文档
+## 📚 文档
 
-- **[开发指南](./CONTRIBUTING.md)** - 如何贡献代码
-- **[部署指南](./DEPLOYMENT.md)** - 生产环境部署
-- **[系统架构](./docs/architecture.md)** - 架构设计和技术决策
-- **[开发文档](./docs/development.md)** - 开发工作流和最佳实践
+- **[项目概览](./docs/PROJECT_OVERVIEW.md)** - 项目简介和快速开始
+- **[系统架构](./docs/ARCHITECTURE.md)** - 架构设计和技术决策
+- **[开发指南](./docs/DEVELOPMENT.md)** - 开发环境设置和工作流程
+- **[API 参考](./docs/API_REFERENCE.md)** - tRPC API 端点文档
+- **[Kiro AI 指南](./docs/KIRO_GUIDE.md)** - 使用 Kiro AI 提高开发效率
+- **[部署指南](./DEPLOYMENT.md)** - 生产环境部署说明
+- **[贡献指南](./CONTRIBUTING.md)** - 如何贡献代码
 
 ## 开发
 

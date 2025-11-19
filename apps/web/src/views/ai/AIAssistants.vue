@@ -11,7 +11,14 @@ import {
   CardTitle,
   CardDescription,
   Badge,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Input,
+  Label,
   Textarea,
   Select,
   SelectContent,
@@ -30,6 +37,7 @@ import {
   Plus,
   Settings,
 } from 'lucide-vue-next'
+import { trpc } from '@/lib/trpc'
 
 const appStore = useAppStore()
 
@@ -54,6 +62,43 @@ const chatContainer = ref<HTMLDivElement>()
 // 评分状态
 const showRating = ref(false)
 const selectedRating = ref(0)
+
+// 创建助手对话框
+const showCreateDialog = ref(false)
+const createForm = ref({
+  name: '',
+  type: 'code_review',
+  systemPrompt: '',
+  model: 'llama2',
+})
+
+// 创建助手
+async function createAssistant() {
+  if (!appStore.currentOrganizationId) return
+  
+  try {
+    await trpc.aiAssistants.create.mutate({
+      organizationId: appStore.currentOrganizationId,
+      name: createForm.value.name,
+      type: createForm.value.type,
+      systemPrompt: createForm.value.systemPrompt,
+      model: createForm.value.model,
+    })
+    
+    showCreateDialog.value = false
+    createForm.value = {
+      name: '',
+      type: 'code_review',
+      systemPrompt: '',
+      model: 'llama2',
+    }
+    
+    // 刷新列表
+    await fetchAssistants({ organizationId: appStore.currentOrganizationId })
+  } catch (error) {
+    console.error('Failed to create assistant:', error)
+  }
+}
 
 // 助手类型映射
 const assistantTypeMap: Record<string, { label: string; icon: string; color: string }> = {
@@ -137,7 +182,7 @@ onMounted(async () => {
 <template>
   <PageContainer title="AI 助手" description="使用 AI 助手优化您的开发和运维流程">
     <template #actions>
-      <Button variant="outline">
+      <Button variant="outline" @click="showCreateDialog = true">
         <Plus class="mr-2 h-4 w-4" />
         创建助手
       </Button>
@@ -384,3 +429,74 @@ onMounted(async () => {
   animation: bounce 1s infinite;
 }
 </style>
+
+
+    <!-- 创建助手对话框 -->
+    <Dialog v-model:open="showCreateDialog">
+      <DialogContent class="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>创建 AI 助手</DialogTitle>
+          <DialogDescription>
+            配置一个新的 AI 助手来帮助您的工作
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <Label for="assistant-name">助手名称</Label>
+            <Input
+              id="assistant-name"
+              v-model="createForm.name"
+              placeholder="例如：代码审查助手"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="assistant-type">助手类型</Label>
+            <Select v-model="createForm.type">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="code_review">代码审查</SelectItem>
+                <SelectItem value="devops_engineer">DevOps 工程师</SelectItem>
+                <SelectItem value="cost_optimizer">成本优化</SelectItem>
+                <SelectItem value="security_analyst">安全分析</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="assistant-model">模型</Label>
+            <Select v-model="createForm.model">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="llama2">Llama 2</SelectItem>
+                <SelectItem value="codellama">Code Llama</SelectItem>
+                <SelectItem value="mistral">Mistral</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="assistant-prompt">系统提示词</Label>
+            <Textarea
+              id="assistant-prompt"
+              v-model="createForm.systemPrompt"
+              placeholder="描述助手的角色和行为..."
+              rows="4"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="showCreateDialog = false">取消</Button>
+          <Button @click="createAssistant" :disabled="!createForm.name || loading">
+            <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
+            创建
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>

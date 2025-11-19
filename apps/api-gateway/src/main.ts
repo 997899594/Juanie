@@ -1,7 +1,9 @@
 import cookie from '@fastify/cookie'
-
+import csrf from '@fastify/csrf-protection'
+import rateLimit from '@fastify/rate-limit'
 import { NestFactory } from '@nestjs/core'
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify'
+import Redis from 'ioredis'
 import { AppModule } from './app.module'
 import { setupObservability } from './observability'
 import { setupTrpc } from './trpc/trpc.adapter'
@@ -20,12 +22,49 @@ async function bootstrap() {
     credentials: true,
   })
 
+  // Rate Limiting - 防止 DDoS 攻击
+  const rateLimitConfig: any = {
+    max: 100, // 每个时间窗口最多 100 个请求
+    timeWindow: '1 minute', // 时间窗口 1 分钟
+    cache: 10000, // 缓存 10000 个 IP
+    allowList: ['127.0.0.1'], // 白名单
+  }
+
+  // 如果配置了 Redis，使用 Redis 存储（生产环境推荐）
+  if (process.env.REDIS_URL) {
+    try {
+      const redis = new Redis(process.env.REDIS_URL, {
+        maxRetriesPerRequest: 3,
+        enableReadyCheck: true,
+        lazyConnect: true,
+      })
+
+      // 测试连接
+      await redis.connect()
+      console.log('✅ Redis 连接成功，启用分布式限流')
+
+      rateLimitConfig.redis = redis
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.warn('⚠️ Redis 连接失败，使用内存限流:', errorMessage)
+    }
+  }
+
+  await fastify.register(rateLimit, rateLimitConfig)
+
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, fastifyAdapter)
 
   // Cookie 插件
   await fastify.register(cookie, {
     secret: process.env.COOKIE_SECRET || 'juanie-secret',
   })
+
+  // CSRF 保护（生产环境启用）
+  if (process.env.NODE_ENV === 'production') {
+    await fastify.register(csrf, {
+      cookieOpts: { signed: true },
+    })
+  }
 
   // 设置 tRPC（包括 WebSocket）
   const trpcRouter = app.get(TrpcRouter)

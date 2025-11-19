@@ -1,9 +1,7 @@
-import { Home } from 'lucide-vue-next'
 import type { RouteRecordRaw } from 'vue-router'
 import { createRouter, createWebHistory } from 'vue-router'
 // 只导入布局组件和登录页（需要立即加载）
 import AppLayout from '@/layouts/AppLayout.vue'
-import Apps from '@/views/Apps.vue'
 import Login from '@/views/Login.vue'
 
 // 扩展路由元数据类型
@@ -29,20 +27,21 @@ const routes: RouteRecordRaw[] = [
     component: AppLayout,
     meta: { requiresAuth: true },
     children: [
-      // 应用管理模块
+      // 仪表盘 - 主页
       {
         path: '',
-        name: 'apps',
-        component: Apps,
+        name: 'dashboard',
+        component: () => import('@/views/Dashboard.vue'),
         meta: {
-          title: '应用管理',
+          title: '仪表盘',
           navigation: {
-            group: '应用管理',
-            icon: 'AppWindow',
+            group: '监控与分析',
+            icon: 'BarChart3',
             order: 1,
           },
         },
       },
+      // 项目管理模块
       {
         path: 'projects',
         name: 'projects',
@@ -50,9 +49,9 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '项目管理',
           navigation: {
-            group: '应用管理',
+            group: '项目管理',
             icon: 'FolderOpen',
-            order: 2,
+            order: 1,
           },
         },
       },
@@ -73,9 +72,9 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '流水线',
           navigation: {
-            group: '应用管理',
+            group: '项目管理',
             icon: 'GitBranch',
-            order: 3,
+            order: 2,
           },
         },
       },
@@ -86,9 +85,9 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '部署记录',
           navigation: {
-            group: '应用管理',
+            group: '项目管理',
             icon: 'Rocket',
-            order: 4,
+            order: 3,
           },
         },
       },
@@ -202,19 +201,6 @@ const routes: RouteRecordRaw[] = [
 
       // 监控与分析模块
       {
-        path: 'dashboard',
-        name: 'dashboard',
-        component: () => import('@/views/Dashboard.vue'),
-        meta: {
-          title: '仪表盘',
-          navigation: {
-            group: '监控与分析',
-            icon: 'BarChart3',
-            order: 1,
-          },
-        },
-      },
-      {
         path: 'monitoring',
         name: 'monitoring',
         component: () => import('@/views/Monitoring.vue'),
@@ -223,7 +209,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '监控与分析',
             icon: 'Activity',
-            order: 2,
+            order: 1,
           },
         },
       },
@@ -236,7 +222,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '监控与分析',
             icon: 'Bell',
-            order: 3,
+            order: 2,
           },
         },
       },
@@ -249,7 +235,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '监控与分析',
             icon: 'AlertCircle',
-            order: 4,
+            order: 3,
           },
         },
       },
@@ -262,7 +248,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '监控与分析',
             icon: 'TrendingUp',
-            order: 5,
+            order: 4,
           },
         },
       },
@@ -275,7 +261,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '监控与分析',
             icon: 'Eye',
-            order: 6,
+            order: 5,
           },
         },
       },
@@ -288,7 +274,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '监控与分析',
             icon: 'AlertCircle',
-            order: 7,
+            order: 6,
           },
         },
       },
@@ -505,7 +491,7 @@ const routes: RouteRecordRaw[] = [
           navigation: {
             group: '监控与分析',
             icon: 'Bell',
-            order: 8,
+            order: 7,
           },
         },
       },
@@ -550,11 +536,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Onboarding.vue'),
     meta: { requiresAuth: true },
   },
-  {
-    path: '/home',
-    name: 'home',
-    component: Home,
-  },
 ]
 
 const router = createRouter({
@@ -563,7 +544,7 @@ const router = createRouter({
 })
 
 // 路由守卫：设置页面标题和认证检查
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // 设置页面标题
   if (to.meta?.title) {
     document.title = `${to.meta.title} - Juanie`
@@ -595,7 +576,7 @@ router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStore()
 
     if (authStore.isAuthenticated) {
-      next({ name: 'apps' })
+      next({ name: 'dashboard' })
       return
     }
   }

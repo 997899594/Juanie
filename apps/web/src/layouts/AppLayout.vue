@@ -24,19 +24,62 @@
       </SidebarHeader>
       
       <SidebarContent>
+        <!-- 监控与分析模块 - 移到最前面 -->
         <SidebarGroup>
-          <SidebarGroupLabel>应用管理</SidebarGroupLabel>
+          <SidebarGroupLabel>监控与分析</SidebarGroupLabel>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton as-child :tooltip="'应用列表'">
+              <SidebarMenuButton as-child :tooltip="'仪表盘'">
                 <router-link to="/" class="flex items-center">
-                  <AppWindow class="size-4" />
-                  <span>应用列表</span>
+                  <BarChart3 class="size-4" />
+                  <span>仪表盘</span>
                 </router-link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-                <SidebarMenuButton as-child :tooltip="'项目管理'">
+              <SidebarMenuButton as-child :tooltip="'性能监控'">
+                <router-link to="/monitoring" class="flex items-center">
+                  <Activity class="size-4" />
+                  <span>性能监控</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'智能告警'">
+                <router-link to="/monitoring/alerts" class="flex items-center">
+                  <Bell class="size-4" />
+                  <span>智能告警</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'通知中心'">
+                <router-link to="/notifications" class="flex items-center">
+                  <Bell class="size-4" />
+                  <span>通知中心</span>
+                  <Badge v-if="notificationUnreadCount > 0" variant="destructive" class="ml-auto">
+                    {{ notificationUnreadCount }}
+                  </Badge>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'事件管理'">
+                <router-link to="/monitoring/incidents" class="flex items-center">
+                  <AlertCircle class="size-4" />
+                  <span>事件管理</span>
+                </router-link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <!-- 项目管理模块 -->
+        <SidebarGroup>
+          <SidebarGroupLabel>项目管理</SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton as-child :tooltip="'项目管理'">
                 <router-link to="/projects" class="flex items-center">
                   <FolderOpen class="size-4" />
                   <span>项目管理</span>
@@ -125,55 +168,7 @@
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
-        
-        <SidebarGroup>
-          <SidebarGroupLabel>监控与分析</SidebarGroupLabel>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton as-child :tooltip="'仪表盘'">
-                <router-link to="/dashboard" class="flex items-center">
-                  <BarChart3 class="size-4" />
-                  <span>仪表盘</span>
-                </router-link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton as-child :tooltip="'性能监控'">
-                <router-link to="/monitoring" class="flex items-center">
-                  <Activity class="size-4" />
-                  <span>性能监控</span>
-                </router-link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton as-child :tooltip="'智能告警'">
-                <router-link to="/monitoring/alerts" class="flex items-center">
-                  <Bell class="size-4" />
-                  <span>智能告警</span>
-                </router-link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton as-child :tooltip="'通知中心'">
-                <router-link to="/notifications" class="flex items-center">
-                  <Bell class="size-4" />
-                  <span>通知中心</span>
-                  <Badge v-if="notificationUnreadCount > 0" variant="destructive" class="ml-auto">
-                    {{ notificationUnreadCount }}
-                  </Badge>
-                </router-link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton as-child :tooltip="'事件管理'">
-                <router-link to="/monitoring/incidents" class="flex items-center">
-                  <AlertCircle class="size-4" />
-                  <span>事件管理</span>
-                </router-link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
+
 
         <!-- 成本与可持续性模块 -->
         <SidebarGroup>
@@ -525,7 +520,7 @@ const navigationGroups = computed(() => {
 
 // 页面标题映射 - 从路由元数据获取
 const currentPageTitle = computed(() => {
-  return route.meta?.title || '应用管理'
+  return route.meta?.title || '仪表盘'
 })
 
 // 动态生成面包屑

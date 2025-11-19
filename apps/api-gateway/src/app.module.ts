@@ -7,6 +7,8 @@ import { AuthModule } from '@juanie/service-auth'
 import { CostTrackingModule } from '@juanie/service-cost-tracking'
 import { DeploymentsModule } from '@juanie/service-deployments'
 import { EnvironmentsModule } from '@juanie/service-environments'
+import { FluxModule } from '@juanie/service-flux'
+import { GitOpsModule } from '@juanie/service-git-ops'
 import { K3sModule } from '@juanie/service-k3s'
 import { NotificationsModule } from '@juanie/service-notifications'
 import { OllamaModule } from '@juanie/service-ollama'
@@ -16,6 +18,7 @@ import { ProjectsModule } from '@juanie/service-projects'
 import { RepositoriesModule } from '@juanie/service-repositories'
 import { SecurityPoliciesModule } from '@juanie/service-security-policies'
 import { StorageModule } from '@juanie/service-storage'
+import { TeamsModule } from '@juanie/service-teams'
 import { TemplatesModule } from '@juanie/service-templates'
 import { UsersModule } from '@juanie/service-users'
 import { Module } from '@nestjs/common'
@@ -29,17 +32,24 @@ import { TrpcModule } from './trpc/trpc.module'
       isGlobal: true,
       envFilePath: ['../../.env.local', '../../.env'],
     }),
+    // Core modules
     DatabaseModule,
     QueueModule,
     SseModule,
+    // Infrastructure modules
     StorageModule,
     K3sModule,
+    FluxModule,
+    GitOpsModule,
+    // AI modules
     OllamaModule,
     AiAssistantsModule,
+    // Service modules
     AuditLogsModule,
     AuthModule,
     CostTrackingModule,
     UsersModule,
+    TeamsModule,
     NotificationsModule,
     TemplatesModule,
     OrganizationsModule,
@@ -49,6 +59,7 @@ import { TrpcModule } from './trpc/trpc.module'
     EnvironmentsModule,
     DeploymentsModule,
     PipelinesModule,
+    // API module
     TrpcModule,
   ],
   controllers: [AppController],

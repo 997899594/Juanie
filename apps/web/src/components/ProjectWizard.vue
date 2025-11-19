@@ -306,13 +306,13 @@ import RepositoryConfig from './RepositoryConfig.vue'
 import { useProjects } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
-import { useJobProgress } from '@/composables/useJobProgress'
+
 
 const router = useRouter()
 const toast = useToast()
 const appStore = useAppStore()
 const { createProject } = useProjects()
-const { progress: jobProgress, connect: connectToJob, disconnect: disconnectJob } = useJobProgress()
+
 
 const emit = defineEmits<{
   close: []
@@ -333,12 +333,7 @@ const repositoryCanProceed = ref(false)
 const showProgress = ref(false)
 const progressMessage = ref('')
 
-// 监听任务进度
-watch(jobProgress, (newProgress) => {
-  if (newProgress) {
-    progressMessage.value = newProgress.logs[newProgress.logs.length - 1] || '处理中...'
-  }
-})
+
 
 // 表单数据
 const formData = ref({
@@ -498,34 +493,14 @@ async function handleCreateProject() {
       }
     }
 
-    const { project, jobIds } = await createProject(projectData)
+    const { project } = await createProject(projectData)
     createdProjectId.value = project.id
 
-    // 如果有异步任务（创建仓库），显示进度
-    if (jobIds && jobIds.length > 0 && projectData.repository?.mode === 'create') {
-      showProgress.value = true
-      progressMessage.value = '正在创建仓库...'
-      
-      // 连接到第一个任务的 SSE 流
-      const firstJobId = jobIds[0]
-      if (firstJobId) {
-        connectToJob(firstJobId)
-      }
-      
-      // 等待一段时间后关闭弹窗并跳转
-      setTimeout(() => {
-        emit('close')
-        router.push(`/projects/${project.id}`)
-      }, 2000)
-    } else {
-      toast.success('项目创建成功', '正在初始化项目资源，请稍候...')
-      
-      // 关闭弹窗
-      emit('close')
-      
-      // 跳转到项目详情页
-      router.push(`/projects/${project.id}`)
-    }
+    toast.success('项目创建成功', '正在初始化项目资源...')
+    
+    // 关闭弹窗并跳转到项目详情页
+    emit('close')
+    router.push(`/projects/${project.id}`)
   } catch (error: any) {
     // 错误已经在 useProjects 中通过 toast 显示
     console.error('Project creation failed:', error)

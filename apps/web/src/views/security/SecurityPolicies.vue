@@ -63,6 +63,89 @@ const formData = ref({
   rules: '{}',
 })
 
+// 规则模板
+const ruleTemplates: Record<string, any> = {
+  basic_access: {
+    name: '基础访问控制',
+    rules: {
+      allow: ['read'],
+      deny: ['write', 'delete'],
+      conditions: [
+        {
+          field: 'user.role',
+          operator: 'equals',
+          value: 'viewer'
+        }
+      ]
+    }
+  },
+  admin_access: {
+    name: '管理员访问',
+    rules: {
+      allow: ['read', 'write', 'delete', 'admin'],
+      deny: [],
+      conditions: [
+        {
+          field: 'user.role',
+          operator: 'equals',
+          value: 'admin'
+        }
+      ]
+    }
+  },
+  network_policy: {
+    name: '网络策略',
+    rules: {
+      ingress: {
+        from: [
+          {
+            podSelector: {
+              matchLabels: {
+                role: 'frontend'
+              }
+            }
+          }
+        ],
+        ports: [
+          {
+            protocol: 'TCP',
+            port: 80
+          }
+        ]
+      }
+    }
+  },
+  data_protection: {
+    name: '数据保护',
+    rules: {
+      encryption: {
+        enabled: true,
+        algorithm: 'AES-256'
+      },
+      backup: {
+        enabled: true,
+        frequency: 'daily',
+        retention: 30
+      },
+      access: {
+        requireMFA: true,
+        allowedIPs: []
+      }
+    }
+  }
+}
+
+const selectedTemplate = ref('')
+
+// 应用模板
+function applyTemplate() {
+  if (!selectedTemplate.value) return
+  const template = ruleTemplates[selectedTemplate.value]
+  if (template) {
+    formData.value.rules = JSON.stringify(template.rules, null, 2)
+  }
+}
+
 // 策略类型选项
 const policyTypes = [
   { value: 'access_control', label: '访问控制' },
@@ -362,14 +445,34 @@ const formatDate = (date: string) => {
             </Select>
           </div>
           <div class="grid gap-2">
-            <Label for="rules">规则配置 (JSON)</Label>
+            <div class="flex items-center justify-between">
+              <Label for="rules">规则配置 (JSON)</Label>
+              <Select v-model="selectedTemplate" @update:modelValue="applyTemplate">
+                <SelectTrigger class="w-[200px]">
+                  <SelectValue placeholder="选择模板" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">自定义</SelectItem>
+                  <SelectItem
+                    v-for="(template, key) in ruleTemplates"
+                    :key="key"
+                    :value="key"
+                  >
+                    {{ template.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Textarea
               id="rules"
               v-model="formData.rules"
               placeholder='{"allow": ["read", "write"]}'
-              rows="6"
+              rows="10"
               class="font-mono text-sm"
             />
+            <p class="text-xs text-muted-foreground">
+              提示：选择模板快速开始，或手动编辑 JSON 配置
+            </p>
           </div>
         </div>
         <DialogFooter>
@@ -432,14 +535,34 @@ const formatDate = (date: string) => {
             </Select>
           </div>
           <div class="grid gap-2">
-            <Label for="edit-rules">规则配置 (JSON)</Label>
+            <div class="flex items-center justify-between">
+              <Label for="edit-rules">规则配置 (JSON)</Label>
+              <Select v-model="selectedTemplate" @update:modelValue="applyTemplate">
+                <SelectTrigger class="w-[200px]">
+                  <SelectValue placeholder="选择模板" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">自定义</SelectItem>
+                  <SelectItem
+                    v-for="(template, key) in ruleTemplates"
+                    :key="key"
+                    :value="key"
+                  >
+                    {{ template.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Textarea
               id="edit-rules"
               v-model="formData.rules"
               placeholder='{"allow": ["read", "write"]}'
-              rows="6"
+              rows="10"
               class="font-mono text-sm"
             />
+            <p class="text-xs text-muted-foreground">
+              提示：选择模板快速开始，或手动编辑 JSON 配置
+            </p>
           </div>
         </div>
         <DialogFooter>

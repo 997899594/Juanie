@@ -1,117 +1,108 @@
 import { onUnmounted, ref } from 'vue'
-import { useToast } from './useToast'
+import { trpc } from '@/lib/trpc'
 
 export interface JobProgress {
   jobId: string
-  state: string
   progress: number
+  state: 'waiting' | 'active' | 'completed' | 'failed'
   logs: string[]
-  timestamp: number
 }
 
+/**
+ * 监听任务进度的 composable
+ */
 export function useJobProgress() {
-  const toast = useToast()
-  const progress = ref<JobProgress | null>(null)
+  const jobProgress = ref<JobProgress | null>(null)
   const isConnected = ref(false)
-  const error = ref<string | null>(null)
+  let unsubscribe: { unsubscribe: () => void } | null = null
 
-  let eventSource: EventSource | null = null
-
-  const connect = (jobId: string) => {
-    if (eventSource) {
-      eventSource.close()
+  /**
+   * 连接到任务进度流
+   */
+  function connectToJob(jobId: string) {
+    if (unsubscribe) {
+      disconnectJob()
     }
 
-    const url = `${import.meta.env.VITE_API_URL}/sse/jobs/${jobId}`
-    eventSource = new EventSource(url)
-
-    eventSource.onopen = () => {
-      isConnected.value = true
-      error.value = null
+    jobProgress.value = {
+      jobId,
+      progress: 0,
+      state: 'waiting',
+      logs: [],
     }
 
-    // 监听连接成功
-    eventSource.addEventListener('connected', (e) => {
-      console.log('SSE connected:', e.data)
-    })
+    isConnected.value = true
 
-    // 监听任务进度
-    eventSource.addEventListener('job.progress', (e) => {
-      try {
-        progress.value = JSON.parse(e.data)
-      } catch (err) {
-        console.error('Failed to parse progress:', err)
-      }
-    })
+    // 使用 tRPC subscription 监听任务进度
+    try {
+      unsubscribe = trpc.projects.onJobProgress.subscribe(
+        { jobId },
+        {
+          onData: (event: any) => {
+            console.log('Job progress event:', event)
 
-    // 监听任务完成
-    eventSource.addEventListener('job.completed', (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        progress.value = {
-          jobId: data.jobId,
-          state: 'completed',
-          progress: 100,
-          logs: [],
-          timestamp: data.timestamp,
-        }
-        toast.success('任务完成', '操作已成功完成')
-        disconnect()
-      } catch (err) {
-        console.error('Failed to parse completed:', err)
-      }
-    })
+            if (!jobProgress.value) return
 
-    // 监听任务失败
-    eventSource.addEventListener('job.failed', (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        error.value = data.error || '任务失败'
-        toast.error('任务失败', error.value)
-        disconnect()
-      } catch (err) {
-        console.error('Failed to parse failed:', err)
-      }
-    })
-
-    eventSource.addEventListener('error', (e: any) => {
-      try {
-        if (e.data) {
-          const data = JSON.parse(e.data)
-          error.value = data.message || '连接错误'
-        } else {
-          error.value = 'SSE 连接错误'
-        }
-      } catch (err) {
-        error.value = 'SSE 连接错误'
-      }
-      disconnect()
-    })
-
-    eventSource.onerror = () => {
+            if (event.type === 'job.progress') {
+              jobProgress.value.progress = event.data.progress || 0
+              jobProgress.value.state = event.data.state || 'active'
+              if (event.data.logs) {
+                jobProgress.value.logs = event.data.logs
+              }
+            } else if (event.type === 'job.completed') {
+              jobProgress.value.progress = 100
+              jobProgress.value.state = 'completed'
+              jobProgress.value.logs.push('任务完成')
+            } else if (event.type === 'job.failed') {
+              jobProgress.value.state = 'failed'
+              jobProgress.value.logs.push(`任务失败: ${event.data.error || '未知错误'}`)
+            }
+          },
+          onError: (err: any) => {
+            console.error('Job progress subscription error:', err)
+            if (jobProgress.value) {
+              jobProgress.value.state = 'failed'
+              jobProgress.value.logs.push('连接失败')
+            }
+            isConnected.value = false
+          },
+        },
+      )
+    } catch (error) {
+      console.error('Failed to connect to job:', error)
       isConnected.value = false
-      // EventSource 会自动重连，除非手动关闭
     }
   }
 
-  const disconnect = () => {
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
+  /**
+   * 断开任务进度流
+   */
+  function disconnectJob() {
+    if (unsubscribe) {
+      unsubscribe.unsubscribe()
+      unsubscribe = null
     }
     isConnected.value = false
   }
 
-  // 组件卸载时清理
+  /**
+   * 重置状态
+   */
+  function reset() {
+    disconnectJob()
+    jobProgress.value = null
+  }
+
+  // 组件卸载时自动断开连接
   onUnmounted(() => {
-    disconnect()
+    disconnectJob()
   })
 
   return {
-    progress,
+    jobProgress,
     isConnected,
-    error,
-    connect,
-    disconnect,
+    connectToJob,
+    disconnectJob,
+    reset,
   }
 }

@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "bun --hot src/main.ts",
-    "build": "bun build src/main.ts --outdir dist --target bun",
+    "build": "tsc",
     "start": "bun run dist/main.js",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
@@ -16,8 +16,9 @@
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.1.0",
+    "@fastify/csrf-protection": "^7.1.0",
+    "@fastify/rate-limit": "^10.3.0",
     "@fastify/sse": "^0.4.0",
-    "@fastify/websocket": "^11.2.0",
     "@juanie/core-database": "workspace:*",
     "@juanie/core-queue": "workspace:*",
     "@juanie/core-sse": "workspace:*",

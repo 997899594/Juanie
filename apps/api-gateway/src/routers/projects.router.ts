@@ -400,6 +400,13 @@ export class ProjectsRouter {
         .subscription(async ({ input }) => {
           return this.projectsService.subscribeToProgress(input.projectId)
         }),
+
+      // 订阅任务进度（通用）
+      onJobProgress: this.trpc.procedure
+        .input(z.object({ jobId: z.string() }))
+        .subscription(async ({ input }) => {
+          return this.projectsService.subscribeToJobProgress(input.jobId)
+        }),
     })
   }
 }

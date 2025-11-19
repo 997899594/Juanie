@@ -97,18 +97,48 @@
       <!-- 资源列表卡片 -->
       <Card>
         <CardHeader>
-          <CardTitle>资源列表</CardTitle>
-          <CardDescription>
-            显示所有 GitOps 资源的状态和同步信息
-          </CardDescription>
+          <div class="flex items-center justify-between">
+            <div>
+              <CardTitle>资源列表</CardTitle>
+              <CardDescription>
+                显示所有 GitOps 资源的状态和同步信息
+              </CardDescription>
+            </div>
+            <div v-if="selectedResources.size > 0" class="flex gap-2">
+              <Badge variant="secondary">已选择 {{ selectedResources.size }} 项</Badge>
+              <Button size="sm" @click="batchSync" :disabled="syncingResources.size > 0">
+                <RefreshCw class="mr-2 h-4 w-4" />
+                批量同步
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div class="space-y-3">
+            <!-- 全选 -->
+            <div v-if="resources.length > 0" class="flex items-center gap-2 pb-2 border-b">
+              <input
+                type="checkbox"
+                v-model="selectAll"
+                @change="toggleSelectAll"
+                class="h-4 w-4 rounded border-gray-300"
+              />
+              <span class="text-sm text-muted-foreground">全选</span>
+            </div>
+
             <div
               v-for="resource in resources"
               :key="resource.id"
               class="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
             >
+              <!-- 复选框 -->
+              <input
+                type="checkbox"
+                :checked="selectedResources.has(resource.id)"
+                @change="toggleSelect(resource.id)"
+                class="h-4 w-4 rounded border-gray-300 mr-4"
+              />
+              
               <!-- 左侧：资源信息 -->
               <div class="flex items-center space-x-4 flex-1">
                 <!-- 状态指示器 -->
@@ -180,6 +210,83 @@
         </CardContent>
       </Card>
     </div>
+
+    <!-- 资源详情对话框 -->
+    <Dialog v-model:open="showDetailsDialog">
+      <DialogContent class="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>资源详情</DialogTitle>
+          <DialogDescription v-if="selectedResource">
+            {{ selectedResource.name }} ({{ selectedResource.type }})
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div v-if="selectedResource" class="space-y-4">
+          <!-- 基本信息 -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <Label class="text-sm font-medium">名称</Label>
+              <p class="text-sm text-muted-foreground">{{ selectedResource.name }}</p>
+            </div>
+            <div>
+              <Label class="text-sm font-medium">类型</Label>
+              <Badge variant="outline">{{ selectedResource.type }}</Badge>
+            </div>
+            <div>
+              <Label class="text-sm font-medium">命名空间</Label>
+              <p class="text-sm text-muted-foreground">{{ selectedResource.namespace }}</p>
+            </div>
+            <div>
+              <Label class="text-sm font-medium">状态</Label>
+              <Badge :variant="getStatusVariant(selectedResource.status)">
+                {{ getStatusText(selectedResource.status) }}
+              </Badge>
+            </div>
+          </div>
+
+          <Separator />
+
+          <!-- 同步信息 -->
+          <div>
+            <Label class="text-sm font-medium mb-2 block">同步信息</Label>
+            <div class="space-y-2 text-sm">
+              <div v-if="selectedResource.lastSyncTime" class="flex justify-between">
+                <span class="text-muted-foreground">最后同步时间:</span>
+                <span>{{ formatRelativeTime(selectedResource.lastSyncTime) }}</span>
+              </div>
+              <div v-if="selectedResource.lastAppliedRevision" class="flex justify-between">
+                <span class="text-muted-foreground">应用版本:</span>
+                <code class="text-xs bg-muted px-2 py-1 rounded">
+                  {{ selectedResource.lastAppliedRevision }}
+                </code>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          <!-- 配置信息 -->
+          <div>
+            <Label class="text-sm font-medium mb-2 block">配置</Label>
+            <pre class="text-xs bg-muted p-3 rounded overflow-x-auto">{{ JSON.stringify(selectedResource.config || {}, null, 2) }}</pre>
+          </div>
+
+          <!-- 错误信息 -->
+          <div v-if="selectedResource.errorMessage" class="bg-red-50 dark:bg-red-950 p-3 rounded">
+            <Label class="text-sm font-medium text-red-600 mb-2 block">错误信息</Label>
+            <p class="text-sm text-red-600">{{ selectedResource.errorMessage }}</p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="showDetailsDialog = false">关闭</Button>
+          <Button @click="selectedResource && handleSyncResource(selectedResource)">
+            <RefreshCw class="mr-2 h-4 w-4" />
+            手动同步
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </PageContainer>
 </template>
 
@@ -200,11 +307,19 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Separator,
 } from '@juanie/ui'
 import {
   ChevronRight,
@@ -223,6 +338,14 @@ const { loading, resources, listGitOpsResources, triggerSync } = useGitOps()
 const error = ref<string | null>(null)
 const selectedProject = ref<string>('')
 const syncingResources = ref(new Set<string>())
+
+// 批量操作
+const selectedResources = ref(new Set<string>())
+const selectAll = ref(false)
+
+// 资源详情
+const showDetailsDialog = ref(false)
+const selectedResource = ref<any>(null)
 
 // 计算属性
 const readyCount = computed(() => 
@@ -275,8 +398,41 @@ async function handleSyncResource(resource: any) {
 
 // 查看资源详情
 function handleViewDetails(resource: any) {
-  // TODO: 实现资源详情页面
-  console.log('View resource details:', resource)
+  selectedResource.value = resource
+  showDetailsDialog.value = true
+}
+
+// 切换全选
+function toggleSelectAll() {
+  if (selectAll.value) {
+    resources.value.forEach(r => selectedResources.value.add(r.id))
+  } else {
+    selectedResources.value.clear()
+  }
+}
+
+// 切换单个选择
+function toggleSelect(resourceId: string) {
+  if (selectedResources.value.has(resourceId)) {
+    selectedResources.value.delete(resourceId)
+  } else {
+    selectedResources.value.add(resourceId)
+  }
+  selectAll.value = selectedResources.value.size === resources.value.length
+}
+
+// 批量同步
+async function batchSync() {
+  const promises = Array.from(selectedResources.value).map(async (resourceId) => {
+    const resource = resources.value.find(r => r.id === resourceId)
+    if (resource) {
+      await handleSyncResource(resource)
+    }
+  })
+  
+  await Promise.all(promises)
+  selectedResources.value.clear()
+  selectAll.value = false
 }
 
 // 获取状态颜色

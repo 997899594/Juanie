@@ -5,10 +5,18 @@
         <h1 class="text-3xl font-bold tracking-tight">团队管理</h1>
         <p class="text-muted-foreground">管理组织内的团队和成员</p>
       </div>
-      <Button @click="openCreateModal" :disabled="!currentOrganizationId">
-        <Plus class="mr-2 h-4 w-4" />
-        创建团队
-      </Button>
+      <div class="flex gap-2">
+        <Input
+          v-model="searchQuery"
+          placeholder="搜索团队..."
+          class="w-64"
+          @input="filterTeams"
+        />
+        <Button @click="openCreateModal" :disabled="!currentOrganizationId">
+          <Plus class="mr-2 h-4 w-4" />
+          创建团队
+        </Button>
+      </div>
     </div>
 
     <!-- 组织选择提示 -->
@@ -46,7 +54,7 @@
       <!-- 团队列表 -->
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card
-          v-for="(team, index) in teams"
+          v-for="(team, index) in filteredTeams"
           :key="team.id"
           class="group cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]"
           v-motion
@@ -66,7 +74,7 @@
             <div class="flex items-center justify-between">
               <div class="flex items-center space-x-2 text-sm text-muted-foreground">
                 <Users class="h-4 w-4" />
-                <span>0 成员</span>
+                <span>{{ (team as any).memberCount || 0 }} 成员</span>
               </div>
               <div class="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button size="sm" variant="ghost" @click.stop="openEditModal(team)">
@@ -182,6 +190,23 @@ const formData = ref({
   name: '',
   description: '',
 })
+
+// 搜索功能
+const searchQuery = ref('')
+const filteredTeams = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return teams.value
+  }
+  const query = searchQuery.value.toLowerCase()
+  return teams.value.filter(team => 
+    team.name.toLowerCase().includes(query) ||
+    (team.description && team.description.toLowerCase().includes(query))
+  )
+})
+
+function filterTeams() {
+  // 触发计算属性更新
+}
 
 // 监听组织变化
 watch(currentOrganizationId, async (orgId) => {

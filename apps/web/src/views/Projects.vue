@@ -239,8 +239,9 @@ import {
 } from '@juanie/ui'
 import { Plus, FolderOpen, Building, Search, Loader2 } from 'lucide-vue-next'
 import { useProjects } from '@/composables/useProjects'
-import { useAppStore } from '@/stores/app'
 import { useJobProgress } from '@/composables/useJobProgress'
+import { useAppStore } from '@/stores/app'
+
 import ProjectCard from '@/components/ProjectCard.vue'
 import CreateProjectModal from '@/components/CreateProjectModal.vue'
 import ProjectWizard from '@/components/ProjectWizard.vue'
@@ -262,7 +263,7 @@ const {
   deleteProject,
 } = useProjects()
 
-const { progress: jobProgress, connect: connectToJob, disconnect: disconnectJob } = useJobProgress()
+
 
 const currentOrganizationId = computed(() => appStore.currentOrganizationId)
 
@@ -277,6 +278,9 @@ const deletingProject = ref<any>(null)
 const repositoryAction = ref<'keep' | 'archive' | 'delete'>('keep')
 const showDeleteProgress = ref(false)
 const deleteProgressMessage = ref('')
+
+// 使用任务进度监听
+const { jobProgress, connectToJob, disconnectJob } = useJobProgress()
 
 // 监听删除任务进度
 watch(jobProgress, (newProgress) => {
@@ -367,14 +371,22 @@ async function handleDelete() {
         connectToJob(firstJobId)
       }
       
-      // 等待一段时间后关闭对话框
-      setTimeout(() => {
-        isDeleteDialogOpen.value = false
-        deletingProject.value = null
-        repositoryAction.value = 'keep'
-        showDeleteProgress.value = false
-        disconnectJob()
-      }, 3000)
+      // 监听任务完成
+      const stopWatch = watch(
+        () => jobProgress.value?.state,
+        (state) => {
+          if (state === 'completed' || state === 'failed') {
+            setTimeout(() => {
+              isDeleteDialogOpen.value = false
+              deletingProject.value = null
+              repositoryAction.value = 'keep'
+              showDeleteProgress.value = false
+              disconnectJob()
+              stopWatch()
+            }, 2000)
+          }
+        }
+      )
     } else {
       isDeleteDialogOpen.value = false
       deletingProject.value = null

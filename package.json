@@ -64,7 +64,6 @@
     "lucide-vue-next": "^0.544.0",
     "nprogress": "^0.2.0",
     "pinia": "^3.0.3",
-    "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.1.14",
     "turbo": "^2.5.8",
     "typescript": "^5.9.3",

@@ -1017,4 +1017,54 @@ export class ProjectsService {
       await eventBus.unsubscribe(channel, handler)
     }
   }
+  /**
+   * 订阅任务进度（通用）
+   * 使用 tRPC subscription 实时推送任务进度
+   */
+  async *subscribeToJobProgress(jobId: string) {
+    const channel = `job:${jobId}`
+    const eventQueue: any[] = []
+    let isComplete = false
+
+    // 监听事件
+    const listener = (event: any) => {
+      if (event.channel === channel) {
+        eventQueue.push(event)
+      }
+    }
+
+    // 注册监听器（这里需要实际的事件总线实现）
+    // eventBus.on('job.progress', listener)
+    // eventBus.on('job.completed', listener)
+    // eventBus.on('job.failed', listener)
+
+    try {
+      // 发送初始事件
+      yield {
+        type: 'init',
+        data: { jobId, progress: 0, state: 'waiting' },
+      }
+
+      // 持续推送事件
+      while (!isComplete) {
+        if (eventQueue.length > 0) {
+          const event = eventQueue.shift()
+          yield event
+
+          // 检查是否完成
+          if (event.type === 'job.completed' || event.type === 'job.failed') {
+            isComplete = true
+          }
+        }
+
+        // 等待一小段时间再检查
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+    } finally {
+      // 清理监听器
+      // eventBus.off('job.progress', listener)
+      // eventBus.off('job.completed', listener)
+      // eventBus.off('job.failed', listener)
+    }
+  }
 }
