@@ -86,12 +86,11 @@
           </DialogDescription>
         </div>
         <ProjectWizard v-if="!editingProject" @close="isModalOpen = false" />
-        <CreateProjectModal
+        <EditProjectModal
           v-else
-          v-model:open="isModalOpen"
-          :loading="loading"
           :project="editingProject"
-          @submit="handleSubmit"
+          @close="isModalOpen = false"
+          @updated="handleProjectUpdated"
         />
       </DialogContent>
     </Dialog>
@@ -243,7 +242,7 @@ import { useJobProgress } from '@/composables/useJobProgress'
 import { useAppStore } from '@/stores/app'
 
 import ProjectCard from '@/components/ProjectCard.vue'
-import CreateProjectModal from '@/components/CreateProjectModal.vue'
+import EditProjectModal from '@/components/EditProjectModal.vue'
 import ProjectWizard from '@/components/ProjectWizard.vue'
 import PageContainer from '@/components/PageContainer.vue'
 import LoadingState from '@/components/LoadingState.vue'
@@ -335,23 +334,13 @@ function confirmDelete(project: any) {
   isDeleteDialogOpen.value = true
 }
 
-async function handleSubmit(data: any) {
-  if (!currentOrganizationId.value) return
-
-  try {
-    if (editingProject.value) {
-      await updateProject(editingProject.value.id, data)
-    } else {
-      await createProject({
-        organizationId: currentOrganizationId.value,
-        ...data,
-      })
-    }
-    isModalOpen.value = false
-    editingProject.value = null
-  } catch (error) {
-    console.error('Failed to submit project:', error)
+async function handleProjectUpdated() {
+  // 项目更新后刷新列表
+  if (currentOrganizationId.value) {
+    await fetchProjects(currentOrganizationId.value)
   }
+  isModalOpen.value = false
+  editingProject.value = null
 }
 
 async function handleDelete() {

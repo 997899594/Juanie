@@ -1,4 +1,4 @@
-import { computed, ref, isRef, watch, onMounted } from 'vue'
+import { computed, isRef, onMounted, ref, watch } from 'vue'
 import { trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 
@@ -40,10 +40,14 @@ export function useEnvironments(projectId?: string | ReturnType<typeof ref<strin
   const initWatcher = () => {
     if (!projectId) return
     if (isRef(projectId)) {
-      watch(projectId, (val) => {
-        currentProjectId.value = val || ''
-        if (currentProjectId.value) fetchEnvironments(currentProjectId.value)
-      }, { immediate: true })
+      watch(
+        projectId,
+        (val) => {
+          currentProjectId.value = val || ''
+          if (currentProjectId.value) fetchEnvironments(currentProjectId.value)
+        },
+        { immediate: true },
+      )
     } else {
       currentProjectId.value = projectId
       if (currentProjectId.value) fetchEnvironments(currentProjectId.value)
@@ -126,7 +130,18 @@ export function useEnvironments(projectId?: string | ReturnType<typeof ref<strin
     isUpdating.value = true
     error.value = null
     try {
-      const result = await trpc.environments.configureGitOps.mutate(payload)
+      // 映射字段名到 API 期望的格式
+      const apiPayload = {
+        environmentId: payload.environmentId,
+        config: {
+          enabled: true,
+          gitBranch: payload.config.branch,
+          gitPath: payload.config.path,
+          autoSync: payload.config.autoSync,
+          syncInterval: payload.config.syncInterval,
+        },
+      }
+      const result = await trpc.environments.configureGitOps.mutate(apiPayload)
       toast.success('GitOps 配置成功')
       if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
       return result

@@ -20,6 +20,7 @@ export const deployments = pgTable(
     // 版本信息
     version: text('version').notNull(),
     commitHash: text('commit_hash').notNull(),
+    commitMessage: text('commit_message'), // 提交信息
     branch: text('branch').notNull(),
 
     // 部署配置

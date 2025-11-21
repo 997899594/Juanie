@@ -5,7 +5,7 @@ import { generateId } from '@juanie/core-utils/id'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { GitHub, GitLab } from 'arctic'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type Redis from 'ioredis'
 
@@ -186,6 +186,12 @@ export class AuthService {
       }
 
       // 创建或更新 OAuth 账号（保存完整的 token 信息）
+      // 注意：使用新的唯一约束 (user_id, provider, server_url)
+      const serverUrl =
+        data.provider === 'github'
+          ? 'https://github.com'
+          : process.env.GITLAB_BASE_URL || 'https://gitlab.com'
+
       await tx
         .insert(schema.oauthAccounts)
         .values({
@@ -196,15 +202,22 @@ export class AuthService {
           refreshToken: data.refreshToken,
           expiresAt: data.expiresAt,
           status: 'active',
+          serverUrl: serverUrl.replace(/\/+$/, ''), // 移除尾部斜杠
+          serverType: 'cloud',
         })
         .onConflictDoUpdate({
-          target: [schema.oauthAccounts.provider, schema.oauthAccounts.providerAccountId],
+          target: [
+            schema.oauthAccounts.userId,
+            schema.oauthAccounts.provider,
+            schema.oauthAccounts.serverUrl,
+          ],
           set: {
-            accessToken: data.accessToken,
-            refreshToken: data.refreshToken,
-            expiresAt: data.expiresAt,
-            status: 'active',
-            updatedAt: new Date(),
+            providerAccountId: sql`excluded.provider_account_id`,
+            accessToken: sql`excluded.access_token`,
+            refreshToken: sql`excluded.refresh_token`,
+            expiresAt: sql`excluded.expires_at`,
+            status: sql`excluded.status`,
+            updatedAt: sql`now()`,
           },
         })
 
@@ -278,9 +291,9 @@ export class AuthService {
       .onConflictDoUpdate({
         target: [schema.oauthAccounts.provider, schema.oauthAccounts.providerAccountId],
         set: {
-          accessToken: tokens.accessToken(),
-          status: 'active',
-          updatedAt: new Date(),
+          accessToken: sql`excluded.access_token`,
+          status: sql`excluded.status`,
+          updatedAt: sql`now()`,
         },
       })
 
@@ -326,11 +339,11 @@ export class AuthService {
       .onConflictDoUpdate({
         target: [schema.oauthAccounts.provider, schema.oauthAccounts.providerAccountId],
         set: {
-          accessToken: tokens.accessToken(),
-          refreshToken: tokens.refreshToken(),
-          expiresAt: tokens.accessTokenExpiresAt(),
-          status: 'active',
-          updatedAt: new Date(),
+          accessToken: sql`excluded.access_token`,
+          refreshToken: sql`excluded.refresh_token`,
+          expiresAt: sql`excluded.expires_at`,
+          status: sql`excluded.status`,
+          updatedAt: sql`now()`,
         },
       })
 

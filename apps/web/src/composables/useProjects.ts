@@ -200,22 +200,16 @@ export function useProjects() {
    */
   async function updateProject(
     projectId: string,
-    data: Omit<RouterInput['projects']['update'], 'projectId'> & { repositoryUrl?: string },
+    data: Omit<RouterInput['projects']['update'], 'projectId'>,
   ) {
     loading.value = true
     error.value = null
 
     try {
-      const { repositoryUrl, ...updateInput } = data
       const result = await trpc.projects.update.mutate({
         projectId,
-        ...updateInput,
+        ...data,
       })
-
-      // 如提供仓库URL，尝试连接仓库
-      if (repositoryUrl) {
-        await connectRepositoryIfNeeded(projectId, repositoryUrl)
-      }
 
       // 更新本地数据
       if (currentProject.value?.id === projectId) {
@@ -223,7 +217,7 @@ export function useProjects() {
       }
 
       // 更新列表中的项目
-      const projectIndex = projects.value.findIndex((p) => p.id === projectId)
+      const projectIndex = projects.value.findIndex((p: any) => p.id === projectId)
       if (projectIndex !== -1 && projects.value[projectIndex]) {
         projects.value[projectIndex] = { ...projects.value[projectIndex], ...result }
       }
@@ -243,41 +237,6 @@ export function useProjects() {
     }
   }
 
-  // 解析仓库URL，返回provider与fullName
-  function parseRepositoryUrl(
-    url: string,
-  ): { provider: 'github' | 'gitlab'; fullName: string; cloneUrl: string } | null {
-    const raw = url.trim()
-    if (!raw) return null
-    const match = raw
-      .replace(/\.git$/i, '')
-      .match(/(?:https?:\/\/|git@)?(github\.com|gitlab\.com)(?::|\/)([^?#]+?)(?:\/+)?(?:[?#].*)?$/i)
-    if (!match) return null
-    const host = match[1]
-    const repoPath = match[2]?.replace(/\/+$/, '')
-    if (!host || !repoPath || !repoPath.includes('/')) return null
-    const provider = host.toLowerCase().includes('github') ? 'github' : 'gitlab'
-    return { provider, fullName: repoPath, cloneUrl: raw }
-  }
-
-  // 若仓库未连接则连接
-  async function connectRepositoryIfNeeded(projectId: string, repositoryUrl: string) {
-    const parsed = parseRepositoryUrl(repositoryUrl)
-    if (!parsed) {
-      toast.error('仓库URL不合法', '无法解析仓库地址')
-      return
-    }
-    const existing = await trpc.repositories.list.query({ projectId })
-    const already = existing.some((r) => r.fullName === parsed.fullName)
-    if (already) return
-    await trpc.repositories.connect.mutate({
-      projectId,
-      provider: parsed.provider,
-      fullName: parsed.fullName,
-      cloneUrl: parsed.cloneUrl,
-    })
-  }
-
   /**
    * 删除项目
    * 返回任务 ID 列表供监听进度
@@ -295,7 +254,7 @@ export function useProjects() {
         repositoryAction: options?.repositoryAction || 'keep',
       })
 
-      projects.value = projects.value.filter((p) => p.id !== projectId)
+      projects.value = projects.value.filter((p: any) => p.id !== projectId)
 
       if (currentProject.value?.id === projectId) {
         currentProject.value = null
@@ -435,7 +394,7 @@ export function useProjects() {
       })
 
       // 更新本地成员列表
-      members.value = members.value.filter((m) => m.id !== memberId)
+      members.value = members.value.filter((m: any) => m.id !== memberId)
 
       toast.success('移除成功', '成员已移除')
     } catch (err) {
@@ -520,7 +479,7 @@ export function useProjects() {
       })
 
       // 更新本地团队列表
-      teams.value = teams.value.filter((t) => t.id !== teamId)
+      teams.value = teams.value.filter((t: any) => t.id !== teamId)
 
       toast.success('移除成功', '团队已移除')
     } catch (err) {

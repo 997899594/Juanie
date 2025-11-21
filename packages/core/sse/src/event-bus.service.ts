@@ -94,8 +94,20 @@ export class EventBusService {
    * 清理资源
    */
   async onModuleDestroy() {
-    await this.publisher.quit()
-    await this.subscriber.quit()
+    try {
+      await this.publisher.quit()
+    } catch (error) {
+      // 忽略关闭时的错误
+      this.logger.debug('Publisher quit error (ignored)', error)
+    }
+
+    try {
+      await this.subscriber.quit()
+    } catch (error) {
+      // 忽略关闭时的错误
+      this.logger.debug('Subscriber quit error (ignored)', error)
+    }
+
     this.logger.log('EventBus destroyed')
   }
 }

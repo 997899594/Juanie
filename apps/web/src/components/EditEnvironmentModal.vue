@@ -186,7 +186,7 @@ const form = reactive({
   name: '',
   description: '',
   type: '' as 'development' | 'staging' | 'production' | '',
-  status: '' as 'active' | 'inactive' | '',
+  status: '' as 'active' | 'inactive' | 'error' | '',
   url: '',
   variables: [] as EnvironmentVariable[]
 })
@@ -195,14 +195,10 @@ const form = reactive({
 const initForm = () => {
   form.name = props.environment!.name
   form.description = props.environment!.description || ''
-  form.type = 'development' // 默认类型，因为 environment schema 中没有 type 字段
-  form.status = props.environment!.status 
-    ? 'active' 
-    : 'inactive'
-  form.url = '' // 暂时设置为空字符串，因为url字段不存在
-  // 从 config.environmentVariables 获取环境变量 (暂时注释掉，因为config字段不存在)
-  // const envVars = props.environment!.config?.environmentVariables || {}
-  // form.variables = Object.entries(envVars).map(([key, value]) => ({ key, value: String(value) }))
+  form.type = props.environment!.type as 'development' | 'staging' | 'production'
+  form.status = props.environment!.status as 'active' | 'inactive' | 'error'
+  form.url = '' // url 字段不存在于 schema
+  form.variables = [] // 环境变量暂不支持
   form.variables = [] // 临时设置为空数组
 }
 

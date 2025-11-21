@@ -269,7 +269,7 @@
                   <span class="text-muted-foreground">创建时间</span>
                   <p class="font-medium">{{ formatDate(currentProject.createdAt) }}</p>
                 </div>
-                <div v-if="projectStatus?.stats.lastDeploymentAt">
+                <div v-if="projectStatus?.stats?.lastDeploymentAt">
                   <span class="text-muted-foreground">最后部署</span>
                   <p class="font-medium">{{ formatDate(projectStatus.stats.lastDeploymentAt) }}</p>
                 </div>
@@ -635,11 +635,11 @@
     </template>
 
     <!-- 编辑项目对话框 -->
-    <CreateProjectModal
-      v-model:open="isEditModalOpen"
-      :loading="loading"
-      :project="editProjectData"
-      @submit="handleUpdate"
+    <EditProjectModal
+      v-if="isEditModalOpen && currentProject"
+      :project="currentProject"
+      @close="isEditModalOpen = false"
+      @updated="handleProjectUpdated"
     />
 
     <!-- 删除确认对话框 -->
@@ -699,7 +699,7 @@ import {
 import { format } from 'date-fns'
 import { useProjects } from '@/composables/useProjects'
 import { trpc } from '@/lib/trpc'
-import CreateProjectModal from '@/components/CreateProjectModal.vue'
+import EditProjectModal from '@/components/EditProjectModal.vue'
 import ProjectMemberTable from '@/components/ProjectMemberTable.vue'
 import RepositoriesTab from '@/components/RepositoriesTab.vue'
 import EnvironmentsTab from '@/components/EnvironmentsTab.vue'
@@ -741,18 +741,7 @@ const isEditModalOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 const removingMemberId = ref<string | null>(null)
 
-// 编辑项目数据（转换为 CreateProjectModal 期望的格式）
-const editProjectData = computed(() => {
-  if (!currentProject.value) return null
-  return {
-    id: currentProject.value.id,
-    name: currentProject.value.name,
-    displayName: currentProject.value.name,
-    description: currentProject.value.description,
-    repositoryUrl: null,
-    visibility: currentProject.value.visibility as 'public' | 'private' | 'internal',
-  }
-})
+
 
 // 初始化
 onMounted(async () => {
@@ -816,6 +805,11 @@ async function handleUpdate(data: any) {
   } catch (error) {
     console.error('Failed to update project:', error)
   }
+}
+
+async function handleProjectUpdated() {
+  isEditModalOpen.value = false
+  await loadProjectData()
 }
 
 async function handleUpdateMemberRole(memberId: string, role: string) {

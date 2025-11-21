@@ -91,6 +91,49 @@ export class DeploymentsRouter {
             })
           }
         }),
+
+      // 按项目获取部署列表
+      getByProject: this.trpc.protectedProcedure
+        .input(z.object({ projectId: z.string(), limit: z.number().optional() }))
+        .query(async ({ ctx, input }) => {
+          // TODO: 实现获取项目部署列表的逻辑
+          return {
+            deployments: [] as Array<{
+              id: string
+              projectId: string
+              environmentId: string
+              pipelineRunId: string | null
+              status: 'pending' | 'running' | 'success' | 'failed' | 'rolled_back'
+              version: string
+              commitHash: string
+              branch: string
+              deployedBy: string | null
+              strategy: string // 使用 strategy 而不是 deploymentStrategy，与数据库字段一致
+              startedAt: string | null
+              finishedAt: string | null
+              commitMessage?: string
+              createdAt: string
+            }>,
+          }
+        }),
+
+      // 获取部署统计
+      getStats: this.trpc.protectedProcedure
+        .input(z.object({ projectId: z.string() }))
+        .query(async ({ ctx, input }) => {
+          // TODO: 实现获取部署统计的逻辑
+          return {
+            total: 0,
+            success: 0,
+            failed: 0,
+            pending: 0,
+            cancelled: 0,
+            running: 0,
+            rolledBack: 0,
+            successRate: 0, // 成功率百分比
+            avgDeploymentTime: 0,
+          }
+        }),
     })
   }
 }

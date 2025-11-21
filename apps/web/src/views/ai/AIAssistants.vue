@@ -65,10 +65,17 @@ const selectedRating = ref(0)
 
 // 创建助手对话框
 const showCreateDialog = ref(false)
-const createForm = ref({
+const createForm = ref<{
+  name: string
+  type: 'code_review' | 'devops_engineer' | 'cost_optimizer' | 'security_analyst'
+  systemPrompt: string
+  provider: 'openai' | 'anthropic' | 'google' | 'ollama'
+  model: string
+}>({
   name: '',
   type: 'code_review',
   systemPrompt: '',
+  provider: 'ollama',
   model: 'llama2',
 })
 
@@ -82,7 +89,12 @@ async function createAssistant() {
       name: createForm.value.name,
       type: createForm.value.type,
       systemPrompt: createForm.value.systemPrompt,
-      model: createForm.value.model,
+      modelConfig: {
+        provider: createForm.value.provider,
+        model: createForm.value.model,
+        temperature: 0.7,
+        maxTokens: 2000,
+      },
     })
     
     showCreateDialog.value = false
@@ -90,6 +102,7 @@ async function createAssistant() {
       name: '',
       type: 'code_review',
       systemPrompt: '',
+      provider: 'ollama',
       model: 'llama2',
     }
     

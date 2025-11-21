@@ -63,7 +63,7 @@ export class EnvironmentsService {
     return environment
   }
 
-  async list(userId: string, projectId: string) {
+  async list(userId: string, projectId: string): Promise<schema.Environment[]> {
     const hasAccess = await this.checkProjectAccess(userId, projectId)
     if (!hasAccess) {
       throw new Error('没有权限访问该项目')
@@ -79,7 +79,7 @@ export class EnvironmentsService {
     return environments
   }
 
-  async get(userId: string, environmentId: string) {
+  async get(userId: string, environmentId: string): Promise<schema.Environment | null> {
     const [environment] = await this.db
       .select()
       .from(schema.environments)

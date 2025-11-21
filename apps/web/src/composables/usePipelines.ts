@@ -185,7 +185,7 @@ export function usePipelines() {
         { runId },
         {
           onData,
-          onError: (err) => {
+          onError: (err: any) => {
             console.error('日志订阅失败:', err)
             toast.error('日志订阅失败')
           },
@@ -195,6 +195,7 @@ export function usePipelines() {
     } catch (err) {
       console.error('Failed to subscribe to logs:', err)
       toast.error('日志订阅失败')
+      return undefined
     }
   }
 
@@ -208,7 +209,7 @@ export function usePipelines() {
         { runId },
         {
           onData,
-          onError: (err) => {
+          onError: (err: any) => {
             console.error('状态订阅失败:', err)
             toast.error('状态订阅失败')
           },
@@ -218,6 +219,7 @@ export function usePipelines() {
     } catch (err) {
       console.error('Failed to subscribe to status:', err)
       toast.error('状态订阅失败')
+      return undefined
     }
   }
 

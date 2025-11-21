@@ -29,14 +29,17 @@
     "@juanie/core-utils": "workspace:*",
     "@juanie/service-git-providers": "workspace:*",
     "@nestjs/common": "^11.1.7",
+    "chokidar": "^4.0.3",
     "handlebars": "^4.7.8",
-    "js-yaml": "^4.1.1"
+    "js-yaml": "^4.1.1",
+    "yaml": "^2.6.1"
   },
   "devDependencies": {
     "@juanie/config-typescript": "workspace:*",
     "@juanie/config-vitest": "workspace:*",
     "@types/handlebars": "^4.1.0",
     "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.7.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.4"
   },

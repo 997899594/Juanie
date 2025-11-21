@@ -1,5 +1,4 @@
 import {
-  connectRepositorySchema,
   disableGitOpsSchema,
   enableGitOpsSchema,
   getFluxStatusSchema,
@@ -21,20 +20,6 @@ export class RepositoriesRouter {
 
   get router() {
     return this.trpc.router({
-      // 连接仓库
-      connect: this.trpc.protectedProcedure
-        .input(connectRepositorySchema)
-        .mutation(async ({ ctx, input }) => {
-          try {
-            return await this.repositoriesService.connect(ctx.user.id, input)
-          } catch (error) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: error instanceof Error ? error.message : '连接仓库失败',
-            })
-          }
-        }),
-
       // 列出项目的仓库
       list: this.trpc.protectedProcedure
         .input(projectIdQuerySchema)
@@ -94,34 +79,6 @@ export class RepositoriesRouter {
           })
         }
       }),
-
-      // 同步仓库元数据
-      sync: this.trpc.protectedProcedure
-        .input(repositoryIdSchema)
-        .mutation(async ({ ctx, input }) => {
-          try {
-            return await this.repositoriesService.sync(ctx.user.id, input.repositoryId)
-          } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '同步仓库失败',
-            })
-          }
-        }),
-
-      // 断开仓库连接
-      disconnect: this.trpc.protectedProcedure
-        .input(repositoryIdSchema)
-        .mutation(async ({ ctx, input }) => {
-          try {
-            return await this.repositoriesService.disconnect(ctx.user.id, input.repositoryId)
-          } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '断开仓库失败',
-            })
-          }
-        }),
 
       // ==================== GitOps 相关端点 ====================
 

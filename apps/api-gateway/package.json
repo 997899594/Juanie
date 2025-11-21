@@ -4,6 +4,9 @@
   "description": "API Gateway - Aggregates all service routers",
   "type": "module",
   "main": "dist/main.js",
+  "exports": {
+    "./router-types": "./src/trpc/trpc.router.ts"
+  },
   "scripts": {
     "dev": "bun --hot src/main.ts",
     "build": "tsc",

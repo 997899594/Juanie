@@ -8,7 +8,7 @@ import type {
   UpdateProjectInput,
 } from '@juanie/core-types'
 import { AuditLogsService } from '@juanie/service-audit-logs'
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { HealthMonitorService } from './health-monitor.service'
@@ -16,9 +16,12 @@ import { ProjectOrchestrator } from './project-orchestrator.service'
 
 @Injectable()
 export class ProjectsService {
+  private readonly logger = new Logger(ProjectsService.name)
+
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private orchestrator: ProjectOrchestrator,
+    @Inject(REDIS) private redis: Redis,
     private healthMonitor: HealthMonitorService,
     private auditLogs: AuditLogsService,
   ) {}
@@ -58,14 +61,21 @@ export class ProjectsService {
         organizationId: data.organizationId,
         action: 'project.created',
         resourceType: 'project',
-        resourceId: result.id,
+        resourceId: result.projectId,
         metadata: {
           templateId: extendedData.templateId,
           hasRepository: !!extendedData.repository,
         },
       })
 
-      return result
+      // 返回项目信息（需要从数据库查询）
+      const [project] = await this.db
+        .select()
+        .from(schema.projects)
+        .where(eq(schema.projects.id, result.projectId))
+        .limit(1)
+
+      return { ...project!, jobIds: result.jobIds }
     }
 
     // 否则使用简单创建（向后兼容）
@@ -261,8 +271,89 @@ export class ProjectsService {
       throw new Error('项目不存在')
     }
 
-    // 使用 orchestrator 获取完整状态
-    return await this.orchestrator.getProjectStatus(userId, projectId)
+    // 获取环境列表
+    const environments = await this.db
+      .select()
+      .from(schema.environments)
+      .where(eq(schema.environments.projectId, projectId))
+
+    // 获取仓库列表
+    const repositories = await this.db
+      .select()
+      .from(schema.repositories)
+      .where(eq(schema.repositories.projectId, projectId))
+
+    // 获取部署列表
+    const { desc } = await import('drizzle-orm')
+    const deployments = await this.db
+      .select()
+      .from(schema.deployments)
+      .where(eq(schema.deployments.projectId, projectId))
+      .orderBy(desc(schema.deployments.createdAt))
+      .limit(50)
+
+    // 计算统计数据
+    const totalDeployments = deployments.length
+    const successfulDeployments = deployments.filter((d) => d.status === 'success').length
+    const failedDeployments = deployments.filter((d) => d.status === 'failed').length
+    const lastDeployment = deployments[0]
+
+    // 获取 GitOps 资源
+    const gitopsResources = await this.db
+      .select()
+      .from(schema.gitopsResources)
+      .where(eq(schema.gitopsResources.projectId, projectId))
+
+    return {
+      project: project as any,
+      environments: environments.map((e) => ({
+        id: e.id,
+        name: e.name,
+        type: e.type as 'development' | 'staging' | 'production' | 'testing',
+        config: e.config,
+      })),
+      repositories: repositories.map((r) => ({
+        id: r.id,
+        provider: r.provider as 'github' | 'gitlab',
+        fullName: r.fullName,
+        cloneUrl: r.cloneUrl,
+        defaultBranch: r.defaultBranch,
+      })),
+      gitopsResources: gitopsResources.map((g) => ({
+        id: g.id,
+        type: g.type as 'kustomization' | 'helm',
+        name: g.name,
+        namespace: g.namespace,
+        status: g.status,
+        errorMessage: g.errorMessage,
+      })),
+      stats: {
+        totalDeployments,
+        successfulDeployments,
+        failedDeployments,
+        lastDeploymentAt: lastDeployment?.createdAt,
+      },
+      health: {
+        score:
+          totalDeployments > 0 ? Math.round((successfulDeployments / totalDeployments) * 100) : 0,
+        status: 'healthy' as const,
+        factors: {
+          deploymentSuccessRate:
+            totalDeployments > 0 ? Math.round((successfulDeployments / totalDeployments) * 100) : 0,
+          gitopsSyncStatus: 'healthy' as const,
+          testCoverage: 0,
+          securityScore: 0,
+          performanceScore: 0,
+        },
+        issues: [],
+        recommendations: [],
+      },
+      resourceUsage: {
+        pods: 0,
+        cpu: '0',
+        memory: '0',
+      },
+    }
   }
 
   // 更新项目
@@ -360,10 +451,11 @@ export class ProjectsService {
 
     // 处理关联的 Git 仓库
     const repositoryAction = options?.repositoryAction || 'keep'
-    let jobIds: string[] = []
+    const jobIds: string[] = []
 
+    // TODO: 实现 handleRepositoryOnDelete
     if (repositoryAction !== 'keep') {
-      jobIds = await this.orchestrator.handleRepositoryOnDelete(userId, projectId, repositoryAction)
+      this.logger.log(`Repository action: ${repositoryAction} (not implemented yet)`)
     }
 
     await this.auditLogs.log({
@@ -398,8 +490,11 @@ export class ProjectsService {
       throw new Error('没有权限归档项目')
     }
 
-    // 使用 orchestrator 归档项目
-    await this.orchestrator.archiveProject(userId, projectId)
+    // 归档项目
+    await this.db
+      .update(schema.projects)
+      .set({ status: 'archived', updatedAt: new Date() })
+      .where(eq(schema.projects.id, projectId))
 
     // 记录审计日志
     await this.auditLogs.log({
@@ -436,8 +531,11 @@ export class ProjectsService {
       throw new Error('没有权限恢复项目')
     }
 
-    // 使用 orchestrator 恢复项目
-    await this.orchestrator.restoreProject(userId, projectId)
+    // 恢复项目
+    await this.db
+      .update(schema.projects)
+      .set({ status: 'active', updatedAt: new Date() })
+      .where(eq(schema.projects.id, projectId))
 
     // 记录审计日志
     await this.auditLogs.log({
@@ -957,22 +1055,39 @@ export class ProjectsService {
    * 使用 tRPC subscription 实时推送进度
    */
   async *subscribeToProgress(projectId: string) {
-    const channel = `project:${projectId}`
+    const eventPattern = `project.${projectId}.initialization.*`
     const eventQueue: any[] = []
     let resolve: ((value: any) => void) | null = null
     let isActive = true
 
-    const handler = (event: any) => {
-      if (resolve) {
-        resolve(event)
-        resolve = null
-      } else {
-        eventQueue.push(event)
-      }
-    }
+    // 创建 Redis 订阅客户端
+    const subscriber = this.redis.duplicate()
+    await subscriber.connect()
 
-    const eventBus = this.orchestrator.eventBus
-    await eventBus.subscribe(channel, handler)
+    // 订阅项目初始化事件
+    await subscriber.pSubscribe(eventPattern, (message, channel) => {
+      try {
+        const eventData = JSON.parse(message)
+        this.logger.log(`Received subscription event on ${channel}:`, eventData)
+
+        if (resolve) {
+          resolve(eventData)
+          resolve = null
+        } else {
+          eventQueue.push(eventData)
+        }
+
+        // 收到完成或失败事件后标记为不活跃
+        if (
+          eventData.type === 'initialization.completed' ||
+          eventData.type === 'initialization.failed'
+        ) {
+          isActive = false
+        }
+      } catch (error) {
+        this.logger.error(`Error processing subscription event: ${error.message}`)
+      }
+    })
 
     try {
       // 1. 先发送当前项目状态
@@ -983,11 +1098,13 @@ export class ProjectsService {
         .limit(1)
 
       if (project) {
+        const initStatus = project.initializationStatus as any
         yield {
           type: 'init',
           data: {
             status: project.status,
-            progress: (project.initializationStatus as any)?.progress || 0,
+            progress: initStatus?.progress || 0,
+            state: initStatus?.state || 'IDLE',
           },
         }
 
@@ -1004,17 +1121,34 @@ export class ProjectsService {
             ? eventQueue.shift()
             : await new Promise<any>((r) => {
                 resolve = r
+                // 设置超时，避免永久等待
+                setTimeout(() => {
+                  if (resolve === r) {
+                    r({ type: 'heartbeat' })
+                    resolve = null
+                  }
+                }, 30000) // 30 秒心跳
               })
+
+        // 跳过心跳事件
+        if (event.type === 'heartbeat') {
+          continue
+        }
 
         yield event
 
         // 收到完成或失败事件后结束
-        if (event.type === 'job.completed' || event.type === 'job.failed') {
-          isActive = false
+        if (event.type === 'initialization.completed' || event.type === 'initialization.failed') {
+          break
         }
       }
     } finally {
-      await eventBus.unsubscribe(channel, handler)
+      try {
+        await subscriber.pUnsubscribe(eventPattern)
+        await subscriber.disconnect()
+      } catch (error) {
+        this.logger.error(`Error closing Redis subscription: ${error.message}`)
+      }
     }
   }
   /**

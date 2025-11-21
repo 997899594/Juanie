@@ -19,16 +19,6 @@
         </div>
 
         <div class="space-y-2">
-          <Label for="displayName">显示名称</Label>
-          <Input
-            id="displayName"
-            v-model="form.displayName"
-            type="text"
-            placeholder="输入项目显示名称"
-          />
-        </div>
-
-        <div class="space-y-2">
           <Label for="description">项目描述</Label>
           <Textarea
             id="description"
@@ -95,17 +85,6 @@
           </div>
         </div>
 
-        <div class="space-y-2">
-          <Label for="repositoryUrl">代码仓库 URL</Label>
-          <Input
-            id="repositoryUrl"
-            type="url"
-            placeholder="https://github.com/username/repo"
-            v-model="form.repositoryUrl"
-          />
-          <p class="text-sm text-muted-foreground">代码仓库的 URL 地址，用于自动化部署</p>
-        </div>
-
         <DialogFooter>
           <Button type="button" variant="outline" @click="$emit('close')">
             取消
@@ -147,26 +126,20 @@ const errors = ref<Record<string, string>>({})
 
 const form = reactive({
   name: '',
-  displayName: '',
   description: '',
-  repositoryUrl: '',
   visibility: 'private' as 'public' | 'private' | 'internal'
 })
 
 // 初始化表单数据
 const initForm = () => {
   form.name = props.project.name
-  form.displayName = props.project.displayName || ''
   form.description = props.project.description || ''
-  form.repositoryUrl = props.project.repositoryUrl || ''
-  form.visibility = props.project.visibility || 'private'
+  form.visibility = (props.project.visibility as 'public' | 'private' | 'internal') || 'private'
 }
 
 const resetForm = () => {
   form.name = ''
-  form.displayName = ''
   form.description = ''
-  form.repositoryUrl = ''
   form.visibility = 'private'
 }
 
@@ -203,14 +176,10 @@ const handleSubmit = async () => {
     loading.value = true
     
     const updateData = {
-      id: props.project.id,
-      data: {
-        name: form.name.trim(),
-        displayName: form.displayName.trim() || undefined,
-        description: form.description.trim() || undefined,
-        repositoryUrl: form.repositoryUrl.trim() || undefined,
-        visibility: form.visibility
-      }
+      projectId: props.project.id,
+      name: form.name.trim(),
+      description: form.description.trim() || undefined,
+      visibility: form.visibility as 'public' | 'private' | 'internal'
     }
     
     await trpc.projects.update.mutate(updateData)

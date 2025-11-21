@@ -538,12 +538,12 @@ async function handleCreateProject() {
     }
 
     // 创建项目
-    const project = await createProject(projectData)
-    createdProject.value = project
+    const result = await createProject(projectData)
+    createdProject.value = result
 
     // 自动创建开发和生产环境
     await trpc.environments.create.mutate({
-      projectId: project.id,
+      projectId: result.project.id,
       name: '开发环境',
       type: 'development' as const,
       config: {
@@ -558,7 +558,7 @@ async function handleCreateProject() {
     })
 
     await trpc.environments.create.mutate({
-      projectId: project.id,
+      projectId: result.project.id,
       name: '生产环境',
       type: 'production' as const,
       config: {

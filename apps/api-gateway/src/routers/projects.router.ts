@@ -10,7 +10,7 @@ import {
   restoreProjectSchema,
   updateProjectSchema,
 } from '@juanie/core-types'
-import { ProjectsService } from '@juanie/service-projects'
+import { OneClickDeployService, ProjectsService } from '@juanie/service-projects'
 import { StorageService } from '@juanie/service-storage'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -23,6 +23,7 @@ export class ProjectsRouter {
     private readonly trpc: TrpcService,
     private readonly projectsService: ProjectsService,
     private readonly storageService: StorageService,
+    private readonly oneClickDeploy: OneClickDeployService,
   ) {}
 
   get router() {
@@ -407,6 +408,147 @@ export class ProjectsRouter {
         .subscription(async ({ input }) => {
           return this.projectsService.subscribeToJobProgress(input.jobId)
         }),
+
+      // 一键部署
+      oneClickDeploy: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectName: z.string(),
+            templateId: z.string(),
+            gitProvider: z.enum(['github', 'gitlab']),
+            organizationId: z.string(),
+            description: z.string().optional(),
+            variables: z.record(z.string(), z.string()).optional(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.oneClickDeploy.deploy({
+              ...input,
+              userId: ctx.user.id,
+            })
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '一键部署失败',
+            })
+          }
+        }),
+
+      // 获取部署状态
+      getDeployStatus: this.trpc.protectedProcedure
+        .input(projectIdSchema)
+        .query(async ({ input }) => {
+          try {
+            return await this.oneClickDeploy.getDeployStatus(input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: error instanceof Error ? error.message : '获取部署状态失败',
+            })
+          }
+        }),
+
+      // 估算部署时间
+      estimateDeployTime: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            templateId: z.string(),
+          }),
+        )
+        .query(async ({ input }) => {
+          return {
+            estimatedTime: this.oneClickDeploy.estimateDeployTime(input.templateId),
+          }
+        }),
+
+      // getById 别名（兼容前端）
+      getById: this.trpc.protectedProcedure
+        .input(z.object({ id: z.string() }))
+        .query(async ({ ctx, input }) => {
+          try {
+            const project = await this.projectsService.get(ctx.user.id, input.id)
+            if (!project) {
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: '项目不存在',
+              })
+            }
+            return project
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取项目详情失败',
+            })
+          }
+        }),
+
+      // 获取最近活动
+      getRecentActivities: this.trpc.protectedProcedure
+        .input(z.object({ projectId: z.string(), limit: z.number().optional() }))
+        .query(async ({ ctx, input }) => {
+          // TODO: 实现获取最近活动的逻辑
+          return {
+            activities: [] as Array<{
+              id: string
+              type: 'deployment' | 'environment' | 'member' | 'settings'
+              title: string
+              description: string
+              status: 'success' | 'failed' | 'pending' | 'running'
+              createdAt: string
+            }>,
+          }
+        }),
+
+      // 更新部署设置
+      updateDeploySettings: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string(),
+            settings: z.object({
+              autoDeployEnabled: z.boolean().optional(),
+              deployBranch: z.string().optional(),
+            }),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          // TODO: 实现更新部署设置的逻辑
+          return { success: true }
+        }),
+
+      // 成员管理（嵌套 router）
+      members: this.trpc.router({
+        list: this.trpc.protectedProcedure
+          .input(z.object({ projectId: z.string() }))
+          .query(async ({ ctx, input }) => {
+            return await this.projectsService.listMembers(ctx.user.id, input.projectId)
+          }),
+
+        add: this.trpc.protectedProcedure
+          .input(
+            z.object({
+              projectId: z.string(),
+              memberId: z.string(),
+              role: z.enum(['admin', 'developer', 'viewer']),
+            }),
+          )
+          .mutation(async ({ ctx, input }) => {
+            const { projectId, ...data } = input
+            return await this.projectsService.addMember(ctx.user.id, projectId, data)
+          }),
+
+        remove: this.trpc.protectedProcedure
+          .input(
+            z.object({
+              projectId: z.string(),
+              memberId: z.string(),
+            }),
+          )
+          .mutation(async ({ ctx, input }) => {
+            const { projectId, ...data } = input
+            return await this.projectsService.removeMember(ctx.user.id, projectId, data)
+          }),
+      }),
     })
   }
 }

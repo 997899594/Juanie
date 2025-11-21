@@ -69,15 +69,17 @@
                   <code class="text-xs text-muted-foreground font-mono">
                     {{ deployment.gitCommitSha.slice(0, 7) }}
                   </code>
-                  <a 
-                    v-if="deployment.gitCommitUrl"
-                    :href="deployment.gitCommitUrl"
+                  <!-- TODO: 需要从项目的 git 配置中构建 commit URL -->
+                  <!-- <a 
+                    v-if="deployment.gitCommitSha"
+                    :href="`https://github.com/org/repo/commit/${deployment.gitCommitSha}`"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     @click.stop
                   >
                     查看提交
+                  </a> -->
                     <ExternalLink class="h-3 w-3" />
                   </a>
                 </div>

@@ -1,6 +1,7 @@
 import { DatabaseModule } from '@juanie/core-database/module'
 import { QueueModule } from '@juanie/core-queue/module'
 import { SseModule } from '@juanie/core-sse'
+import { AIModule } from '@juanie/service-ai'
 import { AiAssistantsModule } from '@juanie/service-ai-assistants'
 import { AuditLogsModule } from '@juanie/service-audit-logs'
 import { AuthModule } from '@juanie/service-auth'
@@ -42,6 +43,7 @@ import { TrpcModule } from './trpc/trpc.module'
     FluxModule,
     GitOpsModule,
     // AI modules
+    AIModule,
     OllamaModule,
     AiAssistantsModule,
     // Service modules

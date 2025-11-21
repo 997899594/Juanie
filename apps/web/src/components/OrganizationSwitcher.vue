@@ -87,7 +87,7 @@ const currentOrganizationId = computed(() => appStore.currentOrganizationId)
 
 const currentOrganization = computed(() => {
   if (!currentOrganizationId.value) return null
-  return organizations.value.find((org) => org.id === currentOrganizationId.value)
+  return organizations.value.find((org: any) => org.id === currentOrganizationId.value)
 })
 
 const currentOrgName = computed(() => {

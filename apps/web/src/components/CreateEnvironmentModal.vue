@@ -253,12 +253,13 @@ const handleSubmit = async () => {
     const createData = {
       projectId: props.projectId,
       name: form.name.trim(),
-      displayName: form.description.trim() || form.name.trim(),
-      url: form.url.trim() || undefined,
-      branch: undefined,
-      config: Object.keys(environmentVariables).length > 0 ? {
-        environmentVariables
-      } : undefined
+      type: form.type as 'development' | 'staging' | 'production' | 'testing',
+      description: form.description.trim() || undefined,
+      status: 'active' as const,
+      config: {
+        approvalRequired: false,
+        minApprovals: 0,
+      }
     }
     
     const result = await trpc.environments.create.mutate(createData)

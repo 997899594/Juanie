@@ -200,7 +200,9 @@ function getTechStack(template: any): string[] {
 }
 
 // 处理模板变化
-function handleTemplateChange(value: string) {
+function handleTemplateChange(value: any) {
+  if (!value || typeof value !== 'string') return
+  
   selectedTemplateId.value = value
   
   if (value === 'blank') {

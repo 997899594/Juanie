@@ -286,8 +286,7 @@ const loadProjectStats = async () => {
       // 获取最近活动
       trpc.projects.getRecentActivities.query({ 
         projectId: props.projectId,
-        limit: 10,
-        offset: 0
+        limit: 10
       })
     ])
     
@@ -324,35 +323,14 @@ const loadProjectStats = async () => {
     
   } catch (error: any) {
     console.error('获取项目统计失败:', error)
-    
-    // 使用模拟数据作为降级方案
+    // 不使用 mock 数据，保持空状态
     projectStats.value = {
-      totalEnvironments: 3,
-      totalDeployments: 24,
-      successRate: 85,
-      totalMembers: 1
+      totalEnvironments: 0,
+      totalDeployments: 0,
+      successRate: 0,
+      totalMembers: 0
     }
-    
-    recentActivities.value = [
-      {
-        id: '1',
-        type: 'deployment' as const,
-        title: '生产环境部署',
-        description: '部署版本 v1.2.3 到生产环境',
-        status: 'success',
-        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        metadata: { version: 'v1.2.3', status: 'success', environment: 'production' }
-      },
-      {
-        id: '2',
-        type: 'event' as const,
-        title: '新建测试环境',
-        description: '创建了新的测试环境 test-v2',
-        status: 'success',
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        metadata: { status: 'success', environment: 'test-v2' }
-      }
-    ]
+    recentActivities.value = []
   } finally {
     loading.value = false
   }

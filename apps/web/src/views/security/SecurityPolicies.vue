@@ -56,10 +56,15 @@ const editingPolicy = ref<SecurityPolicy | null>(null)
 const deletingPolicy = ref<SecurityPolicy | null>(null)
 
 // 表单数据
-const formData = ref({
+const formData = ref<{
+  name: string
+  type: 'access-control' | 'network' | 'data-protection' | 'compliance'
+  status: 'active' | 'inactive'
+  rules: string
+}>({
   name: '',
-  type: 'access_control',
-  status: 'active' as 'active' | 'inactive',
+  type: 'access-control',
+  status: 'active',
   rules: '{}',
 })
 
@@ -148,9 +153,9 @@ function applyTemplate() {
 
 // 策略类型选项
 const policyTypes = [
-  { value: 'access_control', label: '访问控制' },
-  { value: 'data_protection', label: '数据保护' },
-  { value: 'network_security', label: '网络安全' },
+  { value: 'access-control', label: '访问控制' },
+  { value: 'data-protection', label: '数据保护' },
+  { value: 'network', label: '网络安全' },
   { value: 'compliance', label: '合规性' },
 ]
 
@@ -163,7 +168,7 @@ onMounted(async () => {
 const openCreateDialog = () => {
   formData.value = {
     name: '',
-    type: 'access_control',
+    type: 'access-control',
     status: 'active',
     rules: '{}',
   }
@@ -175,8 +180,8 @@ const openEditDialog = (policy: SecurityPolicy) => {
   editingPolicy.value = policy
   formData.value = {
     name: policy.name,
-    type: policy.type,
-    status: policy.status,
+    type: policy.type as 'access-control' | 'network' | 'data-protection' | 'compliance',
+    status: policy.status as 'active' | 'inactive',
     rules: JSON.stringify(policy.rules, null, 2),
   }
   showEditDialog.value = true
@@ -199,12 +204,18 @@ const handleCreate = async () => {
       return
     }
 
+    // 确保 rules 有正确的结构
+    const parsedRules = typeof rules === 'string' ? JSON.parse(rules) : rules
+    const apiRules = {
+      conditions: parsedRules.conditions || [],
+      actions: parsedRules.actions || []
+    }
+    
     await createPolicy({
       organizationId,
       name: formData.value.name,
       type: formData.value.type,
-      status: formData.value.status,
-      rules,
+      rules: apiRules,
     })
 
     showCreateDialog.value = false
@@ -226,11 +237,15 @@ const handleUpdate = async () => {
       return
     }
 
+    // 确保 rules 有正确的结构
+    const apiRules = {
+      conditions: (rules as any).conditions || [],
+      actions: (rules as any).actions || []
+    }
+    
     await updatePolicy(editingPolicy.value.id, {
       name: formData.value.name,
-      type: formData.value.type,
-      status: formData.value.status,
-      rules,
+      rules: apiRules,
     })
 
     showEditDialog.value = false

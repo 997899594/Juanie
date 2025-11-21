@@ -5,13 +5,9 @@
       <div>
         <h3 class="text-lg font-semibold">代码仓库</h3>
         <p class="text-sm text-muted-foreground">
-          管理项目的代码仓库连接
+          查看和管理项目的代码仓库
         </p>
       </div>
-      <Button @click="showConnectDialog = true" size="sm">
-        <Plus class="mr-2 h-4 w-4" />
-        连接仓库
-      </Button>
     </div>
 
     <!-- Loading State -->
@@ -24,13 +20,9 @@
       <CardContent class="flex flex-col items-center justify-center py-12">
         <GitBranch class="h-12 w-12 text-muted-foreground mb-4" />
         <h3 class="text-lg font-semibold mb-2">暂无仓库</h3>
-        <p class="text-sm text-muted-foreground mb-4">
-          连接 GitHub 或 GitLab 仓库以开始使用
+        <p class="text-sm text-muted-foreground">
+          项目创建时会自动关联 Git 仓库
         </p>
-        <Button @click="showConnectDialog = true" size="sm">
-          <Plus class="mr-2 h-4 w-4" />
-          连接仓库
-        </Button>
       </CardContent>
     </Card>
 
@@ -72,97 +64,11 @@
             </div>
           </div>
         </CardContent>
-        <CardFooter class="flex justify-end space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            :disabled="isLoading"
-            @click="handleSync(repo.id)"
-          >
-            <RefreshCw :class="['h-3 w-3 mr-1', isLoading && 'animate-spin']" />
-            同步
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            :disabled="isLoading"
-            @click="handleDisconnect(repo.id)"
-          >
-            <Unplug class="h-3 w-3 mr-1" />
-            断开
-          </Button>
-        </CardFooter>
+
       </Card>
     </div>
 
-    <!-- Connect Repository Dialog -->
-    <Dialog v-model:open="showConnectDialog">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>连接仓库</DialogTitle>
-          <DialogDescription>
-            连接 GitHub 或 GitLab 仓库到当前项目
-          </DialogDescription>
-        </DialogHeader>
-        <form @submit.prevent="handleConnect" class="space-y-4">
-          <div class="space-y-2">
-            <Label for="provider">提供商</Label>
-            <Select v-model="connectForm.provider">
-              <SelectTrigger id="provider">
-                <SelectValue placeholder="选择提供商" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="github">
-                  <div class="flex items-center">
-                    <Github class="mr-2 h-4 w-4" />
-                    GitHub
-                  </div>
-                </SelectItem>
-                <SelectItem value="gitlab">
-                  <div class="flex items-center">
-                    <Gitlab class="mr-2 h-4 w-4" />
-                    GitLab
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
-          <div class="space-y-2">
-            <Label for="url">仓库 URL</Label>
-            <Input
-              id="url"
-              v-model="connectForm.url"
-              placeholder="https://github.com/username/repo"
-              required
-            />
-          </div>
-
-          <div class="space-y-2">
-            <Label for="defaultBranch">默认分支（可选）</Label>
-            <Input
-              id="defaultBranch"
-              v-model="connectForm.defaultBranch"
-              placeholder="main"
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              @click="showConnectDialog = false"
-            >
-              取消
-            </Button>
-            <Button type="submit" :disabled="isLoading">
-              <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
-              连接
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   </div>
 </template>
 
@@ -193,12 +99,9 @@ import {
   SelectValue,
 } from '@juanie/ui'
 import {
-  Plus,
   GitBranch,
   Github,
   Gitlab,
-  RefreshCw,
-  Unplug,
   Loader2,
 } from 'lucide-vue-next'
 
@@ -210,9 +113,6 @@ const {
   repositories,
   isLoading,
   fetchRepositories,
-  connect,
-  sync,
-  disconnect,
 } = useRepositories()
 
 // 组件挂载时获取仓库列表
@@ -221,68 +121,6 @@ onMounted(() => {
     fetchRepositories(props.projectId)
   }
 })
-
-const showConnectDialog = ref(false)
-const connectForm = ref({
-  provider: 'github' as 'github' | 'gitlab',
-  url: '',
-  defaultBranch: '',
-})
-
-// 解析仓库 URL
-const parseRepoUrl = (url: string) => {
-  const match = url.match(/(?:https?:\/\/|git@)?(?:github|gitlab)\.com[:/](.+?)(?:\.git)?$/)
-  return match ? match[1] : ''
-}
-
-const handleConnect = async () => {
-  try {
-    const fullName = parseRepoUrl(connectForm.value.url)
-    if (!fullName) {
-      throw new Error('无效的仓库 URL')
-    }
-    
-    await connect({
-      projectId: props.projectId,
-      provider: connectForm.value.provider,
-      fullName,
-      cloneUrl: connectForm.value.url,
-      defaultBranch: connectForm.value.defaultBranch || undefined,
-    })
-    showConnectDialog.value = false
-    connectForm.value = {
-      provider: 'github',
-      url: '',
-      defaultBranch: '',
-    }
-    // 重新获取仓库列表
-    await fetchRepositories(props.projectId)
-  } catch (error) {
-    console.error('Failed to connect repository:', error)
-  }
-}
-
-const handleSync = async (repositoryId: string) => {
-  try {
-    await sync({ repositoryId })
-    // 重新获取仓库列表
-    await fetchRepositories(props.projectId)
-  } catch (error) {
-    console.error('Failed to sync repository:', error)
-  }
-}
-
-const handleDisconnect = async (repositoryId: string) => {
-  if (confirm('确定要断开此仓库连接吗？')) {
-    try {
-      await disconnect({ repositoryId })
-      // 重新获取仓库列表
-      await fetchRepositories(props.projectId)
-    } catch (error) {
-      console.error('Failed to disconnect repository:', error)
-    }
-  }
-}
 
 const getSyncStatusText = (status: string) => {
   const statusMap: Record<string, string> = {

@@ -364,6 +364,9 @@
           <router-view />
       </div>
     </SidebarInset>
+    
+    <!-- AI 助手 -->
+    <AIAssistant />
   </SidebarProvider>
 </template>
 
@@ -443,6 +446,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useNotifications } from '@/composables/useNotifications'
 import OrganizationSwitcher from '@/components/OrganizationSwitcher.vue'
+import AIAssistant from '@/components/AIAssistant.vue'
 
 const route = useRoute()
 const router = useRouter()

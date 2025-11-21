@@ -21,7 +21,7 @@ export function useNotifications() {
 
   // 计算属性
   const unreadCount = computed(() => {
-    return notifications.value.filter((n) => n.status === 'unread').length
+    return notifications.value.filter((n: any) => n.status === 'unread').length
   })
 
   const hasNotifications = computed(() => notifications.value.length > 0)
@@ -81,7 +81,7 @@ export function useNotifications() {
       await trpc.notifications.markAsRead.mutate({ id: notificationId })
 
       // 更新本地状态
-      const notification = notifications.value.find((n) => n.id === notificationId)
+      const notification = notifications.value.find((n: any) => n.id === notificationId)
       if (notification) {
         notification.status = 'read'
         notification.readAt = new Date() as any
@@ -112,7 +112,7 @@ export function useNotifications() {
       await trpc.notifications.markAllAsRead.mutate()
 
       // 更新本地状态
-      notifications.value.forEach((notification) => {
+      notifications.value.forEach((notification: any) => {
         if (notification.status === 'unread') {
           notification.status = 'read'
           notification.readAt = new Date() as any
@@ -145,7 +145,7 @@ export function useNotifications() {
       await trpc.notifications.delete.mutate({ id: notificationId })
 
       // 更新本地列表
-      notifications.value = notifications.value.filter((n) => n.id !== notificationId)
+      notifications.value = notifications.value.filter((n: any) => n.id !== notificationId)
 
       toast.success('通知已删除')
     } catch (err) {

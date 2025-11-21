@@ -10,6 +10,9 @@ export const environments = pgTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     type: text('type').notNull(), // 'development', 'staging', 'production', 'testing'
+    description: text('description'), // 环境描述
+    status: text('status').notNull().default('active'), // 'active', 'inactive', 'error'
+    healthCheckUrl: text('health_check_url'), // 健康检查 URL
 
     // 环境配置（JSONB）
     config: jsonb('config')

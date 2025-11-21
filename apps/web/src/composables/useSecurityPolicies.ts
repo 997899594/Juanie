@@ -1,17 +1,10 @@
+import type { inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
-import { trpc } from '@/lib/trpc'
+import { type AppRouter, trpc } from '@/lib/trpc'
 
-export interface SecurityPolicy {
-  id: string
-  organizationId: string
-  name: string
-  type: string
-  status: 'active' | 'inactive'
-  rules: Record<string, any>
-  createdAt: string
-  updatedAt: string
-}
+type RouterOutput = inferRouterOutputs<AppRouter>
+export type SecurityPolicy = NonNullable<RouterOutput['securityPolicies']['get']>
 
 export function useSecurityPolicies() {
   const toast = useToast()
@@ -40,7 +33,7 @@ export function useSecurityPolicies() {
       policies.value = result as SecurityPolicy[]
     } catch (err: any) {
       error.value = err.message || '获取安全策略失败'
-      toast.error('获取失败', error.value)
+      toast.error('获取失败', error.value || undefined)
       console.error('获取安全策略失败:', err)
     } finally {
       loading.value = false
@@ -55,13 +48,13 @@ export function useSecurityPolicies() {
       loading.value = true
       error.value = null
 
-      const result = await trpc.securityPolicies.getById.query({ id })
-      currentPolicy.value = result as SecurityPolicy
+      const result = await trpc.securityPolicies.get.query({ id })
+      currentPolicy.value = result
 
       return result
     } catch (err: any) {
       error.value = err.message || '获取安全策略详情失败'
-      toast.error('获取失败', error.value)
+      toast.error('获取失败', error.value || undefined)
       console.error('获取安全策略详情失败:', err)
       throw err
     } finally {
@@ -73,11 +66,15 @@ export function useSecurityPolicies() {
    * 创建安全策略
    */
   const createPolicy = async (data: {
-    organizationId: string
+    organizationId?: string
+    projectId?: string
     name: string
-    type: string
-    status?: 'active' | 'inactive'
-    rules: Record<string, any>
+    type: 'access-control' | 'network' | 'data-protection' | 'compliance'
+    rules: {
+      conditions: Array<{ field: string; operator: string; value: any }>
+      actions: Array<{ type: 'block' | 'warn' | 'log'; message: string }>
+    }
+    isEnforced?: boolean
   }) => {
     try {
       loading.value = true
@@ -85,13 +82,15 @@ export function useSecurityPolicies() {
 
       const result = await trpc.securityPolicies.create.mutate(data)
 
-      policies.value.unshift(result as SecurityPolicy)
+      if (result) {
+        policies.value.unshift(result)
+      }
       toast.success('创建成功', `安全策略 "${data.name}" 已创建`)
 
       return result
     } catch (err: any) {
       error.value = err.message || '创建安全策略失败'
-      toast.error('创建失败', error.value)
+      toast.error('创建失败', error.value || undefined)
       console.error('创建安全策略失败:', err)
       throw err
     } finally {
@@ -106,9 +105,11 @@ export function useSecurityPolicies() {
     id: string,
     data: {
       name?: string
-      type?: string
-      status?: 'active' | 'inactive'
-      rules?: Record<string, any>
+      rules?: {
+        conditions: Array<{ field: string; operator: string; value: any }>
+        actions: Array<{ type: 'block' | 'warn' | 'log'; message: string }>
+      }
+      isEnforced?: boolean
     },
   ) => {
     try {
@@ -121,14 +122,16 @@ export function useSecurityPolicies() {
       })
 
       // 更新列表中的策略
-      const index = policies.value.findIndex((p) => p.id === id)
-      if (index !== -1) {
-        policies.value[index] = result as SecurityPolicy
-      }
+      if (result) {
+        const index = policies.value.findIndex((p) => p.id === id)
+        if (index !== -1) {
+          policies.value[index] = result
+        }
 
-      // 更新当前策略
-      if (currentPolicy.value?.id === id) {
-        currentPolicy.value = result as SecurityPolicy
+        // 更新当前策略
+        if (currentPolicy.value?.id === id) {
+          currentPolicy.value = result
+        }
       }
 
       toast.success('更新成功', '安全策略已更新')
@@ -136,7 +139,7 @@ export function useSecurityPolicies() {
       return result
     } catch (err: any) {
       error.value = err.message || '更新安全策略失败'
-      toast.error('更新失败', error.value)
+      toast.error('更新失败', error.value || undefined)
       console.error('更新安全策略失败:', err)
       throw err
     } finally {
@@ -165,7 +168,7 @@ export function useSecurityPolicies() {
       toast.success('删除成功', '安全策略已删除')
     } catch (err: any) {
       error.value = err.message || '删除安全策略失败'
-      toast.error('删除失败', error.value)
+      toast.error('删除失败', error.value || undefined)
       console.error('删除安全策略失败:', err)
       throw err
     } finally {
@@ -175,13 +178,14 @@ export function useSecurityPolicies() {
 
   /**
    * 切换策略状态
+   * TODO: API 暂不支持更新 status 字段
    */
   const togglePolicyStatus = async (id: string) => {
-    const policy = policies.value.find((p) => p.id === id)
-    if (!policy) return
-
-    const newStatus = policy.status === 'active' ? 'inactive' : 'active'
-    await updatePolicy(id, { status: newStatus })
+    toast.error('功能暂未实现', 'API 暂不支持更新策略状态')
+    // const policy = policies.value.find((p) => p.id === id)
+    // if (!policy) return
+    // const newStatus = policy.status === 'active' ? 'inactive' : 'active'
+    // await updatePolicy(id, { status: newStatus })
   }
 
   return {

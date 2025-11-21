@@ -1,3 +1,4 @@
+import { AIModule } from '@juanie/service-ai'
 import { AiAssistantsModule } from '@juanie/service-ai-assistants'
 import { AuditLogsModule } from '@juanie/service-audit-logs'
 import { AuthModule } from '@juanie/service-auth'
@@ -16,6 +17,7 @@ import { TeamsModule } from '@juanie/service-teams'
 import { TemplatesModule } from '@juanie/service-templates'
 import { UsersModule } from '@juanie/service-users'
 import { Module } from '@nestjs/common'
+import { AIRouter } from '../routers/ai.router'
 import { AiAssistantsRouter } from '../routers/ai-assistants.router'
 import { AuditLogsRouter } from '../routers/audit-logs.router'
 import { AuthRouter } from '../routers/auth.router'
@@ -38,6 +40,7 @@ import { TrpcService } from './trpc.service'
 
 @Module({
   imports: [
+    AIModule,
     AiAssistantsModule,
     AuditLogsModule,
     AuthModule,
@@ -59,6 +62,7 @@ import { TrpcService } from './trpc.service'
   providers: [
     TrpcService,
     TrpcRouter,
+    AIRouter,
     AiAssistantsRouter,
     AuditLogsRouter,
     AuthRouter,

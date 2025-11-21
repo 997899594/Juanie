@@ -137,6 +137,39 @@ export class EnvironmentsRouter {
             })
           }
         }),
+
+      // getById 别名
+      getById: this.trpc.protectedProcedure
+        .input(environmentIdSchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            const env = await this.environmentsService.get(ctx.user.id, input.environmentId)
+            if (!env) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: '环境不存在' })
+            }
+            return env
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取环境详情失败',
+            })
+          }
+        }),
+
+      // listByProject 别名
+      listByProject: this.trpc.protectedProcedure
+        .input(projectIdQuerySchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            const environments = await this.environmentsService.list(ctx.user.id, input.projectId)
+            return { environments }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取环境列表失败',
+            })
+          }
+        }),
     })
   }
 }

@@ -36,6 +36,27 @@
       "when": 1763361986036,
       "tag": "0004_stormy_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1763608394827,
+      "tag": "0005_faulty_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1763608489496,
+      "tag": "0006_stale_silvermane",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1763712165933,
+      "tag": "0007_left_the_santerians",
+      "breakpoints": true
     }
   ]
 }

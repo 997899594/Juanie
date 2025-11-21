@@ -31,18 +31,26 @@ export const usePreferencesStore = defineStore(
         const user = await trpc.users.getMe.query()
         const prefs = user.preferences
 
-        language.value = prefs.language
-        themeMode.value = prefs.themeMode
-        themeId.value = prefs.themeId
+        if (prefs) {
+          language.value = prefs.language
+          themeMode.value = prefs.themeMode
+          themeId.value = prefs.themeId as 'default' | 'github' | 'bilibili'
 
-        notificationsEnabled.value = prefs.notifications?.email ?? true
-        // 声音开关仍为本地偏好
-        compactMode.value = prefs.ui?.compactMode ?? false
-        animationsEnabled.value = prefs.ui?.animationsEnabled ?? true
+          notificationsEnabled.value = prefs.notifications?.email ?? true
+          // 声音开关仍为本地偏好
+          compactMode.value = prefs.ui?.compactMode ?? false
+          animationsEnabled.value = prefs.ui?.animationsEnabled ?? true
+        }
 
         // 应用主题到 DOM
         setTheme(themeId.value)
-        setMode(themeMode.value)
+        // setMode 只接受 'light' | 'dark'，system 需要特殊处理
+        if (themeMode.value === 'system') {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+          setMode(prefersDark ? 'dark' : 'light')
+        } else {
+          setMode(themeMode.value)
+        }
 
         // 设置文档语言
         document.documentElement.lang = language.value
@@ -50,7 +58,12 @@ export const usePreferencesStore = defineStore(
         console.error('Failed to initialize preferences:', err)
         // 即使失败，也应用当前本地默认
         setTheme(themeId.value)
-        setMode(themeMode.value)
+        if (themeMode.value === 'system') {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+          setMode(prefersDark ? 'dark' : 'light')
+        } else {
+          setMode(themeMode.value)
+        }
       }
     }
 
@@ -78,7 +91,14 @@ export const usePreferencesStore = defineStore(
     // 更改主题模式
     const setThemeMode = async (newMode: 'light' | 'dark' | 'system') => {
       themeMode.value = newMode
-      setMode(newMode)
+      // setMode 只接受 'light' | 'dark'，system 需要特殊处理
+      if (newMode === 'system') {
+        // 根据系统偏好设置主题
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        setMode(prefersDark ? 'dark' : 'light')
+      } else {
+        setMode(newMode)
+      }
       await savePreferences()
     }
 
@@ -124,7 +144,7 @@ export const usePreferencesStore = defineStore(
       key: 'user-preferences',
       storage: localStorage,
       // 主题不再通过 Pinia 持久化（由 UI 库控制）
-      paths: [
+      pick: [
         'language',
         'notificationsEnabled',
         'soundEnabled',

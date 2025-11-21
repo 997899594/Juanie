@@ -78,12 +78,27 @@ export function useTeams() {
   /**
    * 创建团队
    */
-  async function createTeam(data: { organizationId: string; name: string; description?: string }) {
+  async function createTeam(data: {
+    organizationId: string
+    name: string
+    slug?: string
+    description?: string
+  }) {
     loading.value = true
     error.value = null
 
     try {
-      const result = await trpc.teams.create.mutate(data)
+      // 如果没有提供 slug，从 name 生成
+      const slug =
+        data.slug ||
+        data.name
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '')
+      const result = await trpc.teams.create.mutate({
+        ...data,
+        slug,
+      })
 
       // 刷新团队列表
       await fetchTeams(data.organizationId)
@@ -128,7 +143,7 @@ export function useTeams() {
       }
 
       // 更新列表中的团队
-      const teamIndex = teams.value.findIndex((t) => t.id === teamId)
+      const teamIndex = teams.value.findIndex((t: any) => t.id === teamId)
       if (teamIndex !== -1 && teams.value[teamIndex]) {
         teams.value[teamIndex] = { ...teams.value[teamIndex], ...result }
       }
@@ -159,7 +174,7 @@ export function useTeams() {
       await trpc.teams.delete.mutate({ teamId })
 
       // 更新本地列表
-      teams.value = teams.value.filter((t) => t.id !== teamId)
+      teams.value = teams.value.filter((t: any) => t.id !== teamId)
 
       if (currentTeam.value?.id === teamId) {
         currentTeam.value = null
@@ -217,9 +232,12 @@ export function useTeams() {
     error.value = null
 
     try {
+      // 将 lead 映射到 maintainer，因为 API 使用不同的角色名称
+      const apiRole = data.role === 'lead' ? 'maintainer' : 'member'
       const result = await trpc.teams.addMember.mutate({
         teamId,
-        ...data,
+        userId: data.userId, // addMember 使用 userId，不是 memberId
+        role: apiRole as 'member' | 'owner' | 'maintainer',
       })
 
       // 刷新成员列表
@@ -248,10 +266,12 @@ export function useTeams() {
     error.value = null
 
     try {
+      // 将 lead 映射到 maintainer，因为 API 使用不同的角色名称
+      const apiRole = role === 'lead' ? 'maintainer' : 'member'
       await trpc.teams.updateMemberRole.mutate({
         teamId,
         memberId,
-        role,
+        role: apiRole as 'member' | 'owner' | 'maintainer',
       })
 
       // 刷新成员列表以获取最新数据
@@ -285,7 +305,7 @@ export function useTeams() {
       })
 
       // 更新本地成员列表
-      members.value = members.value.filter((m) => m.id !== memberId)
+      members.value = members.value.filter((m: any) => m.id !== memberId)
 
       toast.success('移除成功', '成员已移除')
     } catch (err) {

@@ -324,6 +324,10 @@ const canRetry = computed(() => {
 const getStepClass = (step: number) => {
   const stepData = Object.values(steps.value)[step - 1]
   
+  if (!stepData) {
+    return 'border-muted bg-background text-muted-foreground'
+  }
+  
   if (stepData.status === 'success') {
     return 'border-primary bg-primary text-primary-foreground'
   }

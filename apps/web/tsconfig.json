@@ -16,5 +16,5 @@
     "allowImportingTsExtensions": true
   },
   "include": ["src", "env.d.ts", "vite.config.ts", "tailwind.config.ts", "index.html"],
-  "exclude": ["dist", "node_modules"]
+  "exclude": ["dist", "node_modules", "../api-gateway/**/*"]
 }

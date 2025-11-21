@@ -144,17 +144,6 @@ export class UsersRouter {
               )
             }
           }),
-
-        // 断开 OAuth 连接
-        disconnect: this.trpc.protectedProcedure
-          .input(
-            z.object({
-              provider: z.enum(['github', 'gitlab']),
-            }),
-          )
-          .mutation(async ({ ctx, input }) => {
-            return await this.oauthAccountsService.disconnect(ctx.user.id, input.provider)
-          }),
       }),
     })
   }

@@ -12,9 +12,11 @@ import { Module } from '@nestjs/common'
 import { ScheduleModule } from '@nestjs/schedule'
 import { ApprovalManager } from './approval-manager.service'
 import { HealthMonitorService } from './health-monitor.service'
+import { ProjectInitializationModule } from './initialization'
+import { OneClickDeployService } from './one-click-deploy.service'
 import { ProjectOrchestrator } from './project-orchestrator.service'
 import { ProjectsService } from './projects.service'
-import { TemplateManager } from './template-manager.service'
+import { TemplatesModule } from './templates'
 
 @Module({
   imports: [
@@ -29,20 +31,26 @@ import { TemplateManager } from './template-manager.service'
     DeploymentsModule,
     AuditLogsModule,
     NotificationsModule,
+    // 模板服务模块
+    TemplatesModule,
+    // 初始化模块
+    ProjectInitializationModule,
   ],
   providers: [
     ProjectsService,
-    TemplateManager,
     ProjectOrchestrator,
     HealthMonitorService,
     ApprovalManager,
+    OneClickDeployService,
   ],
   exports: [
     ProjectsService,
-    TemplateManager,
     ProjectOrchestrator,
     HealthMonitorService,
     ApprovalManager,
+    OneClickDeployService,
+    // 重新导出模板服务
+    TemplatesModule,
   ],
 })
 export class ProjectsModule {}

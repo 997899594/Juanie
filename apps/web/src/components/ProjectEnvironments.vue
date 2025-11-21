@@ -27,8 +27,8 @@
               <div>
                 <div class="flex items-center gap-2">
                   <CardTitle class="text-base">{{ environment.name }}</CardTitle>
-                  <Badge :variant="getTypeVariant(environment.environmentType)">
-                    {{ getTypeLabel(environment.environmentType) }}
+                  <Badge :variant="getTypeVariant(environment.type)">
+                    {{ getTypeLabel(environment.type) }}
                   </Badge>
                 </div>
                 <CardDescription>{{ environment.description || '暂无描述' }}</CardDescription>
@@ -83,7 +83,7 @@
                 </div>
               </div>
               <div class="info-item">
-                <span class="info-label">URL</span>
+                <span class="info-label">健康检查 URL</span>
                 <span class="info-value">
                   <a 
                     v-if="environment.healthCheckUrl" 

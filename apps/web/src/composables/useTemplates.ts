@@ -38,23 +38,23 @@ export function useTemplates() {
 
     // 按分类筛选
     if (categoryFilter.value) {
-      result = result.filter((t) => t.category === categoryFilter.value)
+      result = result.filter((t: any) => t.category === categoryFilter.value)
     }
 
     // 按搜索关键词筛选
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase()
       result = result.filter(
-        (t) =>
+        (t: any) =>
           t.name.toLowerCase().includes(query) ||
           t.description?.toLowerCase().includes(query) ||
-          t.tags?.some((tag) => tag.toLowerCase().includes(query)),
+          t.tags?.some((tag: any) => tag.toLowerCase().includes(query)),
       )
     }
 
     // 按可见性筛选
     if (showPublicOnly.value) {
-      result = result.filter((t) => t.isPublic)
+      result = result.filter((t: any) => t.isPublic)
     }
 
     return result
@@ -305,6 +305,61 @@ export function useTemplates() {
     return labels[category] || category
   }
 
+  // AI 生成功能（占位符实现）
+  const generatedTemplate = ref<string>('')
+  const templateType = ref<'dockerfile' | 'cicd' | ''>('')
+  const isGenerating = ref(false)
+
+  const generateDockerfile = async (config: any) => {
+    isGenerating.value = true
+    templateType.value = 'dockerfile'
+    try {
+      // TODO: 调用 AI 服务生成 Dockerfile
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      generatedTemplate.value = `# Generated Dockerfile\nFROM node:${config.version}\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nEXPOSE 3000\nCMD ["npm", "start"]`
+      toast.success('Dockerfile 生成成功')
+    } catch (err) {
+      toast.error('生成 Dockerfile 失败')
+    } finally {
+      isGenerating.value = false
+    }
+  }
+
+  const generateCICD = async (config: any) => {
+    isGenerating.value = true
+    templateType.value = 'cicd'
+    try {
+      // TODO: 调用 AI 服务生成 CI/CD 配置
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      generatedTemplate.value = `# Generated CI/CD Config\nstages:\n  - build\n  - test\n  - deploy\n\nbuild:\n  stage: build\n  script:\n    - npm install\n    - npm run build`
+      toast.success('CI/CD 配置生成成功')
+    } catch (err) {
+      toast.error('生成 CI/CD 配置失败')
+    } finally {
+      isGenerating.value = false
+    }
+  }
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedTemplate.value)
+      toast.success('已复制到剪贴板')
+    } catch (err) {
+      toast.error('复制失败')
+    }
+  }
+
+  const downloadTemplate = (filename: string) => {
+    const blob = new Blob([generatedTemplate.value], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('下载成功')
+  }
+
   return {
     // 状态
     templates,
@@ -338,5 +393,14 @@ export function useTemplates() {
     // 工具方法
     getTechStackLabel,
     getCategoryLabel,
+
+    // AI 生成功能
+    generatedTemplate,
+    templateType,
+    isGenerating,
+    generateDockerfile,
+    generateCICD,
+    copyToClipboard,
+    downloadTemplate,
   }
 }

@@ -19,14 +19,7 @@
           </p>
         </div>
 
-        <div class="form-field">
-          <Label for="project-display-name">显示名称</Label>
-          <Input
-            id="project-display-name"
-            v-model="settings.displayName!"
-            placeholder="输入项目显示名称"
-          />
-        </div>
+        <!-- displayName 字段不存在于 schema 中，使用 name 即可 -->
 
         <div class="form-field">
           <Label for="project-description">项目描述</Label>
@@ -58,20 +51,6 @@
           </p>
         </div>
 
-        <div class="form-field">
-          <Label for="repository-url">代码仓库 URL</Label>
-          <Input
-            id="repository-url"
-            :model-value="settings.repositoryUrl || ''"
-            @update:model-value="(value: string | number) => settings.repositoryUrl = typeof value === 'string' ? (value || null) : null"
-            type="url"
-            placeholder="https://github.com/username/repo"
-          />
-          <p class="text-sm text-muted-foreground mt-1">
-            代码仓库的 URL 地址，用于自动化部署
-          </p>
-        </div>
-
         <div class="form-actions">
           <Button @click="saveBasicSettings" :disabled="saving">
             <Loader2 v-if="saving" class="h-4 w-4 mr-2 animate-spin" />
@@ -99,8 +78,8 @@
               </p>
             </div>
             <Switch 
-              v-model="settings.enableCiCd"
-              @update:model-value="saveDeploySettings"
+              :model-value="settings.enableCiCd"
+              @update:model-value="(value) => { settings.enableCiCd = value; saveDeploySettings(); }"
             />
           </div>
         </div>
@@ -109,7 +88,8 @@
           <Label for="deploy-branch">部署分支</Label>
           <Input
             id="deploy-branch"
-            v-model="settings.defaultBranch!"
+            :model-value="settings.defaultBranch"
+            @update:model-value="(value) => settings.defaultBranch = String(value)"
             placeholder="main"
           />
           <p class="text-sm text-muted-foreground mt-1">
@@ -170,11 +150,11 @@
           >
             <div class="member-info">
               <Avatar class="h-8 w-8">
-                <AvatarImage :src="member.user?.avatar || ''" :alt="member.user?.name || ''" />
-            <AvatarFallback>{{ member.user?.name?.charAt(0).toUpperCase() || 'U' }}</AvatarFallback>
+                <AvatarImage :src="member.user?.avatarUrl || ''" :alt="member.user?.displayName || member.user?.username || ''" />
+            <AvatarFallback>{{ (member.user?.displayName || member.user?.username || 'U').charAt(0).toUpperCase() }}</AvatarFallback>
           </Avatar>
           <div class="member-info">
-            <p class="member-name">{{ member.user?.name || '未知用户' }}</p>
+            <p class="member-name">{{ member.user?.displayName || member.user?.username || '未知用户' }}</p>
                 <p class="member-email">{{ member.user?.email || '' }}</p>
               </div>
             </div>
@@ -182,8 +162,8 @@
             <div class="member-role">
               <Select 
                 :model-value="member.role"
-                @update:model-value="(value) => updateMemberRole(member.userId, value as 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner')"
-                :disabled="member.userId === currentUserId"
+                @update:model-value="(value) => updateMemberRole(member.user.id, value as 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner')"
+                :disabled="member.user.id === currentUserId"
               >
                 <SelectTrigger class="w-32">
                   <SelectValue />
@@ -374,11 +354,27 @@ import type { AcceptableValue } from 'reka-ui'
 import { UserPlus, UserMinus, Loader2 } from 'lucide-vue-next'
 import { trpc, type AppRouter } from '@/lib/trpc'
 import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
 
-// 使用后端实际实现的API类型
-type ProjectSettings = NonNullable<Awaited<ReturnType<typeof trpc.projects.getById.query>>>
 // 项目成员类型基于后端实际实现的members.list API
 type Member = Awaited<ReturnType<typeof trpc.projects.members.list.query>>[0]
+
+// 本地设置状态类型（包含从 API 提取和本地管理的字段）
+interface LocalProjectSettings {
+  id: string
+  organizationId: string
+  name: string
+  slug: string
+  description: string | null
+  visibility: 'private' | 'public' | 'internal'
+  status: 'active' | 'inactive' | 'archived' | 'suspended'
+  // 从 config 中提取的字段
+  defaultBranch: string
+  enableCiCd: boolean
+  enableAiAssistant: boolean
+  createdAt: string
+  updatedAt: string
+}
 
 const props = defineProps<{
   projectId: string
@@ -386,6 +382,7 @@ const props = defineProps<{
 
 const router = useRouter()
 const authStore = useAuthStore()
+const toast = useToast()
 
 const saving = ref(false)
 const inviting = ref(false)
@@ -396,32 +393,17 @@ const showInviteModal = ref(false)
 const showDeleteConfirm = ref(false)
 const deleteConfirmName = ref('')
 
-const settings = reactive<ProjectSettings>({
+const settings = reactive<LocalProjectSettings>({
   id: '0',
   organizationId: '',
   name: '',
   slug: '',
-  displayName: null,
   description: null,
-  repositoryUrl: null,
-  visibility: 'private' as 'private' | 'public' | 'internal' | null,
-  status: 'active' as 'active' | 'inactive' | 'archived' | 'suspended' | null,
+  visibility: 'private',
+  status: 'active',
   defaultBranch: 'main',
   enableCiCd: true,
   enableAiAssistant: true,
-  enableMonitoring: true,
-  aiModelPreference: 'gpt-4',
-  aiAutoReview: true,
-  aiCostOptimization: true,
-  maxComputeUnits: 100,
-  maxStorageGb: 100,
-  maxMonthlyCost: '1000.00',
-  currentComputeUnits: 0,
-  currentStorageGb: 0,
-  currentMonthlyCost: '0.00',
-  primaryTag: null,
-  secondaryTags: null,
-  isArchived: false,
   createdAt: '',
   updatedAt: ''
 })
@@ -440,7 +422,24 @@ const loadProjectSettings = async () => {
   try {
     const project = await trpc.projects.getById.query({ id: props.projectId })
     if (project) {
-      Object.assign(settings, project)
+      // 正确映射 project 字段到 settings
+      settings.id = project.id
+      settings.organizationId = project.organizationId
+      settings.name = project.name
+      settings.slug = project.slug
+      settings.description = project.description
+      settings.visibility = project.visibility as 'private' | 'public' | 'internal'
+      settings.status = project.status as 'active' | 'inactive' | 'archived' | 'suspended'
+      
+      // 从 config 中提取字段
+      if (project.config) {
+        settings.defaultBranch = project.config.defaultBranch || 'main'
+        settings.enableCiCd = project.config.enableCiCd ?? true
+        settings.enableAiAssistant = project.config.enableAi ?? true
+      }
+      
+      settings.createdAt = project.createdAt
+      settings.updatedAt = project.updatedAt
     }
     
     // 加载项目成员
@@ -456,48 +455,11 @@ const loadProjectSettings = async () => {
       name: '示例项目',
       displayName: '示例项目显示名称',
       description: '这是一个示例项目',
-      repositoryUrl: '',
       visibility: 'private'
     })
     
-    members.value = [
-      {
-        id: '1',
-        userId: '1',
-        role: 'owner' as 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner',
-        joinedAt: new Date().toISOString(),
-        user: {
-          id: '1',
-          name: '张三',
-          email: 'zhangsan@example.com',
-          avatar: null
-        }
-      },
-      {
-        id: '2',
-        userId: '2',
-        role: 'developer' as 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner',
-        joinedAt: new Date().toISOString(),
-        user: {
-          id: '2',
-          name: '李四',
-          email: 'lisi@example.com',
-          avatar: null
-        }
-      },
-      {
-        id: '3',
-        userId: '3',
-        role: 'developer' as 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner',
-        joinedAt: new Date().toISOString(),
-        user: {
-          id: '3',
-          name: '王五',
-          email: 'wangwu@example.com',
-          avatar: null
-        }
-      }
-    ]
+    // 不使用 mock 数据，保持空状态
+    members.value = []
   }
 }
 
@@ -507,32 +469,16 @@ const saveBasicSettings = async () => {
     saving.value = true
     errors.value = {}
     
-    // 暂时注释掉不存在的 API 调用
-    // await trpc.projects.update.mutate({
-    //   id: props.projectId,
-    //   data: {
-    //     name: settings.name,
-    //     displayName: settings.displayName || undefined,
-    //     description: settings.description || undefined,
-    //     repositoryUrl: settings.repositoryUrl || undefined,
-    //     visibility: settings.visibility,
-    //     defaultBranch: settings.defaultBranch
-    //   }
-    // })
-    
-    console.log('保存基本设置:', {
-      id: props.projectId,
+    await trpc.projects.update.mutate({
+      projectId: props.projectId,
       name: settings.name,
-      displayName: settings.displayName,
-      description: settings.description,
-      repositoryUrl: settings.repositoryUrl,
-      visibility: settings.visibility,
-      defaultBranch: settings.defaultBranch
+      slug: settings.slug,
+      description: settings.description || undefined,
+      visibility: settings.visibility as 'public' | 'private' | 'internal',
     })
-    alert('保存基本设置功能暂未实现')
     
-    // TODO: 显示成功提示
-    console.log('基本设置保存成功')
+    toast.success('保存成功', '项目基本设置已更新')
+    await loadProjectSettings()
   } catch (error: any) {
     console.error('保存基本设置失败:', error)
     
@@ -552,22 +498,18 @@ const saveDeploySettings = async () => {
   try {
     saving.value = true
     
-    // 使用后端已实现的updateDeploySettings API
-    await trpc.projects.updateDeploySettings.mutate({
+    // 更新项目配置
+    await trpc.projects.update.mutate({
       projectId: props.projectId,
-      settings: {
-        enableCiCd: settings.enableCiCd || undefined,
-        defaultBranch: settings.defaultBranch || undefined,
-        enableAiAssistant: settings.enableAiAssistant || undefined,
-        enableMonitoring: settings.enableMonitoring || undefined,
-        aiModelPreference: settings.aiModelPreference || undefined,
-        aiAutoReview: settings.aiAutoReview || undefined,
-        aiCostOptimization: settings.aiCostOptimization || undefined
+      config: {
+        defaultBranch: settings.defaultBranch || 'main',
+        enableCiCd: settings.enableCiCd ?? true,
+        enableAi: settings.enableAiAssistant ?? true,
       }
     })
     
-    console.log('部署设置保存成功')
-    // TODO: 显示成功提示
+    toast.success('保存成功', '部署设置已更新')
+    await loadProjectSettings()
   } catch (error: any) {
     console.error('保存部署设置失败:', error)
     
@@ -607,16 +549,17 @@ const updateMemberRole = async (memberId: string, role: 'guest' | 'reporter' | '
 
 // 移除成员
 const removeMember = async (memberId: string) => {
-  const member = members.value.find(m => m.id === memberId)
-  if (!member || !confirm(`确定要移除成员 "${member.user?.name}" 吗？`)) {
+  const member = members.value.find((m: any) => m.id === memberId)
+  const memberName = member?.user?.displayName || member?.user?.username || '该成员'
+  if (!member || !confirm(`确定要移除成员 "${memberName}" 吗？`)) {
     return
   }
   
   try {
-    // 恢复已实现的 API 调用
+    // 使用正确的 API 参数
     await trpc.projects.members.remove.mutate({
       projectId: props.projectId,
-      userId: memberId
+      memberId: memberId
     })
     
     // 从本地数据中移除
@@ -631,20 +574,23 @@ const inviteMember = async () => {
   try {
     inviting.value = true
     
-    // 恢复已实现的 API 调用
-    await trpc.projects.members.add.mutate({
-      projectId: props.projectId,
-      userId: 'temp-user-id', // 需要根据 email 查找用户 ID
-      role: inviteForm.role as 'guest' | 'reporter' | 'developer' | 'maintainer' | 'owner'
-    })
+    // 映射前端角色到 API 角色
+    const roleMap: Record<string, 'admin' | 'developer' | 'viewer'> = {
+      'owner': 'admin',
+      'maintainer': 'admin',
+      'developer': 'developer',
+      'reporter': 'viewer',
+      'guest': 'viewer'
+    }
+    
+    // TODO: 需要先根据 email 查找或创建用户
+    // 目前暂时跳过，因为需要实现用户查找 API
+    toast.error('邀请功能暂未完成', '需要先实现根据邮箱查找用户的功能')
     
     // 重置表单
     inviteForm.email = ''
     inviteForm.role = 'developer'
     showInviteModal.value = false
-    
-    // 重新加载成员列表
-    await loadProjectSettings()
   } catch (error: any) {
     console.error('邀请成员失败:', error)
   } finally {
@@ -658,7 +604,7 @@ const deleteProject = async () => {
     deleting.value = true
     
     // 恢复已实现的 API 调用
-    await trpc.projects.delete.mutate({ id: props.projectId })
+    await trpc.projects.delete.mutate({ projectId: props.projectId, repositoryAction: 'keep' })
     
     // 跳转到项目列表
     router.push('/projects')

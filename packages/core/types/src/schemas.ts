@@ -259,6 +259,8 @@ export const createEnvironmentSchema = z.object({
   projectId: uuidSchema,
   name: z.string().min(1).max(100),
   type: z.enum(['development', 'staging', 'production', 'testing']),
+  description: z.string().optional(),
+  status: z.enum(['active', 'inactive', 'error']).optional().default('active'),
   config: z
     .object({
       cloudProvider: z.enum(['aws', 'gcp', 'azure']).optional(),

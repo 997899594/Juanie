@@ -285,10 +285,6 @@ const stats = ref<DeploymentStats>({
   rolledBack: 0,
   successRate: 0,
   avgDeploymentTime: 0,
-  totalDeploymentCost: 0,
-  byEnvironment: {},
-  byStatus: {},
-  byStrategy: {},
 })
 
 const deploymentsByDay = ref([])
@@ -299,13 +295,13 @@ const filteredDeployments = computed(() => {
   if (environmentFilter.value === 'all') {
     return deployments.value
   }
-  return deployments.value.filter(d => d.environmentId === environmentFilter.value)
+  return deployments.value.filter((d: any) => d.environmentId === environmentFilter.value)
 })
 
 // 计算成功率
 const calculateSuccessRate = () => {
   if (deployments.value.length === 0) return 0
-  const successCount = deployments.value.filter(d => d.status === 'success').length
+  const successCount = deployments.value.filter((d: any) => d.status === 'success').length
   return Math.round((successCount / deployments.value.length) * 100)
 }
 
@@ -445,101 +441,18 @@ const loadDeployments = async () => {
     }
   } catch (error: any) {
     console.error('获取部署列表失败:', error)
-    
-    // 使用模拟数据作为降级方案
-    deployments.value = [
-      {
-        id: '1',
-        version: 'v1.2.3',
-        status: 'success' as const,
-        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        environmentId: 'env-1',
-        projectId: props.projectId,
-        pipelineRunId: null,
-        commitHash: 'abc123',
-        commitMessage: 'Fix bug in user authentication',
-        branch: 'main',
-        deploymentStrategy: 'rolling',
-        rollbackStrategy: 'manual',
-        startedAt: null,
-        finishedAt: null,
-        deployedBy: 'user-1',
-        approvedBy: null,
-        successProbability: null,
-        riskLevel: null,
-        riskScore: null,
-        riskFactors: null,
-        predictedResponseTime: null,
-        predictedThroughput: null,
-        predictedAvailability: null,
-        avgResponseTime: null,
-        throughputRps: null,
-        availability: null,
-        errorRate: null,
-        responseTimeP95: null,
-        deploymentCost: '0',
-        cpuUsageAvg: null,
-        memoryUsageAvg: null,
-        diskUsageGb: null,
-        carbonFootprint: null,
-        rollbackReason: null,
-        rolledBackAt: null,
-        rollbackDuration: null
-      },
-      {
-        id: '2',
-        version: 'v1.2.2',
-        status: 'failed' as const,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        environmentId: 'env-2',
-        projectId: props.projectId,
-        pipelineRunId: null,
-        commitHash: 'def456',
-        commitMessage: 'Update dependencies',
-        branch: 'develop',
-        deploymentStrategy: 'rolling',
-        rollbackStrategy: 'manual',
-        startedAt: null,
-        finishedAt: null,
-        deployedBy: 'user-2',
-        approvedBy: null,
-        successProbability: null,
-        riskLevel: null,
-        riskScore: null,
-        riskFactors: null,
-        predictedResponseTime: null,
-        predictedThroughput: null,
-        predictedAvailability: null,
-        avgResponseTime: null,
-        throughputRps: null,
-        availability: null,
-        errorRate: null,
-        responseTimeP95: null,
-        deploymentCost: '0',
-        cpuUsageAvg: null,
-        memoryUsageAvg: null,
-        diskUsageGb: null,
-        carbonFootprint: null,
-        rollbackReason: null,
-        rolledBackAt: null,
-        rollbackDuration: null
-      }
-    ]
-    
+    // 不使用 mock 数据，保持空状态
+    deployments.value = []
     stats.value = {
-      total: 24,
-      success: 22,
-      failed: 2,
+      total: 0,
+      success: 0,
+      failed: 0,
       cancelled: 0,
       running: 0,
       pending: 0,
       rolledBack: 0,
-      successRate: 91.7,
+      successRate: 0,
       avgDeploymentTime: 4,
-      totalDeploymentCost: 0,
-      byEnvironment: {},
-      byStatus: {},
-      byStrategy: {},
     }
   } finally {
     loading.value = false

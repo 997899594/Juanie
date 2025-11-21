@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { AIRouter } from '../routers/ai.router'
 import { AiAssistantsRouter } from '../routers/ai-assistants.router'
 import { AuditLogsRouter } from '../routers/audit-logs.router'
 import { AuthRouter } from '../routers/auth.router'
@@ -22,6 +23,7 @@ import { TrpcService } from './trpc.service'
 export class TrpcRouter {
   constructor(
     private readonly trpc: TrpcService,
+    private readonly aiRouter: AIRouter,
     private readonly aiAssistantsRouter: AiAssistantsRouter,
     private readonly auditLogsRouter: AuditLogsRouter,
     private readonly authRouter: AuthRouter,
@@ -47,6 +49,7 @@ export class TrpcRouter {
         return { status: 'ok', timestamp: new Date().toISOString() }
       }),
       // 服务路由
+      ai: this.aiRouter.router,
       aiAssistants: this.aiAssistantsRouter.router,
       auditLogs: this.auditLogsRouter.router,
       auth: this.authRouter.router,

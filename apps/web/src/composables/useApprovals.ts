@@ -73,14 +73,14 @@ export function useApprovals() {
       })
 
       // 筛选出需要审批的部署（状态为 pending 且环境为 production）
-      const pendingDeployments = deployments.filter((d) => {
+      const pendingDeployments = deployments.filter((d: any) => {
         // 这里可以添加更多筛选逻辑
         return d.status === 'pending'
       })
 
       // 将部署转换为审批格式
       // 注意：这是一个简化版本，实际应该从后端获取审批记录
-      pendingApprovals.value = pendingDeployments.map((d) => ({
+      pendingApprovals.value = pendingDeployments.map((d: any) => ({
         id: d.id, // 使用部署ID作为临时ID
         deploymentId: d.id,
         approverId: filters?.approverId || '',
@@ -123,11 +123,11 @@ export function useApprovals() {
 
       // 筛选出已审批的部署
       const completedDeployments = deployments.filter(
-        (d) => d.status === 'success' || d.status === 'failed' || d.status === 'cancelled',
+        (d: any) => d.status === 'success' || d.status === 'failed' || d.status === 'cancelled',
       )
 
       // 将部署转换为审批格式
-      approvalHistory.value = completedDeployments.map((d) => ({
+      approvalHistory.value = completedDeployments.map((d: any) => ({
         id: d.id,
         deploymentId: d.id,
         approverId: filters?.approverId || '',

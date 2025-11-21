@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .appName }}
+  labels:
+    app: {{ .appName }}
+    version: v1
+spec:
+  replicas: {{ .replicas | default 2 }}
+  selector:
+    matchLabels:
+      app: {{ .appName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .appName }}
+        version: v1
+    spec:
+      containers:
+      - name: nextjs
+        image: {{ .registry }}/{{ .appName }}:{{ .imageTag | default "latest" }}
+        ports:
+        - name: http
+          containerPort: {{ .port | default 3000 }}
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: {{ .nodeEnv | default "production" }}
+        - name: PORT
+          value: "{{ .port | default 3000 }}"
+        - name: NEXT_PUBLIC_APP_URL
+          value: "https://{{ .appName }}.{{ .domain }}"
+        
+        {{- if .enableDatabase }}
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ .appName }}-secrets
+              key: database-url
+        {{- end }}
+        
+        {{- if .enableCache }}
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ .appName }}-secrets
+              key: redis-url
+        {{- end }}
+        
+        {{- if .enableAuth }}
+        - name: NEXTAUTH_URL
+          value: "https://{{ .appName }}.{{ .domain }}"
+        - name: NEXTAUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .appName }}-secrets
+              key: nextauth-secret
+        {{- end }}
+        
+        {{- if .enableSentry }}
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .appName }}-secrets
+              key: sentry-dsn
+        {{- end }}
+        
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        resources:
+          requests:
+            cpu: {{ .resources.requests.cpu | default "200m" }}
+            memory: {{ .resources.requests.memory | default "512Mi" }}
+          limits:
+            cpu: {{ .resources.limits.cpu | default "1000m" }}
+            memory: {{ .resources.limits.memory | default "1Gi" }}
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false

@@ -157,7 +157,7 @@ export function useOrganizations() {
       await trpc.organizations.delete.mutate({ orgId })
 
       // 更新本地列表
-      organizations.value = organizations.value.filter((org) => org.id !== orgId)
+      organizations.value = organizations.value.filter((org: any) => org.id !== orgId)
 
       if (currentOrganization.value?.id === orgId) {
         currentOrganization.value = null
@@ -286,7 +286,7 @@ export function useOrganizations() {
       })
 
       // 更新本地成员列表
-      members.value = members.value.filter((m) => m.id !== memberId)
+      members.value = members.value.filter((m: any) => m.id !== memberId)
 
       toast.success('移除成功', '成员已移除')
     } catch (err) {

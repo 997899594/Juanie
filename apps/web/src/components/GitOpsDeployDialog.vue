@@ -322,7 +322,7 @@ const handleValidateYAML = async () => {
 const handleDeploy = async () => {
   loading.value = true
   try {
-    const changes = yamlContent.value || formData.value
+    const changes = yamlContent.value ? JSON.parse(yamlContent.value) : formData.value
     await deployWithGitOps({
       projectId: props.projectId,
       environmentId: props.environmentId,
