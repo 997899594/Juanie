@@ -23,24 +23,24 @@
 - 📱 响应式设计
 - ♿ 无障碍支持
 
-{{- if .enableAuth }}
+{{#if enableAuth}}
 ### 认证
 - 🔐 NextAuth.js v5
 - 🔑 多种 OAuth 提供商支持
-{{- end }}
+{{/if}}
 
-{{- if .enableDatabase }}
+{{#if enableDatabase}}
 ### 数据库
 - 🗄️ PostgreSQL 16
 - ⚡ Drizzle ORM
 - 🔄 自动迁移
-{{- end }}
+{{/if}}
 
-{{- if .enableCache }}
+{{#if enableCache}}
 ### 缓存
 - ⚡ Redis 7
 - 🚀 高性能缓存
-{{- end }}
+{{/if}}
 
 ### DevOps
 - 🐳 Docker 多阶段构建
@@ -56,19 +56,19 @@
 
 - Node.js 20+
 - npm 10+
-{{- if .enableDatabase }}
+{{#if enableDatabase}}
 - PostgreSQL 16+
-{{- end }}
-{{- if .enableCache }}
+{{/if}}
+{{#if enableCache}}
 - Redis 7+
-{{- end }}
+{{/if}}
 
 ### 本地开发
 
 1. **克隆项目**
 ```bash
 git clone <repository-url>
-cd {{ .appName }}
+cd {{ appName }}
 ```
 
 2. **安装依赖**
@@ -82,19 +82,19 @@ cp .env.example .env
 # 编辑 .env 文件，填写必要的配置
 ```
 
-{{- if .enableDatabase }}
+{{#if enableDatabase}}
 4. **设置数据库**
 ```bash
 npm run db:push
 ```
-{{- end }}
+{{/if}}
 
 5. **启动开发服务器**
 ```bash
 npm run dev
 ```
 
-访问 [http://localhost:{{ .port }}](http://localhost:{{ .port }})
+访问 [http://localhost:{{ port }}](http://localhost:{{ port }})
 
 ## 📦 可用脚本
 
@@ -113,19 +113,19 @@ npm run format       # 格式化代码
 npm test             # 运行单元测试
 npm run test:e2e     # 运行 E2E 测试
 
-{{- if .enableDatabase }}
+{{#if enableDatabase}}
 # 数据库
 npm run db:generate  # 生成迁移文件
 npm run db:push      # 推送 schema 到数据库
 npm run db:studio    # 打开 Drizzle Studio
 npm run db:migrate   # 运行迁移
-{{- end }}
+{{/if}}
 ```
 
 ## 🏗️ 项目结构
 
 ```
-{{ .appName }}/
+{{ appName }}/
 ├── src/
 │   ├── app/              # App Router 页面
 │   │   ├── api/          # API 路由
@@ -153,15 +153,15 @@ npm run db:migrate   # 运行迁移
 ### 构建镜像
 
 ```bash
-docker build -t {{ .appName }}:latest .
+docker build -t {{ appName }}:latest .
 ```
 
 ### 运行容器
 
 ```bash
-docker run -p {{ .port }}:{{ .port }} \
+docker run -p {{ port }}:{{ port }} \
   -e DATABASE_URL=postgresql://... \
-  {{ .appName }}:latest
+  {{ appName }}:latest
 ```
 
 ## ☸️ Kubernetes 部署
@@ -176,15 +176,15 @@ docker run -p {{ .port }}:{{ .port }} \
 
 1. **创建命名空间**
 ```bash
-kubectl create namespace {{ .appName }}-dev
+kubectl create namespace {{ appName }}-dev
 ```
 
 2. **创建 Secrets**
 ```bash
-kubectl create secret generic {{ .appName }}-secrets \
+kubectl create secret generic {{ appName }}-secrets \
   --from-literal=database-url=postgresql://... \
   --from-literal=nextauth-secret=... \
-  -n {{ .appName }}-dev
+  -n {{ appName }}-dev
 ```
 
 3. **应用 Kustomize 配置**
@@ -194,8 +194,8 @@ kubectl apply -k .k8s/overlays/dev
 
 4. **检查部署状态**
 ```bash
-kubectl get pods -n {{ .appName }}-dev
-kubectl logs -f deployment/{{ .appName }} -n {{ .appName }}-dev
+kubectl get pods -n {{ appName }}-dev
+kubectl logs -f deployment/{{ appName }} -n {{ appName }}-dev
 ```
 
 ## 🔄 GitOps 工作流
@@ -211,20 +211,20 @@ kubectl logs -f deployment/{{ .appName }} -n {{ .appName }}-dev
 ### 健康检查
 
 ```bash
-curl http://localhost:{{ .port }}/api/health
+curl http://localhost:{{ port }}/api/health
 ```
 
-{{- if .enableAnalytics }}
+{{#if enableAnalytics}}
 ### Vercel Analytics
 
 访问 [Vercel Dashboard](https://vercel.com/analytics) 查看分析数据
-{{- end }}
+{{/if}}
 
-{{- if .enableSentry }}
+{{#if enableSentry}}
 ### Sentry
 
 访问 [Sentry Dashboard](https://sentry.io) 查看错误追踪
-{{- end }}
+{{/if}}
 
 ## 🔧 配置
 
@@ -245,12 +245,12 @@ curl http://localhost:{{ .port }}/api/health
 - [Next.js 文档](https://nextjs.org/docs)
 - [React 文档](https://react.dev)
 - [Tailwind CSS 文档](https://tailwindcss.com/docs)
-{{- if .enableDatabase }}
+{{#if enableDatabase}}
 - [Drizzle ORM 文档](https://orm.drizzle.team)
-{{- end }}
-{{- if .enableAuth }}
+{{/if}}
+{{#if enableAuth}}
 - [NextAuth.js 文档](https://next-auth.js.org)
-{{- end }}
+{{/if}}
 
 ## 🤝 贡献
 

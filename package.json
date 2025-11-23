@@ -7,7 +7,9 @@
     "packages/*",
     "packages/config/*",
     "packages/core/*",
-    "packages/services/*"
+    "packages/services/foundation",
+    "packages/services/business",
+    "packages/services/extensions"
   ],
   "scripts": {
     "dev": "turbo run dev --concurrency=50",
@@ -24,6 +26,7 @@
     "docker:logs": "docker-compose logs -f",
     "docker:ps": "docker-compose ps",
     "clean:processes": "pkill -f vite; pkill -f node; pkill -f bun; echo '进程已清理'",
+    "clean:processes:win": "powershell -Command \"Get-Process | Where-Object {$_.ProcessName -match 'bun|node'} | Stop-Process -Force\"",
     "clean:stuck": "./scripts/kill-stuck-processes.sh",
     "diagnose": "./scripts/diagnose-build.sh",
     "fix:vite": "./scripts/fix-vite-freeze.sh",

@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: {{ .appName }}-dev
+namespace: {{ appName }}-dev
 
 resources:
   - ../../base
@@ -13,7 +13,7 @@ patches:
         value: 1
     target:
       kind: Deployment
-      name: {{ .appName }}
+      name: {{ appName }}
   
   - patch: |-
       - op: add
@@ -23,8 +23,8 @@ patches:
           value: debug
     target:
       kind: Deployment
-      name: {{ .appName }}
+      name: {{ appName }}
 
 images:
-  - name: {{ .registry }}/{{ .appName }}
+  - name: {{ registry }}/{{ appName }}
     newTag: dev-latest

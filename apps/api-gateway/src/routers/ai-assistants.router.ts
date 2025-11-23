@@ -1,5 +1,5 @@
 import { createAIAssistantSchema, idSchema, updateAIAssistantSchema } from '@juanie/core-types'
-import { AiAssistantsService } from '@juanie/service-ai-assistants'
+import { AiAssistantsService } from '@juanie/service-extensions'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'

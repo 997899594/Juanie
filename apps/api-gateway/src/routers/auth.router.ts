@@ -1,6 +1,6 @@
 import '@fastify/cookie'
 import { oauthCallbackSchema } from '@juanie/core-types'
-import { AuthService } from '@juanie/service-auth'
+import { AuthService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { TrpcService } from '../trpc/trpc.service'
@@ -18,6 +18,42 @@ export class AuthRouter {
 
   get router() {
     return this.trpc.router({
+      // 统一的 OAuth 回调（自动判断 GitHub/GitLab）
+      oauthCallback: this.trpc.procedure
+        .input(oauthCallbackSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const user = await this.authService.handleOAuthCallback(input.code, input.state)
+            if (!user) throw new Error('用户创建失败')
+            const sessionId = await this.authService.createSession(user.id)
+
+            // 设置 HttpOnly 会话 Cookie（Cookie-only）
+            ctx.reply?.setCookie('sessionId', sessionId, {
+              path: '/',
+              httpOnly: true,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+              maxAge: 7 * 24 * 60 * 60,
+            })
+
+            return {
+              user: {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
+              },
+              sessionId,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : 'OAuth 登录失败',
+            })
+          }
+        }),
+
       // GitHub OAuth
       githubAuthUrl: this.trpc.procedure.query(async () => {
         return await this.authService.getGitHubAuthUrl()

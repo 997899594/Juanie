@@ -4,8 +4,7 @@ import {
   userIdSchema,
   userIdsSchema,
 } from '@juanie/core-types'
-import { AuthService, OAuthAccountsService } from '@juanie/service-auth'
-import { UsersService } from '@juanie/service-users'
+import { AuthService, OAuthAccountsService, UsersService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'

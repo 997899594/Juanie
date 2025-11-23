@@ -34,6 +34,10 @@ services:
     image: docker.dragonflydb.io/dragonflydb/dragonfly
     container_name: juanie-dragonfly-dev
     restart: unless-stopped
+    command: 
+      - --default_lua_flags=allow-undeclared-keys
+      - --proactor_threads=2
+      - --maxmemory=2gb
     ports:
       - "6379:6379"
     volumes:

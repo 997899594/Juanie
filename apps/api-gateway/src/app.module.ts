@@ -1,32 +1,21 @@
 import { DatabaseModule } from '@juanie/core-database/module'
 import { QueueModule } from '@juanie/core-queue/module'
-import { SseModule } from '@juanie/core-sse'
-import { AIModule } from '@juanie/service-ai'
-import { AiAssistantsModule } from '@juanie/service-ai-assistants'
-import { AuditLogsModule } from '@juanie/service-audit-logs'
-import { AuthModule } from '@juanie/service-auth'
-import { CostTrackingModule } from '@juanie/service-cost-tracking'
-import { DeploymentsModule } from '@juanie/service-deployments'
-import { EnvironmentsModule } from '@juanie/service-environments'
-import { FluxModule } from '@juanie/service-flux'
-import { GitOpsModule } from '@juanie/service-git-ops'
-import { K3sModule } from '@juanie/service-k3s'
-import { NotificationsModule } from '@juanie/service-notifications'
-import { OllamaModule } from '@juanie/service-ollama'
-import { OrganizationsModule } from '@juanie/service-organizations'
-import { PipelinesModule } from '@juanie/service-pipelines'
-import { ProjectsModule } from '@juanie/service-projects'
-import { RepositoriesModule } from '@juanie/service-repositories'
-import { SecurityPoliciesModule } from '@juanie/service-security-policies'
-import { StorageModule } from '@juanie/service-storage'
-import { TeamsModule } from '@juanie/service-teams'
-import { TemplatesModule } from '@juanie/service-templates'
-import { UsersModule } from '@juanie/service-users'
+import { BusinessModule } from '@juanie/service-business'
+import { ExtensionsModule } from '@juanie/service-extensions'
+import { FoundationModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { AppController } from './app.controller'
 import { TrpcModule } from './trpc/trpc.module'
 
+/**
+ * App Module - 应用主模块
+ * 
+ * 三层服务架构：
+ * - Foundation（基础层）：认证、用户、组织、团队、存储
+ * - Business（业务层）：项目、部署、GitOps
+ * - Extensions（扩展层）：AI、监控、通知、安全
+ */
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -36,31 +25,10 @@ import { TrpcModule } from './trpc/trpc.module'
     // Core modules
     DatabaseModule,
     QueueModule,
-    SseModule,
-    // Infrastructure modules
-    StorageModule,
-    K3sModule,
-    FluxModule,
-    GitOpsModule,
-    // AI modules
-    AIModule,
-    OllamaModule,
-    AiAssistantsModule,
-    // Service modules
-    AuditLogsModule,
-    AuthModule,
-    CostTrackingModule,
-    UsersModule,
-    TeamsModule,
-    NotificationsModule,
-    TemplatesModule,
-    OrganizationsModule,
-    ProjectsModule,
-    RepositoriesModule,
-    SecurityPoliciesModule,
-    EnvironmentsModule,
-    DeploymentsModule,
-    PipelinesModule,
+    // Three-tier service architecture
+    FoundationModule, // 基础层
+    BusinessModule, // 业务层
+    ExtensionsModule, // 扩展层
     // API module
     TrpcModule,
   ],

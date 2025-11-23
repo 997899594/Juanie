@@ -364,84 +364,44 @@ const statusDescription = computed(() => {
 
 function connectSubscription() {
   if (!props.projectId) return
-
-  // 使用 SSE 连接
-  const eventSource = new EventSource(`/api/sse/project/${props.projectId}`)
-
-  eventSource.onopen = () => {
-    console.log('SSE connection established')
-  }
-
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data)
-      console.log('SSE message:', data)
-      
-      if (data.type === 'connected') {
-        console.log('Connected to SSE')
-      }
-    } catch (error) {
-      console.error('Error parsing SSE message:', error)
-    }
-  }
-
-  eventSource.addEventListener('initialization.progress', (event: any) => {
-    try {
-      const data = JSON.parse(event.data)
-      console.log('Initialization progress:', data)
-      
-      const newProgress = data.progress || 0
-      progress.value = newProgress
-      smoothUpdateProgress(newProgress)
-      updateSteps(newProgress)
-      
-      if (data.message) {
-        currentStep.value = data.message
-      }
-    } catch (error) {
-      console.error('Error processing progress event:', error)
-    }
-  })
-
-  eventSource.addEventListener('initialization.completed', (event: any) => {
-    try {
-      console.log('Initialization completed')
-      status.value = 'completed'
-      progress.value = 100
-      smoothUpdateProgress(100)
-      updateSteps(100)
-      emit('complete')
-      eventSource.close()
-    } catch (error) {
-      console.error('Error processing completed event:', error)
-    }
-  })
-
-  eventSource.addEventListener('initialization.failed', (event: any) => {
-    try {
-      const data = JSON.parse(event.data)
-      console.log('Initialization failed:', data)
-      status.value = 'failed'
-      errorMessage.value = data.error || '初始化失败'
-      emit('error', errorMessage.value)
-      eventSource.close()
-    } catch (error) {
-      console.error('Error processing failed event:', error)
-    }
-  })
-
-  eventSource.onerror = (error) => {
-    console.error('SSE error:', error)
+  try {
+    unsubscribe = trpc.projects.onInitProgress.subscribe(
+      { projectId: props.projectId },
+      {
+        onData: (event: any) => {
+          if (!event || !event.type) return
+          
+          console.log('收到初始化进度事件:', event)
+          
+          if (event.type === 'initialization.progress') {
+            const newProgress = event.data?.progress || 0
+            progress.value = newProgress
+            smoothUpdateProgress(newProgress)
+            updateSteps(newProgress)
+            if (event.data?.message) currentStep.value = event.data.message
+          } else if (event.type === 'initialization.completed') {
+            status.value = 'completed'
+            progress.value = 100
+            smoothUpdateProgress(100)
+            updateSteps(100)
+            emit('complete')
+          } else if (event.type === 'initialization.failed' || event.type === 'initialization.error') {
+            status.value = 'failed'
+            errorMessage.value = event.data?.error || '初始化失败'
+            emit('error', errorMessage.value)
+          }
+        },
+        onError: (err: any) => {
+          console.error('tRPC subscription error:', err)
+          status.value = 'failed'
+          errorMessage.value = '连接失败，请刷新页面重试'
+        },
+      },
+    )
+  } catch (error) {
+    console.error('Failed to connect tRPC subscription:', error)
     status.value = 'failed'
     errorMessage.value = '连接失败，请刷新页面重试'
-    eventSource.close()
-  }
-
-  // 保存 unsubscribe 函数
-  unsubscribe = {
-    unsubscribe: () => {
-      eventSource.close()
-    }
   }
 }
 

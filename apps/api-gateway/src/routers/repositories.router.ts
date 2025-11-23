@@ -5,7 +5,7 @@ import {
   projectIdQuerySchema,
   repositoryIdSchema,
 } from '@juanie/core-types'
-import { RepositoriesService } from '@juanie/service-repositories'
+import { RepositoriesService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'

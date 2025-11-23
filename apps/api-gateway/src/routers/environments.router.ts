@@ -7,7 +7,7 @@ import {
   projectIdQuerySchema,
   updateEnvironmentSchema,
 } from '@juanie/core-types'
-import { EnvironmentsService } from '@juanie/service-environments'
+import { EnvironmentsService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { TrpcService } from '../trpc/trpc.service'

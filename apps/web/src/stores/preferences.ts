@@ -1,7 +1,13 @@
 import { useTheme } from '@juanie/ui'
+import { TRPCClientError } from '@trpc/client'
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { trpc } from '@/lib/trpc'
+
+// 类型守卫：检查是否为 tRPC 客户端错误
+function isTRPCClientError(error: unknown): error is TRPCClientError<any> {
+  return error instanceof TRPCClientError
+}
 
 export type Theme = 'light' | 'dark' | 'system'
 export type Language = 'zh-CN' | 'en-US'
@@ -55,7 +61,12 @@ export const usePreferencesStore = defineStore(
         // 设置文档语言
         document.documentElement.lang = language.value
       } catch (err) {
-        console.error('Failed to initialize preferences:', err)
+        // 静默处理未登录错误（用户未登录时无法获取偏好设置）
+        if (isTRPCClientError(err) && err.data?.code === 'UNAUTHORIZED') {
+          // 用户未登录，使用本地默认设置
+        } else {
+          console.error('Failed to initialize preferences:', err)
+        }
         // 即使失败，也应用当前本地默认
         setTheme(themeId.value)
         if (themeMode.value === 'system') {

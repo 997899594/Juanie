@@ -1,10 +1,8 @@
 import { DatabaseModule } from '@juanie/core-database/module'
-import { SseModule } from '@juanie/core-sse'
-import { AuthModule } from '@juanie/service-auth'
-import { Global, Inject, Module } from '@nestjs/common'
+import { AuthModule } from '@juanie/service-foundation'
+import { Global, Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { Queue } from 'bullmq'
-import { JobEventPublisher } from './job-event-publisher.service'
 import {
   DEPLOYMENT_QUEUE,
   PIPELINE_QUEUE,
@@ -18,9 +16,8 @@ import { RepositoryWorker } from './workers/repository.worker'
 
 @Global()
 @Module({
-  imports: [ConfigModule, DatabaseModule, AuthModule, SseModule],
+  imports: [ConfigModule, DatabaseModule, AuthModule],
   providers: [
-    JobEventPublisher,
     {
       provide: PIPELINE_QUEUE,
       inject: [ConfigService],
@@ -71,6 +68,21 @@ import { RepositoryWorker } from './workers/repository.worker'
           connection: {
             url: redisUrl,
             maxRetriesPerRequest: null,
+            enableOfflineQueue: false,
+          },
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+            removeOnComplete: {
+              age: 3600, // 保留 1 小时
+              count: 100,
+            },
+            removeOnFail: {
+              age: 86400, // 保留 24 小时
+            },
           },
         })
       },
@@ -82,18 +94,4 @@ import { RepositoryWorker } from './workers/repository.worker'
   ],
   exports: [PIPELINE_QUEUE, DEPLOYMENT_QUEUE, REPOSITORY_QUEUE, PROJECT_INITIALIZATION_QUEUE],
 })
-export class QueueModule {
-  constructor(
-    private jobEventPublisher: JobEventPublisher,
-    @Inject(PIPELINE_QUEUE) pipelineQueue: Queue,
-    @Inject(DEPLOYMENT_QUEUE) deploymentQueue: Queue,
-    @Inject(REPOSITORY_QUEUE) repositoryQueue: Queue,
-    @Inject(PROJECT_INITIALIZATION_QUEUE) projectInitQueue: Queue,
-  ) {
-    // 注册所有队列的事件发布器
-    this.jobEventPublisher.registerQueue(pipelineQueue, 'pipeline')
-    this.jobEventPublisher.registerQueue(deploymentQueue, 'deployment')
-    this.jobEventPublisher.registerQueue(repositoryQueue, 'repository')
-    this.jobEventPublisher.registerQueue(projectInitQueue, 'project-initialization')
-  }
-}
+export class QueueModule {}

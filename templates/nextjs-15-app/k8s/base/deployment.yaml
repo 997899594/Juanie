@@ -1,69 +1,69 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .appName }}
+  name: {{ appName }}
   labels:
-    app: {{ .appName }}
+    app: {{ appName }}
     version: v1
 spec:
-  replicas: {{ .replicas | default 2 }}
+  replicas: {{ replicas }}
   selector:
     matchLabels:
-      app: {{ .appName }}
+      app: {{ appName }}
   template:
     metadata:
       labels:
-        app: {{ .appName }}
+        app: {{ appName }}
         version: v1
     spec:
       containers:
       - name: nextjs
-        image: {{ .registry }}/{{ .appName }}:{{ .imageTag | default "latest" }}
+        image: {{ registry }}/{{ appName }}:{{ .imageTag | default "latest" }}
         ports:
         - name: http
-          containerPort: {{ .port | default 3000 }}
+          containerPort: {{ port }}
           protocol: TCP
         env:
         - name: NODE_ENV
           value: {{ .nodeEnv | default "production" }}
         - name: PORT
-          value: "{{ .port | default 3000 }}"
+          value: "{{ port }}"
         - name: NEXT_PUBLIC_APP_URL
-          value: "https://{{ .appName }}.{{ .domain }}"
+          value: "https://{{ appName }}.{{ domain }}"
         
-        {{- if .enableDatabase }}
+        {{#if enableDatabase}}
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
-              name: {{ .appName }}-secrets
+              name: {{ appName }}-secrets
               key: database-url
-        {{- end }}
+        {{/if}}
         
-        {{- if .enableCache }}
+        {{#if enableCache}}
         - name: REDIS_URL
           valueFrom:
             secretKeyRef:
-              name: {{ .appName }}-secrets
+              name: {{ appName }}-secrets
               key: redis-url
-        {{- end }}
+        {{/if}}
         
-        {{- if .enableAuth }}
+        {{#if enableAuth}}
         - name: NEXTAUTH_URL
-          value: "https://{{ .appName }}.{{ .domain }}"
+          value: "https://{{ appName }}.{{ domain }}"
         - name: NEXTAUTH_SECRET
           valueFrom:
             secretKeyRef:
-              name: {{ .appName }}-secrets
+              name: {{ appName }}-secrets
               key: nextauth-secret
-        {{- end }}
+        {{/if}}
         
-        {{- if .enableSentry }}
+        {{#if enableSentry}}
         - name: SENTRY_DSN
           valueFrom:
             secretKeyRef:
-              name: {{ .appName }}-secrets
+              name: {{ appName }}-secrets
               key: sentry-dsn
-        {{- end }}
+        {{/if}}
         
         livenessProbe:
           httpGet:

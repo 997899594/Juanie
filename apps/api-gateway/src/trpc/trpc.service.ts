@@ -1,4 +1,4 @@
-import { AuthService } from '@juanie/service-auth'
+import { AuthService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { initTRPC, TRPCError } from '@trpc/server'
 import type { FastifyReply } from 'fastify'

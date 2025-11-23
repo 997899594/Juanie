@@ -148,47 +148,11 @@ export function useProjects() {
       return { project: result, jobIds: [] }
     } catch (err) {
       console.error('Failed to create project:', err)
-      error.value = '创建项目失败'
-
-      // 提供友好的错误提示
-      if (isTRPCClientError(err)) {
-        const message = err.message
-
-        // 重复/冲突错误
-        if (
-          message.includes('已存在') ||
-          message.includes('duplicate') ||
-          message.includes('unique')
-        ) {
-          toast.error('创建失败', message)
-        }
-        // OAuth 相关错误
-        else if (
-          message.includes('OAuth') ||
-          message.includes('未找到') ||
-          message.includes('连接')
-        ) {
-          toast.error(
-            'OAuth 授权失败',
-            '请前往"设置 > 账户连接"页面连接您的 GitHub/GitLab 账户，或手动输入访问令牌',
-          )
-        }
-        // 仓库相关错误
-        else if (message.includes('仓库') || message.includes('repository')) {
-          toast.error('仓库操作失败', message)
-        }
-        // 权限错误
-        else if (message.includes('权限')) {
-          toast.error('权限不足', message)
-        }
-        // 其他错误
-        else {
-          toast.error('创建项目失败', message)
-        }
-      } else {
-        toast.error('创建项目失败', '请稍后重试')
-      }
-
+      
+      const errorMessage = isTRPCClientError(err) ? err.message : '创建项目失败，请稍后重试'
+      
+      error.value = errorMessage
+      toast.error('创建项目失败', errorMessage)
       throw err
     } finally {
       loading.value = false

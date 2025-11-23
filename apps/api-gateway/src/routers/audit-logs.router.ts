@@ -3,7 +3,7 @@ import {
   listAuditLogsSchema,
   searchAuditLogsSchema,
 } from '@juanie/core-types'
-import { AuditLogsService } from '@juanie/service-audit-logs'
+import { AuditLogsService } from '@juanie/service-extensions'
 import { Injectable } from '@nestjs/common'
 import { TrpcService } from '../trpc/trpc.service'
 

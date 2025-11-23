@@ -80,7 +80,7 @@ export function useOrganizations() {
   /**
    * 创建组织
    */
-  async function createOrganization(data: { name: string; slug: string; displayName?: string }) {
+  async function createOrganization(data: { name: string; displayName?: string }) {
     loading.value = true
     error.value = null
 
@@ -94,11 +94,11 @@ export function useOrganizations() {
       return result
     } catch (err) {
       console.error('Failed to create organization:', err)
-      error.value = '创建组织失败'
-
-      if (isTRPCClientError(err)) {
-        toast.error('创建组织失败', err.message)
-      }
+      
+      const errorMessage = isTRPCClientError(err) ? err.message : '创建组织失败，请稍后重试'
+      
+      error.value = errorMessage
+      toast.error('创建组织失败', errorMessage)
       throw err
     } finally {
       loading.value = false

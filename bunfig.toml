@@ -1,0 +1,23 @@
+# Bun 全局配置
+# https://bun.sh/docs/runtime/bunfig
+
+[install]
+# 使用硬链接而不是符号链接（减少文件监听警告）
+linkNativeModules = false
+
+[run]
+# 禁用对 node_modules 的监听
+watchExclude = [
+  "node_modules/**",
+  "dist/**",
+  ".git/**",
+  ".turbo/**",
+  "**/*.log"
+]
+
+# 只监听源代码目录
+watchInclude = [
+  "src/**",
+  "packages/*/src/**",
+  "apps/*/src/**"
+]

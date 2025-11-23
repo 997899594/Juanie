@@ -4,7 +4,7 @@ import {
   organizationIdQuerySchema,
   recordCostSchema,
 } from '@juanie/core-types'
-import { CostTrackingService } from '@juanie/service-cost-tracking'
+import { CostTrackingService } from '@juanie/service-extensions'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'

@@ -15,9 +15,9 @@ export default defineConfig({
     }),
     tailwindcss(),
     dts({
-      rollupTypes: true,
+      rollupTypes: false,
       insertTypesEntry: true,
-      copyDtsFiles: true,
+      copyDtsFiles: false,
       // 添加超时设置，防止卡住
       compilerOptions: {
         skipLibCheck: true,
@@ -51,6 +51,14 @@ export default defineConfig({
         'clsx',
         'tailwind-merge',
         'lucide-vue-next',
+        'vue-sonner',
+        '@tanstack/vue-table',
+        '@unovis/ts',
+        '@unovis/vue',
+        'embla-carousel-vue',
+        'vaul-vue',
+        'vee-validate',
+        '@vee-validate/zod',
       ],
       // 注意：tslib 不在 external 列表中，会被内联
       output: {
@@ -58,7 +66,8 @@ export default defineConfig({
         // preserveModules: false,
         // 使用相对路径导入，确保模块解析正确
         entryFileNames: '[name].js',
-        chunkFileNames: 'chunks/[name]-[hash].js',
+        // 禁用代码分割，所有代码打包到单个文件
+        inlineDynamicImports: true,
         // 为外部依赖提供全局变量名（用于 UMD 格式，这里不需要）
         globals: {
           vue: 'Vue',
@@ -83,7 +92,7 @@ export default defineConfig({
     // 开发环境不压缩，生产环境压缩
     minify: false,
     // CSS 代码分割
-    cssCodeSplit: true,
+    cssCodeSplit: false,
     // 生成 sourcemap 便于调试
     sourcemap: true,
     // 清空输出目录

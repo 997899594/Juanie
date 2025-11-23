@@ -1,5 +1,5 @@
 {
-  "name": "{{ .appName }}",
+  "name": "{{ appName }}",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -21,32 +21,32 @@
     "react": "19.0.0-rc.1",
     "react-dom": "19.0.0-rc.1",
     
-    {{- if .enableAuth }}
+    {{#if enableAuth}}
     "next-auth": "^5.0.0-beta.4",
     "@auth/drizzle-adapter": "^1.0.0",
-    {{- end }}
+    {{/if}}
     
-    {{- if .enableDatabase }}
+    {{#if enableDatabase}}
     "drizzle-orm": "^0.33.0",
     "postgres": "^3.4.3",
-    {{- end }}
+    {{/if}}
     
-    {{- if .enableCache }}
+    {{#if enableCache}}
     "ioredis": "^5.3.2",
-    {{- end }}
+    {{/if}}
     
     "zod": "^3.22.4",
     "@tanstack/react-query": "^5.17.0",
     
-    {{- if .enableEmail }}
+    {{#if enableEmail}}
     "resend": "^3.0.0",
     "react-email": "^2.0.0",
-    {{- end }}
+    {{/if}}
     
-    {{- if .enableUpload }}
+    {{#if enableUpload}}
     "uploadthing": "^6.0.0",
     "@uploadthing/react": "^6.0.0",
-    {{- end }}
+    {{/if}}
     
     "tailwindcss": "^4.0.0-alpha.25",
     "@tailwindcss/typography": "^0.5.10",
@@ -59,14 +59,14 @@
     "lucide-react": "^0.294.0",
     "framer-motion": "^10.16.16",
     
-    {{- if .enableAnalytics }}
+    {{#if enableAnalytics}}
     "@vercel/analytics": "^1.1.1",
     "@vercel/speed-insights": "^1.0.2",
-    {{- end }}
+    {{/if}}
     
-    {{- if .enableSentry }}
+    {{#if enableSentry}}
     "@sentry/nextjs": "^7.91.0",
-    {{- end }}
+    {{/if}}
     
     "pino": "^8.17.2",
     "pino-pretty": "^10.3.1"
@@ -76,11 +76,11 @@
     "@types/react": "^18.2.46",
     "@types/react-dom": "^18.2.18",
     
-    {{- if .enableDatabase }}
+    {{#if enableDatabase}}
     "drizzle-kit": "^0.24.0",
     "pg": "^8.11.3",
     "@types/pg": "^8.10.9",
-    {{- end }}
+    {{/if}}
     
     "typescript": "^5.3.3",
     "eslint": "^8.56.0",

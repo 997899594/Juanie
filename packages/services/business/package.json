@@ -1,0 +1,31 @@
+{
+  "name": "@juanie/service-business",
+  "version": "0.1.0",
+  "description": "Business services - Projects, Deployments, GitOps",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@juanie/core-database": "workspace:*",
+    "@juanie/core-queue": "workspace:*",
+    "@juanie/core-tokens": "workspace:*",
+    "@juanie/core-types": "workspace:*",
+    "@juanie/core-utils": "workspace:*",
+    "@juanie/service-foundation": "workspace:*",
+    "@nestjs/common": "^11.1.7",
+    "@nestjs/core": "^11.1.7",
+    "drizzle-orm": "^0.44.7",
+    "ioredis": "^5.4.2"
+  },
+  "devDependencies": {
+    "@juanie/config-typescript": "workspace:*",
+    "@types/node": "^24.7.0",
+    "typescript": "^5.9.3"
+  }
+}

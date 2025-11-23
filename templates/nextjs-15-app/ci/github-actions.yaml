@@ -95,7 +95,7 @@ jobs:
     if: github.ref == 'refs/heads/develop'
     environment:
       name: development
-      url: https://dev.{{ .appName }}.com
+      url: https://dev.{{ appName }}.com
     
     steps:
       - uses: actions/checkout@v4
@@ -129,7 +129,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     environment:
       name: production
-      url: https://{{ .appName }}.com
+      url: https://{{ appName }}.com
     
     steps:
       - uses: actions/checkout@v4
@@ -180,7 +180,7 @@ jobs:
       - name: Run E2E tests
         run: npm run test:e2e
         env:
-          BASE_URL: https://dev.{{ .appName }}.com
+          BASE_URL: https://dev.{{ appName }}.com
       
       - name: Upload test results
         if: always()

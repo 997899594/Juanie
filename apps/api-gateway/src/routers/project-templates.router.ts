@@ -5,7 +5,7 @@ import {
   templateIdSchema,
   validateTemplateSchema,
 } from '@juanie/core-types'
-import { TemplateManager } from '@juanie/service-projects'
+import { TemplateManager } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { TrpcService } from '../trpc/trpc.service'

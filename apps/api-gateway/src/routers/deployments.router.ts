@@ -6,7 +6,7 @@ import {
   rejectDeploymentSchema,
   rollbackDeploymentSchema,
 } from '@juanie/core-types'
-import { DeploymentsService } from '@juanie/service-deployments'
+import { DeploymentsService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'

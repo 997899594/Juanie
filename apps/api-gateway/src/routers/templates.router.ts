@@ -1,5 +1,5 @@
 import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/core-types'
-import { TemplatesService } from '@juanie/service-templates'
+import { TemplatesService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'

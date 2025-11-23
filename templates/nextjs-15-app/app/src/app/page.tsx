@@ -10,7 +10,7 @@ export default function HomePage() {
         {/* Hero Section */}
         <div className="text-center space-y-6 mb-16">
           <h1 className="text-5xl font-bold tracking-tight sm:text-6xl">
-            Welcome to <span className="text-primary">{{ .appName }}</span>
+            Welcome to <span className="text-primary">{{ appName }}</span>
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Built with Next.js 15, React Server Components, and deployed on Kubernetes

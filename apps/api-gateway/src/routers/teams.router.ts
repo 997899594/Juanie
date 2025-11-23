@@ -7,7 +7,7 @@ import {
   updateTeamMemberRoleSchema,
   updateTeamSchema,
 } from '@juanie/core-types'
-import { TeamsService } from '@juanie/service-teams'
+import { TeamsService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'

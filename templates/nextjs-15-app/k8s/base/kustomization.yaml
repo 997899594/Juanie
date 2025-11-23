@@ -7,5 +7,5 @@ resources:
   - ingress.yaml
 
 commonLabels:
-  app: {{ .appName }}
+  app: {{ appName }}
   managed-by: kustomize

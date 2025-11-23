@@ -33,16 +33,10 @@ export class EventBusService {
   }
 
   /**
-   * 发布事件
+   * 发布事件（简化版，直接发布到 Redis）
    */
   async publish(event: SSEEvent): Promise<void> {
-    try {
-      await this.publisher.publish(event.channel, JSON.stringify(event))
-      this.logger.debug(`Published event: ${event.type} to ${event.channel}`)
-    } catch (error) {
-      this.logger.error(`Failed to publish event:`, error)
-      throw error
-    }
+    await this.publisher.publish(event.channel, JSON.stringify(event))
   }
 
   /**

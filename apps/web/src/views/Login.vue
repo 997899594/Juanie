@@ -147,7 +147,7 @@ const authStore = useAuthStore()
 const isLoading = ref(false)
 const error = ref('')
 
-// 处理OAuth回调
+// 处理 OAuth 回调
 onMounted(async () => {
   const { code, state } = route.query
   
@@ -157,7 +157,8 @@ onMounted(async () => {
     const toast = useToast()
     
     try {
-      const result = await trpc.auth.gitlabCallback.mutate({
+      // 使用统一的 oauthCallback，后端自动判断 provider
+      const result = await trpc.auth.oauthCallback.mutate({
         code: code as string,
         state: state as string
       })
@@ -165,12 +166,25 @@ onMounted(async () => {
       // Cookie-only：只设置用户信息，不保存 sessionId
       authStore.setUser(result.user)
       
+      // 获取用户的组织列表，自动设置第一个组织为当前组织
+      const { useAppStore } = await import('@/stores/app')
+      const appStore = useAppStore()
+      
+      try {
+        const orgs = await trpc.organizations.list.query()
+        if (orgs.length > 0 && !appStore.currentOrganizationId) {
+          appStore.setCurrentOrganization(orgs[0].id)
+        }
+      } catch (orgErr) {
+        console.warn('获取组织列表失败:', orgErr)
+      }
+      
       toast.success('登录成功', '欢迎回来！')
       
       const redirectTo = route.query.redirect as string || '/'
       router.push(redirectTo)
     } catch (err) {
-      console.error('OAuth回调处理失败:', err)
+      console.error('OAuth 回调处理失败:', err)
       error.value = '登录失败，请重试'
       toast.error('登录失败', '请重试或联系管理员')
     } finally {
@@ -184,13 +198,20 @@ const handleGitHubLogin = async () => {
   error.value = ''
   
   try {
-    // TODO: 实现GitHub OAuth
-    error.value = 'GitHub登录暂未实现'
+    // 获取 GitHub OAuth 授权 URL
+    const result = await trpc.auth.githubAuthUrl.query()
+    
+    // 跳转到 GitHub 授权页面
+    window.location.href = result.url
   } catch (err) {
-    console.error('GitHub登录失败:', err)
-    error.value = '登录失败，请重试'
-  } finally {
+    console.error('获取 GitHub 授权 URL 失败:', err)
+    error.value = '获取登录链接失败，请重试'
     isLoading.value = false
+    
+    // 使用 toast 显示错误
+    const { useToast } = await import('@/composables/useToast')
+    const toast = useToast()
+    toast.error('登录失败', '获取登录链接失败，请重试')
   }
 }
 

@@ -16,8 +16,8 @@ export const oauthAccounts = pgTable(
     status: text('status').notNull().default('active'), // 'active', 'expired', 'revoked'
 
     // Git 服务器配置（用于 GitLab 私有服务器）
-    serverUrl: text('server_url'), // 例如: https://gitlab.company.com
-    serverType: text('server_type'), // 'cloud' | 'self-hosted'
+    serverUrl: text('server_url').notNull(), // 例如: https://gitlab.company.com
+    serverType: text('server_type').notNull().default('cloud'), // 'cloud' | 'self-hosted'
 
     // 元数据
     metadata: jsonb('metadata').$type<{

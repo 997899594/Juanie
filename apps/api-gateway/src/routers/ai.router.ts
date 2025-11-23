@@ -1,4 +1,4 @@
-import { AIChatService, AIConfigGenerator, AITroubleshooter } from '@juanie/service-ai'
+import { AIChatService, AIConfigGenerator, AITroubleshooter } from '@juanie/service-extensions'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'

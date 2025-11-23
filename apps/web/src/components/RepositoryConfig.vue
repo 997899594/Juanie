@@ -1,11 +1,11 @@
 <template>
   <div class="space-y-6">
-    <div v-if="props.required" class="text-sm text-muted-foreground">
+    <!-- <div v-if="props.required" class="text-sm text-muted-foreground">
       <p class="flex items-center gap-2">
         <span class="text-destructive">*</span>
         <span>Git 仓库是必需的，请选择创建新仓库或关联现有仓库</span>
       </p>
-    </div>
+    </div> -->
 
     <!-- 加载状态 -->
     <div v-if="loadingAccounts" class="flex items-center justify-center py-8">
@@ -186,19 +186,6 @@
         </TabsContent>
       </Tabs>
     </div>
-
-    <!-- 提示信息 -->
-    <Alert class="mt-4">
-      <Info class="h-4 w-4" />
-      <AlertDescription>
-        <p class="text-sm">
-          <strong>提示：</strong>Git 仓库配置是可选的，不填写可直接进入下一步。
-        </p>
-        <p class="text-xs text-muted-foreground mt-1">
-          <span class="text-orange-600 font-medium">注意：</span>没有 Git 仓库将无法使用 GitOps 自动部署功能，稍后可在项目设置中添加。
-        </p>
-      </AlertDescription>
-    </Alert>
   </div>
 </template>
 

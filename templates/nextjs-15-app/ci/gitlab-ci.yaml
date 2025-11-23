@@ -164,17 +164,17 @@ deploy:dev:
   needs: [build-image]
   environment:
     name: development
-    url: https://dev.{{ .appName }}.com
+    url: https://dev.{{ appName }}.com
     on_stop: stop:dev
   before_script:
     - apk add --no-cache git
     # 配置 Git
-    - git config --global user.email "gitlab-ci@{{ .appName }}.com"
+    - git config --global user.email "gitlab-ci@{{ appName }}.com"
     - git config --global user.name "GitLab CI"
   script:
     # 克隆 GitOps 仓库
-    - git clone https://oauth2:${GITOPS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_NAMESPACE}/{{ .appName }}-gitops.git
-    - cd {{ .appName }}-gitops
+    - git clone https://oauth2:${GITOPS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_NAMESPACE}/{{ appName }}-gitops.git
+    - cd {{ appName }}-gitops
     
     # 更新镜像标签
     - cd overlays/dev
@@ -201,7 +201,7 @@ stop:dev:
     name: development
     action: stop
   script:
-    - kubectl delete namespace {{ .appName }}-dev --ignore-not-found=true
+    - kubectl delete namespace {{ appName }}-dev --ignore-not-found=true
   when: manual
   only:
     - develop
@@ -213,14 +213,14 @@ deploy:staging:
   needs: [build-image]
   environment:
     name: staging
-    url: https://staging.{{ .appName }}.com
+    url: https://staging.{{ appName }}.com
   before_script:
     - apk add --no-cache git
-    - git config --global user.email "gitlab-ci@{{ .appName }}.com"
+    - git config --global user.email "gitlab-ci@{{ appName }}.com"
     - git config --global user.name "GitLab CI"
   script:
-    - git clone https://oauth2:${GITOPS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_NAMESPACE}/{{ .appName }}-gitops.git
-    - cd {{ .appName }}-gitops
+    - git clone https://oauth2:${GITOPS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_NAMESPACE}/{{ appName }}-gitops.git
+    - cd {{ appName }}-gitops
     - cd overlays/staging
     - |
       kustomize edit set image app=${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
@@ -238,14 +238,14 @@ deploy:prod:
   needs: [build-image]
   environment:
     name: production
-    url: https://{{ .appName }}.com
+    url: https://{{ appName }}.com
   before_script:
     - apk add --no-cache git
-    - git config --global user.email "gitlab-ci@{{ .appName }}.com"
+    - git config --global user.email "gitlab-ci@{{ appName }}.com"
     - git config --global user.name "GitLab CI"
   script:
-    - git clone https://oauth2:${GITOPS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_NAMESPACE}/{{ .appName }}-gitops.git
-    - cd {{ .appName }}-gitops
+    - git clone https://oauth2:${GITOPS_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_NAMESPACE}/{{ appName }}-gitops.git
+    - cd {{ appName }}-gitops
     - cd overlays/prod
     - |
       kustomize edit set image app=${IMAGE_NAME}:${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}
@@ -273,7 +273,7 @@ e2e-test:
     - npx playwright install
     - npm run test:e2e
   variables:
-    BASE_URL: https://dev.{{ .appName }}.com
+    BASE_URL: https://dev.{{ appName }}.com
   artifacts:
     when: always
     paths:

@@ -16,8 +16,8 @@ const composedUrl = `postgresql://${requireEnv('POSTGRES_USER')}:${encodeURIComp
 const url = envUrl ?? composedUrl
 
 export default defineConfig({
-  schema: './src/schemas/index.ts',
-  out: './drizzle',
+  schema: './packages/core/database/src/schemas/index.ts',
+  out: './packages/core/database/drizzle',
   dialect: 'postgresql',
   dbCredentials: {
     url,

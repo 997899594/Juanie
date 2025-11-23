@@ -1,21 +1,6 @@
-import { AIModule } from '@juanie/service-ai'
-import { AiAssistantsModule } from '@juanie/service-ai-assistants'
-import { AuditLogsModule } from '@juanie/service-audit-logs'
-import { AuthModule } from '@juanie/service-auth'
-import { CostTrackingModule } from '@juanie/service-cost-tracking'
-import { DeploymentsModule } from '@juanie/service-deployments'
-import { EnvironmentsModule } from '@juanie/service-environments'
-import { FluxModule } from '@juanie/service-flux'
-import { GitOpsModule } from '@juanie/service-git-ops'
-import { NotificationsModule } from '@juanie/service-notifications'
-import { OrganizationsModule } from '@juanie/service-organizations'
-import { PipelinesModule } from '@juanie/service-pipelines'
-import { ProjectsModule } from '@juanie/service-projects'
-import { RepositoriesModule } from '@juanie/service-repositories'
-import { SecurityPoliciesModule } from '@juanie/service-security-policies'
-import { TeamsModule } from '@juanie/service-teams'
-import { TemplatesModule } from '@juanie/service-templates'
-import { UsersModule } from '@juanie/service-users'
+import { BusinessModule } from '@juanie/service-business'
+import { ExtensionsModule } from '@juanie/service-extensions'
+import { FoundationModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { AIRouter } from '../routers/ai.router'
 import { AiAssistantsRouter } from '../routers/ai-assistants.router'
@@ -40,24 +25,10 @@ import { TrpcService } from './trpc.service'
 
 @Module({
   imports: [
-    AIModule,
-    AiAssistantsModule,
-    AuditLogsModule,
-    AuthModule,
-    CostTrackingModule,
-    UsersModule,
-    NotificationsModule,
-    TemplatesModule,
-    OrganizationsModule,
-    TeamsModule,
-    ProjectsModule,
-    RepositoriesModule,
-    SecurityPoliciesModule,
-    EnvironmentsModule,
-    DeploymentsModule,
-    PipelinesModule,
-    FluxModule,
-    GitOpsModule,
+    // Three-tier service architecture
+    FoundationModule, // 基础层
+    BusinessModule,   // 业务层
+    ExtensionsModule, // 扩展层
   ],
   providers: [
     TrpcService,

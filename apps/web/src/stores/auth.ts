@@ -31,10 +31,14 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = result.user
       }
     } catch (error) {
-      console.error('Failed to validate session:', error)
-      if (isTRPCClientError(error) && error.data?.code !== 'UNAUTHORIZED') {
-        toast.error('会话验证失败', '请重新登录')
+      // 静默处理 UNAUTHORIZED 错误（用户未登录是正常情况）
+      if (isTRPCClientError(error) && error.data?.code === 'UNAUTHORIZED') {
+        // 用户未登录，这是预期行为，不需要显示错误
+        return
       }
+      // 其他错误才需要记录和提示
+      console.error('Failed to validate session:', error)
+      toast.error('会话验证失败', '请重新登录')
     } finally {
       loading.value = false
       initialized.value = true

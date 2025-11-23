@@ -10,9 +10,12 @@ import {
   restoreProjectSchema,
   updateProjectSchema,
 } from '@juanie/core-types'
-import { OneClickDeployService, ProjectsService } from '@juanie/service-projects'
-import { StorageService } from '@juanie/service-storage'
-import { Injectable } from '@nestjs/common'
+import { OneClickDeployService, ProjectsService } from '@juanie/service-business'
+import { StorageService } from '@juanie/service-foundation'
+import { Inject, Injectable } from '@nestjs/common'
+import { observable } from '@trpc/server/observable'
+import type Redis from 'ioredis'
+import { REDIS } from '@juanie/core-tokens'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'
@@ -24,6 +27,7 @@ export class ProjectsRouter {
     private readonly projectsService: ProjectsService,
     private readonly storageService: StorageService,
     private readonly oneClickDeploy: OneClickDeployService,
+    @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   get router() {
@@ -395,18 +399,72 @@ export class ProjectsRouter {
           }
         }),
 
-      // 订阅项目初始化进度（使用 procedure 因为 subscription 的认证处理不同）
+      // 订阅项目初始化进度（SSE 实现）
       onInitProgress: this.trpc.procedure
         .input(z.object({ projectId: z.string() }))
-        .subscription(async ({ input }) => {
-          return this.projectsService.subscribeToProgress(input.projectId)
+        .subscription(({ input }) => {
+          return observable<any>((emit) => {
+            const subscriber = this.redis.duplicate()
+            const channel = `project:${input.projectId}`
+            
+            subscriber.subscribe(channel)
+
+            subscriber.on('message', (_channel, message) => {
+              try {
+                const event = JSON.parse(message)
+                emit.next(event)
+                
+                // 如果完成或失败，自动关闭连接
+                if (event.type === 'initialization.completed' || 
+                    event.type === 'initialization.failed') {
+                  emit.complete()
+                }
+              } catch (error) {
+                console.error('Failed to parse event:', error)
+              }
+            })
+
+            subscriber.on('error', (error) => {
+              console.error('Redis subscription error:', error)
+              emit.error(error)
+            })
+
+            // 清理函数
+            return () => {
+              subscriber.unsubscribe(channel)
+              subscriber.quit()
+            }
+          })
         }),
 
-      // 订阅任务进度（通用）
+      // 订阅任务进度（通用 Redis 频道 job:{id}）
       onJobProgress: this.trpc.procedure
         .input(z.object({ jobId: z.string() }))
-        .subscription(async ({ input }) => {
-          return this.projectsService.subscribeToJobProgress(input.jobId)
+        .subscription(({ input }) => {
+          return observable<any>((emit) => {
+            const subscriber = this.redis.duplicate()
+            const channel = `job:${input.jobId}`
+            subscriber.subscribe(channel)
+
+            subscriber.on('message', (_channel, message) => {
+              try {
+                const event = JSON.parse(message)
+                emit.next(event)
+              } catch (error) {
+                console.error('Failed to parse job progress event:', error)
+              }
+            })
+
+            subscriber.on('error', (error) => {
+              console.error('Redis subscription error:', error)
+              emit.error(error)
+            })
+
+            return () => {
+              subscriber.unsubscribe(channel)
+              subscriber.quit()
+            }
+          })
         }),
 
       // 一键部署

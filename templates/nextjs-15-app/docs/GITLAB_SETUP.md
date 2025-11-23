@@ -38,7 +38,7 @@ NEXT_PUBLIC_APP_URL
 # 类型: Variable
 # 保护: No
 # 遮罩: No
-# 值: https://{{ .appName }}.com
+# 值: https://{{ appName }}.com
 ```
 
 #### 可选变量（如果使用外部 Registry）
@@ -122,11 +122,11 @@ build-image:
 
 ```bash
 # 在 GitLab 上创建新项目
-# 项目名称: {{ .appName }}-gitops
+# 项目名称: {{ appName }}-gitops
 
 # 克隆并初始化
-git clone https://gitlab.example.com/your-group/{{ .appName }}-gitops.git
-cd {{ .appName }}-gitops
+git clone https://gitlab.example.com/your-group/{{ appName }}-gitops.git
+cd {{ appName }}-gitops
 
 # 复制 K8s 配置
 cp -r .k8s/* .
@@ -139,8 +139,8 @@ git push origin main
 
 ```bash
 # 创建 GitRepository
-flux create source git {{ .appName }} \
-  --url=https://gitlab.example.com/your-group/{{ .appName }}-gitops.git \
+flux create source git {{ appName }} \
+  --url=https://gitlab.example.com/your-group/{{ appName }}-gitops.git \
   --branch=main \
   --interval=1m \
   --secret-ref=gitlab-credentials
@@ -152,12 +152,12 @@ kubectl create secret generic gitlab-credentials \
   -n flux-system
 
 # 创建 Kustomization
-flux create kustomization {{ .appName }}-dev \
-  --source=GitRepository/{{ .appName }} \
+flux create kustomization {{ appName }}-dev \
+  --source=GitRepository/{{ appName }} \
   --path=./overlays/dev \
   --prune=true \
   --interval=5m \
-  --target-namespace={{ .appName }}-dev
+  --target-namespace={{ appName }}-dev
 ```
 
 ---
@@ -310,7 +310,7 @@ kubectl create secret docker-registry gitlab-registry \
   --docker-server=registry.gitlab.com \
   --docker-username=<username> \
   --docker-password=<token> \
-  -n {{ .appName }}-dev
+  -n {{ appName }}-dev
 
 # 在 deployment.yaml 中添加
 spec:

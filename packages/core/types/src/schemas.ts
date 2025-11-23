@@ -77,7 +77,6 @@ export const sessionSchema = z.object({
 
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(100),
-  slug: slugSchema,
   displayName: z.string().max(500).optional(),
 })
 
@@ -155,7 +154,6 @@ export const removeTeamMemberSchema = z.object({
 export const createProjectSchema = z.object({
   organizationId: uuidSchema,
   name: z.string().min(1).max(100),
-  slug: slugSchema,
   description: z.string().max(1000).optional(),
   visibility: z.enum(['public', 'private', 'internal']).default('private'),
   logoUrl: z.string().url().optional(),

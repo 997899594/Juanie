@@ -7,7 +7,7 @@ import {
   triggerPipelineSchema,
   updatePipelineSchema,
 } from '@juanie/core-types'
-import { PipelinesService } from '@juanie/service-pipelines'
+import { PipelinesService } from '@juanie/service-business'
 import { Inject, Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'

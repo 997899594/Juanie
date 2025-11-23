@@ -286,29 +286,29 @@ spec:
     postCreate:
       - name: Install dependencies
         script: |
-          cd {{ .projectPath }}
+          cd {{ projectPath }}
           npm install
       
       - name: Generate Prisma client
         script: |
-          cd {{ .projectPath }}
+          cd {{ projectPath }}
           npm run db:generate
-        condition: "{{ .enableDatabase }}"
+        condition: "{{ enableDatabase }}"
       
       - name: Setup database
         script: |
-          cd {{ .projectPath }}
+          cd {{ projectPath }}
           npm run db:push
-        condition: "{{ .enableDatabase }}"
+        condition: "{{ enableDatabase }}"
       
       - name: Run linter
         script: |
-          cd {{ .projectPath }}
+          cd {{ projectPath }}
           npm run lint
       
       - name: Run type check
         script: |
-          cd {{ .projectPath }}
+          cd {{ projectPath }}
           npm run type-check
   
   # 文档链接

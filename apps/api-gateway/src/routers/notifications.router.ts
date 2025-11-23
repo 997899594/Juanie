@@ -4,7 +4,7 @@ import {
   markNotificationAsReadSchema,
   notificationIdSchema,
 } from '@juanie/core-types'
-import { NotificationsService } from '@juanie/service-notifications'
+import { NotificationsService } from '@juanie/service-extensions'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'

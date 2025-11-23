@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: {{ .appName }}-prod
+namespace: {{ appName }}-prod
 
 resources:
   - ../../base
@@ -14,7 +14,7 @@ patches:
         value: 3
     target:
       kind: Deployment
-      name: {{ .appName }}
+      name: {{ appName }}
   
   - patch: |-
       - op: add
@@ -24,8 +24,8 @@ patches:
           value: warn
     target:
       kind: Deployment
-      name: {{ .appName }}
+      name: {{ appName }}
 
 images:
-  - name: {{ .registry }}/{{ .appName }}
+  - name: {{ registry }}/{{ appName }}
     newTag: latest

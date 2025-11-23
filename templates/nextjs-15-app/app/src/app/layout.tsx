@@ -19,9 +19,9 @@ import { SpeedInsights } from '@vercel/speed-insights/next'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: '{{ .appName }}',
+  title: '{{ appName }}',
   description: 'Built with Next.js 15 and deployed on Kubernetes',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:{{ .port }}'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:{{ port }}'),
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

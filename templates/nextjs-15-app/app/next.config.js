@@ -15,7 +15,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**.{{ .appName }}.com',
+        hostname: '**.{{ appName }}.com',
       },
     ],
   },
@@ -48,8 +48,8 @@ const nextConfig = {
 
 // 环境变量
 {
-  NEXT_PUBLIC_APP_NAME: '{{ .appName }}', NEXT_PUBLIC_APP_URL
-  : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:{{ .port }}',
+  NEXT_PUBLIC_APP_NAME: '{{ appName }}', NEXT_PUBLIC_APP_URL
+  : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:{{ port }}',
 }
 ,
 
