@@ -118,6 +118,7 @@ watch(
 function handleSubmit() {
   const data = {
     name: formData.value.name,
+    slug: formData.value.name.toLowerCase().replace(/\s+/g, '-'),
   }
   emit('submit', data)
 }

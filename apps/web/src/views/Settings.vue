@@ -181,11 +181,9 @@
               </div>
             </div>
 
-            <div v-if="fluxLoading" class="flex items-center justify-center py-8">
-              <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
 
-            <div v-else-if="fluxHealth" class="space-y-4">
+
+            <div v-if="fluxHealth" class="space-y-4">
               <div class="flex items-center justify-between">
                 <div class="space-y-0.5">
                   <Label>Flux 状态</Label>
@@ -218,26 +216,12 @@
 
               <Separator />
 
-              <div class="flex gap-2">
-                <Button variant="outline" @click="checkFlux" :disabled="fluxLoading">
-                  <RefreshCw :class="['h-4 w-4 mr-2', fluxLoading && 'animate-spin']" />
-                  刷新状态
-                </Button>
-                <Button variant="destructive" @click="handleUninstallFlux" :disabled="fluxLoading">
-                  <Trash2 class="h-4 w-4 mr-2" />
-                  卸载 Flux
-                </Button>
+              <div class="text-sm text-muted-foreground">
+                <p>Flux 由运维人员手动安装和管理。</p>
+                <p class="mt-2">
+                  安装命令：<code class="bg-muted px-2 py-1 rounded">flux install --namespace=flux-system</code>
+                </p>
               </div>
-            </div>
-
-            <div v-else class="space-y-4">
-              <p class="text-sm text-muted-foreground">
-                Flux 尚未安装。安装 Flux 后，您可以使用 GitOps 功能进行自动化部署。
-              </p>
-              <Button @click="handleInstallFlux" :disabled="fluxLoading">
-                <Download class="h-4 w-4 mr-2" />
-                安装 Flux
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -320,7 +304,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@juanie/ui'
-import { LogOut, Monitor, Moon, Sun, GitBranch, Loader2, RefreshCw, Download, Trash2 } from 'lucide-vue-next'
+import { LogOut, Monitor, Moon, Sun, GitBranch } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useGitOps } from '@/composables/useGitOps'
@@ -330,53 +314,9 @@ const router = useRouter()
 const authStore = useAuthStore()
 const preferencesStore = usePreferencesStore()
 const toast = useToast()
-const { fluxHealth, installFlux, checkFluxHealth, uninstallFlux } = useGitOps()
+const { fluxHealth } = useGitOps()
 
-const fluxLoading = ref(false)
 
-onMounted(async () => {
-  await checkFlux()
-})
-
-async function checkFlux() {
-  fluxLoading.value = true
-  try {
-    await checkFluxHealth()
-  } catch (error) {
-    // Flux 未安装或检查失败
-    console.log('Flux not installed or check failed')
-  } finally {
-    fluxLoading.value = false
-  }
-}
-
-async function handleInstallFlux() {
-  fluxLoading.value = true
-  try {
-    await installFlux({ namespace: 'flux-system' })
-    await checkFlux()
-  } catch (error) {
-    console.error('Failed to install Flux:', error)
-  } finally {
-    fluxLoading.value = false
-  }
-}
-
-async function handleUninstallFlux() {
-  if (!confirm('确定要卸载 Flux 吗？这将停止所有 GitOps 自动化部署。')) {
-    return
-  }
-
-  fluxLoading.value = true
-  try {
-    await uninstallFlux()
-    await checkFlux()
-  } catch (error) {
-    console.error('Failed to uninstall Flux:', error)
-  } finally {
-    fluxLoading.value = false
-  }
-}
 
 async function handleLogout() {
   try {

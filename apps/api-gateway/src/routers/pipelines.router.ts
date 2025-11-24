@@ -1,4 +1,4 @@
-import { REDIS } from '@juanie/core-tokens'
+import { REDIS } from '@juanie/core/tokens'
 import {
   createPipelineSchema,
   pipelineIdSchema,

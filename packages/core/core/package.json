@@ -1,0 +1,69 @@
+{
+  "name": "@juanie/core",
+  "version": "0.1.0",
+  "description": "Core infrastructure - Database, Queue, Events, SSE, Utils",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./database": {
+      "types": "./dist/database/index.d.ts",
+      "default": "./dist/database/index.js"
+    },
+    "./events": {
+      "types": "./dist/events/index.d.ts",
+      "default": "./dist/events/index.js"
+    },
+    "./queue": {
+      "types": "./dist/queue/index.d.ts",
+      "default": "./dist/queue/index.js"
+    },
+    "./sse": {
+      "types": "./dist/sse/index.d.ts",
+      "default": "./dist/sse/index.js"
+    },
+    "./tokens": {
+      "types": "./dist/tokens/index.d.ts",
+      "default": "./dist/tokens/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "default": "./dist/utils/index.js"
+    },
+    "./observability": {
+      "types": "./dist/observability/index.d.ts",
+      "default": "./dist/observability/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@juanie/core-types": "workspace:*",
+    "@nestjs/bull": "^10.2.1",
+    "@nestjs/common": "^11.1.7",
+    "@nestjs/config": "^3.3.0",
+    "@nestjs/core": "^11.1.7",
+    "@nestjs/event-emitter": "^3.0.1",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.65.0",
+    "@opentelemetry/exporter-jaeger": "^2.1.0",
+    "bull": "^4.16.3",
+    "bullmq": "^5.36.3",
+    "drizzle-orm": "^0.44.7",
+    "ioredis": "^5.4.2",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@juanie/config-typescript": "workspace:*",
+    "@types/node": "^24.7.0",
+    "typescript": "^5.9.3"
+  }
+}

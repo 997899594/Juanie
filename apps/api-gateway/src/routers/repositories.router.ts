@@ -124,6 +124,43 @@ export class RepositoriesRouter {
             })
           }
         }),
+
+      // 连接仓库
+      connect: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string().uuid(),
+            provider: z.enum(['github', 'gitlab']),
+            fullName: z.string(),
+            cloneUrl: z.string(),
+            defaultBranch: z.string().optional(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.repositoriesService.connect(ctx.user.id, input)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '连接仓库失败',
+            })
+          }
+        }),
+
+      // 断开仓库连接
+      disconnect: this.trpc.protectedProcedure
+        .input(repositoryIdSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            await this.repositoriesService.disconnect(ctx.user.id, input.repositoryId)
+            return { success: true, message: '仓库已断开连接' }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '断开仓库连接失败',
+            })
+          }
+        }),
     })
   }
 }

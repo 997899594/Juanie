@@ -36,11 +36,9 @@
 
       <!-- 标签页 -->
       <Tabs :default-value="activeTab" @update:model-value="(value) => activeTab = String(value)">
-        <TabsList class="grid w-full grid-cols-10">
+        <TabsList class="grid w-full grid-cols-8">
           <TabsTrigger value="overview">概览</TabsTrigger>
           <TabsTrigger value="topology">资源拓扑</TabsTrigger>
-          <TabsTrigger value="health">健康度</TabsTrigger>
-          <TabsTrigger value="repositories">仓库</TabsTrigger>
           <TabsTrigger value="environments">环境</TabsTrigger>
           <TabsTrigger value="gitops">GitOps</TabsTrigger>
           <TabsTrigger value="pipelines">Pipeline</TabsTrigger>
@@ -82,24 +80,16 @@
               </div>
             </CardHeader>
             <CardContent>
-              <div class="flex items-center gap-4">
-                <div class="flex-1">
-                  <div class="flex items-baseline gap-2 mb-2">
-                    <span class="text-3xl font-bold">{{ projectStatus.health.score }}</span>
-                    <span class="text-sm text-muted-foreground">/100</span>
-                  </div>
-                  <div class="w-full bg-secondary rounded-full h-2">
-                    <div 
-                      class="h-2 rounded-full transition-all"
-                      :class="getHealthBarColor(projectStatus.health.status)"
-                      :style="{ width: `${projectStatus.health.score}%` }"
-                    />
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" @click="activeTab = 'health'">
-                  查看详情
-                  <ChevronRight class="ml-1 h-4 w-4" />
-                </Button>
+              <div class="flex items-baseline gap-2 mb-2">
+                <span class="text-3xl font-bold">{{ projectStatus.health.score }}</span>
+                <span class="text-sm text-muted-foreground">/100</span>
+              </div>
+              <div class="w-full bg-secondary rounded-full h-2">
+                <div 
+                  class="h-2 rounded-full transition-all"
+                  :class="getHealthBarColor(projectStatus.health.status)"
+                  :style="{ width: `${projectStatus.health.score}%` }"
+                />
               </div>
               
               <!-- 健康度因素 -->
@@ -109,12 +99,12 @@
                   <div class="space-y-1">
                     <div class="flex items-center justify-between text-xs">
                       <span class="text-muted-foreground">部署成功率</span>
-                      <span class="font-medium">{{ Math.round(projectStatus.health.factors.deploymentSuccessRate * 100) }}%</span>
+                      <span class="font-medium">{{ Math.round(projectStatus.health.factors.deploymentSuccessRate) }}%</span>
                     </div>
                     <div class="w-full bg-secondary rounded-full h-1.5">
                       <div 
                         class="h-1.5 rounded-full bg-blue-500 transition-all"
-                        :style="{ width: `${projectStatus.health.factors.deploymentSuccessRate * 100}%` }"
+                        :style="{ width: `${projectStatus.health.factors.deploymentSuccessRate}%` }"
                       />
                     </div>
                   </div>
@@ -283,51 +273,39 @@
 
           <!-- 关联资源概览 -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- 仓库列表 -->
+            <!-- Git 仓库 -->
             <Card>
               <CardHeader>
-                <div class="flex items-center justify-between">
-                  <CardTitle class="text-base">仓库</CardTitle>
-                  <Button variant="ghost" size="sm" @click="activeTab = 'repositories'">
-                    查看全部
-                    <ChevronRight class="ml-1 h-4 w-4" />
-                  </Button>
-                </div>
+                <CardTitle class="text-base">Git 仓库</CardTitle>
               </CardHeader>
               <CardContent>
-                <div v-if="projectStatus?.repositories && projectStatus.repositories.length" class="space-y-3">
-                  <div 
-                    v-for="repo in projectStatus.repositories.slice(0, 3)" 
-                    :key="repo.id"
-                    class="flex items-start gap-2 text-sm p-2 rounded-lg hover:bg-accent transition-colors"
-                  >
-                    <GitBranch class="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div v-if="projectStatus?.repository" class="space-y-3">
+                  <div class="flex items-start gap-3">
+                    <div class="rounded-full bg-primary/10 p-2">
+                      <GitBranch class="h-4 w-4 text-primary" />
+                    </div>
                     <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2">
-                        <span class="font-medium truncate">{{ repo.fullName }}</span>
-                        <Badge variant="outline" class="text-xs">{{ repo.provider }}</Badge>
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="font-medium truncate">{{ projectStatus.repository.fullName }}</span>
+                        <Badge variant="outline" class="text-xs">{{ projectStatus.repository.provider }}</Badge>
                       </div>
-                      <p v-if="repo.defaultBranch" class="text-xs text-muted-foreground mt-0.5">
-                        默认分支: {{ repo.defaultBranch }}
+                      <p v-if="projectStatus.repository.defaultBranch" class="text-xs text-muted-foreground">
+                        默认分支: {{ projectStatus.repository.defaultBranch }}
                       </p>
+                      <a 
+                        v-if="projectStatus.repository.cloneUrl"
+                        :href="projectStatus.repository.cloneUrl" 
+                        target="_blank"
+                        class="text-xs text-primary hover:underline mt-1 inline-block"
+                      >
+                        查看仓库 →
+                      </a>
                     </div>
                   </div>
-                  <Button 
-                    v-if="projectStatus.repositories.length > 3"
-                    variant="ghost" 
-                    size="sm" 
-                    class="w-full"
-                    @click="activeTab = 'repositories'"
-                  >
-                    查看全部 {{ projectStatus.repositories.length }} 个仓库
-                  </Button>
                 </div>
-                <div v-else class="text-center py-4">
+                <div v-else class="text-center py-6">
                   <GitBranch class="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                   <p class="text-sm text-muted-foreground">暂无关联仓库</p>
-                  <Button variant="outline" size="sm" class="mt-2" @click="activeTab = 'repositories'">
-                    添加仓库
-                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -542,15 +520,9 @@
           <ResourceTopology :project-status="projectStatus" />
         </TabsContent>
 
-        <!-- 健康度标签 -->
-        <TabsContent value="health">
-          <HealthDashboard :health="projectStatus?.health" />
-        </TabsContent>
 
-        <!-- 仓库标签 -->
-        <TabsContent value="repositories">
-          <RepositoriesTab :project-id="projectId" />
-        </TabsContent>
+
+
 
         <!-- 环境标签 -->
         <TabsContent value="environments">
@@ -561,28 +533,64 @@
         <TabsContent value="gitops">
           <Card>
             <CardHeader>
-              <CardTitle>GitOps 资源</CardTitle>
-              <CardDescription>
-                管理项目的 GitOps 资源和自动化部署配置
-              </CardDescription>
+              <div class="flex items-center justify-between">
+                <div>
+                  <CardTitle>GitOps 资源</CardTitle>
+                  <CardDescription>
+                    管理项目的 GitOps 资源和自动化部署配置
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" @click="router.push(`/gitops/resources?project=${projectId}`)">
+                  <ExternalLink class="mr-2 h-4 w-4" />
+                  详细视图
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <div class="space-y-4">
-                <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
-                  <div class="flex gap-3">
-                    <GitBranch class="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div class="space-y-1">
-                      <p class="text-sm font-medium text-blue-900">GitOps 工作流</p>
-                      <p class="text-sm text-blue-700">
-                        通过 Git 仓库管理 Kubernetes 配置，实现声明式部署和自动同步。
-                      </p>
+              <div v-if="projectStatus?.gitopsResources && projectStatus.gitopsResources.length > 0" class="space-y-4">
+                <!-- 说明提示 -->
+                <div class="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <p class="text-xs text-blue-700">
+                    GitOps 资源用于自动化部署。每个环境包含 2 个资源：
+                    <span class="font-medium">git-repository</span>（Git 仓库连接）和 
+                    <span class="font-medium">kustomization</span>（部署配置）
+                  </p>
+                </div>
+
+                <!-- 按环境分组显示 -->
+                <div v-for="env in getUniqueEnvironments(projectStatus.gitopsResources)" :key="env" class="space-y-2">
+                  <div class="flex items-center gap-2 mb-2">
+                    <Server class="h-4 w-4 text-muted-foreground" />
+                    <span class="text-sm font-medium">{{ getEnvironmentLabel(env) }}</span>
+                  </div>
+                  <div class="ml-6 space-y-2">
+                    <div
+                      v-for="resource in getResourcesByEnvironment(projectStatus.gitopsResources, env)"
+                      :key="resource.id"
+                      class="flex items-center justify-between rounded-lg border p-3 text-sm"
+                    >
+                      <div class="flex items-center gap-2">
+                        <GitBranch class="h-3.5 w-3.5 text-muted-foreground" />
+                        <div>
+                          <span class="font-medium">{{ getResourceTypeLabel(resource.type) }}</span>
+                          <span class="text-xs text-muted-foreground ml-2">{{ resource.namespace }}</span>
+                        </div>
+                      </div>
+                      <Badge :variant="getResourceStatusVariant(resource.status)" class="text-xs">
+                        {{ resource.status || 'pending' }}
+                      </Badge>
                     </div>
                   </div>
                 </div>
-                <Button @click="router.push(`/gitops/resources?project=${projectId}`)">
-                  <GitBranch class="mr-2 h-4 w-4" />
-                  查看 GitOps 资源
-                </Button>
+              </div>
+              <div v-else class="text-center py-8">
+                <GitBranch class="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <p class="text-sm text-muted-foreground mb-4">
+                  暂无 GitOps 资源
+                </p>
+                <p class="text-xs text-muted-foreground">
+                  GitOps 资源会在项目初始化完成后自动创建
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -695,18 +703,17 @@ import {
   Activity,
   Check,
   X,
+  ExternalLink,
 } from 'lucide-vue-next'
 import { format } from 'date-fns'
 import { useProjects } from '@/composables/useProjects'
 import { trpc } from '@/lib/trpc'
 import EditProjectModal from '@/components/EditProjectModal.vue'
 import ProjectMemberTable from '@/components/ProjectMemberTable.vue'
-import RepositoriesTab from '@/components/RepositoriesTab.vue'
 import EnvironmentsTab from '@/components/EnvironmentsTab.vue'
 import PipelinesTab from '@/components/PipelinesTab.vue'
 import DeploymentsTab from '@/components/DeploymentsTab.vue'
 import ResourceTopology from '@/components/ResourceTopology.vue'
-import HealthDashboard from '@/components/HealthDashboard.vue'
 import InitializationProgress from '@/components/InitializationProgress.vue'
 
 const route = useRoute()
@@ -935,6 +942,15 @@ function getGitOpsStatusVariant(status: string): 'default' | 'secondary' | 'dest
   }
 }
 
+function getResourceStatusVariant(status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' {
+  if (!status) return 'outline'
+  const lowerStatus = status.toLowerCase()
+  if (lowerStatus.includes('ready') || lowerStatus.includes('success')) return 'default'
+  if (lowerStatus.includes('pending') || lowerStatus.includes('progressing')) return 'secondary'
+  if (lowerStatus.includes('failed') || lowerStatus.includes('error')) return 'destructive'
+  return 'outline'
+}
+
 function getGitOpsStatusLabel(status: string): string {
   switch (status) {
     case 'healthy':
@@ -972,6 +988,39 @@ function getPodStatusLabel(status: string): string {
     default:
       return '未知'
   }
+}
+
+function getUniqueEnvironments(resources: any[]): string[] {
+  const envs = new Set<string>()
+  resources.forEach(r => {
+    // 从 namespace 中提取环境名称，格式如: project-xxx-development
+    const match = r.namespace?.match(/-(\w+)$/)
+    if (match) envs.add(match[1])
+  })
+  return Array.from(envs).sort()
+}
+
+function getResourcesByEnvironment(resources: any[], env: string): any[] {
+  return resources.filter(r => r.namespace?.endsWith(`-${env}`))
+}
+
+function getEnvironmentLabel(env: string): string {
+  const labels: Record<string, string> = {
+    development: '开发环境',
+    staging: '预发布环境',
+    production: '生产环境',
+    testing: '测试环境'
+  }
+  return labels[env] || env
+}
+
+function getResourceTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    'git-repository': 'Git 仓库连接',
+    'kustomization': '部署配置',
+    'helm': 'Helm 发布'
+  }
+  return labels[type] || type
 }
 
 function getEnvironmentTypeVariant(type: string): 'default' | 'secondary' | 'destructive' | 'outline' {

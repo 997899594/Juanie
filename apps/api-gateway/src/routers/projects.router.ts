@@ -1,3 +1,4 @@
+import { REDIS } from '@juanie/core/tokens'
 import {
   archiveProjectSchema,
   createProjectSchema,
@@ -10,13 +11,16 @@ import {
   restoreProjectSchema,
   updateProjectSchema,
 } from '@juanie/core-types'
-import { OneClickDeployService, ProjectsService } from '@juanie/service-business'
+import {
+  ProjectMembersService,
+  ProjectStatusService,
+  ProjectsService,
+} from '@juanie/service-business'
 import { StorageService } from '@juanie/service-foundation'
 import { Inject, Injectable } from '@nestjs/common'
+import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import type Redis from 'ioredis'
-import { REDIS } from '@juanie/core-tokens'
-import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'
 
@@ -25,8 +29,9 @@ export class ProjectsRouter {
   constructor(
     private readonly trpc: TrpcService,
     private readonly projectsService: ProjectsService,
+    private readonly projectMembers: ProjectMembersService,
+    private readonly projectStatus: ProjectStatusService,
     private readonly storageService: StorageService,
-    private readonly oneClickDeploy: OneClickDeployService,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
@@ -137,8 +142,15 @@ export class ProjectsRouter {
         )
         .mutation(async ({ ctx, input }) => {
           try {
-            const { projectId, ...data } = input
-            return await this.projectsService.addMember(ctx.user.id, projectId, data)
+            const { projectId, memberId, role, ...rest } = input
+            // 映射 'developer' 到 'member'
+            const mappedRole = (role === 'developer' ? 'member' : role) as
+              | 'owner'
+              | 'admin'
+              | 'member'
+              | 'viewer'
+            const data = { userId: memberId, role: mappedRole, ...rest }
+            return await this.projectMembers.addMember(ctx.user.id, projectId, data)
           } catch (error) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -152,7 +164,7 @@ export class ProjectsRouter {
         .input(projectIdSchema)
         .query(async ({ ctx, input }) => {
           try {
-            return await this.projectsService.listMembers(ctx.user.id, input.projectId)
+            return await this.projectMembers.listMembers(input.projectId)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -172,8 +184,15 @@ export class ProjectsRouter {
         )
         .mutation(async ({ ctx, input }) => {
           try {
-            const { projectId, ...data } = input
-            return await this.projectsService.updateMemberRole(ctx.user.id, projectId, data)
+            const { projectId, memberId, role, ...rest } = input
+            // 映射 'developer' 到 'member'
+            const mappedRole = (role === 'developer' ? 'member' : role) as
+              | 'owner'
+              | 'admin'
+              | 'member'
+              | 'viewer'
+            const data = { userId: memberId, role: mappedRole, ...rest }
+            return await this.projectMembers.updateMemberRole(ctx.user.id, projectId, data)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -192,8 +211,9 @@ export class ProjectsRouter {
         )
         .mutation(async ({ ctx, input }) => {
           try {
-            const { projectId, ...data } = input
-            return await this.projectsService.removeMember(ctx.user.id, projectId, data)
+            const { projectId, memberId, ...rest } = input
+            const data = { userId: memberId, ...rest }
+            return await this.projectMembers.removeMember(ctx.user.id, projectId, data)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -213,7 +233,7 @@ export class ProjectsRouter {
         .mutation(async ({ ctx, input }) => {
           try {
             const { projectId, ...data } = input
-            return await this.projectsService.assignTeam(ctx.user.id, projectId, data)
+            return await this.projectMembers.assignTeam(ctx.user.id, projectId, data)
           } catch (error) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -227,7 +247,7 @@ export class ProjectsRouter {
         .input(projectIdSchema)
         .query(async ({ ctx, input }) => {
           try {
-            return await this.projectsService.listTeams(ctx.user.id, input.projectId)
+            return await this.projectMembers.listTeams(input.projectId)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -247,7 +267,7 @@ export class ProjectsRouter {
         .mutation(async ({ ctx, input }) => {
           try {
             const { projectId, ...data } = input
-            return await this.projectsService.removeTeam(ctx.user.id, projectId, data)
+            return await this.projectMembers.removeTeam(ctx.user.id, projectId, data)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -348,7 +368,7 @@ export class ProjectsRouter {
         .input(getProjectStatusSchema)
         .query(async ({ ctx, input }) => {
           try {
-            return await this.projectsService.getStatus(ctx.user.id, input.projectId)
+            return await this.projectStatus.getStatus(input.projectId)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -362,7 +382,7 @@ export class ProjectsRouter {
         .input(getProjectHealthSchema)
         .query(async ({ ctx, input }) => {
           try {
-            return await this.projectsService.getHealth(ctx.user.id, input.projectId)
+            return await this.projectStatus.getHealth(input.projectId)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -376,7 +396,7 @@ export class ProjectsRouter {
         .input(archiveProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
-            return await this.projectsService.archive(ctx.user.id, input.projectId)
+            return await this.projectStatus.archive(input.projectId)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -390,7 +410,7 @@ export class ProjectsRouter {
         .input(restoreProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
-            return await this.projectsService.restore(ctx.user.id, input.projectId)
+            return await this.projectStatus.restore(input.projectId)
           } catch (error) {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -406,17 +426,19 @@ export class ProjectsRouter {
           return observable<any>((emit) => {
             const subscriber = this.redis.duplicate()
             const channel = `project:${input.projectId}`
-            
+
             subscriber.subscribe(channel)
 
             subscriber.on('message', (_channel, message) => {
               try {
                 const event = JSON.parse(message)
                 emit.next(event)
-                
+
                 // 如果完成或失败，自动关闭连接
-                if (event.type === 'initialization.completed' || 
-                    event.type === 'initialization.failed') {
+                if (
+                  event.type === 'initialization.completed' ||
+                  event.type === 'initialization.failed'
+                ) {
                   emit.complete()
                 }
               } catch (error) {
@@ -465,59 +487,6 @@ export class ProjectsRouter {
               subscriber.quit()
             }
           })
-        }),
-
-      // 一键部署
-      oneClickDeploy: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectName: z.string(),
-            templateId: z.string(),
-            gitProvider: z.enum(['github', 'gitlab']),
-            organizationId: z.string(),
-            description: z.string().optional(),
-            variables: z.record(z.string(), z.string()).optional(),
-          }),
-        )
-        .mutation(async ({ ctx, input }) => {
-          try {
-            return await this.oneClickDeploy.deploy({
-              ...input,
-              userId: ctx.user.id,
-            })
-          } catch (error) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: error instanceof Error ? error.message : '一键部署失败',
-            })
-          }
-        }),
-
-      // 获取部署状态
-      getDeployStatus: this.trpc.protectedProcedure
-        .input(projectIdSchema)
-        .query(async ({ input }) => {
-          try {
-            return await this.oneClickDeploy.getDeployStatus(input.projectId)
-          } catch (error) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: error instanceof Error ? error.message : '获取部署状态失败',
-            })
-          }
-        }),
-
-      // 估算部署时间
-      estimateDeployTime: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            templateId: z.string(),
-          }),
-        )
-        .query(async ({ input }) => {
-          return {
-            estimatedTime: this.oneClickDeploy.estimateDeployTime(input.templateId),
-          }
         }),
 
       // getById 别名（兼容前端）
@@ -579,7 +548,7 @@ export class ProjectsRouter {
         list: this.trpc.protectedProcedure
           .input(z.object({ projectId: z.string() }))
           .query(async ({ ctx, input }) => {
-            return await this.projectsService.listMembers(ctx.user.id, input.projectId)
+            return await this.projectMembers.listMembers(input.projectId)
           }),
 
         add: this.trpc.protectedProcedure
@@ -591,8 +560,15 @@ export class ProjectsRouter {
             }),
           )
           .mutation(async ({ ctx, input }) => {
-            const { projectId, ...data } = input
-            return await this.projectsService.addMember(ctx.user.id, projectId, data)
+            const { projectId, memberId, role, ...rest } = input
+            // 映射 'developer' 到 'member'
+            const mappedRole = (role === 'developer' ? 'member' : role) as
+              | 'owner'
+              | 'admin'
+              | 'member'
+              | 'viewer'
+            const data = { userId: memberId, role: mappedRole, ...rest }
+            return await this.projectMembers.addMember(ctx.user.id, projectId, data)
           }),
 
         remove: this.trpc.protectedProcedure
@@ -603,8 +579,9 @@ export class ProjectsRouter {
             }),
           )
           .mutation(async ({ ctx, input }) => {
-            const { projectId, ...data } = input
-            return await this.projectsService.removeMember(ctx.user.id, projectId, data)
+            const { projectId, memberId, ...rest } = input
+            const data = { userId: memberId, ...rest }
+            return await this.projectMembers.removeMember(ctx.user.id, projectId, data)
           }),
       }),
     })

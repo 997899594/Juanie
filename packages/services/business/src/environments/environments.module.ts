@@ -1,4 +1,4 @@
-import { DatabaseModule } from '@juanie/core-database/module'
+import { DatabaseModule } from '@juanie/core/database'
 import { Module } from '@nestjs/common'
 import { EnvironmentsService } from './environments.service'
 

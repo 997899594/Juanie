@@ -1,5 +1,5 @@
-import * as schema from '@juanie/core-database/schemas'
-import { DATABASE } from '@juanie/core-tokens'
+import * as schema from '@juanie/core/database'
+import { DATABASE } from '@juanie/core/tokens'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { desc, eq } from 'drizzle-orm'

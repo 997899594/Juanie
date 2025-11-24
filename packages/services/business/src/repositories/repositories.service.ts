@@ -1,5 +1,5 @@
-import * as schema from '@juanie/core-database/schemas'
-import { DATABASE } from '@juanie/core-tokens'
+import * as schema from '@juanie/core/database'
+import { DATABASE } from '@juanie/core/tokens'
 import type { ConnectRepositoryInput } from '@juanie/core-types'
 import { OAuthAccountsService } from '@juanie/service-foundation'
 import { GitProviderService } from '../gitops/git-providers/git-provider.service'

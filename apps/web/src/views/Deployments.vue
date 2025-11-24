@@ -78,10 +78,9 @@
                     class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                     @click.stop
                   >
+                    <ExternalLink class="h-3 w-3" />
                     查看提交
                   </a> -->
-                    <ExternalLink class="h-3 w-3" />
-                  </a>
                 </div>
               </div>
             </div>

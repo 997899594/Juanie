@@ -1,12 +1,12 @@
-import * as schema from '@juanie/core-database/schemas'
-import { PIPELINE_QUEUE } from '@juanie/core-queue/tokens'
-import { DATABASE } from '@juanie/core-tokens'
+import * as schema from '@juanie/core/database'
+import { PIPELINE_QUEUE } from '@juanie/core/queue'
+import { DATABASE } from '@juanie/core/tokens'
+import { generateId } from '@juanie/core/utils'
 import type {
   CreatePipelineInput,
   TriggerPipelineInput,
   UpdatePipelineInput,
 } from '@juanie/core-types'
-import { generateId } from '@juanie/core-utils/id'
 import { Inject, Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { and, desc, eq } from 'drizzle-orm'

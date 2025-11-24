@@ -1,4 +1,4 @@
-import { Trace } from '@juanie/core-observability'
+import { Trace } from '@juanie/core/observability'
 import { Injectable, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Ollama } from 'ollama'

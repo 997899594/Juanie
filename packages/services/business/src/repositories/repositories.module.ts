@@ -1,4 +1,4 @@
-import { DatabaseModule } from '@juanie/core-database/module'
+import { DatabaseModule } from '@juanie/core/database'
 import { AuthModule } from '@juanie/service-foundation'
 import { GitProvidersModule } from '../gitops/git-providers/git-providers.module'
 import { Module } from '@nestjs/common'

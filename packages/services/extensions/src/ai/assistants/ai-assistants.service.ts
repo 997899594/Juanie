@@ -1,6 +1,6 @@
-import * as schema from '@juanie/core-database/schemas'
-import { Trace } from '@juanie/core-observability'
-import { DATABASE } from '@juanie/core-tokens'
+import * as schema from '@juanie/core/database'
+import { Trace } from '@juanie/core/observability'
+import { DATABASE } from '@juanie/core/tokens'
 import type {
   ChatWithAssistantInput,
   CreateAIAssistantInput,

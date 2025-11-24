@@ -12,10 +12,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@juanie/core-database": "workspace:*",
-    "@juanie/core-tokens": "workspace:*",
+    "@juanie/core": "workspace:*",
     "@juanie/core-types": "workspace:*",
-    "@juanie/core-utils": "workspace:*",
     "@juanie/service-foundation": "workspace:*",
     "@juanie/service-business": "workspace:*",
     "@nestjs/common": "^11.1.7",

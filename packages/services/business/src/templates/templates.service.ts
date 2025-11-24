@@ -1,4 +1,4 @@
-import { Trace } from '@juanie/core-observability'
+import { Trace } from '@juanie/core/observability'
 import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/core-types'
 import { Injectable } from '@nestjs/common'
 import { readFile } from 'fs/promises'

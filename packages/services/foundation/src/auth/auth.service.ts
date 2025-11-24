@@ -1,7 +1,7 @@
-import * as schema from '@juanie/core-database/schemas'
-import { DATABASE, REDIS } from '@juanie/core-tokens'
+import * as schema from '@juanie/core/database'
+import { DATABASE, REDIS } from '@juanie/core/tokens'
+import { generateId } from '@juanie/core/utils'
 import type { CreateUserFromOAuthInput, OAuthUrlResponse } from '@juanie/core-types'
-import { generateId } from '@juanie/core-utils/id'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { GitHub, GitLab } from 'arctic'
@@ -45,11 +45,11 @@ export class AuthService {
     const state = generateId()
     // 请求所有必要的权限
     const url = this.github.createAuthorizationURL(state, [
-      'user:email',        // 获取用户邮箱
-      'repo',              // 完整的仓库访问权限（读写公开和私有仓库）
-      'workflow',          // 管理 GitHub Actions workflows
-      'admin:repo_hook',   // 管理仓库 webhooks
-      'delete_repo',       // 删除仓库
+      'user:email', // 获取用户邮箱
+      'repo', // 完整的仓库访问权限（读写公开和私有仓库）
+      'workflow', // 管理 GitHub Actions workflows
+      'admin:repo_hook', // 管理仓库 webhooks
+      'delete_repo', // 删除仓库
     ])
 
     // 存储 state 到 Redis（10 分钟过期），标记为 github
@@ -102,28 +102,33 @@ export class AuthService {
       const emailsResponse = await fetch('https://api.github.com/user/emails', {
         headers: { Authorization: `Bearer ${tokens.accessToken()}` },
       })
-      
+
       if (!emailsResponse.ok) {
-        console.error('[GitHub OAuth] 获取邮箱列表失败:', emailsResponse.status, emailsResponse.statusText)
+        console.error(
+          '[GitHub OAuth] 获取邮箱列表失败:',
+          emailsResponse.status,
+          emailsResponse.statusText,
+        )
         throw new Error('无法获取 GitHub 邮箱列表，请确保授权了 user:email 权限')
       }
-      
+
       const emails = (await emailsResponse.json()) as Array<{
         email: string
         primary: boolean
         verified: boolean
       }>
-      
+
       console.log('[GitHub OAuth] 获取到邮箱列表:', emails)
-      
+
       // 优先使用 primary + verified 的邮箱
       const primaryEmail = emails.find((e) => e.primary && e.verified)
-      email = primaryEmail?.email || emails.find((e) => e.verified)?.email || emails[0]?.email || null
-      
+      email =
+        primaryEmail?.email || emails.find((e) => e.verified)?.email || emails[0]?.email || null
+
       if (!email) {
         throw new Error('无法获取 GitHub 邮箱，请确保至少有一个已验证的邮箱')
       }
-      
+
       console.log('[GitHub OAuth] 使用邮箱:', email)
     } else {
       console.log('[GitHub OAuth] 从用户信息获取到邮箱:', email)
@@ -151,13 +156,10 @@ export class AuthService {
     const state = generateId()
     // 请求所有必要的权限
     const url = this.gitlab.createAuthorizationURL(state, [
-      'api',                  // 完整 API 访问（包含所有操作）
-      'read_user',            // 读取用户信息
-      'read_repository',      // 读取仓库
-      'write_repository',     // 写入仓库（创建、推送等）
-      'read_registry',        // 读取容器镜像仓库
-      'write_registry',       // 写入容器镜像仓库
-      'sudo',                 // 管理员权限（如果需要）
+      'api', // 完整 API 访问（包含所有操作）
+      'read_user', // 读取用户信息
+      'read_repository', // 读取仓库
+      'write_repository', // 写入仓库（创建、推送等）
     ])
 
     await this.redis.setex(`oauth:gitlab:${state}`, 600, 'pending')
@@ -250,7 +252,7 @@ export class AuthService {
       if (isNewUser) {
         // slug 使用时间戳 + 随机数，用户不可见
         const orgSlug = `org-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-        
+
         const [org] = await tx
           .insert(schema.organizations)
           .values({
@@ -479,7 +481,7 @@ export class AuthService {
       return { url: url.toString(), state }
     } else {
       const url = this.gitlab.createAuthorizationURL(state, [
-        'api',                  // 完整 API 访问
+        'api', // 完整 API 访问
         'read_user',
         'read_repository',
         'write_repository',

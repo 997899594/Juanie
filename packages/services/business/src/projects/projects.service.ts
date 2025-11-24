@@ -1,6 +1,6 @@
-import * as schema from '@juanie/core-database/schemas'
-import { Trace } from '@juanie/core-observability'
-import { DATABASE, REDIS } from '@juanie/core-tokens'
+import * as schema from '@juanie/core/database'
+import { Trace } from '@juanie/core/observability'
+import { DATABASE, REDIS } from '@juanie/core/tokens'
 import type {
   CreateProjectInput,
   CreateProjectWithTemplateInputType,
@@ -12,7 +12,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { Redis } from 'ioredis'
-import { HealthMonitorService } from './health-monitor.service'
 import { ProjectOrchestrator } from './project-orchestrator.service'
 
 @Injectable()
@@ -23,7 +22,6 @@ export class ProjectsService {
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private orchestrator: ProjectOrchestrator,
     @Inject(REDIS) private redis: Redis,
-    private healthMonitor: HealthMonitorService,
     private auditLogs: AuditLogsService,
   ) {}
 
@@ -92,7 +90,7 @@ export class ProjectsService {
     const baseData = data as CreateProjectInput
     // 自动生成 slug
     const slug = `project-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-    
+
     const [project] = await this.db
       .insert(schema.projects)
       .values({
@@ -562,70 +560,6 @@ export class ProjectsService {
     })
 
     return { success: true }
-  }
-
-  // 获取项目健康度
-  @Trace('projects.getHealth')
-  async getHealth(userId: string, projectId: string) {
-    // 先检查权限
-    const project = await this.get(userId, projectId)
-    if (!project) {
-      throw new Error('项目不存在')
-    }
-
-    // 使用 HealthMonitor 计算健康度
-    return await this.healthMonitor.calculateHealth(projectId)
-  }
-
-  // 更新项目健康度（定时任务调用）
-  @Trace('projects.updateHealth')
-  async updateHealth(projectId: string) {
-    // 计算健康度
-    const health = await this.healthMonitor.calculateHealth(projectId)
-
-    // 更新数据库
-    await this.db
-      .update(schema.projects)
-      .set({
-        healthScore: health.score,
-        healthStatus: health.status,
-        lastHealthCheck: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.projects.id, projectId))
-
-    return health
-  }
-
-  // 批量更新所有活跃项目的健康度（定时任务调用）
-  @Trace('projects.updateAllHealth')
-  async updateAllHealth() {
-    // 获取所有活跃项目
-    const activeProjects = await this.db
-      .select({ id: schema.projects.id })
-      .from(schema.projects)
-      .where(and(eq(schema.projects.status, 'active'), isNull(schema.projects.deletedAt)))
-
-    const results = []
-    for (const project of activeProjects) {
-      try {
-        const health = await this.updateHealth(project.id)
-        results.push({ projectId: project.id, success: true, health })
-      } catch (error) {
-        results.push({
-          projectId: project.id,
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })
-      }
-    }
-
-    return {
-      total: activeProjects.length,
-      successful: results.filter((r) => r.success).length,
-      failed: results.filter((r) => !r.success).length,
-      results,
-    }
   }
 
   // 添加项目成员

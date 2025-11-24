@@ -240,6 +240,16 @@ export interface ProjectStatus {
     defaultBranch: string | null
   }>
 
+  // 主仓库（第一个仓库的快捷访问）
+  repository?: {
+    id: string
+    provider: 'github' | 'gitlab'
+    fullName: string
+    cloneUrl: string
+    defaultBranch: string | null
+    status?: string
+  } | null
+
   gitopsResources: Array<{
     id: string
     type: 'kustomization' | 'helm'

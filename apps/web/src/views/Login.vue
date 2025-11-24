@@ -172,8 +172,8 @@ onMounted(async () => {
       
       try {
         const orgs = await trpc.organizations.list.query()
-        if (orgs.length > 0 && !appStore.currentOrganizationId) {
-          appStore.setCurrentOrganization(orgs[0].id)
+        if (orgs && orgs.length > 0 && !appStore.currentOrganizationId) {
+          appStore.setCurrentOrganization(orgs[0]!.id)
         }
       } catch (orgErr) {
         console.warn('获取组织列表失败:', orgErr)

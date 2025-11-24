@@ -1,6 +1,6 @@
-import * as schema from '@juanie/core-database/schemas'
-import { DEPLOYMENT_QUEUE } from '@juanie/core-queue'
-import { DATABASE } from '@juanie/core-tokens'
+import * as schema from '@juanie/core/database'
+import { DEPLOYMENT_QUEUE } from '@juanie/core/queue'
+import { DATABASE } from '@juanie/core/tokens'
 import type {
   CreateEnvironmentInput,
   EnvironmentUpdatedEvent,

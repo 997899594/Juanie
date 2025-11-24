@@ -1,6 +1,7 @@
+import { Injectable, Logger } from '@nestjs/common'
 import { EnvironmentsService } from '../../../environments/environments.service'
 import { FluxService } from '../../../gitops/flux/flux.service'
-import { Injectable, Logger } from '@nestjs/common'
+import { FluxResourcesService } from '../../../gitops/flux/flux-resources.service'
 import type { InitializationContext, StateHandler } from '../types'
 
 /**
@@ -13,6 +14,7 @@ export class CreateGitOpsHandler implements StateHandler {
 
   constructor(
     private flux: FluxService,
+    private fluxResources: FluxResourcesService,
     private environments: EnvironmentsService,
   ) {}
 
@@ -30,6 +32,11 @@ export class CreateGitOpsHandler implements StateHandler {
       return
     }
 
+    if (!this.flux.isInstalled()) {
+      this.logger.warn('Flux not installed, skipping GitOps resource creation')
+      return
+    }
+
     this.logger.log(`Creating GitOps resources for project: ${context.projectId}`)
 
     // 获取所有环境
@@ -40,7 +47,7 @@ export class CreateGitOpsHandler implements StateHandler {
     // 为每个环境创建 GitOps 资源
     const results = await Promise.allSettled(
       environments.map((environment) =>
-        this.flux.createGitOpsResource({
+        this.fluxResources.createGitOpsResource({
           projectId: context.projectId!,
           environmentId: environment.id,
           repositoryId: context.repositoryId!,

@@ -15,60 +15,6 @@ export function useGitOps() {
   const fluxHealth = ref<any>(null)
 
   // ============================================
-  // Flux 管理
-  // ============================================
-
-  /**
-   * 安装 Flux
-   */
-  async function installFlux(options?: { namespace?: string; version?: string }) {
-    loading.value = true
-    try {
-      const result = await trpc.gitops.installFlux.mutate(options || {})
-      toast.success('Flux 安装成功', `版本 ${result.version}`)
-      return result
-    } catch (error: any) {
-      toast.error('Flux 安装失败', error.message)
-      throw error
-    } finally {
-      loading.value = false
-    }
-  }
-
-  /**
-   * 检查 Flux 健康状态
-   */
-  async function checkFluxHealth() {
-    loading.value = true
-    try {
-      const result = await trpc.gitops.checkFluxHealth.query()
-      fluxHealth.value = result
-      return result
-    } catch (error: any) {
-      toast.error('检查 Flux 状态失败', error.message)
-      throw error
-    } finally {
-      loading.value = false
-    }
-  }
-
-  /**
-   * 卸载 Flux
-   */
-  async function uninstallFlux() {
-    loading.value = true
-    try {
-      await trpc.gitops.uninstallFlux.mutate()
-      toast.success('Flux 已卸载')
-      fluxHealth.value = null
-    } catch (error: any) {
-      toast.error('Flux 卸载失败', error.message)
-      throw error
-    } finally {
-      loading.value = false
-    }
-  }
-
   // ============================================
   // GitOps 资源管理
   // ============================================
@@ -121,7 +67,7 @@ export function useGitOps() {
   async function getGitOpsResource(resourceId: string) {
     loading.value = true
     try {
-      const result = await trpc.gitops.getGitOpsResource.query({ resourceId })
+      const result = await trpc.gitops.getGitOpsResource.query({ id: resourceId })
       return result
     } catch (error: any) {
       toast.error('获取资源详情失败', error.message)
@@ -157,7 +103,7 @@ export function useGitOps() {
   async function deleteGitOpsResource(resourceId: string) {
     loading.value = true
     try {
-      await trpc.gitops.deleteGitOpsResource.mutate({ resourceId })
+      await trpc.gitops.deleteGitOpsResource.mutate({ id: resourceId })
       toast.success('GitOps 资源已删除')
       // 从列表中移除
       resources.value = resources.value.filter((r) => r.id !== resourceId)
@@ -213,7 +159,24 @@ export function useGitOps() {
   }) {
     loading.value = true
     try {
-      const result = await trpc.gitops.deployWithGitOps.mutate(data)
+      // 转换参数格式以匹配 router 期望的格式
+      const payload = {
+        projectId: data.projectId,
+        environmentId: data.environmentId,
+        config: {
+          image: data.changes.image,
+          replicas: data.changes.replicas,
+          resources: data.changes.resources
+            ? {
+                cpu: data.changes.resources.requests?.cpu || data.changes.resources.limits?.cpu,
+                memory:
+                  data.changes.resources.requests?.memory || data.changes.resources.limits?.memory,
+              }
+            : undefined,
+        },
+        commitMessage: data.commitMessage,
+      }
+      const result = await trpc.gitops.deployWithGitOps.mutate(payload)
       toast.success('部署已提交', result.message)
       return result
     } catch (error: any) {
@@ -297,11 +260,6 @@ export function useGitOps() {
     loading,
     resources,
     fluxHealth,
-
-    // Flux 管理
-    installFlux,
-    checkFluxHealth,
-    uninstallFlux,
 
     // GitOps 资源管理
     createGitOpsResource,

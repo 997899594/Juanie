@@ -1,15 +1,15 @@
 import { Module } from '@nestjs/common'
-import { ProjectsModule } from './projects/projects.module'
 import { DeploymentsModule } from './deployments/deployments.module'
 import { EnvironmentsModule } from './environments/environments.module'
-import { RepositoriesModule } from './repositories/repositories.module'
-import { PipelinesModule } from './pipelines/pipelines.module'
-import { TemplatesModule } from './templates/templates.module'
-import { GitOpsModule } from './gitops/git-ops/git-ops.module'
 import { FluxModule } from './gitops/flux/flux.module'
-import { K3sModule } from './gitops/k3s/k3s.module'
+import { GitOpsModule } from './gitops/git-ops/git-ops.module'
 import { GitProvidersModule } from './gitops/git-providers/git-providers.module'
-import { GitOpsOrchestratorModule } from './gitops/gitops-orchestrator.module'
+import { K3sModule } from './gitops/k3s/k3s.module'
+import { PipelinesModule } from './pipelines/pipelines.module'
+import { ProjectsModule } from './projects/projects.module'
+import { BusinessQueueModule } from './queue/queue.module'
+import { RepositoriesModule } from './repositories/repositories.module'
+import { TemplatesModule } from './templates/templates.module'
 
 /**
  * Business Module - 业务层模块
@@ -30,7 +30,8 @@ import { GitOpsOrchestratorModule } from './gitops/gitops-orchestrator.module'
     FluxModule,
     K3sModule,
     GitProvidersModule,
-    GitOpsOrchestratorModule,
+    // Queue Workers
+    BusinessQueueModule,
   ],
   exports: [
     ProjectsModule,
@@ -43,7 +44,6 @@ import { GitOpsOrchestratorModule } from './gitops/gitops-orchestrator.module'
     FluxModule,
     K3sModule,
     GitProvidersModule,
-    GitOpsOrchestratorModule,
   ],
 })
 export class BusinessModule {}

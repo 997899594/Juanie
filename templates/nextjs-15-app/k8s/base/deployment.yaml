@@ -18,14 +18,14 @@ spec:
     spec:
       containers:
       - name: nextjs
-        image: {{ registry }}/{{ appName }}:{{ .imageTag | default "latest" }}
+        image: {{ registry }}/{{ appName }}:{{#if imageTag}}{{ imageTag }}{{else}}latest{{/if}}
         ports:
         - name: http
           containerPort: {{ port }}
           protocol: TCP
         env:
         - name: NODE_ENV
-          value: {{ .nodeEnv | default "production" }}
+          value: {{#if nodeEnv}}{{ nodeEnv }}{{else}}production{{/if}}
         - name: PORT
           value: "{{ port }}"
         - name: NEXT_PUBLIC_APP_URL
@@ -85,11 +85,11 @@ spec:
         
         resources:
           requests:
-            cpu: {{ .resources.requests.cpu | default "200m" }}
-            memory: {{ .resources.requests.memory | default "512Mi" }}
+            cpu: {{#if resources.requests.cpu}}{{ resources.requests.cpu }}{{else}}200m{{/if}}
+            memory: {{#if resources.requests.memory}}{{ resources.requests.memory }}{{else}}512Mi{{/if}}
           limits:
-            cpu: {{ .resources.limits.cpu | default "1000m" }}
-            memory: {{ .resources.limits.memory | default "1Gi" }}
+            cpu: {{#if resources.limits.cpu}}{{ resources.limits.cpu }}{{else}}1000m{{/if}}
+            memory: {{#if resources.limits.memory}}{{ resources.limits.memory }}{{else}}1Gi{{/if}}
         
         securityContext:
           runAsNonRoot: true

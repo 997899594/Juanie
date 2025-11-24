@@ -1,5 +1,5 @@
-import { DatabaseModule } from '@juanie/core-database/module'
-import { QueueModule } from '@juanie/core-queue/module'
+import { DatabaseModule } from '@juanie/core/database'
+import { QueueModule } from '@juanie/core/queue'
 import { BusinessModule } from '@juanie/service-business'
 import { ExtensionsModule } from '@juanie/service-extensions'
 import { FoundationModule } from '@juanie/service-foundation'
@@ -10,7 +10,7 @@ import { TrpcModule } from './trpc/trpc.module'
 
 /**
  * App Module - 应用主模块
- * 
+ *
  * 三层服务架构：
  * - Foundation（基础层）：认证、用户、组织、团队、存储
  * - Business（业务层）：项目、部署、GitOps
@@ -27,7 +27,7 @@ import { TrpcModule } from './trpc/trpc.module'
     QueueModule,
     // Three-tier service architecture
     FoundationModule, // 基础层
-    BusinessModule, // 业务层
+    BusinessModule, // 业务层（包含业务 Workers）
     ExtensionsModule, // 扩展层
     // API module
     TrpcModule,

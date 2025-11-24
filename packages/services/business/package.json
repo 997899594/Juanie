@@ -12,14 +12,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@juanie/core-database": "workspace:*",
-    "@juanie/core-queue": "workspace:*",
-    "@juanie/core-tokens": "workspace:*",
+    "@juanie/core": "workspace:*",
     "@juanie/core-types": "workspace:*",
-    "@juanie/core-utils": "workspace:*",
     "@juanie/service-foundation": "workspace:*",
     "@nestjs/common": "^11.1.7",
     "@nestjs/core": "^11.1.7",
+    "@nestjs/event-emitter": "^3.0.1",
     "drizzle-orm": "^0.44.7",
     "ioredis": "^5.4.2"
   },

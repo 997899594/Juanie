@@ -1,8 +1,8 @@
-import { PROJECT_INITIALIZATION_QUEUE } from '@juanie/core-queue'
+import { PROJECT_INITIALIZATION_QUEUE } from '@juanie/core/queue'
 import { OAuthAccountsService } from '@juanie/service-foundation'
-import { RepositoriesService } from '../../../repositories/repositories.service'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { Queue } from 'bullmq'
+import { RepositoriesService } from '../../../repositories/repositories.service'
 import type { InitializationContext, StateHandler } from '../types'
 
 /**
@@ -76,18 +76,26 @@ export class SetupRepositoryHandler implements StateHandler {
 
   /**
    * 队列化仓库创建（慢速路径）
+   *
+   * 注意：使用 project-initialization 队列，因为它包含完整的 GitOps 资源创建逻辑
    */
   private async queueRepositoryCreation(
     context: InitializationContext,
     config: any,
   ): Promise<void> {
-    this.logger.log('Queueing repository creation')
+    this.logger.log('Queueing project initialization (repository + GitOps)')
 
-    const job = await this.queue.add('create-repository', {
+    // 使用 project-initialization worker，它会：
+    // 1. 创建 Git 仓库
+    // 2. 推送模板代码
+    // 3. 创建数据库记录
+    // 4. 创建 K8s GitOps 资源
+    const job = await this.queue.add('initialize-project', {
       projectId: context.projectId,
       userId: context.userId,
       organizationId: context.organizationId,
       repository: config,
+      templateId: context.templateId,
       environmentIds: context.environmentIds,
     })
 
@@ -95,7 +103,7 @@ export class SetupRepositoryHandler implements StateHandler {
     context.jobIds = context.jobIds || []
     context.jobIds.push(job.id!)
 
-    this.logger.log(`Repository creation queued: ${job.id}`)
+    this.logger.log(`Project initialization queued: ${job.id}`)
   }
 
   /**

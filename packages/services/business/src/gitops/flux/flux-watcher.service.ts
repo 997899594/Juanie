@@ -1,14 +1,16 @@
-import * as schema from '@juanie/core-database/schemas'
-import { DEPLOYMENT_QUEUE } from '@juanie/core-queue'
-import { DATABASE } from '@juanie/core-tokens'
+import * as schema from '@juanie/core/database'
+import { K3sEvents } from '@juanie/core/events'
+import { DEPLOYMENT_QUEUE } from '@juanie/core/queue'
+import { DATABASE } from '@juanie/core/tokens'
 import type { GitOpsSyncStatusEvent } from '@juanie/core-types'
-import { K3sService } from '../k3s/k3s.service'
 import * as k8s from '@kubernetes/client-node'
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { OnEvent } from '@nestjs/event-emitter'
 import type { Queue } from 'bullmq'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { K3sService } from '../k3s/k3s.service'
 import { FluxMetricsService } from './flux-metrics.service'
 
 interface FluxResourceEvent {
@@ -70,12 +72,21 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
         this.logger.log('ℹ️  开发环境：已禁用 TLS 证书验证')
       }
 
-      // 启动监听
-      await this.startWatching()
+      // 不在这里启动监听，等待 K3s 连接事件
     } catch (error: any) {
       // 静默失败，不影响应用启动
-      this.logger.log('ℹ️  Flux Watcher 未启动（Kubernetes 集群不可用）')
+      this.logger.warn('⚠️  Flux Watcher 初始化失败:', error.message)
     }
+  }
+
+  /**
+   * 监听 K3s 连接成功事件
+   * 当 K3s 连接成功后，自动启动 Flux 监听
+   */
+  @OnEvent(K3sEvents.CONNECTED)
+  async handleK3sConnected() {
+    this.logger.log('收到 K3s 连接成功事件，启动 Flux 监听')
+    await this.startWatching()
   }
 
   async onModuleDestroy() {

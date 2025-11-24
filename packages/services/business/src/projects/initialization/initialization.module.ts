@@ -1,10 +1,9 @@
-import { AuditLogsModule } from '@juanie/service-extensions'
+import { AuditLogsModule, NotificationsModule } from '@juanie/service-extensions'
 import { AuthModule } from '@juanie/service-foundation'
+import { Module } from '@nestjs/common'
 import { EnvironmentsModule } from '../../environments/environments.module'
 import { FluxModule } from '../../gitops/flux/flux.module'
-import { NotificationsModule } from '@juanie/service-extensions'
 import { RepositoriesModule } from '../../repositories/repositories.module'
-import { Module } from '@nestjs/common'
 import { TemplatesModule } from '../templates'
 import { CreateEnvironmentsHandler } from './handlers/create-environments.handler'
 import { CreateGitOpsHandler } from './handlers/create-gitops.handler'
@@ -13,7 +12,6 @@ import { FinalizeHandler } from './handlers/finalize.handler'
 import { LoadTemplateHandler } from './handlers/load-template.handler'
 import { RenderTemplateHandler } from './handlers/render-template.handler'
 import { SetupRepositoryHandler } from './handlers/setup-repository.handler'
-import { ProgressTrackerService } from './progress-tracker.service'
 import { ProjectInitializationStateMachine } from './state-machine'
 
 @Module({
@@ -29,9 +27,8 @@ import { ProjectInitializationStateMachine } from './state-machine'
     AuthModule,
   ],
   providers: [
-    // 状态机和进度追踪
+    // 状态机
     ProjectInitializationStateMachine,
-    ProgressTrackerService,
     // 处理器
     CreateProjectHandler,
     LoadTemplateHandler,

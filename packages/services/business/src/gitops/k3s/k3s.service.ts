@@ -1,6 +1,12 @@
+import {
+  type K3sConnectedEvent,
+  type K3sConnectionFailedEvent,
+  K3sEvents,
+} from '@juanie/core/events'
 import * as k8s from '@kubernetes/client-node'
-import { Injectable, type OnModuleInit } from '@nestjs/common'
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 
 @Injectable()
 export class K3sService implements OnModuleInit {
@@ -8,8 +14,12 @@ export class K3sService implements OnModuleInit {
   private k8sApi!: k8s.CoreV1Api
   private appsApi!: k8s.AppsV1Api
   private isConnected = false
+  private readonly logger = new Logger(K3sService.name)
 
-  constructor(private config: ConfigService) {
+  constructor(
+    private config: ConfigService,
+    private eventEmitter: EventEmitter2,
+  ) {
     this.kc = new k8s.KubeConfig()
   }
 
@@ -18,14 +28,15 @@ export class K3sService implements OnModuleInit {
   }
 
   private async connect() {
-    try {
-      // 支持多个环境变量名
-      let kubeconfigPath =
-        this.config.get<string>('KUBECONFIG_PATH') || this.config.get<string>('K3S_KUBECONFIG_PATH')
+    // 支持多个环境变量名
+    let kubeconfigPath =
+      this.config.get<string>('KUBECONFIG_PATH') || this.config.get<string>('K3S_KUBECONFIG_PATH')
 
+    try {
       if (!kubeconfigPath) {
         // 尝试使用默认路径
         try {
+          console.log('ℹ️  K3S_KUBECONFIG_PATH 未设置，尝试使用默认路径')
           this.kc.loadFromDefault()
         } catch (_error) {
           // 默认路径不存在，静默跳过
@@ -34,6 +45,7 @@ export class K3sService implements OnModuleInit {
           return
         }
       } else {
+        console.log('📁 加载 kubeconfig:', kubeconfigPath)
         // 展开 ~ 符号
         if (kubeconfigPath.startsWith('~')) {
           const homeDir = process.env.HOME || process.env.USERPROFILE
@@ -67,11 +79,29 @@ export class K3sService implements OnModuleInit {
       // 测试连接
       await this.k8sApi.listNamespace()
       this.isConnected = true
-      console.log('✅ K3s 连接成功')
+      this.logger.log('✅ K3s 连接成功')
+
+      // 发出连接成功事件
+      this.eventEmitter.emit(K3sEvents.CONNECTED, {
+        timestamp: new Date(),
+        kubeconfigPath,
+      } as K3sConnectedEvent)
     } catch (error: any) {
       this.isConnected = false
-      console.warn('⚠️ K3s 连接失败:', error.message || error)
-      console.log('提示: 确保 K3s 集群正在运行，并且 kubeconfig 配置正确')
+      this.logger.warn(`⚠️ K3s 连接失败: ${error.message || error}`)
+      this.logger.log('提示: 确保 K3s 集群正在运行，并且 kubeconfig 配置正确')
+      this.logger.debug('调试信息:', {
+        kubeconfigPath,
+        K3S_SKIP_TLS_VERIFY: this.config.get<string>('K3S_SKIP_TLS_VERIFY'),
+        NODE_ENV: this.config.get<string>('NODE_ENV'),
+      })
+
+      // 发出连接失败事件
+      this.eventEmitter.emit(K3sEvents.CONNECTION_FAILED, {
+        timestamp: new Date(),
+        error: error.message || String(error),
+        kubeconfigPath,
+      } as K3sConnectionFailedEvent)
     }
   }
 

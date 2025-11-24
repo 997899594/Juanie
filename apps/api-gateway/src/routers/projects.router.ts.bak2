@@ -1,0 +1,621 @@
+import { REDIS } from '@juanie/core/tokens'
+import {
+  archiveProjectSchema,
+  createProjectSchema,
+  createProjectWithTemplateSchema,
+  deleteProjectSchema,
+  getProjectHealthSchema,
+  getProjectStatusSchema,
+  organizationIdQuerySchema,
+  projectIdSchema,
+  restoreProjectSchema,
+  updateProjectSchema,
+} from '@juanie/core-types'
+import {
+  OneClickDeployService,
+  ProjectMembersService,
+  ProjectStatusService,
+  ProjectsService,
+} from '@juanie/service-business'
+import { StorageService } from '@juanie/service-foundation'
+import { Inject, Injectable } from '@nestjs/common'
+import { TRPCError } from '@trpc/server'
+import { observable } from '@trpc/server/observable'
+import type Redis from 'ioredis'
+import { z } from 'zod'
+import { TrpcService } from '../trpc/trpc.service'
+
+@Injectable()
+export class ProjectsRouter {
+  constructor(
+    private readonly trpc: TrpcService,
+    private readonly projectsService: ProjectsService,
+    private readonly projectMembers: ProjectMembersService,
+    private readonly projectStatus: ProjectStatusService,
+    private readonly storageService: StorageService,
+    private readonly oneClickDeploy: OneClickDeployService,
+    @Inject(REDIS) private readonly redis: Redis,
+  ) {}
+
+  get router() {
+    return this.trpc.router({
+      // 创建项目（统一接口，支持基础创建和带模板/仓库配置）
+      create: this.trpc.protectedProcedure
+        .input(createProjectWithTemplateSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.create(ctx.user.id, input)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '创建项目失败',
+            })
+          }
+        }),
+
+      // 创建项目（带模板和仓库配置）- 保留向后兼容
+      createWithTemplate: this.trpc.protectedProcedure
+        .input(createProjectWithTemplateSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.create(ctx.user.id, input)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '创建项目失败',
+            })
+          }
+        }),
+
+      // 列出组织的项目
+      list: this.trpc.protectedProcedure
+        .input(organizationIdQuerySchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.list(ctx.user.id, input.organizationId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取项目列表失败',
+            })
+          }
+        }),
+
+      // 获取项目详情
+      get: this.trpc.protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => {
+        try {
+          const project = await this.projectsService.get(ctx.user.id, input.projectId)
+
+          if (!project) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: '项目不存在',
+            })
+          }
+
+          return project
+        } catch (error) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: error instanceof Error ? error.message : '获取项目详情失败',
+          })
+        }
+      }),
+
+      // 更新项目
+      update: this.trpc.protectedProcedure
+        .input(updateProjectSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const { projectId, ...data } = input
+            return await this.projectsService.update(ctx.user.id, projectId, data)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '更新项目失败',
+            })
+          }
+        }),
+
+      // 删除项目
+      delete: this.trpc.protectedProcedure
+        .input(deleteProjectSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.projectsService.delete(ctx.user.id, input.projectId, {
+              repositoryAction: input.repositoryAction,
+            })
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '删除项目失败',
+            })
+          }
+        }),
+
+      // 添加成员
+      addMember: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string(),
+            memberId: z.string(),
+            role: z.enum(['admin', 'developer', 'viewer']),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const { projectId, ...data } = input
+            return await this.projectMembers.addMember(ctx.user.id, projectId, data)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '添加成员失败',
+            })
+          }
+        }),
+
+      // 列出项目成员
+      listMembers: this.trpc.protectedProcedure
+        .input(projectIdSchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            return await this.projectMembers.listMembers(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取成员列表失败',
+            })
+          }
+        }),
+
+      // 更新成员角色
+      updateMemberRole: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string(),
+            memberId: z.string(),
+            role: z.enum(['admin', 'developer', 'viewer']),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const { projectId, ...data } = input
+            return await this.projectMembers.updateMemberRole(ctx.user.id, projectId, data)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '更新成员角色失败',
+            })
+          }
+        }),
+
+      // 移除成员
+      removeMember: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string(),
+            memberId: z.string(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const { projectId, ...data } = input
+            return await this.projectMembers.removeMember(ctx.user.id, projectId, data)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '移除成员失败',
+            })
+          }
+        }),
+
+      // 分配团队
+      assignTeam: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string(),
+            teamId: z.string(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const { projectId, ...data } = input
+            return await this.projectMembers.assignTeam(ctx.user.id, projectId, data)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '分配团队失败',
+            })
+          }
+        }),
+
+      // 列出项目的团队
+      listTeams: this.trpc.protectedProcedure
+        .input(projectIdSchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            return await this.projectMembers.listTeams(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取团队列表失败',
+            })
+          }
+        }),
+
+      // 移除团队
+      removeTeam: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string(),
+            teamId: z.string(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            const { projectId, ...data } = input
+            return await this.projectMembers.removeTeam(ctx.user.id, projectId, data)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '移除团队失败',
+            })
+          }
+        }),
+
+      // 上传项目 Logo
+      uploadLogo: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string().uuid(),
+            file: z.string(), // Base64 编码的图片
+            contentType: z.string(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            // 验证图片类型
+            if (!this.storageService.isValidImageType(input.contentType)) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: '不支持的图片格式，请上传 JPG, PNG, GIF, WebP 或 SVG',
+              })
+            }
+
+            // 解码 Base64
+            const buffer = Buffer.from(input.file, 'base64')
+
+            // 验证文件大小（5MB）
+            if (!this.storageService.isValidFileSize(buffer.length)) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: '文件大小超过限制（最大 5MB）',
+              })
+            }
+
+            // 上传到 MinIO
+            const logoUrl = await this.storageService.uploadProjectLogo(
+              input.projectId,
+              buffer,
+              input.contentType,
+            )
+
+            // 更新项目
+            const project = await this.projectsService.uploadLogo(
+              ctx.user.id,
+              input.projectId,
+              logoUrl,
+            )
+
+            return {
+              success: true,
+              logoUrl,
+              project,
+            }
+          } catch (error) {
+            if (error instanceof TRPCError) {
+              throw error
+            }
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: error instanceof Error ? error.message : '上传 Logo 失败',
+            })
+          }
+        }),
+
+      // 删除项目 Logo
+      deleteLogo: this.trpc.protectedProcedure
+        .input(projectIdSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            // 删除 MinIO 中的文件
+            await this.storageService.deleteProjectLogo(input.projectId)
+
+            // 更新项目（清空 logoUrl）
+            const project = await this.projectsService.uploadLogo(
+              ctx.user.id,
+              input.projectId,
+              null,
+            )
+
+            return {
+              success: true,
+              project,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: error instanceof Error ? error.message : '删除 Logo 失败',
+            })
+          }
+        }),
+
+      // 获取项目完整状态
+      getStatus: this.trpc.protectedProcedure
+        .input(getProjectStatusSchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            return await this.projectStatus.getStatus(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取项目状态失败',
+            })
+          }
+        }),
+
+      // 获取项目健康度
+      getHealth: this.trpc.protectedProcedure
+        .input(getProjectHealthSchema)
+        .query(async ({ ctx, input }) => {
+          try {
+            return await this.projectStatus.getHealth(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取项目健康度失败',
+            })
+          }
+        }),
+
+      // 归档项目
+      archive: this.trpc.protectedProcedure
+        .input(archiveProjectSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.projectStatus.archive(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '归档项目失败',
+            })
+          }
+        }),
+
+      // 恢复项目
+      restore: this.trpc.protectedProcedure
+        .input(restoreProjectSchema)
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.projectStatus.restore(ctx.user.id, input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '恢复项目失败',
+            })
+          }
+        }),
+
+      // 订阅项目初始化进度（SSE 实现）
+      onInitProgress: this.trpc.procedure
+        .input(z.object({ projectId: z.string() }))
+        .subscription(({ input }) => {
+          return observable<any>((emit) => {
+            const subscriber = this.redis.duplicate()
+            const channel = `project:${input.projectId}`
+
+            subscriber.subscribe(channel)
+
+            subscriber.on('message', (_channel, message) => {
+              try {
+                const event = JSON.parse(message)
+                emit.next(event)
+
+                // 如果完成或失败，自动关闭连接
+                if (
+                  event.type === 'initialization.completed' ||
+                  event.type === 'initialization.failed'
+                ) {
+                  emit.complete()
+                }
+              } catch (error) {
+                console.error('Failed to parse event:', error)
+              }
+            })
+
+            subscriber.on('error', (error) => {
+              console.error('Redis subscription error:', error)
+              emit.error(error)
+            })
+
+            // 清理函数
+            return () => {
+              subscriber.unsubscribe(channel)
+              subscriber.quit()
+            }
+          })
+        }),
+
+      // 订阅任务进度（通用 Redis 频道 job:{id}）
+      onJobProgress: this.trpc.procedure
+        .input(z.object({ jobId: z.string() }))
+        .subscription(({ input }) => {
+          return observable<any>((emit) => {
+            const subscriber = this.redis.duplicate()
+            const channel = `job:${input.jobId}`
+            subscriber.subscribe(channel)
+
+            subscriber.on('message', (_channel, message) => {
+              try {
+                const event = JSON.parse(message)
+                emit.next(event)
+              } catch (error) {
+                console.error('Failed to parse job progress event:', error)
+              }
+            })
+
+            subscriber.on('error', (error) => {
+              console.error('Redis subscription error:', error)
+              emit.error(error)
+            })
+
+            return () => {
+              subscriber.unsubscribe(channel)
+              subscriber.quit()
+            }
+          })
+        }),
+
+      // 一键部署
+      oneClickDeploy: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectName: z.string(),
+            templateId: z.string(),
+            gitProvider: z.enum(['github', 'gitlab']),
+            organizationId: z.string(),
+            description: z.string().optional(),
+            variables: z.record(z.string(), z.string()).optional(),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          try {
+            return await this.oneClickDeploy.deploy({
+              ...input,
+              userId: ctx.user.id,
+            })
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '一键部署失败',
+            })
+          }
+        }),
+
+      // 获取部署状态
+      getDeployStatus: this.trpc.protectedProcedure
+        .input(projectIdSchema)
+        .query(async ({ input }) => {
+          try {
+            return await this.oneClickDeploy.getDeployStatus(input.projectId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: error instanceof Error ? error.message : '获取部署状态失败',
+            })
+          }
+        }),
+
+      // 估算部署时间
+      estimateDeployTime: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            templateId: z.string(),
+          }),
+        )
+        .query(async ({ input }) => {
+          return {
+            estimatedTime: this.oneClickDeploy.estimateDeployTime(input.templateId),
+          }
+        }),
+
+      // getById 别名（兼容前端）
+      getById: this.trpc.protectedProcedure
+        .input(z.object({ id: z.string() }))
+        .query(async ({ ctx, input }) => {
+          try {
+            const project = await this.projectsService.get(ctx.user.id, input.id)
+            if (!project) {
+              throw new TRPCError({
+                code: 'NOT_FOUND',
+                message: '项目不存在',
+              })
+            }
+            return project
+          } catch (error) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: error instanceof Error ? error.message : '获取项目详情失败',
+            })
+          }
+        }),
+
+      // 获取最近活动
+      getRecentActivities: this.trpc.protectedProcedure
+        .input(z.object({ projectId: z.string(), limit: z.number().optional() }))
+        .query(async ({ ctx, input }) => {
+          // TODO: 实现获取最近活动的逻辑
+          return {
+            activities: [] as Array<{
+              id: string
+              type: 'deployment' | 'environment' | 'member' | 'settings'
+              title: string
+              description: string
+              status: 'success' | 'failed' | 'pending' | 'running'
+              createdAt: string
+            }>,
+          }
+        }),
+
+      // 更新部署设置
+      updateDeploySettings: this.trpc.protectedProcedure
+        .input(
+          z.object({
+            projectId: z.string(),
+            settings: z.object({
+              autoDeployEnabled: z.boolean().optional(),
+              deployBranch: z.string().optional(),
+            }),
+          }),
+        )
+        .mutation(async ({ ctx, input }) => {
+          // TODO: 实现更新部署设置的逻辑
+          return { success: true }
+        }),
+
+      // 成员管理（嵌套 router）
+      members: this.trpc.router({
+        list: this.trpc.protectedProcedure
+          .input(z.object({ projectId: z.string() }))
+          .query(async ({ ctx, input }) => {
+            return await this.projectMembers.listMembers(ctx.user.id, input.projectId)
+          }),
+
+        add: this.trpc.protectedProcedure
+          .input(
+            z.object({
+              projectId: z.string(),
+              memberId: z.string(),
+              role: z.enum(['admin', 'developer', 'viewer']),
+            }),
+          )
+          .mutation(async ({ ctx, input }) => {
+            const { projectId, ...data } = input
+            return await this.projectMembers.addMember(ctx.user.id, projectId, data)
+          }),
+
+        remove: this.trpc.protectedProcedure
+          .input(
+            z.object({
+              projectId: z.string(),
+              memberId: z.string(),
+            }),
+          )
+          .mutation(async ({ ctx, input }) => {
+            const { projectId, ...data } = input
+            return await this.projectMembers.removeMember(ctx.user.id, projectId, data)
+          }),
+      }),
+    })
+  }
+}

@@ -1,385 +1,167 @@
-import * as schema from '@juanie/core-database/schemas'
-import { Trace } from '@juanie/core-observability'
-import { DATABASE } from '@juanie/core-tokens'
-import { AuditLogsService } from '@juanie/service-extensions'
-import { DeploymentsService } from '../deployments/deployments.service'
-import { NotificationsService } from '@juanie/service-extensions'
-import { Inject, Injectable } from '@nestjs/common'
-import { Cron } from '@nestjs/schedule'
-import { and, eq, lt } from 'drizzle-orm'
+import * as schema from '@juanie/core/database'
+import { Trace } from '@juanie/core/observability'
+import { DATABASE } from '@juanie/core/tokens'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
-interface ApprovalResult {
-  success: boolean
-  allApproved?: boolean
-  rejected?: boolean
-}
-
+/**
+ * ApprovalManagerService
+ *
+ * TODO: 完整实现部署审批流程
+ *
+ * 计划功能：
+ * - 创建审批请求
+ * - 审批/拒绝部署
+ * - 多级审批流程
+ * - 审批历史记录
+ * - 审批通知
+ * - 自动审批规则
+ *
+ * 依赖：
+ * - 权限系统（RBAC）
+ * - 通知服务
+ * - 审批工作流引擎
+ */
 @Injectable()
-export class ApprovalManager {
-  constructor(
-    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    private deploymentsService: DeploymentsService,
-    private notificationsService: NotificationsService,
-    private auditLogsService: AuditLogsService,
-  ) {}
+export class ApprovalManagerService {
+  private readonly logger = new Logger(ApprovalManagerService.name)
+
+  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
 
   /**
-   * 创建审批请求
-   * 为每个审批人创建一条 approval 记录
+   * 创建部署审批请求
+   *
+   * TODO: 实现审批请求创建
+   *
+   * 功能：
+   * 1. 验证部署权限
+   * 2. 确定审批者
+   * 3. 创建审批记录
+   * 4. 发送通知
    */
-  @Trace('approval-manager.createApprovalRequest')
-  async createApprovalRequest(deploymentId: string, approvers: string[]): Promise<void> {
-    if (!approvers || approvers.length === 0) {
-      throw new Error('审批人列表不能为空')
-    }
+  @Trace('approvalManager.createApprovalRequest')
+  async createApprovalRequest(data: {
+    projectId: string
+    environmentId: string
+    deploymentId: string
+    requesterId: string
+    reason?: string
+  }) {
+    this.logger.warn('Approval system not implemented')
 
-    // 为每个审批人创建一条记录
-    for (const approverId of approvers) {
-      await this.db.insert(schema.deploymentApprovals).values({
-        deploymentId,
-        approverId,
-        status: 'pending',
-      })
-    }
+    // TODO: 实现审批请求创建
+    // 1. 检查是否需要审批
+    // const requiresApproval = await this.checkApprovalRequired(data)
+    // 2. 确定审批者
+    // const approvers = await this.determineApprovers(data)
+    // 3. 创建审批记录
+    // const approval = await this.createApprovalRecord(data, approvers)
+    // 4. 发送通知
+    // await this.notifyApprovers(approval, approvers)
 
-    // 发送审批通知给所有审批人
-    const deployment = await this.getDeployment(deploymentId)
-    if (!deployment) {
-      throw new Error('部署不存在')
-    }
-
-    for (const approverId of approvers) {
-      await this.notificationsService.create({
-        userId: approverId,
-        type: 'approval',
-        title: '部署审批请求',
-        message: `项目 "${deployment.projectId}" 的部署需要您的审批`,
-        priority: 'high',
-      })
-    }
+    throw new Error('Approval system not implemented')
   }
 
   /**
-   * 批准部署
+   * 审批部署
+   *
+   * TODO: 实现审批逻辑
    */
-  @Trace('approval-manager.approve')
-  async approve(approvalId: string, approverId: string, comment?: string): Promise<ApprovalResult> {
-    // 更新该审批人的记录
-    const [updated] = await this.db
-      .update(schema.deploymentApprovals)
-      .set({
-        status: 'approved',
-        comments: comment,
-        decidedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.deploymentApprovals.id, approvalId),
-          eq(schema.deploymentApprovals.approverId, approverId),
-        ),
-      )
-      .returning()
+  @Trace('approvalManager.approve')
+  async approve(data: { approvalId: string; approverId: string; comment?: string }) {
+    this.logger.warn('Approval system not implemented')
 
-    if (!updated) {
-      throw new Error('审批记录不存在或无权限')
-    }
+    // TODO: 实现审批逻辑
+    // 1. 验证审批者权限
+    // 2. 更新审批状态
+    // 3. 检查是否所有审批者都已审批
+    // 4. 如果全部通过，触发部署
+    // 5. 发送通知
 
-    // 记录审计日志
-    const deployment = await this.getDeployment(updated.deploymentId)
-    if (deployment) {
-      await this.auditLogsService.log({
-        userId: approverId,
-        action: 'deployment.approval.approved',
-        resourceType: 'deployment',
-        resourceId: updated.deploymentId,
-        metadata: {
-          approvalId,
-          comment,
-          projectId: deployment.projectId,
-        },
-      })
-    }
-
-    // 检查是否所有审批都完成
-    const allApproved = await this.checkAllApproved(updated.deploymentId)
-
-    if (allApproved) {
-      // 执行部署
-      await this.executeDeployment(updated.deploymentId)
-
-      // 通知申请人
-      if (deployment?.deployedBy) {
-        await this.notificationsService.create({
-          userId: deployment.deployedBy,
-          type: 'deployment',
-          title: '部署已批准',
-          message: `您的部署请求已获得批准，正在执行部署`,
-          priority: 'normal',
-        })
-      }
-    }
-
-    return { success: true, allApproved }
+    throw new Error('Approval system not implemented')
   }
 
   /**
    * 拒绝部署
+   *
+   * TODO: 实现拒绝逻辑
    */
-  @Trace('approval-manager.reject')
-  async reject(approvalId: string, approverId: string, reason: string): Promise<ApprovalResult> {
-    if (!reason || reason.trim() === '') {
-      throw new Error('拒绝原因不能为空')
-    }
+  @Trace('approvalManager.reject')
+  async reject(data: { approvalId: string; approverId: string; reason: string }) {
+    this.logger.warn('Approval system not implemented')
 
-    // 更新该审批人的记录
-    const [updated] = await this.db
-      .update(schema.deploymentApprovals)
-      .set({
-        status: 'rejected',
-        comments: reason,
-        decidedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.deploymentApprovals.id, approvalId),
-          eq(schema.deploymentApprovals.approverId, approverId),
-        ),
-      )
-      .returning()
+    // TODO: 实现拒绝逻辑
+    // 1. 验证审批者权限
+    // 2. 更新审批状态为拒绝
+    // 3. 取消部署
+    // 4. 发送通知
 
-    if (!updated) {
-      throw new Error('审批记录不存在或无权限')
-    }
-
-    // 记录审计日志
-    const deployment = await this.getDeployment(updated.deploymentId)
-    if (deployment) {
-      await this.auditLogsService.log({
-        userId: approverId,
-        action: 'deployment.approval.rejected',
-        resourceType: 'deployment',
-        resourceId: updated.deploymentId,
-        metadata: {
-          approvalId,
-          reason,
-          projectId: deployment.projectId,
-        },
-      })
-    }
-
-    // 任何一个拒绝，整个部署失败
-    await this.failDeployment(updated.deploymentId, reason)
-
-    // 通知申请人
-    if (deployment?.deployedBy) {
-      await this.notificationsService.create({
-        userId: deployment.deployedBy,
-        type: 'deployment',
-        title: '部署已拒绝',
-        message: `您的部署请求已被拒绝。原因：${reason}`,
-        priority: 'high',
-      })
-    }
-
-    return { success: true, rejected: true }
+    throw new Error('Approval system not implemented')
   }
 
   /**
-   * 检查是否所有审批都完成
+   * 获取待审批列表
+   *
+   * TODO: 实现待审批查询
    */
-  @Trace('approval-manager.checkAllApproved')
-  async checkAllApproved(deploymentId: string): Promise<boolean> {
-    const approvals = await this.db.query.deploymentApprovals.findMany({
-      where: eq(schema.deploymentApprovals.deploymentId, deploymentId),
-    })
+  @Trace('approvalManager.getPendingApprovals')
+  async getPendingApprovals(userId: string) {
+    this.logger.warn('Approval system not implemented')
 
-    if (approvals.length === 0) {
-      return false
-    }
+    // TODO: 实现待审批查询
+    // 1. 查询用户作为审批者的待审批请求
+    // 2. 返回审批详情
 
-    // 如果有任何一个拒绝，返回 false
-    if (approvals.some((a) => a.status === 'rejected')) {
-      return false
-    }
-
-    // 如果所有都批准，返回 true
-    return approvals.every((a) => a.status === 'approved')
+    return []
   }
 
   /**
-   * 检查是否需要审批
+   * 获取审批历史
+   *
+   * TODO: 实现审批历史查询
    */
-  @Trace('approval-manager.requiresApproval')
-  async requiresApproval(projectId: string, environmentId: string): Promise<boolean> {
-    const environment = await this.db.query.environments.findFirst({
-      where: eq(schema.environments.id, environmentId),
-    })
+  @Trace('approvalManager.getApprovalHistory')
+  async getApprovalHistory(projectId: string) {
+    this.logger.warn('Approval system not implemented')
 
-    // 生产环境需要审批
-    return environment?.type === 'production'
+    // TODO: 实现审批历史查询
+    // 1. 查询项目的所有审批记录
+    // 2. 返回审批详情和结果
+
+    return []
   }
 
   /**
-   * 获取审批人列表（项目的管理员）
+   * TODO: 检查是否需要审批
    */
-  @Trace('approval-manager.getApprovers')
-  async getApprovers(projectId: string): Promise<string[]> {
-    const project = await this.db.query.projects.findFirst({
-      where: eq(schema.projects.id, projectId),
-    })
-
-    if (!project) {
-      throw new Error('项目不存在')
-    }
-
-    const admins = await this.db.query.organizationMembers.findMany({
-      where: and(
-        eq(schema.organizationMembers.organizationId, project.organizationId),
-        eq(schema.organizationMembers.role, 'admin'),
-      ),
-    })
-
-    return admins.map((a) => a.userId)
+  private async checkApprovalRequired(data: any) {
+    // 实现审批规则检查
+    // 例如：生产环境需要审批，开发环境不需要
+    return true
   }
 
   /**
-   * 审批超时检查（定时任务）
-   * 每小时执行一次，检查超过 24 小时未响应的审批
+   * TODO: 确定审批者
    */
-  @Cron('0 * * * *') // 每小时执行一次
-  @Trace('approval-manager.checkApprovalTimeouts')
-  async checkApprovalTimeouts(): Promise<void> {
-    const timeoutThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 小时
-
-    const timedOutApprovals = await this.db.query.deploymentApprovals.findMany({
-      where: and(
-        eq(schema.deploymentApprovals.status, 'pending'),
-        lt(schema.deploymentApprovals.createdAt, timeoutThreshold),
-      ),
-    })
-
-    for (const approval of timedOutApprovals) {
-      // 自动拒绝
-      await this.db
-        .update(schema.deploymentApprovals)
-        .set({
-          status: 'rejected',
-          comments: '审批超时（24 小时未响应），已自动拒绝',
-          decidedAt: new Date(),
-        })
-        .where(eq(schema.deploymentApprovals.id, approval.id))
-
-      // 更新部署状态
-      await this.failDeployment(approval.deploymentId, '审批超时')
-
-      // 获取部署信息
-      const deployment = await this.getDeployment(approval.deploymentId)
-
-      // 通知申请人
-      if (deployment?.deployedBy) {
-        await this.notificationsService.create({
-          userId: deployment.deployedBy,
-          type: 'approval',
-          title: '部署审批超时',
-          message: '部署审批超时（24 小时未响应），已自动拒绝',
-          priority: 'high',
-        })
-      }
-
-      // 记录审计日志
-      if (deployment) {
-        await this.auditLogsService.log({
-          action: 'deployment.approval.timeout',
-          resourceType: 'deployment',
-          resourceId: approval.deploymentId,
-          metadata: {
-            approvalId: approval.id,
-            approverId: approval.approverId,
-            projectId: deployment.projectId,
-          },
-        })
-      }
-    }
+  private async determineApprovers(data: any) {
+    // 实现审批者确定逻辑
+    // 例如：项目管理员、环境负责人等
+    return []
   }
 
   /**
-   * 获取部署的审批状态
+   * TODO: 创建审批记录
    */
-  @Trace('approval-manager.getApprovalStatus')
-  async getApprovalStatus(deploymentId: string) {
-    const approvals = await this.db.query.deploymentApprovals.findMany({
-      where: eq(schema.deploymentApprovals.deploymentId, deploymentId),
-      with: {
-        approver: {
-          columns: {
-            id: true,
-            username: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
-      },
-    })
-
-    const totalApprovers = approvals.length
-    const approvedCount = approvals.filter((a) => a.status === 'approved').length
-    const rejectedCount = approvals.filter((a) => a.status === 'rejected').length
-    const pendingCount = approvals.filter((a) => a.status === 'pending').length
-
-    return {
-      approvals,
-      summary: {
-        total: totalApprovers,
-        approved: approvedCount,
-        rejected: rejectedCount,
-        pending: pendingCount,
-        isComplete: pendingCount === 0,
-        isApproved: rejectedCount === 0 && approvedCount === totalApprovers,
-        isRejected: rejectedCount > 0,
-      },
-    }
-  }
-
-  // ========== 私有辅助方法 ==========
-
-  /**
-   * 获取部署信息
-   */
-  private async getDeployment(deploymentId: string) {
-    return await this.db.query.deployments.findFirst({
-      where: eq(schema.deployments.id, deploymentId),
-    })
+  private async createApprovalRecord(data: any, approvers: any[]) {
+    // 实现审批记录创建
+    return null
   }
 
   /**
-   * 执行部署
+   * TODO: 通知审批者
    */
-  private async executeDeployment(deploymentId: string): Promise<void> {
-    // 更新部署状态为 running
-    await this.db
-      .update(schema.deployments)
-      .set({
-        status: 'running',
-        startedAt: new Date(),
-      })
-      .where(eq(schema.deployments.id, deploymentId))
-
-    // 注意：实际的部署执行逻辑应该由 DeploymentsService 处理
-    // 这里只是触发部署流程
-    // 在真实场景中，可能需要调用 deploymentsService.execute(deploymentId)
-  }
-
-  /**
-   * 标记部署失败
-   */
-  private async failDeployment(deploymentId: string, reason: string): Promise<void> {
-    await this.db
-      .update(schema.deployments)
-      .set({
-        status: 'failed',
-        finishedAt: new Date(),
-      })
-      .where(eq(schema.deployments.id, deploymentId))
+  private async notifyApprovers(approval: any, approvers: any[]) {
+    // 实现审批通知
+    // 通过邮件、Slack、站内信等方式通知
   }
 }

@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { ProgressTrackerService } from './progress-tracker.service'
 import type {
   InitializationContext,
   InitializationEvent,
@@ -15,14 +14,13 @@ import type {
  * 1. 管理初始化流程的状态转换
  * 2. 协调各个状态处理器
  * 3. 处理错误和回滚
- * 4. 实时推送进度
  */
 @Injectable()
 export class ProjectInitializationStateMachine {
   private readonly logger = new Logger(ProjectInitializationStateMachine.name)
   private handlers = new Map<InitializationState, StateHandler>()
 
-  constructor(private progressTracker: ProgressTrackerService) {}
+  constructor() {}
 
   // 状态转换表
   private readonly transitions: Record<
@@ -86,12 +84,6 @@ export class ProjectInitializationStateMachine {
       if (context.currentState === 'COMPLETED') {
         this.logger.log(`Initialization completed for project: ${context.projectId}`)
 
-        // 仅当仓库已就绪或未配置仓库时才推送完成事件
-        const repoReady = !!context.repositoryId || !context.repository
-        if (repoReady) {
-          await this.progressTracker.publishCompleted(context)
-        }
-
         return {
           success: true,
           projectId: context.projectId!,
@@ -142,9 +134,6 @@ export class ProjectInitializationStateMachine {
       // 更新进度
       context.progress = handler.getProgress()
 
-      // 🎯 推送状态变化（实时进度）
-      await this.progressTracker.publishStateChange(context)
-
       // 执行状态处理
       await handler.execute(context)
 
@@ -153,9 +142,6 @@ export class ProjectInitializationStateMachine {
     } catch (error) {
       this.logger.error(`Error in state ${context.currentState}:`, error)
       context.error = error as Error
-
-      // 🎯 推送错误
-      await this.progressTracker.publishError(context, error as Error)
 
       await this.transition(context, 'ERROR')
     }

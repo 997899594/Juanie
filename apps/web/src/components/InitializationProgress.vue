@@ -387,8 +387,9 @@ function connectSubscription() {
             emit('complete')
           } else if (event.type === 'initialization.failed' || event.type === 'initialization.error') {
             status.value = 'failed'
-            errorMessage.value = event.data?.error || '初始化失败'
-            emit('error', errorMessage.value)
+            const error = event.data?.error || '初始化失败'
+            errorMessage.value = error
+            emit('error', error)
           }
         },
         onError: (err: any) => {
