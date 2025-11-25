@@ -5,7 +5,7 @@ import type {
   CreateEnvironmentInput,
   EnvironmentUpdatedEvent,
   UpdateEnvironmentInput,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { and, eq, isNull } from 'drizzle-orm'

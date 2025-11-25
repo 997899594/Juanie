@@ -3,7 +3,7 @@ import {
   idSchema,
   securityPolicyIdSchema,
   updateSecurityPolicySchema,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { SecurityPoliciesService } from '@juanie/service-extensions'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'

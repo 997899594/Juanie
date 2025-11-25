@@ -88,7 +88,7 @@ export interface GitOpsSetupRequestedEvent {
   repositoryId: string
   repositoryUrl: string
   repositoryBranch: string
-  accessToken: string
+  userId: string // 用于获取 OAuth token
   environments: Array<{
     id: string
     type: 'development' | 'staging' | 'production'

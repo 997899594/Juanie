@@ -5,7 +5,7 @@ import type {
   ChatWithAssistantInput,
   CreateAIAssistantInput,
   UpdateAIAssistantInput,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { OllamaService } from '../ollama/ollama.service'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq } from 'drizzle-orm'

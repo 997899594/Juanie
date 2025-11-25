@@ -47,11 +47,7 @@ export class ProjectInitializationStateMachine {
       ERROR: 'FAILED',
     },
     SETTING_UP_REPOSITORY: {
-      REPOSITORY_READY: 'CREATING_GITOPS',
-      ERROR: 'FAILED',
-    },
-    CREATING_GITOPS: {
-      GITOPS_CREATED: 'FINALIZING',
+      REPOSITORY_READY: 'FINALIZING',
       ERROR: 'FAILED',
     },
     FINALIZING: {
@@ -186,7 +182,6 @@ export class ProjectInitializationStateMachine {
       RENDERING_TEMPLATE: 'TEMPLATE_RENDERED',
       CREATING_ENVIRONMENTS: 'ENVIRONMENTS_CREATED',
       SETTING_UP_REPOSITORY: 'REPOSITORY_READY',
-      CREATING_GITOPS: 'GITOPS_CREATED',
       FINALIZING: 'FINALIZED',
     }
 

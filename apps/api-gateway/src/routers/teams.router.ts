@@ -6,7 +6,7 @@ import {
   teamIdSchema,
   updateTeamMemberRoleSchema,
   updateTeamSchema,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { TeamsService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'

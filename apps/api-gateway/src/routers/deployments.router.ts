@@ -5,7 +5,7 @@ import {
   deployWithGitOpsSchema,
   rejectDeploymentSchema,
   rollbackDeploymentSchema,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { DeploymentsService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'

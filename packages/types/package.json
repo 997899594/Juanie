@@ -1,5 +1,5 @@
 {
-  "name": "@juanie/core-types",
+  "name": "@juanie/types",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",

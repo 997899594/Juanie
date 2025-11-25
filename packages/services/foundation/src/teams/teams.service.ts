@@ -7,7 +7,7 @@ import type {
   RemoveTeamMemberInput,
   UpdateTeamInput,
   UpdateTeamMemberRoleInput,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'

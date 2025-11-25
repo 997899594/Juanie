@@ -6,7 +6,7 @@ import type {
   CreateProjectWithTemplateInputType,
   ProjectStatus,
   UpdateProjectInput,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { AuditLogsService } from '@juanie/service-extensions'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'

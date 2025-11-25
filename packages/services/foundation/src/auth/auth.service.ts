@@ -1,7 +1,7 @@
 import * as schema from '@juanie/core/database'
 import { DATABASE, REDIS } from '@juanie/core/tokens'
 import { generateId } from '@juanie/core/utils'
-import type { CreateUserFromOAuthInput, OAuthUrlResponse } from '@juanie/core-types'
+import type { CreateUserFromOAuthInput, OAuthUrlResponse } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { GitHub, GitLab } from 'arctic'

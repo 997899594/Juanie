@@ -10,7 +10,7 @@ import {
   projectIdSchema,
   restoreProjectSchema,
   updateProjectSchema,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import {
   ProjectMembersService,
   ProjectStatusService,

@@ -46,7 +46,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@juanie/core-types": "workspace:*",
+    "@juanie/types": "workspace:*",
     "@nestjs/bull": "^10.2.1",
     "@nestjs/common": "^11.1.7",
     "@nestjs/config": "^3.3.0",

@@ -3,7 +3,7 @@ import {
   listCostsSchema,
   organizationIdQuerySchema,
   recordCostSchema,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { CostTrackingService } from '@juanie/service-extensions'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'

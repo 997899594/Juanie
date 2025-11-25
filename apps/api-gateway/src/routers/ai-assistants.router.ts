@@ -1,4 +1,4 @@
-import { createAIAssistantSchema, idSchema, updateAIAssistantSchema } from '@juanie/core-types'
+import { createAIAssistantSchema, idSchema, updateAIAssistantSchema } from '@juanie/types'
 import { AiAssistantsService } from '@juanie/service-extensions'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'

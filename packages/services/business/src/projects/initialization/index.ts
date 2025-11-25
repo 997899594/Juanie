@@ -1,5 +1,4 @@
 export * from './handlers/create-environments.handler'
-export * from './handlers/create-gitops.handler'
 export * from './handlers/create-project.handler'
 export * from './handlers/finalize.handler'
 export * from './handlers/load-template.handler'

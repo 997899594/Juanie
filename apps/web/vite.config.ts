@@ -34,7 +34,7 @@ export default defineConfig({
       'zod',
       'tslib',
     ],
-    exclude: ['@juanie/core-types', '@juanie/api-new'],
+    exclude: ['@juanie/types', '@juanie/api-new'],
     // Vite 6 兼容性修复：确保 tslib 被正确处理
     esbuildOptions: {
       target: 'esnext',

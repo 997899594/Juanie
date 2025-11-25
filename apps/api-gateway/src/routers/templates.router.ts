@@ -1,4 +1,4 @@
-import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/core-types'
+import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/types'
 import { TemplatesService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'

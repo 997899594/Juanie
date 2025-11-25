@@ -110,6 +110,27 @@ export class K3sService implements OnModuleInit {
     return this.isConnected
   }
 
+  /**
+   * 验证 K3s 认证和权限
+   * 尝试列出 namespaces 来验证认证是否有效
+   */
+  async verifyAuthentication(): Promise<{ valid: boolean; error?: string }> {
+    if (!this.isConnected) {
+      return { valid: false, error: 'K3s not connected' }
+    }
+
+    try {
+      await this.k8sApi.listNamespace()
+      return { valid: true }
+    } catch (error: any) {
+      this.logger.error('K3s authentication verification failed:', error.message)
+      return {
+        valid: false,
+        error: error.message || 'Authentication failed',
+      }
+    }
+  }
+
   // 创建 Deployment
   async createDeployment(
     namespace: string,

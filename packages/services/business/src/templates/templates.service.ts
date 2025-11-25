@@ -1,5 +1,5 @@
 import { Trace } from '@juanie/core/observability'
-import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/core-types'
+import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { readFile } from 'fs/promises'
 import Handlebars from 'handlebars'

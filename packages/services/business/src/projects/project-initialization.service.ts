@@ -37,7 +37,7 @@ export class ProjectInitializationService {
     repositoryId: string
     repositoryUrl: string
     repositoryBranch: string
-    accessToken: string
+    userId: string // 用于获取 OAuth token
     environments: Array<{
       id: string
       type: 'development' | 'staging' | 'production'
@@ -54,7 +54,7 @@ export class ProjectInitializationService {
         repositoryId: data.repositoryId,
         repositoryUrl: data.repositoryUrl,
         repositoryBranch: data.repositoryBranch,
-        accessToken: data.accessToken,
+        userId: data.userId,
         environments: data.environments,
         jobId: data.jobId,
       }

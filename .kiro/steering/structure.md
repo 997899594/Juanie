@@ -89,7 +89,9 @@ templates/                     # 项目模板
 
 ### 包命名
 - 应用: `@juanie/[app-name]` (例如: `@juanie/web`, `@juanie/api-gateway`)
-- 核心包: `@juanie/core-[name]` (例如: `@juanie/core-database`)
+- 核心包: 
+  - `@juanie/core` - 所有基础设施（database, queue, events, observability, tokens, utils）
+  - `@juanie/types` - 类型定义
 - 服务层: 
   - `@juanie/service-foundation` (基础层)
   - `@juanie/service-business` (业务层)
@@ -161,12 +163,37 @@ Core (核心包)
 
 ## 导入路径
 
-- 使用 workspace 协议引用内部包: `"@juanie/core-types": "workspace:*"`
+- 使用 workspace 协议引用内部包: `"@juanie/types": "workspace:*"`
 - 优先使用命名导出而非默认导出
 - 按以下顺序组织导入:
   1. 外部依赖 (例如: `import { Injectable } from '@nestjs/common'`)
-  2. 内部包 (例如: `import type { Project } from '@juanie/core-types'`)
+  2. 内部包 (例如: `import type { Project } from '@juanie/types'`)
   3. 相对导入 (例如: `import { helper } from './utils'`)
+
+### Core 包导入示例
+```typescript
+// 数据库
+import * as schema from '@juanie/core/database'
+import { DatabaseModule } from '@juanie/core/database'
+
+// 队列
+import { QueueModule, DEPLOYMENT_QUEUE } from '@juanie/core/queue'
+
+// 事件
+import { CoreEventsModule, K3sEvents } from '@juanie/core/events'
+
+// Tokens
+import { DATABASE, REDIS } from '@juanie/core/tokens'
+
+// 工具
+import { generateId } from '@juanie/core/utils'
+
+// 可观测性
+import { Trace } from '@juanie/core/observability'
+
+// 类型
+import type { Project, User } from '@juanie/types'
+```
 
 ## 配置文件位置
 

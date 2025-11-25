@@ -6,7 +6,7 @@ import type {
   CreatePipelineInput,
   TriggerPipelineInput,
   UpdatePipelineInput,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { and, desc, eq } from 'drizzle-orm'

@@ -8,7 +8,7 @@ import type {
   SuccessResponse,
   UpdateMemberRoleInput,
   UpdateOrganizationInput,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'

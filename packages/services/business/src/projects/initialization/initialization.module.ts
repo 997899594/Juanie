@@ -6,7 +6,6 @@ import { FluxModule } from '../../gitops/flux/flux.module'
 import { RepositoriesModule } from '../../repositories/repositories.module'
 import { TemplatesModule } from '../templates'
 import { CreateEnvironmentsHandler } from './handlers/create-environments.handler'
-import { CreateGitOpsHandler } from './handlers/create-gitops.handler'
 import { CreateProjectHandler } from './handlers/create-project.handler'
 import { FinalizeHandler } from './handlers/finalize.handler'
 import { LoadTemplateHandler } from './handlers/load-template.handler'
@@ -35,7 +34,6 @@ import { ProjectInitializationStateMachine } from './state-machine'
     RenderTemplateHandler,
     CreateEnvironmentsHandler,
     SetupRepositoryHandler,
-    CreateGitOpsHandler,
     FinalizeHandler,
   ],
   exports: [
@@ -47,7 +45,6 @@ import { ProjectInitializationStateMachine } from './state-machine'
     RenderTemplateHandler,
     CreateEnvironmentsHandler,
     SetupRepositoryHandler,
-    CreateGitOpsHandler,
     FinalizeHandler,
   ],
 })

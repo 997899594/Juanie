@@ -851,7 +851,7 @@ namePrefix: prod-
         repositoryId,
         repositoryUrl: repository.cloneUrl,
         repositoryBranch: repository.defaultBranch || 'main',
-        accessToken,
+        userId, // 用于获取 OAuth token
         environments: environments.map((env) => ({
           id: env.id,
           type: env.type as 'development' | 'staging' | 'production',

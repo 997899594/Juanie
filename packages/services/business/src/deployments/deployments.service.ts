@@ -6,7 +6,7 @@ import type {
   CreateDeploymentInput,
   DeploymentCompletedEvent,
   RejectDeploymentInput,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import type { DeploymentChanges } from '../gitops/git-ops/git-ops.service'
 import { GitOpsService } from '../gitops/git-ops/git-ops.service'
 import { Inject, Injectable, Logger } from '@nestjs/common'

@@ -5,7 +5,7 @@ import {
   removeMemberSchema,
   updateMemberRoleSchema,
   updateOrganizationSchema,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { OrganizationsService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'

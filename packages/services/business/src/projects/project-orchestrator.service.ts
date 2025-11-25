@@ -1,8 +1,7 @@
-import type { CreateProjectWithTemplateInput } from '@juanie/core-types'
+import type { CreateProjectWithTemplateInput } from '@juanie/types'
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
 import {
   CreateEnvironmentsHandler,
-  CreateGitOpsHandler,
   CreateProjectHandler,
   FinalizeHandler,
   type InitializationContext,
@@ -38,7 +37,6 @@ export class ProjectOrchestrator implements OnModuleInit {
     private renderTemplateHandler: RenderTemplateHandler,
     private createEnvironmentsHandler: CreateEnvironmentsHandler,
     private setupRepositoryHandler: SetupRepositoryHandler,
-    private createGitOpsHandler: CreateGitOpsHandler,
     private finalizeHandler: FinalizeHandler,
   ) {}
 
@@ -49,7 +47,6 @@ export class ProjectOrchestrator implements OnModuleInit {
     this.stateMachine.registerHandler(this.renderTemplateHandler)
     this.stateMachine.registerHandler(this.createEnvironmentsHandler)
     this.stateMachine.registerHandler(this.setupRepositoryHandler)
-    this.stateMachine.registerHandler(this.createGitOpsHandler)
     this.stateMachine.registerHandler(this.finalizeHandler)
 
     this.logger.log('ProjectOrchestrator initialized with state machine')

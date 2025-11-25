@@ -1,7 +1,7 @@
 import * as schema from '@juanie/core/database'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
-import type { ListAuditLogsInput } from '@juanie/core-types'
+import type { ListAuditLogsInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'

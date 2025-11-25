@@ -445,7 +445,7 @@ export class FluxResourcesService {
     repositoryId: string
     repositoryUrl: string
     repositoryBranch: string
-    accessToken: string
+    credential: any // GitCredential 对象
     environments: Array<{
       id: string
       type: 'development' | 'staging' | 'production'
@@ -458,7 +458,7 @@ export class FluxResourcesService {
     kustomizations: string[]
     errors: string[]
   }> {
-    const { projectId, repositoryId, repositoryUrl, repositoryBranch, accessToken, environments } =
+    const { projectId, repositoryId, repositoryUrl, repositoryBranch, credential, environments } =
       data
 
     const result = {
@@ -494,8 +494,31 @@ export class FluxResourcesService {
           result.namespaces.push(namespace)
 
           // 2. 创建 Git 认证 Secret
-          this.logger.log(`Creating Git secret in namespace: ${namespace}`)
-          await this.createGitSecret(namespace, secretName, repositoryUrl, accessToken)
+          this.logger.log(`Creating Git secret ${secretName} in ${namespace}`)
+          if (credential.type === 'github_deploy_key') {
+            // GitHub Deploy Key 使用 SSH 认证
+            // Kubernetes ssh-auth Secret 要求使用 'ssh-privatekey' 字段
+            await this.k3s.createSecret(
+              namespace,
+              secretName,
+              {
+                'ssh-privatekey': credential.token, // SSH 私钥
+                // known_hosts 是可选的，可以留空
+              },
+              'kubernetes.io/ssh-auth',
+            )
+          } else {
+            // GitLab Project Access Token 使用 HTTP Basic Auth
+            await this.k3s.createSecret(
+              namespace,
+              secretName,
+              {
+                username: 'git',
+                password: credential.token,
+              },
+              'kubernetes.io/basic-auth',
+            )
+          }
 
           // 3. 创建 GitRepository
           this.logger.log(`Creating GitRepository: ${gitRepoName} in ${namespace}`)
@@ -637,7 +660,8 @@ export class FluxResourcesService {
   // ==================== 私有方法 ====================
 
   /**
-   * 创建 Git 认证 Secret
+   * 创建 Git 认证 Secret（已废弃，由 GitAuthService 处理）
+   * 保留此方法以防需要手动创建 Secret
    */
   private async createGitSecret(
     namespace: string,
@@ -645,29 +669,8 @@ export class FluxResourcesService {
     repositoryUrl: string,
     accessToken: string,
   ): Promise<void> {
-    const isSSH = repositoryUrl.startsWith('git@') || repositoryUrl.startsWith('ssh://')
-
-    if (isSSH) {
-      throw new Error('SSH authentication not yet supported. Please use HTTPS URL.')
-    }
-
-    const secretYaml = this.yamlGenerator.generateGitSecretYAML({
-      name: secretName,
-      namespace,
-      username: 'git',
-      password: accessToken,
-    })
-
-    const secretData = this.yamlGenerator.parseYAML(secretYaml)
-    const data: Record<string, string> = {}
-
-    if (secretData.stringData) {
-      for (const [key, value] of Object.entries(secretData.stringData)) {
-        data[key] = value as string
-      }
-    }
-
-    await this.k3s.createSecret(namespace, secretName, data, secretData.type || 'Opaque')
+    // 此方法已废弃，Secret 由 GitAuthService.createK8sSecrets 创建
+    this.logger.warn('createGitSecret is deprecated, secrets should be created by GitAuthService')
   }
 
   /**

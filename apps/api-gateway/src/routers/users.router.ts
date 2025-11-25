@@ -3,7 +3,7 @@ import {
   updateUserSchema,
   userIdSchema,
   userIdsSchema,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { AuthService, OAuthAccountsService, UsersService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'

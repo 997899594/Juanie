@@ -6,7 +6,7 @@ import type {
   RenderedTemplate,
   TemplateFilters,
   TemplateVariables,
-} from '@juanie/core-types'
+} from '@juanie/types'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { and, eq, isNull, like, or, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'

@@ -9,7 +9,6 @@ export type InitializationState =
   | 'RENDERING_TEMPLATE'
   | 'CREATING_ENVIRONMENTS'
   | 'SETTING_UP_REPOSITORY'
-  | 'CREATING_GITOPS'
   | 'FINALIZING'
   | 'COMPLETED'
   | 'FAILED'
@@ -21,7 +20,6 @@ export type InitializationEvent =
   | 'TEMPLATE_RENDERED'
   | 'ENVIRONMENTS_CREATED'
   | 'REPOSITORY_READY'
-  | 'GITOPS_CREATED'
   | 'FINALIZED'
   | 'ERROR'
 
