@@ -5,6 +5,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { KnownHostsService } from '../git-auth/known-hosts.service'
 import { K3sService } from '../k3s/k3s.service'
 import { FluxMetricsService } from './flux-metrics.service'
 import { YamlGeneratorService } from './yaml-generator.service'
@@ -48,6 +49,7 @@ export class FluxResourcesService {
     private k3s: K3sService,
     private yamlGenerator: YamlGeneratorService,
     private metrics: FluxMetricsService,
+    private knownHosts: KnownHostsService,
   ) {}
 
   /**
@@ -497,13 +499,21 @@ export class FluxResourcesService {
           this.logger.log(`Creating Git secret ${secretName} in ${namespace}`)
           if (credential.type === 'github_deploy_key') {
             // GitHub Deploy Key 使用 SSH 认证
-            // Kubernetes ssh-auth Secret 要求使用 'ssh-privatekey' 字段
+            // Flux 要求提供三个字段：
+            // - 'ssh-privatekey': Kubernetes Secret 标准字段
+            // - 'identity': Flux GitRepository 需要的字段（与 ssh-privatekey 相同）
+            // - 'known_hosts': Git 提供商的 SSH 主机密钥（必需）
+
+            // 动态获取 known_hosts
+            const knownHostsContent = await this.knownHosts.getKnownHosts('github')
+
             await this.k3s.createSecret(
               namespace,
               secretName,
               {
-                'ssh-privatekey': credential.token, // SSH 私钥
-                // known_hosts 是可选的，可以留空
+                'ssh-privatekey': credential.token, // Kubernetes 标准字段
+                identity: credential.token, // Flux 需要的字段
+                known_hosts: knownHostsContent, // 动态获取的 known_hosts
               },
               'kubernetes.io/ssh-auth',
             )

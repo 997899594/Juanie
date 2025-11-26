@@ -1,38 +1,30 @@
 #!/bin/bash
 
-echo "=== Checking Flux on Remote K3s ==="
-echo ""
+# 检查远程 K3s 集群上的 Flux 状态
 
-# 使用远程 kubeconfig
-export KUBECONFIG=~/.kube/k3s-remote.yaml
+KUBECONFIG=~/.kube/k3s-remote.yaml
 
-echo "1. Checking Flux namespace..."
-kubectl get ns flux-system
+echo "=== Flux 组件状态 ==="
+kubectl --kubeconfig=$KUBECONFIG get pods -n flux-system
 
-echo ""
-echo "2. Checking Flux pods..."
-kubectl get pods -n flux-system
+echo -e "\n=== GitRepository 资源 ==="
+kubectl --kubeconfig=$KUBECONFIG get gitrepository -A
 
-echo ""
-echo "3. Checking Flux CRDs..."
-kubectl get crd | grep flux
+echo -e "\n=== GitRepository 详细信息 ==="
+kubectl --kubeconfig=$KUBECONFIG get gitrepository -A -o wide
 
-echo ""
-echo "4. Checking GitRepository resources..."
-kubectl get gitrepositories -A
+echo -e "\n=== 最近创建的 GitRepository ==="
+LATEST_REPO=$(kubectl --kubeconfig=$KUBECONFIG get gitrepository -A --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null)
+LATEST_NS=$(kubectl --kubeconfig=$KUBECONFIG get gitrepository -A --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.namespace}' 2>/dev/null)
 
-echo ""
-echo "5. Checking Kustomization resources..."
-kubectl get kustomizations -A
-
-echo ""
-echo "6. Checking recent GitRepository (if exists)..."
-LATEST_REPO=$(kubectl get gitrepositories -A --sort-by=.metadata.creationTimestamp -o name | tail -1)
 if [ -n "$LATEST_REPO" ]; then
-  echo "Describing: $LATEST_REPO"
-  kubectl describe $LATEST_REPO
+  echo "Repository: $LATEST_REPO (namespace: $LATEST_NS)"
+  echo -e "\n=== 详细状态 ==="
+  kubectl --kubeconfig=$KUBECONFIG describe gitrepository -n $LATEST_NS $LATEST_REPO
+  
+  echo -e "\n=== source-controller 日志 ==="
+  kubectl --kubeconfig=$KUBECONFIG logs -n flux-system deployment/source-controller --tail=50 | grep -A 5 -B 5 "$LATEST_REPO"
 fi
 
-echo ""
-echo "7. Checking Flux logs (last 50 lines)..."
-kubectl logs -n flux-system -l app=source-controller --tail=50
+echo -e "\n=== Kustomization 资源 ==="
+kubectl --kubeconfig=$KUBECONFIG get kustomization -A

@@ -22,47 +22,52 @@ apps/                          # 应用程序
       router/                  # 路由配置
 
 packages/
-  core/                        # 核心基础包
-    database/                  # 数据库 Schema 和迁移
-      src/schemas/             # Drizzle ORM schemas
-      drizzle/                 # 迁移文件
-    types/                     # 共享类型定义
-    queue/                     # BullMQ 队列配置
-    tokens/                    # Token 管理
-    utils/                     # 工具函数
-    observability/             # 可观测性工具
+  core/                        # 核心基础包（单一包）
+    src/
+      database/                # 数据库 Schema 和迁移
+      events/                  # 事件类型定义
+      queue/                   # BullMQ 队列配置
+      tokens/                  # Token 管理
+      utils/                   # 工具函数
+      observability/           # 可观测性工具
+      sse/                     # Server-Sent Events
+    migrations/                # 数据库迁移文件
   
   services/                    # 三层服务架构
     foundation/                # 基础层 - 认证、用户、存储
-      auth/                    # 认证授权
-      users/                   # 用户管理
-      organizations/           # 组织管理
-      teams/                   # 团队管理
-      storage/                 # 存储服务
+      src/
+        auth/                  # 认证授权
+        users/                 # 用户管理
+        organizations/         # 组织管理
+        teams/                 # 团队管理
+        storage/               # 存储服务
     
     business/                  # 业务层 - 项目、部署、GitOps
-      projects/                # 项目管理
-      environments/            # 环境管理
-      templates/               # 模板服务
-      deployments/             # 部署管理
-      repositories/            # 仓库管理
-      pipelines/               # CI/CD 管道
-      gitops/                  # GitOps 集成
-        flux/                  # Flux CD
-        k3s/                   # Kubernetes
-        git-ops/               # Git 操作
-        git-providers/         # Git 提供商
+      src/
+        projects/              # 项目管理
+          initialization/      # 项目初始化状态机
+        environments/          # 环境管理
+        templates/             # 模板服务
+        deployments/           # 部署管理
+        repositories/          # 仓库管理
+        pipelines/             # CI/CD 管道
+        queue/                 # 队列处理器
+        gitops/                # GitOps 集成
+          flux/                # Flux CD 服务
+          k3s/                 # Kubernetes 服务
+          git-auth/            # Git 认证（Deploy Keys, Tokens）
     
     extensions/                # 扩展层 - AI、监控、通知、安全
-      ai/                      # AI 功能
-        ai/                    # AI 服务
-        ollama/                # Ollama 集成
-        assistants/            # AI 助手
-      monitoring/              # 监控功能
-        audit-logs/            # 审计日志
-        cost-tracking/         # 成本追踪
-      notifications/           # 通知服务
-      security/                # 安全策略
+      src/
+        ai/                    # AI 功能
+          ai/                  # AI 服务
+          ollama/              # Ollama 集成
+          assistants/          # AI 助手
+        monitoring/            # 监控功能
+          audit-logs/          # 审计日志
+          cost-tracking/       # 成本追踪
+        notifications/         # 通知服务
+        security/              # 安全策略
   
   config/                      # 共享配置
     typescript/                # TypeScript 配置
@@ -80,7 +85,16 @@ docs/                          # 文档
   development.md               # 开发指南
 
 scripts/                       # 工具脚本
+  test-*.ts                    # 测试脚本
+  check-*.ts                   # 检查脚本
+  diagnose-*.ts                # 诊断脚本
+  clean-*.ts                   # 清理脚本
+  
 templates/                     # 项目模板
+  nextjs-15-app/               # Next.js 15 应用模板
+    app/                       # 应用代码
+    k8s/                       # Kubernetes 配置
+    ci/                        # CI/CD 配置
   ci-cd/                       # CI/CD 模板
   dockerfiles/                 # Dockerfile 模板
 ```
@@ -191,6 +205,9 @@ import { generateId } from '@juanie/core/utils'
 // 可观测性
 import { Trace } from '@juanie/core/observability'
 
+// SSE (Server-Sent Events)
+import { SSEModule } from '@juanie/core/sse'
+
 // 类型
 import type { Project, User } from '@juanie/types'
 ```
@@ -204,7 +221,8 @@ import type { Project, User } from '@juanie/types'
 
 ## 数据库 Schema
 
-所有数据库 schema 定义在 `packages/core/database/src/schemas/` 中，使用 Drizzle ORM。
+所有数据库 schema 定义在 `packages/core/src/database/schemas/` 中，使用 Drizzle ORM。
+迁移文件位于 `packages/core/migrations/`。
 
 ## 文档组织
 

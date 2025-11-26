@@ -31,6 +31,20 @@ API 接口参考和使用说明
 - **[API 参考](./API_REFERENCE.md)** - 完整 API 文档
 - **[API 详细文档](./api/)** - 各模块 API 详细说明
 
+### 🔧 问题排查 (`troubleshooting/`)
+遇到问题时的诊断和解决方案
+
+- **[问题排查索引](./troubleshooting/README.md)** - 所有问题的快速索引
+- **[Flux GitOps 问题](./troubleshooting/flux/)** - SSH 认证、网络策略等
+- **[Git 认证问题](./troubleshooting/git/)** - OAuth Token、Deploy Key 等
+- **[Kubernetes 问题](./troubleshooting/kubernetes/)** - 资源创建、配置等
+- **[架构问题](./troubleshooting/architecture/)** - 代码冗余、设计缺陷等
+- **[重构记录](./troubleshooting/refactoring/)** - 历史重构和清理记录
+
+### 📋 文档管理
+- **[文档组织说明](./ORGANIZATION.md)** - 文档结构和编写规范
+- **[文档变更日志](./CHANGELOG.md)** - 文档重要变更记录
+
 ---
 
 ## 🎯 文档原则
@@ -45,17 +59,28 @@ API 接口参考和使用说明
 ```
 docs/
 ├── README.md                    # 文档索引（本文件）
+├── ORGANIZATION.md              # 文档组织说明
+├── CHANGELOG.md                 # 文档变更日志
 ├── API_REFERENCE.md             # API 总览
-├── guides/                      # 入门指南
+├── guides/                      # 入门指南（7 个文件）
 │   ├── quick-start.md
 │   ├── development.md
-│   └── deployment.md
-├── architecture/                # 架构文档
+│   ├── deployment.md
+│   ├── flux-installation.md
+│   └── ...
+├── architecture/                # 架构文档（6 个文件）
 │   ├── architecture.md
 │   ├── three-tier-architecture.md
 │   ├── gitops.md
 │   ├── gitops-deep-dive.md
-│   └── simplified-sse-architecture.md
+│   └── ...
+├── troubleshooting/             # 问题排查（41 个文件）
+│   ├── README.md                # 问题索引
+│   ├── flux/                    # Flux GitOps 问题
+│   ├── git/                     # Git 认证问题
+│   ├── kubernetes/              # Kubernetes 问题
+│   ├── architecture/            # 架构问题
+│   └── refactoring/             # 重构记录
 ├── tutorials/                   # 深度教程
 │   ├── trpc-fullstack-typesafety.md
 │   ├── monorepo-turborepo.md

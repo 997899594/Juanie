@@ -30,9 +30,13 @@
 
 - **容器**: Docker
 - **编排**: K3s (轻量级 Kubernetes)
-- **GitOps**: Flux CD
+- **GitOps**: Flux CD v2.7.3
+  - GitHub: Deploy Keys (SSH 认证)
+  - GitLab: Project Access Tokens (HTTPS 认证)
+  - 动态 SSH known_hosts 管理
 - **监控**: Prometheus + Grafana
 - **追踪**: Tempo/Jaeger
+- **对象存储**: MinIO (S3 兼容)
 
 ## 代码质量
 
@@ -83,10 +87,22 @@ bun run docker:logs            # 查看日志
 
 必需的环境变量:
 - `DATABASE_URL`: PostgreSQL 连接字符串
-- `REDIS_URL`: Redis 连接字符串
+- `REDIS_URL`: Redis 连接字符串（或 Dragonfly）
 - `CORS_ORIGIN`: 允许的 CORS 来源
 - `VITE_*`: 前端环境变量（带前缀）
+
+K3s 配置:
+- `K3S_HOST`: K3s API 服务器地址
+- `K3S_TOKEN`: K3s 访问令牌
+- `K3S_CA_CERT`: K3s CA 证书（可选）
+
+Git 提供商 (用于自动创建认证):
+- `GITHUB_TOKEN`: GitHub Personal Access Token
+- `GITLAB_TOKEN`: GitLab Personal Access Token
 
 OAuth (可选):
 - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+
+对象存储:
+- `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`

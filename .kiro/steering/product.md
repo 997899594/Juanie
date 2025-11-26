@@ -4,10 +4,22 @@ AI DevOps Platform - 现代化的 AI 驱动 DevOps 平台，用于项目管理�
 
 ## 核心功能
 
-- **项目管理**: 多项目、多团队支持，内置模板系统
-- **GitOps**: 自动化部署，集成 Flux CD
+- **项目管理**: 
+  - 多项目、多团队支持
+  - 内置模板系统（Next.js 15 等）
+  - 异步初始化流程（状态机 + 队列）
+  - 实时进度追踪（SSE）
+  
+- **GitOps**: 
+  - 自动化部署，集成 Flux CD
+  - 智能 Git 认证（GitHub Deploy Keys, GitLab Tokens）
+  - SSH known_hosts 动态管理
+  - Kubernetes 资源自动创建
+  
 - **环境管理**: Development/Staging/Production 环境隔离
+
 - **成本追踪**: 实时成本监控和优化建议
+
 - **AI 助手**: 代码审查、DevOps 建议、安全分析
 
 ## 目标用户
