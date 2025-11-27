@@ -786,25 +786,28 @@ export class FluxResourcesService {
         },
       }
 
-      await client.patchNamespacedCustomObject(
+      // 使用 Server-Side Apply
+      await client.patchNamespacedCustomObject({
         group,
         version,
         namespace,
         plural,
-        metadata.name,
-        resource,
-        undefined, // dryRun
-        'juanie-platform', // fieldManager - REQUIRED for Server-Side Apply
-        undefined, // force
-        options,
-      )
+        name: metadata.name,
+        body: resource,
+      })
       this.logger.debug(`Successfully patched ${kind} ${metadata.name}`)
     } catch (error: any) {
       if (error.statusCode === 404) {
         this.logger.debug(`Resource not found, creating ${kind} ${metadata.name}`)
         try {
           const client = this.k3s.getCustomObjectsApi()
-          await client.createNamespacedCustomObject(group, version, namespace, plural, resource)
+          await client.createNamespacedCustomObject({
+            group,
+            version,
+            namespace,
+            plural,
+            body: resource,
+          })
           this.logger.debug(`Successfully created ${kind} ${metadata.name}`)
         } catch (createError: any) {
           this.logger.error(`Failed to create ${kind}:`, {

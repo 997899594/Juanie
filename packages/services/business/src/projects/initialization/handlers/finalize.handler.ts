@@ -1,7 +1,6 @@
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { AuditLogsService } from '@juanie/service-extensions'
-import { NotificationsService } from '@juanie/service-extensions'
+import { AuditLogsService, NotificationsService } from '@juanie/service-foundation'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'

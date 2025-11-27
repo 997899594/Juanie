@@ -20,7 +20,7 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "verbatimModuleSyntax": true,
+    "verbatimModuleSyntax": false,
 
     "skipLibCheck": true,
     "incremental": false,

@@ -2,7 +2,6 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { FluxMetricsService } from '../flux/flux-metrics.service'
 import * as k8s from '@kubernetes/client-node'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
@@ -10,6 +9,7 @@ import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import simpleGit, { type SimpleGit, type SimpleGitOptions } from 'simple-git'
 import * as yaml from 'yaml'
+import { FluxMetricsService } from '../flux/flux-metrics.service'
 
 export interface DeploymentChanges {
   image?: string
@@ -615,9 +615,12 @@ export class GitOpsService {
       const k8sApi = kc.makeApiClient(k8s.CoreV1Api)
 
       const namespace = 'flux-system'
-      const secret = await k8sApi.readNamespacedSecret(secretRef, namespace)
+      const secret = await k8sApi.readNamespacedSecret({
+        name: secretRef,
+        namespace,
+      })
 
-      const data = secret.body.data || {}
+      const data = secret.data || {}
 
       return {
         username: data.username

@@ -255,8 +255,14 @@ export class FluxSyncService {
     name: string,
   ): Promise<any> {
     const client = this.k3s.getCustomObjectsApi()
-    const response = await client.getNamespacedCustomObject(group, version, namespace, plural, name)
-    return response.body
+    const response = await client.getNamespacedCustomObject({
+      group,
+      version,
+      namespace,
+      plural,
+      name,
+    })
+    return response
   }
 
   /**

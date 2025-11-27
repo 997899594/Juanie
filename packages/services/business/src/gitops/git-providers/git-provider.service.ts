@@ -193,72 +193,138 @@ export class GitProviderService {
   }
 
   /**
-   * 推送初始文件到仓库
+   * 推送初始文件到仓库（使用批量提交）
+   * 这是推荐的方法，使用 Git Tree API (GitHub) 或 Commits API (GitLab) 一次性提交所有文件
    */
-  async pushInitialFiles(
+  async pushFiles(
     provider: 'github' | 'gitlab',
     accessToken: string,
     fullName: string,
     files: Array<{ path: string; content: string }>,
     branch: string = 'main',
+    commitMessage: string = 'Initial commit: Add project files',
   ): Promise<void> {
-    this.logger.log(`Pushing initial files to ${provider} repository: ${fullName}`)
+    this.logger.log(`Pushing ${files.length} files to ${provider} repository: ${fullName}`)
 
     if (provider === 'github') {
-      await this.pushToGitHub(accessToken, fullName, files, branch)
+      await this.pushToGitHubBatch(accessToken, fullName, files, branch, commitMessage)
     } else {
-      await this.pushToGitLab(accessToken, fullName, files, branch)
+      await this.pushToGitLabBatch(accessToken, fullName, files, branch, commitMessage)
     }
   }
 
   /**
-   * 推送文件到 GitHub
+   * 使用 Git Tree API 批量推送文件到 GitHub（高效，一次提交）
    */
-  private async pushToGitHub(
+  private async pushToGitHubBatch(
     accessToken: string,
     fullName: string,
     files: Array<{ path: string; content: string }>,
     branch: string,
+    commitMessage: string,
   ): Promise<void> {
-    // GitHub 使用 Contents API 创建/更新文件
-    for (const file of files) {
-      const url = `https://api.github.com/repos/${fullName}/contents/${file.path}`
-
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'AI-DevOps-Platform',
-        },
-        body: JSON.stringify({
-          message: `Add ${file.path}`,
-          content: Buffer.from(file.content).toString('base64'),
-          branch,
-        }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        this.logger.error(`Failed to push ${file.path} to GitHub:`, error)
-      }
+    const baseUrl = 'https://api.github.com'
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'AI-DevOps-Platform',
     }
+
+    // 1. 获取当前分支的最新 commit
+    const refResponse = await fetch(`${baseUrl}/repos/${fullName}/git/ref/heads/${branch}`, {
+      headers,
+    })
+    if (!refResponse.ok) {
+      throw new Error(`Failed to get branch ref: ${refResponse.statusText}`)
+    }
+    const refData = (await refResponse.json()) as any
+    const latestCommitSha = refData.object.sha
+
+    // 2. 获取最新 commit 的 tree
+    const commitResponse = await fetch(
+      `${baseUrl}/repos/${fullName}/git/commits/${latestCommitSha}`,
+      { headers },
+    )
+    if (!commitResponse.ok) {
+      throw new Error(`Failed to get commit: ${commitResponse.statusText}`)
+    }
+    const commitData = (await commitResponse.json()) as any
+    const baseTreeSha = commitData.tree.sha
+
+    // 3. 创建新的 tree（包含所有文件）
+    const tree = files.map((file) => ({
+      path: file.path,
+      mode: '100644', // 普通文件
+      type: 'blob',
+      content: file.content,
+    }))
+
+    const treeResponse = await fetch(`${baseUrl}/repos/${fullName}/git/trees`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        base_tree: baseTreeSha,
+        tree,
+      }),
+    })
+
+    if (!treeResponse.ok) {
+      const error = (await treeResponse.json().catch(() => ({}))) as any
+      throw new Error(`Failed to create tree: ${error.message || treeResponse.statusText}`)
+    }
+    const treeData = (await treeResponse.json()) as any
+
+    // 4. 创建新的 commit
+    const commitCreateResponse = await fetch(`${baseUrl}/repos/${fullName}/git/commits`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        message: commitMessage,
+        tree: treeData.sha,
+        parents: [latestCommitSha],
+      }),
+    })
+
+    if (!commitCreateResponse.ok) {
+      const error = (await commitCreateResponse.json().catch(() => ({}))) as any
+      throw new Error(
+        `Failed to create commit: ${error.message || commitCreateResponse.statusText}`,
+      )
+    }
+    const newCommitData = (await commitCreateResponse.json()) as any
+
+    // 5. 更新分支引用
+    const updateRefResponse = await fetch(`${baseUrl}/repos/${fullName}/git/refs/heads/${branch}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({
+        sha: newCommitData.sha,
+        force: false,
+      }),
+    })
+
+    if (!updateRefResponse.ok) {
+      const error = (await updateRefResponse.json().catch(() => ({}))) as any
+      throw new Error(`Failed to update ref: ${error.message || updateRefResponse.statusText}`)
+    }
+
+    this.logger.log(`✅ Successfully pushed ${files.length} files to GitHub in a single commit`)
   }
 
   /**
-   * 推送文件到 GitLab
+   * 使用 Commits API 批量推送文件到 GitLab（高效，一次提交）
    */
-  private async pushToGitLab(
+  private async pushToGitLabBatch(
     accessToken: string,
     fullName: string,
     files: Array<{ path: string; content: string }>,
     branch: string,
+    commitMessage: string,
   ): Promise<void> {
     const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
     const projectPath = encodeURIComponent(fullName)
 
-    // GitLab 使用 Commits API 批量创建文件
     const actions = files.map((file) => ({
       action: 'create',
       file_path: file.path,
@@ -270,21 +336,24 @@ export class GitProviderService {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'PRIVATE-TOKEN': accessToken,
         'User-Agent': 'AI-DevOps-Platform',
       },
       body: JSON.stringify({
         branch,
-        commit_message: 'Initial commit: Add project files',
+        commit_message: commitMessage,
         actions,
       }),
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
+      const error = (await response.json().catch(() => ({}))) as any
       throw new Error(`Failed to push files to GitLab: ${JSON.stringify(error)}`)
     }
+
+    this.logger.log(`✅ Successfully pushed ${files.length} files to GitLab in a single commit`)
   }
 
   /**
@@ -465,6 +534,164 @@ export class GitProviderService {
 
       throw new Error(`创建仓库失败: ${err}`)
     }
+  }
+
+  /**
+   * 创建仓库（带重试逻辑，用于处理 GitLab path 冲突）
+   * 如果仓库名称冲突，会自动添加随机后缀重试
+   */
+  async createRepositoryWithRetry(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    options: CreateRepositoryOptions,
+    maxRetries: number = 3,
+  ): Promise<RepositoryInfo> {
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const baseUrl = provider === 'github' ? 'https://api.github.com' : gitlabUrl
+    const url = provider === 'github' ? `${baseUrl}/user/repos` : `${baseUrl}/api/v4/projects`
+
+    // 为 GitLab 生成安全的 path
+    const basePath = options.name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+
+    let attempt = 0
+    let lastError: any = null
+
+    while (attempt < maxRetries) {
+      const safePath =
+        attempt === 0 ? basePath : `${basePath}-${Math.random().toString(36).slice(2, 8)}`
+
+      const body =
+        provider === 'github'
+          ? {
+              name: options.name,
+              private: options.visibility === 'private',
+              auto_init: options.autoInit ?? true,
+              description: options.description || '',
+            }
+          : {
+              name: options.name,
+              path: safePath,
+              visibility: options.visibility,
+              description: options.description || '',
+              initialize_with_readme: options.autoInit ?? true,
+              default_branch: options.defaultBranch || 'main',
+            }
+
+      this.logger.log(`Creating ${provider} repository (attempt ${attempt + 1}):`, {
+        url,
+        name: options.name,
+      })
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(provider === 'github'
+            ? {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/vnd.github.v3+json',
+                'User-Agent': 'AI-DevOps-Platform',
+              }
+            : {
+                Authorization: `Bearer ${accessToken}`,
+                'PRIVATE-TOKEN': accessToken,
+                'User-Agent': 'AI-DevOps-Platform',
+              }),
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (response.ok) {
+        const repo = (await response.json()) as any
+        return {
+          id: repo.id,
+          name: repo.name,
+          fullName: provider === 'github' ? repo.full_name : repo.path_with_namespace,
+          cloneUrl: provider === 'github' ? repo.clone_url : repo.http_url_to_repo,
+          sshUrl: provider === 'github' ? repo.ssh_url : repo.ssh_url_to_repo,
+          defaultBranch: repo.default_branch || options.defaultBranch || 'main',
+          visibility:
+            provider === 'github' ? (repo.private ? 'private' : 'public') : repo.visibility,
+          htmlUrl: provider === 'github' ? repo.html_url : repo.web_url,
+        }
+      }
+
+      const error = (await response.json().catch(() => ({}))) as any
+      lastError = error
+
+      // GitHub 422 错误特殊处理：可能仓库已创建但 auto_init 失败
+      if (provider === 'github' && response.status === 422) {
+        this.logger.warn(`GitHub returned 422, checking if repository exists...`)
+        const exists = await this.checkRepositoryExists(
+          provider,
+          accessToken,
+          `${error.repository?.owner?.login || 'user'}/${options.name}`,
+        )
+        if (exists) {
+          // 获取已存在的仓库信息
+          const repoResponse = await fetch(
+            `${baseUrl}/repos/${error.repository?.owner?.login || 'user'}/${options.name}`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/vnd.github.v3+json',
+                'User-Agent': 'AI-DevOps-Platform',
+              },
+            },
+          )
+          if (repoResponse.ok) {
+            const repo = (await repoResponse.json()) as any
+            return {
+              id: repo.id,
+              name: repo.name,
+              fullName: repo.full_name,
+              cloneUrl: repo.clone_url,
+              sshUrl: repo.ssh_url,
+              defaultBranch: repo.default_branch || options.defaultBranch || 'main',
+              visibility: repo.private ? 'private' : 'public',
+              htmlUrl: repo.html_url,
+            }
+          }
+        }
+      }
+
+      // 检查是否是 path/name 冲突错误
+      const isConflictError =
+        (typeof error.message === 'object' &&
+          (error.message.path?.includes('taken') || error.message.name?.includes('taken'))) ||
+        (typeof error.message === 'string' && error.message.includes('taken'))
+
+      // 如果是冲突错误且是 GitLab，重试
+      if (isConflictError && provider === 'gitlab' && attempt < maxRetries - 1) {
+        this.logger.warn(`Path conflict detected, retrying with random suffix...`)
+        attempt++
+        continue
+      }
+
+      // 其他错误，直接抛出
+      let errorMsg = ''
+      if (typeof error.message === 'string') {
+        errorMsg = error.message
+      } else if (typeof error.message === 'object') {
+        errorMsg = Object.entries(error.message)
+          .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
+          .join('; ')
+      } else if (error.error) {
+        errorMsg = error.error_description || error.error
+      } else {
+        errorMsg = JSON.stringify(error)
+      }
+
+      throw new Error(`${provider} API error: ${response.status} - ${errorMsg}`)
+    }
+
+    throw new Error(
+      `Failed to create repository after ${attempt} attempts: ${JSON.stringify(lastError)}`,
+    )
   }
 
   /**

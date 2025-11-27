@@ -15,15 +15,23 @@
     "@juanie/core": "workspace:*",
     "@juanie/service-foundation": "workspace:*",
     "@juanie/types": "workspace:*",
+    "@kubernetes/client-node": "^1.0.0",
     "@nestjs/common": "^11.1.7",
+    "@nestjs/config": "^3.3.0",
     "@nestjs/core": "^11.1.7",
     "@nestjs/event-emitter": "^3.0.1",
+    "@nestjs/schedule": "^4.1.1",
+    "bullmq": "^5.36.3",
     "drizzle-orm": "^0.44.7",
+    "handlebars": "^4.7.8",
     "ioredis": "^5.4.2",
+    "js-yaml": "^4.1.0",
+    "simple-git": "^3.27.0",
     "sshpk": "^1.18.0"
   },
   "devDependencies": {
     "@juanie/config-typescript": "workspace:*",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.7.0",
     "@types/sshpk": "^1.17.4",
     "typescript": "^5.9.3"

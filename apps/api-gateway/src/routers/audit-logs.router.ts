@@ -1,9 +1,5 @@
-import {
-  exportAuditLogsSchema,
-  listAuditLogsSchema,
-  searchAuditLogsSchema,
-} from '@juanie/types'
-import { AuditLogsService } from '@juanie/service-extensions'
+import { AuditLogsService } from '@juanie/service-foundation'
+import { exportAuditLogsSchema, listAuditLogsSchema, searchAuditLogsSchema } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { TrpcService } from '../trpc/trpc.service'
 

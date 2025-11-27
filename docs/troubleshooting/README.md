@@ -9,8 +9,9 @@ troubleshooting/
 ├── README.md                              # 本文件
 ├── FIXES_SUMMARY.md                       # 所有修复的总结
 ├── flux/                                  # Flux GitOps 相关问题
-│   ├── ssh-authentication.md              # SSH 认证问题（新）
-│   ├── network-policy.md                  # 网络策略问题（新）
+│   ├── ssh-authentication.md              # SSH 认证问题
+│   ├── network-policy.md                  # 网络策略阻止 SSH 问题
+│   ├── kustomization-reconciling.md       # Kustomization 卡住问题（新）
 │   ├── gitops-authentication.md           # GitOps 认证方案
 │   ├── gitops-auth-improvements.md        # 认证改进
 │   ├── gitops-initialization-fix.md       # 初始化修复
@@ -28,7 +29,9 @@ troubleshooting/
 ├── kubernetes/                            # Kubernetes 相关问题
 │   └── namespace-timing.md                # 资源创建时机问题（新）
 ├── architecture/                          # 架构设计问题
-│   └── code-redundancy.md                 # 代码冗余问题（新）
+│   ├── circular-dependency.md             # 循环依赖问题（已解决）
+│   ├── audit-notifications-refactoring.md # AuditLogs/Notifications 重构（新）
+│   └── code-redundancy.md                 # 代码冗余问题
 └── refactoring/                           # 重构记录
     ├── CLEANUP_*.md                       # 清理记录
     ├── CORE_RESTRUCTURE*.md               # Core 包重构
@@ -49,6 +52,7 @@ troubleshooting/
 | known_hosts 缺失 | [flux/ssh-authentication.md](./flux/ssh-authentication.md#known-hosts-required) | 高 |
 | identity 字段缺失 | [flux/secret-configuration.md](./flux/secret-configuration.md#identity-field) | 高 |
 | 网络策略阻止 SSH | [flux/network-policy.md](./flux/network-policy.md) | 高 |
+| Kustomization 卡在 Reconciling | [flux/kustomization-reconciling.md](./flux/kustomization-reconciling.md) | 高 |
 
 ### Kubernetes 问题
 
@@ -58,9 +62,11 @@ troubleshooting/
 
 ### 架构问题
 
-| 问题 | 文档 | 严重程度 |
-|------|------|----------|
-| 代码冗余和重复 | [architecture/code-redundancy.md](./architecture/code-redundancy.md) | 中 |
+| 问题 | 文档 | 严重程度 | 状态 |
+|------|------|----------|------|
+| 循环依赖 | [architecture/circular-dependency.md](./architecture/circular-dependency.md) | 高 | ✅ 已解决 |
+| AuditLogs/Notifications 层级错误 | [architecture/audit-notifications-refactoring.md](./architecture/audit-notifications-refactoring.md) | 高 | ✅ 已解决 |
+| 代码冗余和重复 | [architecture/code-redundancy.md](./architecture/code-redundancy.md) | 中 | 🔄 进行中 |
 
 ### Git 问题
 

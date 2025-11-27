@@ -91,13 +91,11 @@
       </div>
       <div class="relative w-full h-2 bg-secondary rounded-full overflow-hidden">
         <div 
-          v-motion
-          :animate="{ 
+          class="absolute top-0 left-0 h-full rounded-full transition-all duration-500 ease-out"
+          :style="{ 
             width: `${displayProgress}%`,
-            transition: { duration: 500, ease: 'easeOut' }
+            backgroundColor: progressBarBgColor
           }"
-          class="absolute top-0 left-0 h-full rounded-full"
-          :class="progressBarColor"
         >
           <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
         </div>
@@ -262,8 +260,23 @@ const statusColor = computed(() => {
 
 const progressBarColor = computed(() => {
   if (status.value === 'failed') return 'bg-destructive'
-  if (status.value === 'completed') return 'bg-green-600'
+  if (status.value === 'completed' || displayProgress.value >= 100) return 'bg-green-600'
+  // 根据进度渐变：蓝色 -> 绿色
+  if (displayProgress.value >= 80) return 'bg-emerald-500'
+  if (displayProgress.value >= 60) return 'bg-teal-500'
+  if (displayProgress.value >= 40) return 'bg-cyan-500'
   return 'bg-primary'
+})
+
+// 返回实际的颜色值用于内联样式
+const progressBarBgColor = computed(() => {
+  if (status.value === 'failed') return 'rgb(239, 68, 68)' // red-500
+  if (status.value === 'completed' || displayProgress.value >= 100) return 'rgb(22, 163, 74)' // green-600
+  // 根据进度渐变：蓝色 -> 绿色
+  if (displayProgress.value >= 80) return 'rgb(16, 185, 129)' // emerald-500
+  if (displayProgress.value >= 60) return 'rgb(20, 184, 166)' // teal-500
+  if (displayProgress.value >= 40) return 'rgb(6, 182, 212)' // cyan-500
+  return 'rgb(59, 130, 246)' // blue-500 (primary)
 })
 
 const statusBorderColor = computed(() => {
@@ -304,35 +317,55 @@ function smoothUpdateProgress(targetProgress: number) {
 
 // 更新步骤状态
 function updateSteps(progressValue: number) {
-  if (progressValue >= 0 && progressValue < 20) {
+  // 重置所有步骤的 active 状态
+  steps.value.forEach((step) => {
+    step.active = false
+  })
+
+  // 根据进度值设置完成状态和当前活动步骤
+  // 步骤 1: 创建项目记录 (0-20%)
+  if (progressValue >= 20) {
+    steps.value[0]!.completed = true
+  } else if (progressValue > 0) {
     steps.value[0]!.active = true
     currentStep.value = '正在创建项目...'
-  } else if (progressValue >= 20 && progressValue < 40) {
-    steps.value[0]!.completed = true
-    steps.value[0]!.active = false
+    return
+  }
+
+  // 步骤 2: 初始化代码仓库 (20-40%)
+  if (progressValue >= 40) {
+    steps.value[1]!.completed = true
+  } else if (progressValue >= 20) {
     steps.value[1]!.active = true
     currentStep.value = '正在初始化代码仓库...'
-  } else if (progressValue >= 40 && progressValue < 60) {
-    steps.value[1]!.completed = true
-    steps.value[1]!.active = false
+    return
+  }
+
+  // 步骤 3: 应用项目模板 (40-60%)
+  if (progressValue >= 60) {
+    steps.value[2]!.completed = true
+  } else if (progressValue >= 40) {
     steps.value[2]!.active = true
     currentStep.value = '正在应用项目模板...'
-  } else if (progressValue >= 60 && progressValue < 80) {
-    steps.value[2]!.completed = true
-    steps.value[2]!.active = false
+    return
+  }
+
+  // 步骤 4: 配置 GitOps (60-80%)
+  if (progressValue >= 80) {
+    steps.value[3]!.completed = true
+  } else if (progressValue >= 60) {
     steps.value[3]!.active = true
     currentStep.value = '正在配置 GitOps...'
-  } else if (progressValue >= 80 && progressValue < 100) {
-    steps.value[3]!.completed = true
-    steps.value[3]!.active = false
+    return
+  }
+
+  // 步骤 5: 完成初始化 (80-100%)
+  if (progressValue >= 100) {
+    steps.value[4]!.completed = true
+    currentStep.value = '初始化完成！'
+  } else if (progressValue >= 80) {
     steps.value[4]!.active = true
     currentStep.value = '正在完成初始化...'
-  } else if (progressValue === 100) {
-    steps.value.forEach(step => {
-      step.completed = true
-      step.active = false
-    })
-    currentStep.value = '初始化完成！'
   }
 }
 
@@ -361,6 +394,58 @@ const statusDescription = computed(() => {
       return ''
   }
 })
+
+// 从后端获取当前初始化状态
+async function fetchCurrentStatus() {
+  if (!props.projectId) return
+  
+  try {
+    const projectStatus = await trpc.projects.getStatus.query({ projectId: props.projectId })
+    
+    if (projectStatus?.project) {
+      const project = projectStatus.project
+      
+      // 检查项目状态
+      if (project.status === 'active') {
+        status.value = 'completed'
+        progress.value = 100
+        displayProgress.value = 100
+        updateSteps(100)
+        emit('complete')
+        return // 已完成，不需要连接 subscription
+      }
+      
+      if (project.status === 'failed') {
+        status.value = 'failed'
+        const initStatus = project.initializationStatus as any
+        errorMessage.value = initStatus?.error || '初始化失败'
+        emit('error', errorMessage.value!)
+        return // 已失败，不需要连接 subscription
+      }
+      
+      // 项目正在初始化，恢复进度
+      if (project.status === 'initializing' && project.initializationStatus) {
+        const initStatus = project.initializationStatus as any
+        const savedProgress = initStatus.progress || 0
+        
+        if (savedProgress > 0) {
+          progress.value = savedProgress
+          displayProgress.value = savedProgress
+          updateSteps(savedProgress)
+          if (initStatus.step) {
+            currentStep.value = initStatus.step
+          }
+          console.log(`恢复初始化进度: ${savedProgress}%`)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch current status:', error)
+  }
+  
+  // 连接 subscription 监听后续进度
+  connectSubscription()
+}
 
 function connectSubscription() {
   if (!props.projectId) return
@@ -394,8 +479,9 @@ function connectSubscription() {
         },
         onError: (err: any) => {
           console.error('tRPC subscription error:', err)
-          status.value = 'failed'
-          errorMessage.value = '连接失败，请刷新页面重试'
+          // 不立即标记为失败，可能只是连接问题
+          // 尝试重新获取状态
+          fetchCurrentStatus()
         },
       },
     )
@@ -408,7 +494,8 @@ function connectSubscription() {
 
 onMounted(() => {
   if (props.projectId) {
-    connectSubscription()
+    // 先获取当前状态，再连接 subscription
+    fetchCurrentStatus()
   }
 })
 

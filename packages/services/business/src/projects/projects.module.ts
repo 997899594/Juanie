@@ -1,13 +1,9 @@
 import { QueueModule } from '@juanie/core/queue'
-import { AuditLogsModule, NotificationsModule } from '@juanie/service-extensions'
-import { AuthModule } from '@juanie/service-foundation'
+import { AuditLogsModule, NotificationsModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { ScheduleModule } from '@nestjs/schedule'
 import { DeploymentsModule } from '../deployments/deployments.module'
 import { EnvironmentsModule } from '../environments/environments.module'
-import { FluxModule } from '../gitops/flux/flux.module'
-import { GitProvidersModule } from '../gitops/git-providers/git-providers.module'
-import { K3sModule } from '../gitops/k3s/k3s.module'
 import { RepositoriesModule } from '../repositories/repositories.module'
 import { ProjectInitializationModule } from './initialization'
 import { ProjectInitializationService } from './project-initialization.service'
@@ -17,22 +13,22 @@ import { ProjectStatusService } from './project-status.service'
 import { ProjectsService } from './projects.service'
 import { TemplatesModule } from './templates'
 
+/**
+ * Projects Module
+ *
+ * 注意：以下模块是全局模块，无需显式导入：
+ * - AuthModule, FluxModule, K3sModule, GitProvidersModule
+ */
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     QueueModule,
-    AuthModule,
     EnvironmentsModule,
     RepositoriesModule,
-    FluxModule,
-    GitProvidersModule,
-    K3sModule,
     DeploymentsModule,
     AuditLogsModule,
     NotificationsModule,
-    // 模板服务模块
     TemplatesModule,
-    // 初始化模块
     ProjectInitializationModule,
   ],
   providers: [

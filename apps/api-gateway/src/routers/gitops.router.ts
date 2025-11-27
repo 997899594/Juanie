@@ -50,7 +50,10 @@ export class GitOpsRouter {
             repositoryId: z.string().uuid(),
             repositoryUrl: z.string(),
             repositoryBranch: z.string(),
-            accessToken: z.string(),
+            credential: z.object({
+              type: z.enum(['github_deploy_key', 'gitlab_token', 'access_token']),
+              token: z.string(),
+            }),
             environments: z.array(
               z.object({
                 id: z.string().uuid(),

@@ -65,7 +65,8 @@ export class TemplateLoader implements OnModuleInit {
   constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {
     // 模板目录路径（项目根目录下的 templates/）
     // 优先使用环境变量，否则使用相对路径
-    const templatesPath = process.env.TEMPLATES_DIR || path.resolve(process.cwd(), '../../templates')
+    const templatesPath =
+      process.env.TEMPLATES_DIR || path.resolve(process.cwd(), '../../templates')
     this.templatesDir = path.normalize(templatesPath)
   }
 
@@ -132,6 +133,9 @@ export class TemplateLoader implements OnModuleInit {
     return templates
   }
 
+  // 辅助资源目录，不是项目模板
+  private readonly RESOURCE_DIRS = ['ci-cd', 'dockerfiles', 'shared', 'common']
+
   /**
    * 加载单个模板
    */
@@ -139,6 +143,12 @@ export class TemplateLoader implements OnModuleInit {
     templatePath: string,
     dirName: string,
   ): Promise<NewProjectTemplate | null> {
+    // 跳过辅助资源目录（静默处理，不输出警告）
+    if (this.RESOURCE_DIRS.includes(dirName)) {
+      this.logger.debug(`  ℹ Skipping resource directory: ${dirName}`)
+      return null
+    }
+
     // 检查 template.yaml 是否存在
     const yamlPath = path.join(templatePath, 'template.yaml')
     const yamlExists = await this.fileExists(yamlPath)
@@ -192,6 +202,9 @@ export class TemplateLoader implements OnModuleInit {
    * 转换为数据库格式
    */
   private convertToDbFormat(metadata: TemplateMetadata, templatePath: string): NewProjectTemplate {
+    // 将绝对路径转换为相对于 templatesDir 的路径，避免泄露本地路径
+    const relativePath = path.relative(this.templatesDir, templatePath)
+
     return {
       name: metadata.metadata.name,
       slug: metadata.metadata.slug,
@@ -199,8 +212,8 @@ export class TemplateLoader implements OnModuleInit {
       category: metadata.metadata.category || 'other',
       tags: [
         ...(metadata.metadata.tags || []),
-        // 将模板路径存储在 tags 中（临时方案）
-        `path:${templatePath}`,
+        // 存储相对路径而非绝对路径，避免泄露本地文件系统信息
+        `template:${relativePath}`,
       ],
       icon: metadata.metadata.icon,
       techStack: {
@@ -311,13 +324,15 @@ export class TemplateLoader implements OnModuleInit {
       return null
     }
 
-    // 从 tags 中提取路径
-    const pathTag = template.tags.find((tag: string) => tag.startsWith('path:'))
-    if (!pathTag) {
+    // 从 tags 中提取相对路径
+    const templateTag = template.tags.find((tag: string) => tag.startsWith('template:'))
+    if (!templateTag) {
       return null
     }
 
-    return pathTag.replace('path:', '')
+    // 提取相对路径并拼接为绝对路径
+    const relativePath = templateTag.replace('template:', '')
+    return path.join(this.templatesDir, relativePath)
   }
 
   /**

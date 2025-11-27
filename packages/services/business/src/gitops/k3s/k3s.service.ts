@@ -182,13 +182,20 @@ export class K3sService implements OnModuleInit {
     }
 
     try {
-      const response = await this.appsApi.createNamespacedDeployment(namespace, deployment)
-      return response.body
+      const response = await this.appsApi.createNamespacedDeployment({
+        namespace,
+        body: deployment,
+      })
+      return response
     } catch (error: any) {
       if (error.response?.statusCode === 409) {
         // Deployment 已存在，更新它
-        const response = await this.appsApi.replaceNamespacedDeployment(name, namespace, deployment)
-        return response.body
+        const response = await this.appsApi.replaceNamespacedDeployment({
+          name,
+          namespace,
+          body: deployment,
+        })
+        return response
       }
       throw error
     }
@@ -228,13 +235,20 @@ export class K3sService implements OnModuleInit {
     }
 
     try {
-      const response = await this.k8sApi.createNamespacedService(namespace, service)
-      return response.body
+      const response = await this.k8sApi.createNamespacedService({
+        namespace,
+        body: service,
+      })
+      return response
     } catch (error: any) {
       if (error.response?.statusCode === 409) {
         // Service 已存在，更新它
-        const response = await this.k8sApi.replaceNamespacedService(name, namespace, service)
-        return response.body
+        const response = await this.k8sApi.replaceNamespacedService({
+          name,
+          namespace,
+          body: service,
+        })
+        return response
       }
       throw error
     }
@@ -246,8 +260,8 @@ export class K3sService implements OnModuleInit {
       throw new Error('K3s 未连接')
     }
 
-    const response = await this.appsApi.readNamespacedDeployment(name, namespace)
-    return response.body
+    const response = await this.appsApi.readNamespacedDeployment({ name, namespace })
+    return response
   }
 
   // 列出 Deployments
@@ -256,8 +270,8 @@ export class K3sService implements OnModuleInit {
       return []
     }
 
-    const response = await this.appsApi.listNamespacedDeployment(namespace)
-    return response.body.items || []
+    const response = await this.appsApi.listNamespacedDeployment({ namespace })
+    return response.items || []
   }
 
   // 删除 Deployment
@@ -266,7 +280,7 @@ export class K3sService implements OnModuleInit {
       throw new Error('K3s 未连接')
     }
 
-    await this.appsApi.deleteNamespacedDeployment(name, namespace)
+    await this.appsApi.deleteNamespacedDeployment({ name, namespace })
   }
 
   // 获取 Pods
@@ -275,15 +289,11 @@ export class K3sService implements OnModuleInit {
       return []
     }
 
-    const response = await this.k8sApi.listNamespacedPod(
+    const response = await this.k8sApi.listNamespacedPod({
       namespace,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
       labelSelector,
-    )
-    return response.body.items || []
+    })
+    return response.items || []
   }
 
   // 获取 Pod 日志
@@ -308,8 +318,12 @@ export class K3sService implements OnModuleInit {
       deployment.spec.replicas = replicas
     }
 
-    const response = await this.appsApi.replaceNamespacedDeployment(name, namespace, deployment)
-    return response.body
+    const response = await this.appsApi.replaceNamespacedDeployment({
+      name,
+      namespace,
+      body: deployment,
+    })
+    return response
   }
 
   // 创建 Namespace
@@ -327,13 +341,13 @@ export class K3sService implements OnModuleInit {
     }
 
     try {
-      const response = await this.k8sApi.createNamespace(namespace)
-      return response.body
+      const response = await this.k8sApi.createNamespace({ body: namespace })
+      return response
     } catch (error: any) {
       if (error.response?.statusCode === 409) {
         // Namespace 已存在
-        const response = await this.k8sApi.readNamespace(name)
-        return response.body
+        const response = await this.k8sApi.readNamespace({ name })
+        return response
       }
       throw error
     }
@@ -346,7 +360,7 @@ export class K3sService implements OnModuleInit {
     }
 
     const response = await this.k8sApi.listNamespace()
-    return response.body.items || []
+    return response.items || []
   }
 
   // 删除 Namespace
@@ -355,7 +369,7 @@ export class K3sService implements OnModuleInit {
       throw new Error('K3s 未连接')
     }
 
-    await this.k8sApi.deleteNamespace(name)
+    await this.k8sApi.deleteNamespace({ name })
   }
 
   // 创建 Secret
@@ -387,13 +401,20 @@ export class K3sService implements OnModuleInit {
     }
 
     try {
-      const response = await this.k8sApi.createNamespacedSecret(namespace, secret)
-      return response.body
+      const response = await this.k8sApi.createNamespacedSecret({
+        namespace,
+        body: secret,
+      })
+      return response
     } catch (error: any) {
       if (error.response?.statusCode === 409) {
         // Secret 已存在，更新它
-        const response = await this.k8sApi.replaceNamespacedSecret(name, namespace, secret)
-        return response.body
+        const response = await this.k8sApi.replaceNamespacedSecret({
+          name,
+          namespace,
+          body: secret,
+        })
+        return response
       }
       throw error
     }
@@ -414,8 +435,8 @@ export class K3sService implements OnModuleInit {
     }
 
     try {
-      const response = await this.k8sApi.listNamespacedEvent(namespace)
-      const events = response.body.items || []
+      const response = await this.k8sApi.listNamespacedEvent({ namespace })
+      const events = response.items || []
 
       // 按时间排序
       events.sort((a, b) => {
