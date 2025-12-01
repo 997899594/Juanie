@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import * as k8s from '@kubernetes/client-node'
+// K8s client removed - using K3sService instead
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { eq } from 'drizzle-orm'
@@ -603,39 +603,18 @@ export class GitOpsService {
   /**
    * Get Git credentials from K8s Secret
    * Requirement: 2.2, 2.3
+   * Note: This method is deprecated and should use K3sService instead
    */
   private async getGitCredentials(secretRef: string): Promise<{
     username?: string
     password?: string
     sshKey?: string
   }> {
-    try {
-      const kc = new k8s.KubeConfig()
-      kc.loadFromDefault()
-      const k8sApi = kc.makeApiClient(k8s.CoreV1Api)
-
-      const namespace = 'flux-system'
-      const secret = await k8sApi.readNamespacedSecret({
-        name: secretRef,
-        namespace,
-      })
-
-      const data = secret.data || {}
-
-      return {
-        username: data.username
-          ? Buffer.from(data.username, 'base64').toString('utf-8')
-          : undefined,
-        password: data.password
-          ? Buffer.from(data.password, 'base64').toString('utf-8')
-          : undefined,
-        sshKey: data.identity ? Buffer.from(data.identity, 'base64').toString('utf-8') : undefined,
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      this.logger.error(`Failed to get Git credentials from secret ${secretRef}:`, error)
-      throw new Error(`Failed to get Git credentials: ${errorMessage}`)
-    }
+    // TODO: Implement using K3sService.getSecret()
+    this.logger.warn('getGitCredentials is not yet implemented with BunK8sClient')
+    throw new Error(
+      'Git credentials from K8s Secret not yet implemented. Use environment variables instead.',
+    )
   }
 
   /**

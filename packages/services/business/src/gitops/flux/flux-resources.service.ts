@@ -1,10 +1,10 @@
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import * as k8s from '@kubernetes/client-node'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { load as loadYaml } from 'js-yaml'
 import { KnownHostsService } from '../git-auth/known-hosts.service'
 import { K3sService } from '../k3s/k3s.service'
 import { FluxMetricsService } from './flux-metrics.service'
@@ -688,33 +688,27 @@ export class FluxResourcesService {
    */
   private async applyYAMLToK3s(yaml: string): Promise<void> {
     try {
-      const kc = new k8s.KubeConfig()
-      const kubeconfigPath =
-        this.config.get<string>('KUBECONFIG_PATH') || this.config.get<string>('K3S_KUBECONFIG_PATH')
-
-      if (kubeconfigPath) {
-        let path = kubeconfigPath
-        if (path.startsWith('~')) {
-          const homeDir = process.env.HOME || process.env.USERPROFILE
-          path = path.replace('~', homeDir || '')
-        }
-        kc.loadFromFile(path)
-      } else {
-        kc.loadFromDefault()
-      }
-
-      const obj = k8s.loadYaml(yaml)
+      const obj = loadYaml(yaml) as any
       if (!obj || typeof obj !== 'object') {
         throw new Error('无效的 YAML')
       }
 
-      const client = k8s.KubernetesObjectApi.makeApiClient(kc)
+      const client = this.k3s.getCustomObjectsApi()
+      const { apiVersion, kind, metadata } = obj
+      const [group, version] = apiVersion.split('/')
+      const namespace = metadata.namespace || 'default'
+      const name = metadata.name
+
+      // 转换 kind 为复数形式
+      const plural = kind.toLowerCase() + 's'
 
       try {
-        await client.create(obj as k8s.KubernetesObject)
+        await client.createCustomResource(group, version, plural, namespace, obj)
       } catch (error: any) {
-        if (error.statusCode === 409) {
-          await client.patch(obj as k8s.KubernetesObject)
+        if (error.message?.includes('409') || error.message?.includes('already exists')) {
+          // 资源已存在，尝试更新
+          await client.deleteCustomResource(group, version, plural, namespace, name)
+          await client.createCustomResource(group, version, plural, namespace, obj)
         } else {
           throw error
         }
@@ -729,34 +723,16 @@ export class FluxResourcesService {
    */
   private async deleteK3sResource(kind: string, name: string, namespace: string): Promise<void> {
     try {
-      const kc = new k8s.KubeConfig()
-      const kubeconfigPath =
-        this.config.get<string>('KUBECONFIG_PATH') || this.config.get<string>('K3S_KUBECONFIG_PATH')
+      const client = this.k3s.getCustomObjectsApi()
 
-      if (kubeconfigPath) {
-        let path = kubeconfigPath
-        if (path.startsWith('~')) {
-          const homeDir = process.env.HOME || process.env.USERPROFILE
-          path = path.replace('~', homeDir || '')
-        }
-        kc.loadFromFile(path)
-      } else {
-        kc.loadFromDefault()
-      }
+      const apiVersion =
+        kind === 'kustomization' ? 'kustomize.toolkit.fluxcd.io/v1' : 'helm.toolkit.fluxcd.io/v2'
+      const parts = apiVersion.split('/')
+      const group = parts[0] || 'core'
+      const version = parts[1] || 'v1'
+      const plural = kind.toLowerCase() + 's'
 
-      const client = k8s.KubernetesObjectApi.makeApiClient(kc)
-
-      const obj: k8s.KubernetesObject = {
-        apiVersion:
-          kind === 'kustomization' ? 'kustomize.toolkit.fluxcd.io/v1' : 'helm.toolkit.fluxcd.io/v2',
-        kind: kind === 'kustomization' ? 'Kustomization' : 'HelmRelease',
-        metadata: {
-          name,
-          namespace,
-        },
-      }
-
-      await client.delete(obj)
+      await client.deleteCustomResource(group, version, plural, namespace || 'default', name)
     } catch (error: any) {
       throw new Error(`从 K3s 删除资源失败: ${error.message}`)
     }

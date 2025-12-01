@@ -8,6 +8,8 @@ import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import Redis from 'ioredis'
 import { GitProviderService } from '../gitops/git-providers/git-provider.service'
+import { calculateStepProgress } from '../projects/initialization/initialization-steps'
+import { ProgressManagerService } from '../projects/initialization/progress-manager.service'
 import { ProjectInitializationService } from '../projects/project-initialization.service'
 
 /**
@@ -33,6 +35,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
     private readonly oauthAccounts: OAuthAccountsService,
     private readonly initService: ProjectInitializationService,
     private readonly gitProvider: GitProviderService,
+    private readonly progressManager: ProgressManagerService,
   ) {
     const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
     this.redis = new Redis(redisUrl)
@@ -65,26 +68,36 @@ export class ProjectInitializationWorker implements OnModuleInit {
   }
 
   /**
-   * 更新进度并发布到 Redis（精简版）
+   * 更新进度（使用 ProgressManager 保证单调性）
    */
   private async updateProgress(job: Job, progress: number, message: string) {
     const projectId = job.data.projectId
     if (!projectId) return
 
-    // 更新 BullMQ 进度
-    await job.updateProgress(progress)
+    // 使用 ProgressManager 更新进度（自动保证单调性）
+    const updated = await this.progressManager.updateProgress(projectId, progress, message)
 
-    const event = {
-      type: 'initialization.progress',
-      data: { projectId, progress, message },
-      timestamp: Date.now(),
+    if (updated) {
+      // 同步更新 BullMQ 进度
+      await job.updateProgress(progress)
+      await job.log(`[${progress}%] ${message}`)
     }
+  }
 
-    // 直接发布到 Redis Pub/Sub
-    this.logger.debug(`Publishing progress: ${progress}% - ${message}`)
-    await this.redis.publish(`project:${projectId}`, JSON.stringify(event))
+  /**
+   * 更新步骤内的进度
+   */
+  private async updateStepProgress(
+    job: Job,
+    stepName: string,
+    stepProgress: number,
+    message: string,
+  ) {
+    const totalProgress = calculateStepProgress(stepName, stepProgress)
+    this.logger.debug(`[${stepName}] ${stepProgress}% -> 总进度 ${totalProgress}% - ${message}`)
+    await this.updateProgress(job, totalProgress, message)
 
-    // 添加小延迟确保事件被处理
+    // 添加延迟，避免进度更新过快导致前端渲染问题
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 
@@ -95,16 +108,21 @@ export class ProjectInitializationWorker implements OnModuleInit {
       // 解析 OAuth token（如果需要）
       const resolvedRepository = await this.resolveAccessToken(userId, repository)
 
-      // 阶段 1: 创建 Git 仓库 (0-40%)
-      await this.updateProgress(job, 5, '开始创建 Git 仓库...')
+      // 步骤 1: 创建 Git 仓库 (0-20%)
+      await this.updateStepProgress(job, 'create_repository', 0, '开始创建 Git 仓库...')
 
       const repoInfo = await this.createRepository(job, resolvedRepository)
-      await this.updateProgress(job, 40, `仓库创建成功: ${repoInfo.fullName}`)
 
-      // 阶段 2: 推送渲染后的模板代码 (40-60%)
-      await this.updateProgress(job, 45, '推送模板代码...')
+      await this.updateStepProgress(
+        job,
+        'create_repository',
+        100,
+        `仓库创建成功: ${repoInfo.fullName}`,
+      )
 
-      // 从渲染目录读取文件并推送
+      // 步骤 2: 推送模板代码 (20-50%)
+      await this.updateStepProgress(job, 'push_template', 0, '准备推送模板代码...')
+
       const templateOutputDir = `/tmp/projects/${projectId}`
       await this.pushRenderedTemplate(
         job,
@@ -113,10 +131,11 @@ export class ProjectInitializationWorker implements OnModuleInit {
         repoInfo,
         templateOutputDir,
       )
-      await this.updateProgress(job, 60, '模板代码推送完成')
 
-      // 阶段 3: 创建数据库记录 (60-70%)
-      await this.updateProgress(job, 65, '创建数据库记录...')
+      await this.updateStepProgress(job, 'push_template', 100, '模板代码推送完成')
+
+      // 步骤 3: 创建数据库记录 (50-60%)
+      await this.updateStepProgress(job, 'create_database_records', 0, '创建数据库记录...')
 
       const dbRepository = await this.createRepositoryRecord(
         projectId,
@@ -124,10 +143,10 @@ export class ProjectInitializationWorker implements OnModuleInit {
         repoInfo,
       )
 
-      await this.updateProgress(job, 70, '数据库记录已创建')
+      await this.updateStepProgress(job, 'create_database_records', 100, '数据库记录已创建')
 
-      // 阶段 4: 创建 GitOps 资源 (70-90%)
-      await this.updateProgress(job, 75, '创建 GitOps 资源...')
+      // 步骤 4: 配置 GitOps (60-90%)
+      await this.updateStepProgress(job, 'setup_gitops', 0, '开始配置 GitOps...')
 
       const gitopsCreated = await this.createGitOpsResources(
         job,
@@ -138,13 +157,18 @@ export class ProjectInitializationWorker implements OnModuleInit {
       )
 
       if (gitopsCreated) {
-        await this.updateProgress(job, 90, 'GitOps 资源创建完成')
+        await this.updateStepProgress(job, 'setup_gitops', 100, 'GitOps 资源创建完成')
       } else {
-        await this.updateProgress(job, 90, 'GitOps 资源创建跳过（Flux 未安装）')
+        await this.updateStepProgress(
+          job,
+          'setup_gitops',
+          100,
+          'GitOps 资源创建跳过（Flux 未安装）',
+        )
       }
 
-      // 阶段 5: 更新项目状态 (90-100%)
-      await this.updateProgress(job, 95, '更新项目状态...')
+      // 步骤 5: 完成初始化 (90-100%)
+      await this.updateStepProgress(job, 'finalize', 0, '更新项目状态...')
 
       await this.db
         .update(schema.projects)
@@ -154,33 +178,21 @@ export class ProjectInitializationWorker implements OnModuleInit {
             step: 'completed',
             progress: 100,
             completedSteps: [
-              'create_project',
-              'load_template',
-              'create_environments',
               'create_repository',
-              'push_code',
-              'create_gitops_resources',
+              'push_template',
+              'create_database_records',
+              'setup_gitops',
+              'finalize',
             ],
           },
           updatedAt: new Date(),
         })
         .where(eq(schema.projects.id, projectId))
 
-      await this.updateProgress(job, 100, '项目初始化完成！')
+      await this.updateStepProgress(job, 'finalize', 100, '项目初始化完成！')
 
-      // 推送初始化完成事件
-      await this.redis.publish(
-        `project:${projectId}`,
-        JSON.stringify({
-          type: 'initialization.completed',
-          data: {
-            projectId,
-            repositoryId: dbRepository.id,
-            repositoryFullName: repoInfo.fullName,
-          },
-          timestamp: Date.now(),
-        }),
-      )
+      // 标记完成（自动发布完成事件）
+      await this.progressManager.markCompleted(projectId)
 
       this.logger.log(`Project ${projectId} initialization completed successfully`)
 
@@ -209,18 +221,9 @@ export class ProjectInitializationWorker implements OnModuleInit {
         })
         .where(eq(schema.projects.id, projectId))
 
-      // 推送失败事件
-      await this.redis.publish(
-        `project:${projectId}`,
-        JSON.stringify({
-          type: 'initialization.failed',
-          data: {
-            projectId,
-            error: error instanceof Error ? error.message : String(error),
-          },
-          timestamp: Date.now(),
-        }),
-      )
+      // 标记失败（自动发布失败事件）
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      await this.progressManager.markFailed(projectId, errorMessage)
 
       throw error
     }
@@ -236,6 +239,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
   ): Promise<{ fullName: string; cloneUrl: string; defaultBranch: string }> {
     const { provider, name, visibility, accessToken, defaultBranch } = repository
 
+    await this.updateStepProgress(job, 'create_repository', 30, `正在创建仓库: ${name}`)
     await job.log(`正在创建仓库: ${name}`)
 
     try {
@@ -249,6 +253,8 @@ export class ProjectInitializationWorker implements OnModuleInit {
           autoInit: true,
         },
       )
+
+      await this.updateStepProgress(job, 'create_repository', 70, '仓库创建成功，初始化分支...')
 
       return {
         fullName: repoInfo.fullName,
@@ -310,18 +316,19 @@ export class ProjectInitializationWorker implements OnModuleInit {
       }
     }
 
-    await job.log(`正在读取模板文件: ${templateOutputDir}`)
+    // 读取模板文件
     await readDirectory(templateOutputDir)
+
+    await this.updateStepProgress(job, 'push_template', 20, `找到 ${files.length} 个文件...`)
 
     if (files.length === 0) {
       this.logger.warn('No files found in template output directory, using fallback')
-      await job.log('⚠️ 未找到模板文件，使用默认文件')
-      // 使用默认文件作为后备
+      await this.updateStepProgress(job, 'push_template', 30, '使用默认模板文件...')
       await this.pushInitialCode(job, provider, accessToken, repoInfo)
       return
     }
 
-    await job.log(`找到 ${files.length} 个文件，开始推送...`)
+    await this.updateStepProgress(job, 'push_template', 40, `准备推送 ${files.length} 个文件...`)
 
     await this.pushFilesToRepository(
       job,
@@ -332,7 +339,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
       repoInfo.defaultBranch,
     )
 
-    await job.log(`✅ 成功推送 ${files.length} 个文件`)
+    await this.updateStepProgress(job, 'push_template', 80, `成功推送 ${files.length} 个文件`)
   }
 
   /**
@@ -491,7 +498,7 @@ namePrefix: prod-
     files: Array<{ path: string; content: string }>,
     branch: string,
   ): Promise<void> {
-    await this.updateProgress(job, 50, `批量推送 ${files.length} 个文件...`)
+    await this.updateStepProgress(job, 'push_template', 60, `正在推送 ${files.length} 个文件...`)
 
     try {
       await this.gitProvider.pushFiles(
@@ -549,6 +556,8 @@ namePrefix: prod-
     repositoryFullName: string,
   ): Promise<boolean> {
     try {
+      await this.updateStepProgress(job, 'setup_gitops', 10, '获取项目信息...')
+
       // 获取项目信息
       const [project] = await this.db
         .select()
@@ -565,6 +574,8 @@ namePrefix: prod-
         .select()
         .from(schema.environments)
         .where(eq(schema.environments.projectId, projectId))
+
+      await this.updateStepProgress(job, 'setup_gitops', 20, '获取仓库信息...')
 
       // 获取仓库信息
       const [repository] = await this.db
@@ -584,6 +595,8 @@ namePrefix: prod-
         await job.log('GitOps 资源创建已跳过（无用户信息）')
         return false
       }
+
+      await this.updateStepProgress(job, 'setup_gitops', 30, '验证访问权限...')
 
       let accessToken: string | null = null
 
@@ -634,6 +647,7 @@ namePrefix: prod-
       }
 
       // 使用事件驱动架构：发布 GitOps 设置请求事件
+      await this.updateStepProgress(job, 'setup_gitops', 50, '创建 Kubernetes 资源...')
       await job.log('🚀 开始创建 GitOps 资源...')
 
       const success = await this.initService.requestGitOpsSetup({
@@ -656,6 +670,7 @@ namePrefix: prod-
         return false
       }
 
+      await this.updateStepProgress(job, 'setup_gitops', 80, '配置 Flux CD...')
       await job.log('✅ GitOps 资源创建成功')
       this.logger.log('GitOps resources created successfully')
 

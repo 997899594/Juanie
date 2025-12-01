@@ -2,6 +2,7 @@ import { QueueModule as CoreQueueModule } from '@juanie/core/queue'
 import { AuthModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { ProgressManagerService } from '../projects/initialization/progress-manager.service'
 import { ProjectsModule } from '../projects/projects.module'
 import { ProjectInitializationWorker } from './project-initialization.worker'
 
@@ -18,7 +19,10 @@ import { ProjectInitializationWorker } from './project-initialization.worker'
     AuthModule,
     ProjectsModule, // 提供 ProjectInitializationService
   ],
-  providers: [ProjectInitializationWorker],
+  providers: [
+    ProgressManagerService, // 直接提供 ProgressManagerService
+    ProjectInitializationWorker,
+  ],
   exports: [ProjectInitializationWorker],
 })
 export class BusinessQueueModule {}

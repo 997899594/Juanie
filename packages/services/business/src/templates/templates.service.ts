@@ -3,12 +3,17 @@ import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { readFile } from 'fs/promises'
 import Handlebars from 'handlebars'
-import { join } from 'path'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 import { z } from 'zod'
 
 // 从 Zod schemas 推导类型
 export type DockerfileConfig = z.infer<typeof dockerfileConfigSchema>
 export type CICDConfig = z.infer<typeof cicdConfigSchema>
+
+// ESM 兼容的 __dirname
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 @Injectable()
 export class TemplatesService {

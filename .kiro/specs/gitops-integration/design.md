@@ -16,7 +16,7 @@
 
 **容器编排**:
 - K3s (轻量级 Kubernetes，已集成)
-- @kubernetes/client-node (K8s API 客户端)
+- BunK8sClient (自研 K8s API 客户端，针对 Bun 优化)
 
 **GitOps 引擎**:
 - Flux v2 (CNCF 孵化项目)
@@ -375,7 +375,7 @@ export const fluxEvents = pgTable('flux_events', {
 // packages/services/flux/src/flux.service.ts
 import { Injectable } from '@nestjs/common';
 import { K3sService } from '@/services/k3s';
-import * as k8s from '@kubernetes/client-node';
+import { BunK8sClient } from '../k3s/bun-k8s-client';
 
 @Injectable()
 export class FluxService {
@@ -415,7 +415,7 @@ export class FluxService {
 ```typescript
 // packages/services/flux/src/flux-watcher.service.ts
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import * as k8s from '@kubernetes/client-node';
+import { K3sService } from '../k3s/k3s.service';
 
 @Injectable()
 export class FluxWatcherService implements OnModuleInit {

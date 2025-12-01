@@ -1,5 +1,6 @@
 import { AuditLogsModule, NotificationsModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
+import { ConfigModule } from '@nestjs/config'
 import { EnvironmentsModule } from '../../environments/environments.module'
 import { RepositoriesModule } from '../../repositories/repositories.module'
 import { TemplatesModule } from '../templates'
@@ -9,6 +10,7 @@ import { FinalizeHandler } from './handlers/finalize.handler'
 import { LoadTemplateHandler } from './handlers/load-template.handler'
 import { RenderTemplateHandler } from './handlers/render-template.handler'
 import { SetupRepositoryHandler } from './handlers/setup-repository.handler'
+import { ProgressManagerService } from './progress-manager.service'
 import { ProjectInitializationStateMachine } from './state-machine'
 
 /**
@@ -18,6 +20,7 @@ import { ProjectInitializationStateMachine } from './state-machine'
  */
 @Module({
   imports: [
+    ConfigModule,
     TemplatesModule,
     EnvironmentsModule,
     RepositoriesModule,
@@ -25,6 +28,8 @@ import { ProjectInitializationStateMachine } from './state-machine'
     AuditLogsModule,
   ],
   providers: [
+    // 进度管理器
+    ProgressManagerService,
     // 状态机
     ProjectInitializationStateMachine,
     // 处理器
@@ -36,6 +41,8 @@ import { ProjectInitializationStateMachine } from './state-machine'
     FinalizeHandler,
   ],
   exports: [
+    // 导出进度管理器
+    ProgressManagerService,
     // 导出状态机
     ProjectInitializationStateMachine,
     // 导出所有处理器（供 ProjectOrchestrator 使用）

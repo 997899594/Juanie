@@ -15,7 +15,6 @@
     "@juanie/core": "workspace:*",
     "@juanie/service-foundation": "workspace:*",
     "@juanie/types": "workspace:*",
-    "@kubernetes/client-node": "^1.0.0",
     "@nestjs/common": "^11.1.7",
     "@nestjs/config": "^3.3.0",
     "@nestjs/core": "^11.1.7",

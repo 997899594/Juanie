@@ -5,6 +5,7 @@ import type { ProjectStatus } from '@juanie/types'
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { ProgressManagerService } from './initialization/progress-manager.service'
 
 /**
  * ProjectStatusService
@@ -17,7 +18,10 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 export class ProjectStatusService {
   private readonly logger = new Logger(ProjectStatusService.name)
 
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private readonly progressManager: ProgressManagerService,
+  ) {}
 
   /**
    * 获取项目完整状态（包括所有关联资源）
@@ -33,6 +37,20 @@ export class ProjectStatusService {
 
     if (!project) {
       throw new Error('项目不存在')
+    }
+
+    // 如果项目正在初始化，使用 Redis 的实时进度
+    if (project.status === 'initializing') {
+      const realtimeProgress = await this.progressManager.getProgressInfo(projectId)
+      if (realtimeProgress) {
+        project.initializationStatus = {
+          step: realtimeProgress.message,
+          progress: realtimeProgress.progress,
+          completedSteps: project.initializationStatus?.completedSteps || [],
+          error: project.initializationStatus?.error,
+          jobId: project.initializationStatus?.jobId,
+        }
+      }
     }
 
     // 获取环境

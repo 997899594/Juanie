@@ -68,10 +68,38 @@
                 id="repo-name"
                 v-model="newRepo.name"
                 placeholder="my-project"
+                :class="{ 'border-destructive': newRepo.name && !repoNameValidation.valid }"
                 @focus="isRepoNameAutoFilled = false"
               />
-              <p class="text-xs text-muted-foreground">
-                只能包含字母、数字、连字符和下划线
+              
+              <!-- 验证提示 -->
+              <div v-if="newRepo.name && !repoNameValidation.valid" class="space-y-2">
+                <p class="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle class="h-3 w-3" />
+                  {{ repoNameValidation.message }}
+                </p>
+                <div v-if="repoNameValidation.suggestion" class="flex items-center gap-2">
+                  <p class="text-xs text-muted-foreground">
+                    建议使用: <code class="px-1.5 py-0.5 bg-muted rounded text-xs">{{ repoNameValidation.suggestion }}</code>
+                  </p>
+                  <Button size="sm" variant="ghost" class="h-6 text-xs" @click="applySuggestedName">
+                    应用
+                  </Button>
+                </div>
+              </div>
+              
+              <!-- 成功提示 -->
+              <p v-else-if="newRepo.name && repoNameValidation.valid && repoNameValidation.message" class="text-xs text-amber-600 flex items-center gap-1">
+                <Info class="h-3 w-3" />
+                {{ repoNameValidation.message }}
+                <Button v-if="repoNameValidation.suggestion" size="sm" variant="ghost" class="h-5 text-xs ml-1" @click="applySuggestedName">
+                  (使用 {{ repoNameValidation.suggestion }})
+                </Button>
+              </p>
+              
+              <!-- 默认提示 -->
+              <p v-else class="text-xs text-muted-foreground">
+                只能包含字母、数字、连字符和下划线，不能以连字符开头或结尾
               </p>
             </div>
 
@@ -217,6 +245,7 @@ import {
 } from '@juanie/ui'
 import { trpc } from '@/lib/trpc'
 import { useToast } from '@/composables/useToast'
+import { validateRepositoryName, sanitizeRepositoryName } from '@/utils/repository'
 
 const props = defineProps<{
   modelValue: any
@@ -354,6 +383,22 @@ const newRepo = ref({
   visibility: 'private' as 'private' | 'public',
 })
 
+// 仓库名称验证
+const repoNameValidation = computed(() => {
+  if (!newRepo.value.name) {
+    return { valid: false, message: '', suggestion: '' }
+  }
+  return validateRepositoryName(newRepo.value.name)
+})
+
+// 自动应用建议的名称
+function applySuggestedName() {
+  if (repoNameValidation.value.suggestion) {
+    newRepo.value.name = repoNameValidation.value.suggestion
+    isRepoNameAutoFilled.value = false
+  }
+}
+
 // 选择提供商
 function selectProvider(provider: any) {
   if (!provider.connected) {
@@ -462,7 +507,12 @@ function updateModelValue() {
   let canProceed = false
 
   if (repositoryMode.value === 'create') {
-    canProceed = !!(selectedProvider.value?.connected && newRepo.value.name)
+    // 创建模式：需要连接账户、有仓库名称且名称验证通过
+    canProceed = !!(
+      selectedProvider.value?.connected && 
+      newRepo.value.name && 
+      repoNameValidation.value.valid
+    )
   } else if (repositoryMode.value === 'existing') {
     canProceed = !!(selectedProvider.value?.connected && existingRepo.value.url && !urlError.value)
   }
@@ -470,12 +520,13 @@ function updateModelValue() {
   emit('update:canProceed', canProceed)
 }
 
-// 监听项目名称变化，自动填充仓库名称
+// 监听项目名称变化，自动填充仓库名称（并清理）
 watch(
   () => props.projectName,
   (newProjectName) => {
     if (newProjectName && repositoryMode.value === 'create' && !newRepo.value.name) {
-      newRepo.value.name = newProjectName
+      // 自动清理项目名称为合法的仓库名称
+      newRepo.value.name = sanitizeRepositoryName(newProjectName)
       isRepoNameAutoFilled.value = true
     }
   },

@@ -44,8 +44,9 @@ import { TemplatesModule } from './templates'
     ProjectMembersService,
     ProjectStatusService,
     ProjectInitializationService,
-    // 重新导出模板服务
+    // 重新导出模块
     TemplatesModule,
+    ProjectInitializationModule, // 导出以便其他模块访问 ProgressManager
   ],
 })
 export class ProjectsModule {}

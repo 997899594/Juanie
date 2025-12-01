@@ -9,6 +9,12 @@ import { setupObservability } from './observability'
 import { setupTrpc } from './trpc/trpc.adapter'
 import { TrpcRouter } from './trpc/trpc.router'
 
+// 开发环境禁用 TLS 证书验证（用于 K3s 自签名证书）
+if (process.env.NODE_ENV === 'development' || process.env.K3S_SKIP_TLS_VERIFY === 'true') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+  console.log('⚠️  已禁用 TLS 证书验证（开发环境）')
+}
+
 // 启动 OpenTelemetry（必须在应用启动前）
 const otelSdk = setupObservability()
 

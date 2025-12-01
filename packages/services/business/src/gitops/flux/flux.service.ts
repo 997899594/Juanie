@@ -165,7 +165,7 @@ export class FluxService implements OnModuleInit {
       const health = await Promise.all(
         components.map(async (name) => {
           try {
-            const deployment = await this.k3s.getDeployment('flux-system', name)
+            const deployment = (await this.k3s.getDeployment('flux-system', name)) as any
             const ready =
               deployment.status?.readyReplicas === deployment.spec?.replicas &&
               (deployment.status?.readyReplicas || 0) > 0

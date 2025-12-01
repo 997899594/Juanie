@@ -1,5 +1,11 @@
 import { REDIS } from '@juanie/core/tokens'
 import {
+  ProjectMembersService,
+  ProjectStatusService,
+  ProjectsService,
+} from '@juanie/service-business'
+import { StorageService } from '@juanie/service-foundation'
+import {
   archiveProjectSchema,
   createProjectSchema,
   createProjectWithTemplateSchema,
@@ -11,12 +17,6 @@ import {
   restoreProjectSchema,
   updateProjectSchema,
 } from '@juanie/types'
-import {
-  ProjectMembersService,
-  ProjectStatusService,
-  ProjectsService,
-} from '@juanie/service-business'
-import { StorageService } from '@juanie/service-foundation'
 import { Inject, Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
@@ -452,36 +452,6 @@ export class ProjectsRouter {
             })
 
             // 清理函数
-            return () => {
-              subscriber.unsubscribe(channel)
-              subscriber.quit()
-            }
-          })
-        }),
-
-      // 订阅任务进度（通用 Redis 频道 job:{id}）
-      onJobProgress: this.trpc.procedure
-        .input(z.object({ jobId: z.string() }))
-        .subscription(({ input }) => {
-          return observable<any>((emit) => {
-            const subscriber = this.redis.duplicate()
-            const channel = `job:${input.jobId}`
-            subscriber.subscribe(channel)
-
-            subscriber.on('message', (_channel, message) => {
-              try {
-                const event = JSON.parse(message)
-                emit.next(event)
-              } catch (error) {
-                console.error('Failed to parse job progress event:', error)
-              }
-            })
-
-            subscriber.on('error', (error) => {
-              console.error('Redis subscription error:', error)
-              emit.error(error)
-            })
-
             return () => {
               subscriber.unsubscribe(channel)
               subscriber.quit()

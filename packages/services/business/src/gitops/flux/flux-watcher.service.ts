@@ -3,7 +3,6 @@ import { K3sEvents } from '@juanie/core/events'
 import { DEPLOYMENT_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
 import type { GitOpsSyncStatusEvent } from '@juanie/types'
-import * as k8s from '@kubernetes/client-node'
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { OnEvent } from '@nestjs/event-emitter'
@@ -25,8 +24,7 @@ interface FluxResourceEvent {
 @Injectable()
 export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(FluxWatcherService.name)
-  private watchers: Map<string, k8s.Watch> = new Map()
-  private kc: k8s.KubeConfig
+  private watchers: Map<string, AbortController> = new Map()
   private isWatching = false
 
   constructor(
@@ -35,9 +33,7 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
     private config: ConfigService,
     private k3s: K3sService,
     private metrics: FluxMetricsService,
-  ) {
-    this.kc = new k8s.KubeConfig()
-  }
+  ) {}
 
   async onModuleInit() {
     // 检查是否启用 Flux Watcher
@@ -48,35 +44,7 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
       return
     }
 
-    // 初始化 kubeconfig
-    try {
-      const kubeconfigPath =
-        this.config.get<string>('KUBECONFIG_PATH') || this.config.get<string>('K3S_KUBECONFIG_PATH')
-
-      if (kubeconfigPath) {
-        let path = kubeconfigPath
-        if (path.startsWith('~')) {
-          const homeDir = process.env.HOME || process.env.USERPROFILE
-          path = path.replace('~', homeDir || '')
-        }
-        this.kc.loadFromFile(path)
-      } else {
-        this.kc.loadFromDefault()
-      }
-
-      // 在开发环境中禁用 TLS 验证
-      const isDevelopment = this.config.get<string>('NODE_ENV') !== 'production'
-      if (isDevelopment) {
-        // 禁用 TLS 证书验证（仅开发环境）
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-        this.logger.log('ℹ️  开发环境：已禁用 TLS 证书验证')
-      }
-
-      // 不在这里启动监听，等待 K3s 连接事件
-    } catch (error: any) {
-      // 静默失败，不影响应用启动
-      this.logger.warn('⚠️  Flux Watcher 初始化失败:', error.message)
-    }
+    this.logger.log('ℹ️  Flux Watcher 已初始化，等待 K3s 连接')
   }
 
   /**
@@ -129,12 +97,12 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
    * 停止所有监听
    */
   async stopWatching() {
-    for (const [key, _watch] of this.watchers.entries()) {
+    for (const [key, controller] of this.watchers.entries()) {
       try {
-        // Note: k8s.Watch doesn't have abort() method, we just clear the map
-        console.log(`✅ 停止监听: ${key}`)
+        controller.abort()
+        this.logger.log(`✅ 停止监听: ${key}`)
       } catch (error: any) {
-        console.warn(`⚠️  停止监听失败 ${key}:`, error.message)
+        this.logger.warn(`⚠️  停止监听失败 ${key}:`, error.message)
       }
     }
 
@@ -144,44 +112,22 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * 监听特定类型的 Flux 资源
+   * Note: This is a placeholder implementation. Full watch functionality requires
+   * implementing a custom watch mechanism using BunK8sClient or kubectl.
    */
   private async watchResource(group: string, version: string, plural: string) {
-    const watch = new k8s.Watch(this.kc)
-    const path = `/apis/${group}/${version}/${plural}`
     const key = `${group}/${version}/${plural}`
 
-    try {
-      await watch.watch(
-        path,
-        {},
-        // 事件回调
-        (type, apiObj, watchObj) => {
-          this.handleResourceEvent(type, apiObj, watchObj).catch((error) => {
-            this.logger.error(`处理 ${plural} 事件失败:`, error)
-          })
-        },
-        // 错误回调
-        (err) => {
-          if (err) {
-            // 如果是 Not Found 错误，说明 Flux CRD 未安装，静默跳过
-            if (err.message?.includes('Not Found')) {
-              return
-            }
+    this.logger.log(`ℹ️  Flux Watcher for ${key} is not yet implemented with BunK8sClient`)
+    this.logger.log(`ℹ️  Consider using polling or kubectl watch as an alternative`)
 
-            // 其他错误也静默处理，避免日志刷屏
-            this.logger.debug(`监听 ${plural} 出错: ${err.message}`)
-          }
+    // TODO: Implement watch using one of these approaches:
+    // 1. Polling with listCustomResources and comparing resourceVersion
+    // 2. Using kubectl watch command and parsing output
+    // 3. Implementing WebSocket-based watch with BunK8sClient
 
-          // 不自动重连，避免在没有 Flux 的环境中持续报错
-        },
-      )
-
-      this.watchers.set(key, watch)
-      this.logger.log(`✅ 开始监听: ${key}`)
-    } catch (error: any) {
-      // 静默失败，不抛出错误
-      this.logger.debug(`监听 ${plural} 失败: ${error.message}`)
-    }
+    // For now, we'll skip watching to avoid errors
+    return
   }
 
   /**

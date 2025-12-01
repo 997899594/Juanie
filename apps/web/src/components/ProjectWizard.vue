@@ -182,16 +182,10 @@
           <div v-if="currentStep === 3">
             <!-- 进度显示 -->
             <div v-if="showProgress" class="mb-6 p-4 border rounded-lg bg-muted/50">
-              <div class="flex items-center gap-3 mb-3">
+              <div class="flex items-center gap-3">
                 <Loader2 class="h-5 w-5 animate-spin text-primary" />
-                <div class="flex-1">
-                  <p class="text-sm font-medium">{{ progressMessage }}</p>
-                  <p v-if="jobProgress" class="text-xs text-muted-foreground mt-1">
-                    进度: {{ jobProgress.progress }}% - {{ jobProgress.state }}
-                  </p>
-                </div>
+                <p class="text-sm font-medium">{{ progressMessage }}</p>
               </div>
-              <Progress v-if="jobProgress" :value="jobProgress.progress" class="h-2" />
             </div>
 
             <div class="border rounded-lg divide-y">
@@ -380,7 +374,6 @@ const repositoryCanProceed = ref(false)
 const showProgress = ref(false)
 const progressMessage = ref('')
 const selectedTemplate = ref<any>(null)
-const jobProgress = ref<any>(null)
 
 // 表单验证 schema
 const formSchema = toTypedSchema(

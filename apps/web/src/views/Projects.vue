@@ -105,20 +105,6 @@
           </DialogDescription>
         </DialogHeader>
         
-        <!-- 删除进度显示 -->
-        <div v-if="showDeleteProgress" class="mb-4 p-4 border rounded-lg bg-muted/50">
-          <div class="flex items-center gap-3 mb-3">
-            <Loader2 class="h-5 w-5 animate-spin text-primary" />
-            <div class="flex-1">
-              <p class="text-sm font-medium">{{ deleteProgressMessage }}</p>
-              <p v-if="jobProgress" class="text-xs text-muted-foreground mt-1">
-                进度: {{ jobProgress.progress }}% - {{ jobProgress.state }}
-              </p>
-            </div>
-          </div>
-          <Progress v-if="jobProgress" :value="jobProgress.progress" class="h-2" />
-        </div>
-
         <div class="space-y-3 py-4">
           <label class="text-sm font-medium text-foreground">Git 仓库处理</label>
           <div class="grid gap-2">
@@ -208,10 +194,10 @@
         </div>
 
         <DialogFooter>
-          <Button variant="outline" @click="isDeleteDialogOpen = false" :disabled="showDeleteProgress">取消</Button>
-          <Button variant="destructive" :disabled="loading || showDeleteProgress" @click="handleDelete">
-            <Loader2 v-if="loading || showDeleteProgress" class="mr-2 h-4 w-4 animate-spin" />
-            {{ showDeleteProgress ? '删除中...' : '删除项目' }}
+          <Button variant="outline" @click="isDeleteDialogOpen = false" :disabled="loading">取消</Button>
+          <Button variant="destructive" :disabled="loading" @click="handleDelete">
+            <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
+            删除项目
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -238,7 +224,6 @@ import {
 } from '@juanie/ui'
 import { Plus, FolderOpen, Building, Search, Loader2 } from 'lucide-vue-next'
 import { useProjects } from '@/composables/useProjects'
-import { useJobProgress } from '@/composables/useJobProgress'
 import { useAppStore } from '@/stores/app'
 
 import ProjectCard from '@/components/ProjectCard.vue'
@@ -275,18 +260,6 @@ const isDeleteDialogOpen = ref(false)
 const editingProject = ref<any>(null)
 const deletingProject = ref<any>(null)
 const repositoryAction = ref<'keep' | 'archive' | 'delete'>('keep')
-const showDeleteProgress = ref(false)
-const deleteProgressMessage = ref('')
-
-// 使用任务进度监听
-const { jobProgress, connectToJob, disconnectJob } = useJobProgress()
-
-// 监听删除任务进度
-watch(jobProgress, (newProgress) => {
-  if (newProgress && showDeleteProgress.value) {
-    deleteProgressMessage.value = newProgress.logs[newProgress.logs.length - 1] || '处理中...'
-  }
-})
 
 // 过滤后的项目列表
 const filteredProjects = computed(() => {
@@ -347,43 +320,13 @@ async function handleDelete() {
   if (!deletingProject.value) return
 
   try {
-    const jobIds = await deleteProject(deletingProject.value.id, { repositoryAction: repositoryAction.value })
+    await deleteProject(deletingProject.value.id, { repositoryAction: repositoryAction.value })
     
-    // 如果有异步任务（删除/归档仓库），显示进度
-    if (jobIds && jobIds.length > 0 && repositoryAction.value !== 'keep') {
-      showDeleteProgress.value = true
-      deleteProgressMessage.value = repositoryAction.value === 'archive' ? '正在归档仓库...' : '正在删除仓库...'
-      
-      // 连接到第一个任务的 SSE 流
-      const firstJobId = jobIds[0]
-      if (firstJobId) {
-        connectToJob(firstJobId)
-      }
-      
-      // 监听任务完成
-      const stopWatch = watch(
-        () => jobProgress.value?.state,
-        (state) => {
-          if (state === 'completed' || state === 'failed') {
-            setTimeout(() => {
-              isDeleteDialogOpen.value = false
-              deletingProject.value = null
-              repositoryAction.value = 'keep'
-              showDeleteProgress.value = false
-              disconnectJob()
-              stopWatch()
-            }, 2000)
-          }
-        }
-      )
-    } else {
-      isDeleteDialogOpen.value = false
-      deletingProject.value = null
-      repositoryAction.value = 'keep'
-    }
+    isDeleteDialogOpen.value = false
+    deletingProject.value = null
+    repositoryAction.value = 'keep'
   } catch (error) {
     console.error('Failed to delete project:', error)
-    showDeleteProgress.value = false
   }
 }
 

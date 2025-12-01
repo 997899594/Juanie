@@ -14,9 +14,10 @@
 
 1. **[系统架构](./architecture/architecture.md)** - 技术栈概览
 2. **[三层服务架构](./architecture/three-tier-architecture.md)** - Foundation/Business/Extensions 分层
-3. **[GitOps 指南](./architecture/gitops.md)** - Flux CD 配置
-4. **[GitOps 深度解析](./architecture/gitops-deep-dive.md)** - GitOps 完整实现细节
-5. **[SSE 实时通信](./architecture/simplified-sse-architecture.md)** - 服务端推送架构
+3. **[Bun K8s 客户端](./architecture/bun-k8s-client.md)** - 自研 Kubernetes 客户端实现
+4. **[GitOps 指南](./architecture/gitops.md)** - Flux CD 配置
+5. **[GitOps 深度解析](./architecture/gitops-deep-dive.md)** - GitOps 完整实现细节
+6. **[SSE 实时通信](./architecture/simplified-sse-architecture.md)** - 服务端推送架构
 
 ### 🔥 深度技术教程 (`tutorials/`)
 核心技术栈深度解析和实践指南

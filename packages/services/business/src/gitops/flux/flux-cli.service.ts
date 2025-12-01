@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import * as k8s from '@kubernetes/client-node'
+// K8s client removed - using K3sService instead
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
@@ -172,43 +172,12 @@ export class FluxCliService {
   }
 
   /**
-   * Alternative method: Apply manifests using Kubernetes client
+   * Alternative method: Apply manifests using kubectl (deprecated)
+   * Note: This method is kept for reference but not used anymore
    */
-  private async applyManifestsWithK8s(yaml: string): Promise<void> {
-    try {
-      const kc = new k8s.KubeConfig()
-
-      if (this.kubeconfig) {
-        kc.loadFromFile(this.kubeconfig)
-      } else {
-        kc.loadFromDefault()
-      }
-
-      // Parse YAML documents
-      const documents = yaml.split('---').filter((doc) => doc.trim())
-
-      for (const doc of documents) {
-        try {
-          const obj = k8s.loadYaml(doc)
-          if (!obj || typeof obj !== 'object') continue
-
-          // Apply the resource
-          const client = k8s.KubernetesObjectApi.makeApiClient(kc)
-          await client.create(obj as k8s.KubernetesObject)
-        } catch (error: any) {
-          // If resource already exists, try to patch it
-          if (error.statusCode === 409) {
-            const client = k8s.KubernetesObjectApi.makeApiClient(kc)
-            const obj = k8s.loadYaml(doc)
-            await client.patch(obj as k8s.KubernetesObject)
-          } else {
-            console.warn('Failed to apply resource:', error.message)
-          }
-        }
-      }
-    } catch (error: any) {
-      throw new Error(`Failed to apply manifests with K8s client: ${error.message}`)
-    }
+  private async applyManifestsWithKubectl(yaml: string): Promise<void> {
+    // This method is deprecated - use applyManifests() instead
+    throw new Error('This method is deprecated. Use applyManifests() instead.')
   }
 
   /**

@@ -33,13 +33,45 @@ export class GitProviderService {
   constructor(private readonly config: ConfigService) {}
 
   /**
+   * 清理仓库名称，使其符合 GitHub/GitLab 命名规范
+   * 规则：
+   * - 只能包含字母、数字、连字符和下划线
+   * - 不能以连字符开头
+   * - 最长 100 个字符
+   */
+  private sanitizeRepositoryName(name: string): string {
+    // 移除所有非法字符，只保留字母、数字、连字符和下划线
+    let sanitized = name
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, '-') // 将非法字符替换为连字符
+      .replace(/^-+/, '') // 移除开头的连字符
+      .replace(/-+/g, '-') // 合并多个连续的连字符
+      .replace(/-+$/, '') // 移除结尾的连字符
+      .substring(0, 100) // 限制长度
+
+    // 如果清理后为空，使用默认名称
+    if (!sanitized) {
+      sanitized = 'project-' + Date.now()
+    }
+
+    return sanitized
+  }
+
+  /**
    * 创建 GitHub 仓库
    */
   async createGitHubRepository(
     accessToken: string,
     options: CreateRepositoryOptions,
   ): Promise<RepositoryInfo> {
-    this.logger.log(`Creating GitHub repository: ${options.name}`)
+    // 清理仓库名称
+    const sanitizedName = this.sanitizeRepositoryName(options.name)
+
+    if (sanitizedName !== options.name) {
+      this.logger.warn(`Repository name sanitized: "${options.name}" -> "${sanitizedName}"`)
+    }
+
+    this.logger.log(`Creating GitHub repository: ${sanitizedName}`)
 
     const response = await fetch('https://api.github.com/user/repos', {
       method: 'POST',
@@ -50,7 +82,7 @@ export class GitProviderService {
         'User-Agent': 'AI-DevOps-Platform',
       },
       body: JSON.stringify({
-        name: options.name,
+        name: sanitizedName,
         description: options.description || '',
         private: options.visibility === 'private',
         auto_init: options.autoInit ?? true,
@@ -95,7 +127,14 @@ export class GitProviderService {
     accessToken: string,
     options: CreateRepositoryOptions,
   ): Promise<RepositoryInfo> {
-    this.logger.log(`Creating GitLab repository: ${options.name}`)
+    // 清理仓库名称
+    const sanitizedName = this.sanitizeRepositoryName(options.name)
+
+    if (sanitizedName !== options.name) {
+      this.logger.warn(`Repository name sanitized: "${options.name}" -> "${sanitizedName}"`)
+    }
+
+    this.logger.log(`Creating GitLab repository: ${sanitizedName}`)
 
     const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
     const apiUrl = `${gitlabUrl.replace(/\/+$/, '')}/api/v4/projects`
@@ -108,7 +147,7 @@ export class GitProviderService {
         'User-Agent': 'AI-DevOps-Platform',
       },
       body: JSON.stringify({
-        name: options.name,
+        name: sanitizedName,
         description: options.description || '',
         visibility: options.visibility,
         initialize_with_readme: options.autoInit ?? true,

@@ -45,7 +45,7 @@ export class FinalizeHandler implements StateHandler {
         initializationStatus: repositoryPending
           ? {
               step: 'setup_repository',
-              progress: 70,
+              progress: 0, // ✅ 从 0 开始，由 Worker 更新
               completedSteps: [
                 'create_project',
                 'load_template',

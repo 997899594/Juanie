@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "bun --watch src/main.ts",
     "build": "tsc",
-    "start": "bun run dist/main.js",
+    "start": "bun src/main.ts",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
