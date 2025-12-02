@@ -511,12 +511,29 @@ const routes: RouteRecordRaw[] = [
           },
         },
       },
+      {
+        path: 'settings/git-accounts',
+        name: 'settings-git-accounts',
+        component: () => import('@/views/settings/GitAccounts.vue'),
+        meta: {
+          title: 'Git 账号管理',
+          navigation: { hidden: true, group: '', icon: '', order: 0 },
+        },
+      },
     ],
   },
   {
     path: '/login',
     name: 'login',
     component: Login,
+  },
+  {
+    path: '/auth/git-callback',
+    name: 'git-callback',
+    component: () => import('@/views/auth/GitCallback.vue'),
+    meta: {
+      title: 'Git 账号关联',
+    },
   },
 ]
 

@@ -34,6 +34,7 @@
               <tr>
                 <th class="px-4 py-3 text-left text-sm font-medium">成员</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">角色</th>
+                <th class="px-4 py-3 text-left text-sm font-medium">Git 同步</th>
                 <th class="px-4 py-3 text-left text-sm font-medium">加入时间</th>
                 <th class="px-4 py-3 text-right text-sm font-medium">操作</th>
               </tr>
@@ -84,6 +85,28 @@
                   </Badge>
                 </td>
 
+                <!-- Git 同步状态 -->
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <Badge
+                      v-if="member.gitSyncStatus"
+                      :variant="getGitSyncVariant(member.gitSyncStatus)"
+                      class="text-xs"
+                    >
+                      <div class="flex items-center gap-1">
+                        <CheckCircle2 v-if="member.gitSyncStatus === 'synced'" class="h-3 w-3" />
+                        <AlertCircle v-else-if="member.gitSyncStatus === 'failed'" class="h-3 w-3" />
+                        <Loader2 v-else-if="member.gitSyncStatus === 'pending'" class="h-3 w-3 animate-spin" />
+                        <XCircle v-else class="h-3 w-3" />
+                        {{ getGitSyncLabel(member.gitSyncStatus) }}
+                      </div>
+                    </Badge>
+                    <Badge v-else variant="outline" class="text-xs">
+                      未关联
+                    </Badge>
+                  </div>
+                </td>
+
                 <!-- 加入时间 -->
                 <td class="px-4 py-3 text-sm text-muted-foreground">
                   {{ formatDate(member.joinedAt) }}
@@ -121,13 +144,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@juanie/ui'
-import { UserPlus, Users, Loader2, Trash2 } from 'lucide-vue-next'
+import { 
+  UserPlus, 
+  Users, 
+  Loader2, 
+  Trash2, 
+  CheckCircle2, 
+  AlertCircle, 
+  XCircle 
+} from 'lucide-vue-next'
 import { format } from 'date-fns'
 
 interface Member {
   id: string
   role: string
   joinedAt: string
+  gitSyncStatus?: 'synced' | 'pending' | 'failed' | 'not_linked'
   user: {
     id: string
     username: string | null
@@ -188,5 +220,22 @@ function canEditRole(member: Member): boolean {
 function canRemove(member: Member): boolean {
   // 简化版本：允许移除所有成员
   return true
+}
+
+function getGitSyncLabel(status: string): string {
+  const labels: Record<string, string> = {
+    synced: '已同步',
+    pending: '同步中',
+    failed: '失败',
+    not_linked: '未关联',
+  }
+  return labels[status] || status
+}
+
+function getGitSyncVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+  if (status === 'synced') return 'default'
+  if (status === 'pending') return 'secondary'
+  if (status === 'failed') return 'destructive'
+  return 'outline'
 }
 </script>

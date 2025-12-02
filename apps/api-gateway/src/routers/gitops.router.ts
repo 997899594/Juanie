@@ -50,10 +50,7 @@ export class GitOpsRouter {
             repositoryId: z.string().uuid(),
             repositoryUrl: z.string(),
             repositoryBranch: z.string(),
-            credential: z.object({
-              type: z.enum(['github_deploy_key', 'gitlab_token', 'access_token']),
-              token: z.string(),
-            }),
+            userId: z.string().uuid(),
             environments: z.array(
               z.object({
                 id: z.string().uuid(),
@@ -63,8 +60,12 @@ export class GitOpsRouter {
             ),
           }),
         )
-        .mutation(async ({ input }) => {
-          const result = await this.fluxResources.setupProjectGitOps(input)
+        .mutation(async ({ input, ctx }) => {
+          // 使用当前用户 ID
+          const result = await this.fluxResources.setupProjectGitOps({
+            ...input,
+            userId: ctx.user.id,
+          })
 
           if (!result.success) {
             throw new TRPCError({

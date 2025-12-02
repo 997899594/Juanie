@@ -61,6 +61,14 @@ troubleshooting/
 
 - [文档重组](refactoring/DOCS_REORGANIZATION.md)
 - [架构重构总结](refactoring/REFACTORING_SUMMARY.md)
+- [Git 认证重构 - Phase 3](refactoring/git-auth-phase3-summary.md)
+- [Git 认证重构 - Phase 4](refactoring/git-auth-phase4-summary.md)
+- [Git 认证重构总结](refactoring/git-auth-refactoring-summary.md)
+- [Git 认证工作区上下文](refactoring/git-auth-workspace-context.md)
+- [进度系统清理](refactoring/progress-system-cleanup-summary.md)
+- [进度系统最终方案](refactoring/progress-system-final-summary.md)
+- [清理完成总结](refactoring/cleanup-complete.md)
+- [最终总结](refactoring/final-summary.md)
 
 ## 相关文档
 

@@ -82,3 +82,11 @@ export const selectUserSchema = z.object({
 
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
+
+// Relations
+import { relations } from 'drizzle-orm'
+import { userGitAccounts } from './user-git-accounts.schema'
+
+export const usersRelations = relations(users, ({ many }) => ({
+  gitAccounts: many(userGitAccounts),
+}))

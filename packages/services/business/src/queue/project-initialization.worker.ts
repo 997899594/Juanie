@@ -321,11 +321,26 @@ export class ProjectInitializationWorker implements OnModuleInit {
 
     await this.updateStepProgress(job, 'push_template', 20, `找到 ${files.length} 个文件...`)
 
+    // 检查是否有 k8s 目录
+    const hasK8sFiles = files.some((f) => f.path.startsWith('k8s/'))
+
     if (files.length === 0) {
       this.logger.warn('No files found in template output directory, using fallback')
       await this.updateStepProgress(job, 'push_template', 30, '使用默认模板文件...')
       await this.pushInitialCode(job, provider, accessToken, repoInfo)
       return
+    }
+
+    // 如果模板文件中没有 k8s 目录，添加默认的 k8s 配置
+    if (!hasK8sFiles) {
+      this.logger.warn('Template files do not include k8s directory, adding default k8s config')
+      await this.updateStepProgress(job, 'push_template', 30, '添加 Kubernetes 配置...')
+
+      // 添加默认的 k8s 文件
+      const k8sFiles = this.getDefaultK8sFiles()
+      files.push(...k8sFiles)
+
+      this.logger.log(`Added ${k8sFiles.length} k8s files to template`)
     }
 
     await this.updateStepProgress(job, 'push_template', 40, `准备推送 ${files.length} 个文件...`)
@@ -340,6 +355,94 @@ export class ProjectInitializationWorker implements OnModuleInit {
     )
 
     await this.updateStepProgress(job, 'push_template', 80, `成功推送 ${files.length} 个文件`)
+  }
+
+  /**
+   * 获取默认的 k8s 配置文件
+   */
+  private getDefaultK8sFiles(): Array<{ path: string; content: string }> {
+    return [
+      {
+        path: 'k8s/base/kustomization.yaml',
+        content: `apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+  - service.yaml
+`,
+      },
+      {
+        path: 'k8s/base/deployment.yaml',
+        content: `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+      - name: app
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+`,
+      },
+      {
+        path: 'k8s/base/service.yaml',
+        content: `apiVersion: v1
+kind: Service
+metadata:
+  name: app
+spec:
+  selector:
+    app: app
+  ports:
+  - port: 80
+    targetPort: 80
+`,
+      },
+      {
+        path: 'k8s/overlays/development/kustomization.yaml',
+        content: `apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namePrefix: development-
+`,
+      },
+      {
+        path: 'k8s/overlays/staging/kustomization.yaml',
+        content: `apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namePrefix: staging-
+`,
+      },
+      {
+        path: 'k8s/overlays/production/kustomization.yaml',
+        content: `apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namePrefix: production-
+`,
+      },
+    ]
   }
 
   /**

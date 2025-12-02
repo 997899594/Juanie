@@ -12,10 +12,14 @@ import type {
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { OrganizationEventsService } from './organization-events.service'
 
 @Injectable()
 export class OrganizationsService {
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private organizationEvents: OrganizationEventsService,
+  ) {}
 
   // 创建组织（自动添加创建者为 owner）
   @Trace('organizations.create')
@@ -23,13 +27,16 @@ export class OrganizationsService {
     return await this.db.transaction(async (tx) => {
       // 创建组织，slug 使用时间戳 + 随机数保证唯一性（用户不可见）
       const slug = `org-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-      
+
       const [org] = await tx
         .insert(schema.organizations)
         .values({
           name: data.name,
           slug,
           displayName: data.displayName,
+          gitSyncEnabled: data.gitSyncEnabled || false,
+          gitProvider: data.gitProvider || null,
+          gitOrgName: data.gitOrgName || null,
         })
         .returning()
 
@@ -42,6 +49,16 @@ export class OrganizationsService {
         organizationId: org.id,
         userId,
         role: 'owner',
+      })
+
+      // 发布组织创建事件 (用于自动同步)
+      this.organizationEvents.emitOrganizationCreated({
+        organizationId: org.id,
+        name: org.name,
+        gitSyncEnabled: org.gitSyncEnabled || false,
+        gitProvider: org.gitProvider || undefined,
+        gitOrgName: org.gitOrgName || undefined,
+        createdBy: userId,
       })
 
       return org
@@ -59,6 +76,11 @@ export class OrganizationsService {
         quotas: schema.organizations.quotas,
         createdAt: schema.organizations.createdAt,
         role: schema.organizationMembers.role,
+        gitSyncEnabled: schema.organizations.gitSyncEnabled,
+        gitProvider: schema.organizations.gitProvider,
+        gitOrgName: schema.organizations.gitOrgName,
+        gitOrgUrl: schema.organizations.gitOrgUrl,
+        gitLastSyncAt: schema.organizations.gitLastSyncAt,
       })
       .from(schema.organizations)
       .innerJoin(
@@ -84,6 +106,12 @@ export class OrganizationsService {
         createdAt: schema.organizations.createdAt,
         updatedAt: schema.organizations.updatedAt,
         role: schema.organizationMembers.role,
+        gitSyncEnabled: schema.organizations.gitSyncEnabled,
+        gitProvider: schema.organizations.gitProvider,
+        gitOrgId: schema.organizations.gitOrgId,
+        gitOrgName: schema.organizations.gitOrgName,
+        gitOrgUrl: schema.organizations.gitOrgUrl,
+        gitLastSyncAt: schema.organizations.gitLastSyncAt,
       })
       .from(schema.organizations)
       .innerJoin(
@@ -163,6 +191,14 @@ export class OrganizationsService {
       })
       .returning()
 
+    // 发布成员添加事件 (用于自动同步)
+    this.organizationEvents.emitMemberAdded({
+      organizationId: orgId,
+      userId: data.invitedUserId,
+      role: data.role,
+      addedBy: userId,
+    })
+
     return newMember
   }
 
@@ -202,6 +238,19 @@ export class OrganizationsService {
       throw new Error('只有组织所有者可以更改成员角色')
     }
 
+    // 获取当前角色
+    const [currentMember] = await this.db
+      .select()
+      .from(schema.organizationMembers)
+      .where(eq(schema.organizationMembers.id, data.memberId))
+      .limit(1)
+
+    if (!currentMember) {
+      throw new Error('成员不存在')
+    }
+
+    const oldRole = currentMember.role
+
     const [updated] = await this.db
       .update(schema.organizationMembers)
       .set({
@@ -209,6 +258,15 @@ export class OrganizationsService {
       })
       .where(eq(schema.organizationMembers.id, data.memberId))
       .returning()
+
+    // 发布角色更新事件 (用于自动同步)
+    this.organizationEvents.emitMemberRoleUpdated({
+      organizationId: orgId,
+      userId: updated.userId,
+      oldRole,
+      newRole: data.role,
+      updatedBy: userId,
+    })
 
     return updated
   }
@@ -239,6 +297,13 @@ export class OrganizationsService {
     await this.db
       .delete(schema.organizationMembers)
       .where(eq(schema.organizationMembers.id, data.memberId))
+
+    // 发布成员移除事件 (用于自动同步)
+    this.organizationEvents.emitMemberRemoved({
+      organizationId: orgId,
+      userId: targetMember[0].userId,
+      removedBy: userId,
+    })
 
     return { success: true }
   }

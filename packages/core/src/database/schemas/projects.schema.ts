@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import {
   index,
   integer,
@@ -10,8 +10,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import { organizations } from './organizations.schema'
+import { projectMembers } from './project-members.schema'
 import { projectTemplates } from './project-templates.schema'
-
 export const projects = pgTable(
   'projects',
   {
@@ -45,6 +45,12 @@ export const projects = pgTable(
     healthScore: integer('health_score'), // 0-100
     healthStatus: text('health_status'), // 'healthy', 'warning', 'critical'
     lastHealthCheck: timestamp('last_health_check'),
+
+    // Git 仓库信息
+    gitProvider: text('git_provider', { enum: ['github', 'gitlab'] }).$type<'github' | 'gitlab'>(),
+    gitRepoUrl: text('git_repo_url'),
+    gitRepoName: text('git_repo_name'),
+    gitDefaultBranch: text('git_default_branch').default('main'),
 
     // 项目配置（JSONB）
     config: jsonb('config')
@@ -81,3 +87,17 @@ export const projects = pgTable(
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
+
+// Relations
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [projects.organizationId],
+    references: [organizations.id],
+  }),
+  template: one(projectTemplates, {
+    fields: [projects.templateId],
+    references: [projectTemplates.id],
+  }),
+  members: many(projectMembers),
+}))

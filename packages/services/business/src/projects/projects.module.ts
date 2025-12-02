@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common'
 import { ScheduleModule } from '@nestjs/schedule'
 import { DeploymentsModule } from '../deployments/deployments.module'
 import { EnvironmentsModule } from '../environments/environments.module'
+import { GitSyncModule } from '../gitops/git-sync/git-sync.module'
 import { RepositoriesModule } from '../repositories/repositories.module'
 import { ProjectInitializationModule } from './initialization'
 import { ProjectInitializationService } from './project-initialization.service'
@@ -17,7 +18,7 @@ import { TemplatesModule } from './templates'
  * Projects Module
  *
  * 注意：以下模块是全局模块，无需显式导入：
- * - AuthModule, FluxModule, K3sModule, GitProvidersModule
+ * - AuthModule, FluxModule, K3sModule, GitProvidersModule, GitSyncModule
  */
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { TemplatesModule } from './templates'
     NotificationsModule,
     TemplatesModule,
     ProjectInitializationModule,
+    GitSyncModule,
   ],
   providers: [
     ProjectsService,

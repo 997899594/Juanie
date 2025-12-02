@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1764573486395,
+      "tag": "0000_fair_paladin",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1764588391664,
+      "tag": "0001_soft_senator_kelly",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1764590606032,
+      "tag": "0002_omniscient_invaders",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1764593607750,
+      "tag": "0003_misty_firedrake",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1764593737182,
+      "tag": "0004_polite_morgan_stark",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1764594634522,
+      "tag": "0005_normal_iron_monger",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1764595035360,
+      "tag": "0006_fantastic_wendell_rand",
+      "breakpoints": true
+    }
+  ]
+}

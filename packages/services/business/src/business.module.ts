@@ -5,7 +5,9 @@ import { EnvironmentsModule } from './environments/environments.module'
 import { FluxModule } from './gitops/flux/flux.module'
 import { GitOpsModule } from './gitops/git-ops/git-ops.module'
 import { GitProvidersModule } from './gitops/git-providers/git-providers.module'
+import { GitSyncModule } from './gitops/git-sync/git-sync.module'
 import { K3sModule } from './gitops/k3s/k3s.module'
+import { WebhookModule } from './gitops/webhooks/webhook.module'
 import { PipelinesModule } from './pipelines/pipelines.module'
 import { ProjectsModule } from './projects/projects.module'
 import { BusinessQueueModule } from './queue/queue.module'
@@ -28,6 +30,8 @@ import { TemplatesModule } from './templates/templates.module'
     GitProvidersModule,
     FluxModule,
     K3sModule,
+    GitSyncModule,
+    WebhookModule,
     // 业务模块
     GitOpsModule,
     ProjectsModule,
@@ -47,6 +51,8 @@ import { TemplatesModule } from './templates/templates.module'
     RepositoriesModule,
     PipelinesModule,
     GitOpsModule,
+    GitSyncModule,
+    WebhookModule,
   ],
 })
 export class BusinessModule {}

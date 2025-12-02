@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { load as loadYaml } from 'js-yaml'
-import { KnownHostsService } from '../git-auth/known-hosts.service'
+import { CredentialManagerService } from '../credentials/credential-manager.service'
 import { K3sService } from '../k3s/k3s.service'
 import { FluxMetricsService } from './flux-metrics.service'
 import { YamlGeneratorService } from './yaml-generator.service'
@@ -49,7 +49,7 @@ export class FluxResourcesService {
     private k3s: K3sService,
     private yamlGenerator: YamlGeneratorService,
     private metrics: FluxMetricsService,
-    private knownHosts: KnownHostsService,
+    private credentialManager: CredentialManagerService,
   ) {}
 
   /**
@@ -441,13 +441,14 @@ export class FluxResourcesService {
 
   /**
    * 为项目设置完整的 GitOps 资源栈
+   * 使用新的凭证管理器，自动处理认证
    */
   async setupProjectGitOps(data: {
     projectId: string
     repositoryId: string
     repositoryUrl: string
     repositoryBranch: string
-    credential: any // GitCredential 对象
+    userId: string // 用于创建凭证
     environments: Array<{
       id: string
       type: 'development' | 'staging' | 'production'
@@ -460,8 +461,7 @@ export class FluxResourcesService {
     kustomizations: string[]
     errors: string[]
   }> {
-    const { projectId, repositoryId, repositoryUrl, repositoryBranch, credential, environments } =
-      data
+    const { projectId, repositoryId, repositoryUrl, repositoryBranch, userId, environments } = data
 
     const result = {
       success: true,
@@ -483,66 +483,43 @@ export class FluxResourcesService {
     }
 
     try {
+      // 1. 创建项目凭证（自动同步到所有环境的 K8s Secret）
+      this.logger.log(`Creating credential for project ${projectId}`)
+      await this.credentialManager.createProjectCredential({ projectId, userId })
+
+      // 2. 为每个环境设置 GitOps 资源
       for (const environment of environments) {
         const namespace = `project-${projectId}-${environment.type}`
         const gitRepoName = `${projectId}-repo`
         const kustomizationName = `${projectId}-${environment.type}`
-        const secretName = `${projectId}-git-auth`
 
         try {
-          // 1. 创建 Namespace
+          // 2.1 创建 Namespace
           this.logger.log(`Creating namespace: ${namespace}`)
           await this.k3s.createNamespace(namespace)
           result.namespaces.push(namespace)
 
-          // 2. 创建 Git 认证 Secret
-          this.logger.log(`Creating Git secret ${secretName} in ${namespace}`)
-          if (credential.type === 'github_deploy_key') {
-            // GitHub Deploy Key 使用 SSH 认证
-            // Flux 要求提供三个字段：
-            // - 'ssh-privatekey': Kubernetes Secret 标准字段
-            // - 'identity': Flux GitRepository 需要的字段（与 ssh-privatekey 相同）
-            // - 'known_hosts': Git 提供商的 SSH 主机密钥（必需）
+          // 2.2 Git Secret 已由 CredentialManager 自动创建 ✅
+          this.logger.log(`Git secret synced to ${namespace}`)
 
-            // 动态获取 known_hosts
-            const knownHostsContent = await this.knownHosts.getKnownHosts('github')
-
-            await this.k3s.createSecret(
-              namespace,
-              secretName,
-              {
-                'ssh-privatekey': credential.token, // Kubernetes 标准字段
-                identity: credential.token, // Flux 需要的字段
-                known_hosts: knownHostsContent, // 动态获取的 known_hosts
-              },
-              'kubernetes.io/ssh-auth',
-            )
-          } else {
-            // GitLab Project Access Token 使用 HTTP Basic Auth
-            await this.k3s.createSecret(
-              namespace,
-              secretName,
-              {
-                username: 'git',
-                password: credential.token,
-              },
-              'kubernetes.io/basic-auth',
-            )
-          }
-
-          // 3. 创建 GitRepository
+          // 2.3 创建 GitRepository
           this.logger.log(`Creating GitRepository: ${gitRepoName} in ${namespace}`)
+
+          // 确保使用 HTTPS URL
+          const httpsUrl = this.convertToHttpsUrl(repositoryUrl)
+          this.logger.log(`Using HTTPS URL: ${httpsUrl}`)
+
           const gitRepo = await this.createGitRepository({
             name: gitRepoName,
             namespace,
-            url: repositoryUrl,
+            url: httpsUrl,
             branch: repositoryBranch,
-            secretRef: secretName,
+            secretRef: `${projectId}-git-auth`,
             interval: '1m',
           })
           result.gitRepositories.push(`${namespace}/${gitRepoName}`)
 
-          // 4. 创建数据库记录 - GitRepository
+          // 2.4 创建数据库记录 - GitRepository
           await this.db.insert(schema.gitopsResources).values({
             projectId,
             environmentId: environment.id,
@@ -551,15 +528,15 @@ export class FluxResourcesService {
             name: gitRepoName,
             namespace,
             config: {
-              url: repositoryUrl,
+              url: httpsUrl,
               branch: repositoryBranch,
-              secretRef: secretName,
+              secretRef: `${projectId}-git-auth`,
               interval: '1m',
             } as any,
             status: gitRepo.status,
           })
 
-          // 5. 创建 Kustomization
+          // 2.5 创建 Kustomization
           this.logger.log(`Creating Kustomization: ${kustomizationName} in ${namespace}`)
           const kustomization = await this.createKustomization({
             name: kustomizationName,
@@ -572,7 +549,7 @@ export class FluxResourcesService {
           })
           result.kustomizations.push(`${namespace}/${kustomizationName}`)
 
-          // 6. 创建数据库记录 - Kustomization
+          // 2.6 创建数据库记录 - Kustomization
           await this.db.insert(schema.gitopsResources).values({
             projectId,
             environmentId: environment.id,
@@ -668,6 +645,34 @@ export class FluxResourcesService {
   }
 
   // ==================== 私有方法 ====================
+
+  /**
+   * 将 SSH URL 转换为 HTTPS URL
+   * 例如：git@github.com:user/repo.git -> https://github.com/user/repo.git
+   */
+  private convertToHttpsUrl(url: string): string {
+    // 如果已经是 HTTPS，直接返回
+    if (url.startsWith('https://')) {
+      return url
+    }
+
+    // 转换 SSH URL 格式
+    // git@github.com:user/repo.git -> https://github.com/user/repo.git
+    // ssh://git@github.com/user/repo.git -> https://github.com/user/repo.git
+    if (url.startsWith('git@') || url.startsWith('ssh://')) {
+      const sshPattern = /^(?:ssh:\/\/)?git@([^:/]+)[:\\/](.+?)(?:\.git)?$/
+      const match = url.match(sshPattern)
+
+      if (match) {
+        const [, host, path] = match
+        return `https://${host}/${path}.git`
+      }
+    }
+
+    // 如果无法识别格式，返回原 URL
+    this.logger.warn(`Unable to convert URL to HTTPS: ${url}`)
+    return url
+  }
 
   /**
    * 创建 Git 认证 Secret（已废弃，由 GitAuthService 处理）

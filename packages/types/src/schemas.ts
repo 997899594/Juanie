@@ -78,6 +78,9 @@ export const sessionSchema = z.object({
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(100),
   displayName: z.string().max(500).optional(),
+  gitSyncEnabled: z.boolean().optional(),
+  gitProvider: z.enum(['github', 'gitlab']).optional(),
+  gitOrgName: z.string().min(1).max(100).optional(),
 })
 
 export const updateOrganizationSchema = z.object({

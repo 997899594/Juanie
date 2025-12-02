@@ -9,6 +9,7 @@ import { AuthRouter } from '../routers/auth.router'
 import { CostTrackingRouter } from '../routers/cost-tracking.router'
 import { DeploymentsRouter } from '../routers/deployments.router'
 import { EnvironmentsRouter } from '../routers/environments.router'
+import { GitSyncRouter } from '../routers/git-sync.router'
 import { GitOpsRouter } from '../routers/gitops.router'
 import { NotificationsRouter } from '../routers/notifications.router'
 import { OrganizationsRouter } from '../routers/organizations.router'
@@ -27,7 +28,7 @@ import { TrpcService } from './trpc.service'
   imports: [
     // Three-tier service architecture
     FoundationModule, // 基础层
-    BusinessModule,   // 业务层
+    BusinessModule, // 业务层
     ExtensionsModule, // 扩展层
   ],
   providers: [
@@ -51,6 +52,7 @@ import { TrpcService } from './trpc.service'
     DeploymentsRouter,
     PipelinesRouter,
     GitOpsRouter,
+    GitSyncRouter,
   ],
   exports: [TrpcService, TrpcRouter],
 })

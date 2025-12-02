@@ -12,6 +12,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@47ng/cloak": "^1.2.0",
     "@juanie/core": "workspace:*",
     "@juanie/service-foundation": "workspace:*",
     "@juanie/types": "workspace:*",
@@ -19,7 +20,9 @@
     "@nestjs/config": "^3.3.0",
     "@nestjs/core": "^11.1.7",
     "@nestjs/event-emitter": "^3.0.1",
-    "@nestjs/schedule": "^4.1.1",
+    "@nestjs/schedule": "^6.0.1",
+    "@node-rs/argon2": "^2.0.2",
+    "@node-rs/bcrypt": "^1.10.7",
     "bullmq": "^5.36.3",
     "drizzle-orm": "^0.44.7",
     "handlebars": "^4.7.8",

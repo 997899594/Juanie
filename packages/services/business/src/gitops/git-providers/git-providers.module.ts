@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { GitProviderService } from './git-provider.service'
+import { GitProviderOrgExtensions } from './git-provider-org-extensions'
 
 /**
  * Git Providers Module
@@ -11,7 +12,7 @@ import { GitProviderService } from './git-provider.service'
 @Global()
 @Module({
   imports: [ConfigModule],
-  providers: [GitProviderService],
-  exports: [GitProviderService],
+  providers: [GitProviderService, GitProviderOrgExtensions],
+  exports: [GitProviderService, GitProviderOrgExtensions],
 })
 export class GitProvidersModule {}

@@ -127,7 +127,19 @@
         </TabsContent>
 
         <!-- 设置标签 -->
-        <TabsContent value="settings">
+        <TabsContent value="settings" class="space-y-4">
+          <!-- Git 同步状态 -->
+          <OrganizationGitSyncStatus
+            :organization="currentOrganization"
+            :syncing="syncingGit"
+            :sync-stats="gitSyncStats"
+            @enable-sync="handleEnableGitSync"
+            @sync-now="handleSyncNow"
+            @view-logs="handleViewLogs"
+            @configure="handleConfigureGitSync"
+          />
+
+          <!-- 基本设置 -->
           <Card>
             <CardHeader>
               <CardTitle>组织设置</CardTitle>
@@ -273,11 +285,14 @@ import {
 } from 'lucide-vue-next'
 import { format } from 'date-fns'
 import { useOrganizations } from '@/composables/useOrganizations'
+import { useToast } from '@/composables/useToast'
 import OrganizationMemberTable from '@/components/OrganizationMemberTable.vue'
 import CreateOrganizationModal from '@/components/CreateOrganizationModal.vue'
+import OrganizationGitSyncStatus from '@/components/OrganizationGitSyncStatus.vue'
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 const orgId = String(route.params.id)
 
 const {
@@ -302,6 +317,8 @@ const isInviteModalOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
 const isRemoveMemberDialogOpen = ref(false)
 const removingMemberId = ref<string | null>(null)
+const syncingGit = ref(false)
+const gitSyncStats = ref<{ totalMembers: number; syncedMembers: number; failedMembers: number } | null>(null)
 
 const inviteForm = ref({
   userId: '',
@@ -413,5 +430,33 @@ function formatQuotaKey(key: string): string {
     maxTeams: '最大团队数',
   }
   return labels[key] || key
+}
+
+// Git 同步相关函数
+function handleEnableGitSync() {
+  toast.info('功能开发中', '启用 Git 同步功能即将上线')
+}
+
+async function handleSyncNow() {
+  syncingGit.value = true
+  try {
+    toast.info('同步中', '正在同步组织成员到 Git 平台...')
+    // TODO: 调用同步 API
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    toast.success('同步成功', '组织成员已同步到 Git 平台')
+  } catch (error) {
+    console.error('Failed to sync:', error)
+    toast.error('同步失败', '同步组织成员失败，请稍后重试')
+  } finally {
+    syncingGit.value = false
+  }
+}
+
+function handleViewLogs() {
+  toast.info('功能开发中', '同步日志查看功能即将上线')
+}
+
+function handleConfigureGitSync() {
+  toast.info('功能开发中', 'Git 同步配置功能即将上线')
 }
 </script>

@@ -607,7 +607,7 @@
         </TabsContent>
 
         <!-- 成员标签 -->
-        <TabsContent value="members">
+        <TabsContent value="members" class="space-y-6">
           <ProjectMemberTable
             :members="members"
             :loading="loading"
@@ -615,6 +615,9 @@
             @update-role="handleUpdateMemberRole"
             @remove="confirmRemoveMember"
           />
+          
+          <!-- Git 同步状态 -->
+          <GitSyncStatus :project-id="projectId" />
         </TabsContent>
 
         <!-- 设置标签 -->
@@ -715,6 +718,7 @@ import PipelinesTab from '@/components/PipelinesTab.vue'
 import DeploymentsTab from '@/components/DeploymentsTab.vue'
 import ResourceTopology from '@/components/ResourceTopology.vue'
 import InitializationProgress from '@/components/InitializationProgress.vue'
+import GitSyncStatus from '@/components/GitSyncStatus.vue'
 
 const route = useRoute()
 const router = useRouter()

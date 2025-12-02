@@ -192,7 +192,13 @@ export class GitProviderService {
   /**
    * 获取 GitHub 用户信息
    */
-  async getGitHubUser(accessToken: string): Promise<{ login: string; id: number }> {
+  async getGitHubUser(accessToken: string): Promise<{
+    login: string
+    id: number
+    type: 'User' | 'Organization'
+    name: string | null
+    email: string | null
+  }> {
     const response = await fetch('https://api.github.com/user', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -206,7 +212,75 @@ export class GitProviderService {
     }
 
     const data = (await response.json()) as any
-    return { login: data.login, id: data.id }
+    return {
+      login: data.login,
+      id: data.id,
+      type: data.type || 'User',
+      name: data.name,
+      email: data.email,
+    }
+  }
+
+  /**
+   * 检查 GitHub 用户是否有创建 Organization 的权限
+   * 个人账号无法通过 API 创建 Organization
+   */
+  async canCreateGitHubOrganization(accessToken: string): Promise<{
+    canCreate: boolean
+    reason?: string
+    accountType: 'personal' | 'enterprise'
+  }> {
+    try {
+      const user = await this.getGitHubUser(accessToken)
+
+      // 检查用户类型
+      if (user.type === 'Organization') {
+        return {
+          canCreate: false,
+          reason: '当前令牌属于组织账号，无法创建新组织',
+          accountType: 'enterprise',
+        }
+      }
+
+      // 尝试获取用户的组织列表，判断是否有企业账号
+      const orgsResponse = await fetch('https://api.github.com/user/orgs', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      })
+
+      if (orgsResponse.ok) {
+        const orgs = (await orgsResponse.json()) as any[]
+
+        // 如果用户已经是某些组织的 owner，可能有企业账号
+        const ownedOrgs = orgs.filter((org) => org.role === 'admin')
+
+        if (ownedOrgs.length > 0) {
+          // 有管理的组织，可能是企业用户，但仍然无法通过 API 创建
+          return {
+            canCreate: false,
+            reason: 'GitHub 个人账号无法通过 API 创建 Organization，请在 GitHub 网站手动创建',
+            accountType: 'personal',
+          }
+        }
+      }
+
+      // 个人账号
+      return {
+        canCreate: false,
+        reason: 'GitHub 个人账号无法通过 API 创建 Organization，请在 GitHub 网站手动创建',
+        accountType: 'personal',
+      }
+    } catch (error) {
+      this.logger.error('Failed to check GitHub organization creation permission:', error)
+      return {
+        canCreate: false,
+        reason: '无法检查账号权限',
+        accountType: 'personal',
+      }
+    }
   }
 
   /**
@@ -849,5 +923,814 @@ export class GitProviderService {
         private: repo.visibility === 'private',
       }))
     }
+  }
+
+  /**
+   * 添加协作者到 GitHub 仓库
+   * Requirements: 4.2, 4.7
+   */
+  async addGitHubCollaborator(
+    accessToken: string,
+    fullName: string,
+    username: string,
+    permission: 'pull' | 'push' | 'admin' | 'maintain' | 'triage' = 'push',
+  ): Promise<void> {
+    this.logger.log(`Adding collaborator ${username} to GitHub repository ${fullName}`)
+
+    const response = await fetch(
+      `https://api.github.com/repos/${fullName}/collaborators/${username}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+        body: JSON.stringify({ permission }),
+      },
+    )
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(`Failed to add GitHub collaborator: ${error.message || response.statusText}`)
+    }
+
+    this.logger.log(`Successfully added ${username} as collaborator with ${permission} permission`)
+  }
+
+  /**
+   * 添加成员到 GitLab 项目
+   * Requirements: 4.2, 4.7
+   */
+  async addGitLabMember(
+    accessToken: string,
+    projectId: string | number,
+    userId: number,
+    accessLevel: 10 | 20 | 30 | 40 | 50 = 30,
+  ): Promise<void> {
+    this.logger.log(`Adding member ${userId} to GitLab project ${projectId}`)
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const encodedProjectId = encodeURIComponent(projectId)
+
+    const response = await fetch(
+      `${gitlabUrl.replace(/\/+$/, '')}/api/v4/projects/${encodedProjectId}/members`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          access_level: accessLevel,
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(`Failed to add GitLab member: ${error.message || response.statusText}`)
+    }
+
+    this.logger.log(`Successfully added user ${userId} as member with access level ${accessLevel}`)
+  }
+
+  /**
+   * 移除 GitHub 协作者
+   * Requirements: 4.8
+   */
+  async removeGitHubCollaborator(
+    accessToken: string,
+    fullName: string,
+    username: string,
+  ): Promise<void> {
+    this.logger.log(`Removing collaborator ${username} from GitHub repository ${fullName}`)
+
+    const response = await fetch(
+      `https://api.github.com/repos/${fullName}/collaborators/${username}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      },
+    )
+
+    if (!response.ok && response.status !== 204) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(
+        `Failed to remove GitHub collaborator: ${error.message || response.statusText}`,
+      )
+    }
+
+    this.logger.log(`Successfully removed ${username} from repository`)
+  }
+
+  /**
+   * 移除 GitLab 项目成员
+   * Requirements: 4.8
+   */
+  async removeGitLabMember(
+    accessToken: string,
+    projectId: string | number,
+    userId: number,
+  ): Promise<void> {
+    this.logger.log(`Removing member ${userId} from GitLab project ${projectId}`)
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const encodedProjectId = encodeURIComponent(projectId)
+
+    const response = await fetch(
+      `${gitlabUrl.replace(/\/+$/, '')}/api/v4/projects/${encodedProjectId}/members/${userId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      },
+    )
+
+    if (!response.ok && response.status !== 204) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(`Failed to remove GitLab member: ${error.message || response.statusText}`)
+    }
+
+    this.logger.log(`Successfully removed user ${userId} from project`)
+  }
+
+  /**
+   * 更新 GitHub 协作者权限
+   * Requirements: 4.7
+   */
+  async updateGitHubCollaboratorPermission(
+    accessToken: string,
+    fullName: string,
+    username: string,
+    permission: 'pull' | 'push' | 'admin' | 'maintain' | 'triage',
+  ): Promise<void> {
+    this.logger.log(
+      `Updating collaborator ${username} permission to ${permission} in GitHub repository ${fullName}`,
+    )
+
+    // GitHub 使用相同的 PUT 端点来添加和更新权限
+    await this.addGitHubCollaborator(accessToken, fullName, username, permission)
+  }
+
+  /**
+   * 更新 GitLab 项目成员权限
+   * Requirements: 4.7
+   */
+  async updateGitLabMemberPermission(
+    accessToken: string,
+    projectId: string | number,
+    userId: number,
+    accessLevel: 10 | 20 | 30 | 40 | 50,
+  ): Promise<void> {
+    this.logger.log(
+      `Updating member ${userId} access level to ${accessLevel} in GitLab project ${projectId}`,
+    )
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const encodedProjectId = encodeURIComponent(projectId)
+
+    const response = await fetch(
+      `${gitlabUrl.replace(/\/+$/, '')}/api/v4/projects/${encodedProjectId}/members/${userId}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+        body: JSON.stringify({
+          access_level: accessLevel,
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(
+        `Failed to update GitLab member permission: ${error.message || response.statusText}`,
+      )
+    }
+
+    this.logger.log(`Successfully updated user ${userId} access level to ${accessLevel}`)
+  }
+
+  /**
+   * 列出 GitHub 仓库协作者
+   * Requirements: 4.2
+   */
+  async listGitHubCollaborators(
+    accessToken: string,
+    fullName: string,
+  ): Promise<
+    Array<{
+      username: string
+      id: number
+      permission: string
+      role_name: string
+    }>
+  > {
+    this.logger.log(`Listing collaborators for GitHub repository ${fullName}`)
+
+    const response = await fetch(
+      `https://api.github.com/repos/${fullName}/collaborators?affiliation=direct`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      },
+    )
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(
+        `Failed to list GitHub collaborators: ${error.message || response.statusText}`,
+      )
+    }
+
+    const collaborators = (await response.json()) as any[]
+
+    return collaborators.map((collab) => ({
+      username: collab.login,
+      id: collab.id,
+      permission: collab.permissions
+        ? Object.keys(collab.permissions).find((key) => collab.permissions[key]) || 'read'
+        : 'read',
+      role_name: collab.role_name || 'direct_member',
+    }))
+  }
+
+  /**
+   * 列出 GitLab 项目成员
+   * Requirements: 4.2
+   */
+  async listGitLabMembers(
+    accessToken: string,
+    projectId: string | number,
+  ): Promise<
+    Array<{
+      username: string
+      id: number
+      access_level: number
+      access_level_description: string
+    }>
+  > {
+    this.logger.log(`Listing members for GitLab project ${projectId}`)
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const encodedProjectId = encodeURIComponent(projectId)
+
+    const response = await fetch(
+      `${gitlabUrl.replace(/\/+$/, '')}/api/v4/projects/${encodedProjectId}/members`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      },
+    )
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(`Failed to list GitLab members: ${error.message || response.statusText}`)
+    }
+
+    const members = (await response.json()) as any[]
+
+    const accessLevelMap: Record<number, string> = {
+      10: 'Guest',
+      20: 'Reporter',
+      30: 'Developer',
+      40: 'Maintainer',
+      50: 'Owner',
+    }
+
+    return members.map((member) => ({
+      username: member.username,
+      id: member.id,
+      access_level: member.access_level,
+      access_level_description: accessLevelMap[member.access_level] || 'Unknown',
+    }))
+  }
+
+  /**
+   * 统一的添加协作者接口
+   * Requirements: 4.2, 4.7
+   */
+  async addCollaborator(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    repoIdentifier: string,
+    userIdentifier: string | number,
+    permission: string,
+  ): Promise<void> {
+    if (provider === 'github') {
+      const githubPermission = permission as 'pull' | 'push' | 'admin' | 'maintain' | 'triage'
+      await this.addGitHubCollaborator(
+        accessToken,
+        repoIdentifier,
+        userIdentifier as string,
+        githubPermission,
+      )
+    } else {
+      // GitLab 使用数字访问级别
+      const accessLevel = this.mapPermissionToGitLabAccessLevel(permission)
+      await this.addGitLabMember(accessToken, repoIdentifier, userIdentifier as number, accessLevel)
+    }
+  }
+
+  /**
+   * 统一的移除协作者接口
+   * Requirements: 4.8
+   */
+  async removeCollaborator(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    repoIdentifier: string,
+    userIdentifier: string | number,
+  ): Promise<void> {
+    if (provider === 'github') {
+      await this.removeGitHubCollaborator(accessToken, repoIdentifier, userIdentifier as string)
+    } else {
+      await this.removeGitLabMember(accessToken, repoIdentifier, userIdentifier as number)
+    }
+  }
+
+  /**
+   * 统一的更新协作者权限接口
+   * Requirements: 4.7
+   */
+  async updateCollaboratorPermission(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    repoIdentifier: string,
+    userIdentifier: string | number,
+    permission: string,
+  ): Promise<void> {
+    if (provider === 'github') {
+      const githubPermission = permission as 'pull' | 'push' | 'admin' | 'maintain' | 'triage'
+      await this.updateGitHubCollaboratorPermission(
+        accessToken,
+        repoIdentifier,
+        userIdentifier as string,
+        githubPermission,
+      )
+    } else {
+      const accessLevel = this.mapPermissionToGitLabAccessLevel(permission)
+      await this.updateGitLabMemberPermission(
+        accessToken,
+        repoIdentifier,
+        userIdentifier as number,
+        accessLevel,
+      )
+    }
+  }
+
+  /**
+   * 统一的列出协作者接口
+   * Requirements: 4.2
+   */
+  async listCollaborators(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    repoIdentifier: string,
+  ): Promise<
+    Array<{
+      username: string
+      id: number
+      permission: string
+    }>
+  > {
+    if (provider === 'github') {
+      const collaborators = await this.listGitHubCollaborators(accessToken, repoIdentifier)
+      return collaborators.map((collab) => ({
+        username: collab.username,
+        id: collab.id,
+        permission: collab.permission,
+      }))
+    } else {
+      const members = await this.listGitLabMembers(accessToken, repoIdentifier)
+      return members.map((member) => ({
+        username: member.username,
+        id: member.id,
+        permission: member.access_level_description,
+      }))
+    }
+  }
+
+  /**
+   * 将通用权限映射到 GitLab 访问级别
+   * Requirements: 4.3, 4.4, 4.5, 4.6
+   */
+  private mapPermissionToGitLabAccessLevel(permission: string): 10 | 20 | 30 | 40 | 50 {
+    const permissionMap: Record<string, 10 | 20 | 30 | 40 | 50> = {
+      read: 20, // Reporter
+      pull: 20, // Reporter
+      triage: 20, // Reporter
+      write: 30, // Developer
+      push: 30, // Developer
+      maintain: 40, // Maintainer
+      admin: 50, // Owner
+    }
+
+    return permissionMap[permission.toLowerCase()] || 30 // 默认 Developer
+  }
+
+  // ============================================================================
+  // 组织管理方法 (Organization Management)
+  // Requirements: 2.1, 2.2, 4.1
+  // ============================================================================
+
+  /**
+   * 创建 GitHub Organization
+   * Requirements: 2.1
+   *
+   * 注意：创建 GitHub Organization 需要企业账号或特殊权限
+   * 个人账号无法通过 API 创建 Organization
+   */
+  async createGitHubOrganization(
+    accessToken: string,
+    name: string,
+    displayName?: string,
+    description?: string,
+  ): Promise<{
+    id: number
+    login: string
+    name: string
+    url: string
+    avatarUrl: string
+  }> {
+    this.logger.log(`Creating GitHub organization: ${name}`)
+
+    const response = await fetch('https://api.github.com/admin/organizations', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'AI-DevOps-Platform',
+      },
+      body: JSON.stringify({
+        login: name,
+        profile_name: displayName || name,
+        admin: 'admin', // 需要指定管理员用户名
+      }),
+    })
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+
+      // GitHub 个人账号无法创建 Organization
+      if (response.status === 403) {
+        throw new Error('GitHub 个人账号无法通过 API 创建 Organization，请在 GitHub 网站手动创建')
+      }
+
+      throw new Error(
+        `Failed to create GitHub organization: ${error.message || response.statusText}`,
+      )
+    }
+
+    const data = (await response.json()) as any
+
+    return {
+      id: data.id,
+      login: data.login,
+      name: data.name || data.login,
+      url: data.html_url,
+      avatarUrl: data.avatar_url,
+    }
+  }
+
+  /**
+   * 创建 GitLab Group
+   * Requirements: 2.2
+   */
+  async createGitLabGroup(
+    accessToken: string,
+    name: string,
+    path: string,
+    description?: string,
+    visibility: 'private' | 'internal' | 'public' = 'private',
+  ): Promise<{
+    id: number
+    name: string
+    path: string
+    fullPath: string
+    url: string
+    avatarUrl: string | null
+  }> {
+    this.logger.log(`Creating GitLab group: ${name} (path: ${path})`)
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+
+    const response = await fetch(`${gitlabUrl.replace(/\/+$/, '')}/api/v4/groups`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'AI-DevOps-Platform',
+      },
+      body: JSON.stringify({
+        name,
+        path,
+        description: description || '',
+        visibility,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+
+      if (response.status === 400 && error.message?.path) {
+        throw new Error(`GitLab group path "${path}" 已存在或不符合命名规范`)
+      }
+
+      throw new Error(`Failed to create GitLab group: ${error.message || response.statusText}`)
+    }
+
+    const data = (await response.json()) as any
+
+    return {
+      id: data.id,
+      name: data.name,
+      path: data.path,
+      fullPath: data.full_path,
+      url: data.web_url,
+      avatarUrl: data.avatar_url,
+    }
+  }
+
+  /**
+   * 添加成员到 GitHub Organization
+   * Requirements: 4.1
+   */
+  async addGitHubOrgMember(
+    accessToken: string,
+    orgName: string,
+    username: string,
+    role: 'admin' | 'member' = 'member',
+  ): Promise<void> {
+    this.logger.log(`Adding member ${username} to GitHub organization ${orgName} with role ${role}`)
+
+    // GitHub 需要先邀请用户，然后用户接受邀请
+    const response = await fetch(`https://api.github.com/orgs/${orgName}/memberships/${username}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'AI-DevOps-Platform',
+      },
+      body: JSON.stringify({ role }),
+    })
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(
+        `Failed to add GitHub organization member: ${error.message || response.statusText}`,
+      )
+    }
+
+    this.logger.log(`Successfully added ${username} to organization ${orgName}`)
+  }
+
+  /**
+   * 添加成员到 GitLab Group
+   * Requirements: 4.1
+   */
+  async addGitLabGroupMember(
+    accessToken: string,
+    groupId: string | number,
+    userId: number,
+    accessLevel: 10 | 20 | 30 | 40 | 50 = 30,
+  ): Promise<void> {
+    this.logger.log(
+      `Adding member ${userId} to GitLab group ${groupId} with access level ${accessLevel}`,
+    )
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const encodedGroupId = encodeURIComponent(groupId)
+
+    const response = await fetch(
+      `${gitlabUrl.replace(/\/+$/, '')}/api/v4/groups/${encodedGroupId}/members`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          access_level: accessLevel,
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(`Failed to add GitLab group member: ${error.message || response.statusText}`)
+    }
+
+    this.logger.log(`Successfully added user ${userId} to group ${groupId}`)
+  }
+
+  /**
+   * 移除 GitHub Organization 成员
+   * Requirements: 4.1
+   */
+  async removeGitHubOrgMember(
+    accessToken: string,
+    orgName: string,
+    username: string,
+  ): Promise<void> {
+    this.logger.log(`Removing member ${username} from GitHub organization ${orgName}`)
+
+    const response = await fetch(`https://api.github.com/orgs/${orgName}/memberships/${username}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'AI-DevOps-Platform',
+      },
+    })
+
+    if (!response.ok && response.status !== 204) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(
+        `Failed to remove GitHub organization member: ${error.message || response.statusText}`,
+      )
+    }
+
+    this.logger.log(`Successfully removed ${username} from organization ${orgName}`)
+  }
+
+  /**
+   * 移除 GitLab Group 成员
+   * Requirements: 4.1
+   */
+  async removeGitLabGroupMember(
+    accessToken: string,
+    groupId: string | number,
+    userId: number,
+  ): Promise<void> {
+    this.logger.log(`Removing member ${userId} from GitLab group ${groupId}`)
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const encodedGroupId = encodeURIComponent(groupId)
+
+    const response = await fetch(
+      `${gitlabUrl.replace(/\/+$/, '')}/api/v4/groups/${encodedGroupId}/members/${userId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      },
+    )
+
+    if (!response.ok && response.status !== 204) {
+      const error = (await response.json().catch(() => ({}))) as any
+      throw new Error(
+        `Failed to remove GitLab group member: ${error.message || response.statusText}`,
+      )
+    }
+
+    this.logger.log(`Successfully removed user ${userId} from group ${groupId}`)
+  }
+
+  /**
+   * 统一的创建组织接口
+   * Requirements: 2.1, 2.2
+   */
+  async createOrganization(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    name: string,
+    options?: {
+      displayName?: string
+      description?: string
+      visibility?: 'private' | 'internal' | 'public'
+    },
+  ): Promise<{
+    id: number
+    name: string
+    path: string
+    url: string
+    avatarUrl: string | null
+  }> {
+    if (provider === 'github') {
+      const result = await this.createGitHubOrganization(
+        accessToken,
+        name,
+        options?.displayName,
+        options?.description,
+      )
+      return {
+        id: result.id,
+        name: result.name,
+        path: result.login,
+        url: result.url,
+        avatarUrl: result.avatarUrl,
+      }
+    } else {
+      // GitLab 需要 path，使用 name 的小写版本
+      const path = name.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+      const result = await this.createGitLabGroup(
+        accessToken,
+        name,
+        path,
+        options?.description,
+        options?.visibility || 'private',
+      )
+      return {
+        id: result.id,
+        name: result.name,
+        path: result.path,
+        url: result.url,
+        avatarUrl: result.avatarUrl,
+      }
+    }
+  }
+
+  /**
+   * 统一的添加组织成员接口
+   * Requirements: 4.1
+   */
+  async addOrgMember(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    orgIdentifier: string | number,
+    userIdentifier: string | number,
+    role: string,
+  ): Promise<void> {
+    if (provider === 'github') {
+      const githubRole = role as 'admin' | 'member'
+      await this.addGitHubOrgMember(
+        accessToken,
+        orgIdentifier as string,
+        userIdentifier as string,
+        githubRole,
+      )
+    } else {
+      const accessLevel = this.mapOrgRoleToGitLabAccessLevel(role)
+      await this.addGitLabGroupMember(
+        accessToken,
+        orgIdentifier,
+        userIdentifier as number,
+        accessLevel,
+      )
+    }
+  }
+
+  /**
+   * 统一的移除组织成员接口
+   * Requirements: 4.1
+   */
+  async removeOrgMember(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    orgIdentifier: string | number,
+    userIdentifier: string | number,
+  ): Promise<void> {
+    if (provider === 'github') {
+      await this.removeGitHubOrgMember(
+        accessToken,
+        orgIdentifier as string,
+        userIdentifier as string,
+      )
+    } else {
+      await this.removeGitLabGroupMember(accessToken, orgIdentifier, userIdentifier as number)
+    }
+  }
+
+  /**
+   * 将组织角色映射到 GitLab 访问级别
+   * Requirements: 4.3
+   */
+  private mapOrgRoleToGitLabAccessLevel(role: string): 10 | 20 | 30 | 40 | 50 {
+    const roleMap: Record<string, 10 | 20 | 30 | 40 | 50> = {
+      owner: 50, // Owner
+      admin: 40, // Maintainer
+      maintainer: 40, // Maintainer
+      member: 30, // Developer
+      developer: 30, // Developer
+      billing: 20, // Reporter
+      guest: 10, // Guest
+    }
+
+    return roleMap[role.toLowerCase()] || 30 // 默认 Developer
   }
 }

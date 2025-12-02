@@ -30,3 +30,8 @@ export function createDatabaseClient(
  * 数据库客户端类型
  */
 export type DatabaseClient = ReturnType<typeof createDatabaseClient>
+
+/**
+ * 数据库类型（别名）
+ */
+export type Database = DatabaseClient

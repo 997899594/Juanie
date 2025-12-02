@@ -38,10 +38,10 @@
     "ui:build:ultra": "cd packages/ui && bun run build:ultra-fast",
     "ui:build:timeout": "cd packages/ui && ./scripts/build-with-timeout.sh",
     "ui:clean": "cd packages/ui && ./scripts/clean-build.sh",
-    "db:generate": "dotenvx run -- bun x drizzle-kit generate --config ./packages/core/database/src/drizzle.config.ts",
-    "db:push": "dotenvx run -- bun x drizzle-kit push --config ./packages/core/database/src/drizzle.config.ts",
-    "db:migrate": "dotenvx run -- bun x drizzle-kit migrate --config ./packages/core/database/src/drizzle.config.ts",
-    "db:studio": "dotenvx run -- bun x drizzle-kit studio --config ./packages/core/database/src/drizzle.config.ts"
+    "db:generate": "dotenvx run -- bun x drizzle-kit generate --config ./packages/core/src/database/drizzle.config.ts",
+    "db:push": "dotenvx run -- bun x drizzle-kit push --config ./packages/core/src/database/drizzle.config.ts",
+    "db:migrate": "dotenvx run -- bun x drizzle-kit migrate --config ./packages/core/src/database/drizzle.config.ts",
+    "db:studio": "dotenvx run -- bun x drizzle-kit studio --config ./packages/core/src/database/drizzle.config.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",

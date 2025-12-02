@@ -3,7 +3,7 @@ import { CoreEventsModule } from '@juanie/core/events'
 import { FoundationModule } from '@juanie/service-foundation'
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
-import { GitAuthModule } from '../git-auth/git-auth.module'
+import { CredentialsModule } from '../credentials/credentials.module'
 import { GitOpsEventHandlerService } from '../gitops-event-handler.service'
 import { K3sModule } from '../k3s/k3s.module'
 import { FluxService } from './flux.service'
@@ -22,7 +22,7 @@ import { YamlGeneratorService } from './yaml-generator.service'
     K3sModule,
     CoreEventsModule,
     FoundationModule,
-    GitAuthModule, // 新的 Git 认证模块（替代定时刷新）
+    CredentialsModule, // 新的凭证管理模块
   ],
   providers: [
     FluxService,
