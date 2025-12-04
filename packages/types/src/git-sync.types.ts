@@ -96,8 +96,8 @@ export interface GitOrganizationInfo {
   avatarUrl?: string
 }
 
-// 同步结果
-export interface SyncResult {
+// 同步结果 (Git 同步专用)
+export interface GitSyncResult {
   success: boolean
   error?: string
   gitResourceId?: string

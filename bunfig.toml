@@ -4,6 +4,12 @@
 [install]
 # 使用硬链接而不是符号链接（减少文件监听警告）
 linkNativeModules = false
+# 完全提升所有依赖到根 node_modules
+hoisting = true
+# 不在子包中创建 node_modules
+flattenWorkspace = true
+# 不创建符号链接
+symlink = false
 
 [run]
 # 禁用对 node_modules 的监听

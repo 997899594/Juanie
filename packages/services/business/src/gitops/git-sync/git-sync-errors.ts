@@ -414,7 +414,8 @@ export function calculateBackoffDelay(
 
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { and, desc, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
@@ -423,14 +424,14 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
  */
 export interface RecordSyncLogInput {
   syncType: 'project' | 'member' | 'organization'
-  action: 'create' | 'update' | 'delete' | 'sync'
+  action: 'create' | 'update' | 'delete' | 'sync' | 'add' | 'remove'
   provider: 'github' | 'gitlab'
   organizationId?: string
   projectId?: string
   userId?: string
   gitResourceId?: string
   gitResourceUrl?: string
-  gitResourceType?: 'repository' | 'organization' | 'user' | 'team'
+  gitResourceType?: 'repository' | 'organization' | 'user' | 'team' | 'member'
   status: 'pending' | 'success' | 'failed'
   error?: string
   errorType?:
@@ -445,7 +446,7 @@ export interface RecordSyncLogInput {
   requiresResolution?: boolean
   metadata?: {
     attemptCount?: number
-    lastAttemptAt?: Date
+    lastAttemptAt?: string // ISO 8601 format
     gitApiResponse?: any
     gitApiStatusCode?: number
     userAgent?: string
@@ -453,6 +454,7 @@ export interface RecordSyncLogInput {
     triggeredBy?: 'user' | 'system' | 'webhook'
     workspaceType?: 'personal' | 'team'
     permissions?: string[]
+    [key: string]: any // Allow additional properties
   }
 }
 
@@ -461,7 +463,7 @@ export interface RecordSyncLogInput {
  */
 export interface GetSyncLogsInput {
   syncType?: 'project' | 'member' | 'organization'
-  action?: 'create' | 'update' | 'delete' | 'sync'
+  action?: 'create' | 'update' | 'delete' | 'sync' | 'add' | 'remove'
   provider?: 'github' | 'gitlab'
   organizationId?: string
   projectId?: string
@@ -493,9 +495,7 @@ export class GitSyncErrorService {
    */
   async recordSyncLog(input: RecordSyncLogInput): Promise<string> {
     try {
-      const id = crypto.randomUUID()
       await this.db.insert(schema.gitSyncLogs).values({
-        id,
         syncType: input.syncType,
         action: input.action,
         provider: input.provider,
@@ -511,10 +511,18 @@ export class GitSyncErrorService {
         errorStack: input.errorStack,
         requiresResolution: input.requiresResolution || false,
         resolved: false,
-        metadata: input.metadata,
+        metadata: input.metadata as any,
         createdAt: new Date(),
         completedAt: input.status !== 'pending' ? new Date() : undefined,
       })
+
+      const [inserted] = await this.db
+        .select({ id: schema.gitSyncLogs.id })
+        .from(schema.gitSyncLogs)
+        .orderBy(schema.gitSyncLogs.createdAt)
+        .limit(1)
+
+      const id = inserted?.id || crypto.randomUUID()
 
       this.logger.log(`Recorded sync log: ${input.syncType}/${input.action} - ${input.status}`)
       return id
@@ -533,7 +541,17 @@ export class GitSyncErrorService {
     update: {
       status?: 'pending' | 'success' | 'failed'
       error?: string
-      errorType?: string
+      errorType?:
+        | 'authentication'
+        | 'authorization'
+        | 'network'
+        | 'rate_limit'
+        | 'conflict'
+        | 'permission'
+        | 'not_found'
+        | 'validation'
+        | 'timeout'
+        | 'unknown'
       errorStack?: string
       requiresResolution?: boolean
       metadata?: any
@@ -542,7 +560,12 @@ export class GitSyncErrorService {
     await this.db
       .update(schema.gitSyncLogs)
       .set({
-        ...update,
+        status: update.status,
+        error: update.error,
+        errorType: update.errorType,
+        errorStack: update.errorStack,
+        requiresResolution: update.requiresResolution,
+        metadata: update.metadata as any,
         completedAt: update.status !== 'pending' ? new Date() : undefined,
       })
       .where(eq(schema.gitSyncLogs.id, logId))
@@ -596,7 +619,17 @@ export class GitSyncErrorService {
     logId: string,
     success: boolean,
     error?: string,
-    errorType?: string,
+    errorType?:
+      | 'authentication'
+      | 'authorization'
+      | 'network'
+      | 'rate_limit'
+      | 'conflict'
+      | 'permission'
+      | 'not_found'
+      | 'validation'
+      | 'timeout'
+      | 'unknown',
   ): Promise<void> {
     await this.updateSyncLog(logId, {
       status: success ? 'success' : 'failed',

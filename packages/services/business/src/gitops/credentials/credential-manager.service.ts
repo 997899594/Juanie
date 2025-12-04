@@ -1,8 +1,9 @@
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
 import { OAuthAccountsService } from '@juanie/service-foundation'
-import type { CreateCredentialOptions, HealthStatus } from '@juanie/types'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import type { CreateCredentialOptions, GitAuthHealthStatus } from '@juanie/types'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { K3sService } from '../k3s/k3s.service'
@@ -159,7 +160,7 @@ export class CredentialManagerService {
   /**
    * 健康检查
    */
-  async healthCheck(projectId: string): Promise<HealthStatus> {
+  async healthCheck(projectId: string): Promise<GitAuthHealthStatus> {
     try {
       const credential = await this.getProjectCredential(projectId)
       const isValid = await credential.validate()
@@ -271,7 +272,11 @@ export class CredentialManagerService {
 
         this.logger.debug(`Synced credential to ${namespace}/${secretName}`)
       } catch (error: any) {
-        this.logger.error(`Failed to sync to ${namespace}:`, error)
+        this.logger.error(`Failed to sync to ${namespace}: ${error.message || error}`, {
+          namespace,
+          secretName,
+          error: error.stack || error.toString(),
+        })
       }
     }
   }

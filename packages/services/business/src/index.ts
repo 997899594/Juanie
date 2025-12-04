@@ -24,13 +24,20 @@ export { GitSyncWorker } from './gitops/git-sync/git-sync.worker'
 export { GitSyncErrorService } from './gitops/git-sync/git-sync-errors'
 export { OrganizationSyncService } from './gitops/git-sync/organization-sync.service'
 // Git 权限映射类型
-export * from './gitops/git-sync/permission-mapper'
+export type { GitPermission, ProjectRole } from './gitops/git-sync/permission-mapper'
+export {
+  isValidGitPermission,
+  isValidProjectRole,
+  mapProjectRoleToGitPermission,
+} from './gitops/git-sync/permission-mapper'
 export { ProjectCollaborationSyncService } from './gitops/git-sync/project-collaboration-sync.service'
 export * from './gitops/gitops.types'
 export { GitOpsEventHandlerService } from './gitops/gitops-event-handler.service'
 export { K3sService } from './gitops/k3s/k3s.service'
+export { GitPlatformSyncService } from './gitops/webhooks/git-platform-sync.service'
 export { PipelinesService } from './pipelines/pipelines.service'
 export { ProjectInitializationService } from './projects/project-initialization.service'
+export { ProjectMembersModule } from './projects/project-members.module'
 export { ProjectMembersService } from './projects/project-members.service'
 export { ProjectStatusService } from './projects/project-status.service'
 // 服务导出

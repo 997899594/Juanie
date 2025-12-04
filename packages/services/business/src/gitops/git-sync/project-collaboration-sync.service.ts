@@ -9,7 +9,8 @@
 
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -167,19 +168,22 @@ export class ProjectCollaborationSyncService {
           )
 
           // 添加协作者到 Git 仓库
+          const repoPath = `${repoInfo.owner}/${repoInfo.repo}`
           if (project.gitProvider === 'github') {
             await this.gitProvider.addGitHubCollaborator(
               ownerGitAccount.accessToken,
-              `${repoInfo.owner}/${repoInfo.repo}`,
+              repoPath,
               memberGitAccount.gitUsername,
               gitPermission as 'pull' | 'push' | 'admin',
             )
           } else if (project.gitProvider === 'gitlab') {
+            // GitLab access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner
+            const accessLevel = typeof gitPermission === 'number' ? gitPermission : 30
             await this.gitProvider.addGitLabMember(
               ownerGitAccount.accessToken,
-              `${repoInfo.owner}/${repoInfo.repo}`,
+              repoPath,
               Number.parseInt(memberGitAccount.gitUserId!),
-              gitPermission as number,
+              accessLevel as 10 | 20 | 30 | 40 | 50,
             )
           }
 
@@ -200,22 +204,25 @@ export class ProjectCollaborationSyncService {
 
           results.syncedCollaborators++
           this.logger.log(
-            `Synced collaborator ${member.user.name} to ${project.gitProvider} repository`,
+            `Synced collaborator ${member.user.displayName || member.user.email} to ${project.gitProvider} repository`,
           )
 
           // 记录成功
           await this.errorService.recordSuccess({
             syncType: 'member',
-            action: 'create',
+            action: 'add',
             provider: project.gitProvider as 'github' | 'gitlab',
             projectId,
             userId: member.userId,
             gitResourceId: memberGitAccount.gitUserId,
             gitResourceUrl: project.gitRepoUrl,
-            gitResourceType: 'repository',
+            gitResourceType: 'member',
           })
         } catch (error) {
-          this.logger.error(`Failed to sync collaborator ${member.user.name}:`, error)
+          this.logger.error(
+            `Failed to sync collaborator ${member.user.displayName || member.user.email}:`,
+            error,
+          )
 
           // 更新同步状态为失败
           await this.db
@@ -241,7 +248,7 @@ export class ProjectCollaborationSyncService {
           // 记录错误
           await this.errorService.recordError({
             syncType: 'member',
-            action: 'create',
+            action: 'add',
             provider: project.gitProvider as 'github' | 'gitlab',
             projectId,
             userId: member.userId,
@@ -307,12 +314,10 @@ export class ProjectCollaborationSyncService {
 
       // 添加到数据库
       await this.db.insert(schema.projectMembers).values({
-        id: crypto.randomUUID(),
         projectId,
         userId,
         role,
         gitSyncStatus: 'pending',
-        invitedAt: new Date(),
       })
 
       // 如果项目有 Git 仓库，同步到 Git
@@ -330,7 +335,7 @@ export class ProjectCollaborationSyncService {
 
       await this.errorService.recordError({
         syncType: 'member',
-        action: 'create',
+        action: 'add',
         provider: 'github', // 默认
         projectId,
         userId,
@@ -413,7 +418,7 @@ export class ProjectCollaborationSyncService {
                 (acc) => acc.provider === project.gitProvider,
               )
 
-              if (ownerGitAccount) {
+              if (ownerGitAccount && repoInfo.owner && repoInfo.repo) {
                 if (project.gitProvider === 'github') {
                   await this.gitProvider.removeGitHubCollaborator(
                     ownerGitAccount.accessToken,
@@ -448,7 +453,7 @@ export class ProjectCollaborationSyncService {
       // 记录成功
       await this.errorService.recordSuccess({
         syncType: 'member',
-        action: 'delete',
+        action: 'remove',
         provider: project.gitProvider as 'github' | 'gitlab',
         projectId,
         userId,
@@ -460,7 +465,7 @@ export class ProjectCollaborationSyncService {
 
       await this.errorService.recordError({
         syncType: 'member',
-        action: 'delete',
+        action: 'remove',
         provider: 'github', // 默认
         projectId,
         userId,
@@ -569,13 +574,13 @@ export class ProjectCollaborationSyncService {
 
       // HTTPS 格式
       match = cleanUrl.match(/https?:\/\/[^/]+\/([^/]+)\/([^/]+)/)
-      if (match) {
+      if (match && match[1] && match[2]) {
         return { owner: match[1], repo: match[2] }
       }
 
       // SSH 格式
       match = cleanUrl.match(/git@[^:]+:([^/]+)\/(.+)/)
-      if (match) {
+      if (match && match[1] && match[2]) {
         return { owner: match[1], repo: match[2] }
       }
 

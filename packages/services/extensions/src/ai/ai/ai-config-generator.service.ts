@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import { Ollama } from 'ollama'
 
@@ -291,15 +292,16 @@ Output ONLY the Dockerfile, no explanations.`
   /**
    * 验证建议格式
    */
-  private isValidSuggestion(suggestion: any): suggestion is OptimizationSuggestion {
+  private isValidSuggestion(suggestion: unknown): suggestion is OptimizationSuggestion {
+    if (!suggestion || typeof suggestion !== 'object') return false
+
+    const s = suggestion as Record<string, unknown>
     return (
-      suggestion &&
-      typeof suggestion === 'object' &&
-      ['performance', 'security', 'cost', 'reliability'].includes(suggestion.type) &&
-      ['low', 'medium', 'high'].includes(suggestion.severity) &&
-      typeof suggestion.title === 'string' &&
-      typeof suggestion.description === 'string' &&
-      typeof suggestion.suggestion === 'string'
+      ['performance', 'security', 'cost', 'reliability'].includes(s.type as string) &&
+      ['low', 'medium', 'high'].includes(s.severity as string) &&
+      typeof s.title === 'string' &&
+      typeof s.description === 'string' &&
+      typeof s.suggestion === 'string'
     )
   }
 

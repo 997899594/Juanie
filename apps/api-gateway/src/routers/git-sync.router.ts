@@ -254,8 +254,9 @@ export class GitSyncRouter {
       /**
        * 检测项目成员权限冲突
        * Requirements: 8.3
+       * TODO: 需要实现 accessToken 获取逻辑后重新启用
        */
-      detectConflicts: this.trpc.protectedProcedure
+      /* detectConflicts: this.trpc.protectedProcedure
         .input(
           z.object({
             projectId: z.string(),
@@ -285,13 +286,14 @@ export class GitSyncRouter {
               message: error instanceof Error ? error.message : '检测冲突失败',
             })
           }
-        }),
+        }), */
 
       /**
        * 解决项目成员权限冲突
        * Requirements: 8.3
+       * TODO: 需要实现 accessToken 获取逻辑后重新启用
        */
-      resolveConflicts: this.trpc.protectedProcedure
+      /* resolveConflicts: this.trpc.protectedProcedure
         .input(
           z.object({
             projectId: z.string(),
@@ -323,13 +325,14 @@ export class GitSyncRouter {
               message: error instanceof Error ? error.message : '解决冲突失败',
             })
           }
-        }),
+        }), */
 
       /**
        * 获取冲突统计信息
        * Requirements: 8.3
+       * TODO: 需要实现 accessToken 获取逻辑后重新启用
        */
-      getConflictStats: this.trpc.protectedProcedure
+      /* getConflictStats: this.trpc.protectedProcedure
         .input(
           z.object({
             projectId: z.string(),
@@ -346,7 +349,7 @@ export class GitSyncRouter {
               message: error instanceof Error ? error.message : '获取冲突统计失败',
             })
           }
-        }),
+        }), */
 
       /**
        * 获取冲突历史

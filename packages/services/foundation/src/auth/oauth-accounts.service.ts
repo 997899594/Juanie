@@ -86,7 +86,13 @@ export class OAuthAccountsService {
         throw new Error('GitLab token 刷新失败')
       }
 
-      const data: any = await response.json()
+      interface GitLabTokenResponse {
+        access_token: string
+        refresh_token: string
+        expires_in: number
+      }
+
+      const data = (await response.json()) as GitLabTokenResponse
 
       // 更新 token
       const [updated] = await this.db

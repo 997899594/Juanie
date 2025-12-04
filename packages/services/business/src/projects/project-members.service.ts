@@ -3,10 +3,11 @@ import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
 import { AuditLogsService } from '@juanie/service-foundation'
 import type { ProjectRole } from '@juanie/types'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import { GitSyncService } from '../gitops/git-sync/git-sync.service'
 
 /**
  * ProjectMembersService
@@ -16,7 +17,8 @@ import { GitSyncService } from '../gitops/git-sync/git-sync.service'
  * - 更新成员角色
  * - 列出成员
  * - 权限检查
- * - Git 平台权限同步
+ *
+ * 使用事件驱动架构与 GitSyncService 解耦
  */
 @Injectable()
 export class ProjectMembersService {
@@ -25,7 +27,7 @@ export class ProjectMembersService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private auditLogs: AuditLogsService,
-    private gitSync: GitSyncService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   /**
@@ -84,20 +86,14 @@ export class ProjectMembersService {
       })
     }
 
-    // 触发 Git 平台权限同步
-    // Requirements: 4.2
-    try {
-      await this.gitSync.syncProjectMember(
-        projectId,
-        data.userId,
-        this.mapRoleToProjectRole(data.role),
-      )
-      this.logger.log(`Queued Git sync for member ${data.userId} in project ${projectId}`)
-    } catch (error) {
-      // Git 同步失败不应阻止成员添加
-      // 错误会被记录到 git_sync_logs 表中
-      this.logger.warn(`Failed to queue Git sync for member ${data.userId}:`, error)
-    }
+    // 触发 Git 平台权限同步事件
+    // Requirements: 4.2 - 使用事件驱动架构解耦
+    this.eventEmitter.emit('project.member.added', {
+      projectId,
+      userId: data.userId,
+      role: this.mapRoleToProjectRole(data.role),
+    })
+    this.logger.log(`Emitted member added event for ${data.userId} in project ${projectId}`)
 
     return member
   }
@@ -189,21 +185,15 @@ export class ProjectMembersService {
       })
     }
 
-    // 触发 Git 平台权限更新
-    // Requirements: 4.7
-    try {
-      await this.gitSync.syncProjectMember(
-        projectId,
-        data.userId,
-        this.mapRoleToProjectRole(data.role),
-      )
-      this.logger.log(
-        `Queued Git permission update for member ${data.userId} in project ${projectId}`,
-      )
-    } catch (error) {
-      // Git 同步失败不应阻止角色更新
-      this.logger.warn(`Failed to queue Git permission update for member ${data.userId}:`, error)
-    }
+    // 触发 Git 平台权限更新事件
+    // Requirements: 4.7 - 使用事件驱动架构解耦
+    this.eventEmitter.emit('project.member.updated', {
+      projectId,
+      userId: data.userId,
+      role: this.mapRoleToProjectRole(data.role),
+      oldRole: this.mapRoleToProjectRole(existing.role),
+    })
+    this.logger.log(`Emitted member updated event for ${data.userId} in project ${projectId}`)
 
     return updated
   }
@@ -260,15 +250,13 @@ export class ProjectMembersService {
       })
     }
 
-    // 触发 Git 平台权限移除
-    // Requirements: 4.8
-    try {
-      await this.gitSync.removeMemberAccess(projectId, data.userId)
-      this.logger.log(`Queued Git access removal for member ${data.userId} in project ${projectId}`)
-    } catch (error) {
-      // Git 同步失败不应阻止成员移除
-      this.logger.warn(`Failed to queue Git access removal for member ${data.userId}:`, error)
-    }
+    // 触发 Git 平台权限移除事件
+    // Requirements: 4.8 - 使用事件驱动架构解耦
+    this.eventEmitter.emit('project.member.removed', {
+      projectId,
+      userId: data.userId,
+    })
+    this.logger.log(`Emitted member removed event for ${data.userId} in project ${projectId}`)
 
     return { success: true }
   }

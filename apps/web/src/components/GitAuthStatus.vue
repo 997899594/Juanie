@@ -74,7 +74,7 @@ const emit = defineEmits<{
   configure: []
 }>()
 
-const { toast } = useToast()
+const toast = useToast()
 const checking = ref(false)
 const auth = ref<any>(null)
 
@@ -112,17 +112,13 @@ async function handleCheck() {
 
     auth.value = result
 
-    toast({
-      title: '检查完成',
-      description: result.validationStatus === 'valid' ? '认证状态正常' : '认证状态异常',
-      variant: result.validationStatus === 'valid' ? 'default' : 'destructive',
-    })
+    if (result.validationStatus === 'valid') {
+      toast.success('检查完成', '认证状态正常')
+    } else {
+      toast.error('检查完成', '认证状态异常')
+    }
   } catch (error: any) {
-    toast({
-      title: '检查失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('检查失败', error.message)
   } finally {
     checking.value = false
   }

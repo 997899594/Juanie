@@ -1,7 +1,8 @@
 import type { Database } from '@juanie/core/database'
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { and, eq } from 'drizzle-orm'
 import { GitProviderService } from '../git-providers/git-provider.service'
 import { mapProjectRoleToGitPermission } from './permission-mapper'
@@ -31,7 +32,10 @@ export class ConflictResolutionService {
    *
    * Requirements: 8.3
    */
-  async detectProjectMemberConflicts(projectId: string): Promise<
+  async detectProjectMemberConflicts(
+    projectId: string,
+    accessToken: string,
+  ): Promise<
     Array<{
       userId: string
       userName: string
@@ -50,7 +54,7 @@ export class ConflictResolutionService {
         where: eq(schema.projects.id, projectId),
       })
 
-      if (!project || !project.gitProvider || !project.gitRepoId) {
+      if (!project || !project.gitProvider || !project.gitRepoUrl) {
         this.logger.warn('Project not linked to Git repository', { projectId })
         return []
       }
@@ -90,12 +94,13 @@ export class ConflictResolutionService {
       // 获取 Git 平台上的协作者列表
       const gitCollaborators = await this.gitProvider.listCollaborators(
         project.gitProvider,
-        project.gitRepoId,
+        project.gitRepoUrl,
+        accessToken,
       )
 
-      // 创建 Git 协作者映射 (gitLogin -> permission)
+      // 创建 Git 协作者映射 (gitUsername -> permission)
       const gitCollaboratorMap = new Map(
-        gitCollaborators.map((c) => [c.gitLogin.toLowerCase(), c.permission]),
+        gitCollaborators.map((c) => [c.username.toLowerCase(), c.permission]),
       )
 
       // 检测冲突
@@ -110,18 +115,18 @@ export class ConflictResolutionService {
       }> = []
 
       for (const member of membersWithGit) {
-        const gitLogin = member.gitAccount!.gitLogin.toLowerCase()
+        const gitUsername = member.gitAccount!.gitUsername.toLowerCase()
         const systemRole = member.role
-        const expectedGitPermission = mapProjectRoleToGitPermission(systemRole, project.gitProvider)
+        const expectedGitPermission = mapProjectRoleToGitPermission(systemRole as any)
 
-        const actualGitPermission = gitCollaboratorMap.get(gitLogin)
+        const actualGitPermission = gitCollaboratorMap.get(gitUsername)
 
         if (!actualGitPermission) {
           // 成员在系统中但不在 Git 平台上
           conflicts.push({
             userId: member.userId,
-            userName: member.user.name || member.user.email,
-            gitLogin: member.gitAccount!.gitLogin,
+            userName: member.user.displayName || member.user.email,
+            gitLogin: member.gitAccount!.gitUsername,
             systemRole,
             gitPermission: 'none',
             expectedGitPermission,
@@ -131,8 +136,8 @@ export class ConflictResolutionService {
           // 权限不匹配
           conflicts.push({
             userId: member.userId,
-            userName: member.user.name || member.user.email,
-            gitLogin: member.gitAccount!.gitLogin,
+            userName: member.user.displayName || member.user.email,
+            gitLogin: member.gitAccount!.gitUsername,
             systemRole,
             gitPermission: actualGitPermission,
             expectedGitPermission,
@@ -142,17 +147,17 @@ export class ConflictResolutionService {
       }
 
       // 检测 Git 平台上多余的协作者
-      const systemGitLogins = new Set(
-        membersWithGit.map((m) => m.gitAccount!.gitLogin.toLowerCase()),
+      const systemGitUsernames = new Set(
+        membersWithGit.map((m) => m.gitAccount!.gitUsername.toLowerCase()),
       )
 
       for (const collaborator of gitCollaborators) {
-        if (!systemGitLogins.has(collaborator.gitLogin.toLowerCase())) {
+        if (!systemGitUsernames.has(collaborator.username.toLowerCase())) {
           // 协作者在 Git 平台上但不在系统中
           conflicts.push({
             userId: '',
-            userName: collaborator.gitName || collaborator.gitLogin,
-            gitLogin: collaborator.gitLogin,
+            userName: collaborator.username,
+            gitLogin: collaborator.username,
             systemRole: 'none',
             gitPermission: collaborator.permission,
             expectedGitPermission: 'none',
@@ -182,6 +187,7 @@ export class ConflictResolutionService {
    */
   async resolveProjectMemberConflicts(
     projectId: string,
+    accessToken: string,
     options: {
       autoResolve?: boolean // 是否自动解决所有冲突
       conflictTypes?: Array<'permission_mismatch' | 'missing_on_git' | 'extra_on_git'> // 要解决的冲突类型
@@ -205,7 +211,7 @@ export class ConflictResolutionService {
 
     try {
       // 检测冲突
-      const conflicts = await this.detectProjectMemberConflicts(projectId)
+      const conflicts = await this.detectProjectMemberConflicts(projectId, accessToken)
 
       if (conflicts.length === 0) {
         this.logger.log('No conflicts found', { projectId })
@@ -222,7 +228,7 @@ export class ConflictResolutionService {
         where: eq(schema.projects.id, projectId),
       })
 
-      if (!project || !project.gitProvider || !project.gitRepoId) {
+      if (!project || !project.gitProvider || !project.gitRepoUrl) {
         throw new Error('Project not linked to Git repository')
       }
 
@@ -264,7 +270,8 @@ export class ConflictResolutionService {
               action = 'add_collaborator'
               await this.gitProvider.addCollaborator(
                 project.gitProvider,
-                project.gitRepoId,
+                project.gitRepoUrl,
+                accessToken,
                 conflict.gitLogin,
                 conflict.expectedGitPermission,
               )
@@ -277,7 +284,8 @@ export class ConflictResolutionService {
               action = 'update_permission'
               await this.gitProvider.updateCollaboratorPermission(
                 project.gitProvider,
-                project.gitRepoId,
+                project.gitRepoUrl,
+                accessToken,
                 conflict.gitLogin,
                 conflict.expectedGitPermission,
               )
@@ -307,20 +315,21 @@ export class ConflictResolutionService {
 
           // 记录冲突解决日志
           await this.db.insert(schema.gitSyncLogs).values({
-            entityType: 'project',
-            entityId: projectId,
-            syncType: 'conflict_resolution',
-            provider: project.gitProvider,
-            status: status === 'success' ? 'success' : 'skipped',
-            details: {
-              gitLogin: conflict.gitLogin,
+            gitResourceType: 'repository',
+            gitResourceId: projectId,
+            action: 'sync',
+            syncType: 'member',
+            provider: project.gitProvider!,
+            status: status === 'success' ? 'success' : 'failed',
+            metadata: {
               conflictType: conflict.conflictType,
               action,
               systemRole: conflict.systemRole,
               gitPermission: conflict.gitPermission,
               expectedGitPermission: conflict.expectedGitPermission,
-            },
-            syncedAt: new Date(),
+              gitLogin: conflict.gitLogin,
+            } as any,
+            completedAt: new Date(),
           })
         } catch (error) {
           failed++
@@ -336,17 +345,18 @@ export class ConflictResolutionService {
 
           // 记录错误日志
           await this.db.insert(schema.gitSyncLogs).values({
-            entityType: 'project',
-            entityId: projectId,
-            syncType: 'conflict_resolution',
-            provider: project.gitProvider,
+            gitResourceType: 'repository',
+            gitResourceId: projectId,
+            action: 'sync',
+            syncType: 'member',
+            provider: project.gitProvider!,
             status: 'failed',
             error: errorMessage,
-            details: {
+            metadata: {
               gitLogin: conflict.gitLogin,
               conflictType: conflict.conflictType,
-            },
-            syncedAt: new Date(),
+            } as any,
+            completedAt: new Date(),
           })
 
           this.logger.error('Error resolving conflict:', {
@@ -401,16 +411,16 @@ export class ConflictResolutionService {
     try {
       const logs = await this.db.query.gitSyncLogs.findMany({
         where: and(
-          eq(schema.gitSyncLogs.entityType, 'project'),
-          eq(schema.gitSyncLogs.entityId, projectId),
-          eq(schema.gitSyncLogs.syncType, 'conflict_resolution'),
+          eq(schema.gitSyncLogs.gitResourceType, 'repository'),
+          eq(schema.gitSyncLogs.gitResourceId, projectId),
+          eq(schema.gitSyncLogs.action, 'sync'),
         ),
-        orderBy: (logs, { desc }) => [desc(logs.syncedAt)],
+        orderBy: (logs, { desc }) => [desc(logs.completedAt)],
         limit,
         offset,
       })
 
-      return logs
+      return logs as any
     } catch (error) {
       this.logger.error('Error getting conflict history:', error)
       throw error
@@ -422,7 +432,10 @@ export class ConflictResolutionService {
    *
    * 统计项目的冲突数量和类型
    */
-  async getConflictStats(projectId: string): Promise<{
+  async getConflictStats(
+    projectId: string,
+    accessToken: string,
+  ): Promise<{
     total: number
     byType: {
       permission_mismatch: number
@@ -432,7 +445,7 @@ export class ConflictResolutionService {
     lastChecked: Date | null
   }> {
     try {
-      const conflicts = await this.detectProjectMemberConflicts(projectId)
+      const conflicts = await this.detectProjectMemberConflicts(projectId, accessToken)
 
       const stats = {
         total: conflicts.length,

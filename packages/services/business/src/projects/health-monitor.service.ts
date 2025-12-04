@@ -1,26 +1,25 @@
 import * as schema from '@juanie/core/database'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger } from '@nestjs/common'
-import { eq } from 'drizzle-orm'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 /**
- * HealthMonitorService
+ * HealthMonitorService - 项目健康度监控 (独立版)
  *
- * TODO: 完整实现项目健康度监控
+ * 📝 状态: 占位实现 - 功能已集成到 ProjectStatusService
  *
- * 计划功能：
- * - 部署成功率监控
- * - GitOps 同步状态检查
- * - Pod 健康状态检查
- * - 资源使用率监控
- * - 告警和建议生成
+ * 说明: 
+ * 当前健康度监控已在 ProjectStatusService 中实现基础版本
+ * 此服务保留用于未来可能的独立监控需求 (如 Prometheus 集成、告警等)
  *
- * 依赖：
+ * 计划功能:
  * - Prometheus 指标收集
- * - K8s API 集成
- * - 历史数据分析
+ * - 实时告警推送
+ * - 健康度趋势分析
+ * - 自动化修复建议
+ * - 成本优化建议
  */
 @Injectable()
 export class HealthMonitorService {
@@ -30,36 +29,17 @@ export class HealthMonitorService {
 
   /**
    * 计算项目健康度
-   *
-   * TODO: 实现完整的健康度计算逻辑
-   *
-   * 当前：返回默认值
-   * 未来：
-   * 1. 从 Prometheus 获取指标
-   * 2. 检查 GitOps 同步状态
-   * 3. 检查 Pod 健康状态
-   * 4. 分析部署历史
-   * 5. 生成健康度评分和建议
+   * 注意: 建议使用 ProjectStatusService.getHealth() 代替
    */
   @Trace('healthMonitor.calculateHealth')
   async calculateHealth(projectId: string) {
-    this.logger.warn(`Health monitoring not fully implemented for project: ${projectId}`)
-
-    // TODO: 实现真实的健康度计算
-    // 1. 获取部署历史
-    // const deployments = await this.getDeploymentHistory(projectId)
-    // 2. 计算成功率
-    // const successRate = this.calculateSuccessRate(deployments)
-    // 3. 检查 GitOps 状态
-    // const gitopsStatus = await this.checkGitOpsStatus(projectId)
-    // 4. 检查 Pod 状态
-    // const podStatus = await this.checkPodHealth(projectId)
-    // 5. 综合评分
-    // const score = this.calculateScore(successRate, gitopsStatus, podStatus)
+    this.logger.warn(
+      `HealthMonitorService is placeholder. Use ProjectStatusService.getHealth() instead for project: ${projectId}`,
+    )
 
     return {
       score: 100,
-      status: 'healthy' as const,
+      isHealthy: true as const,
       factors: {
         deploymentSuccessRate: 100,
         gitopsSyncStatus: 'healthy' as const,
@@ -68,62 +48,27 @@ export class HealthMonitorService {
       },
       issues: [],
       recommendations: [],
+      note: 'Using ProjectStatusService for actual health monitoring',
     }
   }
 
   /**
-   * TODO: 获取部署历史
+   * 启动健康度监控 (Prometheus 集成等)
+   * 占位方法 - 等待 Prometheus 集成后实现
    */
-  private async getDeploymentHistory(projectId: string) {
-    // 实现部署历史查询
-    return []
+  @Trace('healthMonitor.startMonitoring')
+  async startMonitoring(projectId: string) {
+    this.logger.debug(`Health monitoring placeholder for project: ${projectId}`)
+    return { monitoring: false, reason: 'Not implemented' }
   }
 
   /**
-   * TODO: 计算部署成功率
+   * 停止健康度监控
+   * 占位方法
    */
-  private calculateSuccessRate(deployments: any[]) {
-    // 实现成功率计算
-    return 100
-  }
-
-  /**
-   * TODO: 检查 GitOps 同步状态
-   */
-  private async checkGitOpsStatus(projectId: string) {
-    // 实现 GitOps 状态检查
-    return 'healthy'
-  }
-
-  /**
-   * TODO: 检查 Pod 健康状态
-   */
-  private async checkPodHealth(projectId: string) {
-    // 实现 Pod 健康检查
-    return 'healthy'
-  }
-
-  /**
-   * TODO: 综合计算健康度评分
-   */
-  private calculateScore(successRate: number, gitopsStatus: string, podStatus: string) {
-    // 实现评分算法
-    return 100
-  }
-
-  /**
-   * TODO: 生成健康问题列表
-   */
-  private generateIssues(successRate: number, gitopsStatus: string, podStatus: string) {
-    // 实现问题检测
-    return []
-  }
-
-  /**
-   * TODO: 生成优化建议
-   */
-  private generateRecommendations(issues: any[]) {
-    // 实现建议生成
-    return []
+  @Trace('healthMonitor.stopMonitoring')
+  async stopMonitoring(projectId: string) {
+    this.logger.debug(`Stop monitoring placeholder for project: ${projectId}`)
+    return { success: true }
   }
 }

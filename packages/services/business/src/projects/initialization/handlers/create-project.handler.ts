@@ -1,6 +1,7 @@
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { InitializationContext, StateHandler } from '../types'
@@ -30,7 +31,7 @@ export class CreateProjectHandler implements StateHandler {
     try {
       // 自动生成 slug（时间戳 + 随机数，用户不可见）
       const slug = `project-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-      
+
       const [project] = await this.db
         .insert(schema.projects)
         .values({
@@ -63,8 +64,9 @@ export class CreateProjectHandler implements StateHandler {
       // 保存项目 ID 到上下文
       context.projectId = project.id
       this.logger.log(`Project created: ${project.id}`)
-    } catch (error: any) {
-      throw new Error(`创建项目失败: ${error.message || '数据库错误'}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '数据库错误'
+      throw new Error(`创建项目失败: ${message}`)
     }
   }
 }

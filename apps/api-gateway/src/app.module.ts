@@ -1,10 +1,13 @@
 import { DatabaseModule } from '@juanie/core/database'
+import { GlobalExceptionFilter } from '@juanie/core/errors'
 import { QueueModule } from '@juanie/core/queue'
 import { BusinessModule } from '@juanie/service-business'
 import { ExtensionsModule } from '@juanie/service-extensions'
 import { FoundationModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { APP_FILTER } from '@nestjs/core'
+import { LoggerModule } from 'nestjs-pino'
 import { AppController } from './app.controller'
 import { TrpcModule } from './trpc/trpc.module'
 
@@ -22,6 +25,45 @@ import { TrpcModule } from './trpc/trpc.module'
       isGlobal: true,
       envFilePath: ['../../.env.local', '../../.env'],
     }),
+    // Pino Logger（全局日志）
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.LOG_LEVEL || 'info',
+        transport:
+          process.env.NODE_ENV !== 'production'
+            ? {
+                target: 'pino-pretty',
+                options: {
+                  colorize: true,
+                  translateTime: 'SYS:standard',
+                  ignore: 'pid,hostname',
+                  singleLine: false,
+                  // 美化应用日志
+                  messageFormat: '{context} {msg}',
+                },
+              }
+            : undefined,
+        // 自定义日志格式
+        customProps: (_req, _res) => ({
+          context: 'HTTP',
+        }),
+        // 序列化配置
+        serializers: {
+          req(req) {
+            return {
+              method: req.method,
+              url: req.url,
+              // 不记录完整的 headers（可能包含敏感信息）
+            }
+          },
+          res(res) {
+            return {
+              statusCode: res.statusCode,
+            }
+          },
+        },
+      },
+    }),
     // Core modules
     DatabaseModule,
     QueueModule,
@@ -33,5 +75,12 @@ import { TrpcModule } from './trpc/trpc.module'
     TrpcModule,
   ],
   controllers: [AppController],
+  providers: [
+    // 全局异常过滤器
+    {
+      provide: APP_FILTER,
+      useClass: GlobalExceptionFilter,
+    },
+  ],
 })
 export class AppModule {}

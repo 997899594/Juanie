@@ -1,10 +1,11 @@
 import type { Database } from '@juanie/core/database'
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { EncryptionService } from '@juanie/service-business'
 import type { GitProvider } from '@juanie/types'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { eq } from 'drizzle-orm'
+import { EncryptionService } from '../encryption/encryption.service'
 
 export interface LinkGitAccountInput {
   userId: string
@@ -57,7 +58,7 @@ export class GitAccountLinkingService {
 
     if (existing) {
       // 更新现有记录
-      const [updated] = await this.db
+      const updated = await this.db
         .update(schema.userGitAccounts)
         .set({
           gitUserId: input.gitUserId,
@@ -75,7 +76,9 @@ export class GitAccountLinkingService {
         .returning()
 
       this.logger.log(`Updated Git account link for user ${input.userId}`)
-      return updated
+      const result = updated[0]
+      if (!result) throw new Error('Failed to update Git account')
+      return result
     }
 
     // 创建新记录
@@ -96,6 +99,7 @@ export class GitAccountLinkingService {
       .returning()
 
     this.logger.log(`Created Git account link for user ${input.userId}`)
+    if (!created) throw new Error('Failed to create Git account')
     return created
   }
 

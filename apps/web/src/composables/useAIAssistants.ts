@@ -1,58 +1,19 @@
 import { computed, ref } from 'vue'
+import type {
+  AiAssistant,
+  ChatMessage,
+  ChatResponse,
+  OllamaModel,
+  OllamaStatus,
+} from '@juanie/types'
 import { useToast } from '@/composables/useToast'
 import { trpc } from '@/lib/trpc'
-
-export interface AIAssistant {
-  id: string
-  organizationId: string | null
-  name: string
-  type: string
-  modelConfig: {
-    provider: string
-    model: string
-    temperature?: number
-    maxTokens?: number
-  } | null
-  systemPrompt: string
-  isActive: boolean
-  averageRating: number | null
-  usageCount: number
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  timestamp?: Date
-}
-
-export interface ChatResponse {
-  message: string
-  usage?: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-  }
-}
-
-export interface OllamaModel {
-  name: string
-  size: number
-  modified: string
-}
-
-export interface OllamaStatus {
-  available: boolean
-  version?: string
-  models?: OllamaModel[]
-}
 
 export function useAIAssistants() {
   const toast = useToast()
 
-  const assistants = ref<AIAssistant[]>([])
-  const currentAssistant = ref<AIAssistant | null>(null)
+  const assistants = ref<AiAssistant[]>([])
+  const currentAssistant = ref<AiAssistant | null>(null)
   const messages = ref<ChatMessage[]>([])
   const loading = ref(false)
   const chatting = ref(false)
@@ -65,18 +26,21 @@ export function useAIAssistants() {
   /**
    * 获取 AI 助手列表
    */
-  const fetchAssistants = async (filters?: { organizationId?: string; type?: string }) => {
+  const fetchAssistants = async (filters?: {
+    organizationId?: string
+    type?: string
+    isActive?: boolean
+  }) => {
     try {
       loading.value = true
       error.value = null
 
       const result = await trpc.aiAssistants.list.query(filters || {})
-      assistants.value = result as AIAssistant[]
-    } catch (err: any) {
-      const errorMessage = err.message || '获取 AI 助手列表失败'
+      assistants.value = result as AiAssistant[]
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '获取 AI 助手列表失败'
       error.value = errorMessage
       toast.error('获取失败', errorMessage)
-      console.error('获取 AI 助手列表失败:', err)
     } finally {
       loading.value = false
     }
@@ -91,13 +55,12 @@ export function useAIAssistants() {
       error.value = null
 
       const result = await trpc.aiAssistants.get.query({ id })
-      currentAssistant.value = result as AIAssistant
-      return result as AIAssistant
-    } catch (err: any) {
-      const errorMessage = err.message || '获取 AI 助手失败'
+      currentAssistant.value = result as AiAssistant
+      return result as AiAssistant
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '获取 AI 助手失败'
       error.value = errorMessage
       toast.error('获取失败', errorMessage)
-      console.error('获取 AI 助手失败:', err)
       return null
     } finally {
       loading.value = false
@@ -110,7 +73,7 @@ export function useAIAssistants() {
   const chat = async (
     assistantId: string,
     message: string,
-    context?: Record<string, any>,
+    context?: Record<string, unknown>,
   ): Promise<string | null> => {
     try {
       chatting.value = true
@@ -139,11 +102,10 @@ export function useAIAssistants() {
       })
 
       return response.message
-    } catch (err: any) {
-      const errorMessage = err.message || '对话失败'
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '对话失败'
       error.value = errorMessage
       toast.error('对话失败', errorMessage)
-      console.error('AI 助手对话失败:', err)
       return null
     } finally {
       chatting.value = false
@@ -167,10 +129,9 @@ export function useAIAssistants() {
       if (assistant) {
         await fetchAssistant(assistantId)
       }
-    } catch (err: any) {
-      const errorMessage = err.message || '评分失败'
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '评分失败'
       toast.error('评分失败', errorMessage)
-      console.error('评分失败:', err)
     }
   }
 
@@ -180,9 +141,9 @@ export function useAIAssistants() {
   const create = async (data: {
     organizationId?: string
     name: string
-    type: 'code_review' | 'devops_engineer' | 'cost_optimizer' | 'security_analyst'
+    type: string
     modelConfig: {
-      provider: 'openai' | 'anthropic' | 'google' | 'ollama'
+      provider: string
       model: string
       temperature?: number
       maxTokens?: number
@@ -200,12 +161,11 @@ export function useAIAssistants() {
       if (data.organizationId) {
         await fetchAssistants({ organizationId: data.organizationId })
       }
-      return result as AIAssistant
-    } catch (err: any) {
-      const errorMessage = err.message || '创建失败'
+      return result as AiAssistant
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '创建失败'
       error.value = errorMessage
       toast.error('创建失败', errorMessage)
-      console.error('创建 AI 助手失败:', err)
       return null
     } finally {
       loading.value = false
@@ -215,43 +175,37 @@ export function useAIAssistants() {
   /**
    * 更新 AI 助手
    */
-  const update = async (
-    assistantId: string,
-    data: {
-      name?: string
-      systemPrompt?: string
-      temperature?: number
-      maxTokens?: number
-      isActive?: boolean
-    },
-  ) => {
+  const update = async (data: {
+    assistantId: string
+    name?: string
+    systemPrompt?: string
+    temperature?: number
+    maxTokens?: number
+    isActive?: boolean
+  }) => {
     try {
       loading.value = true
       error.value = null
 
-      const result = await trpc.aiAssistants.update.mutate({
-        assistantId,
-        ...data,
-      })
+      const result = await trpc.aiAssistants.update.mutate(data)
 
       toast.success('更新成功', 'AI 助手已更新')
 
       // 更新本地数据
-      const index = assistants.value.findIndex((a) => a.id === assistantId)
+      const index = assistants.value.findIndex((a) => a.id === data.assistantId)
       if (index !== -1) {
-        assistants.value[index] = result as AIAssistant
+        assistants.value[index] = result as AiAssistant
       }
 
-      if (currentAssistant.value?.id === assistantId) {
-        currentAssistant.value = result as AIAssistant
+      if (currentAssistant.value?.id === data.assistantId) {
+        currentAssistant.value = result as AiAssistant
       }
 
-      return result as AIAssistant
-    } catch (err: any) {
-      const errorMessage = err.message || '更新失败'
+      return result as AiAssistant
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '更新失败'
       error.value = errorMessage
       toast.error('更新失败', errorMessage)
-      console.error('更新 AI 助手失败:', err)
       return null
     } finally {
       loading.value = false
@@ -275,11 +229,10 @@ export function useAIAssistants() {
       if (currentAssistant.value?.id === id) {
         currentAssistant.value = null
       }
-    } catch (err: any) {
-      const errorMessage = err.message || '删除失败'
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '删除失败'
       error.value = errorMessage
       toast.error('删除失败', errorMessage)
-      console.error('删除 AI 助手失败:', err)
     } finally {
       loading.value = false
     }
@@ -292,8 +245,7 @@ export function useAIAssistants() {
     try {
       const result = await trpc.aiAssistants.listOllamaModels.query()
       return result as OllamaModel[]
-    } catch (err: any) {
-      console.error('获取 Ollama 模型列表失败:', err)
+    } catch (err) {
       return []
     }
   }
@@ -305,8 +257,7 @@ export function useAIAssistants() {
     try {
       const result = await trpc.aiAssistants.checkOllamaStatus.query()
       return result as OllamaStatus
-    } catch (err: any) {
-      console.error('检查 Ollama 状态失败:', err)
+    } catch (err) {
       return { available: false }
     }
   }

@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import { Client } from 'minio'
 
 @Injectable()
 export class StorageService {
+  private readonly logger = new Logger(StorageService.name)
   private minioClient: Client
   private bucketName = 'juanie'
 
@@ -25,7 +27,7 @@ export class StorageService {
       const exists = await this.minioClient.bucketExists(this.bucketName)
       if (!exists) {
         await this.minioClient.makeBucket(this.bucketName, 'us-east-1')
-        console.log(`✅ Created MinIO bucket: ${this.bucketName}`)
+        this.logger.log(`✅ Created MinIO bucket: ${this.bucketName}`)
 
         // 设置公开访问策略（用于 Logo）
         const policy = {
@@ -41,14 +43,15 @@ export class StorageService {
         }
         await this.minioClient.setBucketPolicy(this.bucketName, JSON.stringify(policy))
       } else {
-        console.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
+        this.logger.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
       }
-    } catch (error: any) {
+    } catch (error) {
       // 忽略 bucket 已存在的错误
-      if (error.code === 'BucketAlreadyOwnedByYou' || error.code === 'BucketAlreadyExists') {
-        console.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
+      const minioError = error as { code?: string }
+      if (minioError.code === 'BucketAlreadyOwnedByYou' || minioError.code === 'BucketAlreadyExists') {
+        this.logger.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
       } else {
-        console.error('MinIO bucket setup error:', error)
+        this.logger.error('MinIO bucket setup error', error)
       }
     }
   }
@@ -73,7 +76,7 @@ export class StorageService {
 
       return `${protocol}://${endpoint}:${port}/${this.bucketName}/${objectName}`
     } catch (error) {
-      console.error('MinIO upload error:', error)
+      this.logger.error('MinIO upload error', error)
       throw new Error('Failed to upload file')
     }
   }
@@ -105,7 +108,7 @@ export class StorageService {
     try {
       await this.minioClient.removeObject(this.bucketName, objectName)
     } catch (error) {
-      console.error('MinIO delete error:', error)
+      this.logger.error('MinIO delete error', error)
       throw new Error('Failed to delete file')
     }
   }
@@ -135,7 +138,7 @@ export class StorageService {
     try {
       return await this.minioClient.presignedGetObject(this.bucketName, objectName, expiry)
     } catch (error) {
-      console.error('MinIO presigned URL error:', error)
+      this.logger.error('MinIO presigned URL error', error)
       throw new Error('Failed to generate presigned URL')
     }
   }

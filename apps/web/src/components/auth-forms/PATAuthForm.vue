@@ -85,7 +85,7 @@ const emit = defineEmits<{
   success: []
 }>()
 
-const { toast } = useToast()
+const toast = useToast()
 const loading = ref(false)
 
 const form = ref({
@@ -114,18 +114,11 @@ async function handleSubmit() {
       expiresAt: form.value.expiresAt ? new Date(form.value.expiresAt) : undefined,
     })
 
-    toast({
-      title: '配置成功',
-      description: 'PAT 凭证已保存',
-    })
+    toast.success('配置成功', 'PAT 凭证已保存')
 
     emit('success')
   } catch (error: any) {
-    toast({
-      title: '配置失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('配置失败', error.message)
   } finally {
     loading.value = false
   }
@@ -146,23 +139,12 @@ async function testToken() {
     })
 
     if (response.ok) {
-      toast({
-        title: '测试成功',
-        description: 'Token 有效',
-      })
+      toast.success('测试成功', 'Token 有效')
     } else {
-      toast({
-        title: '测试失败',
-        description: `API 返回错误: ${response.status}`,
-        variant: 'destructive',
-      })
+      toast.error('测试失败', `API 返回错误: ${response.status}`)
     }
   } catch (error: any) {
-    toast({
-      title: '测试失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('测试失败', error.message)
   } finally {
     loading.value = false
   }

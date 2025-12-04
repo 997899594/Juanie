@@ -182,7 +182,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const { toast } = useToast()
+const toast = useToast()
 
 const logs = ref<any[]>([])
 const loading = ref(false)
@@ -226,11 +226,7 @@ async function loadLogs() {
     logs.value = result.logs
     hasMore.value = result.logs.length >= limit.value
   } catch (error: any) {
-    toast({
-      title: '加载失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('加载失败', error.message)
   } finally {
     loading.value = false
   }
@@ -247,21 +243,14 @@ async function handleManualSync() {
       projectId: props.projectId,
     })
 
-    toast({
-      title: '同步已触发',
-      description: '正在同步项目成员权限...',
-    })
+    toast.success('同步已触发', '正在同步项目成员权限...')
 
     // 延迟后重新加载日志
     setTimeout(() => {
       loadLogs()
     }, 2000)
   } catch (error: any) {
-    toast({
-      title: '同步失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('同步失败', error.message)
   } finally {
     syncing.value = false
   }
@@ -276,21 +265,14 @@ async function handleRetry(syncLogId: string) {
   try {
     await trpc.gitSync.retrySyncTask.mutate({ syncLogId })
 
-    toast({
-      title: '重试已触发',
-      description: '正在重新同步...',
-    })
+    toast.success('重试已触发', '正在重新同步...')
 
     // 延迟后重新加载日志
     setTimeout(() => {
       loadLogs()
     }, 2000)
   } catch (error: any) {
-    toast({
-      title: '重试失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('重试失败', error.message)
   } finally {
     retrying.value = null
   }

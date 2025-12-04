@@ -1,0 +1,552 @@
+/**
+ * 统一错误码定义
+ * 
+ * 错误码格式: <模块>_<类型>_<具体错误>
+ * 
+ * 模块前缀:
+ * - AUTH: 认证授权
+ * - USER: 用户管理
+ * - ORG: 组织管理
+ * - PROJECT: 项目管理
+ * - DEPLOY: 部署管理
+ * - GITOPS: GitOps 相关
+ * - AI: AI 服务
+ * - SYSTEM: 系统级错误
+ */
+
+export enum ErrorCode {
+  // ============================================
+  // 通用错误 (1000-1999)
+  // ============================================
+  UNKNOWN_ERROR = 'SYSTEM_UNKNOWN_ERROR',
+  INTERNAL_ERROR = 'SYSTEM_INTERNAL_ERROR',
+  VALIDATION_ERROR = 'SYSTEM_VALIDATION_ERROR',
+  NOT_FOUND = 'SYSTEM_NOT_FOUND',
+  FORBIDDEN = 'SYSTEM_FORBIDDEN',
+  UNAUTHORIZED = 'SYSTEM_UNAUTHORIZED',
+  BAD_REQUEST = 'SYSTEM_BAD_REQUEST',
+  CONFLICT = 'SYSTEM_CONFLICT',
+  RATE_LIMIT_EXCEEDED = 'SYSTEM_RATE_LIMIT_EXCEEDED',
+  SERVICE_UNAVAILABLE = 'SYSTEM_SERVICE_UNAVAILABLE',
+
+  // ============================================
+  // 认证授权错误 (2000-2999)
+  // ============================================
+  AUTH_INVALID_CREDENTIALS = 'AUTH_INVALID_CREDENTIALS',
+  AUTH_TOKEN_EXPIRED = 'AUTH_TOKEN_EXPIRED',
+  AUTH_TOKEN_INVALID = 'AUTH_TOKEN_INVALID',
+  AUTH_SESSION_EXPIRED = 'AUTH_SESSION_EXPIRED',
+  AUTH_INSUFFICIENT_PERMISSIONS = 'AUTH_INSUFFICIENT_PERMISSIONS',
+  AUTH_ACCOUNT_LOCKED = 'AUTH_ACCOUNT_LOCKED',
+  AUTH_ACCOUNT_DISABLED = 'AUTH_ACCOUNT_DISABLED',
+  AUTH_EMAIL_NOT_VERIFIED = 'AUTH_EMAIL_NOT_VERIFIED',
+  AUTH_PASSWORD_TOO_WEAK = 'AUTH_PASSWORD_TOO_WEAK',
+  AUTH_OAUTH_FAILED = 'AUTH_OAUTH_FAILED',
+  AUTH_GITHUB_CONNECTION_FAILED = 'AUTH_GITHUB_CONNECTION_FAILED',
+  AUTH_GITLAB_CONNECTION_FAILED = 'AUTH_GITLAB_CONNECTION_FAILED',
+
+  // ============================================
+  // 用户管理错误 (3000-3999)
+  // ============================================
+  USER_NOT_FOUND = 'USER_NOT_FOUND',
+  USER_ALREADY_EXISTS = 'USER_ALREADY_EXISTS',
+  USER_EMAIL_ALREADY_EXISTS = 'USER_EMAIL_ALREADY_EXISTS',
+  USER_INVALID_EMAIL = 'USER_INVALID_EMAIL',
+  USER_CREATION_FAILED = 'USER_CREATION_FAILED',
+  USER_UPDATE_FAILED = 'USER_UPDATE_FAILED',
+  USER_DELETE_FAILED = 'USER_DELETE_FAILED',
+
+  // ============================================
+  // 组织管理错误 (4000-4999)
+  // ============================================
+  ORG_NOT_FOUND = 'ORG_NOT_FOUND',
+  ORG_ALREADY_EXISTS = 'ORG_ALREADY_EXISTS',
+  ORG_SLUG_ALREADY_EXISTS = 'ORG_SLUG_ALREADY_EXISTS',
+  ORG_CREATION_FAILED = 'ORG_CREATION_FAILED',
+  ORG_UPDATE_FAILED = 'ORG_UPDATE_FAILED',
+  ORG_DELETE_FAILED = 'ORG_DELETE_FAILED',
+  ORG_MEMBER_NOT_FOUND = 'ORG_MEMBER_NOT_FOUND',
+  ORG_NOT_MEMBER = 'ORG_NOT_MEMBER',
+  ORG_INSUFFICIENT_ROLE = 'ORG_INSUFFICIENT_ROLE',
+  ORG_CANNOT_REMOVE_OWNER = 'ORG_CANNOT_REMOVE_OWNER',
+  ORG_MEMBER_ALREADY_EXISTS = 'ORG_MEMBER_ALREADY_EXISTS',
+
+  // ============================================
+  // 团队管理错误 (5000-5999)
+  // ============================================
+  TEAM_NOT_FOUND = 'TEAM_NOT_FOUND',
+  TEAM_ALREADY_EXISTS = 'TEAM_ALREADY_EXISTS',
+  TEAM_CREATION_FAILED = 'TEAM_CREATION_FAILED',
+  TEAM_UPDATE_FAILED = 'TEAM_UPDATE_FAILED',
+  TEAM_DELETE_FAILED = 'TEAM_DELETE_FAILED',
+  TEAM_MEMBER_NOT_FOUND = 'TEAM_MEMBER_NOT_FOUND',
+  TEAM_MEMBER_ALREADY_EXISTS = 'TEAM_MEMBER_ALREADY_EXISTS',
+
+  // ============================================
+  // 项目管理错误 (6000-6999)
+  // ============================================
+  PROJECT_NOT_FOUND = 'PROJECT_NOT_FOUND',
+  PROJECT_ALREADY_EXISTS = 'PROJECT_ALREADY_EXISTS',
+  PROJECT_SLUG_ALREADY_EXISTS = 'PROJECT_SLUG_ALREADY_EXISTS',
+  PROJECT_CREATION_FAILED = 'PROJECT_CREATION_FAILED',
+  PROJECT_UPDATE_FAILED = 'PROJECT_UPDATE_FAILED',
+  PROJECT_DELETE_FAILED = 'PROJECT_DELETE_FAILED',
+  PROJECT_INITIALIZATION_FAILED = 'PROJECT_INITIALIZATION_FAILED',
+  PROJECT_MEMBER_NOT_FOUND = 'PROJECT_MEMBER_NOT_FOUND',
+  PROJECT_NOT_MEMBER = 'PROJECT_NOT_MEMBER',
+  PROJECT_INSUFFICIENT_ROLE = 'PROJECT_INSUFFICIENT_ROLE',
+  PROJECT_TEMPLATE_NOT_FOUND = 'PROJECT_TEMPLATE_NOT_FOUND',
+  PROJECT_TEMPLATE_INVALID = 'PROJECT_TEMPLATE_INVALID',
+  PROJECT_ARCHIVE_FAILED = 'PROJECT_ARCHIVE_FAILED',
+  PROJECT_RESTORE_FAILED = 'PROJECT_RESTORE_FAILED',
+
+  // ============================================
+  // 仓库管理错误 (7000-7999)
+  // ============================================
+  REPO_NOT_FOUND = 'REPO_NOT_FOUND',
+  REPO_ALREADY_EXISTS = 'REPO_ALREADY_EXISTS',
+  REPO_CREATION_FAILED = 'REPO_CREATION_FAILED',
+  REPO_CLONE_FAILED = 'REPO_CLONE_FAILED',
+  REPO_PUSH_FAILED = 'REPO_PUSH_FAILED',
+  REPO_INVALID_URL = 'REPO_INVALID_URL',
+  REPO_ACCESS_DENIED = 'REPO_ACCESS_DENIED',
+  REPO_SYNC_FAILED = 'REPO_SYNC_FAILED',
+
+  // ============================================
+  // 环境管理错误 (8000-8999)
+  // ============================================
+  ENV_NOT_FOUND = 'ENV_NOT_FOUND',
+  ENV_ALREADY_EXISTS = 'ENV_ALREADY_EXISTS',
+  ENV_CREATION_FAILED = 'ENV_CREATION_FAILED',
+  ENV_UPDATE_FAILED = 'ENV_UPDATE_FAILED',
+  ENV_DELETE_FAILED = 'ENV_DELETE_FAILED',
+  ENV_INVALID_CONFIG = 'ENV_INVALID_CONFIG',
+
+  // ============================================
+  // 部署管理错误 (9000-9999)
+  // ============================================
+  DEPLOY_NOT_FOUND = 'DEPLOY_NOT_FOUND',
+  DEPLOY_CREATION_FAILED = 'DEPLOY_CREATION_FAILED',
+  DEPLOY_ALREADY_RUNNING = 'DEPLOY_ALREADY_RUNNING',
+  DEPLOY_FAILED = 'DEPLOY_FAILED',
+  DEPLOY_ROLLBACK_FAILED = 'DEPLOY_ROLLBACK_FAILED',
+  DEPLOY_APPROVAL_REQUIRED = 'DEPLOY_APPROVAL_REQUIRED',
+  DEPLOY_APPROVAL_REJECTED = 'DEPLOY_APPROVAL_REJECTED',
+  DEPLOY_INVALID_STATUS = 'DEPLOY_INVALID_STATUS',
+  DEPLOY_ENVIRONMENT_NOT_READY = 'DEPLOY_ENVIRONMENT_NOT_READY',
+
+  // ============================================
+  // Pipeline 错误 (10000-10999)
+  // ============================================
+  PIPELINE_NOT_FOUND = 'PIPELINE_NOT_FOUND',
+  PIPELINE_CREATION_FAILED = 'PIPELINE_CREATION_FAILED',
+  PIPELINE_RUN_FAILED = 'PIPELINE_RUN_FAILED',
+  PIPELINE_INVALID_CONFIG = 'PIPELINE_INVALID_CONFIG',
+  PIPELINE_ALREADY_RUNNING = 'PIPELINE_ALREADY_RUNNING',
+
+  // ============================================
+  // GitOps 错误 (11000-11999)
+  // ============================================
+  GITOPS_RESOURCE_NOT_FOUND = 'GITOPS_RESOURCE_NOT_FOUND',
+  GITOPS_SYNC_FAILED = 'GITOPS_SYNC_FAILED',
+  GITOPS_K8S_CONNECTION_FAILED = 'GITOPS_K8S_CONNECTION_FAILED',
+  GITOPS_FLUX_NOT_INSTALLED = 'GITOPS_FLUX_NOT_INSTALLED',
+  GITOPS_INVALID_MANIFEST = 'GITOPS_INVALID_MANIFEST',
+  GITOPS_APPLY_FAILED = 'GITOPS_APPLY_FAILED',
+  GITOPS_DELETE_FAILED = 'GITOPS_DELETE_FAILED',
+  GITOPS_CREDENTIAL_NOT_FOUND = 'GITOPS_CREDENTIAL_NOT_FOUND',
+  GITOPS_CREDENTIAL_INVALID = 'GITOPS_CREDENTIAL_INVALID',
+
+  // ============================================
+  // AI 服务错误 (12000-12999)
+  // ============================================
+  AI_SERVICE_UNAVAILABLE = 'AI_SERVICE_UNAVAILABLE',
+  AI_MODEL_NOT_FOUND = 'AI_MODEL_NOT_FOUND',
+  AI_INFERENCE_FAILED = 'AI_INFERENCE_FAILED',
+  AI_INVALID_INPUT = 'AI_INVALID_INPUT',
+  AI_RATE_LIMIT_EXCEEDED = 'AI_RATE_LIMIT_EXCEEDED',
+  AI_TIMEOUT = 'AI_TIMEOUT',
+  AI_CODE_REVIEW_FAILED = 'AI_CODE_REVIEW_FAILED',
+  AI_RECOMMENDATION_FAILED = 'AI_RECOMMENDATION_FAILED',
+
+  // ============================================
+  // 通知错误 (13000-13999)
+  // ============================================
+  NOTIFICATION_SEND_FAILED = 'NOTIFICATION_SEND_FAILED',
+  NOTIFICATION_INVALID_CHANNEL = 'NOTIFICATION_INVALID_CHANNEL',
+  NOTIFICATION_NOT_FOUND = 'NOTIFICATION_NOT_FOUND',
+
+  // ============================================
+  // 安全策略错误 (14000-14999)
+  // ============================================
+  SECURITY_POLICY_NOT_FOUND = 'SECURITY_POLICY_NOT_FOUND',
+  SECURITY_POLICY_VIOLATION = 'SECURITY_POLICY_VIOLATION',
+  SECURITY_SCAN_FAILED = 'SECURITY_SCAN_FAILED',
+  SECURITY_VULNERABILITY_DETECTED = 'SECURITY_VULNERABILITY_DETECTED',
+
+  // ============================================
+  // 成本追踪错误 (15000-15999)
+  // ============================================
+  COST_TRACKING_FAILED = 'COST_TRACKING_FAILED',
+  COST_LIMIT_EXCEEDED = 'COST_LIMIT_EXCEEDED',
+  COST_REPORT_GENERATION_FAILED = 'COST_REPORT_GENERATION_FAILED',
+
+  // ============================================
+  // 数据库错误 (16000-16999)
+  // ============================================
+  DB_CONNECTION_FAILED = 'DB_CONNECTION_FAILED',
+  DB_QUERY_FAILED = 'DB_QUERY_FAILED',
+  DB_TRANSACTION_FAILED = 'DB_TRANSACTION_FAILED',
+  DB_CONSTRAINT_VIOLATION = 'DB_CONSTRAINT_VIOLATION',
+  DB_UNIQUE_VIOLATION = 'DB_UNIQUE_VIOLATION',
+
+  // ============================================
+  // 缓存错误 (17000-17999)
+  // ============================================
+  CACHE_CONNECTION_FAILED = 'CACHE_CONNECTION_FAILED',
+  CACHE_SET_FAILED = 'CACHE_SET_FAILED',
+  CACHE_GET_FAILED = 'CACHE_GET_FAILED',
+
+  // ============================================
+  // 队列错误 (18000-18999)
+  // ============================================
+  QUEUE_JOB_FAILED = 'QUEUE_JOB_FAILED',
+  QUEUE_CONNECTION_FAILED = 'QUEUE_CONNECTION_FAILED',
+  QUEUE_ADD_JOB_FAILED = 'QUEUE_ADD_JOB_FAILED',
+}
+
+/**
+ * 错误码对应的 HTTP 状态码映射
+ */
+export const ErrorCodeToHttpStatus: Record<ErrorCode, number> = {
+  // 通用错误
+  [ErrorCode.UNKNOWN_ERROR]: 500,
+  [ErrorCode.INTERNAL_ERROR]: 500,
+  [ErrorCode.VALIDATION_ERROR]: 400,
+  [ErrorCode.NOT_FOUND]: 404,
+  [ErrorCode.FORBIDDEN]: 403,
+  [ErrorCode.UNAUTHORIZED]: 401,
+  [ErrorCode.BAD_REQUEST]: 400,
+  [ErrorCode.CONFLICT]: 409,
+  [ErrorCode.RATE_LIMIT_EXCEEDED]: 429,
+  [ErrorCode.SERVICE_UNAVAILABLE]: 503,
+
+  // 认证授权错误
+  [ErrorCode.AUTH_INVALID_CREDENTIALS]: 401,
+  [ErrorCode.AUTH_TOKEN_EXPIRED]: 401,
+  [ErrorCode.AUTH_TOKEN_INVALID]: 401,
+  [ErrorCode.AUTH_SESSION_EXPIRED]: 401,
+  [ErrorCode.AUTH_INSUFFICIENT_PERMISSIONS]: 403,
+  [ErrorCode.AUTH_ACCOUNT_LOCKED]: 403,
+  [ErrorCode.AUTH_ACCOUNT_DISABLED]: 403,
+  [ErrorCode.AUTH_EMAIL_NOT_VERIFIED]: 403,
+  [ErrorCode.AUTH_PASSWORD_TOO_WEAK]: 400,
+  [ErrorCode.AUTH_OAUTH_FAILED]: 401,
+  [ErrorCode.AUTH_GITHUB_CONNECTION_FAILED]: 401,
+  [ErrorCode.AUTH_GITLAB_CONNECTION_FAILED]: 401,
+
+  // 用户管理错误
+  [ErrorCode.USER_NOT_FOUND]: 404,
+  [ErrorCode.USER_ALREADY_EXISTS]: 409,
+  [ErrorCode.USER_EMAIL_ALREADY_EXISTS]: 409,
+  [ErrorCode.USER_INVALID_EMAIL]: 400,
+  [ErrorCode.USER_CREATION_FAILED]: 500,
+  [ErrorCode.USER_UPDATE_FAILED]: 500,
+  [ErrorCode.USER_DELETE_FAILED]: 500,
+
+  // 组织管理错误
+  [ErrorCode.ORG_NOT_FOUND]: 404,
+  [ErrorCode.ORG_ALREADY_EXISTS]: 409,
+  [ErrorCode.ORG_SLUG_ALREADY_EXISTS]: 409,
+  [ErrorCode.ORG_CREATION_FAILED]: 500,
+  [ErrorCode.ORG_UPDATE_FAILED]: 500,
+  [ErrorCode.ORG_DELETE_FAILED]: 500,
+  [ErrorCode.ORG_MEMBER_NOT_FOUND]: 404,
+  [ErrorCode.ORG_NOT_MEMBER]: 403,
+  [ErrorCode.ORG_INSUFFICIENT_ROLE]: 403,
+  [ErrorCode.ORG_CANNOT_REMOVE_OWNER]: 400,
+  [ErrorCode.ORG_MEMBER_ALREADY_EXISTS]: 409,
+
+  // 团队管理错误
+  [ErrorCode.TEAM_NOT_FOUND]: 404,
+  [ErrorCode.TEAM_ALREADY_EXISTS]: 409,
+  [ErrorCode.TEAM_CREATION_FAILED]: 500,
+  [ErrorCode.TEAM_UPDATE_FAILED]: 500,
+  [ErrorCode.TEAM_DELETE_FAILED]: 500,
+  [ErrorCode.TEAM_MEMBER_NOT_FOUND]: 404,
+  [ErrorCode.TEAM_MEMBER_ALREADY_EXISTS]: 409,
+
+  // 项目管理错误
+  [ErrorCode.PROJECT_NOT_FOUND]: 404,
+  [ErrorCode.PROJECT_ALREADY_EXISTS]: 409,
+  [ErrorCode.PROJECT_SLUG_ALREADY_EXISTS]: 409,
+  [ErrorCode.PROJECT_CREATION_FAILED]: 500,
+  [ErrorCode.PROJECT_UPDATE_FAILED]: 500,
+  [ErrorCode.PROJECT_DELETE_FAILED]: 500,
+  [ErrorCode.PROJECT_INITIALIZATION_FAILED]: 500,
+  [ErrorCode.PROJECT_MEMBER_NOT_FOUND]: 404,
+  [ErrorCode.PROJECT_NOT_MEMBER]: 403,
+  [ErrorCode.PROJECT_INSUFFICIENT_ROLE]: 403,
+  [ErrorCode.PROJECT_TEMPLATE_NOT_FOUND]: 404,
+  [ErrorCode.PROJECT_TEMPLATE_INVALID]: 400,
+  [ErrorCode.PROJECT_ARCHIVE_FAILED]: 500,
+  [ErrorCode.PROJECT_RESTORE_FAILED]: 500,
+
+  // 仓库管理错误
+  [ErrorCode.REPO_NOT_FOUND]: 404,
+  [ErrorCode.REPO_ALREADY_EXISTS]: 409,
+  [ErrorCode.REPO_CREATION_FAILED]: 500,
+  [ErrorCode.REPO_CLONE_FAILED]: 500,
+  [ErrorCode.REPO_PUSH_FAILED]: 500,
+  [ErrorCode.REPO_INVALID_URL]: 400,
+  [ErrorCode.REPO_ACCESS_DENIED]: 403,
+  [ErrorCode.REPO_SYNC_FAILED]: 500,
+
+  // 环境管理错误
+  [ErrorCode.ENV_NOT_FOUND]: 404,
+  [ErrorCode.ENV_ALREADY_EXISTS]: 409,
+  [ErrorCode.ENV_CREATION_FAILED]: 500,
+  [ErrorCode.ENV_UPDATE_FAILED]: 500,
+  [ErrorCode.ENV_DELETE_FAILED]: 500,
+  [ErrorCode.ENV_INVALID_CONFIG]: 400,
+
+  // 部署管理错误
+  [ErrorCode.DEPLOY_NOT_FOUND]: 404,
+  [ErrorCode.DEPLOY_CREATION_FAILED]: 500,
+  [ErrorCode.DEPLOY_ALREADY_RUNNING]: 409,
+  [ErrorCode.DEPLOY_FAILED]: 500,
+  [ErrorCode.DEPLOY_ROLLBACK_FAILED]: 500,
+  [ErrorCode.DEPLOY_APPROVAL_REQUIRED]: 403,
+  [ErrorCode.DEPLOY_APPROVAL_REJECTED]: 403,
+  [ErrorCode.DEPLOY_INVALID_STATUS]: 400,
+  [ErrorCode.DEPLOY_ENVIRONMENT_NOT_READY]: 400,
+
+  // Pipeline 错误
+  [ErrorCode.PIPELINE_NOT_FOUND]: 404,
+  [ErrorCode.PIPELINE_CREATION_FAILED]: 500,
+  [ErrorCode.PIPELINE_RUN_FAILED]: 500,
+  [ErrorCode.PIPELINE_INVALID_CONFIG]: 400,
+  [ErrorCode.PIPELINE_ALREADY_RUNNING]: 409,
+
+  // GitOps 错误
+  [ErrorCode.GITOPS_RESOURCE_NOT_FOUND]: 404,
+  [ErrorCode.GITOPS_SYNC_FAILED]: 500,
+  [ErrorCode.GITOPS_K8S_CONNECTION_FAILED]: 503,
+  [ErrorCode.GITOPS_FLUX_NOT_INSTALLED]: 503,
+  [ErrorCode.GITOPS_INVALID_MANIFEST]: 400,
+  [ErrorCode.GITOPS_APPLY_FAILED]: 500,
+  [ErrorCode.GITOPS_DELETE_FAILED]: 500,
+  [ErrorCode.GITOPS_CREDENTIAL_NOT_FOUND]: 404,
+  [ErrorCode.GITOPS_CREDENTIAL_INVALID]: 400,
+
+  // AI 服务错误
+  [ErrorCode.AI_SERVICE_UNAVAILABLE]: 503,
+  [ErrorCode.AI_MODEL_NOT_FOUND]: 404,
+  [ErrorCode.AI_INFERENCE_FAILED]: 500,
+  [ErrorCode.AI_INVALID_INPUT]: 400,
+  [ErrorCode.AI_RATE_LIMIT_EXCEEDED]: 429,
+  [ErrorCode.AI_TIMEOUT]: 504,
+  [ErrorCode.AI_CODE_REVIEW_FAILED]: 500,
+  [ErrorCode.AI_RECOMMENDATION_FAILED]: 500,
+
+  // 通知错误
+  [ErrorCode.NOTIFICATION_SEND_FAILED]: 500,
+  [ErrorCode.NOTIFICATION_INVALID_CHANNEL]: 400,
+  [ErrorCode.NOTIFICATION_NOT_FOUND]: 404,
+
+  // 安全策略错误
+  [ErrorCode.SECURITY_POLICY_NOT_FOUND]: 404,
+  [ErrorCode.SECURITY_POLICY_VIOLATION]: 403,
+  [ErrorCode.SECURITY_SCAN_FAILED]: 500,
+  [ErrorCode.SECURITY_VULNERABILITY_DETECTED]: 400,
+
+  // 成本追踪错误
+  [ErrorCode.COST_TRACKING_FAILED]: 500,
+  [ErrorCode.COST_LIMIT_EXCEEDED]: 400,
+  [ErrorCode.COST_REPORT_GENERATION_FAILED]: 500,
+
+  // 数据库错误
+  [ErrorCode.DB_CONNECTION_FAILED]: 503,
+  [ErrorCode.DB_QUERY_FAILED]: 500,
+  [ErrorCode.DB_TRANSACTION_FAILED]: 500,
+  [ErrorCode.DB_CONSTRAINT_VIOLATION]: 400,
+  [ErrorCode.DB_UNIQUE_VIOLATION]: 409,
+
+  // 缓存错误
+  [ErrorCode.CACHE_CONNECTION_FAILED]: 503,
+  [ErrorCode.CACHE_SET_FAILED]: 500,
+  [ErrorCode.CACHE_GET_FAILED]: 500,
+
+  // 队列错误
+  [ErrorCode.QUEUE_JOB_FAILED]: 500,
+  [ErrorCode.QUEUE_CONNECTION_FAILED]: 503,
+  [ErrorCode.QUEUE_ADD_JOB_FAILED]: 500,
+}
+
+/**
+ * 错误码对应的用户友好消息（中文）
+ */
+export const ErrorMessages: Record<ErrorCode, string> = {
+  // 通用错误
+  [ErrorCode.UNKNOWN_ERROR]: '未知错误',
+  [ErrorCode.INTERNAL_ERROR]: '服务器内部错误',
+  [ErrorCode.VALIDATION_ERROR]: '数据验证失败',
+  [ErrorCode.NOT_FOUND]: '资源不存在',
+  [ErrorCode.FORBIDDEN]: '没有权限访问',
+  [ErrorCode.UNAUTHORIZED]: '未授权，请先登录',
+  [ErrorCode.BAD_REQUEST]: '请求参数错误',
+  [ErrorCode.CONFLICT]: '资源冲突',
+  [ErrorCode.RATE_LIMIT_EXCEEDED]: '请求过于频繁，请稍后再试',
+  [ErrorCode.SERVICE_UNAVAILABLE]: '服务暂时不可用',
+
+  // 认证授权错误
+  [ErrorCode.AUTH_INVALID_CREDENTIALS]: '用户名或密码错误',
+  [ErrorCode.AUTH_TOKEN_EXPIRED]: '登录已过期，请重新登录',
+  [ErrorCode.AUTH_TOKEN_INVALID]: '无效的登录令牌',
+  [ErrorCode.AUTH_SESSION_EXPIRED]: '会话已过期',
+  [ErrorCode.AUTH_INSUFFICIENT_PERMISSIONS]: '权限不足',
+  [ErrorCode.AUTH_ACCOUNT_LOCKED]: '账号已被锁定',
+  [ErrorCode.AUTH_ACCOUNT_DISABLED]: '账号已被禁用',
+  [ErrorCode.AUTH_EMAIL_NOT_VERIFIED]: '邮箱未验证',
+  [ErrorCode.AUTH_PASSWORD_TOO_WEAK]: '密码强度不足',
+  [ErrorCode.AUTH_OAUTH_FAILED]: 'OAuth 认证失败',
+  [ErrorCode.AUTH_GITHUB_CONNECTION_FAILED]: 'GitHub 连接失败',
+  [ErrorCode.AUTH_GITLAB_CONNECTION_FAILED]: 'GitLab 连接失败',
+
+  // 用户管理错误
+  [ErrorCode.USER_NOT_FOUND]: '用户不存在',
+  [ErrorCode.USER_ALREADY_EXISTS]: '用户已存在',
+  [ErrorCode.USER_EMAIL_ALREADY_EXISTS]: '邮箱已被使用',
+  [ErrorCode.USER_INVALID_EMAIL]: '邮箱格式无效',
+  [ErrorCode.USER_CREATION_FAILED]: '创建用户失败',
+  [ErrorCode.USER_UPDATE_FAILED]: '更新用户失败',
+  [ErrorCode.USER_DELETE_FAILED]: '删除用户失败',
+
+  // 组织管理错误
+  [ErrorCode.ORG_NOT_FOUND]: '组织不存在',
+  [ErrorCode.ORG_ALREADY_EXISTS]: '组织已存在',
+  [ErrorCode.ORG_SLUG_ALREADY_EXISTS]: '组织标识符已被使用',
+  [ErrorCode.ORG_CREATION_FAILED]: '创建组织失败',
+  [ErrorCode.ORG_UPDATE_FAILED]: '更新组织失败',
+  [ErrorCode.ORG_DELETE_FAILED]: '删除组织失败',
+  [ErrorCode.ORG_MEMBER_NOT_FOUND]: '组织成员不存在',
+  [ErrorCode.ORG_NOT_MEMBER]: '不是组织成员',
+  [ErrorCode.ORG_INSUFFICIENT_ROLE]: '组织角色权限不足',
+  [ErrorCode.ORG_CANNOT_REMOVE_OWNER]: '无法移除组织所有者',
+  [ErrorCode.ORG_MEMBER_ALREADY_EXISTS]: '成员已在组织中',
+
+  // 团队管理错误
+  [ErrorCode.TEAM_NOT_FOUND]: '团队不存在',
+  [ErrorCode.TEAM_ALREADY_EXISTS]: '团队已存在',
+  [ErrorCode.TEAM_CREATION_FAILED]: '创建团队失败',
+  [ErrorCode.TEAM_UPDATE_FAILED]: '更新团队失败',
+  [ErrorCode.TEAM_DELETE_FAILED]: '删除团队失败',
+  [ErrorCode.TEAM_MEMBER_NOT_FOUND]: '团队成员不存在',
+  [ErrorCode.TEAM_MEMBER_ALREADY_EXISTS]: '成员已在团队中',
+
+  // 项目管理错误
+  [ErrorCode.PROJECT_NOT_FOUND]: '项目不存在',
+  [ErrorCode.PROJECT_ALREADY_EXISTS]: '项目已存在',
+  [ErrorCode.PROJECT_SLUG_ALREADY_EXISTS]: '项目标识符已被使用',
+  [ErrorCode.PROJECT_CREATION_FAILED]: '创建项目失败',
+  [ErrorCode.PROJECT_UPDATE_FAILED]: '更新项目失败',
+  [ErrorCode.PROJECT_DELETE_FAILED]: '删除项目失败',
+  [ErrorCode.PROJECT_INITIALIZATION_FAILED]: '项目初始化失败',
+  [ErrorCode.PROJECT_MEMBER_NOT_FOUND]: '项目成员不存在',
+  [ErrorCode.PROJECT_NOT_MEMBER]: '不是项目成员',
+  [ErrorCode.PROJECT_INSUFFICIENT_ROLE]: '项目角色权限不足',
+  [ErrorCode.PROJECT_TEMPLATE_NOT_FOUND]: '项目模板不存在',
+  [ErrorCode.PROJECT_TEMPLATE_INVALID]: '项目模板无效',
+  [ErrorCode.PROJECT_ARCHIVE_FAILED]: '归档项目失败',
+  [ErrorCode.PROJECT_RESTORE_FAILED]: '恢复项目失败',
+
+  // 仓库管理错误
+  [ErrorCode.REPO_NOT_FOUND]: '仓库不存在',
+  [ErrorCode.REPO_ALREADY_EXISTS]: '仓库已存在',
+  [ErrorCode.REPO_CREATION_FAILED]: '创建仓库失败',
+  [ErrorCode.REPO_CLONE_FAILED]: '克隆仓库失败',
+  [ErrorCode.REPO_PUSH_FAILED]: '推送代码失败',
+  [ErrorCode.REPO_INVALID_URL]: '仓库地址无效',
+  [ErrorCode.REPO_ACCESS_DENIED]: '无权访问仓库',
+  [ErrorCode.REPO_SYNC_FAILED]: '仓库同步失败',
+
+  // 环境管理错误
+  [ErrorCode.ENV_NOT_FOUND]: '环境不存在',
+  [ErrorCode.ENV_ALREADY_EXISTS]: '环境已存在',
+  [ErrorCode.ENV_CREATION_FAILED]: '创建环境失败',
+  [ErrorCode.ENV_UPDATE_FAILED]: '更新环境失败',
+  [ErrorCode.ENV_DELETE_FAILED]: '删除环境失败',
+  [ErrorCode.ENV_INVALID_CONFIG]: '环境配置无效',
+
+  // 部署管理错误
+  [ErrorCode.DEPLOY_NOT_FOUND]: '部署不存在',
+  [ErrorCode.DEPLOY_CREATION_FAILED]: '创建部署失败',
+  [ErrorCode.DEPLOY_ALREADY_RUNNING]: '已有部署正在运行',
+  [ErrorCode.DEPLOY_FAILED]: '部署失败',
+  [ErrorCode.DEPLOY_ROLLBACK_FAILED]: '回滚失败',
+  [ErrorCode.DEPLOY_APPROVAL_REQUIRED]: '需要审批才能部署',
+  [ErrorCode.DEPLOY_APPROVAL_REJECTED]: '部署审批被拒绝',
+  [ErrorCode.DEPLOY_INVALID_STATUS]: '部署状态无效',
+  [ErrorCode.DEPLOY_ENVIRONMENT_NOT_READY]: '环境未就绪',
+
+  // Pipeline 错误
+  [ErrorCode.PIPELINE_NOT_FOUND]: '流水线不存在',
+  [ErrorCode.PIPELINE_CREATION_FAILED]: '创建流水线失败',
+  [ErrorCode.PIPELINE_RUN_FAILED]: '流水线运行失败',
+  [ErrorCode.PIPELINE_INVALID_CONFIG]: '流水线配置无效',
+  [ErrorCode.PIPELINE_ALREADY_RUNNING]: '流水线已在运行',
+
+  // GitOps 错误
+  [ErrorCode.GITOPS_RESOURCE_NOT_FOUND]: 'GitOps 资源不存在',
+  [ErrorCode.GITOPS_SYNC_FAILED]: 'GitOps 同步失败',
+  [ErrorCode.GITOPS_K8S_CONNECTION_FAILED]: 'Kubernetes 连接失败',
+  [ErrorCode.GITOPS_FLUX_NOT_INSTALLED]: 'Flux CD 未安装',
+  [ErrorCode.GITOPS_INVALID_MANIFEST]: 'Kubernetes 清单无效',
+  [ErrorCode.GITOPS_APPLY_FAILED]: '应用配置失败',
+  [ErrorCode.GITOPS_DELETE_FAILED]: '删除资源失败',
+  [ErrorCode.GITOPS_CREDENTIAL_NOT_FOUND]: 'Git 凭证不存在',
+  [ErrorCode.GITOPS_CREDENTIAL_INVALID]: 'Git 凭证无效',
+
+  // AI 服务错误
+  [ErrorCode.AI_SERVICE_UNAVAILABLE]: 'AI 服务不可用',
+  [ErrorCode.AI_MODEL_NOT_FOUND]: 'AI 模型不存在',
+  [ErrorCode.AI_INFERENCE_FAILED]: 'AI 推理失败',
+  [ErrorCode.AI_INVALID_INPUT]: 'AI 输入无效',
+  [ErrorCode.AI_RATE_LIMIT_EXCEEDED]: 'AI 调用频率超限',
+  [ErrorCode.AI_TIMEOUT]: 'AI 请求超时',
+  [ErrorCode.AI_CODE_REVIEW_FAILED]: 'AI 代码审查失败',
+  [ErrorCode.AI_RECOMMENDATION_FAILED]: 'AI 推荐失败',
+
+  // 通知错误
+  [ErrorCode.NOTIFICATION_SEND_FAILED]: '发送通知失败',
+  [ErrorCode.NOTIFICATION_INVALID_CHANNEL]: '通知渠道无效',
+  [ErrorCode.NOTIFICATION_NOT_FOUND]: '通知不存在',
+
+  // 安全策略错误
+  [ErrorCode.SECURITY_POLICY_NOT_FOUND]: '安全策略不存在',
+  [ErrorCode.SECURITY_POLICY_VIOLATION]: '违反安全策略',
+  [ErrorCode.SECURITY_SCAN_FAILED]: '安全扫描失败',
+  [ErrorCode.SECURITY_VULNERABILITY_DETECTED]: '检测到安全漏洞',
+
+  // 成本追踪错误
+  [ErrorCode.COST_TRACKING_FAILED]: '成本追踪失败',
+  [ErrorCode.COST_LIMIT_EXCEEDED]: '成本超出限额',
+  [ErrorCode.COST_REPORT_GENERATION_FAILED]: '成本报告生成失败',
+
+  // 数据库错误
+  [ErrorCode.DB_CONNECTION_FAILED]: '数据库连接失败',
+  [ErrorCode.DB_QUERY_FAILED]: '数据库查询失败',
+  [ErrorCode.DB_TRANSACTION_FAILED]: '数据库事务失败',
+  [ErrorCode.DB_CONSTRAINT_VIOLATION]: '违反数据库约束',
+  [ErrorCode.DB_UNIQUE_VIOLATION]: '数据已存在（唯一性约束）',
+
+  // 缓存错误
+  [ErrorCode.CACHE_CONNECTION_FAILED]: '缓存连接失败',
+  [ErrorCode.CACHE_SET_FAILED]: '缓存写入失败',
+  [ErrorCode.CACHE_GET_FAILED]: '缓存读取失败',
+
+  // 队列错误
+  [ErrorCode.QUEUE_JOB_FAILED]: '队列任务失败',
+  [ErrorCode.QUEUE_CONNECTION_FAILED]: '队列连接失败',
+  [ErrorCode.QUEUE_ADD_JOB_FAILED]: '添加队列任务失败',
+}

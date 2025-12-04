@@ -18,7 +18,7 @@ export class SecurityPoliciesService {
       name: string
       type: 'access-control' | 'network' | 'data-protection' | 'compliance'
       rules: {
-        conditions: Array<{ field: string; operator: string; value: any }>
+        conditions: Array<{ field: string; operator: string; value: unknown }>
         actions: Array<{ type: 'block' | 'warn' | 'log'; message: string }>
       }
       isEnforced?: boolean
@@ -200,8 +200,8 @@ export class SecurityPoliciesService {
     organizationId?: string
     projectId?: string
     action: string
-    resource: any
-    user: any
+    resource: Record<string, unknown>
+    user: Record<string, unknown>
   }) {
     // 获取适用的策略
     const conditions = []
@@ -239,7 +239,9 @@ export class SecurityPoliciesService {
     }
 
     return {
-      allowed: violations.every((v) => !v.actions.some((a: any) => a.type === 'block')),
+      allowed: violations.every(
+        (v) => !v.actions.some((a: { type: string }) => a.type === 'block'),
+      ),
       violations,
     }
   }
@@ -278,26 +280,30 @@ export class SecurityPoliciesService {
   }
 
   // 从上下文中获取值
-  private getValueFromContext(field: string, context: any): any {
+  private getValueFromContext(field: string, context: Record<string, unknown>): unknown {
     const parts = field.split('.')
-    let value = context
+    let value: unknown = context
     for (const part of parts) {
-      value = value?.[part]
+      if (value && typeof value === 'object' && part in value) {
+        value = (value as Record<string, unknown>)[part]
+      } else {
+        return undefined
+      }
     }
     return value
   }
 
   // 评估条件
-  private evaluateCondition(value: any, operator: string, expected: any): boolean {
+  private evaluateCondition(value: unknown, operator: string, expected: unknown): boolean {
     switch (operator) {
       case 'equals':
         return value === expected
       case 'not_equals':
         return value !== expected
       case 'contains':
-        return String(value).includes(expected)
+        return String(value).includes(String(expected))
       case 'not_contains':
-        return !String(value).includes(expected)
+        return !String(value).includes(String(expected))
       case 'greater_than':
         return Number(value) > Number(expected)
       case 'less_than':

@@ -3,17 +3,20 @@ import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
 import type { CreateNotificationInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { and, desc, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name)
+
   constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
 
   // 创建通知
   @Trace('notifications.create')
   async create(data: CreateNotificationInput) {
-    const [notification] = await this.db
+    const notification = await this.db
       .insert(schema.notifications)
       .values({
         userId: data.userId,
@@ -25,14 +28,28 @@ export class NotificationsService {
       })
       .returning()
 
-    // 触发通知投递
-    await this.deliverNotification(notification)
+    const createdNotification = notification[0]
+    if (!createdNotification) {
+      throw new Error('Failed to create notification')
+    }
 
-    return notification
+    // 触发通知投递
+    await this.deliverNotification({
+      ...createdNotification,
+      message: createdNotification.content,
+    })
+
+    return createdNotification
   }
 
   // 投递通知
-  private async deliverNotification(notification: any) {
+  private async deliverNotification(notification: {
+    userId: string
+    type: string
+    title: string
+    message: string
+    [key: string]: unknown
+  }) {
     // 获取用户偏好设置
     const [user] = await this.db
       .select()
@@ -45,7 +62,7 @@ export class NotificationsService {
     }
 
     // 检查用户通知偏好
-    const preferences = user.preferences as any
+    const preferences = user.preferences as Record<string, unknown> | null
     if (!preferences) {
       return
     }
@@ -53,7 +70,8 @@ export class NotificationsService {
     // 应用内通知已经通过数据库记录实现
 
     // 邮件通知
-    if (preferences.notifications?.email) {
+    const notificationPrefs = preferences.notifications as Record<string, unknown> | undefined
+    if (notificationPrefs?.email) {
       await this.sendEmailNotification(user.email, notification)
     }
 
@@ -64,10 +82,18 @@ export class NotificationsService {
   }
 
   // 发送邮件通知
-  private async sendEmailNotification(email: string, notification: any) {
+  private async sendEmailNotification(
+    email: string,
+    notification: {
+      type: string
+      title: string
+      message: string
+      [key: string]: unknown
+    },
+  ) {
     // 在真实场景中，这里会使用邮件服务（如 SendGrid, AWS SES）
     // 简化实现：只记录日志
-    console.log(`[Email] Sending notification to ${email}:`, {
+    this.logger.log(`[Email] Sending notification to ${email}`, {
       title: notification.title,
       content: notification.content,
       priority: notification.priority,

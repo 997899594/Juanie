@@ -3,6 +3,7 @@ import { DATABASE, REDIS } from '@juanie/core/tokens'
 import { generateId } from '@juanie/core/utils'
 import type { CreateUserFromOAuthInput, OAuthUrlResponse } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import { GitHub, GitLab } from 'arctic'
 import { eq, sql } from 'drizzle-orm'
@@ -11,6 +12,7 @@ import type Redis from 'ioredis'
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name)
   private github: GitHub
   private gitlab: GitLab
 
@@ -98,16 +100,14 @@ export class AuthService {
     // 如果 email 为空，从 /user/emails 获取
     let email = githubUser.email
     if (!email) {
-      console.log('[GitHub OAuth] email 为空，尝试从 /user/emails 获取')
+      this.logger.log('[GitHub OAuth] email 为空，尝试从 /user/emails 获取')
       const emailsResponse = await fetch('https://api.github.com/user/emails', {
         headers: { Authorization: `Bearer ${tokens.accessToken()}` },
       })
 
       if (!emailsResponse.ok) {
-        console.error(
-          '[GitHub OAuth] 获取邮箱列表失败:',
-          emailsResponse.status,
-          emailsResponse.statusText,
+        this.logger.error(
+          `[GitHub OAuth] 获取邮箱列表失败: ${emailsResponse.status} ${emailsResponse.statusText}`,
         )
         throw new Error('无法获取 GitHub 邮箱列表，请确保授权了 user:email 权限')
       }
@@ -118,7 +118,7 @@ export class AuthService {
         verified: boolean
       }>
 
-      console.log('[GitHub OAuth] 获取到邮箱列表:', emails)
+      this.logger.log('[GitHub OAuth] 获取到邮箱列表', { count: emails.length })
 
       // 优先使用 primary + verified 的邮箱
       const primaryEmail = emails.find((e) => e.primary && e.verified)
@@ -129,9 +129,9 @@ export class AuthService {
         throw new Error('无法获取 GitHub 邮箱，请确保至少有一个已验证的邮箱')
       }
 
-      console.log('[GitHub OAuth] 使用邮箱:', email)
+      this.logger.log('[GitHub OAuth] 使用邮箱', { email })
     } else {
-      console.log('[GitHub OAuth] 从用户信息获取到邮箱:', email)
+      this.logger.log('[GitHub OAuth] 从用户信息获取到邮箱', { email })
     }
 
     // 创建或更新用户
@@ -275,7 +275,7 @@ export class AuthService {
           status: 'active',
         })
 
-        console.log(`[Auth] 为新用户 ${user.username} 创建了组织: ${org.name}`)
+        this.logger.log(`[Auth] 为新用户 ${user.username} 创建了组织: ${org.name}`)
       }
 
       // 创建或更新 OAuth 账号（保存完整的 token 信息）

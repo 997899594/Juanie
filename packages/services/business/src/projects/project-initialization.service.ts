@@ -2,7 +2,8 @@ import * as schema from '@juanie/core/database'
 import { GitOpsEvents, type GitOpsSetupRequestedEvent } from '@juanie/core/events'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -94,7 +95,7 @@ export class ProjectInitializationService {
               gitops: {
                 enabled: false,
                 setupFailed: true,
-                error: error.message,
+                error: (error instanceof Error ? error.message : String(error)),
               },
             },
             updatedAt: new Date(),

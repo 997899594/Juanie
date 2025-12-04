@@ -251,7 +251,7 @@ export class OrganizationsService {
 
     const oldRole = currentMember.role
 
-    const [updated] = await this.db
+    const [updatedMember] = await this.db
       .update(schema.organizationMembers)
       .set({
         role: data.role,
@@ -259,16 +259,20 @@ export class OrganizationsService {
       .where(eq(schema.organizationMembers.id, data.memberId))
       .returning()
 
+    if (!updatedMember) {
+      throw new Error('Failed to update member role')
+    }
+
     // 发布角色更新事件 (用于自动同步)
     this.organizationEvents.emitMemberRoleUpdated({
       organizationId: orgId,
-      userId: updated.userId,
-      oldRole,
-      newRole: data.role,
+      userId: updatedMember.userId,
+      oldRole: oldRole as 'owner' | 'admin' | 'member',
+      newRole: data.role as 'owner' | 'admin' | 'member',
       updatedBy: userId,
     })
 
-    return updated
+    return updatedMember
   }
 
   // 移除成员
@@ -299,11 +303,13 @@ export class OrganizationsService {
       .where(eq(schema.organizationMembers.id, data.memberId))
 
     // 发布成员移除事件 (用于自动同步)
-    this.organizationEvents.emitMemberRemoved({
-      organizationId: orgId,
-      userId: targetMember[0].userId,
-      removedBy: userId,
-    })
+    if (targetMember[0]) {
+      this.organizationEvents.emitMemberRemoved({
+        organizationId: orgId,
+        userId: targetMember[0].userId,
+        removedBy: userId,
+      })
+    }
 
     return { success: true }
   }

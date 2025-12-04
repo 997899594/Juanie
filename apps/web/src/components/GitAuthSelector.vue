@@ -164,7 +164,7 @@ watch([() => authOptions.value, recommendedAuthType], ([options, recommended]) =
     selectedAuthType.value = recommended.type
   } else if (!selectedAuthType.value && options.length > 0) {
     const recommendedOption = options.find(o => o.recommended)
-    selectedAuthType.value = recommendedOption?.value || options[0].value
+    selectedAuthType.value = recommendedOption?.value || options[0]?.value || 'oauth'
   }
 }, { immediate: true })
 

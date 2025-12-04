@@ -17,11 +17,6 @@
     "@juanie/types": "workspace:*",
     "@juanie/service-foundation": "workspace:*",
     "@juanie/service-business": "workspace:*",
-    "@nestjs/common": "^11.1.7",
-    "@nestjs/config": "^3.3.0",
-    "@nestjs/core": "^11.1.7",
-    "drizzle-orm": "^0.44.7",
-    "ioredis": "^5.4.2",
     "ollama": "^0.5.11"
   },
   "devDependencies": {

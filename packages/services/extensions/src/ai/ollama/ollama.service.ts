@@ -1,10 +1,11 @@
 import { Trace } from '@juanie/core/observability'
-import { Injectable, type OnModuleInit } from '@nestjs/common'
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Ollama } from 'ollama'
 
 @Injectable()
 export class OllamaService implements OnModuleInit {
+  private readonly logger = new Logger(OllamaService.name)
   private ollama: Ollama
   private isConnected = false
 
@@ -24,11 +25,11 @@ export class OllamaService implements OnModuleInit {
     try {
       await this.ollama.list()
       this.isConnected = true
-      console.log('✅ Ollama 连接成功')
+      this.logger.log('✅ Ollama 连接成功')
     } catch {
       this.isConnected = false
-      console.warn('⚠️ Ollama 连接失败，将使用模拟响应')
-      console.warn('启动 Ollama: docker-compose up -d ollama')
+      this.logger.warn('⚠️ Ollama 连接失败，将使用模拟响应')
+      this.logger.warn('启动 Ollama: docker-compose up -d ollama')
     }
   }
 
@@ -54,13 +55,14 @@ export class OllamaService implements OnModuleInit {
       })
 
       if (missingModels.length > 0) {
-        console.log('📥 推荐下载以下模型以获得最佳体验:')
+        this.logger.log('📥 推荐下载以下模型以获得最佳体验:')
         missingModels.forEach((model) => {
-          console.log(`   ollama pull ${model}`)
+          this.logger.log(`   ollama pull ${model}`)
         })
       }
-    } catch (error: any) {
-      console.warn('检查模型时出错:', error.message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      this.logger.warn(`检查模型时出错: ${message}`)
     }
   }
 
@@ -92,7 +94,7 @@ export class OllamaService implements OnModuleInit {
       })
       return response.response
     } catch (error) {
-      console.error('Ollama 生成错误:', error)
+      this.logger.error('Ollama 生成错误', error)
       return this.generateMockResponse(model, prompt, system)
     }
   }
@@ -131,7 +133,7 @@ export class OllamaService implements OnModuleInit {
         }
       }
     } catch (error) {
-      console.error('Ollama 流式生成错误:', error)
+      this.logger.error('Ollama 流式生成错误', error)
       yield* this.generateMockStream(model, prompt, system)
     }
   }
@@ -167,7 +169,7 @@ export class OllamaService implements OnModuleInit {
       })
       return response.message.content
     } catch (error) {
-      console.error('Ollama 对话错误:', error)
+      this.logger.error('Ollama 对话错误', error)
       const lastMessage = messages[messages.length - 1]
       if (!lastMessage) {
         throw new Error('No messages provided')
@@ -196,7 +198,7 @@ export class OllamaService implements OnModuleInit {
         modified: new Date(m.modified_at),
       }))
     } catch (error) {
-      console.error('获取模型列表错误:', error)
+      this.logger.error('获取模型列表错误', error)
       return []
     }
   }
@@ -209,11 +211,11 @@ export class OllamaService implements OnModuleInit {
     }
 
     try {
-      console.log(`📥 开始下载模型: ${model}`)
+      this.logger.log(`📥 开始下载模型: ${model}`)
       await this.ollama.pull({ model })
-      console.log(`✅ 模型下载完成: ${model}`)
+      this.logger.log(`✅ 模型下载完成: ${model}`)
     } catch (error) {
-      console.error(`模型下载失败: ${model}`, error)
+      this.logger.error(`模型下载失败: ${model}`, error)
       throw error
     }
   }
@@ -227,9 +229,9 @@ export class OllamaService implements OnModuleInit {
 
     try {
       await this.ollama.delete({ model })
-      console.log(`🗑️ 模型已删除: ${model}`)
+      this.logger.log(`🗑️ 模型已删除: ${model}`)
     } catch (error) {
-      console.error(`删除模型失败: ${model}`, error)
+      this.logger.error(`删除模型失败: ${model}`, error)
       throw error
     }
   }

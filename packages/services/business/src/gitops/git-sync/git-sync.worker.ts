@@ -149,7 +149,7 @@ export class GitSyncWorker implements OnModuleInit {
       const platformPermission = mapPermissionForProvider(provider, gitPermission)
 
       // 获取访问 token（使用 CredentialManager）
-      const credential = await this.credentialManager.getCredential(projectId)
+      const credential = await this.credentialManager.getProjectCredential(projectId)
       const accessToken = await credential.getAccessToken()
 
       // 从项目认证配置中获取仓库信息
@@ -159,7 +159,7 @@ export class GitSyncWorker implements OnModuleInit {
 
       // 调用 Git Provider API 添加协作者
       await this.gitProvider.addCollaborator(
-        provider,
+        provider as 'github' | 'gitlab',
         accessToken,
         repoFullName,
         userGitAccount.gitUsername,
@@ -194,8 +194,8 @@ export class GitSyncWorker implements OnModuleInit {
           completedAt: new Date(),
           metadata: {
             attemptCount: (job.attemptsMade || 0) + 1,
-            lastAttemptAt: new Date(),
-          },
+            lastAttemptAt: new Date().toISOString(),
+          } as any,
         })
         .where(eq(schema.gitSyncLogs.id, syncLogId))
 
@@ -268,7 +268,7 @@ export class GitSyncWorker implements OnModuleInit {
       }
 
       // 获取访问 token
-      const credential = await this.credentialManager.getCredential(projectId)
+      const credential = await this.credentialManager.getProjectCredential(projectId)
       const accessToken = await credential.getAccessToken()
 
       // 获取仓库全名
@@ -276,7 +276,7 @@ export class GitSyncWorker implements OnModuleInit {
 
       // 调用 Git Provider API 移除协作者
       await this.gitProvider.removeCollaborator(
-        provider,
+        provider as 'github' | 'gitlab',
         accessToken,
         repoFullName,
         userGitAccount.gitUsername,
@@ -310,8 +310,8 @@ export class GitSyncWorker implements OnModuleInit {
           completedAt: new Date(),
           metadata: {
             attemptCount: (job.attemptsMade || 0) + 1,
-            lastAttemptAt: new Date(),
-          },
+            lastAttemptAt: new Date().toISOString(),
+          } as any,
         })
         .where(eq(schema.gitSyncLogs.id, syncLogId))
 
@@ -368,7 +368,7 @@ export class GitSyncWorker implements OnModuleInit {
       const errors: Array<{ userId: string; error: string }> = []
 
       // 获取访问 token
-      const credential = await this.credentialManager.getCredential(projectId)
+      const credential = await this.credentialManager.getProjectCredential(projectId)
       const accessToken = await credential.getAccessToken()
       const repoFullName = `${project.organizationId}/${project.slug}`
 
@@ -403,7 +403,7 @@ export class GitSyncWorker implements OnModuleInit {
 
           // 添加协作者
           await this.gitProvider.addCollaborator(
-            provider,
+            provider as 'github' | 'gitlab',
             accessToken,
             repoFullName,
             userGitAccount.gitUsername,
@@ -456,7 +456,7 @@ export class GitSyncWorker implements OnModuleInit {
           completedAt: new Date(),
           metadata: {
             attemptCount: (job.attemptsMade || 0) + 1,
-            lastAttemptAt: new Date(),
+            lastAttemptAt: new Date().toISOString(),
           },
         })
         .where(eq(schema.gitSyncLogs.id, syncLogId))
@@ -483,7 +483,7 @@ export class GitSyncWorker implements OnModuleInit {
           metadata: {
             ...((log.metadata as any) || {}),
             attemptCount,
-            lastAttemptAt: new Date(),
+            lastAttemptAt: new Date().toISOString(),
           },
         })
         .where(eq(schema.gitSyncLogs.id, syncLogId))
@@ -531,7 +531,7 @@ export class GitSyncWorker implements OnModuleInit {
         completedAt: new Date(),
         metadata: {
           attemptCount: (job.attemptsMade || 0) + 1,
-          lastAttemptAt: new Date(),
+          lastAttemptAt: new Date().toISOString(),
           errorType: classifiedError.type,
           retryable: classifiedError.retryable,
           statusCode: classifiedError.statusCode,

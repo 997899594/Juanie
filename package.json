@@ -12,8 +12,14 @@
     "packages/services/business",
     "packages/services/extensions"
   ],
+  "trustedDependencies": [
+    "@nestjs/config",
+    "@nestjs/common",
+    "@nestjs/core"
+  ],
   "scripts": {
     "dev": "turbo run dev --concurrency=50",
+    "dev:api": "turbo dev --filter='@juanie/api-gateway'",
     "dev:web": "turbo dev --filter='@juanie/web'",
     "dev:ui": "turbo dev --filter='@juanie/ui'",
     "build": "turbo build",
@@ -41,7 +47,13 @@
     "db:generate": "dotenvx run -- bun x drizzle-kit generate --config ./packages/core/src/database/drizzle.config.ts",
     "db:push": "dotenvx run -- bun x drizzle-kit push --config ./packages/core/src/database/drizzle.config.ts",
     "db:migrate": "dotenvx run -- bun x drizzle-kit migrate --config ./packages/core/src/database/drizzle.config.ts",
-    "db:studio": "dotenvx run -- bun x drizzle-kit studio --config ./packages/core/src/database/drizzle.config.ts"
+    "db:studio": "dotenvx run -- bun x drizzle-kit studio --config ./packages/core/src/database/drizzle.config.ts",
+    "cleanup": "./scripts/cleanup.sh",
+    "check-quality": "./scripts/check-code-quality.sh",
+    "extract-todos": "./scripts/extract-todos.sh",
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",
@@ -67,8 +79,11 @@
     "lint-staged": "16.2.3",
     "lodash-es": "^4.17.21",
     "lucide-vue-next": "^0.544.0",
+    "nestjs-pino": "^4.5.0",
     "nprogress": "^0.2.0",
     "pinia": "^3.0.3",
+    "pino-http": "^11.0.0",
+    "pino-pretty": "^13.1.3",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.20.6",
     "turbo": "^2.5.8",
@@ -99,11 +114,11 @@
   "dependencies": {
     "@badrap/result": "^0.3.1",
     "@dotenvx/dotenvx": "^1.51.0",
-    "@nestjs/event-emitter": "^3.0.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.65.0",
     "@opentelemetry/exporter-jaeger": "^2.1.0",
     "drizzle-orm": "0.44.7",
-    "postgres": "^3.4.7"
+    "postgres": "^3.4.7",
+    "trpc-panel": "^1.3.4"
   }
 }

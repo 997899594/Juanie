@@ -7,7 +7,8 @@ import type {
   TemplateFilters,
   TemplateVariables,
 } from '@juanie/types'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { and, eq, isNull, like, or, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import Handlebars from 'handlebars'

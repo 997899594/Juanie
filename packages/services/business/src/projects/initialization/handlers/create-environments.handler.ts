@@ -1,5 +1,6 @@
 import { EnvironmentsService } from '../../../environments/environments.service'
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import type { InitializationContext, StateHandler } from '../types'
 
 /**

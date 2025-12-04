@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 
 /**
  * 加密服务
@@ -39,7 +40,7 @@ export class EncryptionService {
 
       // 格式: iv:authTag:ciphertext
       return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Encryption failed:', error)
       throw new Error('Failed to encrypt data')
     }
@@ -67,7 +68,7 @@ export class EncryptionService {
       const decrypted = decipher.update(encrypted!, 'hex', 'utf8') + decipher.final('utf8')
 
       return decrypted
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Decryption failed:', error)
       throw new Error('Failed to decrypt data')
     }

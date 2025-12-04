@@ -14,8 +14,15 @@
 // Database
 export * from './database'
 
+// Errors
+export * from './errors'
+
 // Events
 export * from './events'
+
+// Logger
+export * from './logger'
+
 // Observability
 export * from './observability'
 // Queue

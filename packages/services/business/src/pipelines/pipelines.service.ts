@@ -86,7 +86,7 @@ export class PipelinesService {
       throw new Error('没有权限更新 Pipeline')
     }
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     }
 

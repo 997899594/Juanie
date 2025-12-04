@@ -1,6 +1,7 @@
 import { PROJECT_INITIALIZATION_QUEUE } from '@juanie/core/queue'
 import { OAuthAccountsService } from '@juanie/service-foundation'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import type { Queue } from 'bullmq'
 import { RepositoriesService } from '../../../repositories/repositories.service'
 import type { InitializationContext, StateHandler } from '../types'

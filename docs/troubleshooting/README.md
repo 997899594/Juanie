@@ -4,7 +4,15 @@
 
 ## 快速导航
 
-### 最新问题（2025-11-28）
+### 最新问题（2025-12-04）
+- [循环依赖修复](./architecture/circular-dependency-fix.md) - 使用事件驱动架构解决 NestJS 循环依赖
+- [TypeScript 错误修复](./architecture/typescript-errors-fix-summary.md) - useToast 使用方式修复和剩余问题
+- [Git 平台集成恢复计划](./architecture/git-platform-integration-recovery-plan.md) - 系统化恢复 Git 平台集成功能
+
+### 架构优化（2025-12-04）
+- [Git Sync Logs Schema 现代化](../architecture/git-sync-logs-schema-modernization.md) - 使用 PostgreSQL 枚举和索引优化
+
+### 近期问题（2025-11-28）
 - [Bun K8s 客户端实现](../architecture/bun-k8s-client.md) - 自研 K8s 客户端，替代 @kubernetes/client-node
 - [Kubernetes 客户端迁移](./kubernetes/k8s-client-migration.md) - 完整的迁移记录和验证
 - [迁移总结](./kubernetes/MIGRATION_SUMMARY.md) - 迁移成果和经验总结

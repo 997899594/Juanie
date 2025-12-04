@@ -105,7 +105,7 @@ import { Github, Gitlab, Link2, Loader2, Unlink } from 'lucide-vue-next'
 import { trpc } from '@/lib/trpc'
 import { useToast } from '@/composables/useToast'
 
-const { toast } = useToast()
+const toast = useToast()
 
 const accounts = ref<any[]>([])
 const linking = ref<'github' | 'gitlab' | null>(null)
@@ -121,11 +121,7 @@ async function loadAccounts() {
     const result = await trpc.gitSync.getGitAccountStatus.query({})
     accounts.value = result.accounts
   } catch (error: any) {
-    toast({
-      title: '加载失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('加载失败', error.message)
   } finally {
     loading.value = false
   }
@@ -150,11 +146,7 @@ async function handleLink(provider: 'github' | 'gitlab') {
     // 跳转到 OAuth 授权页面
     window.location.href = result.authUrl
   } catch (error: any) {
-    toast({
-      title: '获取授权链接失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('获取授权链接失败', error.message)
     linking.value = null
   }
 }
@@ -168,19 +160,12 @@ async function handleUnlink(accountId: string) {
   try {
     await trpc.gitSync.unlinkGitAccount.mutate({ accountId })
 
-    toast({
-      title: '取消关联成功',
-      description: 'Git 账号已取消关联',
-    })
+    toast.success('取消关联成功', 'Git 账号已取消关联')
 
     // 重新加载账号列表
     await loadAccounts()
   } catch (error: any) {
-    toast({
-      title: '取消关联失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('取消关联失败', error.message)
   } finally {
     unlinking.value = null
   }

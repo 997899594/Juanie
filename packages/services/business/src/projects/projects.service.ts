@@ -8,7 +8,8 @@ import type {
   ProjectStatus,
   UpdateProjectInput,
 } from '@juanie/types'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { Redis } from 'ioredis'
@@ -345,9 +346,9 @@ export class ProjectsService {
         lastDeploymentAt: lastDeployment?.createdAt,
       },
       health: {
+        status: 'healthy' as const,
         score:
           totalDeployments > 0 ? Math.round((successfulDeployments / totalDeployments) * 100) : 0,
-        status: 'healthy' as const,
         factors: {
           deploymentSuccessRate:
             totalDeployments > 0 ? Math.round((successfulDeployments / totalDeployments) * 100) : 0,
@@ -386,7 +387,7 @@ export class ProjectsService {
     }
 
     // 合并 config
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     }
 

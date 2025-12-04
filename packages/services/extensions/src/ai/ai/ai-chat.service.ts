@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 
 /**
  * 用户意图类型
@@ -30,6 +31,15 @@ export interface IntentDetectionResult {
   confidence: number
   entities: Record<string, any>
   rawMessage: string
+}
+
+/**
+ * 操作结果
+ */
+export interface ActionResult {
+  type: string
+  params: Record<string, any>
+  needsConfirmation?: boolean
 }
 
 /**
@@ -303,7 +313,7 @@ Extract relevant entities like project names, template types, technologies, etc.
   private async generateResponse(
     userMessage: string,
     intentResult: IntentDetectionResult,
-    actionResult: any,
+    actionResult: ActionResult | null,
     history: ChatMessage[],
   ): Promise<ChatResponse> {
     try {

@@ -8,11 +8,14 @@ import type {
 } from '@juanie/types'
 import { OllamaService } from '../ollama/ollama.service'
 import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 @Injectable()
 export class AiAssistantsService {
+  private readonly logger = new Logger(AiAssistantsService.name)
+
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private ollamaService: OllamaService,
@@ -126,7 +129,7 @@ export class AiAssistantsService {
       }
     }
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
     }
 
@@ -240,7 +243,7 @@ export class AiAssistantsService {
           throw new Error(`Unsupported provider: ${modelConfig.provider}`)
       }
     } catch (error) {
-      console.error('AI service error:', error)
+      this.logger.error('AI service error', error)
       // 如果 AI 服务失败，返回友好的错误消息
       return `抱歉，AI 服务暂时不可用。错误信息：${error instanceof Error ? error.message : '未知错误'}`
     }
@@ -248,24 +251,27 @@ export class AiAssistantsService {
 
   // 调用 Ollama 本地模型
   private async callOllama(
-    modelConfig: any,
+    modelConfig: Record<string, unknown>,
     systemPrompt: string,
     message: string,
   ): Promise<string> {
     try {
       // 使用 OllamaService 而不是直接使用 Ollama 客户端
+      const modelName = typeof modelConfig.model === 'string' ? modelConfig.model : 'llama3.2:3b'
+      const temperature = typeof modelConfig.temperature === 'number' ? modelConfig.temperature : 0.7
+      
       return await this.ollamaService.generate(
-        modelConfig.model || 'llama3.2:3b',
+        modelName,
         message,
         systemPrompt,
         {
-          temperature: modelConfig.temperature || 0.7,
+          temperature,
         },
       )
     } catch (error) {
       console.error('Ollama error:', error)
       throw new Error(
-        `Ollama 调用失败。请确保 Ollama 服务正在运行。错误：${error instanceof Error ? error.message : '未知错误'}`,
+        `Ollama 调用失败。请确保 Ollama 服务正在运行。错误:${error instanceof Error ? error.message : '未知错误'}`,
       )
     }
   }

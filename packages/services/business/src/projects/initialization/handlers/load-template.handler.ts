@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { TemplateManager } from '../../template-manager.service'
 import type { InitializationContext, StateHandler } from '../types'
 

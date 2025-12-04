@@ -320,21 +320,21 @@ export interface UpdateTemplateInputType {
 // ============================================
 
 /**
- * 验证错误
+ * 模板验证错误
  */
-export interface ValidationError {
+export interface TemplateValidationError {
   field: string
   message: string
   severity: 'error' | 'warning'
 }
 
 /**
- * 验证结果
+ * 模板验证结果
  */
-export interface ValidationResult {
+export interface TemplateValidationResult {
   valid: boolean
-  errors: ValidationError[]
-  warnings: ValidationError[]
+  errors: TemplateValidationError[]
+  warnings: TemplateValidationError[]
 }
 
 /**

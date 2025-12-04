@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import Redis from 'ioredis'
 

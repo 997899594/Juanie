@@ -1,6 +1,7 @@
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import { desc, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -229,9 +230,9 @@ Focus on:
    */
   private buildDiagnosisPrompt(
     symptoms: string,
-    projectInfo: any,
+    projectInfo: Record<string, unknown>,
     logs: string[],
-    metrics: any,
+    metrics: Record<string, unknown>,
   ): string {
     return `Diagnose the following issue:
 
@@ -308,7 +309,12 @@ Provide a comprehensive diagnosis with actionable recommendations.`
       suggestion: string
     }>
   }> {
-    const issues: any[] = []
+    const issues: Array<{
+      type: string
+      severity: string
+      message: string
+      suggestion: string
+    }> = []
 
     try {
       // 检查最近的部署失败

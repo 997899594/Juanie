@@ -4,11 +4,10 @@ import { Module } from '@nestjs/common'
 import { ScheduleModule } from '@nestjs/schedule'
 import { DeploymentsModule } from '../deployments/deployments.module'
 import { EnvironmentsModule } from '../environments/environments.module'
-import { GitSyncModule } from '../gitops/git-sync/git-sync.module'
 import { RepositoriesModule } from '../repositories/repositories.module'
 import { ProjectInitializationModule } from './initialization'
 import { ProjectInitializationService } from './project-initialization.service'
-import { ProjectMembersService } from './project-members.service'
+import { ProjectMembersModule } from './project-members.module'
 import { ProjectOrchestrator } from './project-orchestrator.service'
 import { ProjectStatusService } from './project-status.service'
 import { ProjectsService } from './projects.service'
@@ -24,31 +23,30 @@ import { TemplatesModule } from './templates'
   imports: [
     ScheduleModule.forRoot(),
     QueueModule,
+    AuditLogsModule,
     EnvironmentsModule,
     RepositoriesModule,
     DeploymentsModule,
-    AuditLogsModule,
     NotificationsModule,
     TemplatesModule,
     ProjectInitializationModule,
-    GitSyncModule,
+    ProjectMembersModule,
   ],
   providers: [
     ProjectsService,
     ProjectOrchestrator,
-    ProjectMembersService,
     ProjectStatusService,
     ProjectInitializationService,
   ],
   exports: [
     ProjectsService,
     ProjectOrchestrator,
-    ProjectMembersService,
     ProjectStatusService,
     ProjectInitializationService,
     // 重新导出模块
     TemplatesModule,
     ProjectInitializationModule, // 导出以便其他模块访问 ProgressManager
+    ProjectMembersModule, // 导出以便其他模块使用
   ],
 })
 export class ProjectsModule {}

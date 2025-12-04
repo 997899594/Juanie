@@ -18,5 +18,6 @@
   "[typescript]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
-  "kiroAgent.configureMCP": "Enabled"
+  "kiroAgent.configureMCP": "Enabled",
+  "codingcopilot.enableCompletionLanguage": {}
 }

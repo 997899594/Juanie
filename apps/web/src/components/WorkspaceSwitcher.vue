@@ -121,7 +121,7 @@ import { useToast } from '@/composables/useToast'
 
 const workspaceStore = useWorkspaceStore()
 const { currentWorkspace, personalWorkspace, organizationWorkspaces } = storeToRefs(workspaceStore)
-const { toast } = useToast()
+const toast = useToast()
 
 const showCreateOrg = ref(false)
 const showJoinOrg = ref(false)
@@ -136,16 +136,9 @@ async function handleSwitch(workspaceId: string) {
   try {
     await workspaceStore.switchWorkspace(workspaceId)
     
-    toast({
-      title: '工作空间已切换',
-      description: `当前: ${currentWorkspace.value?.name}`,
-    })
+    toast.success('工作空间已切换', `当前: ${currentWorkspace.value?.name}`)
   } catch (error: any) {
-    toast({
-      title: '切换失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('切换失败', error.message)
   }
 }
 
@@ -158,20 +151,13 @@ async function handleCreateOrg() {
       provider: newOrgProvider.value,
     })
 
-    toast({
-      title: '组织创建成功',
-      description: `已切换到 ${newOrgName.value}`,
-    })
+    toast.success('组织创建成功', `已切换到 ${newOrgName.value}`)
 
     showCreateOrg.value = false
     newOrgName.value = ''
     newOrgProvider.value = undefined
   } catch (error: any) {
-    toast({
-      title: '创建失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('创建失败', error.message)
   }
 }
 </script>

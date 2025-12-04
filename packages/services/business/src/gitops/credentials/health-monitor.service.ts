@@ -1,6 +1,7 @@
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { CredentialManagerService } from './credential-manager.service'

@@ -1,4 +1,12 @@
-import { Body, Controller, Headers, HttpException, HttpStatus, Post } from '@nestjs/common'
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Headers,
+  HttpException,
+  HttpStatus,
+  Post,
+} from '@nestjs/common'
 import { WebhookService } from './webhook.service'
 
 /**
@@ -41,6 +49,10 @@ export class WebhookController {
 
       // 获取事件类型
       const eventType = headers['x-github-event']
+
+      if (!eventType) {
+        throw new BadRequestException('Missing x-github-event header')
+      }
 
       // 处理 webhook 事件
       await this.webhookService.processGitHubEvent(payload, eventType)

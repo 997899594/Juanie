@@ -3,6 +3,7 @@ import csrf from '@fastify/csrf-protection'
 import rateLimit from '@fastify/rate-limit'
 import { NestFactory } from '@nestjs/core'
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify'
+import { Logger } from 'nestjs-pino'
 import Redis from 'ioredis'
 import { AppModule } from './app.module'
 import { setupObservability } from './observability'
@@ -12,7 +13,7 @@ import { TrpcRouter } from './trpc/trpc.router'
 // 开发环境禁用 TLS 证书验证（用于 K3s 自签名证书）
 if (process.env.NODE_ENV === 'development' || process.env.K3S_SKIP_TLS_VERIFY === 'true') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-  console.log('⚠️  已禁用 TLS 证书验证（开发环境）')
+  // 启动时会通过 Pino 输出警告
 }
 
 // 启动 OpenTelemetry（必须在应用启动前）
@@ -21,6 +22,13 @@ const otelSdk = setupObservability()
 async function bootstrap() {
   const fastifyAdapter = new FastifyAdapter({ logger: true })
   const fastify = fastifyAdapter.getInstance()
+
+  // 临时 logger（在 NestJS app 创建前）
+  const tempLogger = {
+    log: (msg: string) => console.log(`[Bootstrap] ${msg}`),
+    warn: (msg: string) => console.warn(`[Bootstrap] ${msg}`),
+    error: (msg: string, err?: any) => console.error(`[Bootstrap] ${msg}`, err),
+  }
 
   // CORS 配置（统一在这里配置）
   await fastify.register(import('@fastify/cors'), {
@@ -47,18 +55,29 @@ async function bootstrap() {
 
       // 测试连接
       await redis.connect()
-      console.log('✅ Redis 连接成功，启用分布式限流')
+      tempLogger.log('✅ Redis 连接成功，启用分布式限流')
 
       rateLimitConfig.redis = redis
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      console.warn('⚠️ Redis 连接失败，使用内存限流:', errorMessage)
+      tempLogger.warn(`⚠️ Redis 连接失败，使用内存限流: ${errorMessage}`)
     }
   }
 
   await fastify.register(rateLimit, rateLimitConfig)
 
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, fastifyAdapter)
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, fastifyAdapter, {
+    bufferLogs: true, // 缓冲日志直到 Logger 准备好
+  })
+
+  // 使用 Pino Logger 替换默认 Logger
+  const logger = app.get(Logger)
+  app.useLogger(logger)
+
+  // 输出 TLS 警告（使用 Pino）
+  if (process.env.NODE_ENV === 'development' || process.env.K3S_SKIP_TLS_VERIFY === 'true') {
+    logger.warn('⚠️  已禁用 TLS 证书验证（开发环境）')
+  }
 
   // Cookie 插件
   await fastify.register(cookie, {
@@ -83,14 +102,14 @@ async function bootstrap() {
   const signals = ['SIGTERM', 'SIGINT']
   signals.forEach((signal) => {
     process.on(signal, async () => {
-      console.log(`\n📡 收到 ${signal} 信号，开始优雅关闭...`)
+      logger.log(`📡 收到 ${signal} 信号，开始优雅关闭...`)
 
       // 关闭 NestJS 应用
       await app.close()
 
       // 关闭 OpenTelemetry
       await otelSdk.shutdown()
-      console.log('✅ 应用已安全关闭')
+      logger.log('✅ 应用已安全关闭')
 
       process.exit(0)
     })
@@ -99,9 +118,13 @@ async function bootstrap() {
   const port = process.env.PORT || 3000
   await app.listen(port, '0.0.0.0')
 
-  console.log(`🚀 API Gateway running on http://localhost:${port}`)
-  console.log(`📊 Health check: http://localhost:${port}/health`)
-  console.log(`🔌 tRPC endpoint: http://localhost:${port}/trpc`)
+  logger.log(`🚀 API Gateway running on http://localhost:${port}`)
+  logger.log(`📊 Health check: http://localhost:${port}/health`)
+  logger.log(`🔌 tRPC endpoint: http://localhost:${port}/trpc`)
+
+  if (process.env.NODE_ENV !== 'production') {
+    logger.log(`🎛️  tRPC Panel: http://localhost:${port}/panel`)
+  }
 }
 
 bootstrap().catch((error) => {

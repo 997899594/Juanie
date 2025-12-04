@@ -9,7 +9,8 @@ import * as schema from '@juanie/core/database'
 import { GIT_SYNC_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
 import type { GitProvider, ProjectRole } from '@juanie/types'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import type { Queue } from 'bullmq'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -49,7 +50,7 @@ export class GitSyncService {
   /**
    * 从认证类型推断 Git 提供商
    */
-  private inferProviderFromAuthType(authType: string): GitProvider {
+  private inferProviderFromAuthType(authType: string): 'github' | 'gitlab' {
     if (authType.includes('github')) {
       return 'github'
     }
@@ -109,12 +110,18 @@ export class GitSyncService {
         userId,
         provider,
         status: 'pending',
+        gitResourceType: 'repository',
+        gitResourceId: projectId,
         metadata: {
           attemptCount: 0,
-          role,
+          systemRole: role, // 存储角色信息用于重试
         },
       })
       .returning()
+
+    if (!syncLog) {
+      throw new Error('Failed to create sync log')
+    }
 
     // 添加到队列
     await this.queue.add(
@@ -188,6 +195,10 @@ export class GitSyncService {
       })
       .returning()
 
+    if (!syncLog) {
+      throw new Error('Failed to create sync log')
+    }
+
     // 添加到队列
     await this.queue.add(
       'remove-member',
@@ -253,6 +264,10 @@ export class GitSyncService {
         },
       })
       .returning()
+
+    if (!syncLog) {
+      throw new Error('Failed to create sync log')
+    }
 
     // 添加到队列
     await this.queue.add(
@@ -350,8 +365,8 @@ export class GitSyncService {
     // 根据同步类型重新添加到队列
     if (syncLog.syncType === 'member') {
       if (syncLog.action === 'create' || syncLog.action === 'update') {
-        // 需要从 metadata 中获取 role 信息
-        const role = (syncLog.metadata as any)?.role || 'developer'
+        // 需要从 metadata 中获取 systemRole 信息
+        const role = (syncLog.metadata as any)?.systemRole || 'developer'
         await this.queue.add(
           'sync-member',
           {

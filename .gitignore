@@ -98,6 +98,7 @@ jspm_packages/
 .env
 .env.test
 .env.production
+.env.local
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -127,5 +128,19 @@ gitlab/logs/
 gitlab/config/
 gitlab/backups/
 
-
 .history
+
+# Backup files (should never be committed)
+*.bak
+*.backup
+*.old
+*.broken
+*.temp
+*.swp
+*.swo
+
+# Test files in production code
+*-test.ts
+*-test.js
+test-*.ts
+test-*.js

@@ -45,7 +45,7 @@ const emit = defineEmits<{
   success: []
 }>()
 
-const { toast } = useToast()
+const toast = useToast()
 const loading = ref(false)
 
 const providerIcon = computed(() => {
@@ -60,11 +60,7 @@ async function handleOAuth() {
     const redirectUrl = `/api/auth/${props.provider}/authorize?projectId=${props.projectId}`
     window.location.href = redirectUrl
   } catch (error: any) {
-    toast({
-      title: '授权失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('授权失败', error.message)
     loading.value = false
   }
 }

@@ -1,6 +1,7 @@
 import { GitOpsEvents, type GitOpsSetupRequestedEvent } from '@juanie/core/events'
 import { Trace } from '@juanie/core/observability'
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { OnEvent } from '@nestjs/event-emitter'
 import { FluxResourcesService } from './flux/flux-resources.service'
 import { K3sService } from './k3s/k3s.service'

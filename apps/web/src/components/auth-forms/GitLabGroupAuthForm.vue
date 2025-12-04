@@ -95,7 +95,7 @@ const emit = defineEmits<{
   success: []
 }>()
 
-const { toast } = useToast()
+const toast = useToast()
 const loading = ref(false)
 
 const form = ref({
@@ -122,18 +122,11 @@ async function handleSubmit() {
       expiresAt: form.value.expiresAt ? new Date(form.value.expiresAt) : undefined,
     })
 
-    toast({
-      title: '配置成功',
-      description: 'GitLab Group Token 凭证已保存',
-    })
+    toast.success('配置成功', 'GitLab Group Token 凭证已保存')
 
     emit('success')
   } catch (error: any) {
-    toast({
-      title: '配置失败',
-      description: error.message,
-      variant: 'destructive',
-    })
+    toast.error('配置失败', error.message)
   } finally {
     loading.value = false
   }

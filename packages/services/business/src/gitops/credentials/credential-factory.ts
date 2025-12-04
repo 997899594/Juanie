@@ -3,7 +3,8 @@ import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
 import { EncryptionService, OAuthAccountsService } from '@juanie/service-foundation'
 import type { GitProvider } from '@juanie/types'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { GitCredential, GitCredentialFactory } from './git-credential.interface'
@@ -76,7 +77,7 @@ export class CredentialFactory implements GitCredentialFactory {
     }
 
     // 解密 token
-    const token = this.encryption.decryptData(authRecord.projectToken)
+    const token = this.encryption.decrypt(authRecord.projectToken)
 
     // 推断 provider（从 token 或其他字段）
     const provider: GitProvider = 'github' // TODO: 从数据库或配置中获取
@@ -99,7 +100,7 @@ export class CredentialFactory implements GitCredentialFactory {
     }
 
     // 解密私钥
-    const privateKey = this.encryption.decryptData(authRecord.githubPrivateKey)
+    const privateKey = this.encryption.decrypt(authRecord.githubPrivateKey)
 
     return new GitHubAppCredential(
       authRecord.id,
@@ -119,7 +120,7 @@ export class CredentialFactory implements GitCredentialFactory {
     }
 
     // 解密 token
-    const token = this.encryption.decryptData(authRecord.gitlabGroupToken)
+    const token = this.encryption.decrypt(authRecord.gitlabGroupToken)
     const scopes = (authRecord.gitlabGroupScopes as string[]) || []
 
     return new GitLabGroupTokenCredential(

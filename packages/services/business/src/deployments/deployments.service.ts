@@ -9,7 +9,8 @@ import type {
 } from '@juanie/types'
 import type { DeploymentChanges } from '../gitops/git-ops/git-ops.service'
 import { GitOpsService } from '../gitops/git-ops/git-ops.service'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import type { Queue } from 'bullmq'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -244,9 +245,9 @@ export class DeploymentsService {
       })
 
       this.logger.log(`Git commit created: ${gitCommitSha}`)
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error('Failed to commit changes to Git:', error)
-      throw new Error(`GitOps commit 失败: ${error.message}`)
+      throw new Error(`GitOps commit 失败: ${(error instanceof Error ? error.message : String(error))}`)
     }
 
     // 5. Extract version from changes (use image tag or provided version)
@@ -560,7 +561,7 @@ export class DeploymentsService {
     // 3. 通过 webhook 回调更新状态
     // 简化实现：模拟异步部署过程
     this.simulateDeployment(deploymentId).catch((error) => {
-      console.error('Deployment failed:', error)
+      this.logger.error('Deployment failed', error)
     })
   }
 

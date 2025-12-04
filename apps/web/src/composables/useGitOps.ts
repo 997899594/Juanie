@@ -1,4 +1,15 @@
 import { computed, ref } from 'vue'
+import type {
+  ConfigChange,
+  ConfigChangePreview,
+  DeploymentConfig,
+  FluxHealth,
+  FluxResourceKind,
+  GitOpsResource,
+  ResourceRequirements,
+  SyncResult,
+  YAMLValidationResult,
+} from '@juanie/types'
 import { trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 
@@ -11,8 +22,8 @@ export function useGitOps() {
 
   // 状态
   const loading = ref(false)
-  const resources = ref<any[]>([])
-  const fluxHealth = ref<any>(null)
+  const resources = ref<GitOpsResource[]>([])
+  const fluxHealth = ref<FluxHealth | null>(null)
 
   // ============================================
   // ============================================
@@ -26,18 +37,19 @@ export function useGitOps() {
     projectId: string
     environmentId: string
     repositoryId: string
-    type: 'kustomization' | 'helm'
+    type: string
     name: string
     namespace: string
-    config: any
+    config: Record<string, unknown>
   }) {
     loading.value = true
     try {
       const result = await trpc.gitops.createGitOpsResource.mutate(data)
       toast.success('GitOps 资源已创建', `${result.name} 创建成功`)
       return result
-    } catch (error: any) {
-      toast.error('创建 GitOps 资源失败', error.message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('创建 GitOps 资源失败', message)
       throw error
     } finally {
       loading.value = false
@@ -53,8 +65,9 @@ export function useGitOps() {
       const result = await trpc.gitops.listGitOpsResources.query({ projectId })
       resources.value = result
       return result
-    } catch (error: any) {
-      toast.error('获取 GitOps 资源失败', error.message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('获取 GitOps 资源失败', message)
       throw error
     } finally {
       loading.value = false
@@ -69,8 +82,9 @@ export function useGitOps() {
     try {
       const result = await trpc.gitops.getGitOpsResource.query({ id: resourceId })
       return result
-    } catch (error: any) {
-      toast.error('获取资源详情失败', error.message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('获取资源详情失败', message)
       throw error
     } finally {
       loading.value = false
@@ -80,7 +94,10 @@ export function useGitOps() {
   /**
    * 更新 GitOps 资源
    */
-  async function updateGitOpsResource(resourceId: string, data: any) {
+  async function updateGitOpsResource(
+    resourceId: string,
+    data: Partial<Omit<GitOpsResource, 'id' | 'createdAt' | 'updatedAt'>>,
+  ) {
     loading.value = true
     try {
       const result = await trpc.gitops.updateGitOpsResource.mutate({
@@ -89,8 +106,9 @@ export function useGitOps() {
       })
       toast.success('GitOps 资源已更新')
       return result
-    } catch (error: any) {
-      toast.error('更新 GitOps 资源失败', error.message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('更新 GitOps 资源失败', message)
       throw error
     } finally {
       loading.value = false
@@ -107,8 +125,9 @@ export function useGitOps() {
       toast.success('GitOps 资源已删除')
       // 从列表中移除
       resources.value = resources.value.filter((r) => r.id !== resourceId)
-    } catch (error: any) {
-      toast.error('删除 GitOps 资源失败', error.message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('删除 GitOps 资源失败', message)
       throw error
     } finally {
       loading.value = false
@@ -118,18 +137,15 @@ export function useGitOps() {
   /**
    * 手动触发同步
    */
-  async function triggerSync(data: {
-    kind: 'GitRepository' | 'Kustomization' | 'HelmRelease'
-    name: string
-    namespace: string
-  }) {
+  async function triggerSync(data: { kind: FluxResourceKind; name: string; namespace: string }) {
     loading.value = true
     try {
       const result = await trpc.gitops.triggerSync.mutate(data)
       toast.success('同步已触发', result.message)
-      return result
-    } catch (error: any) {
-      toast.error('触发同步失败', error.message)
+      return result as SyncResult
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('触发同步失败', message)
       throw error
     } finally {
       loading.value = false
@@ -146,15 +162,7 @@ export function useGitOps() {
   async function deployWithGitOps(data: {
     projectId: string
     environmentId: string
-    changes: {
-      image?: string
-      replicas?: number
-      env?: Record<string, string>
-      resources?: {
-        requests?: { cpu?: string; memory?: string }
-        limits?: { cpu?: string; memory?: string }
-      }
-    }
+    changes: DeploymentConfig
     commitMessage?: string
   }) {
     loading.value = true
@@ -166,21 +174,16 @@ export function useGitOps() {
         config: {
           image: data.changes.image,
           replicas: data.changes.replicas,
-          resources: data.changes.resources
-            ? {
-                cpu: data.changes.resources.requests?.cpu || data.changes.resources.limits?.cpu,
-                memory:
-                  data.changes.resources.requests?.memory || data.changes.resources.limits?.memory,
-              }
-            : undefined,
+          resources: data.changes.resources,
         },
         commitMessage: data.commitMessage,
       }
       const result = await trpc.gitops.deployWithGitOps.mutate(payload)
       toast.success('部署已提交', result.message)
       return result
-    } catch (error: any) {
-      toast.error('GitOps 部署失败', error.message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('GitOps 部署失败', message)
       throw error
     } finally {
       loading.value = false
@@ -193,7 +196,7 @@ export function useGitOps() {
   async function commitConfigChanges(data: {
     projectId: string
     environmentId: string
-    changes: any
+    changes: ConfigChange[]
     commitMessage?: string
   }) {
     loading.value = true
@@ -201,8 +204,9 @@ export function useGitOps() {
       const result = await trpc.gitops.commitConfigChanges.mutate(data)
       toast.success('配置已提交', result.message)
       return result
-    } catch (error: any) {
-      toast.error('提交配置失败', error.message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('提交配置失败', message)
       throw error
     } finally {
       loading.value = false
@@ -212,13 +216,18 @@ export function useGitOps() {
   /**
    * 预览配置变更（不提交）
    */
-  async function previewChanges(data: { projectId: string; environmentId: string; changes: any }) {
+  async function previewChanges(data: {
+    projectId: string
+    environmentId: string
+    changes: ConfigChange[]
+  }): Promise<ConfigChangePreview | undefined> {
     loading.value = true
     try {
       const result = await trpc.gitops.previewChanges.query(data)
-      return result
-    } catch (error: any) {
-      toast.error('预览变更失败', error.message)
+      return result as ConfigChangePreview
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('预览变更失败', message)
       throw error
     } finally {
       loading.value = false
@@ -228,13 +237,14 @@ export function useGitOps() {
   /**
    * 验证 YAML 语法
    */
-  async function validateYAML(content: string) {
+  async function validateYAML(content: string): Promise<YAMLValidationResult | undefined> {
     loading.value = true
     try {
       const result = await trpc.gitops.validateYAML.query({ content })
-      return result
-    } catch (error: any) {
-      toast.error('验证 YAML 失败', error.message)
+      return result as YAMLValidationResult
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      toast.error('验证 YAML 失败', message)
       throw error
     } finally {
       loading.value = false

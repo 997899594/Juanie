@@ -35,7 +35,7 @@ import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
-const { toast } = useToast()
+const toast = useToast()
 
 const projectId = route.params.id as string
 const provider = ref<'github' | 'gitlab'>('github') // 从项目信息获取
@@ -45,10 +45,7 @@ const showConfig = ref(false)
 function handleSuccess() {
   showConfig.value = false
   
-  toast({
-    title: '配置成功',
-    description: 'Git 认证已更新',
-  })
+  toast.success('配置成功', 'Git 认证已更新')
 
   // 可选：跳转回项目详情
   // router.push(`/projects/${projectId}`)

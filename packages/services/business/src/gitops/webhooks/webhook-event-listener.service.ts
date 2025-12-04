@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
 import { OnEvent } from '@nestjs/event-emitter'
-import { GitPlatformSyncService } from './git-platform-sync.service'
+// import { GitPlatformSyncService } from './git-platform-sync.service'
 
 /**
  * Webhook 事件监听器
@@ -9,12 +10,14 @@ import { GitPlatformSyncService } from './git-platform-sync.service'
  * 触发相应的同步操作
  *
  * Requirements: 5.1, 5.2, 5.3, 8.2, 8.3, 8.4
+ *
+ * 注意：GitPlatformSyncService 暂时禁用，webhook 事件处理功能暂不可用
  */
 @Injectable()
 export class WebhookEventListener {
   private readonly logger = new Logger(WebhookEventListener.name)
 
-  constructor(private readonly gitPlatformSync: GitPlatformSyncService) {}
+  constructor() {} // private readonly gitPlatformSync: GitPlatformSyncService
 
   /**
    * 处理 Git 仓库变更事件
@@ -29,44 +32,8 @@ export class WebhookEventListener {
       repositoryId: event.repository.gitId,
     })
 
-    try {
-      // 根据事件类型触发相应的同步操作
-      switch (event.action) {
-        case 'deleted':
-        case 'destroy':
-          // 仓库删除
-          await this.gitPlatformSync.handleRepositoryDeleted({
-            provider: event.provider,
-            repository: event.repository,
-            timestamp: event.timestamp,
-          })
-          break
-
-        case 'renamed':
-        case 'updated':
-        case 'edited':
-          // 仓库设置变更
-          await this.gitPlatformSync.handleRepositoryUpdated({
-            provider: event.provider,
-            repository: event.repository,
-            changes: event.changes || {},
-            timestamp: event.timestamp,
-          })
-          break
-
-        case 'created':
-          // 仓库创建 - 暂时不处理
-          this.logger.debug('Repository created, no action needed', {
-            repository: event.repository.fullName,
-          })
-          break
-
-        default:
-          this.logger.warn(`Unsupported repository action: ${event.action}`)
-      }
-    } catch (error) {
-      this.logger.error('Error handling repository changed event:', error)
-    }
+    // TODO: 重新启用 GitPlatformSyncService 后恢复此功能
+    this.logger.warn('GitPlatformSyncService disabled, repository sync not available')
   }
 
   /**
@@ -83,54 +50,8 @@ export class WebhookEventListener {
       collaboratorLogin: event.collaborator.gitLogin,
     })
 
-    try {
-      // 根据事件类型触发相应的同步操作
-      switch (event.action) {
-        case 'added':
-        case 'created':
-          // 协作者添加
-          await this.gitPlatformSync.handleCollaboratorAdded({
-            provider: event.provider,
-            repository: event.repository,
-            collaborator: event.collaborator,
-            timestamp: event.timestamp,
-          })
-          break
-
-        case 'removed':
-        case 'deleted':
-          // 协作者移除
-          await this.gitPlatformSync.handleCollaboratorRemoved({
-            provider: event.provider,
-            repository: event.repository,
-            collaborator: event.collaborator,
-            timestamp: event.timestamp,
-          })
-          break
-
-        case 'permission_changed':
-        case 'edited':
-          // 权限变更 - 先移除再添加
-          await this.gitPlatformSync.handleCollaboratorRemoved({
-            provider: event.provider,
-            repository: event.repository,
-            collaborator: event.collaborator,
-            timestamp: event.timestamp,
-          })
-          await this.gitPlatformSync.handleCollaboratorAdded({
-            provider: event.provider,
-            repository: event.repository,
-            collaborator: event.collaborator,
-            timestamp: event.timestamp,
-          })
-          break
-
-        default:
-          this.logger.warn(`Unsupported collaborator action: ${event.action}`)
-      }
-    } catch (error) {
-      this.logger.error('Error handling collaborator changed event:', error)
-    }
+    // TODO: 重新启用 GitPlatformSyncService 后恢复此功能
+    this.logger.warn('GitPlatformSyncService disabled, collaborator sync not available')
   }
 
   /**
