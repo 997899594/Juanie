@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common'
 import { Logger } from '@juanie/core/logger'
+import { Injectable } from '@nestjs/common'
 import type { GitProvider } from './git-credential.interface'
 
 /**

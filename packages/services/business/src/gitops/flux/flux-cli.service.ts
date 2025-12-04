@@ -88,7 +88,7 @@ export class FluxCliService {
       })
 
       return this.parseFluxStatus(stdout)
-    } catch (error: any) {
+    } catch (_error: any) {
       // If flux check fails, Flux is likely not installed
       return {
         installed: false,
@@ -172,15 +172,6 @@ export class FluxCliService {
   }
 
   /**
-   * Alternative method: Apply manifests using kubectl (deprecated)
-   * Note: This method is kept for reference but not used anymore
-   */
-  private async applyManifestsWithKubectl(yaml: string): Promise<void> {
-    // This method is deprecated - use applyManifests() instead
-    throw new Error('This method is deprecated. Use applyManifests() instead.')
-  }
-
-  /**
    * Parse Flux status output
    */
   private parseFluxStatus(output: string): FluxStatus {
@@ -203,7 +194,7 @@ export class FluxCliService {
       // Check for component status
       if (line.includes('✔') || line.includes('✓')) {
         const match = line.match(/✔\s+(.+?)\s+/)
-        if (match && match[1]) {
+        if (match?.[1]) {
           components.push({
             name: match[1].trim(),
             status: 'ready',
@@ -211,7 +202,7 @@ export class FluxCliService {
         }
       } else if (line.includes('✗')) {
         const match = line.match(/✗\s+(.+?)\s+/)
-        if (match && match[1]) {
+        if (match?.[1]) {
           components.push({
             name: match[1].trim(),
             status: 'failed',

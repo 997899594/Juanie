@@ -173,8 +173,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import {
-  Badge,
+import { Badge,
   Button,
   Card,
   CardContent,
@@ -183,8 +182,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Skeleton,
-} from '@juanie/ui'
+  Skeleton , log } from '@juanie/ui'
 import {
   AlertCircle,
   Bell,
@@ -305,7 +303,7 @@ async function handleMarkAsRead(notificationId: string) {
   try {
     await markAsRead(notificationId)
   } catch (err) {
-    console.error('Failed to mark notification as read:', err)
+    log.error('Failed to mark notification as read:', err)
   }
 }
 
@@ -314,7 +312,7 @@ async function handleMarkAllAsRead() {
   try {
     await markAllAsRead()
   } catch (err) {
-    console.error('Failed to mark all notifications as read:', err)
+    log.error('Failed to mark all notifications as read:', err)
   }
 }
 
@@ -323,7 +321,7 @@ async function handleDelete(notificationId: string) {
   try {
     await deleteNotification(notificationId)
   } catch (err) {
-    console.error('Failed to delete notification:', err)
+    log.error('Failed to delete notification:', err)
   }
 }
 

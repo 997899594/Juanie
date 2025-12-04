@@ -1,91 +1,148 @@
-# 文档中心
+# Juanie 项目文档
+
+AI DevOps Platform - 现代化的 AI 驱动 DevOps 平台
 
 ## 📚 文档导航
 
-### 📖 入门指南 (`guides/`)
-快速上手和日常开发必读文档
+### 快速开始
+- [快速开始指南](guides/quick-start.md) - 5 分钟快速上手
+- [K3s 远程访问配置](guides/k3s-remote-access.md) - 配置远程 Kubernetes 集群
+- [Flux CD 安装](guides/flux-installation.md) - GitOps 工具安装指南
+- [部署测试](guides/deployment-test.md) - 测试部署流程
 
-1. **[快速开始](./guides/quick-start.md)** - 5 分钟上手
-2. **[开发指南](./guides/development.md)** - 本地开发环境搭建
-3. **[服务器部署](./guides/deployment.md)** - 生产环境部署
+### 架构设计
+- [系统架构](ARCHITECTURE.md) - 整体架构设计
+- [数据库 Schema 关系](architecture/database-schema-relationships.md) - 数据模型设计
+- [Bun K8s 客户端](architecture/bun-k8s-client.md) - Kubernetes 客户端实现
+- [进度系统设计](architecture/progress-system-final.md) - 实时进度追踪系统
 
-### 🏗️ 架构文档 (`architecture/`)
-系统设计和架构决策
+### API 文档
+- [API 参考](API_REFERENCE.md) - tRPC API 完整文档
+- [API 概览](api/README.md) - API 使用指南
 
-1. **[系统架构](./architecture/architecture.md)** - 技术栈概览
-2. **[三层服务架构](./architecture/three-tier-architecture.md)** - Foundation/Business/Extensions 分层
-3. **[Bun K8s 客户端](./architecture/bun-k8s-client.md)** - 自研 Kubernetes 客户端实现
-4. **[GitOps 指南](./architecture/gitops.md)** - Flux CD 配置
-5. **[GitOps 深度解析](./architecture/gitops-deep-dive.md)** - GitOps 完整实现细节
-6. **[SSE 实时通信](./architecture/simplified-sse-architecture.md)** - 服务端推送架构
+### 教程
+- [Monorepo 与 Turborepo](tutorials/monorepo-turborepo.md) - Monorepo 架构实践
+- [Ollama AI 集成](tutorials/ollama-ai-integration.md) - AI 功能集成指南
+- [tRPC 全栈类型安全](tutorials/trpc-fullstack-typesafety.md) - 端到端类型安全实践
 
-### 🔥 深度技术教程 (`tutorials/`)
-核心技术栈深度解析和实践指南
+### 故障排查
+- [故障排查索引](troubleshooting/README.md) - 常见问题解决方案
+- **Flux CD 相关**
+  - [SSH 认证问题](troubleshooting/flux/ssh-authentication.md)
+  - [网络策略问题](troubleshooting/flux/network-policy.md)
+  - [Kustomization 协调问题](troubleshooting/flux/kustomization-reconciling.md)
+- **Kubernetes 相关**
+  - [Namespace 时序问题](troubleshooting/kubernetes/namespace-timing.md)
+  - [快速参考](troubleshooting/kubernetes/QUICK_REFERENCE.md)
+- **Git 相关**
+  - [仓库名称验证](troubleshooting/git/repository-name-validation.md)
 
-1. **[tRPC 全栈类型安全](./tutorials/trpc-fullstack-typesafety.md)** - 端到端类型安全实践
-2. **[Monorepo + Turborepo](./tutorials/monorepo-turborepo.md)** - 现代化工程架构
-3. **[Ollama AI 集成](./tutorials/ollama-ai-integration.md)** - 本地 AI 模型集成指南
+### 其他
+- [变更日志](CHANGELOG.md) - 版本更新记录
+- [文档组织规则](ORGANIZATION.md) - 文档管理规范
 
-### 📡 API 文档 (`api/`)
-API 接口参考和使用说明
+## 🚀 核心功能
 
-- **[API 参考](./API_REFERENCE.md)** - 完整 API 文档
-- **[API 详细文档](./api/)** - 各模块 API 详细说明
+### 项目管理
+- 多项目、多团队支持
+- 内置模板系统（Next.js 15 等）
+- 异步初始化流程（状态机 + 队列）
+- 实时进度追踪（SSE）
 
-### 🔧 问题排查 (`troubleshooting/`)
-遇到问题时的诊断和解决方案
+### GitOps
+- 自动化部署，集成 Flux CD
+- 智能 Git 认证（GitHub Deploy Keys, GitLab Tokens）
+- SSH known_hosts 动态管理
+- Kubernetes 资源自动创建
 
-- **[问题排查索引](./troubleshooting/README.md)** - 所有问题的快速索引
-- **[Flux GitOps 问题](./troubleshooting/flux/)** - SSH 认证、网络策略等
-- **[Git 认证问题](./troubleshooting/git/)** - OAuth Token、Deploy Key 等
-- **[Kubernetes 问题](./troubleshooting/kubernetes/)** - 资源创建、配置等
-- **[架构问题](./troubleshooting/architecture/)** - 代码冗余、设计缺陷等
-- **[重构记录](./troubleshooting/refactoring/)** - 历史重构和清理记录
+### 环境管理
+- Development/Staging/Production 环境隔离
+- 环境变量管理
+- 配置版本控制
 
-### 📋 文档管理
-- **[文档组织说明](./ORGANIZATION.md)** - 文档结构和编写规范
-- **[文档变更日志](./CHANGELOG.md)** - 文档重要变更记录
+### AI 助手
+- 代码审查
+- DevOps 建议
+- 安全分析
 
----
+## 🛠️ 技术栈
 
-## 🎯 文档原则
+### 后端
+- **框架**: NestJS 11 + Fastify
+- **API**: tRPC（类型安全）
+- **数据库**: PostgreSQL 15 + Drizzle ORM
+- **缓存**: Dragonfly（Redis 兼容）
+- **队列**: BullMQ
+- **运行时**: Bun
 
-- **分类清晰** - 按用途分类到不同目录
-- **只保留有用的** - 删除过时和重复内容
-- **及时更新** - 代码变化时同步更新文档
-- **实用为主** - 提供可执行的代码示例
+### 前端
+- **框架**: Vue 3 + Composition API
+- **构建**: Vite 7
+- **状态**: Pinia
+- **UI**: shadcn-vue + Tailwind CSS 4
+- **路由**: Vue Router
 
-## 📂 目录结构
+### 基础设施
+- **容器**: Docker
+- **编排**: K3s（轻量级 Kubernetes）
+- **GitOps**: Flux CD
+- **监控**: Prometheus + Grafana + Jaeger
 
+## 📖 开发指南
+
+### 环境要求
+- Bun >= 1.0.0
+- Node.js >= 22.0.0
+- PostgreSQL 15+
+- Redis/Dragonfly 7+
+- K3s（可选，用于 GitOps）
+
+### 快速开始
+```bash
+# 安装依赖
+bun install
+
+# 启动核心服务
+docker compose up -d
+
+# 数据库迁移
+bun run db:push
+
+# 启动开发服务器
+bun run dev
 ```
-docs/
-├── README.md                    # 文档索引（本文件）
-├── ORGANIZATION.md              # 文档组织说明
-├── CHANGELOG.md                 # 文档变更日志
-├── API_REFERENCE.md             # API 总览
-├── guides/                      # 入门指南（7 个文件）
-│   ├── quick-start.md
-│   ├── development.md
-│   ├── deployment.md
-│   ├── flux-installation.md
-│   └── ...
-├── architecture/                # 架构文档（6 个文件）
-│   ├── architecture.md
-│   ├── three-tier-architecture.md
-│   ├── gitops.md
-│   ├── gitops-deep-dive.md
-│   └── ...
-├── troubleshooting/             # 问题排查（41 个文件）
-│   ├── README.md                # 问题索引
-│   ├── flux/                    # Flux GitOps 问题
-│   ├── git/                     # Git 认证问题
-│   ├── kubernetes/              # Kubernetes 问题
-│   ├── architecture/            # 架构问题
-│   └── refactoring/             # 重构记录
-├── tutorials/                   # 深度教程
-│   ├── trpc-fullstack-typesafety.md
-│   ├── monorepo-turborepo.md
-│   └── ollama-ai-integration.md
-└── api/                         # API 详细文档
-    └── README.md
+
+### 常用命令
+```bash
+# 开发
+bun run dev                    # 启动所有服务
+bun run dev:web                # 只启动 Web
+bun run dev:api                # 只启动 API
+
+# 数据库
+bun run db:generate            # 生成迁移
+bun run db:push                # 应用迁移
+bun run db:studio              # Drizzle Studio
+
+# 测试和检查
+bun test                       # 运行测试
+bun run type-check             # 类型检查
+biome check --write            # 代码检查
+
+# 构建
+bun run build                  # 构建所有包
 ```
+
+## 🤝 贡献指南
+
+请参考 [协作原则](.kiro/steering/collaboration.md) 和 [AI 协作指南](.kiro/steering/ai-collaboration.md)
+
+## 📝 许可证
+
+MIT License
+
+## 🔗 相关链接
+
+- [项目仓库](https://github.com/your-org/juanie)
+- [问题追踪](https://github.com/your-org/juanie/issues)
+- [讨论区](https://github.com/your-org/juanie/discussions)

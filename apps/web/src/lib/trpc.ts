@@ -1,4 +1,5 @@
 import type { AppRouter } from '@juanie/api-gateway/router-types'
+import { log } from '@juanie/ui'
 import {
   createTRPCProxyClient,
   httpBatchLink,
@@ -50,7 +51,7 @@ export const trpc: ReturnType<typeof createTRPCProxyClient<AppRouter>> =
 
               return response
             } catch (error) {
-              console.error('Network error:', error)
+              log.error('Network error:', error)
               throw error
             }
           },

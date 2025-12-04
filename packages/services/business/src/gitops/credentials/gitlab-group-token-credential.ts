@@ -57,7 +57,7 @@ export class GitLabGroupTokenCredential implements GitCredential {
       const hasRequiredScopes = requiredScopes.every((scope) => tokenInfo.scopes.includes(scope))
 
       return hasRequiredScopes
-    } catch (error) {
+    } catch (_error) {
       return false
     }
   }
@@ -98,7 +98,7 @@ export class GitLabGroupTokenCredential implements GitCredential {
       }
 
       return (await response.json()) as { scopes: string[] }
-    } catch (error) {
+    } catch (_error) {
       return null
     }
   }

@@ -1,10 +1,10 @@
+import { readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Trace } from '@juanie/core/observability'
 import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
-import { readFile } from 'fs/promises'
 import Handlebars from 'handlebars'
-import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
 import { z } from 'zod'
 
 // 从 Zod schemas 推导类型

@@ -70,7 +70,7 @@ export class GitHubAppCredential implements GitCredential {
       })
 
       return response.ok
-    } catch (error) {
+    } catch (_error) {
       return false
     }
   }

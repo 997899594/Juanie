@@ -1,3 +1,4 @@
+import { TemplateManager } from '@juanie/service-business'
 import {
   createTemplateSchema,
   listTemplatesSchema,
@@ -5,7 +6,6 @@ import {
   templateIdSchema,
   validateTemplateSchema,
 } from '@juanie/types'
-import { TemplateManager } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { TrpcService } from '../trpc/trpc.service'
@@ -20,21 +20,19 @@ export class ProjectTemplatesRouter {
   get router() {
     return this.trpc.router({
       // 列出所有模板
-      list: this.trpc.protectedProcedure
-        .input(listTemplatesSchema)
-        .query(async ({ ctx, input }) => {
-          try {
-            return await this.templateManager.listTemplates(input)
-          } catch (error) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: error instanceof Error ? error.message : '获取模板列表失败',
-            })
-          }
-        }),
+      list: this.trpc.protectedProcedure.input(listTemplatesSchema).query(async ({ input }) => {
+        try {
+          return await this.templateManager.listTemplates(input)
+        } catch (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: error instanceof Error ? error.message : '获取模板列表失败',
+          })
+        }
+      }),
 
       // 获取模板详情
-      get: this.trpc.protectedProcedure.input(templateIdSchema).query(async ({ ctx, input }) => {
+      get: this.trpc.protectedProcedure.input(templateIdSchema).query(async ({ input }) => {
         try {
           const template = await this.templateManager.getTemplate(input.templateId)
 
@@ -60,7 +58,7 @@ export class ProjectTemplatesRouter {
       // 渲染模板
       render: this.trpc.protectedProcedure
         .input(renderTemplateSchema)
-        .mutation(async ({ ctx, input }) => {
+        .mutation(async ({ input }) => {
           try {
             return await this.templateManager.renderTemplate(input.templateId, input.variables)
           } catch (error) {

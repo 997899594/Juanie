@@ -311,8 +311,7 @@ import { useRouter } from 'vue-router'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import * as z from 'zod'
-import {
-  Button,
+import { Button,
   Badge,
   Input,
   Label,
@@ -334,8 +333,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
-} from '@juanie/ui'
+  FormMessage , log } from '@juanie/ui'
 import {
   CheckCircle2,
   ChevronLeft,
@@ -530,7 +528,7 @@ function handleCancel() {
 
 // 创建项目
 const onSubmit = handleSubmit(async (values) => {
-  console.log('提交表单，values:', values)
+  log.info('提交表单，values:', values)
   loading.value = true
 
   try {
@@ -546,7 +544,7 @@ const onSubmit = handleSubmit(async (values) => {
       repository: values.repository || undefined,
     }
 
-    console.log('创建项目，数据:', projectData)
+    log.info('创建项目，数据:', projectData)
     const { project } = await createProject(projectData)
     createdProjectId.value = project.id
 
@@ -557,7 +555,7 @@ const onSubmit = handleSubmit(async (values) => {
     router.push(`/projects/${project.id}`)
   } catch (error: any) {
     // 错误已经在 useProjects 中通过 toast 显示
-    console.error('Project creation failed:', error)
+    log.error('Project creation failed:', error)
     toast.error('创建失败', error.message || '未知错误')
   } finally {
     loading.value = false
@@ -565,13 +563,13 @@ const onSubmit = handleSubmit(async (values) => {
 })
 
 async function handleCreateProject() {
-  console.log('点击创建项目按钮')
-  console.log('当前表单数据:', formData)
-  console.log('name:', name.value)
-  console.log('slug:', slug.value)
-  console.log('visibility:', visibility.value)
-  console.log('repository:', formData.repository)
-  console.log('errors:', errors.value)
+  log.info('点击创建项目按钮')
+  log.info('当前表单数据:', formData)
+  log.info('name:', name.value)
+  log.info('slug:', slug.value)
+  log.info('visibility:', visibility.value)
+  log.info('repository:', formData.repository)
+  log.info('errors:', errors.value)
   
   // 直接调用，不通过 handleSubmit
   if (!name.value || !slug.value) {
@@ -592,7 +590,7 @@ async function handleCreateProject() {
       repository: formData.repository || undefined,
     }
 
-    console.log('创建项目，数据:', projectData)
+    log.info('创建项目，数据:', projectData)
     const { project } = await createProject(projectData)
     createdProjectId.value = project.id
 
@@ -601,7 +599,7 @@ async function handleCreateProject() {
     emit('close')
     router.push(`/projects/${project.id}`)
   } catch (error: any) {
-    console.error('Project creation failed:', error)
+    log.error('Project creation failed:', error)
     toast.error('创建失败', error.message || '未知错误')
   } finally {
     loading.value = false

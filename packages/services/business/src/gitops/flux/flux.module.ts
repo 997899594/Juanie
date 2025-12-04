@@ -4,7 +4,6 @@ import { FoundationModule } from '@juanie/service-foundation'
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { CredentialsModule } from '../credentials/credentials.module'
-import { GitOpsEventHandlerService } from '../gitops-event-handler.service'
 import { K3sModule } from '../k3s/k3s.module'
 import { FluxService } from './flux.service'
 import { FluxCliService } from './flux-cli.service'
@@ -32,7 +31,6 @@ import { YamlGeneratorService } from './yaml-generator.service'
     FluxMetricsService,
     YamlGeneratorService,
     FluxWatcherService,
-    GitOpsEventHandlerService, // 事件处理服务
   ],
   exports: [
     FluxService,
@@ -42,7 +40,6 @@ import { YamlGeneratorService } from './yaml-generator.service'
     FluxMetricsService,
     YamlGeneratorService,
     FluxWatcherService,
-    GitOpsEventHandlerService,
   ],
 })
 export class FluxModule {}

@@ -1,5 +1,5 @@
+import { DomainEvents, EventPublisher } from '@juanie/core/events'
 import { Injectable } from '@nestjs/common'
-import { EventEmitter2 } from '@nestjs/event-emitter'
 
 export interface OrganizationCreatedEvent {
   organizationId: string
@@ -33,21 +33,59 @@ export interface OrganizationMemberRoleUpdatedEvent {
 
 @Injectable()
 export class OrganizationEventsService {
-  constructor(private eventEmitter: EventEmitter2) {}
+  constructor(private eventPublisher: EventPublisher) {}
 
-  emitOrganizationCreated(event: OrganizationCreatedEvent) {
-    this.eventEmitter.emit('organization.created', event)
+  async emitOrganizationCreated(event: OrganizationCreatedEvent) {
+    await this.eventPublisher.publishDomain({
+      type: DomainEvents.ORGANIZATION_CREATED,
+      version: 1,
+      resourceId: event.organizationId,
+      userId: event.createdBy,
+      data: {
+        name: event.name,
+        gitSyncEnabled: event.gitSyncEnabled,
+        gitProvider: event.gitProvider,
+        gitOrgName: event.gitOrgName,
+      },
+    })
   }
 
-  emitMemberAdded(event: OrganizationMemberAddedEvent) {
-    this.eventEmitter.emit('organization.member.added', event)
+  async emitMemberAdded(event: OrganizationMemberAddedEvent) {
+    await this.eventPublisher.publishDomain({
+      type: DomainEvents.ORGANIZATION_MEMBER_ADDED,
+      version: 1,
+      resourceId: event.organizationId,
+      userId: event.addedBy,
+      data: {
+        memberId: event.userId,
+        role: event.role,
+      },
+    })
   }
 
-  emitMemberRemoved(event: OrganizationMemberRemovedEvent) {
-    this.eventEmitter.emit('organization.member.removed', event)
+  async emitMemberRemoved(event: OrganizationMemberRemovedEvent) {
+    await this.eventPublisher.publishDomain({
+      type: DomainEvents.ORGANIZATION_MEMBER_REMOVED,
+      version: 1,
+      resourceId: event.organizationId,
+      userId: event.removedBy,
+      data: {
+        memberId: event.userId,
+      },
+    })
   }
 
-  emitMemberRoleUpdated(event: OrganizationMemberRoleUpdatedEvent) {
-    this.eventEmitter.emit('organization.member.role.updated', event)
+  async emitMemberRoleUpdated(event: OrganizationMemberRoleUpdatedEvent) {
+    await this.eventPublisher.publishDomain({
+      type: DomainEvents.ORGANIZATION_MEMBER_ROLE_UPDATED,
+      version: 1,
+      resourceId: event.organizationId,
+      userId: event.updatedBy,
+      data: {
+        memberId: event.userId,
+        oldRole: event.oldRole,
+        newRole: event.newRole,
+      },
+    })
   }
 }

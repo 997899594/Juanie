@@ -6,8 +6,8 @@ import { GitPlatformSyncService } from './git-platform-sync.service'
 
 describe('GitPlatformSyncService', () => {
   let service: GitPlatformSyncService
-  let projectMembersService: ProjectMembersService
-  let projectsService: ProjectsService
+  let _projectMembersService: ProjectMembersService
+  let _projectsService: ProjectsService
 
   const mockDb = {
     query: {
@@ -59,8 +59,8 @@ describe('GitPlatformSyncService', () => {
     }).compile()
 
     service = module.get<GitPlatformSyncService>(GitPlatformSyncService)
-    projectMembersService = module.get<ProjectMembersService>(ProjectMembersService)
-    projectsService = module.get<ProjectsService>(ProjectsService)
+    _projectMembersService = module.get<ProjectMembersService>(ProjectMembersService)
+    _projectsService = module.get<ProjectsService>(ProjectsService)
   })
 
   afterEach(() => {

@@ -143,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+import { log } from '@juanie/ui'
 import { ref, nextTick, watch } from 'vue'
 import { trpc } from '@/lib/trpc'
 import { useToast } from '@/composables/useToast'
@@ -210,13 +211,13 @@ const sendMessage = async (message: string) => {
     // 如果有需要确认的操作
     if (response.action) {
       // TODO: 显示确认对话框
-      console.log('Action to confirm:', response.action)
+      log.info('Action to confirm:', response.action)
     }
 
     // 滚动到底部
     await scrollToBottom()
   } catch (error) {
-    console.error('Failed to send message:', error)
+    log.error('Failed to send message:', error)
     toastHelper.error('Failed to send message. Please try again.')
   } finally {
     isTyping.value = false

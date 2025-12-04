@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import type { inferRouterOutputs } from '@trpc/server'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -37,7 +38,7 @@ export const useAuthStore = defineStore('auth', () => {
         return
       }
       // 其他错误才需要记录和提示
-      console.error('Failed to validate session:', error)
+      log.error('Failed to validate session:', error)
       toast.error('会话验证失败', '请重新登录')
     } finally {
       loading.value = false
@@ -57,7 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
       await trpc.auth.logout.mutate()
       toast.success('已退出登录')
     } catch (error) {
-      console.error('Logout failed:', error)
+      log.error('Logout failed:', error)
       if (isTRPCClientError(error)) {
         toast.error('退出登录失败', error.message ?? '请稍后重试')
       } else {

@@ -1,3 +1,4 @@
+import { TeamsService } from '@juanie/service-foundation'
 import {
   addTeamMemberSchema,
   createTeamSchema,
@@ -7,10 +8,8 @@ import {
   updateTeamMemberRoleSchema,
   updateTeamSchema,
 } from '@juanie/types'
-import { TeamsService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
-import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'
 
 /**

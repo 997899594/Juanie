@@ -326,7 +326,7 @@ async function handleDelete() {
     deletingProject.value = null
     repositoryAction.value = 'keep'
   } catch (error) {
-    console.error('Failed to delete project:', error)
+    log.error('Failed to delete project:', error)
   }
 }
 

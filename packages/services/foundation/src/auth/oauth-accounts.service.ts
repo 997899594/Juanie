@@ -63,55 +63,50 @@ export class OAuthAccountsService {
    */
   @Trace('oauth-accounts.refreshGitLabToken')
   private async refreshGitLabToken(account: typeof schema.oauthAccounts.$inferSelect) {
-    try {
-      const gitlabUrl = process.env.GITLAB_BASE_URL || 'https://gitlab.com'
-      const response = await fetch(`${gitlabUrl}/oauth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grant_type: 'refresh_token',
-          refresh_token: account.refreshToken,
-          client_id: process.env.GITLAB_CLIENT_ID,
-          client_secret: process.env.GITLAB_CLIENT_SECRET,
-        }),
-      })
+    const gitlabUrl = process.env.GITLAB_BASE_URL || 'https://gitlab.com'
+    const response = await fetch(`${gitlabUrl}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'refresh_token',
+        refresh_token: account.refreshToken,
+        client_id: process.env.GITLAB_CLIENT_ID,
+        client_secret: process.env.GITLAB_CLIENT_SECRET,
+      }),
+    })
 
-      if (!response.ok) {
-        // 刷新失败，标记为过期
-        await this.db
-          .update(schema.oauthAccounts)
-          .set({ status: 'expired', updatedAt: new Date() })
-          .where(eq(schema.oauthAccounts.id, account.id))
-
-        throw new Error('GitLab token 刷新失败')
-      }
-
-      interface GitLabTokenResponse {
-        access_token: string
-        refresh_token: string
-        expires_in: number
-      }
-
-      const data = (await response.json()) as GitLabTokenResponse
-
-      // 更新 token
-      const [updated] = await this.db
+    if (!response.ok) {
+      // 刷新失败，标记为过期
+      await this.db
         .update(schema.oauthAccounts)
-        .set({
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token,
-          expiresAt: new Date(Date.now() + data.expires_in * 1000),
-          status: 'active',
-          updatedAt: new Date(),
-        })
+        .set({ status: 'expired', updatedAt: new Date() })
         .where(eq(schema.oauthAccounts.id, account.id))
-        .returning()
 
-      return updated!
-    } catch (error) {
-      // 刷新失败，返回原账户（让上层处理）
-      throw error
+      throw new Error('GitLab token 刷新失败')
     }
+
+    interface GitLabTokenResponse {
+      access_token: string
+      refresh_token: string
+      expires_in: number
+    }
+
+    const data = (await response.json()) as GitLabTokenResponse
+
+    // 更新 token
+    const [updated] = await this.db
+      .update(schema.oauthAccounts)
+      .set({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        expiresAt: new Date(Date.now() + data.expires_in * 1000),
+        status: 'active',
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.oauthAccounts.id, account.id))
+      .returning()
+
+    return updated!
   }
 
   /**

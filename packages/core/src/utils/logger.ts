@@ -111,7 +111,7 @@ export function extractErrorDetails(error: any): {
 export function createLogContext(data: Record<string, any>): string {
   try {
     return JSON.stringify(data, null, 2)
-  } catch (error) {
+  } catch (_error) {
     return String(data)
   }
 }

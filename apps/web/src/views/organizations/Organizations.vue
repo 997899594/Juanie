@@ -73,9 +73,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  Button,
-} from '@juanie/ui'
+import { Button , log } from '@juanie/ui'
 import { Plus, Building } from 'lucide-vue-next'
 import { useOrganizations } from '@/composables/useOrganizations'
 import OrganizationCard from '@/components/OrganizationCard.vue'
@@ -138,7 +136,7 @@ async function handleSubmit(data: { name: string; slug: string; displayName?: st
     editingOrganization.value = null
   } catch (error) {
     // 错误已在 composable 中处理
-    console.error('Failed to submit organization:', error)
+    log.error('Failed to submit organization:', error)
   }
 }
 
@@ -152,7 +150,7 @@ async function handleDelete() {
     deletingOrganization.value = null
   } catch (error) {
     // 错误已在 composable 中处理
-    console.error('Failed to delete organization:', error)
+    log.error('Failed to delete organization:', error)
   }
 }
 

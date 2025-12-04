@@ -1,4 +1,5 @@
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
 import type {
@@ -6,11 +7,10 @@ import type {
   CreateAIAssistantInput,
   UpdateAIAssistantInput,
 } from '@juanie/types'
-import { OllamaService } from '../ollama/ollama.service'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { OllamaService } from '../ollama/ollama.service'
 
 @Injectable()
 export class AiAssistantsService {
@@ -137,8 +137,7 @@ export class AiAssistantsService {
 
     // 只有当 modelConfig 完整时才更新
     if (
-      data.modelConfig &&
-      data.modelConfig.provider &&
+      data.modelConfig?.provider &&
       data.modelConfig.model &&
       data.modelConfig.temperature !== undefined
     ) {
@@ -258,16 +257,12 @@ export class AiAssistantsService {
     try {
       // 使用 OllamaService 而不是直接使用 Ollama 客户端
       const modelName = typeof modelConfig.model === 'string' ? modelConfig.model : 'llama3.2:3b'
-      const temperature = typeof modelConfig.temperature === 'number' ? modelConfig.temperature : 0.7
-      
-      return await this.ollamaService.generate(
-        modelName,
-        message,
-        systemPrompt,
-        {
-          temperature,
-        },
-      )
+      const temperature =
+        typeof modelConfig.temperature === 'number' ? modelConfig.temperature : 0.7
+
+      return await this.ollamaService.generate(modelName, message, systemPrompt, {
+        temperature,
+      })
     } catch (error) {
       console.error('Ollama error:', error)
       throw new Error(

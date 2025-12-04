@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import type { inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import type { AppRouter } from '@/lib/trpc'
@@ -28,7 +29,7 @@ export function usePipelines() {
       pipelines.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch pipelines:', err)
+      log.error('Failed to fetch pipelines:', err)
       error.value = '获取 Pipeline 列表失败'
       if (isTRPCClientError(err)) {
         toast.error('获取 Pipeline 列表失败', err.message)
@@ -186,14 +187,14 @@ export function usePipelines() {
         {
           onData,
           onError: (err: any) => {
-            console.error('日志订阅失败:', err)
+            log.error('日志订阅失败:', err)
             toast.error('日志订阅失败')
           },
         },
       )
       return subscription
     } catch (err) {
-      console.error('Failed to subscribe to logs:', err)
+      log.error('Failed to subscribe to logs:', err)
       toast.error('日志订阅失败')
       return undefined
     }
@@ -210,14 +211,14 @@ export function usePipelines() {
         {
           onData,
           onError: (err: any) => {
-            console.error('状态订阅失败:', err)
+            log.error('状态订阅失败:', err)
             toast.error('状态订阅失败')
           },
         },
       )
       return subscription
     } catch (err) {
-      console.error('Failed to subscribe to status:', err)
+      log.error('Failed to subscribe to status:', err)
       toast.error('状态订阅失败')
       return undefined
     }

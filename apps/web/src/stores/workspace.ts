@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { trpc } from '@/lib/trpc'
 
 export interface Workspace {
   id: string
@@ -128,7 +127,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     // TODO: 刷新项目列表等
   }
 
-  async function createOrganization(data: { name: string; provider: 'github' | 'gitlab' }) {
+  async function createOrganization(_data: { name: string; provider: 'github' | 'gitlab' }) {
     // TODO: 实现创建组织
     // const org = await trpc.organizations.create.mutate(data)
     // 添加到可用工作空间

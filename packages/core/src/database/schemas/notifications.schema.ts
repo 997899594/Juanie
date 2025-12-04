@@ -1,9 +1,13 @@
-import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core';
-import { users } from './users.schema';
+import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { users } from './users.schema'
 
-export const notifications = pgTable('notifications', {
+export const notifications = pgTable(
+  'notifications',
+  {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id').notNull().references(() => users.id),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
 
     type: text('type').notNull(), // 'deployment_success', 'approval_request', 'cost_alert'
     title: text('title').notNull(),
@@ -19,11 +23,13 @@ export const notifications = pgTable('notifications', {
 
     priority: text('priority').notNull().default('normal'), // 'low', 'normal', 'high', 'urgent'
     createdAt: timestamp('created_at').notNull().defaultNow(),
-}, (table) => [
+  },
+  (table) => [
     index('notifs_user_idx').on(table.userId),
     index('notifs_status_idx').on(table.status),
     index('notifs_created_idx').on(table.createdAt),
-]);
+  ],
+)
 
-export type Notification = typeof notifications.$inferSelect;
-export type NewNotification = typeof notifications.$inferInsert;
+export type Notification = typeof notifications.$inferSelect
+export type NewNotification = typeof notifications.$inferInsert

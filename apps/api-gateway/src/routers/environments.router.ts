@@ -1,3 +1,4 @@
+import { EnvironmentsService } from '@juanie/service-business'
 import {
   configureGitOpsSchema,
   createEnvironmentSchema,
@@ -7,7 +8,6 @@ import {
   projectIdQuerySchema,
   updateEnvironmentSchema,
 } from '@juanie/types'
-import { EnvironmentsService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { TrpcService } from '../trpc/trpc.service'

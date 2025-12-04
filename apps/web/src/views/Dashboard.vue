@@ -135,15 +135,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  Badge,
+import { Badge,
   Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
-} from '@juanie/ui'
+  CardTitle , log } from '@juanie/ui'
 import { DollarSign, FolderKanban, GitBranch, Rocket, Server } from 'lucide-vue-next'
 import StatsCard from '@/components/StatsCard.vue'
 import { useAppStore } from '@/stores/app'
@@ -259,7 +257,7 @@ async function loadData() {
           await fetchPipelines(project.id)
           allPipelines = [...allPipelines, ...pipelines.value]
         } catch (err) {
-          console.error(`Failed to fetch pipelines for project ${project.id}:`, err)
+          log.error(`Failed to fetch pipelines for project ${project.id}:`, err)
         }
       }
 
@@ -273,7 +271,7 @@ async function loadData() {
       stats.value.costTrend = Math.floor(Math.random() * 40) - 20
     }
   } catch (err) {
-    console.error('Failed to load dashboard data:', err)
+    log.error('Failed to load dashboard data:', err)
   }
 }
 

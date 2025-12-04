@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
@@ -92,7 +93,7 @@ export function useTemplates() {
       templates.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch templates:', err)
+      log.error('Failed to fetch templates:', err)
       error.value = '获取模板列表失败'
 
       if (isTRPCClientError(err)) {
@@ -116,7 +117,7 @@ export function useTemplates() {
       currentTemplate.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch template:', err)
+      log.error('Failed to fetch template:', err)
       error.value = '获取模板详情失败'
 
       if (isTRPCClientError(err)) {
@@ -187,7 +188,7 @@ export function useTemplates() {
       toast.success('渲染成功', '模板已生成配置文件')
       return result
     } catch (err) {
-      console.error('Failed to render template:', err)
+      log.error('Failed to render template:', err)
       error.value = '渲染模板失败'
 
       if (isTRPCClientError(err)) {
@@ -210,7 +211,7 @@ export function useTemplates() {
       const result = await trpc.projectTemplates.validate.query({ templateId })
       return result
     } catch (err) {
-      console.error('Failed to validate template:', err)
+      log.error('Failed to validate template:', err)
       error.value = '验证模板失败'
 
       if (isTRPCClientError(err)) {
@@ -238,7 +239,7 @@ export function useTemplates() {
       toast.success('创建成功', `模板 "${data.name}" 已创建`)
       return result
     } catch (err) {
-      console.error('Failed to create template:', err)
+      log.error('Failed to create template:', err)
       error.value = '创建模板失败'
 
       if (isTRPCClientError(err)) {
@@ -318,14 +319,14 @@ export function useTemplates() {
       await new Promise((resolve) => setTimeout(resolve, 1000))
       generatedTemplate.value = `# Generated Dockerfile\nFROM node:${config.version}\nWORKDIR /app\nCOPY package*.json ./\nRUN npm install\nCOPY . .\nEXPOSE 3000\nCMD ["npm", "start"]`
       toast.success('Dockerfile 生成成功')
-    } catch (err) {
+    } catch (_err) {
       toast.error('生成 Dockerfile 失败')
     } finally {
       isGenerating.value = false
     }
   }
 
-  const generateCICD = async (config: any) => {
+  const generateCICD = async (_config: any) => {
     isGenerating.value = true
     templateType.value = 'cicd'
     try {
@@ -333,7 +334,7 @@ export function useTemplates() {
       await new Promise((resolve) => setTimeout(resolve, 1000))
       generatedTemplate.value = `# Generated CI/CD Config\nstages:\n  - build\n  - test\n  - deploy\n\nbuild:\n  stage: build\n  script:\n    - npm install\n    - npm run build`
       toast.success('CI/CD 配置生成成功')
-    } catch (err) {
+    } catch (_err) {
       toast.error('生成 CI/CD 配置失败')
     } finally {
       isGenerating.value = false
@@ -344,7 +345,7 @@ export function useTemplates() {
     try {
       await navigator.clipboard.writeText(generatedTemplate.value)
       toast.success('已复制到剪贴板')
-    } catch (err) {
+    } catch (_err) {
       toast.error('复制失败')
     }
   }

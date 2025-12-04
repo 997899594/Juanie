@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import type { inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
@@ -34,7 +35,7 @@ export function useSecurityPolicies() {
     } catch (err: any) {
       error.value = err.message || '获取安全策略失败'
       toast.error('获取失败', error.value || undefined)
-      console.error('获取安全策略失败:', err)
+      log.error('获取安全策略失败:', err)
     } finally {
       loading.value = false
     }
@@ -55,7 +56,7 @@ export function useSecurityPolicies() {
     } catch (err: any) {
       error.value = err.message || '获取安全策略详情失败'
       toast.error('获取失败', error.value || undefined)
-      console.error('获取安全策略详情失败:', err)
+      log.error('获取安全策略详情失败:', err)
       throw err
     } finally {
       loading.value = false
@@ -91,7 +92,7 @@ export function useSecurityPolicies() {
     } catch (err: any) {
       error.value = err.message || '创建安全策略失败'
       toast.error('创建失败', error.value || undefined)
-      console.error('创建安全策略失败:', err)
+      log.error('创建安全策略失败:', err)
       throw err
     } finally {
       loading.value = false
@@ -140,7 +141,7 @@ export function useSecurityPolicies() {
     } catch (err: any) {
       error.value = err.message || '更新安全策略失败'
       toast.error('更新失败', error.value || undefined)
-      console.error('更新安全策略失败:', err)
+      log.error('更新安全策略失败:', err)
       throw err
     } finally {
       loading.value = false
@@ -169,7 +170,7 @@ export function useSecurityPolicies() {
     } catch (err: any) {
       error.value = err.message || '删除安全策略失败'
       toast.error('删除失败', error.value || undefined)
-      console.error('删除安全策略失败:', err)
+      log.error('删除安全策略失败:', err)
       throw err
     } finally {
       loading.value = false
@@ -180,7 +181,7 @@ export function useSecurityPolicies() {
    * 切换策略状态
    * TODO: API 暂不支持更新 status 字段
    */
-  const togglePolicyStatus = async (id: string) => {
+  const togglePolicyStatus = async (_id: string) => {
     toast.error('功能暂未实现', 'API 暂不支持更新策略状态')
     // const policy = policies.value.find((p) => p.id === id)
     // if (!policy) return

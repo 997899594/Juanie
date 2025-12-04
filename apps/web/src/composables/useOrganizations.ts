@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import type { inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
@@ -41,7 +42,7 @@ export function useOrganizations() {
       organizations.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch organizations:', err)
+      log.error('Failed to fetch organizations:', err)
       error.value = '获取组织列表失败'
 
       if (isTRPCClientError(err)) {
@@ -65,7 +66,7 @@ export function useOrganizations() {
       currentOrganization.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch organization:', err)
+      log.error('Failed to fetch organization:', err)
       error.value = '获取组织详情失败'
 
       if (isTRPCClientError(err)) {
@@ -99,7 +100,7 @@ export function useOrganizations() {
       toast.success('创建成功', `组织 "${data.name}" 已创建`)
       return result
     } catch (err) {
-      console.error('Failed to create organization:', err)
+      log.error('Failed to create organization:', err)
 
       const errorMessage = isTRPCClientError(err) ? err.message : '创建组织失败，请稍后重试'
 
@@ -140,7 +141,7 @@ export function useOrganizations() {
       toast.success('更新成功', '组织信息已更新')
       return result
     } catch (err) {
-      console.error('Failed to update organization:', err)
+      log.error('Failed to update organization:', err)
       error.value = '更新组织失败'
 
       if (isTRPCClientError(err)) {
@@ -171,7 +172,7 @@ export function useOrganizations() {
 
       toast.success('删除成功', '组织已删除')
     } catch (err) {
-      console.error('Failed to delete organization:', err)
+      log.error('Failed to delete organization:', err)
       error.value = '删除组织失败'
 
       if (isTRPCClientError(err)) {
@@ -195,7 +196,7 @@ export function useOrganizations() {
       members.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch members:', err)
+      log.error('Failed to fetch members:', err)
       error.value = '获取成员列表失败'
 
       if (isTRPCClientError(err)) {
@@ -230,7 +231,7 @@ export function useOrganizations() {
       toast.success('邀请成功', '成员已添加到组织')
       return result
     } catch (err) {
-      console.error('Failed to invite member:', err)
+      log.error('Failed to invite member:', err)
       error.value = '邀请成员失败'
 
       if (isTRPCClientError(err)) {
@@ -264,7 +265,7 @@ export function useOrganizations() {
 
       toast.success('更新成功', '成员角色已更新')
     } catch (err) {
-      console.error('Failed to update member role:', err)
+      log.error('Failed to update member role:', err)
       error.value = '更新成员角色失败'
 
       if (isTRPCClientError(err)) {
@@ -296,7 +297,7 @@ export function useOrganizations() {
 
       toast.success('移除成功', '成员已移除')
     } catch (err) {
-      console.error('Failed to remove member:', err)
+      log.error('Failed to remove member:', err)
       error.value = '移除成员失败'
 
       if (isTRPCClientError(err)) {
@@ -320,7 +321,7 @@ export function useOrganizations() {
       quotaUsage.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch quota usage:', err)
+      log.error('Failed to fetch quota usage:', err)
       error.value = '获取配额信息失败'
 
       if (isTRPCClientError(err)) {

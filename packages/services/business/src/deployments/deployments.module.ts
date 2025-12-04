@@ -1,7 +1,7 @@
 import { DatabaseModule } from '@juanie/core/database'
+import { Module } from '@nestjs/common'
 import { GitOpsModule } from '../gitops/git-ops/git-ops.module'
 import { K3sModule } from '../gitops/k3s/k3s.module'
-import { Module } from '@nestjs/common'
 import { DeploymentsService } from './deployments.service'
 
 @Module({

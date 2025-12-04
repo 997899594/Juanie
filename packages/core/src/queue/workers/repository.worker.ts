@@ -55,7 +55,15 @@ export class RepositoryWorker implements OnModuleInit {
   }
 
   private async handleCreateRepository(job: Job) {
-    const { provider, name, visibility, accessToken, projectId, userId, pushInitialCode } = job.data
+    const {
+      provider,
+      name,
+      visibility,
+      accessToken,
+      projectId,
+      userId: _userId,
+      pushInitialCode,
+    } = job.data
 
     try {
       await job.updateProgress(10)

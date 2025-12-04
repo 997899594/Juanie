@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common'
 import { Logger } from '@juanie/core/logger'
+import { Injectable } from '@nestjs/common'
 import type {
   InitializationContext,
   InitializationEvent,
@@ -20,8 +20,6 @@ import type {
 export class ProjectInitializationStateMachine {
   private readonly logger = new Logger(ProjectInitializationStateMachine.name)
   private handlers = new Map<InitializationState, StateHandler>()
-
-  constructor() {}
 
   // 状态转换表
   private readonly transitions: Record<

@@ -1,9 +1,9 @@
 import type { Database } from '@juanie/core/database'
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import type { GitProvider } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { eq } from 'drizzle-orm'
 import { EncryptionService } from '../encryption/encryption.service'
 
@@ -117,7 +117,7 @@ export class GitAccountLinkingService {
   /**
    * 获取用户的 Git 账号状态
    */
-  async getGitAccountStatus(userId: string, provider: GitProvider): Promise<GitAccountStatus> {
+  async getGitAccountStatus(userId: string, _provider: GitProvider): Promise<GitAccountStatus> {
     const account = await this.db.query.userGitAccounts.findFirst({
       where: eq(schema.userGitAccounts.userId, userId),
     })
@@ -141,7 +141,7 @@ export class GitAccountLinkingService {
    */
   async getGitAccount(
     userId: string,
-    provider: GitProvider,
+    _provider: GitProvider,
   ): Promise<schema.UserGitAccount | null> {
     const account = await this.db.query.userGitAccounts.findFirst({
       where: eq(schema.userGitAccounts.userId, userId),
@@ -169,7 +169,7 @@ export class GitAccountLinkingService {
    */
   async updateSyncStatus(
     userId: string,
-    provider: GitProvider,
+    _provider: GitProvider,
     status: 'active' | 'expired' | 'revoked',
   ): Promise<void> {
     await this.db
@@ -189,7 +189,7 @@ export class GitAccountLinkingService {
    */
   async refreshAccessToken(
     userId: string,
-    provider: GitProvider,
+    _provider: GitProvider,
     newAccessToken: string,
     newRefreshToken?: string,
     expiresAt?: Date,

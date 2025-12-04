@@ -1,11 +1,6 @@
-import {
-  type K3sConnectedEvent,
-  type K3sConnectionFailedEvent,
-  K3sEvents,
-} from '@juanie/core/events'
+import { EventPublisher, SystemEvents } from '@juanie/core/events'
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { EventEmitter2 } from '@nestjs/event-emitter'
 import { BunK8sClient } from './bun-k8s-client'
 
 @Injectable()
@@ -16,7 +11,7 @@ export class K3sService implements OnModuleInit {
 
   constructor(
     private config: ConfigService,
-    private eventEmitter: EventEmitter2,
+    private eventPublisher: EventPublisher,
   ) {}
 
   async onModuleInit() {
@@ -46,20 +41,28 @@ export class K3sService implements OnModuleInit {
       this.isConnected = true
       this.logger.log('✅ K3s 连接成功')
 
-      this.eventEmitter.emit(K3sEvents.CONNECTED, {
-        timestamp: new Date(),
-        kubeconfigPath,
-      } as K3sConnectedEvent)
+      await this.eventPublisher.publishDomain({
+        type: SystemEvents.K3S_CONNECTED,
+        version: 1,
+        resourceId: 'k3s-cluster',
+        data: {
+          kubeconfigPath,
+        },
+      })
     } catch (error: any) {
       this.isConnected = false
       this.logger.warn(`⚠️ K3s 连接失败: ${error.message || error}`)
       this.logger.log('提示: 确保 K3s 集群正在运行，并且 kubeconfig 配置正确')
 
-      this.eventEmitter.emit(K3sEvents.CONNECTION_FAILED, {
-        timestamp: new Date(),
-        error: error.message || String(error),
-        kubeconfigPath,
-      } as K3sConnectionFailedEvent)
+      await this.eventPublisher.publishDomain({
+        type: SystemEvents.K3S_CONNECTION_FAILED,
+        version: 1,
+        resourceId: 'k3s-cluster',
+        data: {
+          error: error.message || String(error),
+          kubeconfigPath,
+        },
+      })
     }
   }
 

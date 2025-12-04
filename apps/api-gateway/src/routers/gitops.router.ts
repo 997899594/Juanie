@@ -1,4 +1,4 @@
-import { FluxResourcesService, FluxService, FluxSyncService } from '@juanie/service-business'
+import { FluxResourcesService, FluxSyncService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
@@ -12,7 +12,6 @@ import { TrpcService } from '../trpc/trpc.service'
 export class GitOpsRouter {
   constructor(
     private trpc: TrpcService,
-    private flux: FluxService,
     private fluxResources: FluxResourcesService,
     private fluxSync: FluxSyncService,
   ) {}
@@ -233,7 +232,7 @@ export class GitOpsRouter {
             commitMessage: z.string().optional(),
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input: _input }) => {
           // TODO: 实现 GitOps 部署逻辑
           // 1. 更新 Git 仓库中的配置文件
           // 2. 提交变更
@@ -257,7 +256,7 @@ export class GitOpsRouter {
             commitMessage: z.string().optional(),
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input: _input }) => {
           // TODO: 实现配置提交逻辑
           return {
             success: true,
@@ -277,7 +276,7 @@ export class GitOpsRouter {
             changes: z.any(),
           }),
         )
-        .query(async ({ input }) => {
+        .query(async ({ input: _input }) => {
           // TODO: 实现变更预览逻辑
           return {
             diff: '# 配置变更预览\n# TODO: 实现实际的 diff',

@@ -1,8 +1,7 @@
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
-import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { InitializationContext, StateHandler } from '../types'
 
@@ -16,7 +15,7 @@ export class CreateProjectHandler implements StateHandler {
 
   constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
 
-  canHandle(context: InitializationContext): boolean {
+  canHandle(_context: InitializationContext): boolean {
     // 总是需要创建项目
     return true
   }

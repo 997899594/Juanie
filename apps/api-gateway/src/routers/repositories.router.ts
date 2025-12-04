@@ -1,3 +1,4 @@
+import { RepositoriesService } from '@juanie/service-business'
 import {
   disableGitOpsSchema,
   enableGitOpsSchema,
@@ -5,7 +6,6 @@ import {
   projectIdQuerySchema,
   repositoryIdSchema,
 } from '@juanie/types'
-import { RepositoriesService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'

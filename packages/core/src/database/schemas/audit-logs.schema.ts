@@ -1,8 +1,10 @@
-import { pgTable, uuid, text, jsonb, timestamp, index } from 'drizzle-orm/pg-core';
-import { users } from './users.schema';
-import { organizations } from './organizations.schema';
+import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { organizations } from './organizations.schema'
+import { users } from './users.schema'
 
-export const auditLogs = pgTable('audit_logs', {
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
     id: uuid('id').primaryKey().defaultRandom(),
     userId: uuid('user_id').references(() => users.id),
     organizationId: uuid('organization_id').references(() => organizations.id),
@@ -21,12 +23,14 @@ export const auditLogs = pgTable('audit_logs', {
     violationSeverity: text('violation_severity'), // 'low', 'medium', 'high', 'critical'
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
-}, (table) => [
+  },
+  (table) => [
     index('audit_user_idx').on(table.userId),
     index('audit_org_idx').on(table.organizationId),
     index('audit_action_idx').on(table.action),
     index('audit_created_idx').on(table.createdAt),
-]);
+  ],
+)
 
-export type AuditLog = typeof auditLogs.$inferSelect;
-export type NewAuditLog = typeof auditLogs.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect
+export type NewAuditLog = typeof auditLogs.$inferInsert

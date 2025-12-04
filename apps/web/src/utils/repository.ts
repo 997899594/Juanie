@@ -26,7 +26,7 @@ export function sanitizeRepositoryName(name: string): string {
 
   // 如果清理后为空，使用默认名称
   if (!sanitized) {
-    sanitized = 'project-' + Date.now()
+    sanitized = `project-${Date.now()}`
   }
 
   return sanitized

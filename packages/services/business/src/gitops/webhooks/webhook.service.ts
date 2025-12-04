@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common'
+import * as crypto from 'node:crypto'
 import { Logger } from '@juanie/core/logger'
+import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import * as crypto from 'crypto'
 import { WebhookEventProcessor } from './webhook-event-processor.service'
 
 /**
@@ -55,8 +55,8 @@ export class WebhookService {
 
       if (!isValid) {
         this.logger.warn('GitHub webhook signature verification failed', {
-          received: receivedSignature.substring(0, 8) + '...',
-          expected: expectedSignature.substring(0, 8) + '...',
+          received: `${receivedSignature.substring(0, 8)}...`,
+          expected: `${expectedSignature.substring(0, 8)}...`,
         })
       }
 

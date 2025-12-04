@@ -53,7 +53,7 @@ import { ref, onMounted } from 'vue'
 import { trpc } from '../lib/trpc'
 import PageContainer from '@/components/PageContainer.vue'
 import AnimatedCard from '@/components/AnimatedCard.vue'
-import { Button, CardHeader, CardTitle, CardContent } from '@juanie/ui'
+import { Button, CardHeader, CardTitle, CardContent, log } from '@juanie/ui'
 import { Plus, Loader2 } from 'lucide-vue-next'
 
 // 临时类型定义，直到后端实现 documents API
@@ -82,23 +82,23 @@ const loadDocuments = async () => {
       }
     ]
   } catch (error) {
-    console.error('加载文档失败:', error)
+    log.error('加载文档失败:', error)
   } finally {
     loading.value = false
   }
 }
 
 const viewDocument = (id: string) => {
-  console.log('查看文档:', id)
+  log.info('查看文档:', id)
 }
 
 const editDocument = (id: string) => {
-  console.log('编辑文档:', id)
+  log.info('编辑文档:', id)
   // TODO: 实现文档编辑功能
 }
 
 const createDocument = () => {
-  console.log('创建新文档')
+  log.info('创建新文档')
   // TODO: 实现文档创建功能
 }
 

@@ -6,11 +6,10 @@ import { ConfigService } from '@nestjs/config'
 import { Job, Worker } from 'bullmq'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import Redis from 'ioredis'
 import { GitProviderService } from '../gitops/git-providers/git-provider.service'
 import { calculateStepProgress } from '../projects/initialization/initialization-steps'
 import { ProgressManagerService } from '../projects/initialization/progress-manager.service'
-import { ProjectInitializationService } from '../projects/project-initialization.service'
+import { ProjectsService } from '../projects/projects.service'
 
 /**
  * 项目初始化 Worker
@@ -21,25 +20,21 @@ import { ProjectInitializationService } from '../projects/project-initialization
  * 3. 更新进度
  * 4. 发布事件
  *
- * 业务逻辑委托给 ProjectInitializationService
+ * 业务逻辑委托给 ProjectsService
  */
 @Injectable()
 export class ProjectInitializationWorker implements OnModuleInit {
   private readonly logger = new Logger(ProjectInitializationWorker.name)
   private worker!: Worker
-  private redis: Redis
 
   constructor(
     private readonly config: ConfigService,
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly oauthAccounts: OAuthAccountsService,
-    private readonly initService: ProjectInitializationService,
+    private readonly projectsService: ProjectsService,
     private readonly gitProvider: GitProviderService,
     private readonly progressManager: ProgressManagerService,
-  ) {
-    const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
-    this.redis = new Redis(redisUrl)
-  }
+  ) {}
 
   onModuleInit() {
     const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
@@ -656,7 +651,7 @@ namePrefix: prod-
     projectId: string,
     repositoryId: string,
     _environmentIds: string[],
-    repositoryFullName: string,
+    _repositoryFullName: string,
   ): Promise<boolean> {
     try {
       await this.updateStepProgress(job, 'setup_gitops', 10, '获取项目信息...')
@@ -734,7 +729,7 @@ namePrefix: prod-
             name: `${projectId}-${environment.type}`,
             namespace: `project-${projectId}-${environment.type}`,
             config: {
-              gitRepositoryName: repositoryFullName,
+              gitRepositoryName: _repositoryFullName,
               path: `k8s/overlays/${environment.type}`,
               interval: '5m',
               prune: true,
@@ -753,7 +748,7 @@ namePrefix: prod-
       await this.updateStepProgress(job, 'setup_gitops', 50, '创建 Kubernetes 资源...')
       await job.log('🚀 开始创建 GitOps 资源...')
 
-      const success = await this.initService.requestGitOpsSetup({
+      const success = await this.projectsService.requestGitOpsSetup({
         projectId,
         repositoryId,
         repositoryUrl: repository.cloneUrl,

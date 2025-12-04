@@ -1,12 +1,11 @@
 import { DatabaseModule } from '@juanie/core/database'
-import { GlobalExceptionFilter } from '@juanie/core/errors'
 import { QueueModule } from '@juanie/core/queue'
+import { RBACModule } from '@juanie/core/rbac'
 import { BusinessModule } from '@juanie/service-business'
 import { ExtensionsModule } from '@juanie/service-extensions'
 import { FoundationModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
-import { APP_FILTER } from '@nestjs/core'
 import { LoggerModule } from 'nestjs-pino'
 import { AppController } from './app.controller'
 import { TrpcModule } from './trpc/trpc.module'
@@ -67,6 +66,7 @@ import { TrpcModule } from './trpc/trpc.module'
     // Core modules
     DatabaseModule,
     QueueModule,
+    RBACModule, // RBAC 权限系统（全局模块）
     // Three-tier service architecture
     FoundationModule, // 基础层
     BusinessModule, // 业务层（包含业务 Workers）
@@ -75,12 +75,5 @@ import { TrpcModule } from './trpc/trpc.module'
     TrpcModule,
   ],
   controllers: [AppController],
-  providers: [
-    // 全局异常过滤器
-    {
-      provide: APP_FILTER,
-      useClass: GlobalExceptionFilter,
-    },
-  ],
 })
 export class AppModule {}

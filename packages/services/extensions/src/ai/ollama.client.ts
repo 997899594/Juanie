@@ -1,12 +1,12 @@
+import { Logger } from '@juanie/core/logger'
 import type {
   AIModel,
   OllamaGenerateRequest,
   OllamaGenerateResponse,
   OllamaModelInfo,
 } from '@juanie/types'
-import { ErrorCode, ErrorFactory } from '@juanie/types'
+import { ErrorFactory } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 
 /**

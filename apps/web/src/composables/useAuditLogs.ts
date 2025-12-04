@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import { trpc } from '@/lib/trpc'
@@ -52,7 +53,7 @@ export function useAuditLogs() {
       const errorMessage = err.message || '获取审计日志失败'
       error.value = errorMessage
       toast.error('获取失败', errorMessage)
-      console.error('获取审计日志失败:', err)
+      log.error('获取审计日志失败:', err)
     } finally {
       loading.value = false
     }
@@ -82,7 +83,7 @@ export function useAuditLogs() {
       const errorMessage = err.message || '搜索审计日志失败'
       error.value = errorMessage
       toast.error('搜索失败', errorMessage)
-      console.error('搜索审计日志失败:', err)
+      log.error('搜索审计日志失败:', err)
     } finally {
       loading.value = false
     }
@@ -122,7 +123,7 @@ export function useAuditLogs() {
       const errorMessage = err.message || '导出审计日志失败'
       error.value = errorMessage
       toast.error('导出失败', errorMessage)
-      console.error('导出审计日志失败:', err)
+      log.error('导出审计日志失败:', err)
       throw err
     } finally {
       loading.value = false

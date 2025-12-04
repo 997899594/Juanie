@@ -153,14 +153,12 @@ import DeploymentStatusBadge from '@/components/DeploymentStatusBadge.vue'
 import DeploymentTimeline from '@/components/DeploymentTimeline.vue'
 import DeploymentApprovalCard from '@/components/DeploymentApprovalCard.vue'
 import PageContainer from '@/components/PageContainer.vue'
-import {
-  Button,
+import { Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  Label,
-} from '@juanie/ui'
+  Label , log } from '@juanie/ui'
 import {
   ArrowLeft,
   Loader2,
@@ -201,7 +199,7 @@ const loadDeployment = async () => {
     // For now, using mock data
     deploymentApprovals.value = []
   } catch (err) {
-    console.error('Failed to load deployment:', err)
+    log.error('Failed to load deployment:', err)
   }
 }
 
@@ -212,7 +210,7 @@ const handleApprove = async (comment?: string) => {
     await approveDeployment(deploymentId.value, comment)
     await loadDeployment()
   } catch (err) {
-    console.error('Failed to approve deployment:', err)
+    log.error('Failed to approve deployment:', err)
   }
 }
 
@@ -223,7 +221,7 @@ const handleReject = async (reason: string) => {
     await rejectDeployment(deploymentId.value, reason)
     await loadDeployment()
   } catch (err) {
-    console.error('Failed to reject deployment:', err)
+    log.error('Failed to reject deployment:', err)
   }
 }
 
@@ -234,13 +232,13 @@ const handleRollback = async () => {
     await rollbackDeployment(deploymentId.value)
     router.push('/deployments')
   } catch (err) {
-    console.error('Failed to rollback deployment:', err)
+    log.error('Failed to rollback deployment:', err)
   }
 }
 
 const handleRetry = () => {
   // TODO: Implement retry logic
-  console.log('Retry deployment')
+  log.info('Retry deployment')
 }
 
 const getStrategyText = (strategy: string) => {

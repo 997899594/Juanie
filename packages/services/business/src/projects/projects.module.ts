@@ -6,7 +6,6 @@ import { DeploymentsModule } from '../deployments/deployments.module'
 import { EnvironmentsModule } from '../environments/environments.module'
 import { RepositoriesModule } from '../repositories/repositories.module'
 import { ProjectInitializationModule } from './initialization'
-import { ProjectInitializationService } from './project-initialization.service'
 import { ProjectMembersModule } from './project-members.module'
 import { ProjectOrchestrator } from './project-orchestrator.service'
 import { ProjectStatusService } from './project-status.service'
@@ -32,17 +31,11 @@ import { TemplatesModule } from './templates'
     ProjectInitializationModule,
     ProjectMembersModule,
   ],
-  providers: [
-    ProjectsService,
-    ProjectOrchestrator,
-    ProjectStatusService,
-    ProjectInitializationService,
-  ],
+  providers: [ProjectsService, ProjectOrchestrator, ProjectStatusService],
   exports: [
     ProjectsService,
     ProjectOrchestrator,
     ProjectStatusService,
-    ProjectInitializationService,
     // 重新导出模块
     TemplatesModule,
     ProjectInitializationModule, // 导出以便其他模块访问 ProgressManager

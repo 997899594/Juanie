@@ -1,3 +1,4 @@
+import { handleServiceError } from '@juanie/core/errors'
 import { REDIS } from '@juanie/core/tokens'
 import {
   ProjectMembersService,
@@ -7,7 +8,6 @@ import {
 import { StorageService } from '@juanie/service-foundation'
 import {
   archiveProjectSchema,
-  createProjectSchema,
   createProjectWithTemplateSchema,
   deleteProjectSchema,
   getProjectHealthSchema,
@@ -44,10 +44,7 @@ export class ProjectsRouter {
           try {
             return await this.projectsService.create(ctx.user.id, input)
           } catch (error) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: error instanceof Error ? error.message : '创建项目失败',
-            })
+            handleServiceError(error)
           }
         }),
 
@@ -58,10 +55,7 @@ export class ProjectsRouter {
           try {
             return await this.projectsService.create(ctx.user.id, input)
           } catch (error) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: error instanceof Error ? error.message : '创建项目失败',
-            })
+            handleServiceError(error)
           }
         }),
 
@@ -72,31 +66,16 @@ export class ProjectsRouter {
           try {
             return await this.projectsService.list(ctx.user.id, input.organizationId)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取项目列表失败',
-            })
+            handleServiceError(error)
           }
         }),
 
       // 获取项目详情
       get: this.trpc.protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => {
         try {
-          const project = await this.projectsService.get(ctx.user.id, input.projectId)
-
-          if (!project) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: '项目不存在',
-            })
-          }
-
-          return project
+          return await this.projectsService.get(ctx.user.id, input.projectId)
         } catch (error) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: error instanceof Error ? error.message : '获取项目详情失败',
-          })
+          handleServiceError(error)
         }
       }),
 
@@ -108,10 +87,7 @@ export class ProjectsRouter {
             const { projectId, ...data } = input
             return await this.projectsService.update(ctx.user.id, projectId, data)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '更新项目失败',
-            })
+            handleServiceError(error)
           }
         }),
 
@@ -124,10 +100,7 @@ export class ProjectsRouter {
               repositoryAction: input.repositoryAction,
             })
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '删除项目失败',
-            })
+            handleServiceError(error)
           }
         }),
 
@@ -152,26 +125,18 @@ export class ProjectsRouter {
             const data = { userId: memberId, role: mappedRole, ...rest }
             return await this.projectMembers.addMember(ctx.user.id, projectId, data)
           } catch (error) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: error instanceof Error ? error.message : '添加成员失败',
-            })
+            handleServiceError(error)
           }
         }),
 
       // 列出项目成员
-      listMembers: this.trpc.protectedProcedure
-        .input(projectIdSchema)
-        .query(async ({ ctx, input }) => {
-          try {
-            return await this.projectMembers.listMembers(input.projectId)
-          } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取成员列表失败',
-            })
-          }
-        }),
+      listMembers: this.trpc.protectedProcedure.input(projectIdSchema).query(async ({ input }) => {
+        try {
+          return await this.projectMembers.listMembers(input.projectId)
+        } catch (error) {
+          handleServiceError(error)
+        }
+      }),
 
       // 更新成员角色
       updateMemberRole: this.trpc.protectedProcedure
@@ -194,10 +159,7 @@ export class ProjectsRouter {
             const data = { userId: memberId, role: mappedRole, ...rest }
             return await this.projectMembers.updateMemberRole(ctx.user.id, projectId, data)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '更新成员角色失败',
-            })
+            handleServiceError(error)
           }
         }),
 
@@ -215,10 +177,7 @@ export class ProjectsRouter {
             const data = { userId: memberId, ...rest }
             return await this.projectMembers.removeMember(ctx.user.id, projectId, data)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '移除成员失败',
-            })
+            handleServiceError(error)
           }
         }),
 
@@ -235,26 +194,18 @@ export class ProjectsRouter {
             const { projectId, ...data } = input
             return await this.projectMembers.assignTeam(ctx.user.id, projectId, data)
           } catch (error) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: error instanceof Error ? error.message : '分配团队失败',
-            })
+            handleServiceError(error)
           }
         }),
 
       // 列出项目的团队
-      listTeams: this.trpc.protectedProcedure
-        .input(projectIdSchema)
-        .query(async ({ ctx, input }) => {
-          try {
-            return await this.projectMembers.listTeams(input.projectId)
-          } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取团队列表失败',
-            })
-          }
-        }),
+      listTeams: this.trpc.protectedProcedure.input(projectIdSchema).query(async ({ input }) => {
+        try {
+          return await this.projectMembers.listTeams(input.projectId)
+        } catch (error) {
+          handleServiceError(error)
+        }
+      }),
 
       // 移除团队
       removeTeam: this.trpc.protectedProcedure
@@ -269,10 +220,7 @@ export class ProjectsRouter {
             const { projectId, ...data } = input
             return await this.projectMembers.removeTeam(ctx.user.id, projectId, data)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '移除团队失败',
-            })
+            handleServiceError(error)
           }
         }),
 
@@ -366,56 +314,44 @@ export class ProjectsRouter {
       // 获取项目完整状态
       getStatus: this.trpc.protectedProcedure
         .input(getProjectStatusSchema)
-        .query(async ({ ctx, input }) => {
+        .query(async ({ input }) => {
           try {
             return await this.projectStatus.getStatus(input.projectId)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取项目状态失败',
-            })
+            handleServiceError(error)
           }
         }),
 
       // 获取项目健康度
       getHealth: this.trpc.protectedProcedure
         .input(getProjectHealthSchema)
-        .query(async ({ ctx, input }) => {
+        .query(async ({ input }) => {
           try {
             return await this.projectStatus.getHealth(input.projectId)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取项目健康度失败',
-            })
+            handleServiceError(error)
           }
         }),
 
       // 归档项目
       archive: this.trpc.protectedProcedure
         .input(archiveProjectSchema)
-        .mutation(async ({ ctx, input }) => {
+        .mutation(async ({ input }) => {
           try {
             return await this.projectStatus.archive(input.projectId)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '归档项目失败',
-            })
+            handleServiceError(error)
           }
         }),
 
       // 恢复项目
       restore: this.trpc.protectedProcedure
         .input(restoreProjectSchema)
-        .mutation(async ({ ctx, input }) => {
+        .mutation(async ({ input }) => {
           try {
             return await this.projectStatus.restore(input.projectId)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '恢复项目失败',
-            })
+            handleServiceError(error)
           }
         }),
 
@@ -464,26 +400,16 @@ export class ProjectsRouter {
         .input(z.object({ id: z.string() }))
         .query(async ({ ctx, input }) => {
           try {
-            const project = await this.projectsService.get(ctx.user.id, input.id)
-            if (!project) {
-              throw new TRPCError({
-                code: 'NOT_FOUND',
-                message: '项目不存在',
-              })
-            }
-            return project
+            return await this.projectsService.get(ctx.user.id, input.id)
           } catch (error) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: error instanceof Error ? error.message : '获取项目详情失败',
-            })
+            handleServiceError(error)
           }
         }),
 
       // 获取最近活动
       getRecentActivities: this.trpc.protectedProcedure
         .input(z.object({ projectId: z.string(), limit: z.number().optional() }))
-        .query(async ({ ctx, input }) => {
+        .query(async ({ input: _input }) => {
           // TODO: 实现获取最近活动的逻辑
           return {
             activities: [] as Array<{
@@ -508,7 +434,7 @@ export class ProjectsRouter {
             }),
           }),
         )
-        .mutation(async ({ ctx, input }) => {
+        .mutation(async ({ input: _input }) => {
           // TODO: 实现更新部署设置的逻辑
           return { success: true }
         }),
@@ -517,8 +443,8 @@ export class ProjectsRouter {
       members: this.trpc.router({
         list: this.trpc.protectedProcedure
           .input(z.object({ projectId: z.string() }))
-          .query(async ({ ctx, input }) => {
-            return await this.projectMembers.listMembers(input.projectId)
+          .query(async ({ input: _input }) => {
+            return await this.projectMembers.listMembers(_input.projectId)
           }),
 
         add: this.trpc.protectedProcedure

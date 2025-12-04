@@ -27,6 +27,8 @@ export * from './logger'
 export * from './observability'
 // Queue
 export * from './queue'
+// RBAC
+export * from './rbac'
 // SSE
 export * from './sse'
 // Tokens

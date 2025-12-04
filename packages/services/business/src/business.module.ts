@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common'
-import { ConfigModule } from '@nestjs/config'
 import { DeploymentsModule } from './deployments/deployments.module'
 import { EnvironmentsModule } from './environments/environments.module'
 import { FluxModule } from './gitops/flux/flux.module'

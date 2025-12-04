@@ -1,6 +1,6 @@
-import { EnvironmentsService } from '../../../environments/environments.service'
-import { Injectable } from '@nestjs/common'
 import { Logger } from '@juanie/core/logger'
+import { Injectable } from '@nestjs/common'
+import { EnvironmentsService } from '../../../environments/environments.service'
 import type { InitializationContext, StateHandler } from '../types'
 
 /**
@@ -13,7 +13,7 @@ export class CreateEnvironmentsHandler implements StateHandler {
 
   constructor(private environments: EnvironmentsService) {}
 
-  canHandle(context: InitializationContext): boolean {
+  canHandle(_context: InitializationContext): boolean {
     // 总是需要创建环境
     return true
   }

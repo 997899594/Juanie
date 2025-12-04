@@ -146,16 +146,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  Button,
+import { Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
   Input,
-  Label,
-} from '@juanie/ui'
+  Label , log } from '@juanie/ui'
 import { Plus, Users, Building, Edit, Trash2 } from 'lucide-vue-next'
 import { useTeams } from '@/composables/useTeams'
 import { useAppStore } from '@/stores/app'
@@ -264,7 +262,7 @@ async function handleSubmit() {
     }
     isModalOpen.value = false
   } catch (error) {
-    console.error('Failed to submit team:', error)
+    log.error('Failed to submit team:', error)
   }
 }
 
@@ -276,7 +274,7 @@ async function handleDelete() {
     isDeleteDialogOpen.value = false
     deletingTeam.value = null
   } catch (error) {
-    console.error('Failed to delete team:', error)
+    log.error('Failed to delete team:', error)
   }
 }
 

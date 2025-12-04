@@ -146,7 +146,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Alert, AlertDescription, AlertTitle } from '@juanie/ui'
+import { Alert, AlertDescription, AlertTitle, log } from '@juanie/ui'
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-vue-next'
 import { trpc } from '@/lib/trpc'
 
@@ -249,7 +249,7 @@ async function fetchCurrentStatus() {
       }
     }
   } catch (error) {
-    console.error('Failed to fetch current status:', error)
+    log.error('Failed to fetch current status:', error)
   }
   
   // 连接 SSE 监听后续进度

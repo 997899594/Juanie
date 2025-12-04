@@ -4,7 +4,6 @@ import { DATABASE } from '@juanie/core/tokens'
 import { EncryptionService, OAuthAccountsService } from '@juanie/service-foundation'
 import type { GitProvider } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { GitCredential, GitCredentialFactory } from './git-credential.interface'
@@ -19,8 +18,6 @@ import { PATCredential } from './pat-credential'
  */
 @Injectable()
 export class CredentialFactory implements GitCredentialFactory {
-  private readonly logger = new Logger(CredentialFactory.name)
-
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly oauthService: OAuthAccountsService,
@@ -80,12 +77,12 @@ export class CredentialFactory implements GitCredentialFactory {
     const token = this.encryption.decrypt(authRecord.projectToken)
 
     // 推断 provider（从 token 或其他字段）
-    const provider: GitProvider = 'github' // TODO: 从数据库或配置中获取
+    const _provider: GitProvider = 'github' // TODO: 从数据库或配置中获取
 
     const scopes = (authRecord.tokenScopes as string[]) || []
     const expiresAt = authRecord.tokenExpiresAt || undefined
 
-    return new PATCredential(authRecord.id, provider, token, scopes, expiresAt)
+    return new PATCredential(authRecord.id, _provider, token, scopes, expiresAt)
   }
 
   private async createGitHubAppCredential(

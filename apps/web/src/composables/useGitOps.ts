@@ -1,4 +1,3 @@
-import { computed, ref } from 'vue'
 import type {
   ConfigChange,
   ConfigChangePreview,
@@ -6,10 +5,10 @@ import type {
   FluxHealth,
   FluxResourceKind,
   GitOpsResource,
-  ResourceRequirements,
   SyncResult,
   YAMLValidationResult,
 } from '@juanie/types'
+import { computed, ref } from 'vue'
 import { trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 

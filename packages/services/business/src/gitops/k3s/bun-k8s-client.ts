@@ -2,7 +2,7 @@
  * Bun 原生 Kubernetes 客户端
  * 使用 Bun 的 fetch + TLS 支持，绕过 @kubernetes/client-node 的兼容性问题
  */
-import { readFileSync } from 'fs'
+import { readFileSync } from 'node:fs'
 import { load } from 'js-yaml'
 
 /**

@@ -8,9 +8,9 @@
  */
 
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { GitProviderService } from '../git-providers/git-provider.service'
@@ -224,7 +224,7 @@ export class OrganizationSyncService {
           await this.gitProvider.addGitLabGroupMember(
             ownerGitAccount.accessToken,
             organization.gitOrgId!,
-            Number.parseInt(memberGitAccount.gitUserId!),
+            Number.parseInt(memberGitAccount.gitUserId!, 10),
             gitRole as 10 | 20 | 30 | 40 | 50,
           )
         }
@@ -377,7 +377,7 @@ export class OrganizationSyncService {
         await this.gitProvider.removeGitLabGroupMember(
           ownerGitAccount.accessToken,
           organization.gitOrgId!,
-          Number.parseInt(userGitAccount.gitUserId!),
+          Number.parseInt(userGitAccount.gitUserId!, 10),
         )
       }
 
@@ -665,7 +665,7 @@ export class OrganizationSyncService {
         await this.gitProvider.addGitLabGroupMember(
           ownerGitAccount.accessToken,
           org.gitOrgId,
-          Number.parseInt(gitAccount.gitUserId!),
+          Number.parseInt(gitAccount.gitUserId!, 10),
           gitRole as 10 | 20 | 30 | 40 | 50,
         )
       }
@@ -778,7 +778,7 @@ export class OrganizationSyncService {
         await this.gitProvider.removeGitLabGroupMember(
           ownerGitAccount.accessToken,
           org.gitOrgId,
-          Number.parseInt(gitAccount.gitUserId!),
+          Number.parseInt(gitAccount.gitUserId!, 10),
         )
       }
 
@@ -901,12 +901,12 @@ export class OrganizationSyncService {
         await this.gitProvider.removeGitLabGroupMember(
           ownerGitAccount.accessToken,
           org.gitOrgId,
-          Number.parseInt(gitAccount.gitUserId!),
+          Number.parseInt(gitAccount.gitUserId!, 10),
         )
         await this.gitProvider.addGitLabGroupMember(
           ownerGitAccount.accessToken,
           org.gitOrgId,
-          Number.parseInt(gitAccount.gitUserId!),
+          Number.parseInt(gitAccount.gitUserId!, 10),
           gitRole as 10 | 20 | 30 | 40 | 50,
         )
       }

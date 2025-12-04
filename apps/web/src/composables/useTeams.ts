@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import type { inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
@@ -39,7 +40,7 @@ export function useTeams() {
       teams.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch teams:', err)
+      log.error('Failed to fetch teams:', err)
       error.value = '获取团队列表失败'
 
       if (isTRPCClientError(err)) {
@@ -63,7 +64,7 @@ export function useTeams() {
       currentTeam.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch team:', err)
+      log.error('Failed to fetch team:', err)
       error.value = '获取团队详情失败'
 
       if (isTRPCClientError(err)) {
@@ -106,7 +107,7 @@ export function useTeams() {
       toast.success('创建成功', `团队 "${data.name}" 已创建`)
       return result
     } catch (err) {
-      console.error('Failed to create team:', err)
+      log.error('Failed to create team:', err)
       error.value = '创建团队失败'
 
       if (isTRPCClientError(err)) {
@@ -151,7 +152,7 @@ export function useTeams() {
       toast.success('更新成功', '团队信息已更新')
       return result
     } catch (err) {
-      console.error('Failed to update team:', err)
+      log.error('Failed to update team:', err)
       error.value = '更新团队失败'
 
       if (isTRPCClientError(err)) {
@@ -182,7 +183,7 @@ export function useTeams() {
 
       toast.success('删除成功', '团队已删除')
     } catch (err) {
-      console.error('Failed to delete team:', err)
+      log.error('Failed to delete team:', err)
       error.value = '删除团队失败'
 
       if (isTRPCClientError(err)) {
@@ -206,7 +207,7 @@ export function useTeams() {
       members.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch members:', err)
+      log.error('Failed to fetch members:', err)
       error.value = '获取成员列表失败'
 
       if (isTRPCClientError(err)) {
@@ -246,7 +247,7 @@ export function useTeams() {
       toast.success('添加成功', '成员已添加到团队')
       return result
     } catch (err) {
-      console.error('Failed to add member:', err)
+      log.error('Failed to add member:', err)
       error.value = '添加成员失败'
 
       if (isTRPCClientError(err)) {
@@ -279,7 +280,7 @@ export function useTeams() {
 
       toast.success('更新成功', '成员角色已更新')
     } catch (err) {
-      console.error('Failed to update member role:', err)
+      log.error('Failed to update member role:', err)
       error.value = '更新成员角色失败'
 
       if (isTRPCClientError(err)) {
@@ -309,7 +310,7 @@ export function useTeams() {
 
       toast.success('移除成功', '成员已移除')
     } catch (err) {
-      console.error('Failed to remove member:', err)
+      log.error('Failed to remove member:', err)
       error.value = '移除成员失败'
 
       if (isTRPCClientError(err)) {

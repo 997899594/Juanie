@@ -1,9 +1,9 @@
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
-import { OAuthAccountsService } from '@juanie/service-foundation'
+import { EncryptionService, OAuthAccountsService } from '@juanie/service-foundation'
 import type { CreateCredentialOptions, GitAuthHealthStatus } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { K3sService } from '../k3s/k3s.service'
@@ -23,6 +23,7 @@ export class CredentialManagerService {
     private readonly k3s: K3sService,
     private readonly oauthService: OAuthAccountsService,
     private readonly credentialFactory: CredentialFactory,
+    private readonly encryption: EncryptionService,
   ) {}
 
   /**
@@ -32,18 +33,14 @@ export class CredentialManagerService {
     projectId: string,
     userId: string,
     token: string,
-    provider: 'github' | 'gitlab',
+    _provider: 'github' | 'gitlab',
     scopes?: string[],
     expiresAt?: Date,
   ): Promise<GitCredential> {
     this.logger.log(`Creating PAT credential for project ${projectId}`)
 
-    // 需要加密服务
-    const { EncryptionService } = await import('./encryption.service')
-    const encryption = new EncryptionService()
-
     // 加密 token
-    const encryptedToken = encryption.encryptData(token)
+    const encryptedToken = this.encryption.encrypt(token)
 
     // 创建数据库记录
     const [authRecord] = await this.db
@@ -253,7 +250,7 @@ export class CredentialManagerService {
 
     const token = await credential.getAccessToken()
     // 使用类型断言获取 username
-    const username = (credential as unknown as GitCredentialExtended).getUsername()
+    const _username = (credential as unknown as GitCredentialExtended).getUsername()
 
     for (const env of environments) {
       const namespace = `project-${projectId}-${env.type}`
@@ -264,7 +261,7 @@ export class CredentialManagerService {
           namespace,
           secretName,
           {
-            username,
+            username: _username,
             password: token,
           },
           'kubernetes.io/basic-auth',

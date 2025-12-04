@@ -1,4 +1,11 @@
 # 开发环境 Docker Compose 配置
+# 
+# 使用方式：
+#   docker compose up -d                    # 启动核心服务（postgres, dragonfly, minio）
+#   docker compose --profile ai up -d       # 启动 AI 服务
+#   docker compose --profile monitoring up -d  # 启动监控服务
+#   docker compose --profile git up -d      # 启动 GitLab
+#   docker compose --profile full up -d     # 启动所有服务
 
 services:
   # ============================================
@@ -53,18 +60,24 @@ services:
       - dev-network
 
   # ============================================
-  # AI 服务
+  # AI 服务（可选 - 使用 --profile ai 启动）
   # ============================================
   ollama:
     image: ollama/ollama:latest
     container_name: juanie-ollama-dev
     restart: unless-stopped
+    profiles: ["ai", "full"]
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     networks:
       - dev-network
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
     # 如果有 GPU,取消注释
     # deploy:
     #   resources:
@@ -99,12 +112,13 @@ services:
       - dev-network
 
   # ============================================
-  # 监控服务（开发环境可选）
+  # 监控服务（可选 - 使用 --profile monitoring 启动）
   # ============================================
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: juanie-jaeger-dev
     restart: unless-stopped
+    profiles: ["monitoring", "full"]
     ports:
       - "16686:16686" # Jaeger UI
       - "4318:4318" # OTLP HTTP receiver
@@ -112,11 +126,17 @@ services:
       - COLLECTOR_OTLP_ENABLED=true
     networks:
       - dev-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
   prometheus:
     image: prom/prometheus:latest
     container_name: juanie-prometheus-dev
     restart: unless-stopped
+    profiles: ["monitoring", "full"]
     ports:
       - "9090:9090"
     volumes:
@@ -126,11 +146,17 @@ services:
       - "--storage.tsdb.path=/prometheus"
     networks:
       - dev-network
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
 
   grafana:
     image: grafana/grafana:latest
     container_name: juanie-grafana-dev
     restart: unless-stopped
+    profiles: ["monitoring", "full"]
     ports:
       - "3000:3000"
     environment:
@@ -145,14 +171,21 @@ services:
       - prometheus
     networks:
       - dev-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   # ============================================
-  # GitLab CE 私服（轻量级配置）
+  # GitLab CE 私服（可选 - 使用 --profile git 启动）
+  # 注意：GitLab 占用资源较多，仅在需要测试 GitLab 集成时启动
   # ============================================
   gitlab:
     image: gitlab/gitlab-ce:latest
     container_name: juanie-gitlab-dev
     restart: unless-stopped
+    profiles: ["git", "full"]
     hostname: ${GITLAB_HOSTNAME:-gitlab.local}
     environment:
       GITLAB_OMNIBUS_CONFIG: |

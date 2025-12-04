@@ -372,7 +372,7 @@ async function loadResources() {
     await listGitOpsResources(selectedProject.value)
   } catch (err: any) {
     error.value = err.message || '加载 GitOps 资源失败'
-    console.error('Failed to load GitOps resources:', err)
+    log.error('Failed to load GitOps resources:', err)
   }
 }
 
@@ -390,7 +390,7 @@ async function handleSyncResource(resource: any) {
       loadResources()
     }, 2000)
   } catch (err: any) {
-    console.error('Failed to sync resource:', err)
+    log.error('Failed to sync resource:', err)
   } finally {
     syncingResources.value.delete(resource.id)
   }

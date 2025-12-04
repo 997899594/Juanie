@@ -8,9 +8,9 @@
  */
 
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -36,7 +36,7 @@ export class ProjectCollaborationSyncService {
 
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
-    private readonly config: ConfigService,
+    readonly _config: ConfigService,
     private readonly gitProvider: GitProviderService,
     private readonly errorService: GitSyncErrorService,
   ) {}
@@ -182,7 +182,7 @@ export class ProjectCollaborationSyncService {
             await this.gitProvider.addGitLabMember(
               ownerGitAccount.accessToken,
               repoPath,
-              Number.parseInt(memberGitAccount.gitUserId!),
+              Number.parseInt(memberGitAccount.gitUserId!, 10),
               accessLevel as 10 | 20 | 30 | 40 | 50,
             )
           }
@@ -429,7 +429,7 @@ export class ProjectCollaborationSyncService {
                   await this.gitProvider.removeGitLabMember(
                     ownerGitAccount.accessToken,
                     `${repoInfo.owner}/${repoInfo.repo}`,
-                    Number.parseInt(memberGitAccount.gitUserId!),
+                    Number.parseInt(memberGitAccount.gitUserId!, 10),
                   )
                 }
               }
@@ -574,13 +574,13 @@ export class ProjectCollaborationSyncService {
 
       // HTTPS 格式
       match = cleanUrl.match(/https?:\/\/[^/]+\/([^/]+)\/([^/]+)/)
-      if (match && match[1] && match[2]) {
+      if (match?.[1] && match[2]) {
         return { owner: match[1], repo: match[2] }
       }
 
       // SSH 格式
       match = cleanUrl.match(/git@[^:]+:([^/]+)\/(.+)/)
-      if (match && match[1] && match[2]) {
+      if (match?.[1] && match[2]) {
         return { owner: match[1], repo: match[2] }
       }
 

@@ -1,4 +1,5 @@
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DEPLOYMENT_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
 import type {
@@ -7,7 +8,6 @@ import type {
   UpdateEnvironmentInput,
 } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import type { Queue } from 'bullmq'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'

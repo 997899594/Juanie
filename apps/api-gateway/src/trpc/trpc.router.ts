@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
-import { AICodeReviewRouter } from '../routers/ai-code-review.router'
 import { AIRouter } from '../routers/ai.router'
 import { AiAssistantsRouter } from '../routers/ai-assistants.router'
+import { AICodeReviewRouter } from '../routers/ai-code-review.router'
 import { AuditLogsRouter } from '../routers/audit-logs.router'
 import { AuthRouter } from '../routers/auth.router'
 import { CostTrackingRouter } from '../routers/cost-tracking.router'

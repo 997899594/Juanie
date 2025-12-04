@@ -1,10 +1,5 @@
-import {
-  createSecurityPolicySchema,
-  idSchema,
-  securityPolicyIdSchema,
-  updateSecurityPolicySchema,
-} from '@juanie/types'
 import { SecurityPoliciesService } from '@juanie/service-extensions'
+import { idSchema } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'

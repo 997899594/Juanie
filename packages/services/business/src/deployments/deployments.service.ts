@@ -1,4 +1,5 @@
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DEPLOYMENT_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
 import type {
@@ -7,13 +8,12 @@ import type {
   DeploymentCompletedEvent,
   RejectDeploymentInput,
 } from '@juanie/types'
-import type { DeploymentChanges } from '../gitops/git-ops/git-ops.service'
-import { GitOpsService } from '../gitops/git-ops/git-ops.service'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import type { Queue } from 'bullmq'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import type { DeploymentChanges } from '../gitops/git-ops/git-ops.service'
+import { GitOpsService } from '../gitops/git-ops/git-ops.service'
 
 export interface DeployWithGitOpsInput {
   projectId: string
@@ -247,7 +247,9 @@ export class DeploymentsService {
       this.logger.log(`Git commit created: ${gitCommitSha}`)
     } catch (error) {
       this.logger.error('Failed to commit changes to Git:', error)
-      throw new Error(`GitOps commit 失败: ${(error instanceof Error ? error.message : String(error))}`)
+      throw new Error(
+        `GitOps commit 失败: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
 
     // 5. Extract version from changes (use image tag or provided version)
@@ -674,7 +676,7 @@ export class DeploymentsService {
   private async checkDeployPermission(
     userId: string,
     projectId: string,
-    environmentId: string,
+    _environmentId: string,
   ): Promise<boolean> {
     const [project] = await this.db
       .select()

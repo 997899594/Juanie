@@ -68,10 +68,10 @@ export class AICodeReviewRouter {
               .optional(),
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input: _input }) => {
           // TODO: 实现 CodeReviewService 后启用
           throw new Error('CodeReviewService not implemented yet')
-          // return this.codeReviewService.comprehensiveReview(input)
+          // return this.codeReviewService.comprehensiveReview(_input)
         }),
 
       /**
@@ -116,7 +116,7 @@ export class AICodeReviewRouter {
               .optional(),
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input: _input }) => {
           // TODO: 实现 CodeReviewService 后启用
           throw new Error('CodeReviewService not implemented yet')
           // return this.codeReviewService.quickReview(input)
@@ -164,7 +164,7 @@ export class AICodeReviewRouter {
               .optional(),
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input: _input }) => {
           // TODO: 实现 CodeReviewService 后启用
           throw new Error('CodeReviewService not implemented yet')
           // return this.codeReviewService.securityFocusedReview(input)
@@ -220,7 +220,7 @@ export class AICodeReviewRouter {
               .optional(),
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ input: _input }) => {
           // TODO: 实现 CodeReviewService 后启用
           throw new Error('CodeReviewService not implemented yet')
           // return this.codeReviewService.batchReview(input)

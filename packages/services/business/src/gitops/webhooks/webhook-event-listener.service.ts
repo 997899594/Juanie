@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common'
+import { DomainEvents } from '@juanie/core/events'
 import { Logger } from '@juanie/core/logger'
+import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 // import { GitPlatformSyncService } from './git-platform-sync.service'
 
@@ -17,14 +18,12 @@ import { OnEvent } from '@nestjs/event-emitter'
 export class WebhookEventListener {
   private readonly logger = new Logger(WebhookEventListener.name)
 
-  constructor() {} // private readonly gitPlatformSync: GitPlatformSyncService
-
   /**
    * 处理 Git 仓库变更事件
    *
    * Requirements: 8.2, 8.4
    */
-  @OnEvent('git.repository.changed')
+  @OnEvent(DomainEvents.GIT_REPOSITORY_CHANGED)
   async handleRepositoryChanged(event: any) {
     this.logger.log('Received repository changed event', {
       provider: event.provider,
@@ -41,7 +40,7 @@ export class WebhookEventListener {
    *
    * Requirements: 8.3
    */
-  @OnEvent('git.collaborator.changed')
+  @OnEvent(DomainEvents.GIT_COLLABORATOR_CHANGED)
   async handleCollaboratorChanged(event: any) {
     this.logger.log('Received collaborator changed event', {
       provider: event.provider,
@@ -60,7 +59,7 @@ export class WebhookEventListener {
    * 推送事件可以触发 CI/CD 或其他自动化流程
    * 这里主要记录日志,具体的 CI/CD 处理由其他模块负责
    */
-  @OnEvent('git.push')
+  @OnEvent(DomainEvents.GIT_PUSH)
   async handlePushEvent(event: any) {
     this.logger.log('Received push event', {
       provider: event.provider,
@@ -86,7 +85,7 @@ export class WebhookEventListener {
    *
    * 组织级别的变更事件
    */
-  @OnEvent('git.organization.changed')
+  @OnEvent(DomainEvents.GIT_ORGANIZATION_CHANGED)
   async handleOrganizationChanged(event: any) {
     this.logger.log('Received organization changed event', {
       provider: event.provider,
@@ -111,7 +110,7 @@ export class WebhookEventListener {
    *
    * 组织成员级别的变更事件
    */
-  @OnEvent('git.member.changed')
+  @OnEvent(DomainEvents.GIT_MEMBER_CHANGED)
   async handleMemberChanged(event: any) {
     this.logger.log('Received member changed event', {
       provider: event.provider,

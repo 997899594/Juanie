@@ -268,7 +268,7 @@ const handleSubmit = async () => {
       emit('created', result)
     }
   } catch (error: any) {
-    console.error('创建环境失败:', error)
+    log.error('创建环境失败:', error)
     
     // 处理服务器验证错误
     if (error?.data?.zodError) {

@@ -1,4 +1,3 @@
-import { computed, ref } from 'vue'
 import type {
   AiAssistant,
   ChatMessage,
@@ -6,6 +5,7 @@ import type {
   OllamaModel,
   OllamaStatus,
 } from '@juanie/types'
+import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import { trpc } from '@/lib/trpc'
 
@@ -245,7 +245,7 @@ export function useAIAssistants() {
     try {
       const result = await trpc.aiAssistants.listOllamaModels.query()
       return result as OllamaModel[]
-    } catch (err) {
+    } catch (_err) {
       return []
     }
   }
@@ -257,7 +257,7 @@ export function useAIAssistants() {
     try {
       const result = await trpc.aiAssistants.checkOllamaStatus.query()
       return result as OllamaStatus
-    } catch (err) {
+    } catch (_err) {
       return { available: false }
     }
   }

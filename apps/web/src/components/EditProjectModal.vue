@@ -187,7 +187,7 @@ const handleSubmit = async () => {
     // 通知父组件
     emit('updated')
   } catch (error: any) {
-    console.error('更新项目失败:', error)
+    log.error('更新项目失败:', error)
     
     // 处理特定错误
     if (error?.message?.includes('name')) {

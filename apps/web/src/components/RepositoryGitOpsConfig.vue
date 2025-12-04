@@ -215,7 +215,7 @@ const handleSave = async () => {
     emit('saved')
     emit('update:open', false)
   } catch (error) {
-    console.error('Failed to save GitOps config:', error)
+    log.error('Failed to save GitOps config:', error)
   } finally {
     loading.value = false
   }

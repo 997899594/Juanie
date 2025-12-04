@@ -1,5 +1,21 @@
 import * as schema from '@juanie/core/database'
+import {
+  OrganizationNotFoundError,
+  PermissionDeniedError,
+  ProjectAlreadyExistsError,
+  ProjectInitializationError,
+  ProjectNotFoundError,
+  ResourceConflictError,
+  ValidationError,
+} from '@juanie/core/errors'
+import {
+  EventPublisher,
+  type GitOpsSetupRequestedEvent,
+  IntegrationEvents,
+} from '@juanie/core/events'
+import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
+import { Action, RBACService, Resource } from '@juanie/core/rbac'
 import { DATABASE, REDIS } from '@juanie/core/tokens'
 import { AuditLogsService } from '@juanie/service-foundation'
 import type {
@@ -9,7 +25,6 @@ import type {
   UpdateProjectInput,
 } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { Redis } from 'ioredis'
@@ -24,6 +39,8 @@ export class ProjectsService {
     private orchestrator: ProjectOrchestrator,
     @Inject(REDIS) private redis: Redis,
     private auditLogs: AuditLogsService,
+    private eventPublisher: EventPublisher,
+    private rbac: RBACService,
   ) {}
 
   // 创建项目
@@ -32,16 +49,19 @@ export class ProjectsService {
     userId: string,
     data: CreateProjectInput | CreateProjectWithTemplateInputType,
   ): Promise<typeof schema.projects.$inferSelect & { jobIds?: string[] }> {
-    // 检查用户是否是组织成员
-    const member = await this.getOrgMember(data.organizationId, userId)
-    if (!member) {
-      throw new Error('不是组织成员')
+    // 检查组织是否存在
+    const [organization] = await this.db
+      .select()
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, data.organizationId))
+      .limit(1)
+
+    if (!organization) {
+      throw new OrganizationNotFoundError(data.organizationId)
     }
 
-    // 只有 owner 和 admin 可以创建项目
-    if (!['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限创建项目')
-    }
+    // 检查权限：需要 CREATE 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.CREATE, data.organizationId)
 
     // 类型守卫：检查是否是扩展输入类型
     const extendedData = data as CreateProjectWithTemplateInputType
@@ -57,7 +77,10 @@ export class ProjectsService {
 
       // 如果初始化失败，抛出错误
       if (!result.success || !result.projectId || result.projectId.trim() === '') {
-        throw new Error(result.error || '项目初始化失败')
+        throw new ProjectInitializationError(
+          result.projectId || 'unknown',
+          result.error || '项目初始化失败',
+        )
       }
 
       // 记录审计日志
@@ -81,7 +104,7 @@ export class ProjectsService {
         .limit(1)
 
       if (!project) {
-        throw new Error('项目创建成功但查询失败')
+        throw new ProjectNotFoundError(result.projectId)
       }
 
       return { ...project, jobIds: result.jobIds }
@@ -105,7 +128,7 @@ export class ProjectsService {
       .returning()
 
     if (!project) {
-      throw new Error('创建项目失败')
+      throw new ProjectInitializationError('unknown', '创建项目失败')
     }
 
     // 记录审计日志
@@ -133,14 +156,11 @@ export class ProjectsService {
   ): Promise<typeof schema.projects.$inferSelect> {
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const member = await this.getOrgMember(project.organizationId, userId)
-    if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限上传 Logo')
-    }
+    // 检查权限：需要 UPDATE 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.UPDATE, projectId)
 
     const [updated] = await this.db
       .update(schema.projects)
@@ -152,7 +172,7 @@ export class ProjectsService {
       .returning()
 
     if (!updated) {
-      throw new Error('更新 Logo 失败')
+      throw new ProjectNotFoundError(projectId)
     }
 
     return updated
@@ -268,7 +288,7 @@ export class ProjectsService {
       project.visibility,
     )
     if (!hasAccess) {
-      throw new Error('没有权限访问该项目')
+      throw new PermissionDeniedError(Resource.PROJECT, Action.READ)
     }
 
     return project
@@ -280,7 +300,7 @@ export class ProjectsService {
     // 先检查基本权限
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
     // 获取环境列表
@@ -377,13 +397,24 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const member = await this.getOrgMember(project.organizationId, userId)
-    if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限更新项目')
+    // 检查权限：需要 UPDATE 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.UPDATE, projectId)
+
+    // 检查名称冲突
+    if (data.name) {
+      const existing = await this.db.query.projects.findFirst({
+        where: and(
+          eq(schema.projects.name, data.name),
+          eq(schema.projects.organizationId, project.organizationId),
+        ),
+      })
+
+      if (existing && existing.id !== projectId) {
+        throw new ProjectAlreadyExistsError(data.name, project.organizationId)
+      }
     }
 
     // 合并 config
@@ -412,7 +443,7 @@ export class ProjectsService {
       .returning()
 
     if (!updated) {
-      throw new Error('更新项目失败')
+      throw new ProjectNotFoundError(projectId)
     }
 
     // 记录审计日志
@@ -446,13 +477,11 @@ export class ProjectsService {
   ) {
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    const member = await this.getOrgMember(project.organizationId, userId)
-    if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限删除项目')
-    }
+    // 检查权限：需要 DELETE 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.DELETE, projectId)
 
     // 软删除项目
     await this.db
@@ -492,14 +521,11 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const member = await this.getOrgMember(project.organizationId, userId)
-    if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限归档项目')
-    }
+    // 检查权限：需要 UPDATE 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.UPDATE, projectId)
 
     // 归档项目
     await this.db
@@ -533,14 +559,11 @@ export class ProjectsService {
       .limit(1)
 
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const member = await this.getOrgMember(project.organizationId, userId)
-    if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限恢复项目')
-    }
+    // 检查权限：需要 UPDATE 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.UPDATE, projectId)
 
     // 恢复项目
     await this.db
@@ -576,25 +599,22 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const orgMember = await this.getOrgMember(project.organizationId, userId)
-    if (!orgMember || !['owner', 'admin'].includes(orgMember.role)) {
-      throw new Error('没有权限添加成员')
-    }
+    // 检查权限：需要 MANAGE_MEMBERS 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
 
     // 检查被添加的用户是否是组织成员
     const targetOrgMember = await this.getOrgMember(project.organizationId, data.memberId)
     if (!targetOrgMember) {
-      throw new Error('用户不是组织成员')
+      throw new ValidationError('memberId', '用户不是组织成员')
     }
 
     // 检查是否已经是项目成员
     const existing = await this.getProjectMember(projectId, data.memberId)
     if (existing) {
-      throw new Error('用户已经是项目成员')
+      throw new ResourceConflictError('project_member', '用户已经是项目成员')
     }
 
     const [member] = await this.db
@@ -628,8 +648,11 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
+
+    // 检查权限：需要 READ 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.READ, projectId)
 
     const members = await this.db
       .select({
@@ -664,14 +687,11 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const orgMember = await this.getOrgMember(project.organizationId, userId)
-    if (!orgMember || !['owner', 'admin'].includes(orgMember.role)) {
-      throw new Error('没有权限更新成员角色')
-    }
+    // 检查权限：需要 MANAGE_MEMBERS 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
 
     // 获取当前成员信息用于审计
     const [currentMember] = await this.db
@@ -717,14 +737,11 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const orgMember = await this.getOrgMember(project.organizationId, userId)
-    if (!orgMember || !['owner', 'admin'].includes(orgMember.role)) {
-      throw new Error('没有权限移除成员')
-    }
+    // 检查权限：需要 MANAGE_MEMBERS 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
 
     // 获取成员信息用于审计
     const [member] = await this.db
@@ -764,14 +781,11 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const orgMember = await this.getOrgMember(project.organizationId, userId)
-    if (!orgMember || !['owner', 'admin'].includes(orgMember.role)) {
-      throw new Error('没有权限分配团队')
-    }
+    // 检查权限：需要 MANAGE_MEMBERS 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
 
     // 检查团队是否属于同一组织
     const [team] = await this.db
@@ -781,7 +795,7 @@ export class ProjectsService {
       .limit(1)
 
     if (!team || team.organizationId !== project.organizationId) {
-      throw new Error('团队不存在或不属于该组织')
+      throw new ValidationError('teamId', '团队不存在或不属于该组织')
     }
 
     // 检查是否已经分配
@@ -797,7 +811,7 @@ export class ProjectsService {
       .limit(1)
 
     if (existing.length > 0) {
-      throw new Error('团队已经分配到该项目')
+      throw new ResourceConflictError('team_project', '团队已经分配到该项目')
     }
 
     const [assignment] = await this.db
@@ -830,8 +844,11 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
+
+    // 检查权限：需要 READ 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.READ, projectId)
 
     const teams = await this.db
       .select({
@@ -864,14 +881,11 @@ export class ProjectsService {
     // 获取项目信息
     const project = await this.get(userId, projectId)
     if (!project) {
-      throw new Error('项目不存在')
+      throw new ProjectNotFoundError(projectId)
     }
 
-    // 检查权限
-    const orgMember = await this.getOrgMember(project.organizationId, userId)
-    if (!orgMember || !['owner', 'admin'].includes(orgMember.role)) {
-      throw new Error('没有权限移除团队')
-    }
+    // 检查权限：需要 MANAGE_MEMBERS 权限
+    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
 
     // 获取团队信息用于审计
     const [team] = await this.db
@@ -998,6 +1012,91 @@ export class ProjectsService {
   }
 
   /**
+   * 请求 GitOps 资源创建
+   *
+   * 通过发布事件，让 FluxSyncService 处理实际创建
+   * （从 ProjectInitializationService 合并而来）
+   */
+  @Trace('projects.requestGitOpsSetup')
+  async requestGitOpsSetup(data: {
+    projectId: string
+    repositoryId: string
+    repositoryUrl: string
+    repositoryBranch: string
+    userId: string
+    environments: Array<{
+      id: string
+      type: 'development' | 'staging' | 'production'
+      name: string
+    }>
+    jobId?: string
+  }): Promise<boolean> {
+    this.logger.log(`Requesting GitOps setup for project: ${data.projectId}`)
+
+    try {
+      // 使用新的 EventPublisher 发布领域事件
+      await this.eventPublisher.publishDomain<GitOpsSetupRequestedEvent>({
+        type: IntegrationEvents.GITOPS_SETUP_REQUESTED,
+        version: 1,
+        resourceId: data.projectId,
+        userId: data.userId,
+        data: {
+          projectId: data.projectId,
+          repositoryId: data.repositoryId,
+          repositoryUrl: data.repositoryUrl,
+          repositoryBranch: data.repositoryBranch,
+          userId: data.userId,
+          environments: data.environments,
+          jobId: data.jobId,
+        },
+      })
+
+      this.logger.log('GitOps setup request completed successfully')
+      return true
+    } catch (error) {
+      this.logger.error('GitOps setup request failed:', error)
+
+      // 更新项目配置，标记 GitOps 设置失败
+      await this.markGitOpsSetupFailed(data.projectId, error as Error)
+
+      return false
+    }
+  }
+
+  /**
+   * 标记 GitOps 设置失败
+   * （从 ProjectInitializationService 合并而来）
+   */
+  private async markGitOpsSetupFailed(projectId: string, error: Error): Promise<void> {
+    try {
+      const [project] = await this.db
+        .select()
+        .from(schema.projects)
+        .where(eq(schema.projects.id, projectId))
+        .limit(1)
+
+      if (project) {
+        await this.db
+          .update(schema.projects)
+          .set({
+            config: {
+              ...(project.config as any),
+              gitops: {
+                enabled: false,
+                setupFailed: true,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.projects.id, projectId))
+      }
+    } catch (err) {
+      this.logger.error('Failed to mark GitOps setup as failed:', err)
+    }
+  }
+
+  /**
    * 订阅项目初始化进度
    * 使用 tRPC subscription 实时推送进度
    */
@@ -1012,7 +1111,7 @@ export class ProjectsService {
     await subscriber.connect()
 
     // 监听消息事件
-    subscriber.on('pmessage', (pattern: string, channel: string, message: string) => {
+    subscriber.on('pmessage', (_pattern: string, channel: string, message: string) => {
       try {
         const eventData = JSON.parse(message)
         this.logger.log(`Received subscription event on ${channel}:`, eventData)
@@ -1113,16 +1212,17 @@ export class ProjectsService {
     let isComplete = false
 
     // 监听事件
-    const listener = (event: any) => {
+    // @ts-expect-error - Reserved for future event bus implementation
+    const _listener = (event: any) => {
       if (event.channel === channel) {
         eventQueue.push(event)
       }
     }
 
     // 注册监听器（这里需要实际的事件总线实现）
-    // eventBus.on('job.progress', listener)
-    // eventBus.on('job.completed', listener)
-    // eventBus.on('job.failed', listener)
+    // eventBus.on('job.progress', _listener)
+    // eventBus.on('job.completed', _listener)
+    // eventBus.on('job.failed', _listener)
 
     try {
       // 发送初始事件

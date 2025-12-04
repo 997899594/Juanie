@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common'
 import { Logger } from '@juanie/core/logger'
+import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Client } from 'minio'
 
@@ -48,7 +48,10 @@ export class StorageService {
     } catch (error) {
       // 忽略 bucket 已存在的错误
       const minioError = error as { code?: string }
-      if (minioError.code === 'BucketAlreadyOwnedByYou' || minioError.code === 'BucketAlreadyExists') {
+      if (
+        minioError.code === 'BucketAlreadyOwnedByYou' ||
+        minioError.code === 'BucketAlreadyExists'
+      ) {
         this.logger.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
       } else {
         this.logger.error('MinIO bucket setup error', error)

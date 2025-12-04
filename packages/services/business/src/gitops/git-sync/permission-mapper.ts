@@ -210,7 +210,6 @@ export function mapGitHubPermissionToGitPermission(permission: string): GitPermi
     case GitHubRepositoryPermission.Write:
     case GitHubRepositoryPermission.Triage:
       return 'write'
-    case GitHubRepositoryPermission.Read:
     default:
       return 'read'
   }
@@ -234,8 +233,6 @@ export function mapOrgRoleToGitHubOrgRole(role: OrganizationRole): GitHubOrganiz
     case 'owner':
     case 'admin':
       return GitHubOrganizationRole.Admin
-    case 'member':
-    case 'billing':
     default:
       return GitHubOrganizationRole.Member
   }
@@ -257,7 +254,6 @@ export function mapGitHubOrgRoleToOrgRole(role: string): OrganizationRole {
   switch (role) {
     case GitHubOrganizationRole.Admin:
       return 'admin'
-    case GitHubOrganizationRole.Member:
     default:
       return 'member'
   }

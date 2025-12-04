@@ -1,3 +1,4 @@
+import { OrganizationsService } from '@juanie/service-foundation'
 import {
   createOrganizationSchema,
   inviteMemberSchema,
@@ -6,7 +7,6 @@ import {
   updateMemberRoleSchema,
   updateOrganizationSchema,
 } from '@juanie/types'
-import { OrganizationsService } from '@juanie/service-foundation'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { TrpcService } from '../trpc/trpc.service'

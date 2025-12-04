@@ -1,7 +1,7 @@
-import { useTheme } from '@juanie/ui'
+import { log, useTheme } from '@juanie/ui'
 import { TRPCClientError } from '@trpc/client'
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { trpc } from '@/lib/trpc'
 
 // 类型守卫：检查是否为 tRPC 客户端错误
@@ -65,7 +65,7 @@ export const usePreferencesStore = defineStore(
         if (isTRPCClientError(err) && err.data?.code === 'UNAUTHORIZED') {
           // 用户未登录，使用本地默认设置
         } else {
-          console.error('Failed to initialize preferences:', err)
+          log.error('Failed to initialize preferences:', err)
         }
         // 即使失败，也应用当前本地默认
         setTheme(themeId.value)
@@ -95,7 +95,7 @@ export const usePreferencesStore = defineStore(
           },
         })
       } catch (err) {
-        console.error('Failed to save preferences:', err)
+        log.error('Failed to save preferences:', err)
       }
     }
 

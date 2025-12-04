@@ -293,7 +293,7 @@ const handleSubmit = async () => {
     // 暂时注释掉不存在的 API 调用
     // const result = await trpc.environments.update.mutate(updateData)
     
-    console.log('更新环境:', updateData)
+    log.info('更新环境:', updateData)
     alert('更新环境功能暂未实现')
     
     // 模拟返回更新后的环境数据
@@ -308,7 +308,7 @@ const handleSubmit = async () => {
       emit('updated', result)
     }
   } catch (error: any) {
-    console.error('更新环境失败:', error)
+    log.error('更新环境失败:', error)
     
     // 处理服务器验证错误
     if (error?.data?.zodError) {

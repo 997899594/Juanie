@@ -1,4 +1,5 @@
 import { REDIS } from '@juanie/core/tokens'
+import { PipelinesService } from '@juanie/service-business'
 import {
   createPipelineSchema,
   pipelineIdSchema,
@@ -7,12 +8,11 @@ import {
   triggerPipelineSchema,
   updatePipelineSchema,
 } from '@juanie/types'
-import { PipelinesService } from '@juanie/service-business'
 import { Inject, Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import type Redis from 'ioredis'
-import { z } from 'zod'
+
 import { TrpcService } from '../trpc/trpc.service'
 
 @Injectable()

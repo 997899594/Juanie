@@ -18,7 +18,6 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { CredentialManagerService } from '../credentials/credential-manager.service'
 import { GitProviderService } from '../git-providers/git-provider.service'
 import type { GitSyncBatchJob, GitSyncMemberJob, GitSyncRemoveMemberJob } from './git-sync.service'
-import { classifyError, type GitSyncError } from './git-sync-errors'
 import { mapPermissionForProvider, mapProjectRoleToGitPermission } from './permission-mapper'
 
 /**
@@ -33,7 +32,7 @@ export class GitSyncWorker implements OnModuleInit {
 
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
-    @Inject(GIT_SYNC_QUEUE) private readonly queue: Queue,
+    @Inject(GIT_SYNC_QUEUE) readonly queue: Queue,
     private readonly gitProvider: GitProviderService,
     private readonly credentialManager: CredentialManagerService,
     private readonly config: ConfigService,
@@ -502,50 +501,6 @@ export class GitSyncWorker implements OnModuleInit {
     }
     // 默认 GitHub
     return 'github'
-  }
-
-  /**
-   * 处理同步错误并更新日志
-   *
-   * @param syncLogId - 同步日志 ID
-   * @param error - 错误对象
-   * @param provider - Git 提供商
-   * @param job - BullMQ 任务
-   */
-  private async handleSyncError(
-    syncLogId: string,
-    error: any,
-    provider: GitProvider,
-    job: Job,
-  ): Promise<void> {
-    // 分类错误
-    const classifiedError = classifyError(provider, error)
-
-    // 更新同步日志为失败
-    await this.db
-      .update(schema.gitSyncLogs)
-      .set({
-        status: 'failed',
-        error: classifiedError.getUserMessage(),
-        errorStack: error instanceof Error ? error.stack : undefined,
-        completedAt: new Date(),
-        metadata: {
-          attemptCount: (job.attemptsMade || 0) + 1,
-          lastAttemptAt: new Date().toISOString(),
-          errorType: classifiedError.type,
-          retryable: classifiedError.retryable,
-          statusCode: classifiedError.statusCode,
-        } as any,
-      })
-      .where(eq(schema.gitSyncLogs.id, syncLogId))
-
-    this.logger.error(`Sync failed [${classifiedError.type}]: ${classifiedError.message}`, {
-      syncLogId,
-      errorType: classifiedError.type,
-      retryable: classifiedError.retryable,
-      statusCode: classifiedError.statusCode,
-      attemptCount: job.attemptsMade,
-    })
   }
 
   async onModuleDestroy() {

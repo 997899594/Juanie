@@ -6,11 +6,11 @@
  */
 
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { GIT_SYNC_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
-import type { GitProvider, ProjectRole } from '@juanie/types'
+import type { ProjectRole } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import type { Queue } from 'bullmq'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'

@@ -1,8 +1,8 @@
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import { AuditLogsService, NotificationsService } from '@juanie/service-foundation'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { InitializationContext, StateHandler } from '../types'
@@ -21,7 +21,7 @@ export class FinalizeHandler implements StateHandler {
     private audit: AuditLogsService,
   ) {}
 
-  canHandle(context: InitializationContext): boolean {
+  canHandle(_context: InitializationContext): boolean {
     // 总是需要完成
     return true
   }

@@ -5,7 +5,7 @@ import { ConflictResolutionService } from './conflict-resolution.service'
 
 describe('ConflictResolutionService', () => {
   let service: ConflictResolutionService
-  let gitProvider: GitProviderService
+  let _gitProvider: GitProviderService
 
   const mockDb = {
     query: {
@@ -47,7 +47,7 @@ describe('ConflictResolutionService', () => {
     }).compile()
 
     service = module.get<ConflictResolutionService>(ConflictResolutionService)
-    gitProvider = module.get<GitProviderService>(GitProviderService)
+    _gitProvider = module.get<GitProviderService>(GitProviderService)
   })
 
   afterEach(() => {

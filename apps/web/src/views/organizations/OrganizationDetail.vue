@@ -346,7 +346,7 @@ async function loadOrganizationData() {
     await fetchMembers(orgId)
     await fetchQuotaUsage(orgId)
   } catch (error) {
-    console.error('Failed to load organization data:', error)
+    log.error('Failed to load organization data:', error)
   }
 }
 
@@ -376,7 +376,7 @@ async function handleUpdate(data: { name?: string; slug?: string; displayName?: 
     await updateOrganization(orgId, data)
     isEditModalOpen.value = false
   } catch (error) {
-    console.error('Failed to update organization:', error)
+    log.error('Failed to update organization:', error)
   }
 }
 
@@ -385,7 +385,7 @@ async function handleInvite() {
     await inviteMember(orgId, inviteForm.value.userId, inviteForm.value.role)
     isInviteModalOpen.value = false
   } catch (error) {
-    console.error('Failed to invite member:', error)
+    log.error('Failed to invite member:', error)
   }
 }
 
@@ -393,7 +393,7 @@ async function handleUpdateRole(memberId: string, role: string) {
   try {
     await updateMemberRole(orgId, memberId, role as 'admin' | 'member')
   } catch (error) {
-    console.error('Failed to update member role:', error)
+    log.error('Failed to update member role:', error)
   }
 }
 
@@ -405,7 +405,7 @@ async function handleRemoveMember() {
     isRemoveMemberDialogOpen.value = false
     removingMemberId.value = null
   } catch (error) {
-    console.error('Failed to remove member:', error)
+    log.error('Failed to remove member:', error)
   }
 }
 
@@ -415,7 +415,7 @@ async function handleDelete() {
     isDeleteDialogOpen.value = false
     router.push('/organizations')
   } catch (error) {
-    console.error('Failed to delete organization:', error)
+    log.error('Failed to delete organization:', error)
   }
 }
 
@@ -445,7 +445,7 @@ async function handleSyncNow() {
     await new Promise(resolve => setTimeout(resolve, 2000))
     toast.success('同步成功', '组织成员已同步到 Git 平台')
   } catch (error) {
-    console.error('Failed to sync:', error)
+    log.error('Failed to sync:', error)
     toast.error('同步失败', '同步组织成员失败，请稍后重试')
   } finally {
     syncingGit.value = false

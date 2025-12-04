@@ -1,7 +1,7 @@
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -46,7 +46,7 @@ export class FluxResourcesService {
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    private config: ConfigService,
+    _config: ConfigService,
     private k3s: K3sService,
     private yamlGenerator: YamlGeneratorService,
     private metrics: FluxMetricsService,
@@ -676,20 +676,6 @@ export class FluxResourcesService {
   }
 
   /**
-   * 创建 Git 认证 Secret（已废弃，由 GitAuthService 处理）
-   * 保留此方法以防需要手动创建 Secret
-   */
-  private async createGitSecret(
-    namespace: string,
-    secretName: string,
-    repositoryUrl: string,
-    accessToken: string,
-  ): Promise<void> {
-    // 此方法已废弃，Secret 由 GitAuthService.createK8sSecrets 创建
-    this.logger.warn('createGitSecret is deprecated, secrets should be created by GitAuthService')
-  }
-
-  /**
    * 应用 YAML 到 K3s
    */
   private async applyYAMLToK3s(yaml: string): Promise<void> {
@@ -706,7 +692,7 @@ export class FluxResourcesService {
       const name = metadata.name
 
       // 转换 kind 为复数形式
-      const plural = kind.toLowerCase() + 's'
+      const plural = `${kind.toLowerCase()}s`
 
       try {
         await client.createCustomResource(group, version, plural, namespace, obj)
@@ -736,7 +722,7 @@ export class FluxResourcesService {
       const parts = apiVersion.split('/')
       const group = parts[0] || 'core'
       const version = parts[1] || 'v1'
-      const plural = kind.toLowerCase() + 's'
+      const plural = `${kind.toLowerCase()}s`
 
       await client.deleteCustomResource(group, version, plural, namespace || 'default', name)
     } catch (error: any) {
@@ -762,7 +748,8 @@ export class FluxResourcesService {
       const client = this.k3s.getCustomObjectsApi()
 
       // Server-Side Apply requires fieldManager as query parameter
-      const options = {
+      // @ts-expect-error - Reserved for future use
+      const _options = {
         headers: {
           'Content-Type': 'application/apply-patch+yaml',
         },

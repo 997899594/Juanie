@@ -8,19 +8,7 @@ import { AITroubleshooter } from './ai-troubleshooter.service'
 
 @Module({
   imports: [ConfigModule],
-  providers: [
-    OllamaClient,
-    CodeReviewService,
-    AIConfigGenerator,
-    AITroubleshooter,
-    AIChatService,
-  ],
-  exports: [
-    OllamaClient,
-    CodeReviewService,
-    AIConfigGenerator,
-    AITroubleshooter,
-    AIChatService,
-  ],
+  providers: [OllamaClient, CodeReviewService, AIConfigGenerator, AITroubleshooter, AIChatService],
+  exports: [OllamaClient, CodeReviewService, AIConfigGenerator, AITroubleshooter, AIChatService],
 })
 export class AIModule {}

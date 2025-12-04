@@ -8,14 +8,12 @@ import type {
   TemplateVariables,
 } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
-import { and, eq, isNull, like, or, sql } from 'drizzle-orm'
+import { and, eq, like, or, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import Handlebars from 'handlebars'
 
 @Injectable()
 export class TemplateManager {
-  private readonly logger = new Logger(TemplateManager.name)
   private handlebars: typeof Handlebars
 
   constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {
@@ -427,7 +425,7 @@ export class TemplateManager {
     const [projectCount] = await this.db
       .select({ count: sql<number>`count(*)` })
       .from(schema.projects)
-      .where(and(eq(schema.projects.templateId, templateId), isNull(schema.projects.deletedAt)))
+      .where(and(eq(schema.projects.templateId, templateId), sql`deleted_at IS NULL`))
 
     if (projectCount && projectCount.count > 0) {
       throw new Error('Cannot delete template that is being used by projects')

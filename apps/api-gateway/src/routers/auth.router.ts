@@ -1,6 +1,6 @@
 import '@fastify/cookie'
-import { oauthCallbackSchema } from '@juanie/types'
 import { AuthService } from '@juanie/service-foundation'
+import { oauthCallbackSchema } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { TrpcService } from '../trpc/trpc.service'

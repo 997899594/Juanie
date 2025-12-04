@@ -4,8 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDebounceFn } from '@vueuse/core'
 import { useAuditLogs, type AuditLogFilters } from '@/composables/useAuditLogs'
 import PageContainer from '@/components/PageContainer.vue'
-import {
-  Button,
+import { Button,
   Card,
   CardContent,
   CardHeader,
@@ -22,8 +21,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
-} from '@juanie/ui'
+  SelectValue , log } from '@juanie/ui'
 import { FileSearch, Loader2, Download, Search, Filter, X } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -166,7 +164,7 @@ const handleExport = async (format: 'csv' | 'json') => {
   try {
     await exportLogs(format, buildFilters())
   } catch (error) {
-    console.error('导出日志失败:', error)
+    log.error('导出日志失败:', error)
   }
 }
 

@@ -45,6 +45,10 @@
     "./logger": {
       "types": "./dist/logger/index.d.ts",
       "default": "./dist/logger/index.js"
+    },
+    "./rbac": {
+      "types": "./dist/rbac/index.d.ts",
+      "default": "./dist/rbac/index.js"
     }
   },
   "scripts": {

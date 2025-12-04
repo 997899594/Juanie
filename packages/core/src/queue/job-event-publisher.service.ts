@@ -1,7 +1,7 @@
 import { EventBusService } from '@juanie/core/sse'
 import type { OnModuleInit } from '@nestjs/common'
 import { Injectable, Logger } from '@nestjs/common'
-import type { Queue, QueueEvents } from 'bullmq'
+import type { Queue } from 'bullmq'
 import { QueueEvents as BullMQQueueEvents } from 'bullmq'
 
 /**

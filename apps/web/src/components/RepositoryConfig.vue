@@ -220,8 +220,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { Github, Gitlab, AlertCircle, GitBranch, Plus, Info, Lock, Globe, Loader2 } from 'lucide-vue-next'
-import {
-  Card,
+import { Card,
   CardContent,
   CardDescription,
   CardHeader,
@@ -241,8 +240,7 @@ import {
   Badge,
   Alert,
   AlertDescription,
-  AlertTitle,
-} from '@juanie/ui'
+  AlertTitle , log } from '@juanie/ui'
 import { trpc } from '@/lib/trpc'
 import { useToast } from '@/composables/useToast'
 import { validateRepositoryName, sanitizeRepositoryName } from '@/utils/repository'
@@ -276,7 +274,7 @@ async function loadOAuthAccounts() {
       selectProvider(connectedProvider)
     }
   } catch (error: any) {
-    console.error('Failed to load OAuth accounts:', error)
+    log.error('Failed to load OAuth accounts:', error)
     toast.error('加载账户失败', error.message)
   } finally {
     loadingAccounts.value = false

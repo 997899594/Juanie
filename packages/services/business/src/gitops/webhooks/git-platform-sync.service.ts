@@ -1,8 +1,8 @@
 import type { Database } from '@juanie/core/database'
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { and, eq } from 'drizzle-orm'
 import { ProjectMembersService } from '../../projects/project-members.service'
 import { ProjectsService } from '../../projects/projects.service'
@@ -21,7 +21,7 @@ export class GitPlatformSyncService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly projectMembersService: ProjectMembersService,
-    private readonly projectsService: ProjectsService,
+    readonly _projectsService: ProjectsService,
   ) {}
 
   /**

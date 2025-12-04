@@ -1,10 +1,19 @@
-import { Module } from '@nestjs/common'
+import { Global, Module } from '@nestjs/common'
 import { EventEmitterModule } from '@nestjs/event-emitter'
+import { EventPublisher } from './event-publisher.service'
+import { EventReplayService } from './event-replay.service'
 
 /**
  * 核心事件模块
- * 提供应用级事件总线
+ * 提供统一的事件系统
+ *
+ * 功能：
+ * - 领域事件（NestJS EventEmitter）
+ * - 集成事件（BullMQ）
+ * - 实时事件（Redis Pub/Sub）
+ * - 事件重放和查询
  */
+@Global()
 @Module({
   imports: [
     EventEmitterModule.forRoot({
@@ -18,6 +27,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter'
       verboseMemoryLeak: process.env.NODE_ENV === 'development',
     }),
   ],
-  exports: [EventEmitterModule],
+  providers: [EventPublisher, EventReplayService],
+  exports: [EventEmitterModule, EventPublisher, EventReplayService],
 })
 export class CoreEventsModule {}

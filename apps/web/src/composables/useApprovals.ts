@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
@@ -91,7 +92,7 @@ export function useApprovals() {
 
       return pendingApprovals.value
     } catch (err) {
-      console.error('Failed to fetch pending approvals:', err)
+      log.error('Failed to fetch pending approvals:', err)
       error.value = '获取待审批列表失败'
 
       if (isTRPCClientError(err)) {
@@ -143,7 +144,7 @@ export function useApprovals() {
 
       return approvalHistory.value
     } catch (err) {
-      console.error('Failed to fetch approval history:', err)
+      log.error('Failed to fetch approval history:', err)
       error.value = '获取审批历史失败'
 
       if (isTRPCClientError(err)) {
@@ -174,7 +175,7 @@ export function useApprovals() {
       toast.success('审批成功', '部署已批准')
       return result
     } catch (err) {
-      console.error('Failed to approve deployment:', err)
+      log.error('Failed to approve deployment:', err)
       error.value = '批准部署失败'
 
       if (isTRPCClientError(err)) {
@@ -210,7 +211,7 @@ export function useApprovals() {
       toast.success('拒绝成功', '部署已拒绝')
       return result
     } catch (err) {
-      console.error('Failed to reject deployment:', err)
+      log.error('Failed to reject deployment:', err)
       error.value = '拒绝部署失败'
 
       if (isTRPCClientError(err)) {
@@ -266,7 +267,7 @@ export function useApprovals() {
         summary,
       }
     } catch (err) {
-      console.error('Failed to get approval status:', err)
+      log.error('Failed to get approval status:', err)
       error.value = '获取审批状态失败'
 
       if (isTRPCClientError(err)) {
@@ -299,7 +300,7 @@ export function useApprovals() {
 
       return results
     } catch (err) {
-      console.error('Failed to batch approve:', err)
+      log.error('Failed to batch approve:', err)
       error.value = '批量批准失败'
 
       if (isTRPCClientError(err)) {
@@ -337,7 +338,7 @@ export function useApprovals() {
 
       return results
     } catch (err) {
-      console.error('Failed to batch reject:', err)
+      log.error('Failed to batch reject:', err)
       error.value = '批量拒绝失败'
 
       if (isTRPCClientError(err)) {

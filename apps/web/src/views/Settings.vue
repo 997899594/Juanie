@@ -282,8 +282,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  Badge,
+import { Badge,
   Button,
   Card,
   CardContent,
@@ -302,8 +301,7 @@ import {
   Tabs,
   TabsContent,
   TabsList,
-  TabsTrigger,
-} from '@juanie/ui'
+  TabsTrigger , log } from '@juanie/ui'
 import { LogOut, Monitor, Moon, Sun, GitBranch } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -323,7 +321,7 @@ async function handleLogout() {
     await authStore.logout()
     router.push('/login')
   } catch (error) {
-    console.error('Logout failed:', error)
+    log.error('Logout failed:', error)
   }
 }
 </script>

@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common'
-import { ConfigModule } from '@nestjs/config'
 import { AIModule } from './ai/ai/ai.module'
 import { AiAssistantsModule } from './ai/assistants/ai-assistants.module'
 import { OllamaModule } from './ai/ollama/ollama.module'

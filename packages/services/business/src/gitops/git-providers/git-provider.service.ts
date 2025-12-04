@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common'
 import { Logger } from '@juanie/core/logger'
+import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 export interface CreateRepositoryOptions {
@@ -52,7 +52,7 @@ export class GitProviderService {
 
     // 如果清理后为空，使用默认名称
     if (!sanitized) {
-      sanitized = 'project-' + Date.now()
+      sanitized = `project-${Date.now()}`
     }
 
     return sanitized
@@ -1364,7 +1364,7 @@ export class GitProviderService {
     accessToken: string,
     name: string,
     displayName?: string,
-    description?: string,
+    _description?: string,
   ): Promise<{
     id: number
     login: string

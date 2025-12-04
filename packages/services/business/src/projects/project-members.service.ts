@@ -1,11 +1,11 @@
 import * as schema from '@juanie/core/database'
+import { DomainEvents, EventPublisher } from '@juanie/core/events'
+import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
 import { AuditLogsService } from '@juanie/service-foundation'
 import type { ProjectRole } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
-import { EventEmitter2 } from '@nestjs/event-emitter'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
@@ -27,7 +27,7 @@ export class ProjectMembersService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private auditLogs: AuditLogsService,
-    private eventEmitter: EventEmitter2,
+    private eventPublisher: EventPublisher,
   ) {}
 
   /**
@@ -88,12 +88,17 @@ export class ProjectMembersService {
 
     // 触发 Git 平台权限同步事件
     // Requirements: 4.2 - 使用事件驱动架构解耦
-    this.eventEmitter.emit('project.member.added', {
-      projectId,
-      userId: data.userId,
-      role: this.mapRoleToProjectRole(data.role),
+    await this.eventPublisher.publishDomain({
+      type: DomainEvents.PROJECT_MEMBER_ADDED,
+      version: 1,
+      resourceId: projectId,
+      userId,
+      data: {
+        memberId: data.userId,
+        role: this.mapRoleToProjectRole(data.role),
+      },
     })
-    this.logger.log(`Emitted member added event for ${data.userId} in project ${projectId}`)
+    this.logger.log(`Published member added event for ${data.userId} in project ${projectId}`)
 
     return member
   }
@@ -187,13 +192,18 @@ export class ProjectMembersService {
 
     // 触发 Git 平台权限更新事件
     // Requirements: 4.7 - 使用事件驱动架构解耦
-    this.eventEmitter.emit('project.member.updated', {
-      projectId,
-      userId: data.userId,
-      role: this.mapRoleToProjectRole(data.role),
-      oldRole: this.mapRoleToProjectRole(existing.role),
+    await this.eventPublisher.publishDomain({
+      type: DomainEvents.PROJECT_MEMBER_UPDATED,
+      version: 1,
+      resourceId: projectId,
+      userId,
+      data: {
+        memberId: data.userId,
+        role: this.mapRoleToProjectRole(data.role),
+        oldRole: this.mapRoleToProjectRole(existing.role),
+      },
     })
-    this.logger.log(`Emitted member updated event for ${data.userId} in project ${projectId}`)
+    this.logger.log(`Published member updated event for ${data.userId} in project ${projectId}`)
 
     return updated
   }
@@ -252,11 +262,16 @@ export class ProjectMembersService {
 
     // 触发 Git 平台权限移除事件
     // Requirements: 4.8 - 使用事件驱动架构解耦
-    this.eventEmitter.emit('project.member.removed', {
-      projectId,
-      userId: data.userId,
+    await this.eventPublisher.publishDomain({
+      type: DomainEvents.PROJECT_MEMBER_REMOVED,
+      version: 1,
+      resourceId: projectId,
+      userId,
+      data: {
+        memberId: data.userId,
+      },
     })
-    this.logger.log(`Emitted member removed event for ${data.userId} in project ${projectId}`)
+    this.logger.log(`Published member removed event for ${data.userId} in project ${projectId}`)
 
     return { success: true }
   }

@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import { trpc } from '@/lib/trpc'
@@ -71,7 +72,7 @@ export function useCostTracking() {
       const errorMessage = err.message || '获取成本记录失败'
       error.value = errorMessage
       toast.error('获取失败', errorMessage)
-      console.error('获取成本记录失败:', err)
+      log.error('获取成本记录失败:', err)
     } finally {
       loading.value = false
     }
@@ -91,7 +92,7 @@ export function useCostTracking() {
       const errorMessage = err.message || '获取成本汇总失败'
       error.value = errorMessage
       toast.error('获取失败', errorMessage)
-      console.error('获取成本汇总失败:', err)
+      log.error('获取成本汇总失败:', err)
     } finally {
       loading.value = false
     }
@@ -105,7 +106,7 @@ export function useCostTracking() {
       const result = await trpc.costTracking.checkAlerts.query({ organizationId })
       alerts.value = result as CostAlert[]
     } catch (err: any) {
-      console.error('获取成本告警失败:', err)
+      log.error('获取成本告警失败:', err)
     }
   }
 

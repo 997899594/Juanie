@@ -1,11 +1,17 @@
-import { pgTable, uuid, text, timestamp, integer, index } from 'drizzle-orm/pg-core';
-import { pipelines } from './pipelines.schema';
-import { projects } from './projects.schema';
+import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { pipelines } from './pipelines.schema'
+import { projects } from './projects.schema'
 
-export const pipelineRuns = pgTable('pipeline_runs', {
+export const pipelineRuns = pgTable(
+  'pipeline_runs',
+  {
     id: uuid('id').primaryKey().defaultRandom(),
-    pipelineId: uuid('pipeline_id').notNull().references(() => pipelines.id, { onDelete: 'cascade' }),
-    projectId: uuid('project_id').notNull().references(() => projects.id),
+    pipelineId: uuid('pipeline_id')
+      .notNull()
+      .references(() => pipelines.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
 
     // 触发信息
     trigger: text('trigger').notNull(), // 'push', 'pr', 'schedule', 'manual'
@@ -22,11 +28,13 @@ export const pipelineRuns = pgTable('pipeline_runs', {
     logsUrl: text('logs_url'),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
-}, (table) => [
+  },
+  (table) => [
     index('pipeline_runs_pipeline_idx').on(table.pipelineId),
     index('pipeline_runs_status_idx').on(table.status),
     index('pipeline_runs_created_idx').on(table.createdAt),
-]);
+  ],
+)
 
-export type PipelineRun = typeof pipelineRuns.$inferSelect;
-export type NewPipelineRun = typeof pipelineRuns.$inferInsert;
+export type PipelineRun = typeof pipelineRuns.$inferSelect
+export type NewPipelineRun = typeof pipelineRuns.$inferInsert

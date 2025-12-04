@@ -125,14 +125,16 @@ const categoryNames: Record<string, string> = {
 }
 
 // OKLCH 转 Hex (简化版)
-function oklchToHex(oklch: string): string {
+// @ts-expect-error - Reserved for future color conversion
+function _oklchToHex(_oklch: string): string {
   // 这里需要一个完整的颜色转换库
   // 暂时返回一个占位符
   return '#000000'
 }
 
 // Hex 转 OKLCH (简化版)
-function hexToOklch(hex: string): string {
+// @ts-expect-error - Reserved for future color conversion
+function _hexToOklch(_hex: string): string {
   // 这里需要一个完整的颜色转换库
   // 暂时返回一个占位符
   return 'oklch(0.5 0.1 180)'

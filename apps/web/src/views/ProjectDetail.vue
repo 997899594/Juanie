@@ -777,7 +777,7 @@ async function loadProjectData() {
     await loadProjectStatus()
     await loadPendingApprovals()
   } catch (error) {
-    console.error('Failed to load project data:', error)
+    log.error('Failed to load project data:', error)
   }
 }
 
@@ -786,7 +786,7 @@ async function loadProjectStatus() {
   try {
     projectStatus.value = await trpc.projects.getStatus.query({ projectId })
   } catch (error) {
-    console.error('Failed to load project status:', error)
+    log.error('Failed to load project status:', error)
   } finally {
     loadingStatus.value = false
   }
@@ -814,7 +814,7 @@ async function handleUpdate(data: any) {
     await updateProject(projectId, data)
     isEditModalOpen.value = false
   } catch (error) {
-    console.error('Failed to update project:', error)
+    log.error('Failed to update project:', error)
   }
 }
 
@@ -827,7 +827,7 @@ async function handleUpdateMemberRole(memberId: string, role: string) {
   try {
     await updateMemberRole(projectId, memberId, role as 'admin' | 'developer' | 'viewer')
   } catch (error) {
-    console.error('Failed to update member role:', error)
+    log.error('Failed to update member role:', error)
   }
 }
 
@@ -837,7 +837,7 @@ async function handleDelete() {
     isDeleteDialogOpen.value = false
     router.push('/projects')
   } catch (error) {
-    console.error('Failed to delete project:', error)
+    log.error('Failed to delete project:', error)
   }
 }
 
@@ -851,7 +851,7 @@ function handleInitializationComplete() {
 }
 
 function handleInitializationError(error: string) {
-  console.error('Initialization error:', error)
+  log.error('Initialization error:', error)
   // 可以显示错误提示
 }
 
@@ -1074,7 +1074,7 @@ async function loadPendingApprovals() {
     // 临时模拟数据
     pendingApprovals.value = []
   } catch (error) {
-    console.error('Failed to load pending approvals:', error)
+    log.error('Failed to load pending approvals:', error)
   } finally {
     loadingApprovals.value = false
   }
@@ -1082,13 +1082,13 @@ async function loadPendingApprovals() {
 
 function handleApproveQuick(approvalId: string) {
   // TODO: 实现快速批准逻辑
-  console.log('Quick approve:', approvalId)
+  log.info('Quick approve:', approvalId)
   // 可以打开一个简单的确认对话框或直接批准
 }
 
 function handleRejectQuick(approvalId: string) {
   // TODO: 实现快速拒绝逻辑
-  console.log('Quick reject:', approvalId)
+  log.info('Quick reject:', approvalId)
   // 应该打开一个对话框要求输入拒绝原因
 }
 </script>

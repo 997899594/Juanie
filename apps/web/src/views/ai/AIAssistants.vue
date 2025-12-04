@@ -109,7 +109,7 @@ async function createAssistant() {
     // 刷新列表
     await fetchAssistants({ organizationId: appStore.currentOrganizationId })
   } catch (error) {
-    console.error('Failed to create assistant:', error)
+    log.error('Failed to create assistant:', error)
   }
 }
 

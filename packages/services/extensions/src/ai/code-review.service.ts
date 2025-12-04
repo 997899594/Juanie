@@ -1,3 +1,4 @@
+import { Logger } from '@juanie/core/logger'
 import type {
   AIModel,
   BatchCodeReviewRequest,
@@ -8,7 +9,6 @@ import type {
 } from '@juanie/types'
 import { CodeReviewCategory, CodeReviewSeverity } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { OllamaClient } from './ollama.client'
 
 /**

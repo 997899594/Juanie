@@ -1,3 +1,4 @@
+import { DeploymentsService } from '@juanie/service-business'
 import {
   approveDeploymentSchema,
   createDeploymentSchema,
@@ -6,7 +7,6 @@ import {
   rejectDeploymentSchema,
   rollbackDeploymentSchema,
 } from '@juanie/types'
-import { DeploymentsService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
@@ -95,7 +95,7 @@ export class DeploymentsRouter {
       // 按项目获取部署列表
       getByProject: this.trpc.protectedProcedure
         .input(z.object({ projectId: z.string(), limit: z.number().optional() }))
-        .query(async ({ ctx, input }) => {
+        .query(async ({ input: _input }) => {
           // TODO: 实现获取项目部署列表的逻辑
           return {
             deployments: [] as Array<{
@@ -120,7 +120,7 @@ export class DeploymentsRouter {
       // 获取部署统计
       getStats: this.trpc.protectedProcedure
         .input(z.object({ projectId: z.string() }))
-        .query(async ({ ctx, input }) => {
+        .query(async ({ input: _input }) => {
           // TODO: 实现获取部署统计的逻辑
           return {
             total: 0,

@@ -374,8 +374,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { generateNavigationConfig } from '@/router'
-import {
-  Avatar,
+import { Avatar,
   AvatarFallback,
   AvatarImage,
   Badge,
@@ -404,8 +403,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
-} from '@juanie/ui'
+  SidebarTrigger , log } from '@juanie/ui'
 import {
   Activity,
   AlertCircle,
@@ -553,7 +551,7 @@ async function handleLogout() {
     await authStore.logout()
     router.push('/login')
   } catch (error) {
-    console.error('Logout failed:', error)
+    log.error('Logout failed:', error)
   }
 }
 
@@ -562,7 +560,7 @@ async function loadUnreadCount() {
   try {
     notificationUnreadCount.value = await fetchUnreadCount()
   } catch (error) {
-    console.error('Failed to fetch unread count:', error)
+    log.error('Failed to fetch unread count:', error)
   }
 }
 

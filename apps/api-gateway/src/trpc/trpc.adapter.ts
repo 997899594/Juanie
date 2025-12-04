@@ -1,6 +1,6 @@
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify'
-import { renderTrpcPanel } from 'trpc-panel'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import { renderTrpcPanel } from 'trpc-panel'
 import type { AppRouter } from './trpc.router'
 import { TrpcRouter } from './trpc.router'
 import type { Context } from './trpc.service'

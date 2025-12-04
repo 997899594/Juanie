@@ -1,12 +1,16 @@
 import * as schema from '@juanie/core/database'
+import { type GitOpsSetupRequestedEvent, IntegrationEvents } from '@juanie/core/events'
+import { Logger } from '@juanie/core/logger'
+import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
+import { OnEvent } from '@nestjs/event-emitter'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { K3sService } from '../k3s/k3s.service'
 import { FluxCliService } from './flux-cli.service'
 import { FluxMetricsService } from './flux-metrics.service'
+import { FluxResourcesService } from './flux-resources.service'
 
 /**
  * FluxSyncService
@@ -16,6 +20,7 @@ import { FluxMetricsService } from './flux-metrics.service'
  * - 同步资源状态
  * - 等待资源就绪
  * - 获取事件
+ * - 处理 GitOps 设置请求事件
  */
 @Injectable()
 export class FluxSyncService {
@@ -26,7 +31,65 @@ export class FluxSyncService {
     private k3s: K3sService,
     private fluxCli: FluxCliService,
     private metrics: FluxMetricsService,
+    private fluxResources: FluxResourcesService,
   ) {}
+
+  /**
+   * 处理 GitOps 设置请求
+   *
+   * 当项目初始化 Worker 发布 gitops.setup.requested 事件时触发
+   * 使用长期有效的 Git 凭证（Project Access Token / Deploy Key）
+   */
+  @OnEvent(IntegrationEvents.GITOPS_SETUP_REQUESTED)
+  @Trace('gitops.handleSetupRequest')
+  async handleSetupRequest(event: GitOpsSetupRequestedEvent): Promise<void> {
+    const { data } = event
+    this.logger.log(`Handling GitOps setup request for project: ${data.projectId}`)
+
+    try {
+      // 检查 K3s 连接和认证
+      if (!this.k3s.isK3sConnected()) {
+        this.logger.warn('K3s not connected, skipping GitOps setup')
+        throw new Error('K3s cluster not connected')
+      }
+
+      // 验证 K3s 认证（尝试列出 namespaces）
+      try {
+        await this.k3s.listNamespaces()
+        this.logger.debug('K3s authentication verified')
+      } catch (error: any) {
+        this.logger.error('K3s authentication failed:', error.message)
+        throw new Error(`K3s authentication failed: ${error.message}`)
+      }
+
+      this.logger.log(`Setting up GitOps for project ${data.projectId}`)
+
+      // 创建 GitOps 资源（凭证由 FluxResourcesService 内部自动创建）
+      const result = await this.fluxResources.setupProjectGitOps({
+        projectId: data.projectId,
+        repositoryId: data.repositoryId,
+        repositoryUrl: data.repositoryUrl,
+        repositoryBranch: data.repositoryBranch,
+        userId: data.userId,
+        environments: data.environments,
+      })
+
+      if (!result.success) {
+        this.logger.error('GitOps setup failed:', result.errors)
+        throw new Error(`GitOps setup failed: ${result.errors.join(', ')}`)
+      }
+
+      this.logger.log('GitOps setup completed successfully:', {
+        projectId: data.projectId,
+        namespaces: result.namespaces.length,
+        gitRepositories: result.gitRepositories.length,
+        kustomizations: result.kustomizations.length,
+      })
+    } catch (error) {
+      this.logger.error('Failed to handle GitOps setup request:', error)
+      throw error
+    }
+  }
 
   /**
    * 手动触发 reconciliation
@@ -160,7 +223,7 @@ export class FluxSyncService {
         }
 
         await new Promise((resolve) => setTimeout(resolve, 2000))
-      } catch (error) {
+      } catch (_error) {
         await new Promise((resolve) => setTimeout(resolve, 2000))
       }
     }
@@ -194,7 +257,7 @@ export class FluxSyncService {
         }
 
         await new Promise((resolve) => setTimeout(resolve, 3000))
-      } catch (error) {
+      } catch (_error) {
         await new Promise((resolve) => setTimeout(resolve, 3000))
       }
     }
@@ -226,7 +289,7 @@ export class FluxSyncService {
         try {
           const events = await this.k3s.getEvents(namespace)
           allEvents.push(...events)
-        } catch (error) {
+        } catch (_error) {
           // Namespace 可能不存在，继续处理其他 namespace
         }
       }

@@ -220,7 +220,7 @@ const handleCreate = async () => {
 
     showCreateDialog.value = false
   } catch (error) {
-    console.error('创建策略失败:', error)
+    log.error('创建策略失败:', error)
   }
 }
 
@@ -251,7 +251,7 @@ const handleUpdate = async () => {
     showEditDialog.value = false
     editingPolicy.value = null
   } catch (error) {
-    console.error('更新策略失败:', error)
+    log.error('更新策略失败:', error)
   }
 }
 
@@ -264,7 +264,7 @@ const handleDelete = async () => {
     showDeleteDialog.value = false
     deletingPolicy.value = null
   } catch (error) {
-    console.error('删除策略失败:', error)
+    log.error('删除策略失败:', error)
   }
 }
 
@@ -273,7 +273,7 @@ const handleToggleStatus = async (policy: SecurityPolicy) => {
   try {
     await togglePolicyStatus(policy.id)
   } catch (error) {
-    console.error('切换策略状态失败:', error)
+    log.error('切换策略状态失败:', error)
   }
 }
 

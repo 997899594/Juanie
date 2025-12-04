@@ -4,7 +4,6 @@
 // 模块导出
 export { BusinessModule } from './business.module'
 export { DeploymentsService } from './deployments/deployments.service'
-export * from './deployments/deployments.types'
 export type { ConfigureGitOpsInput, GitOpsConfig } from './environments/environments.service'
 export { EnvironmentsService } from './environments/environments.service'
 // GitAuthService 已废弃，使用 CredentialManagerService 代替
@@ -31,19 +30,14 @@ export {
   mapProjectRoleToGitPermission,
 } from './gitops/git-sync/permission-mapper'
 export { ProjectCollaborationSyncService } from './gitops/git-sync/project-collaboration-sync.service'
-export * from './gitops/gitops.types'
-export { GitOpsEventHandlerService } from './gitops/gitops-event-handler.service'
 export { K3sService } from './gitops/k3s/k3s.service'
 export { GitPlatformSyncService } from './gitops/webhooks/git-platform-sync.service'
 export { PipelinesService } from './pipelines/pipelines.service'
-export { ProjectInitializationService } from './projects/project-initialization.service'
 export { ProjectMembersModule } from './projects/project-members.module'
 export { ProjectMembersService } from './projects/project-members.service'
 export { ProjectStatusService } from './projects/project-status.service'
 // 服务导出
 export { ProjectsService } from './projects/projects.service'
-// 类型导出
-export * from './projects/projects.types'
 export { TemplateManager } from './projects/template-manager.service'
 export { RepositoriesService } from './repositories/repositories.service'
 export { TemplatesService } from './templates/templates.service'

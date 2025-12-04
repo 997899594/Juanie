@@ -1,10 +1,10 @@
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 // K8s client removed - using K3sService instead
 import { Inject, Injectable } from '@nestjs/common'
-import { Logger } from '@juanie/core/logger'
 import { ConfigService } from '@nestjs/config'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -606,7 +606,7 @@ export class GitOpsService {
    * Requirement: 2.2, 2.3
    * Note: This method is deprecated and should use K3sService instead
    */
-  private async getGitCredentials(secretRef: string): Promise<{
+  private async getGitCredentials(_secretRef: string): Promise<{
     username?: string
     password?: string
     sshKey?: string

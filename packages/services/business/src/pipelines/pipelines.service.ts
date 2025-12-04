@@ -2,11 +2,7 @@ import * as schema from '@juanie/core/database'
 import { PIPELINE_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
 import { generateId } from '@juanie/core/utils'
-import type {
-  CreatePipelineInput,
-  TriggerPipelineInput,
-  UpdatePipelineInput,
-} from '@juanie/types'
+import type { CreatePipelineInput, TriggerPipelineInput, UpdatePipelineInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { and, desc, eq } from 'drizzle-orm'
@@ -93,7 +89,7 @@ export class PipelinesService {
     if (data.name !== undefined) updateData.name = data.name
 
     // 只有当 config 完整时才更新
-    if (data.config && data.config.triggers && data.config.stages) {
+    if (data.config?.triggers && data.config.stages) {
       updateData.config = data.config
     }
 

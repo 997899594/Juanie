@@ -1,3 +1,4 @@
+import { log } from '@juanie/ui'
 import type { inferRouterOutputs } from '@trpc/server'
 import { computed, ref } from 'vue'
 import type { AppRouter } from '@/lib/trpc'
@@ -29,7 +30,7 @@ export function useDeployments() {
       deployments.value = result
       return result
     } catch (err) {
-      console.error('Failed to fetch deployments:', err)
+      log.error('Failed to fetch deployments:', err)
       error.value = '获取部署列表失败'
       if (isTRPCClientError(err)) {
         toast.error('获取部署列表失败', err.message)

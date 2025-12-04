@@ -134,6 +134,7 @@
 </template>
 
 <script setup lang="ts">
+import { log } from '@juanie/ui'
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -176,7 +177,7 @@ onMounted(async () => {
           appStore.setCurrentOrganization(orgs[0]!.id)
         }
       } catch (orgErr) {
-        console.warn('获取组织列表失败:', orgErr)
+        log.warn('获取组织列表失败:', orgErr)
       }
       
       toast.success('登录成功', '欢迎回来！')
@@ -184,7 +185,7 @@ onMounted(async () => {
       const redirectTo = route.query.redirect as string || '/'
       router.push(redirectTo)
     } catch (err) {
-      console.error('OAuth 回调处理失败:', err)
+      log.error('OAuth 回调处理失败:', err)
       error.value = '登录失败，请重试'
       toast.error('登录失败', '请重试或联系管理员')
     } finally {
@@ -204,7 +205,7 @@ const handleGitHubLogin = async () => {
     // 跳转到 GitHub 授权页面
     window.location.href = result.url
   } catch (err) {
-    console.error('获取 GitHub 授权 URL 失败:', err)
+    log.error('获取 GitHub 授权 URL 失败:', err)
     error.value = '获取登录链接失败，请重试'
     isLoading.value = false
     
@@ -226,7 +227,7 @@ const handleGitLabLogin = async () => {
     // 跳转到GitLab授权页面
     window.location.href = result.url
   } catch (err) {
-    console.error('获取GitLab授权URL失败:', err)
+    log.error('获取GitLab授权URL失败:', err)
     error.value = '获取登录链接失败，请重试'
     isLoading.value = false
     

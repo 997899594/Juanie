@@ -1,6 +1,6 @@
-import { FluxEvents, K3sEvents } from '@juanie/core/events'
+import { EventPublisher, SystemEvents } from '@juanie/core/events'
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
-import { EventEmitter2, OnEvent } from '@nestjs/event-emitter'
+import { OnEvent } from '@nestjs/event-emitter'
 import { K3sService } from '../k3s/k3s.service'
 import { FluxCliService } from './flux-cli.service'
 import { FluxMetricsService } from './flux-metrics.service'
@@ -27,9 +27,9 @@ export class FluxService implements OnModuleInit {
 
   constructor(
     private k3s: K3sService,
-    private fluxCli: FluxCliService,
+    _fluxCli: FluxCliService,
     private metrics: FluxMetricsService,
-    private eventEmitter: EventEmitter2,
+    private eventPublisher: EventPublisher,
   ) {}
 
   async onModuleInit() {
@@ -40,7 +40,7 @@ export class FluxService implements OnModuleInit {
    * 监听 K3s 连接成功事件
    * 当 K3s 连接成功后，自动检查 Flux 安装状态
    */
-  @OnEvent(K3sEvents.CONNECTED)
+  @OnEvent(SystemEvents.K3S_CONNECTED)
   async handleK3sConnected() {
     this.logger.log('收到 K3s 连接成功事件，开始检查 Flux 状态')
     await this.checkFluxInstallationAsync()
@@ -49,7 +49,7 @@ export class FluxService implements OnModuleInit {
   /**
    * 监听 K3s 连接失败事件
    */
-  @OnEvent(K3sEvents.CONNECTION_FAILED)
+  @OnEvent(SystemEvents.K3S_CONNECTION_FAILED)
   handleK3sConnectionFailed() {
     this.logger.warn('K3s 连接失败，Flux 功能不可用')
     this.fluxStatus = 'not-installed'
@@ -69,15 +69,19 @@ export class FluxService implements OnModuleInit {
 
     // 异步执行，不等待结果
     this.checkFluxInstallation()
-      .then((installed) => {
+      .then(async (installed) => {
         this.fluxStatus = installed ? 'installed' : 'not-installed'
         this.logger.log(`Flux status: ${this.fluxStatus}`)
 
         // 发出 Flux 状态检查完成事件
-        const event = installed ? FluxEvents.INSTALLED : FluxEvents.NOT_INSTALLED
-        this.eventEmitter.emit(event, {
-          timestamp: new Date(),
-          installed,
+        const eventType = installed ? SystemEvents.FLUX_INSTALLED : SystemEvents.FLUX_NOT_INSTALLED
+        await this.eventPublisher.publishDomain({
+          type: eventType,
+          version: 1,
+          resourceId: 'flux-system',
+          data: {
+            installed,
+          },
         })
       })
       .catch((error) => {
@@ -178,7 +182,7 @@ export class FluxService implements OnModuleInit {
               ready,
               replicas: deployment.status?.replicas || 0,
             }
-          } catch (error) {
+          } catch (_error) {
             // 记录组件不健康
             this.metrics.updateComponentHealth(name, false)
             return {

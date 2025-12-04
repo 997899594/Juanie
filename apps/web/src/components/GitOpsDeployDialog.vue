@@ -300,7 +300,7 @@ const handlePreview = async () => {
       changes,
     })
   } catch (error) {
-    console.error('Failed to preview changes:', error)
+    log.error('Failed to preview changes:', error)
   } finally {
     previewLoading.value = false
   }
@@ -313,7 +313,7 @@ const handleValidateYAML = async () => {
   try {
     yamlValidation.value = await validateYAML(yamlContent.value)
   } catch (error) {
-    console.error('Failed to validate YAML:', error)
+    log.error('Failed to validate YAML:', error)
   } finally {
     validating.value = false
   }
@@ -348,7 +348,7 @@ const handleDeploy = async () => {
     preview.value = null
     yamlValidation.value = null
   } catch (error) {
-    console.error('Failed to deploy:', error)
+    log.error('Failed to deploy:', error)
   } finally {
     loading.value = false
   }

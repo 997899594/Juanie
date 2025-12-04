@@ -10,6 +10,9 @@ export * from './components/ui'
 export * from './theme'
 // 类型导出
 export type * from './types'
+export type { LogLevel } from './utils/logger'
+// Utils
+export { log, logger } from './utils/logger'
 
 // 新增：预设配置导出
 // export { default as defaultTheme } from "./styles/themes/default";

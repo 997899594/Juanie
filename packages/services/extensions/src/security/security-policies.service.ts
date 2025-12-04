@@ -1,5 +1,4 @@
 import * as schema from '@juanie/core/database'
-import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, or } from 'drizzle-orm'
