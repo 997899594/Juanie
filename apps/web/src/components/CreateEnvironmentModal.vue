@@ -1,5 +1,5 @@
 <template>
-  <Dialog :open="true" @update:open="$emit('close')">
+  <Dialog v-model:open="open">
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>新建环境</DialogTitle>
@@ -112,7 +112,7 @@
           <Button
             type="button"
             variant="outline"
-            @click="$emit('close')"
+            @click="open = false"
             :disabled="loading"
           >
             取消
@@ -147,7 +147,8 @@ import {
   SelectValue,
 } from '@juanie/ui'
 import { Plus, X, Loader2 } from 'lucide-vue-next'
-import { trpc, type AppRouter } from '@/lib/trpc'
+import { trpc } from '@/lib/trpc'
+import { log } from '@juanie/ui'
 
 interface EnvironmentVariable {
   key: string
@@ -160,8 +161,9 @@ const props = defineProps<{
   projectId: string
 }>()
 
+const open = defineModel<boolean>('open', { required: true })
+
 const emit = defineEmits<{
-  close: []
   created: [environment: Environment | undefined]
 }>()
 
@@ -243,13 +245,6 @@ const handleSubmit = async () => {
   try {
     loading.value = true
     
-    // 过滤空的环境变量并转换为 config.environmentVariables 格式
-    const variables = form.variables.filter(v => v.key.trim() && v.value.trim())
-    const environmentVariables = variables.reduce((acc, v) => {
-      acc[v.key] = v.value
-      return acc
-    }, {} as Record<string, string>)
-    
     const createData = {
       projectId: props.projectId,
       name: form.name.trim(),
@@ -266,6 +261,7 @@ const handleSubmit = async () => {
     
     if (result) {
       emit('created', result)
+      open.value = false
     }
   } catch (error: any) {
     log.error('创建环境失败:', error)

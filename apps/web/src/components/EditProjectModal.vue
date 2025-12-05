@@ -1,5 +1,5 @@
 <template>
-  <Dialog :open="true" @update:open="$emit('close')">
+  <Dialog v-model:open="open">
     <DialogContent class="max-w-md">
       <DialogHeader>
         <DialogTitle>编辑项目</DialogTitle>
@@ -86,7 +86,7 @@
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" @click="$emit('close')">
+          <Button type="button" variant="outline" @click="open = false">
             取消
           </Button>
           <Button type="submit" :disabled="loading">
@@ -107,7 +107,8 @@ import { Button } from '@juanie/ui'
 import { Input } from '@juanie/ui'
 import { Textarea } from '@juanie/ui'
 import { Label } from '@juanie/ui'
-import { Lock, Globe, Loader2 } from 'lucide-vue-next'
+import { Lock, Globe, Loader2, Building } from 'lucide-vue-next'
+import { log } from '@juanie/ui'
 
 // 使用后端实际实现的getById API类型
 type Project = NonNullable<Awaited<ReturnType<typeof trpc.projects.getById.query>>>
@@ -116,8 +117,9 @@ const props = defineProps<{
   project: Project
 }>()
 
+const open = defineModel<boolean>('open', { required: true })
+
 const emit = defineEmits<{
-  close: []
   updated: []
 }>()
 
@@ -135,12 +137,6 @@ const initForm = () => {
   form.name = props.project.name
   form.description = props.project.description || ''
   form.visibility = (props.project.visibility as 'public' | 'private' | 'internal') || 'private'
-}
-
-const resetForm = () => {
-  form.name = ''
-  form.description = ''
-  form.visibility = 'private'
 }
 
 // 监听项目变化
@@ -184,8 +180,9 @@ const handleSubmit = async () => {
     
     await trpc.projects.update.mutate(updateData)
     
-    // 通知父组件
+    // 通知父组件并关闭对话框
     emit('updated')
+    open.value = false
   } catch (error: any) {
     log.error('更新项目失败:', error)
     

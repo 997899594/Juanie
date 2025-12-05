@@ -9,7 +9,7 @@ import type {
   UpdateTeamMemberRoleInput,
 } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { and, eq, isNull } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 @Injectable()
@@ -52,17 +52,19 @@ export class TeamsService {
       throw new Error('不是组织成员')
     }
 
-    const teams = await this.db
-      .select({
-        id: schema.teams.id,
-        name: schema.teams.name,
-        slug: schema.teams.slug,
-        description: schema.teams.description,
-        createdAt: schema.teams.createdAt,
-        updatedAt: schema.teams.updatedAt,
-      })
-      .from(schema.teams)
-      .where(and(eq(schema.teams.organizationId, organizationId), isNull(schema.teams.deletedAt)))
+    // 使用 Relational Query 的回调函数方式
+    const teams = await this.db.query.teams.findMany({
+      where: (teams, { eq, and, isNull }) =>
+        and(eq(teams.organizationId, organizationId), isNull(teams.deletedAt)),
+      columns: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
 
     return teams
   }
@@ -70,19 +72,19 @@ export class TeamsService {
   // 获取团队详情
   @Trace('teams.get')
   async get(userId: string, teamId: string) {
-    const [team] = await this.db
-      .select({
-        id: schema.teams.id,
-        name: schema.teams.name,
-        slug: schema.teams.slug,
-        description: schema.teams.description,
-        organizationId: schema.teams.organizationId,
-        createdAt: schema.teams.createdAt,
-        updatedAt: schema.teams.updatedAt,
-      })
-      .from(schema.teams)
-      .where(and(eq(schema.teams.id, teamId), isNull(schema.teams.deletedAt)))
-      .limit(1)
+    // 使用 Relational Query 的回调函数方式
+    const team = await this.db.query.teams.findFirst({
+      where: (teams, { eq, and, isNull }) => and(eq(teams.id, teamId), isNull(teams.deletedAt)),
+      columns: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        organizationId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
 
     if (!team) {
       return null
@@ -197,22 +199,26 @@ export class TeamsService {
       throw new Error('团队不存在')
     }
 
-    const members = await this.db
-      .select({
-        id: schema.teamMembers.id,
-        role: schema.teamMembers.role,
-        joinedAt: schema.teamMembers.joinedAt,
+    // 使用 Relational Query 自动 join user
+    const members = await this.db.query.teamMembers.findMany({
+      where: (members, { eq }) => eq(members.teamId, teamId),
+      columns: {
+        id: true,
+        role: true,
+        joinedAt: true,
+      },
+      with: {
         user: {
-          id: schema.users.id,
-          username: schema.users.username,
-          displayName: schema.users.displayName,
-          avatarUrl: schema.users.avatarUrl,
-          email: schema.users.email,
+          columns: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            email: true,
+          },
         },
-      })
-      .from(schema.teamMembers)
-      .innerJoin(schema.users, eq(schema.teamMembers.userId, schema.users.id))
-      .where(eq(schema.teamMembers.teamId, teamId))
+      },
+    })
 
     return members
   }
@@ -265,27 +271,21 @@ export class TeamsService {
 
   // 辅助方法：获取组织成员信息
   private async getOrgMember(organizationId: string, userId: string) {
-    const [member] = await this.db
-      .select()
-      .from(schema.organizationMembers)
-      .where(
-        and(
-          eq(schema.organizationMembers.organizationId, organizationId),
-          eq(schema.organizationMembers.userId, userId),
-        ),
-      )
-      .limit(1)
+    // 使用 Relational Query 的回调函数方式
+    const member = await this.db.query.organizationMembers.findFirst({
+      where: (members, { eq, and }) =>
+        and(eq(members.organizationId, organizationId), eq(members.userId, userId)),
+    })
 
     return member || null
   }
 
   // 辅助方法：获取团队成员信息
   private async getTeamMember(teamId: string, userId: string) {
-    const [member] = await this.db
-      .select()
-      .from(schema.teamMembers)
-      .where(and(eq(schema.teamMembers.teamId, teamId), eq(schema.teamMembers.userId, userId)))
-      .limit(1)
+    // 使用 Relational Query 的回调函数方式
+    const member = await this.db.query.teamMembers.findFirst({
+      where: (members, { eq, and }) => and(eq(members.teamId, teamId), eq(members.userId, userId)),
+    })
 
     return member || null
   }

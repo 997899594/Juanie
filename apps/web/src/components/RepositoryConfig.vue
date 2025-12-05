@@ -220,11 +220,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { Github, Gitlab, AlertCircle, GitBranch, Plus, Info, Lock, Globe, Loader2 } from 'lucide-vue-next'
-import { Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -240,20 +236,22 @@ import { Card,
   Badge,
   Alert,
   AlertDescription,
-  AlertTitle , log } from '@juanie/ui'
+  AlertTitle,
+  log
+} from '@juanie/ui'
 import { trpc } from '@/lib/trpc'
 import { useToast } from '@/composables/useToast'
 import { validateRepositoryName, sanitizeRepositoryName } from '@/utils/repository'
 
 const props = defineProps<{
-  modelValue: any
   projectName?: string
   template?: any
   required?: boolean
 }>()
 
+const modelValue = defineModel<any>({ required: true })
+
 const emit = defineEmits<{
-  'update:modelValue': [value: any]
   'update:canProceed': [value: boolean]
 }>()
 
@@ -499,7 +497,7 @@ function updateModelValue() {
     serverType: selectedProvider.value?.account?.serverType,
   }
 
-  emit('update:modelValue', value)
+  modelValue.value = value
 
   // 检查是否可以继续
   let canProceed = false

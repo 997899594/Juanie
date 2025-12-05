@@ -1,136 +1,139 @@
-import { computed, isRef, onMounted, ref, watch } from 'vue'
-import { trpc } from '@/lib/trpc'
+import { log } from '@juanie/ui'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import type { MaybeRef } from 'vue'
+import { unref } from 'vue'
+import { isTRPCClientError, trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 
 /**
- * 环境管理组合式函数
- * 提供环境的 CRUD 操作
+ * 环境管理组合式函数 (TanStack Query)
  */
-export function useEnvironments(projectId?: string | ReturnType<typeof ref<string>>) {
+export function useEnvironments(projectId?: MaybeRef<string>) {
   const toast = useToast()
+  const queryClient = useQueryClient()
 
-  const environments = ref<any[]>([])
-  const isLoading = ref(false)
-  const error = ref<Error | null>(null)
-  const isCreating = ref(false)
-  const isUpdating = ref(false)
-  const isDeleting = ref(false)
-  const currentProjectId = ref<string>('')
+  // ==================== Queries ====================
 
   /**
    * 获取项目的环境列表
    */
-  const fetchEnvironments = async (projectId: string) => {
-    if (!projectId) return
-
-    isLoading.value = true
-    error.value = null
-    try {
-      const result = await trpc.environments.list.query({ projectId })
-      environments.value = Array.isArray(result) ? result : []
-    } catch (e) {
-      error.value = e as Error
-      toast.error('获取环境列表失败', (e as Error)?.message || '未知错误')
-      throw e
-    } finally {
-      isLoading.value = false
-    }
+  function useEnvironmentsQuery(projectIdOverride?: string) {
+    const pid = projectIdOverride || unref(projectId)
+    return useQuery({
+      queryKey: ['environments', 'list', pid],
+      queryFn: async () => {
+        if (!pid) return []
+        try {
+          const result = await trpc.environments.list.query({ projectId: pid })
+          return Array.isArray(result) ? result : []
+        } catch (err) {
+          log.error('Failed to fetch environments:', err)
+          if (isTRPCClientError(err)) {
+            toast.error('获取环境列表失败', err.message)
+          }
+          throw err
+        }
+      },
+      staleTime: 1000 * 60 * 5,
+      enabled: !!pid,
+    })
   }
 
-  const initWatcher = () => {
-    if (!projectId) return
-    if (isRef(projectId)) {
-      watch(
-        projectId,
-        (val) => {
-          currentProjectId.value = val || ''
-          if (currentProjectId.value) fetchEnvironments(currentProjectId.value)
-        },
-        { immediate: true },
-      )
-    } else {
-      currentProjectId.value = projectId
-      if (currentProjectId.value) fetchEnvironments(currentProjectId.value)
-    }
+  /**
+   * 获取环境的 GitOps 配置
+   */
+  function useGitOpsConfigQuery(environmentId: string) {
+    return useQuery({
+      queryKey: ['environments', 'gitops-config', environmentId],
+      queryFn: async () => {
+        try {
+          return await trpc.environments.getGitOpsConfig.query({ environmentId })
+        } catch (err) {
+          log.error('Failed to fetch GitOps config:', err)
+          if (isTRPCClientError(err)) {
+            toast.error('获取 GitOps 配置失败', err.message)
+          }
+          throw err
+        }
+      },
+      staleTime: 1000 * 60 * 5,
+      enabled: !!environmentId,
+    })
   }
-  onMounted(() => initWatcher())
+
+  // ==================== Mutations ====================
 
   /**
    * 创建环境
    */
-  const create = async (input: any) => {
-    isCreating.value = true
-    error.value = null
-    try {
-      const result = await trpc.environments.create.mutate(input)
+  const createEnvironmentMutation = useMutation({
+    mutationFn: async (input: any) => {
+      return await trpc.environments.create.mutate(input)
+    },
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['environments', 'list', variables.projectId] })
       toast.success('环境创建成功')
-      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
-      return result
-    } catch (e) {
-      error.value = e as Error
-      toast.error('创建失败', (e as Error)?.message || '未知错误')
-      throw e
-    } finally {
-      isCreating.value = false
-    }
-  }
+    },
+    onError: (err) => {
+      log.error('Failed to create environment:', err)
+      if (isTRPCClientError(err)) {
+        toast.error('创建失败', err.message)
+      }
+    },
+  })
 
   /**
    * 更新环境
    */
-  const update = async (input: any) => {
-    isUpdating.value = true
-    error.value = null
-    try {
-      const result = await trpc.environments.update.mutate(input)
+  const updateEnvironmentMutation = useMutation({
+    mutationFn: async (input: any) => {
+      return await trpc.environments.update.mutate(input)
+    },
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['environments', 'list'] })
       toast.success('环境更新成功')
-      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
-      return result
-    } catch (e) {
-      error.value = e as Error
-      toast.error('更新失败', (e as Error)?.message || '未知错误')
-      throw e
-    } finally {
-      isUpdating.value = false
-    }
-  }
+    },
+    onError: (err) => {
+      log.error('Failed to update environment:', err)
+      if (isTRPCClientError(err)) {
+        toast.error('更新失败', err.message)
+      }
+    },
+  })
 
   /**
    * 删除环境
    */
-  const remove = async (payload: { environmentId: string }) => {
-    isDeleting.value = true
-    error.value = null
-    try {
-      await trpc.environments.delete.mutate(payload)
+  const deleteEnvironmentMutation = useMutation({
+    mutationFn: async (payload: { environmentId: string }) => {
+      return await trpc.environments.delete.mutate(payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['environments', 'list'] })
       toast.success('环境删除成功')
-      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
-    } catch (e) {
-      error.value = e as Error
-      toast.error('删除失败', (e as Error)?.message || '未知错误')
-      throw e
-    } finally {
-      isDeleting.value = false
-    }
-  }
+    },
+    onError: (err) => {
+      log.error('Failed to delete environment:', err)
+      if (isTRPCClientError(err)) {
+        toast.error('删除失败', err.message)
+      }
+    },
+  })
 
   /**
    * 配置环境的 GitOps
    */
-  const configureGitOps = async (payload: {
-    environmentId: string
-    config: {
-      repositoryId: string
-      branch: string
-      path: string
-      autoSync?: boolean
-      syncInterval?: string
-    }
-  }) => {
-    isUpdating.value = true
-    error.value = null
-    try {
-      // 映射字段名到 API 期望的格式
+  const configureGitOpsMutation = useMutation({
+    mutationFn: async (payload: {
+      environmentId: string
+      config: {
+        repositoryId: string
+        branch: string
+        path: string
+        autoSync?: boolean
+        syncInterval?: string
+      }
+    }) => {
       const apiPayload = {
         environmentId: payload.environmentId,
         config: {
@@ -141,70 +144,60 @@ export function useEnvironments(projectId?: string | ReturnType<typeof ref<strin
           syncInterval: payload.config.syncInterval,
         },
       }
-      const result = await trpc.environments.configureGitOps.mutate(apiPayload)
+      return await trpc.environments.configureGitOps.mutate(apiPayload)
+    },
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['environments', 'list'] })
+      queryClient.invalidateQueries({
+        queryKey: ['environments', 'gitops-config', variables.environmentId],
+      })
       toast.success('GitOps 配置成功')
-      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
-      return result
-    } catch (e) {
-      error.value = e as Error
-      toast.error('配置 GitOps 失败', (e as Error)?.message || '未知错误')
-      throw e
-    } finally {
-      isUpdating.value = false
-    }
-  }
-
-  /**
-   * 获取环境的 GitOps 配置
-   */
-  const getGitOpsConfig = async (payload: { environmentId: string }) => {
-    isLoading.value = true
-    error.value = null
-    try {
-      const result = await trpc.environments.getGitOpsConfig.query(payload)
-      return result
-    } catch (e) {
-      error.value = e as Error
-      toast.error('获取 GitOps 配置失败', (e as Error)?.message || '未知错误')
-      throw e
-    } finally {
-      isLoading.value = false
-    }
-  }
+    },
+    onError: (err) => {
+      log.error('Failed to configure GitOps:', err)
+      if (isTRPCClientError(err)) {
+        toast.error('配置 GitOps 失败', err.message)
+      }
+    },
+  })
 
   /**
    * 禁用环境的 GitOps
    */
-  const disableGitOps = async (payload: { environmentId: string }) => {
-    isUpdating.value = true
-    error.value = null
-    try {
-      const result = await trpc.environments.disableGitOps.mutate(payload)
+  const disableGitOpsMutation = useMutation({
+    mutationFn: async (payload: { environmentId: string }) => {
+      return await trpc.environments.disableGitOps.mutate(payload)
+    },
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['environments', 'list'] })
+      queryClient.invalidateQueries({
+        queryKey: ['environments', 'gitops-config', variables.environmentId],
+      })
       toast.success('GitOps 已禁用')
-      if (currentProjectId.value) await fetchEnvironments(currentProjectId.value)
-      return result
-    } catch (e) {
-      error.value = e as Error
-      toast.error('禁用 GitOps 失败', (e as Error)?.message || '未知错误')
-      throw e
-    } finally {
-      isUpdating.value = false
-    }
-  }
+    },
+    onError: (err) => {
+      log.error('Failed to disable GitOps:', err)
+      if (isTRPCClientError(err)) {
+        toast.error('禁用 GitOps 失败', err.message)
+      }
+    },
+  })
 
   return {
-    environments: computed(() => environments.value),
-    isLoading: computed(() => isLoading.value),
-    error: computed(() => error.value),
-    isCreating: computed(() => isCreating.value),
-    isUpdating: computed(() => isUpdating.value),
-    isDeleting: computed(() => isDeleting.value),
-    fetchEnvironments,
-    create,
-    update,
-    delete: remove,
-    configureGitOps,
-    getGitOpsConfig,
-    disableGitOps,
+    // Queries
+    useEnvironmentsQuery,
+    useGitOpsConfigQuery,
+
+    // Mutations
+    create: createEnvironmentMutation.mutateAsync,
+    createEnvironmentMutation,
+    update: updateEnvironmentMutation.mutateAsync,
+    updateEnvironmentMutation,
+    delete: deleteEnvironmentMutation.mutateAsync,
+    deleteEnvironmentMutation,
+    configureGitOps: configureGitOpsMutation.mutateAsync,
+    configureGitOpsMutation,
+    disableGitOps: disableGitOpsMutation.mutateAsync,
+    disableGitOpsMutation,
   }
 }

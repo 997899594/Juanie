@@ -108,23 +108,27 @@ export class ProjectMembersService {
    */
   @Trace('projectMembers.list')
   async listMembers(projectId: string) {
-    const members = await this.db
-      .select({
-        id: schema.projectMembers.id,
-        userId: schema.projectMembers.userId,
-        role: schema.projectMembers.role,
-        joinedAt: schema.projectMembers.joinedAt,
+    // 使用 Relational Query 自动加载关联的 user
+    const members = await this.db.query.projectMembers.findMany({
+      where: (members, { eq }) => eq(members.projectId, projectId),
+      columns: {
+        id: true,
+        userId: true,
+        role: true,
+        joinedAt: true,
+      },
+      with: {
         user: {
-          id: schema.users.id,
-          email: schema.users.email,
-          username: schema.users.username,
-          displayName: schema.users.displayName,
-          avatarUrl: schema.users.avatarUrl,
+          columns: {
+            id: true,
+            email: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+          },
         },
-      })
-      .from(schema.projectMembers)
-      .innerJoin(schema.users, eq(schema.projectMembers.userId, schema.users.id))
-      .where(eq(schema.projectMembers.projectId, projectId))
+      },
+    })
 
     return members
   }
@@ -334,20 +338,24 @@ export class ProjectMembersService {
    */
   @Trace('projectMembers.listTeams')
   async listTeams(projectId: string) {
-    const teams = await this.db
-      .select({
-        id: schema.teamProjects.id,
-        teamId: schema.teamProjects.teamId,
-        createdAt: schema.teamProjects.createdAt,
+    // 使用 Relational Query 自动加载关联的 team
+    const teams = await this.db.query.teamProjects.findMany({
+      where: (teamProjects, { eq }) => eq(teamProjects.projectId, projectId),
+      columns: {
+        id: true,
+        teamId: true,
+        createdAt: true,
+      },
+      with: {
         team: {
-          id: schema.teams.id,
-          name: schema.teams.name,
-          description: schema.teams.description,
+          columns: {
+            id: true,
+            name: true,
+            description: true,
+          },
         },
-      })
-      .from(schema.teamProjects)
-      .innerJoin(schema.teams, eq(schema.teamProjects.teamId, schema.teams.id))
-      .where(eq(schema.teamProjects.projectId, projectId))
+      },
+    })
 
     return teams
   }

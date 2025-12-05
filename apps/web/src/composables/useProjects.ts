@@ -6,7 +6,7 @@ import { useProjectTeams } from './projects/useProjectTeams'
 
 /**
  * 项目管理组合式函数（聚合版本）
- * 提供项目的 CRUD 操作、成员管理、团队管理等
+ * 使用 TanStack Query 提供自动缓存、失效和重新获取功能
  *
  * 注意：这是一个便捷的聚合函数，如果只需要特定功能，
  * 可以直接导入对应的子 composable 以减少包大小
@@ -23,25 +23,16 @@ export function useProjects() {
     ...crud,
 
     // 成员管理
-    members: members.members,
-    fetchMembers: members.fetchMembers,
-    addMember: members.addMember,
-    updateMemberRole: members.updateMemberRole,
-    removeMember: members.removeMember,
+    ...members,
 
     // 团队管理
-    teams: teams.teams,
-    fetchTeams: teams.fetchTeams,
-    assignTeam: teams.assignTeam,
-    removeTeam: teams.removeTeam,
+    ...teams,
 
     // 资源管理
-    uploadLogo: assets.uploadLogo,
-    deleteLogo: assets.deleteLogo,
+    ...assets,
 
     // 状态和健康度
-    getStatus: status.getStatus,
-    getHealth: status.getHealth,
+    ...status,
   }
 }
 

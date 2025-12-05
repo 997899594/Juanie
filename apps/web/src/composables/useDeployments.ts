@@ -1,138 +1,127 @@
 import { log } from '@juanie/ui'
-import type { inferRouterOutputs } from '@trpc/server'
-import { computed, ref } from 'vue'
-import type { AppRouter } from '@/lib/trpc'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { computed } from 'vue'
 import { isTRPCClientError, trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 
-type RouterOutput = inferRouterOutputs<AppRouter>
-type Deployment = RouterOutput['deployments']['list'][number]
-
-export function useDeployments() {
+export function useDeployments(filters?: {
+  projectId?: string
+  environmentId?: string
+  status?: string
+}) {
   const toast = useToast()
+  const queryClient = useQueryClient()
 
-  const deployments = ref<Deployment[]>([])
-  const currentDeployment = ref<Deployment | null>(null)
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+  // 查询：部署列表
+  const {
+    data: deployments,
+    isLoading: isLoadingList,
+    error: listError,
+  } = useQuery({
+    queryKey: ['deployments', 'list', filters],
+    queryFn: () => trpc.deployments.list.query(filters || {}),
+  })
 
-  // 获取部署列表
-  async function fetchDeployments(filters?: {
-    projectId?: string
-    environmentId?: string
-    status?: string
-  }) {
-    loading.value = true
-    error.value = null
+  // 查询：部署详情（需要单独调用）
+  const fetchDeployment = (deploymentId: string) =>
+    useQuery({
+      queryKey: ['deployments', 'detail', deploymentId],
+      queryFn: () => trpc.deployments.get.query({ deploymentId }),
+    })
 
-    try {
-      const result = await trpc.deployments.list.query(filters || {})
-      deployments.value = result
-      return result
-    } catch (err) {
-      log.error('Failed to fetch deployments:', err)
-      error.value = '获取部署列表失败'
-      if (isTRPCClientError(err)) {
-        toast.error('获取部署列表失败', err.message)
-      }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  // 获取部署详情
-  async function fetchDeployment(deploymentId: string) {
-    loading.value = true
-    try {
-      const result = await trpc.deployments.get.query({ deploymentId })
-      currentDeployment.value = result
-      return result
-    } catch (err) {
-      if (isTRPCClientError(err)) {
-        toast.error('获取部署详情失败', err.message)
-      }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  // 创建部署
-  async function createDeployment(data: any) {
-    loading.value = true
-    try {
-      const result = await trpc.deployments.create.mutate(data)
+  // Mutation：创建部署
+  const createMutation = useMutation({
+    mutationFn: (data: any) => trpc.deployments.create.mutate(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployments', 'list'] })
       toast.success('部署创建成功')
-      return result
-    } catch (err) {
+    },
+    onError: (err) => {
+      log.error('Failed to create deployment:', err)
       if (isTRPCClientError(err)) {
         toast.error('创建失败', err.message)
       }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
+    },
+  })
 
-  // 批准部署
-  async function approveDeployment(deploymentId: string, comment?: string) {
-    loading.value = true
-    try {
-      await trpc.deployments.approve.mutate({ deploymentId, comment })
+  // Mutation：批准部署
+  const approveMutation = useMutation({
+    mutationFn: (data: { deploymentId: string; comment?: string }) =>
+      trpc.deployments.approve.mutate(data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['deployments', 'list'] })
+      queryClient.invalidateQueries({ queryKey: ['deployments', 'detail', variables.deploymentId] })
       toast.success('部署已批准')
-    } catch (err) {
+    },
+    onError: (err) => {
+      log.error('Failed to approve deployment:', err)
       if (isTRPCClientError(err)) {
         toast.error('批准失败', err.message)
       }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
+    },
+  })
 
-  // 拒绝部署
-  async function rejectDeployment(deploymentId: string, reason: string) {
-    loading.value = true
-    try {
-      await trpc.deployments.reject.mutate({ deploymentId, reason })
+  // Mutation：拒绝部署
+  const rejectMutation = useMutation({
+    mutationFn: (data: { deploymentId: string; reason: string }) =>
+      trpc.deployments.reject.mutate(data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['deployments', 'list'] })
+      queryClient.invalidateQueries({ queryKey: ['deployments', 'detail', variables.deploymentId] })
       toast.success('部署已拒绝')
-    } catch (err) {
+    },
+    onError: (err) => {
+      log.error('Failed to reject deployment:', err)
       if (isTRPCClientError(err)) {
         toast.error('拒绝失败', err.message)
       }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
+    },
+  })
 
-  // 回滚部署
-  async function rollbackDeployment(deploymentId: string) {
-    loading.value = true
-    try {
-      await trpc.deployments.rollback.mutate({ deploymentId })
+  // Mutation：回滚部署
+  const rollbackMutation = useMutation({
+    mutationFn: (deploymentId: string) => trpc.deployments.rollback.mutate({ deploymentId }),
+    onSuccess: (_, deploymentId) => {
+      queryClient.invalidateQueries({ queryKey: ['deployments', 'list'] })
+      queryClient.invalidateQueries({ queryKey: ['deployments', 'detail', deploymentId] })
       toast.success('部署已回滚')
-    } catch (err) {
+    },
+    onError: (err) => {
+      log.error('Failed to rollback deployment:', err)
       if (isTRPCClientError(err)) {
         toast.error('回滚失败', err.message)
       }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
+    },
+  })
+
+  // 包装函数以保持 API 兼容性
+  const createDeployment = (data: any) => createMutation.mutateAsync(data)
+
+  const approveDeployment = (deploymentId: string, comment?: string) =>
+    approveMutation.mutateAsync({ deploymentId, comment })
+
+  const rejectDeployment = (deploymentId: string, reason: string) =>
+    rejectMutation.mutateAsync({ deploymentId, reason })
+
+  const rollbackDeployment = (deploymentId: string) => rollbackMutation.mutateAsync(deploymentId)
 
   return {
-    deployments: computed(() => deployments.value),
-    currentDeployment: computed(() => currentDeployment.value),
-    loading: computed(() => loading.value),
-    error: computed(() => error.value),
-    fetchDeployments,
+    // 状态
+    deployments: computed(() => deployments.value ?? []),
+    loading: computed(() => isLoadingList.value),
+    error: computed(() => listError.value),
+
+    // 方法
     fetchDeployment,
     createDeployment,
     approveDeployment,
     rejectDeployment,
     rollbackDeployment,
+
+    // Mutation 状态
+    isCreating: computed(() => createMutation.isPending.value),
+    isApproving: computed(() => approveMutation.isPending.value),
+    isRejecting: computed(() => rejectMutation.isPending.value),
+    isRollingBack: computed(() => rollbackMutation.isPending.value),
   }
 }

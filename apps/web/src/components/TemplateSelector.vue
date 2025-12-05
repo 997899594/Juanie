@@ -126,18 +126,11 @@ import {
   CardTitle,
   Badge,
   Label,
-  Button,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from '@juanie/ui'
 import {
   Loader2,
@@ -152,12 +145,9 @@ import {
 import { trpc } from '@/lib/trpc'
 import { useToast } from '@/composables/useToast'
 
-const props = defineProps<{
-  modelValue?: string | null
-}>()
+const modelValue = defineModel<string | null>()
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string | null]
   'template-selected': [template: any]
 }>()
 
@@ -166,7 +156,7 @@ const toast = useToast()
 // 状态
 const templates = ref<any[]>([])
 const loading = ref(false)
-const selectedTemplateId = ref<string>(props.modelValue || 'blank') // 默认选择空白模板
+const selectedTemplateId = ref<string>(modelValue.value || 'blank') // 默认选择空白模板
 
 
 // 计算属性
@@ -206,12 +196,12 @@ function handleTemplateChange(value: any) {
   selectedTemplateId.value = value
   
   if (value === 'blank') {
-    emit('update:modelValue', null)
+    modelValue.value = null
     emit('template-selected', null)
   } else {
     const template = templates.value.find(t => t.id === value)
     if (template) {
-      emit('update:modelValue', template.id)
+      modelValue.value = template.id
       emit('template-selected', template)
     }
   }

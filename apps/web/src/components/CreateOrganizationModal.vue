@@ -1,5 +1,5 @@
 <template>
-  <Dialog :open="open" @update:open="$emit('update:open', $event)">
+  <Dialog v-model:open="open">
     <DialogContent class="sm:max-w-[600px]">
       <DialogHeader>
         <DialogTitle>{{ isEdit ? '编辑组织' : '创建组织' }}</DialogTitle>
@@ -91,7 +91,7 @@
           <Button
             type="button"
             variant="outline"
-            @click="$emit('update:open', false)"
+            @click="open = false"
           >
             取消
           </Button>
@@ -139,7 +139,6 @@ interface Organization {
 }
 
 interface Props {
-  open: boolean
   loading?: boolean
   organization?: Organization | null
 }
@@ -149,8 +148,9 @@ const props = withDefaults(defineProps<Props>(), {
   organization: null,
 })
 
+const open = defineModel<boolean>('open', { required: true })
+
 const emit = defineEmits<{
-  'update:open': [value: boolean]
   submit: [data: {
     name: string
     slug: string
@@ -199,7 +199,7 @@ watch(
 
 // 监听 open 变化，关闭时重置表单
 watch(
-  () => props.open,
+  () => open.value,
   (isOpen) => {
     if (!isOpen && !props.organization) {
       formData.value = {

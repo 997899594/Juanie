@@ -202,3 +202,98 @@ export class GitOpsSetupError extends BusinessError {
     return 'GitOps 配置失败，请检查 Git 仓库设置'
   }
 }
+
+// ==================== 团队相关错误 ====================
+
+export class TeamNotFoundError extends BusinessError {
+  constructor(teamId: string) {
+    super(`Team ${teamId} not found`, 'TEAM_NOT_FOUND', 404, false, { teamId })
+  }
+
+  getUserMessage(): string {
+    return '团队不存在'
+  }
+}
+
+export class TeamMemberAlreadyExistsError extends BusinessError {
+  constructor(teamId: string, userId: string) {
+    super(
+      `User ${userId} is already a member of team ${teamId}`,
+      'TEAM_MEMBER_EXISTS',
+      409,
+      false,
+      { teamId, userId },
+    )
+  }
+
+  getUserMessage(): string {
+    return '用户已经是团队成员'
+  }
+}
+
+// ==================== 通知相关错误 ====================
+
+export class NotificationNotFoundError extends BusinessError {
+  constructor(notificationId: string) {
+    super(`Notification ${notificationId} not found`, 'NOTIFICATION_NOT_FOUND', 404, false, {
+      notificationId,
+    })
+  }
+
+  getUserMessage(): string {
+    return '通知不存在'
+  }
+}
+
+// ==================== 存储相关错误 ====================
+
+export class StorageError extends BusinessError {
+  constructor(operation: string, reason: string) {
+    super(`Storage ${operation} failed: ${reason}`, 'STORAGE_ERROR', 500, true, {
+      operation,
+      reason,
+    })
+  }
+
+  getUserMessage(): string {
+    return '文件操作失败，请稍后重试'
+  }
+}
+
+// ==================== OAuth 相关错误 ====================
+
+export class OAuthError extends BusinessError {
+  constructor(provider: string, reason: string) {
+    super(`OAuth ${provider} error: ${reason}`, 'OAUTH_ERROR', 400, false, { provider, reason })
+  }
+
+  getUserMessage(): string {
+    return `${this.context?.provider} 授权失败: ${this.context?.reason}`
+  }
+}
+
+export class InvalidStateError extends BusinessError {
+  constructor(provider: string) {
+    super(`Invalid OAuth state for ${provider}`, 'INVALID_STATE', 400, false, { provider })
+  }
+
+  getUserMessage(): string {
+    return '授权状态无效或已过期，请重新授权'
+  }
+}
+
+// ==================== 配额相关错误 ====================
+
+export class QuotaExceededError extends BusinessError {
+  constructor(resource: string, limit: number, current: number) {
+    super(`Quota exceeded for ${resource}: ${current}/${limit}`, 'QUOTA_EXCEEDED', 403, false, {
+      resource,
+      limit,
+      current,
+    })
+  }
+
+  getUserMessage(): string {
+    return `${this.context?.resource} 配额已达上限 (${this.context?.current}/${this.context?.limit})`
+  }
+}

@@ -185,24 +185,25 @@ export class ProjectsService {
     const member = await this.getOrgMember(organizationId, userId)
     const isOrgAdmin = member && ['owner', 'admin'].includes(member.role)
 
-    // 获取所有项目
-    const allProjects = await this.db
-      .select({
-        id: schema.projects.id,
-        name: schema.projects.name,
-        slug: schema.projects.slug,
-        description: schema.projects.description,
-        logoUrl: schema.projects.logoUrl,
-        visibility: schema.projects.visibility,
-        status: schema.projects.status,
-        config: schema.projects.config,
-        createdAt: schema.projects.createdAt,
-        updatedAt: schema.projects.updatedAt,
-      })
-      .from(schema.projects)
-      .where(
-        and(eq(schema.projects.organizationId, organizationId), isNull(schema.projects.deletedAt)),
-      )
+    // 使用 Relational Query 获取所有项目（包含关联数据）
+    const allProjects = await this.db.query.projects.findMany({
+      where: and(
+        eq(schema.projects.organizationId, organizationId),
+        isNull(schema.projects.deletedAt),
+      ),
+      columns: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        logoUrl: true,
+        visibility: true,
+        status: true,
+        config: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
 
     // 根据 visibility 过滤项目
     const filteredProjects = []
@@ -258,23 +259,23 @@ export class ProjectsService {
   // 获取项目详情
   @Trace('projects.get')
   async get(userId: string, projectId: string) {
-    const [project] = await this.db
-      .select({
-        id: schema.projects.id,
-        name: schema.projects.name,
-        slug: schema.projects.slug,
-        description: schema.projects.description,
-        organizationId: schema.projects.organizationId,
-        logoUrl: schema.projects.logoUrl,
-        visibility: schema.projects.visibility,
-        status: schema.projects.status,
-        config: schema.projects.config,
-        createdAt: schema.projects.createdAt,
-        updatedAt: schema.projects.updatedAt,
-      })
-      .from(schema.projects)
-      .where(and(eq(schema.projects.id, projectId), isNull(schema.projects.deletedAt)))
-      .limit(1)
+    // 使用 Relational Query 获取项目（更简洁）
+    const project = await this.db.query.projects.findFirst({
+      where: and(eq(schema.projects.id, projectId), isNull(schema.projects.deletedAt)),
+      columns: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        organizationId: true,
+        logoUrl: true,
+        visibility: true,
+        status: true,
+        config: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
 
     if (!project) {
       return null
@@ -303,26 +304,23 @@ export class ProjectsService {
       throw new ProjectNotFoundError(projectId)
     }
 
-    // 获取环境列表
-    const environments = await this.db
-      .select()
-      .from(schema.environments)
-      .where(eq(schema.environments.projectId, projectId))
+    // 使用 Relational Query 获取环境列表
+    const environments = await this.db.query.environments.findMany({
+      where: eq(schema.environments.projectId, projectId),
+    })
 
-    // 获取仓库列表
-    const repositories = await this.db
-      .select()
-      .from(schema.repositories)
-      .where(eq(schema.repositories.projectId, projectId))
+    // 使用 Relational Query 获取仓库列表
+    const repositories = await this.db.query.repositories.findMany({
+      where: eq(schema.repositories.projectId, projectId),
+    })
 
-    // 获取部署列表
+    // 使用 Relational Query 获取部署列表
     const { desc } = await import('drizzle-orm')
-    const deployments = await this.db
-      .select()
-      .from(schema.deployments)
-      .where(eq(schema.deployments.projectId, projectId))
-      .orderBy(desc(schema.deployments.createdAt))
-      .limit(50)
+    const deployments = await this.db.query.deployments.findMany({
+      where: eq(schema.deployments.projectId, projectId),
+      orderBy: [desc(schema.deployments.createdAt)],
+      limit: 50,
+    })
 
     // 计算统计数据
     const totalDeployments = deployments.length
@@ -330,11 +328,10 @@ export class ProjectsService {
     const failedDeployments = deployments.filter((d) => d.status === 'failed').length
     const lastDeployment = deployments[0]
 
-    // 获取 GitOps 资源
-    const gitopsResources = await this.db
-      .select()
-      .from(schema.gitopsResources)
-      .where(eq(schema.gitopsResources.projectId, projectId))
+    // 使用 Relational Query 获取 GitOps 资源
+    const gitopsResources = await this.db.query.gitopsResources.findMany({
+      where: eq(schema.gitopsResources.projectId, projectId),
+    })
 
     return {
       project: project as any,
@@ -654,22 +651,26 @@ export class ProjectsService {
     // 检查权限：需要 READ 权限
     await this.rbac.assert(userId, Resource.PROJECT, Action.READ, projectId)
 
-    const members = await this.db
-      .select({
-        id: schema.projectMembers.id,
-        role: schema.projectMembers.role,
-        joinedAt: schema.projectMembers.joinedAt,
+    // 使用 Relational Query 获取成员（自动 join user）
+    const members = await this.db.query.projectMembers.findMany({
+      where: eq(schema.projectMembers.projectId, projectId),
+      columns: {
+        id: true,
+        role: true,
+        joinedAt: true,
+      },
+      with: {
         user: {
-          id: schema.users.id,
-          username: schema.users.username,
-          displayName: schema.users.displayName,
-          avatarUrl: schema.users.avatarUrl,
-          email: schema.users.email,
+          columns: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            email: true,
+          },
         },
-      })
-      .from(schema.projectMembers)
-      .innerJoin(schema.users, eq(schema.projectMembers.userId, schema.users.id))
-      .where(eq(schema.projectMembers.projectId, projectId))
+      },
+    })
 
     return members
   }
@@ -850,21 +851,25 @@ export class ProjectsService {
     // 检查权限：需要 READ 权限
     await this.rbac.assert(userId, Resource.PROJECT, Action.READ, projectId)
 
-    const teams = await this.db
-      .select({
-        id: schema.teamProjects.id,
-        role: schema.teamProjects.role,
-        createdAt: schema.teamProjects.createdAt,
+    // 使用 Relational Query 获取团队（自动 join team）
+    const teams = await this.db.query.teamProjects.findMany({
+      where: eq(schema.teamProjects.projectId, projectId),
+      columns: {
+        id: true,
+        role: true,
+        createdAt: true,
+      },
+      with: {
         team: {
-          id: schema.teams.id,
-          name: schema.teams.name,
-          slug: schema.teams.slug,
-          description: schema.teams.description,
+          columns: {
+            id: true,
+            name: true,
+            slug: true,
+            description: true,
+          },
         },
-      })
-      .from(schema.teamProjects)
-      .innerJoin(schema.teams, eq(schema.teamProjects.teamId, schema.teams.id))
-      .where(eq(schema.teamProjects.projectId, projectId))
+      },
+    })
 
     return teams
   }
@@ -981,32 +986,26 @@ export class ProjectsService {
 
   // 辅助方法：获取组织成员信息
   private async getOrgMember(organizationId: string, userId: string) {
-    const [member] = await this.db
-      .select()
-      .from(schema.organizationMembers)
-      .where(
-        and(
-          eq(schema.organizationMembers.organizationId, organizationId),
-          eq(schema.organizationMembers.userId, userId),
-        ),
-      )
-      .limit(1)
+    // 使用 Relational Query
+    const member = await this.db.query.organizationMembers.findFirst({
+      where: and(
+        eq(schema.organizationMembers.organizationId, organizationId),
+        eq(schema.organizationMembers.userId, userId),
+      ),
+    })
 
     return member || null
   }
 
   // 辅助方法：获取项目成员信息
   private async getProjectMember(projectId: string, userId: string) {
-    const [member] = await this.db
-      .select()
-      .from(schema.projectMembers)
-      .where(
-        and(
-          eq(schema.projectMembers.projectId, projectId),
-          eq(schema.projectMembers.userId, userId),
-        ),
-      )
-      .limit(1)
+    // 使用 Relational Query
+    const member = await this.db.query.projectMembers.findFirst({
+      where: and(
+        eq(schema.projectMembers.projectId, projectId),
+        eq(schema.projectMembers.userId, userId),
+      ),
+    })
 
     return member || null
   }

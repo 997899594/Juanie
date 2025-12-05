@@ -124,11 +124,16 @@ export class StorageService {
 
     const stream = this.minioClient.listObjects(this.bucketName, prefix, true)
 
-    for await (const obj of stream) {
-      if (obj.name) {
-        objectsList.push(obj.name)
-      }
-    }
+    // 使用 Promise 包装来处理 stream
+    await new Promise<void>((resolve, reject) => {
+      stream.on('data', (obj) => {
+        if (obj.name) {
+          objectsList.push(obj.name)
+        }
+      })
+      stream.on('end', () => resolve())
+      stream.on('error', (err) => reject(err))
+    })
 
     // 删除所有找到的文件
     for (const objName of objectsList) {

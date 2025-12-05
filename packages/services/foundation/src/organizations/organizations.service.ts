@@ -67,67 +67,73 @@ export class OrganizationsService {
 
   // 列出用户的组织
   async list(userId: string) {
-    const orgs = await this.db
-      .select({
-        id: schema.organizations.id,
-        name: schema.organizations.name,
-        slug: schema.organizations.slug,
-        displayName: schema.organizations.displayName,
-        quotas: schema.organizations.quotas,
-        createdAt: schema.organizations.createdAt,
-        role: schema.organizationMembers.role,
-        gitSyncEnabled: schema.organizations.gitSyncEnabled,
-        gitProvider: schema.organizations.gitProvider,
-        gitOrgName: schema.organizations.gitOrgName,
-        gitOrgUrl: schema.organizations.gitOrgUrl,
-        gitLastSyncAt: schema.organizations.gitLastSyncAt,
-      })
-      .from(schema.organizations)
-      .innerJoin(
-        schema.organizationMembers,
-        eq(schema.organizations.id, schema.organizationMembers.organizationId),
-      )
-      .where(
-        and(eq(schema.organizationMembers.userId, userId), isNull(schema.organizations.deletedAt)),
-      )
+    // 使用 Relational Query 加载关联数据
+    const memberships = await this.db.query.organizationMembers.findMany({
+      where: eq(schema.organizationMembers.userId, userId),
+      columns: {
+        role: true,
+      },
+      with: {
+        organization: true,
+      },
+    })
 
-    return orgs
+    // 过滤软删除的组织，并扁平化结构
+    return memberships
+      .filter((m) => m.organization && !m.organization.deletedAt)
+      .map((m) => ({
+        id: m.organization.id,
+        name: m.organization.name,
+        slug: m.organization.slug,
+        displayName: m.organization.displayName,
+        quotas: m.organization.quotas,
+        createdAt: m.organization.createdAt,
+        gitSyncEnabled: m.organization.gitSyncEnabled,
+        gitProvider: m.organization.gitProvider,
+        gitOrgName: m.organization.gitOrgName,
+        gitOrgUrl: m.organization.gitOrgUrl,
+        gitLastSyncAt: m.organization.gitLastSyncAt,
+        role: m.role,
+      }))
   }
 
   // 获取组织详情
   async get(orgId: string, userId: string) {
-    const [org] = await this.db
-      .select({
-        id: schema.organizations.id,
-        name: schema.organizations.name,
-        slug: schema.organizations.slug,
-        displayName: schema.organizations.displayName,
-        quotas: schema.organizations.quotas,
-        createdAt: schema.organizations.createdAt,
-        updatedAt: schema.organizations.updatedAt,
-        role: schema.organizationMembers.role,
-        gitSyncEnabled: schema.organizations.gitSyncEnabled,
-        gitProvider: schema.organizations.gitProvider,
-        gitOrgId: schema.organizations.gitOrgId,
-        gitOrgName: schema.organizations.gitOrgName,
-        gitOrgUrl: schema.organizations.gitOrgUrl,
-        gitLastSyncAt: schema.organizations.gitLastSyncAt,
-      })
-      .from(schema.organizations)
-      .innerJoin(
-        schema.organizationMembers,
-        eq(schema.organizations.id, schema.organizationMembers.organizationId),
-      )
-      .where(
-        and(
-          eq(schema.organizations.id, orgId),
-          eq(schema.organizationMembers.userId, userId),
-          isNull(schema.organizations.deletedAt),
-        ),
-      )
-      .limit(1)
+    // 使用 Relational Query 的 with + where（回调函数方式）
+    const org = await this.db.query.organizations.findFirst({
+      where: (orgs, { eq, and, isNull }) => and(eq(orgs.id, orgId), isNull(orgs.deletedAt)),
+      with: {
+        members: {
+          where: (members, { eq }) => eq(members.userId, userId),
+        },
+      },
+    })
 
-    return org || null
+    if (!org || !org.members || org.members.length === 0) {
+      return null
+    }
+
+    const member = org.members[0]
+    if (!member) {
+      return null
+    }
+
+    return {
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      displayName: org.displayName,
+      quotas: org.quotas,
+      createdAt: org.createdAt,
+      updatedAt: org.updatedAt,
+      role: member.role,
+      gitSyncEnabled: org.gitSyncEnabled,
+      gitProvider: org.gitProvider,
+      gitOrgId: org.gitOrgId,
+      gitOrgName: org.gitOrgName,
+      gitOrgUrl: org.gitOrgUrl,
+      gitLastSyncAt: org.gitLastSyncAt,
+    }
   }
 
   // 更新组织
@@ -210,24 +216,28 @@ export class OrganizationsService {
       throw new Error('不是组织成员')
     }
 
-    const members = await this.db
-      .select({
-        id: schema.organizationMembers.id,
-        role: schema.organizationMembers.role,
-        joinedAt: schema.organizationMembers.joinedAt,
+    // 使用 Relational Query 加载用户信息
+    const members = await this.db.query.organizationMembers.findMany({
+      where: eq(schema.organizationMembers.organizationId, orgId),
+      with: {
         user: {
-          id: schema.users.id,
-          username: schema.users.username,
-          displayName: schema.users.displayName,
-          avatarUrl: schema.users.avatarUrl,
-          email: schema.users.email,
+          columns: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            email: true,
+          },
         },
-      })
-      .from(schema.organizationMembers)
-      .innerJoin(schema.users, eq(schema.organizationMembers.userId, schema.users.id))
-      .where(eq(schema.organizationMembers.organizationId, orgId))
+      },
+    })
 
-    return members
+    return members.map((m) => ({
+      id: m.id,
+      role: m.role,
+      joinedAt: m.joinedAt,
+      user: m.user,
+    }))
   }
 
   // 更新成员角色

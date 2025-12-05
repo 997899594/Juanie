@@ -11,8 +11,10 @@
     "type-check": "vue-tsc --noEmit --pretty"
   },
   "dependencies": {
+    "@grafana/faro-web-sdk": "^2.0.2",
     "@juanie/types": "workspace:*",
     "@juanie/ui": "workspace:*",
+    "@tanstack/vue-query": "^5.92.1",
     "@trpc/client": "^11.0.0",
     "@vueuse/core": "^11.3.0",
     "@vueuse/motion": "^3.0.3",

@@ -1,5 +1,5 @@
 <template>
-  <Dialog :open="true" @update:open="$emit('close')">
+  <Dialog v-model:open="open">
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>编辑环境</DialogTitle>
@@ -126,7 +126,7 @@
           <Button
             type="button"
             variant="outline"
-            @click="$emit('close')"
+            @click="open = false"
             :disabled="loading"
           >
             取消
@@ -161,7 +161,8 @@ import {
   SelectValue,
 } from '@juanie/ui'
 import { Plus, X, Loader2 } from 'lucide-vue-next'
-import { trpc, type AppRouter } from '@/lib/trpc'
+import { trpc } from '@/lib/trpc'
+import { log } from '@juanie/ui'
 
 interface EnvironmentVariable {
   key: string
@@ -174,8 +175,9 @@ const props = defineProps<{
   environment: Environment
 }>()
 
+const open = defineModel<boolean>('open', { required: true })
+
 const emit = defineEmits<{
-  close: []
   updated: [environment: Environment | undefined]
 }>()
 
@@ -306,6 +308,7 @@ const handleSubmit = async () => {
     
     if (result) {
       emit('updated', result)
+      open.value = false
     }
   } catch (error: any) {
     log.error('更新环境失败:', error)

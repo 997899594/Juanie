@@ -1,6 +1,6 @@
 import { log } from '@juanie/ui'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { inferRouterOutputs } from '@trpc/server'
-import { ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import type { AppRouter } from '@/lib/trpc'
 import { isTRPCClientError, trpc } from '@/lib/trpc'
@@ -9,109 +9,125 @@ type RouterOutput = inferRouterOutputs<AppRouter>
 type ProjectMember = RouterOutput['projects']['listMembers'][number]
 
 /**
- * 项目成员管理
+ * 项目成员管理 (TanStack Query)
  */
 export function useProjectMembers() {
   const toast = useToast()
-  const members = ref<ProjectMember[]>([])
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+  const queryClient = useQueryClient()
 
-  async function fetchMembers(projectId: string) {
-    loading.value = true
-    error.value = null
+  // ==================== Queries ====================
 
-    try {
-      const result = await trpc.projects.listMembers.query({ projectId })
-      members.value = result
-      return result
-    } catch (err) {
-      log.error('Failed to fetch members:', err)
-      error.value = '获取成员列表失败'
-      if (isTRPCClientError(err)) {
-        toast.error('获取成员列表失败', err.message)
-      }
-      throw err
-    } finally {
-      loading.value = false
-    }
+  /**
+   * 获取项目成员列表
+   */
+  function useMembersQuery(projectId: string) {
+    return useQuery({
+      queryKey: ['projects', 'members', projectId],
+      queryFn: async () => {
+        try {
+          return await trpc.projects.listMembers.query({ projectId })
+        } catch (err) {
+          log.error('Failed to fetch members:', err)
+          if (isTRPCClientError(err)) {
+            toast.error('获取成员列表失败', err.message)
+          }
+          throw err
+        }
+      },
+      staleTime: 1000 * 60 * 5,
+      enabled: !!projectId,
+    })
   }
 
-  async function addMember(
-    projectId: string,
-    data: { memberId: string; role: 'admin' | 'developer' | 'viewer' },
-  ) {
-    loading.value = true
-    error.value = null
+  // ==================== Mutations ====================
 
-    try {
-      const result = await trpc.projects.addMember.mutate({ projectId, ...data })
-      await fetchMembers(projectId)
+  /**
+   * 添加成员
+   */
+  const addMemberMutation = useMutation({
+    mutationFn: async ({
+      projectId,
+      memberId,
+      role,
+    }: {
+      projectId: string
+      memberId: string
+      role: 'admin' | 'developer' | 'viewer'
+    }) => {
+      return await trpc.projects.addMember.mutate({ projectId, memberId, role })
+    },
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['projects', 'members', variables.projectId] })
       toast.success('添加成功', '成员已添加到项目')
-      return result
-    } catch (err) {
+    },
+    onError: (err) => {
       log.error('Failed to add member:', err)
-      error.value = '添加成员失败'
       if (isTRPCClientError(err)) {
         toast.error('添加成员失败', err.message)
       }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
+    },
+  })
 
-  async function updateMemberRole(
-    projectId: string,
-    memberId: string,
-    role: 'admin' | 'developer' | 'viewer',
-  ) {
-    loading.value = true
-    error.value = null
-
-    try {
-      await trpc.projects.updateMemberRole.mutate({ projectId, memberId, role })
-      await fetchMembers(projectId)
+  /**
+   * 更新成员角色
+   */
+  const updateMemberRoleMutation = useMutation({
+    mutationFn: async ({
+      projectId,
+      memberId,
+      role,
+    }: {
+      projectId: string
+      memberId: string
+      role: 'admin' | 'developer' | 'viewer'
+    }) => {
+      return await trpc.projects.updateMemberRole.mutate({ projectId, memberId, role })
+    },
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['projects', 'members', variables.projectId] })
       toast.success('更新成功', '成员角色已更新')
-    } catch (err) {
+    },
+    onError: (err) => {
       log.error('Failed to update member role:', err)
-      error.value = '更新成员角色失败'
       if (isTRPCClientError(err)) {
         toast.error('更新成员角色失败', err.message)
       }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
+    },
+  })
 
-  async function removeMember(projectId: string, memberId: string) {
-    loading.value = true
-    error.value = null
-
-    try {
-      await trpc.projects.removeMember.mutate({ projectId, memberId })
-      members.value = members.value.filter((m) => m.id !== memberId)
+  /**
+   * 移除成员
+   */
+  const removeMemberMutation = useMutation({
+    mutationFn: async ({ projectId, memberId }: { projectId: string; memberId: string }) => {
+      return await trpc.projects.removeMember.mutate({ projectId, memberId })
+    },
+    onSuccess: (result, variables) => {
+      // 乐观更新：从缓存中移除成员
+      queryClient.setQueryData<ProjectMember[]>(
+        ['projects', 'members', variables.projectId],
+        (old) => old?.filter((m) => m.id !== variables.memberId),
+      )
       toast.success('移除成功', '成员已移除')
-    } catch (err) {
+    },
+    onError: (err) => {
       log.error('Failed to remove member:', err)
-      error.value = '移除成员失败'
       if (isTRPCClientError(err)) {
         toast.error('移除成员失败', err.message)
       }
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
+    },
+  })
 
   return {
-    members,
-    loading,
-    error,
-    fetchMembers,
-    addMember,
-    updateMemberRole,
-    removeMember,
+    // Queries
+    useMembersQuery,
+
+    // Mutations
+    addMember: addMemberMutation.mutateAsync,
+    addMemberMutation,
+    updateMemberRole: updateMemberRoleMutation.mutateAsync,
+    updateMemberRoleMutation,
+    removeMember: removeMemberMutation.mutateAsync,
+    removeMemberMutation,
   }
 }
