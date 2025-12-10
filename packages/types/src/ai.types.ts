@@ -3,15 +3,106 @@
  * 统一管理所有 AI 相关的类型
  */
 
+// 注意: AIProvider 和 AIMessage 在 schemas.ts 中定义(从 zod schema 推断)
+// 这里只定义其他 AI 相关类型
+
+/**
+ * AI 提供商类型 (用于非 zod 场景)
+ * 注意: 优先使用 schemas.ts 中从 zod 推断的类型
+ */
+export type AIProvider = 'anthropic' | 'openai' | 'zhipu' | 'qwen' | 'ollama'
+
 /**
  * 支持的 AI 模型
  */
 export type AIModel =
+  // Ollama 本地模型
   | 'qwen2.5-coder:7b' // 通义千问代码模型
   | 'deepseek-coder:6.7b' // DeepSeek 代码模型
   | 'codellama:7b' // Meta CodeLlama
   | 'mistral:7b' // Mistral 通用模型
   | 'llama3.1:8b' // Meta Llama 3.1
+  // Claude 模型
+  | 'claude-3-5-sonnet-20241022'
+  | 'claude-3-opus-20240229'
+  | 'claude-3-sonnet-20240229'
+  | 'claude-3-haiku-20240307'
+  // OpenAI 模型
+  | 'gpt-4-turbo'
+  | 'gpt-4'
+  | 'gpt-3.5-turbo'
+  // 智谱 GLM 模型
+  | 'glm-4'
+  | 'glm-4-flash'
+  | 'glm-4v'
+  | 'glm-6'
+  // 阿里 Qwen 模型
+  | 'qwen2.5'
+  | 'qwen2.5-coder'
+  | 'qwenvl'
+
+/**
+ * AI 客户端配置
+ */
+export interface AIClientConfig {
+  provider: AIProvider
+  model: AIModel
+  apiKey?: string
+  baseURL?: string
+  temperature?: number
+  maxTokens?: number
+}
+
+/**
+ * AI 消息
+ */
+export interface AIMessage {
+  role: 'system' | 'user' | 'assistant' | 'function'
+  content: string
+  name?: string
+  functionCall?: {
+    name: string
+    arguments: string
+  }
+}
+
+/**
+ * AI 完成选项
+ */
+export interface AICompletionOptions {
+  messages: AIMessage[]
+  temperature?: number
+  maxTokens?: number
+  stream?: boolean
+  functions?: AIFunction[]
+  stopSequences?: string[]
+}
+
+/**
+ * AI 完成结果
+ */
+export interface AICompletionResult {
+  content: string
+  finishReason: 'stop' | 'length' | 'function_call' | 'content_filter'
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+  functionCall?: {
+    name: string
+    arguments: Record<string, unknown>
+  }
+}
+
+/**
+ * AI 函数定义
+ */
+export interface AIFunction {
+  name: string
+  description: string
+  parameters: Record<string, unknown> // JSON Schema
+}
 
 /**
  * 编程语言类型
@@ -136,6 +227,8 @@ export interface CodeReviewRequest {
   model?: AIModel
   /** 上下文信息 */
   context?: {
+    /** 项目 ID */
+    projectId?: string
     /** 项目类型 */
     projectType?: string
     /** 框架 */

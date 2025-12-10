@@ -152,19 +152,97 @@ Project
 #### `projects.create`
 创建项目
 
+支持多种创建场景：
+- **简单创建**: 只提供基本信息
+- **模板创建**: 提供 `templateId` 应用模板
+- **仓库创建**: 提供 `repository` 连接 Git 仓库
+- **完整创建**: 同时提供模板和仓库
+
 ```typescript
 trpc.projects.create.useMutation({
+  // 必需字段
   name: string
   slug: string
-  description?: string
   organizationId: string
-  visibility?: 'public' | 'private'
+  
+  // 可选字段
+  description?: string
+  visibility?: 'public' | 'private' | 'internal'
+  logoUrl?: string
+  
+  // 模板配置（可选）
   templateId?: string
+  templateConfig?: Record<string, any>
+  
+  // 仓库配置（可选）
+  repository?: {
+    provider: 'github' | 'gitlab'
+    name: string
+    visibility: 'public' | 'private'
+    autoInit?: boolean
+  }
 })
 
 // 返回
-Project
+{
+  ...Project,
+  jobIds?: string[]  // 异步任务 ID（如果有模板或仓库）
+}
 ```
+
+**示例**:
+
+```typescript
+// 简单创建
+const project = await trpc.projects.create.mutate({
+  name: 'My Project',
+  slug: 'my-project',
+  organizationId: 'org-123',
+})
+
+// 使用模板创建
+const project = await trpc.projects.create.mutate({
+  name: 'Next.js App',
+  slug: 'nextjs-app',
+  organizationId: 'org-123',
+  templateId: 'nextjs-15-app',
+  templateConfig: {
+    typescript: true,
+    tailwind: true,
+  },
+})
+
+// 连接仓库创建
+const project = await trpc.projects.create.mutate({
+  name: 'My App',
+  slug: 'my-app',
+  organizationId: 'org-123',
+  repository: {
+    provider: 'github',
+    name: 'my-org/my-app',
+    visibility: 'private',
+    autoInit: true,
+  },
+})
+
+// 完整创建（模板 + 仓库）
+const project = await trpc.projects.create.mutate({
+  name: 'Full Stack App',
+  slug: 'full-stack-app',
+  organizationId: 'org-123',
+  templateId: 'nextjs-15-app',
+  repository: {
+    provider: 'github',
+    name: 'my-org/full-stack-app',
+    visibility: 'private',
+  },
+})
+```
+
+**注意**: 
+- 所有创建场景都使用统一的 API 端点
+- 如果提供了 `templateId` 或 `repository`，创建过程将异步进行
+- 可以通过返回的 `jobIds` 订阅 SSE 事件来跟踪初始化进度
 
 #### `projects.update`
 更新项目
@@ -742,6 +820,531 @@ trpc.auditLogs.list.useQuery({
 {
   items: AuditLog[]
   total: number
+}
+```
+
+---
+
+### 15. AI 模块 (ai)
+
+AI 模块提供多模型支持、RAG、提示词管理、对话历史等功能。
+
+#### `ai.complete`
+AI 同步调用
+
+```typescript
+trpc.ai.complete.useMutation({
+  provider: 'anthropic' | 'openai' | 'zhipu' | 'qwen' | 'ollama'
+  model: string
+  messages: Array<{
+    role: 'system' | 'user' | 'assistant'
+    content: string
+  }>
+  temperature?: number
+  maxTokens?: number
+})
+
+// 返回
+{
+  content: string
+  finishReason: 'stop' | 'length' | 'function_call' | 'content_filter'
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+}
+```
+
+**示例**:
+
+```typescript
+const result = await trpc.ai.complete.mutate({
+  provider: 'zhipu',
+  model: 'glm-4-flash',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant' },
+    { role: 'user', content: 'Explain TypeScript generics' }
+  ],
+  temperature: 0.7,
+  maxTokens: 500,
+})
+```
+
+#### `ai.streamComplete`
+AI 流式调用
+
+```typescript
+trpc.ai.streamComplete.useMutation({
+  provider: string
+  model: string
+  messages: AIMessage[]
+  temperature?: number
+  maxTokens?: number
+})
+
+// 返回 AsyncIterable<string>
+```
+
+#### `ai.chat`
+AI 聊天（带上下文管理）
+
+```typescript
+trpc.ai.chat.useMutation({
+  provider: string
+  model: string
+  message: string
+  projectId?: string
+  conversationId?: string
+})
+
+// 返回
+{
+  response: string
+  conversationId: string
+  usage: TokenUsage
+}
+```
+
+#### 提示词模板管理
+
+##### `ai.prompts.create`
+创建提示词模板
+
+```typescript
+trpc.ai.prompts.create.useMutation({
+  name: string
+  category: 'code-review' | 'config-gen' | 'troubleshooting' | 'general'
+  template: string
+  variables: string[]
+})
+
+// 返回
+PromptTemplate
+```
+
+##### `ai.prompts.findById`
+查询提示词模板
+
+```typescript
+trpc.ai.prompts.findById.useQuery({
+  id: string
+})
+
+// 返回
+PromptTemplate
+```
+
+##### `ai.prompts.findByCategory`
+按分类查询模板
+
+```typescript
+trpc.ai.prompts.findByCategory.useQuery({
+  category: string
+})
+
+// 返回
+PromptTemplate[]
+```
+
+##### `ai.prompts.render`
+渲染提示词模板
+
+```typescript
+trpc.ai.prompts.render.useMutation({
+  id: string
+  variables: Record<string, string>
+})
+
+// 返回
+{
+  rendered: string
+}
+```
+
+##### `ai.prompts.update`
+更新提示词模板
+
+```typescript
+trpc.ai.prompts.update.useMutation({
+  id: string
+  name?: string
+  template?: string
+  variables?: string[]
+})
+
+// 返回
+PromptTemplate
+```
+
+##### `ai.prompts.delete`
+删除提示词模板
+
+```typescript
+trpc.ai.prompts.delete.useMutation({
+  id: string
+})
+
+// 返回
+{ success: boolean }
+```
+
+#### 对话历史管理
+
+##### `ai.conversations.create`
+创建对话
+
+```typescript
+trpc.ai.conversations.create.useMutation({
+  projectId?: string
+  title?: string
+})
+
+// 返回
+Conversation
+```
+
+##### `ai.conversations.addMessage`
+添加消息
+
+```typescript
+trpc.ai.conversations.addMessage.useMutation({
+  conversationId: string
+  message: {
+    role: 'user' | 'assistant'
+    content: string
+  }
+})
+
+// 返回
+Conversation
+```
+
+##### `ai.conversations.findById`
+查询对话
+
+```typescript
+trpc.ai.conversations.findById.useQuery({
+  id: string
+})
+
+// 返回
+Conversation
+```
+
+##### `ai.conversations.findByProject`
+按项目查询对话
+
+```typescript
+trpc.ai.conversations.findByProject.useQuery({
+  projectId: string
+})
+
+// 返回
+Conversation[]
+```
+
+##### `ai.conversations.search`
+搜索对话
+
+```typescript
+trpc.ai.conversations.search.useQuery({
+  query: string
+  projectId?: string
+})
+
+// 返回
+Conversation[]
+```
+
+##### `ai.conversations.delete`
+删除对话
+
+```typescript
+trpc.ai.conversations.delete.useMutation({
+  id: string
+})
+
+// 返回
+{ success: boolean }
+```
+
+#### 使用统计
+
+##### `ai.usage.getStatistics`
+获取使用统计
+
+```typescript
+trpc.ai.usage.getStatistics.useQuery({
+  projectId?: string
+  userId?: string
+  provider?: string
+  model?: string
+  startDate?: Date
+  endDate?: Date
+})
+
+// 返回
+{
+  totalTokens: number
+  totalCost: number
+  requestCount: number
+  breakdown: Array<{
+    provider: string
+    model: string
+    tokens: number
+    cost: number
+    requests: number
+  }>
+}
+```
+
+##### `ai.usage.getCacheHitRate`
+获取缓存命中率
+
+```typescript
+trpc.ai.usage.getCacheHitRate.useQuery({
+  projectId?: string
+  startDate?: Date
+  endDate?: Date
+})
+
+// 返回
+{
+  hitRate: number
+  hits: number
+  misses: number
+  total: number
+}
+```
+
+#### 代码审查
+
+##### `ai.codeReview.review`
+代码审查
+
+```typescript
+trpc.ai.codeReview.review.useMutation({
+  code: string
+  language: string
+  mode?: 'quick' | 'comprehensive'
+})
+
+// 返回
+{
+  score: number
+  issues: Array<{
+    severity: 'critical' | 'high' | 'medium' | 'low'
+    line: number
+    message: string
+    suggestion: string
+  }>
+  suggestions: string[]
+  strengths: string[]
+}
+```
+
+##### `ai.codeReview.batchReview`
+批量代码审查
+
+```typescript
+trpc.ai.codeReview.batchReview.useMutation({
+  files: Array<{
+    path: string
+    code: string
+    language: string
+  }>
+})
+
+// 返回
+Array<{
+  path: string
+  result: CodeReviewResult
+}>
+```
+
+##### `ai.codeReview.generateSummary`
+生成审查摘要
+
+```typescript
+trpc.ai.codeReview.generateSummary.useMutation({
+  results: CodeReviewResult[]
+})
+
+// 返回
+{
+  overallScore: number
+  totalIssues: number
+  criticalIssues: number
+  summary: string
+  recommendations: string[]
+}
+```
+
+#### 配置生成
+
+##### `ai.config.generateK8sConfig`
+生成 Kubernetes 配置
+
+```typescript
+trpc.ai.config.generateK8sConfig.useMutation({
+  projectName: string
+  image: string
+  port: number
+  replicas?: number
+  resources?: {
+    requests: { cpu: string, memory: string }
+    limits: { cpu: string, memory: string }
+  }
+})
+
+// 返回
+{
+  config: string
+  suggestions: string[]
+}
+```
+
+##### `ai.config.generateDockerfile`
+生成 Dockerfile
+
+```typescript
+trpc.ai.config.generateDockerfile.useMutation({
+  language: string
+  framework?: string
+  version?: string
+})
+
+// 返回
+{
+  dockerfile: string
+  suggestions: string[]
+}
+```
+
+##### `ai.config.generateGitHubActions`
+生成 GitHub Actions 配置
+
+```typescript
+trpc.ai.config.generateGitHubActions.useMutation({
+  language: string
+  buildCommand: string
+  testCommand?: string
+})
+
+// 返回
+{
+  config: string
+  suggestions: string[]
+}
+```
+
+##### `ai.config.generateGitLabCI`
+生成 GitLab CI 配置
+
+```typescript
+trpc.ai.config.generateGitLabCI.useMutation({
+  language: string
+  buildCommand: string
+  testCommand?: string
+})
+
+// 返回
+{
+  config: string
+  suggestions: string[]
+}
+```
+
+#### 故障诊断
+
+##### `ai.troubleshoot.diagnose`
+故障诊断
+
+```typescript
+trpc.ai.troubleshoot.diagnose.useMutation({
+  logs: string
+  events?: string
+  context?: Record<string, any>
+})
+
+// 返回
+{
+  rootCause: string
+  analysis: string
+  fixSteps: string[]
+  estimatedTime: string
+  relatedDocs: string[]
+}
+```
+
+##### `ai.troubleshoot.quickDiagnose`
+快速诊断
+
+```typescript
+trpc.ai.troubleshoot.quickDiagnose.useMutation({
+  error: string
+})
+
+// 返回
+{
+  possibleCauses: string[]
+  quickFixes: string[]
+}
+```
+
+#### RAG (检索增强生成)
+
+##### `ai.rag.embedDocument`
+嵌入文档
+
+```typescript
+trpc.ai.rag.embedDocument.useMutation({
+  projectId: string
+  content: string
+  metadata: {
+    type: 'code' | 'doc' | 'config'
+    path: string
+    language?: string
+  }
+})
+
+// 返回
+{ success: boolean }
+```
+
+##### `ai.rag.search`
+语义搜索
+
+```typescript
+trpc.ai.rag.search.useQuery({
+  projectId: string
+  query: string
+  limit?: number
+})
+
+// 返回
+Array<{
+  content: string
+  metadata: DocumentMetadata
+  score: number
+}>
+```
+
+##### `ai.rag.enhancePrompt`
+增强提示词
+
+```typescript
+trpc.ai.rag.enhancePrompt.useMutation({
+  projectId: string
+  prompt: string
+  topK?: number
+})
+
+// 返回
+{
+  enhanced: string
+  sources: DocumentMetadata[]
 }
 ```
 

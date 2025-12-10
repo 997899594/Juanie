@@ -22,6 +22,13 @@ export const projectMembers = pgTable(
   },
   (table) => [
     uniqueIndex('project_members_unique').on(table.projectId, table.userId),
+
+    // 性能优化索引
+    index('idx_project_members_user_id').on(table.userId),
+    index('idx_project_members_project_user').on(table.projectId, table.userId),
+    index('idx_project_members_role').on(table.role),
+
+    // 原有索引
     index('project_members_git_sync_status_idx').on(table.gitSyncStatus),
   ],
 )

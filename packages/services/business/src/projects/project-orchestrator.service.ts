@@ -1,4 +1,4 @@
-import type { CreateProjectWithTemplateInput } from '@juanie/types'
+import type { CreateProjectInput } from '@juanie/types'
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
 import {
   CreateEnvironmentsHandler,
@@ -56,10 +56,11 @@ export class ProjectOrchestrator implements OnModuleInit {
    * 创建并初始化项目
    *
    * 这是唯一的公共方法，所有复杂性都被封装在状态机中
+   * 支持简单创建（无模板/仓库）、模板创建和仓库创建
    */
   async createAndInitialize(
     userId: string,
-    data: CreateProjectWithTemplateInput,
+    data: CreateProjectInput,
   ): Promise<InitializationResult> {
     this.logger.log(`Creating project: ${data.name}`)
 

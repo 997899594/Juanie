@@ -37,7 +37,7 @@
         v-if="error && !loading"
         title="加载失败"
         :message="error"
-        @retry="() => currentOrganizationId && fetchProjects(currentOrganizationId)"
+        @retry="refetch"
       />
 
       <!-- 加载状态 -->
@@ -206,7 +206,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Button,
@@ -220,10 +220,10 @@ import {
   DialogHeader,
   DialogFooter,
   Badge,
-  Progress,
+  log,
 } from '@juanie/ui'
 import { Plus, FolderOpen, Building, Search, Loader2 } from 'lucide-vue-next'
-import { useProjects } from '@/composables/useProjects'
+import { useProjectCRUD } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
 
 import ProjectCard from '@/components/ProjectCard.vue'
@@ -236,20 +236,20 @@ import ErrorState from '@/components/ErrorState.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
-const {
-  projects,
-  loading,
-  error,
-  hasProjects,
-  fetchProjects,
-  createProject,
-  updateProject,
-  deleteProject,
-} = useProjects()
-
-
-
 const currentOrganizationId = computed(() => appStore.currentOrganizationId)
+
+// 使用 TanStack Query - 自动获取数据
+const { useProjectsQuery, deleteProject } = useProjectCRUD()
+const {
+  data: projects,
+  isLoading: loading,
+  error: queryError,
+  refetch,
+} = useProjectsQuery(currentOrganizationId.value!)
+
+// 计算属性
+const error = computed(() => queryError.value?.message)
+const hasProjects = computed(() => (projects.value?.length ?? 0) > 0)
 
 // 搜索
 const searchQuery = ref('')
@@ -263,12 +263,12 @@ const repositoryAction = ref<'keep' | 'archive' | 'delete'>('keep')
 
 // 过滤后的项目列表
 const filteredProjects = computed(() => {
-  let result = projects.value
+  const result = projects.value ?? []
 
   // 按搜索关键词过滤
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    result = result.filter(
+    return result.filter(
       (project) =>
         project.name.toLowerCase().includes(query) ||
         project.slug.toLowerCase().includes(query) ||
@@ -279,18 +279,8 @@ const filteredProjects = computed(() => {
   return result
 })
 
-// 监听组织变化
-watch(currentOrganizationId, async (orgId) => {
-  if (orgId) {
-    await fetchProjects(orgId)
-  }
-})
-
-onMounted(async () => {
-  if (currentOrganizationId.value) {
-    await fetchProjects(currentOrganizationId.value)
-  }
-})
+// TanStack Query 会自动响应 currentOrganizationId 的变化并重新获取数据
+// 不需要手动 watch 或 onMounted
 
 function openCreateModal() {
   editingProject.value = null
@@ -307,11 +297,8 @@ function confirmDelete(project: any) {
   isDeleteDialogOpen.value = true
 }
 
-async function handleProjectUpdated() {
-  // 项目更新后刷新列表
-  if (currentOrganizationId.value) {
-    await fetchProjects(currentOrganizationId.value)
-  }
+function handleProjectUpdated() {
+  // TanStack Query 会自动刷新数据（通过 mutation 的 invalidateQueries）
   isModalOpen.value = false
   editingProject.value = null
 }
@@ -320,7 +307,10 @@ async function handleDelete() {
   if (!deletingProject.value) return
 
   try {
-    await deleteProject(deletingProject.value.id, { repositoryAction: repositoryAction.value })
+    await deleteProject({ 
+      projectId: deletingProject.value.id, 
+      repositoryAction: repositoryAction.value 
+    })
     
     isDeleteDialogOpen.value = false
     deletingProject.value = null

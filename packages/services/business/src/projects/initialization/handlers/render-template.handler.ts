@@ -36,8 +36,9 @@ export class RenderTemplateHandler implements StateHandler {
 
     this.logger.log(`Rendering template: ${context.templatePath}`)
 
-    // 获取项目信息
-    const [project] = await this.db
+    const db = context.tx || this.db
+
+    const [project] = await db
       .select()
       .from(schema.projects)
       .where(eq(schema.projects.id, context.projectId))
@@ -47,7 +48,6 @@ export class RenderTemplateHandler implements StateHandler {
       throw new Error('Project not found')
     }
 
-    // 渲染模板
     const outputDir = `/tmp/projects/${context.projectId}`
     const result = await this.renderer.renderTemplate(
       context.templatePath,

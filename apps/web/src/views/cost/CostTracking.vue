@@ -32,13 +32,16 @@ import {
   AlertTriangle,
   Download,
 } from 'lucide-vue-next'
-import { useProjects } from '@/composables/useProjects'
+import { useProjectCRUD } from '@/composables/useProjects'
 import { VisXYContainer, VisLine, VisArea, VisAxis, VisTooltip } from '@unovis/vue'
 import { VisDonut, VisSingleContainer } from '@unovis/vue'
 
 const route = useRoute()
 const appStore = useAppStore()
-const { projects, fetchProjects } = useProjects()
+
+// 使用 TanStack Query - 自动获取项目列表
+const { useProjectsQuery } = useProjectCRUD()
+const { data: projects } = useProjectsQuery(appStore.currentOrganizationId!)
 
 const {
   costs,
@@ -186,12 +189,8 @@ function exportData() {
   document.body.removeChild(link)
 }
 
-// 初始化
+// 初始化 - TanStack Query 会自动获取项目列表
 onMounted(async () => {
-  // 加载项目列表
-  if (appStore.currentOrganizationId) {
-    await fetchProjects(appStore.currentOrganizationId)
-  }
   await loadData()
 })
 </script>

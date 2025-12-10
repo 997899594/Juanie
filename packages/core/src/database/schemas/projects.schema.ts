@@ -78,7 +78,17 @@ export const projects = pgTable(
     uniqueIndex('projects_org_slug_unique')
       .on(table.organizationId, table.slug)
       .where(sql`deleted_at IS NULL`),
-    index('projects_status_idx').on(table.status),
+
+    // 性能优化索引
+    index('idx_projects_organization_id')
+      .on(table.organizationId)
+      .where(sql`deleted_at IS NULL`),
+    index('idx_projects_status').on(table.status).where(sql`deleted_at IS NULL`),
+    index('idx_projects_org_status')
+      .on(table.organizationId, table.status)
+      .where(sql`deleted_at IS NULL`),
+
+    // 原有索引
     index('projects_deleted_idx').on(table.deletedAt),
     index('projects_template_idx').on(table.templateId),
     index('projects_health_status_idx').on(table.healthStatus),

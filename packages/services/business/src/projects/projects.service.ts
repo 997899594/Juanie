@@ -15,15 +15,10 @@ import {
 } from '@juanie/core/events'
 import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
-import { Action, RBACService, Resource } from '@juanie/core/rbac'
+import { CaslAbilityFactory } from '@juanie/core/rbac'
 import { DATABASE, REDIS } from '@juanie/core/tokens'
 import { AuditLogsService } from '@juanie/service-foundation'
-import type {
-  CreateProjectInput,
-  CreateProjectWithTemplateInputType,
-  ProjectStatus,
-  UpdateProjectInput,
-} from '@juanie/types'
+import type { CreateProjectInput, ProjectStatus, UpdateProjectInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -40,16 +35,34 @@ export class ProjectsService {
     @Inject(REDIS) private redis: Redis,
     private auditLogs: AuditLogsService,
     private eventPublisher: EventPublisher,
-    private rbac: RBACService,
+    private caslAbilityFactory: CaslAbilityFactory,
   ) {}
+
+  /**
+   * 检查权限（CASL）
+   */
+  private async assertCan(
+    userId: string,
+    action: string,
+    subject: string,
+    projectId?: string,
+  ): Promise<void> {
+    const ability = projectId
+      ? await this.caslAbilityFactory.createForProject(userId, projectId)
+      : await this.caslAbilityFactory.createForUser(userId)
+
+    if (!ability.can(action as any, subject as any)) {
+      throw new PermissionDeniedError(subject, action)
+    }
+  }
 
   // 创建项目
   @Trace('projects.create')
   async create(
     userId: string,
-    data: CreateProjectInput | CreateProjectWithTemplateInputType,
+    data: CreateProjectInput,
   ): Promise<typeof schema.projects.$inferSelect & { jobIds?: string[] }> {
-    // 检查组织是否存在
+    // 1. 检查组织是否存在
     const [organization] = await this.db
       .select()
       .from(schema.organizations)
@@ -60,91 +73,32 @@ export class ProjectsService {
       throw new OrganizationNotFoundError(data.organizationId)
     }
 
-    // 检查权限：需要 CREATE 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.CREATE, data.organizationId)
-
-    // 类型守卫：检查是否是扩展输入类型
-    const extendedData = data as CreateProjectWithTemplateInputType
-
-    // 如果提供了模板或仓库配置，使用 orchestrator 进行完整初始化
-    if (extendedData.templateId || extendedData.repository) {
-      // 确保 visibility 有默认值
-      const dataWithDefaults = {
-        ...extendedData,
-        visibility: extendedData.visibility ?? ('private' as const),
-      }
-      const result = await this.orchestrator.createAndInitialize(userId, dataWithDefaults)
-
-      // 如果初始化失败，抛出错误
-      if (!result.success || !result.projectId || result.projectId.trim() === '') {
-        throw new ProjectInitializationError(
-          result.projectId || 'unknown',
-          result.error || '项目初始化失败',
-        )
-      }
-
-      // 记录审计日志
-      await this.auditLogs.log({
-        userId,
-        organizationId: data.organizationId,
-        action: 'project.created',
-        resourceType: 'project',
-        resourceId: result.projectId,
-        metadata: {
-          templateId: extendedData.templateId,
-          hasRepository: !!extendedData.repository,
-        },
-      })
-
-      // 返回项目信息（需要从数据库查询）
-      const [project] = await this.db
-        .select()
-        .from(schema.projects)
-        .where(eq(schema.projects.id, result.projectId))
-        .limit(1)
-
-      if (!project) {
-        throw new ProjectNotFoundError(result.projectId)
-      }
-
-      return { ...project, jobIds: result.jobIds }
+    // 2. 检查权限
+    const ability = await this.caslAbilityFactory.createForUser(userId, data.organizationId)
+    if (!ability.can('create', 'Project')) {
+      throw new PermissionDeniedError('Project', 'create')
     }
 
-    // 否则使用简单创建（向后兼容）
-    const baseData = data as CreateProjectInput
-    // 自动生成 slug
-    const slug = `project-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-
-    const [project] = await this.db
-      .insert(schema.projects)
-      .values({
-        organizationId: baseData.organizationId,
-        name: baseData.name,
-        slug,
-        description: baseData.description,
-        logoUrl: baseData.logoUrl,
-        visibility: baseData.visibility ?? 'private',
-      })
-      .returning()
-
-    if (!project) {
-      throw new ProjectInitializationError('unknown', '创建项目失败')
-    }
-
-    // 记录审计日志
-    await this.auditLogs.log({
-      userId,
-      organizationId: data.organizationId,
-      action: 'project.created',
-      resourceType: 'project',
-      resourceId: project.id,
-      metadata: {
-        name: project.name,
-        slug: project.slug,
-      },
+    // 3. 调用 orchestrator (所有逻辑都在里面)
+    const result = await this.orchestrator.createAndInitialize(userId, {
+      ...data,
+      visibility: data.visibility ?? ('private' as const),
     })
 
-    return project
+    // 4. 处理结果
+    if (!result.success || !result.project) {
+      throw new ProjectInitializationError(
+        result.projectId || 'unknown',
+        result.error || '项目初始化失败',
+        result.errorStep,
+      )
+    }
+
+    // 5. 直接返回 (不需要额外查询)
+    return {
+      ...(result.project as any),
+      jobIds: result.jobIds,
+    }
   }
 
   // 上传项目 Logo
@@ -160,7 +114,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 UPDATE 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.UPDATE, projectId)
+    await this.assertCan(userId, 'update', 'Project', projectId)
 
     const [updated] = await this.db
       .update(schema.projects)
@@ -289,7 +243,7 @@ export class ProjectsService {
       project.visibility,
     )
     if (!hasAccess) {
-      throw new PermissionDeniedError(Resource.PROJECT, Action.READ)
+      throw new PermissionDeniedError('Project', 'read')
     }
 
     return project
@@ -398,7 +352,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 UPDATE 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.UPDATE, projectId)
+    await this.assertCan(userId, 'update', 'Project', projectId)
 
     // 检查名称冲突
     if (data.name) {
@@ -478,7 +432,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 DELETE 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.DELETE, projectId)
+    await this.assertCan(userId, 'delete', 'Project', projectId)
 
     // 软删除项目
     await this.db
@@ -522,7 +476,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 UPDATE 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.UPDATE, projectId)
+    await this.assertCan(userId, 'update', 'Project', projectId)
 
     // 归档项目
     await this.db
@@ -560,7 +514,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 UPDATE 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.UPDATE, projectId)
+    await this.assertCan(userId, 'update', 'Project', projectId)
 
     // 恢复项目
     await this.db
@@ -600,7 +554,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 MANAGE_MEMBERS 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
+    await this.assertCan(userId, 'manage_members', 'Project', projectId)
 
     // 检查被添加的用户是否是组织成员
     const targetOrgMember = await this.getOrgMember(project.organizationId, data.memberId)
@@ -649,7 +603,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 READ 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.READ, projectId)
+    await this.assertCan(userId, 'read', 'Project', projectId)
 
     // 使用 Relational Query 获取成员（自动 join user）
     const members = await this.db.query.projectMembers.findMany({
@@ -692,7 +646,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 MANAGE_MEMBERS 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
+    await this.assertCan(userId, 'manage_members', 'Project', projectId)
 
     // 获取当前成员信息用于审计
     const [currentMember] = await this.db
@@ -742,7 +696,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 MANAGE_MEMBERS 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
+    await this.assertCan(userId, 'manage_members', 'Project', projectId)
 
     // 获取成员信息用于审计
     const [member] = await this.db
@@ -786,7 +740,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 MANAGE_MEMBERS 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
+    await this.assertCan(userId, 'manage_members', 'Project', projectId)
 
     // 检查团队是否属于同一组织
     const [team] = await this.db
@@ -849,7 +803,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 READ 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.READ, projectId)
+    await this.assertCan(userId, 'read', 'Project', projectId)
 
     // 使用 Relational Query 获取团队（自动 join team）
     const teams = await this.db.query.teamProjects.findMany({
@@ -890,7 +844,7 @@ export class ProjectsService {
     }
 
     // 检查权限：需要 MANAGE_MEMBERS 权限
-    await this.rbac.assert(userId, Resource.PROJECT, Action.MANAGE_MEMBERS, projectId)
+    await this.assertCan(userId, 'manage_members', 'Project', projectId)
 
     // 获取团队信息用于审计
     const [team] = await this.db

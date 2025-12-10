@@ -2,6 +2,8 @@
  * 项目初始化状态机 - 类型定义
  */
 
+import type { ProjectWithRelations } from '@juanie/types'
+
 export type InitializationState =
   | 'IDLE'
   | 'CREATING_PROJECT'
@@ -22,6 +24,8 @@ export type InitializationEvent =
   | 'REPOSITORY_READY'
   | 'FINALIZED'
   | 'ERROR'
+
+export type { ProjectWithRelations }
 
 export interface InitializationContext {
   // 输入数据
@@ -45,11 +49,15 @@ export interface InitializationContext {
   repositoryId?: string
   gitopsResourceIds?: string[]
   jobIds?: string[]
+  projectWithRelations?: ProjectWithRelations
 
   // 状态
   currentState: InitializationState
   progress: number
   error?: Error
+
+  // 事务支持
+  tx?: any
 
   // 🎯 进度推送函数（由状态机注入）
   publishDetail?: (detail: {
@@ -82,6 +90,8 @@ export interface StateHandler {
 export interface InitializationResult {
   success: boolean
   projectId: string
+  project?: ProjectWithRelations
   jobIds?: string[]
   error?: string
+  errorStep?: InitializationState
 }

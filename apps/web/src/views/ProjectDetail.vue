@@ -709,7 +709,7 @@ import {
   ExternalLink,
 } from 'lucide-vue-next'
 import { format } from 'date-fns'
-import { useProjects } from '@/composables/useProjects'
+import { useProjectCRUD, useProjectMembers, useProjectTeams } from '@/composables/useProjects'
 import { trpc } from '@/lib/trpc'
 import EditProjectModal from '@/components/EditProjectModal.vue'
 import ProjectMemberTable from '@/components/ProjectMemberTable.vue'
@@ -724,19 +724,22 @@ const route = useRoute()
 const router = useRouter()
 const projectId = String(route.params.id)
 
-const {
-  currentProject,
-  members,
-  teams,
-  loading,
-  fetchProject,
-  fetchMembers,
-  fetchTeams,
-  updateProject,
-  deleteProject,
-  updateMemberRole,
-  removeMember,
-} = useProjects()
+// 使用 TanStack Query - 自动获取数据
+const { useProjectQuery, updateProject, deleteProject } = useProjectCRUD()
+const { useMembersQuery, updateMemberRole, removeMember } = useProjectMembers()
+const { useTeamsQuery } = useProjectTeams()
+
+// 查询项目详情
+const { data: currentProject, isLoading: loadingProject } = useProjectQuery(projectId)
+
+// 查询项目成员
+const { data: members, isLoading: loadingMembers } = useMembersQuery(projectId)
+
+// 查询项目团队
+const { data: teams, isLoading: loadingTeams } = useTeamsQuery(projectId)
+
+// 综合加载状态
+const loading = computed(() => loadingProject.value || loadingMembers.value || loadingTeams.value)
 
 // 项目状态数据
 const projectStatus = ref<any>(null)
@@ -754,9 +757,10 @@ const removingMemberId = ref<string | null>(null)
 
 
 
-// 初始化
+// 初始化 - TanStack Query 会自动获取数据
 onMounted(async () => {
-  await loadProjectData()
+  await loadProjectStatus()
+  await loadPendingApprovals()
 })
 
 // 监听路由变化
@@ -764,22 +768,12 @@ watch(
   () => route.params.id,
   async (newId) => {
     if (newId) {
-      await loadProjectData()
+      // TanStack Query 会自动重新获取数据
+      await loadProjectStatus()
+      await loadPendingApprovals()
     }
   }
 )
-
-async function loadProjectData() {
-  try {
-    await fetchProject(projectId)
-    await fetchMembers(projectId)
-    await fetchTeams(projectId)
-    await loadProjectStatus()
-    await loadPendingApprovals()
-  } catch (error) {
-    log.error('Failed to load project data:', error)
-  }
-}
 
 async function loadProjectStatus() {
   loadingStatus.value = true
@@ -820,7 +814,9 @@ async function handleUpdate(data: any) {
 
 async function handleProjectUpdated() {
   isEditModalOpen.value = false
-  await loadProjectData()
+  // TanStack Query 会自动刷新数据（通过 mutation 的 invalidateQueries）
+  await loadProjectStatus()
+  await loadPendingApprovals()
 }
 
 async function handleUpdateMemberRole(memberId: string, role: string) {
@@ -846,8 +842,9 @@ function formatDate(dateString: string | Date): string {
 }
 
 function handleInitializationComplete() {
-  // 初始化完成，重新加载项目数据
-  loadProjectData()
+  // 初始化完成，重新加载项目状态
+  loadProjectStatus()
+  loadPendingApprovals()
 }
 
 function handleInitializationError(error: string) {

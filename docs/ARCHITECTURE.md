@@ -194,12 +194,15 @@ graph TD
 
 ### 项目创建流程
 
+项目创建采用统一的 `ProjectOrchestrator` 路径，支持简单创建、模板创建、仓库创建等多种场景。
+
 ```mermaid
 sequenceDiagram
     actor User
     participant Web
     participant Gateway
     participant ProjectService
+    participant Orchestrator
     participant Queue
     participant Worker
     participant GitService
@@ -213,34 +216,60 @@ sequenceDiagram
     Gateway->>ProjectService: 验证权限
     ProjectService->>ProjectService: 检查组织成员
     
-    ProjectService->>Queue: 添加初始化任务
-    Queue-->>ProjectService: 返回 jobId
-    ProjectService-->>Gateway: 返回项目 + jobId
+    ProjectService->>Orchestrator: createAndInitialize()
+    
+    alt 有模板
+        Orchestrator->>Queue: 添加模板应用任务
+    end
+    
+    alt 有仓库
+        Orchestrator->>Queue: 添加仓库连接任务
+        Orchestrator->>Queue: 添加 GitOps 设置任务
+    end
+    
+    alt 无模板
+        Orchestrator->>Orchestrator: 创建默认环境
+    end
+    
+    Orchestrator-->>ProjectService: 返回初始化结果
+    ProjectService->>ProjectService: 添加创建者为 owner
+    ProjectService->>ProjectService: 记录审计日志
+    ProjectService-->>Gateway: 返回项目 + jobIds
     Gateway-->>Web: 项目创建成功
     Web->>SSE: 订阅初始化进度
 
     Worker->>Queue: 拉取任务
-    Worker->>Worker: Step 1: 渲染模板
-    Worker->>SSE: 推送进度 20%
     
-    Worker->>GitService: Step 2: 创建仓库
-    GitService->>GitService: 调用 GitHub API
-    Worker->>SSE: 推送进度 40%
+    opt 模板应用
+        Worker->>Worker: 渲染模板
+        Worker->>SSE: 推送进度
+    end
     
-    Worker->>FluxService: Step 3: 配置 GitOps
-    FluxService->>K8s: 创建 GitRepository
-    FluxService->>K8s: 创建 Kustomization
-    Worker->>SSE: 推送进度 60%
+    opt 仓库连接
+        Worker->>GitService: 创建仓库
+        GitService->>GitService: 调用 Git Provider API
+        Worker->>SSE: 推送进度
+    end
     
-    Worker->>Worker: Step 4: 初始化环境
-    Worker->>SSE: 推送进度 80%
+    opt GitOps 设置
+        Worker->>FluxService: 配置 GitOps
+        FluxService->>K8s: 创建 GitRepository
+        FluxService->>K8s: 创建 Kustomization
+        Worker->>SSE: 推送进度
+    end
     
-    Worker->>ProjectService: Step 5: 更新状态
+    Worker->>ProjectService: 更新状态
     Worker->>SSE: 推送进度 100%
     SSE-->>Web: 初始化完成
     
     Web->>User: 显示成功消息
 ```
+
+**统一创建路径的优势**:
+- ✅ 单一代码路径，易于维护
+- ✅ 统一的类型系统
+- ✅ 灵活支持多种创建场景
+- ✅ 可选步骤自动处理
 
 ### 部署流程
 
@@ -621,6 +650,37 @@ graph TB
     DBPrimary -.->|复制| DBReplica1
     DBPrimary -.->|复制| DBReplica2
 ```
+
+## 核心设计决策
+
+### 项目创建统一化
+
+**决策**: 所有项目创建都通过 `ProjectOrchestrator` 统一处理
+
+**背景**: 
+- 原有设计存在两个创建路径（简单创建 + 模板初始化）
+- 导致代码重复、类型混乱、维护困难
+
+**方案**:
+```typescript
+// 统一入口
+ProjectsService.create()
+  └─ ProjectOrchestrator.createAndInitialize()
+      ├─ 创建项目（必需）
+      ├─ 应用模板（可选）
+      ├─ 连接仓库（可选）
+      ├─ 创建环境（可选）
+      └─ 设置 GitOps（可选）
+```
+
+**优势**:
+- ✅ 单一代码路径，易于维护
+- ✅ 统一的类型系统（`CreateProjectInput`）
+- ✅ 灵活支持多种场景
+- ✅ 可选步骤自动处理
+- ✅ 无条件分支，代码更清晰
+
+**相关文档**: [项目创建统一化迁移](./troubleshooting/refactoring/project-creation-unification-migration.md)
 
 ## 技术决策记录
 

@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useDeployments } from '@/composables/useDeployments'
 import { useEnvironments } from '@/composables/useEnvironments'
 import DeploymentStatusBadge from '@/components/DeploymentStatusBadge.vue'
@@ -75,32 +75,32 @@ const props = defineProps<{
   projectId: string
 }>()
 
-const { deployments, loading, fetchDeployments } = useDeployments()
-const { environments, fetchEnvironments } = useEnvironments()
+// 使用 TanStack Query - 自动获取数据
+const { deployments, loading } = useDeployments({ projectId: props.projectId })
+const { useEnvironmentsQuery } = useEnvironments()
+const { data: environments } = useEnvironmentsQuery(props.projectId)
 
 const showGitOpsDeployDialog = ref(false)
 const showDeployDialog = ref(false)
 const selectedEnvironmentId = ref<string>('')
 
-onMounted(async () => {
-  await Promise.all([
-    fetchDeployments({ projectId: props.projectId }),
-    fetchEnvironments(props.projectId)
-  ])
-  
-  // 选择第一个环境
-  if (environments.value.length > 0) {
-    selectedEnvironmentId.value = environments.value[0].id
-  }
-})
+// 当环境数据加载完成后，选择第一个环境
+watch(
+  () => environments.value,
+  (envs) => {
+    if (envs && envs.length > 0 && !selectedEnvironmentId.value) {
+      selectedEnvironmentId.value = envs[0].id
+    }
+  },
+  { immediate: true }
+)
 
 const formatDate = (date: string) => {
   return new Date(date).toLocaleString('zh-CN')
 }
 
-const handleGitOpsDeploy = async (result: any) => {
+const handleGitOpsDeploy = (result: any) => {
   showGitOpsDeployDialog.value = false
-  // 刷新部署列表
-  await fetchDeployments({ projectId: props.projectId })
+  // TanStack Query 会自动刷新数据（通过 mutation 的 invalidateQueries）
 }
 </script>

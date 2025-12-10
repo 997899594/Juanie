@@ -293,7 +293,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useGitOps } from '@/composables/useGitOps'
-import { useProjects } from '@/composables/useProjects'
+import { useProjectCRUD } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
 import PageContainer from '@/components/PageContainer.vue'
 import LoadingState from '@/components/LoadingState.vue'
@@ -331,7 +331,11 @@ import {
 } from 'lucide-vue-next'
 
 const appStore = useAppStore()
-const { projects, fetchProjects } = useProjects()
+
+// 使用 TanStack Query - 自动获取项目列表
+const { useProjectsQuery } = useProjectCRUD()
+const { data: projects } = useProjectsQuery(appStore.currentOrganizationId!)
+
 const { loading, resources, listGitOpsResources, triggerSync } = useGitOps()
 
 // 状态
@@ -492,25 +496,23 @@ watch(selectedProject, () => {
   loadResources()
 })
 
-// 初始化
-onMounted(async () => {
-  // 获取当前组织的项目列表
-  if (appStore.currentOrganizationId) {
-    await fetchProjects(appStore.currentOrganizationId)
-    
-    // 从 URL 参数获取项目 ID
-    const urlParams = new URLSearchParams(window.location.search)
-    const projectIdFromUrl = urlParams.get('project')
-    
-    if (projectIdFromUrl && projects.value.some(p => p.id === projectIdFromUrl)) {
-      selectedProject.value = projectIdFromUrl
-    } else {
-      // 选择第一个项目
-      const firstProject = projects.value[0]
-      if (firstProject) {
-        selectedProject.value = firstProject.id
+// 初始化 - TanStack Query 会自动获取项目列表
+watch(
+  () => projects.value,
+  (projectList) => {
+    if (projectList && projectList.length > 0 && !selectedProject.value) {
+      // 从 URL 参数获取项目 ID
+      const urlParams = new URLSearchParams(window.location.search)
+      const projectIdFromUrl = urlParams.get('project')
+      
+      if (projectIdFromUrl && projectList.some(p => p.id === projectIdFromUrl)) {
+        selectedProject.value = projectIdFromUrl
+      } else {
+        // 选择第一个项目
+        selectedProject.value = projectList[0].id
       }
     }
-  }
-})
+  },
+  { immediate: true }
+)
 </script>

@@ -8,7 +8,7 @@ import {
 import { StorageService } from '@juanie/service-foundation'
 import {
   archiveProjectSchema,
-  createProjectWithTemplateSchema,
+  createProjectSchema,
   deleteProjectSchema,
   getProjectHealthSchema,
   getProjectStatusSchema,
@@ -37,20 +37,9 @@ export class ProjectsRouter {
 
   get router() {
     return this.trpc.router({
-      // 创建项目（统一接口，支持基础创建和带模板/仓库配置）
+      // 创建项目（统一接口，支持简单创建、模板创建和仓库创建）
       create: this.trpc.protectedProcedure
-        .input(createProjectWithTemplateSchema)
-        .mutation(async ({ ctx, input }) => {
-          try {
-            return await this.projectsService.create(ctx.user.id, input)
-          } catch (error) {
-            handleServiceError(error)
-          }
-        }),
-
-      // 创建项目（带模板和仓库配置）- 保留向后兼容
-      createWithTemplate: this.trpc.protectedProcedure
-        .input(createProjectWithTemplateSchema)
+        .input(createProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.projectsService.create(ctx.user.id, input)

@@ -5,11 +5,12 @@
 ## 📖 文档
 
 所有文档在 [`docs/`](./docs/) 目录：
-- [快速开始](./docs/quick-start.md)
-- [开发指南](./docs/development.md)
-- [服务器部署](./docs/deployment.md)
-- [GitOps 指南](./docs/gitops.md)
-- [系统架构](./docs/architecture.md)
+- [文档索引](./docs/README.md) - 完整的文档导航
+- [快速开始](./docs/guides/quick-start.md) - 项目快速上手
+- [系统架构](./docs/ARCHITECTURE.md) - 架构设计文档
+- [API 参考](./docs/API_REFERENCE.md) - API 接口文档
+- [现代化进度](./docs/guides/MODERNIZATION_PROGRESS.md) - 技术栈现代化进度（89% 完成）
+- [故障排查](./docs/troubleshooting/README.md) - 问题诊断和解决方案
 
 ## 快速开始
 
@@ -65,16 +66,28 @@ bun run dev
 - **容器编排**: K3s + Flux CD
 - **监控**: Prometheus + Grafana + OpenTelemetry
 
-## 文档
+## 更多文档
 
-- [贡献指南](./CONTRIBUTING.md)
-- [部署指南](./DEPLOYMENT.md)
-- [三层架构](./REFACTORING_THREE_TIER.md)
-- [快速开始指南](./QUICK_START_GUIDE.md)
-- [快速参考](./QUICK_REFERENCE.md)
-- [2025 路线图](./ROADMAP_2025.md)
-- [现代最佳实践](./MODERN_BEST_PRACTICES_2025.md)
-- [详细文档](./docs/)
+### 操作指南
+- [快速开始](./docs/guides/quick-start.md) - 项目快速上手
+- [K3s 远程访问](./docs/guides/k3s-remote-access.md) - 配置 K3s 集群
+- [Flux 安装](./docs/guides/flux-installation.md) - 安装 Flux CD
+- [OpenTelemetry 集成](./docs/guides/opentelemetry-integration.md) - 可观测性方案
+
+### 技术指南
+- [现代化进度](./docs/guides/MODERNIZATION_PROGRESS.md) - 技术栈现代化（89% 完成）
+- [2025 实用指南](./docs/guides/pragmatic-2025-guide.md) - 技术选型和最佳实践
+- [Using Declarations](./docs/guides/using-declarations.md) - TypeScript 资源管理
+
+### 架构文档
+- [系统架构](./docs/ARCHITECTURE.md) - 总体架构设计
+- [三层服务架构](./docs/architecture/three-tier-architecture.md) - 服务分层设计
+- [GitOps 架构](./docs/architecture/gitops.md) - GitOps 实现方案
+
+### 故障排查
+- [问题排查索引](./docs/troubleshooting/README.md) - 常见问题和解决方案
+- [Flux 问题](./docs/troubleshooting/flux/) - Flux GitOps 相关问题
+- [Kubernetes 问题](./docs/troubleshooting/kubernetes/) - K8s 相关问题
 
 ## 常用命令
 

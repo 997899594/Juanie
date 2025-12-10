@@ -16,8 +16,7 @@
     <ErrorState
       v-if="error && !loading"
       title="加载失败"
-      :message="error"
-      @retry="fetchOrganizations"
+      :message="error?.message || '加载组织失败'"
     />
 
     <!-- 加载状态 -->
@@ -89,7 +88,6 @@ const {
   loading,
   error,
   hasOrganizations,
-  fetchOrganizations,
   createOrganization,
   updateOrganization,
   deleteOrganization,
@@ -101,10 +99,7 @@ const isDeleteDialogOpen = ref(false)
 const editingOrganization = ref<any>(null)
 const deletingOrganization = ref<any>(null)
 
-// 初始化
-onMounted(async () => {
-  await fetchOrganizations()
-})
+// TanStack Query 会自动获取数据，不需要手动调用 fetchOrganizations
 
 // 打开创建对话框
 function openCreateModal() {

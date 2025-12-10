@@ -1,6 +1,5 @@
 // 导出所有类型
 export * from './ai'
-export * from './ai.types'
 export * from './ai-assistant.types'
 export * from './api'
 export * from './dtos'

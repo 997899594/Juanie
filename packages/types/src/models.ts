@@ -127,6 +127,46 @@ export interface ProjectMember {
   joinedAt: Date
 }
 
+/**
+ * 项目完整对象（包含关联数据）
+ * 用于项目初始化等需要返回完整信息的场景
+ */
+export interface ProjectWithRelations {
+  id: string
+  name: string
+  slug: string
+  description?: string
+  organizationId: string
+  visibility: 'public' | 'private' | 'internal'
+  status: 'initializing' | 'active' | 'failed'
+  config: Record<string, any>
+  createdAt: Date
+  updatedAt: Date
+  // 关联数据
+  members?: Array<{
+    id: string
+    projectId: string
+    userId: string
+    role: string
+    createdAt: Date
+    user?: {
+      id: string
+      username: string
+      displayName?: string
+      avatarUrl?: string
+    }
+  }>
+  environments?: Array<{
+    id: string
+    projectId: string
+    name: string
+    type: string
+    config: Record<string, any>
+    createdAt: Date
+    updatedAt: Date
+  }>
+}
+
 // ============ 仓库相关 ============
 
 export interface Repository {

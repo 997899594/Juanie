@@ -1,20 +1,35 @@
+import * as schema from '@juanie/core/database'
 import { Logger } from '@juanie/core/logger'
-import { Injectable } from '@nestjs/common'
+import { DATABASE } from '@juanie/core/tokens'
+import { Inject, Injectable } from '@nestjs/common'
+import { eq } from 'drizzle-orm'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { EnvironmentsService } from '../../../environments/environments.service'
 import type { InitializationContext, StateHandler } from '../types'
 
 /**
  * 创建环境处理器
+ *
+ * 智能判断:
+ * - 如果模板已定义环境，跳过默认环境创建
+ * - 如果模板未定义环境，创建默认环境
  */
 @Injectable()
 export class CreateEnvironmentsHandler implements StateHandler {
   readonly name = 'CREATING_ENVIRONMENTS' as const
   private readonly logger = new Logger(CreateEnvironmentsHandler.name)
 
-  constructor(private environments: EnvironmentsService) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private environments: EnvironmentsService,
+  ) {}
 
-  canHandle(_context: InitializationContext): boolean {
-    // 总是需要创建环境
+  canHandle(context: InitializationContext): boolean {
+    // 智能判断: 如果模板已定义环境，跳过默认环境创建
+    if (context.templateId && context.templateConfig?.environments) {
+      this.logger.log('Template defines environments, skipping default creation')
+      return false
+    }
     return true
   }
 
@@ -29,6 +44,20 @@ export class CreateEnvironmentsHandler implements StateHandler {
 
     this.logger.log(`Creating environments for project: ${context.projectId}`)
 
+    const db = context.tx || this.db
+
+    // 检查模板是否已创建环境
+    const existingEnvs = await db.query.environments.findMany({
+      where: eq(schema.environments.projectId, context.projectId),
+    })
+
+    if (existingEnvs.length > 0) {
+      this.logger.log(`Template already created ${existingEnvs.length} environments`)
+      context.environmentIds = existingEnvs.map((e: { id: string }) => e.id)
+      return
+    }
+
+    // 创建默认环境
     const environmentTypes: Array<{
       name: string
       type: 'development' | 'staging' | 'production'
@@ -57,11 +86,9 @@ export class CreateEnvironmentsHandler implements StateHandler {
 
     const environmentIds: string[] = []
 
-    // 🎯 逐个创建环境，推送详细进度
     for (let i = 0; i < environmentTypes.length; i++) {
       const envConfig = environmentTypes[i]!
 
-      // 推送详细进度
       await context.publishDetail?.({
         action: `正在创建${envConfig.name}...`,
         subProgress: Math.round(((i + 1) / environmentTypes.length) * 100),
@@ -86,7 +113,6 @@ export class CreateEnvironmentsHandler implements StateHandler {
         }
       } catch (error) {
         this.logger.error(`Failed to create environment ${envConfig.name}:`, error)
-        // 继续创建其他环境
       }
     }
 
@@ -94,8 +120,7 @@ export class CreateEnvironmentsHandler implements StateHandler {
       throw new Error('Failed to create any environments')
     }
 
-    // 保存环境 ID 到上下文
     context.environmentIds = environmentIds
-    this.logger.log(`Created ${environmentIds.length} environments`)
+    this.logger.log(`Created ${environmentIds.length} default environments`)
   }
 }

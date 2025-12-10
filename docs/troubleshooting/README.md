@@ -4,12 +4,15 @@
 
 ## 快速导航
 
-### 最新问题（2025-12-04）
+### 最新问题（2024-12-09）
+- [数据库索引优化](./refactoring/database-indexes-optimization.md) - 添加关键索引，查询速度提升 5-10倍
+- [项目创建流程修复](./refactoring/project-creation-flow-fixes.md) - 事务支持、智能环境创建、完整错误处理
+- [项目创建统一化](./refactoring/project-creation-unification-migration.md) - 统一项目创建流程，简化架构
+
+### 架构优化（2024-12-04）
 - [循环依赖修复](./architecture/circular-dependency-fix.md) - 使用事件驱动架构解决 NestJS 循环依赖
 - [TypeScript 错误修复](./architecture/typescript-errors-fix-summary.md) - useToast 使用方式修复和剩余问题
 - [Git 平台集成恢复计划](./architecture/git-platform-integration-recovery-plan.md) - 系统化恢复 Git 平台集成功能
-
-### 架构优化（2025-12-04）
 - [Git Sync Logs Schema 现代化](../architecture/git-sync-logs-schema-modernization.md) - 使用 PostgreSQL 枚举和索引优化
 
 ### 近期问题（2025-11-28）
@@ -67,6 +70,11 @@ troubleshooting/
 
 ## 重构记录
 
+### 现代化改进（2025-12）
+- [项目创建统一化](refactoring/project-creation-unification-migration.md) - 统一项目创建路径，删除向后兼容代码
+- [Task 8: OpenTelemetry 集成](refactoring/TASK_8_OPENTELEMETRY.md) - 端到端可观测性集成完成总结
+
+### 历史重构
 - [文档重组](refactoring/DOCS_REORGANIZATION.md)
 - [架构重构总结](refactoring/REFACTORING_SUMMARY.md)
 - [Git 认证重构 - Phase 3](refactoring/git-auth-phase3-summary.md)

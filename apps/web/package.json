@@ -11,6 +11,7 @@
     "type-check": "vue-tsc --noEmit --pretty"
   },
   "dependencies": {
+    "@casl/vue": "^2.2.2",
     "@grafana/faro-web-sdk": "^2.0.2",
     "@juanie/types": "workspace:*",
     "@juanie/ui": "workspace:*",

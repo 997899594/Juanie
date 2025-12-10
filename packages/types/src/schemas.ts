@@ -154,12 +154,46 @@ export const removeTeamMemberSchema = z.object({
 // 项目 Schemas
 // ============================================
 
+// 仓库配置 Schema - 关联现有仓库
+export const existingRepositoryConfigSchema = z.object({
+  mode: z.literal('existing'),
+  provider: z.enum(['github', 'gitlab']),
+  url: z.string().url(),
+  accessToken: z.string().min(1),
+  defaultBranch: z.string().optional(),
+})
+
+// 仓库配置 Schema - 创建新仓库
+export const newRepositoryConfigSchema = z.object({
+  mode: z.literal('create'),
+  provider: z.enum(['github', 'gitlab']),
+  name: z.string().min(1).max(100),
+  visibility: z.enum(['public', 'private']),
+  accessToken: z.string().min(1),
+  defaultBranch: z.string().optional(),
+  includeAppCode: z.boolean().optional(),
+})
+
+// 仓库配置联合 Schema
+export const repositoryConfigSchema = z.discriminatedUnion('mode', [
+  existingRepositoryConfigSchema,
+  newRepositoryConfigSchema,
+])
+
 export const createProjectSchema = z.object({
   organizationId: uuidSchema,
   name: z.string().min(1).max(100),
+  slug: slugSchema,
   description: z.string().max(1000).optional(),
   visibility: z.enum(['public', 'private', 'internal']).default('private'),
   logoUrl: z.string().url().optional(),
+
+  // 模板相关（可选）
+  templateId: uuidSchema.optional(),
+  templateConfig: z.record(z.any()).optional(),
+
+  // 仓库配置（可选）
+  repository: repositoryConfigSchema.optional(),
 })
 
 export const updateProjectSchema = z.object({
@@ -908,7 +942,7 @@ export type UpdateTeamMemberRoleInput = Omit<z.infer<typeof updateTeamMemberRole
 export type RemoveTeamMemberInput = Omit<z.infer<typeof removeTeamMemberSchema>, 'teamId'>
 
 // 项目相关类型
-export type CreateProjectInput = z.infer<typeof createProjectSchema>
+// CreateProjectInput 现在定义在 project.types.ts 中
 export type UpdateProjectInput = Omit<z.infer<typeof updateProjectSchema>, 'projectId'>
 export type AddProjectMemberInput = Omit<z.infer<typeof addProjectMemberSchema>, 'projectId'>
 export type UpdateProjectMemberRoleInput = Omit<
@@ -1016,48 +1050,7 @@ export const projectQuotaSchema = z.object({
   maxMemory: z.string(),
 })
 
-// 仓库配置 Schema - 关联现有仓库
-export const existingRepositoryConfigSchema = z.object({
-  mode: z.literal('existing'),
-  provider: z.enum(['github', 'gitlab']),
-  url: z.string().url(),
-  accessToken: z.string().min(1),
-  defaultBranch: z.string().optional(),
-})
-
-// 仓库配置 Schema - 创建新仓库
-export const newRepositoryConfigSchema = z.object({
-  mode: z.literal('create'),
-  provider: z.enum(['github', 'gitlab']),
-  name: z.string().min(1).max(100),
-  visibility: z.enum(['public', 'private']),
-  accessToken: z.string().min(1),
-  defaultBranch: z.string().optional(),
-  includeAppCode: z.boolean().optional(),
-})
-
-// 仓库配置联合 Schema
-export const repositoryConfigSchema = z.discriminatedUnion('mode', [
-  existingRepositoryConfigSchema,
-  newRepositoryConfigSchema,
-])
-
-// 扩展的创建项目 Schema（包含模板和仓库配置）
-export const createProjectWithTemplateSchema = z.object({
-  organizationId: uuidSchema,
-  name: z.string().min(1).max(100),
-  slug: slugSchema,
-  description: z.string().max(1000).optional(),
-  visibility: z.enum(['public', 'private', 'internal']).default('private'),
-  logoUrl: z.string().url().optional(),
-
-  // 模板相关
-  templateId: z.string().optional(),
-  templateConfig: z.record(z.string(), z.any()).optional(),
-
-  // 仓库配置
-  repository: repositoryConfigSchema.optional(),
-})
+// 仓库配置 schemas 已移动到 createProjectSchema 之前
 
 // 项目状态查询 Schema
 export const getProjectStatusSchema = z.object({
@@ -1336,7 +1329,7 @@ export const getEventStatsSchema = z.object({
 // ============================================
 
 // 项目相关类型
-export type CreateProjectWithTemplateInput = z.infer<typeof createProjectWithTemplateSchema>
+// CreateProjectInput 现在定义在 project.types.ts 中，统一使用该接口
 export type GetProjectStatusInput = z.infer<typeof getProjectStatusSchema>
 export type GetProjectHealthInput = z.infer<typeof getProjectHealthSchema>
 export type ArchiveProjectInput = z.infer<typeof archiveProjectSchema>
@@ -1359,3 +1352,209 @@ export type ListPendingApprovalsInput = z.infer<typeof listPendingApprovalsSchem
 // 事件相关类型
 export type QueryEventsInput = z.infer<typeof queryEventsSchema>
 export type GetEventStatsInput = z.infer<typeof getEventStatsSchema>
+
+// ============================================
+// AI 模块 Schemas
+// ============================================
+
+// AI 提供商和模型
+export const aiProviderSchema = z.enum(['anthropic', 'openai', 'zhipu', 'qwen', 'ollama'])
+
+export const aiModelSchema = z.enum([
+  // Ollama 本地模型
+  'qwen2.5-coder:7b',
+  'deepseek-coder:6.7b',
+  'codellama:7b',
+  'mistral:7b',
+  'llama3.1:8b',
+  // Claude 模型
+  'claude-3-5-sonnet-20241022',
+  'claude-3-opus-20240229',
+  'claude-3-sonnet-20240229',
+  'claude-3-haiku-20240307',
+  // OpenAI 模型
+  'gpt-4-turbo',
+  'gpt-4',
+  'gpt-3.5-turbo',
+  // 智谱 GLM 模型
+  'glm-4',
+  'glm-4-flash',
+  'glm-4v',
+  'glm-6',
+  // 阿里 Qwen 模型
+  'qwen2.5',
+  'qwen2.5-coder',
+  'qwenvl',
+])
+
+export const aiMessageRoleSchema = z.enum(['system', 'user', 'assistant', 'function'])
+
+export const aiMessageSchema = z.object({
+  role: aiMessageRoleSchema,
+  content: z.string(),
+  name: z.string().optional(),
+})
+
+// AI 完成请求
+export const aiCompleteSchema = z.object({
+  provider: aiProviderSchema,
+  model: z.string(),
+  messages: z.array(aiMessageSchema),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().positive().optional(),
+  projectId: z.string().optional(),
+})
+
+// AI 配额检查
+export const aiCheckQuotaSchema = z.object({
+  monthlyTokenLimit: z.number().positive(),
+  monthlyCostLimit: z.number().positive(),
+})
+
+// AI 缓存管理
+export const aiClearCacheSchema = z.object({
+  provider: aiProviderSchema.optional(),
+})
+
+// 对话管理
+export const createConversationSchema = z.object({
+  title: z.string().optional(),
+  projectId: z.string().optional(),
+})
+
+export const conversationIdSchema = z.object({
+  conversationId: z.string(),
+})
+
+export const addMessageSchema = z.object({
+  conversationId: z.string(),
+  role: aiMessageRoleSchema,
+  content: z.string(),
+})
+
+export const searchConversationsSchema = z.object({
+  query: z.string(),
+})
+
+// 提示词模板管理
+export const promptTemplateCategorySchema = z.enum([
+  'code-review',
+  'config-gen',
+  'troubleshooting',
+  'general',
+])
+
+export const createPromptTemplateSchema = z.object({
+  name: z.string(),
+  category: promptTemplateCategorySchema,
+  template: z.string(),
+  variables: z.array(z.string()),
+})
+
+export const promptTemplateIdSchema = z.object({
+  templateId: z.string(),
+})
+
+export const getPromptTemplatesByCategorySchema = z.object({
+  category: promptTemplateCategorySchema,
+})
+
+export const renderPromptTemplateSchema = z.object({
+  templateId: z.string(),
+  variables: z.record(z.string(), z.string()),
+})
+
+export const updatePromptTemplateSchema = z.object({
+  templateId: z.string(),
+  name: z.string().optional(),
+  template: z.string().optional(),
+  variables: z.array(z.string()).optional(),
+})
+
+// 使用统计
+export const getUsageStatisticsSchema = z.object({
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+  projectId: z.string().optional(),
+  provider: aiProviderSchema.optional(),
+  model: z.string().optional(),
+})
+
+export const getCacheHitRateSchema = z.object({
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+})
+
+// K8s 配置生成
+export const generateK8sConfigSchema = z.object({
+  appName: z.string(),
+  appType: z.enum(['web', 'api', 'worker', 'cron']),
+  language: z.string(),
+  framework: z.string().optional(),
+  port: z.number().optional(),
+  replicas: z.number().optional(),
+  resources: z
+    .object({
+      cpu: z.string(),
+      memory: z.string(),
+    })
+    .optional(),
+  envVars: z.record(z.string(), z.string()).optional(),
+})
+
+// Dockerfile 生成
+export const generateDockerfileSchema = z.object({
+  language: z.string(),
+  framework: z.string().optional(),
+  buildCommand: z.string().optional(),
+  startCommand: z.string().optional(),
+  port: z.number().optional(),
+  workdir: z.string().optional(),
+})
+
+// 配置优化建议
+export const suggestOptimizationsSchema = z.object({
+  config: z.string(),
+  type: z.enum(['k8s', 'dockerfile']),
+})
+
+// 故障诊断
+export const diagnoseSchema = z.object({
+  projectId: z.string(),
+  issue: z.string().optional(),
+})
+
+export const quickDiagnoseSchema = z.object({
+  projectId: z.string(),
+})
+
+// AI 聊天
+export const aiChatSchema = z.object({
+  message: z.string(),
+  context: z.record(z.string(), z.any()).optional(),
+})
+
+// AI 模块类型导出
+// 注意: AIProvider 和 AIMessage 在 ai.types.ts 中定义,这里不重复导出
+export type AIMessageRole = z.infer<typeof aiMessageRoleSchema>
+export type AICompleteInput = z.infer<typeof aiCompleteSchema>
+export type AICheckQuotaInput = z.infer<typeof aiCheckQuotaSchema>
+export type AIClearCacheInput = z.infer<typeof aiClearCacheSchema>
+export type CreateConversationInput = z.infer<typeof createConversationSchema>
+export type ConversationIdInput = z.infer<typeof conversationIdSchema>
+export type AddMessageInput = z.infer<typeof addMessageSchema>
+export type SearchConversationsInput = z.infer<typeof searchConversationsSchema>
+export type PromptTemplateCategory = z.infer<typeof promptTemplateCategorySchema>
+export type CreatePromptTemplateInput = z.infer<typeof createPromptTemplateSchema>
+export type PromptTemplateIdInput = z.infer<typeof promptTemplateIdSchema>
+export type GetPromptTemplatesByCategoryInput = z.infer<typeof getPromptTemplatesByCategorySchema>
+export type RenderPromptTemplateInput = z.infer<typeof renderPromptTemplateSchema>
+export type UpdatePromptTemplateInput = z.infer<typeof updatePromptTemplateSchema>
+export type GetUsageStatisticsInput = z.infer<typeof getUsageStatisticsSchema>
+export type GetCacheHitRateInput = z.infer<typeof getCacheHitRateSchema>
+export type GenerateK8sConfigInput = z.infer<typeof generateK8sConfigSchema>
+export type GenerateDockerfileInput = z.infer<typeof generateDockerfileSchema>
+export type SuggestOptimizationsInput = z.infer<typeof suggestOptimizationsSchema>
+export type DiagnoseInput = z.infer<typeof diagnoseSchema>
+export type QuickDiagnoseInput = z.infer<typeof quickDiagnoseSchema>
+export type AIChatInput = z.infer<typeof aiChatSchema>

@@ -1,6 +1,7 @@
 import { Logger } from '@juanie/core/logger'
 import type {
   AIModel,
+  AIProvider,
   BatchCodeReviewRequest,
   BatchCodeReviewResult,
   CodeReviewRequest,
@@ -9,42 +10,64 @@ import type {
 } from '@juanie/types'
 import { CodeReviewCategory, CodeReviewSeverity } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
-import { OllamaClient } from './ollama.client'
+import { AIService } from './ai/ai.service'
 
 /**
- * AI 代码审查服务
- * 使用 Ollama 本地模型进行代码审查
+ * AI 代码审查服务 (增强版)
+ * 使用统一的 AI 客户端接口支持多种模型提供商
  */
 @Injectable()
 export class CodeReviewService {
   private readonly logger = new Logger(CodeReviewService.name)
 
-  constructor(private readonly ollamaClient: OllamaClient) {}
+  constructor(private readonly aiService: AIService) {}
 
   /**
    * 全面代码审查
+   * 支持多种 AI 提供商和模型
    */
   async comprehensiveReview(request: CodeReviewRequest): Promise<CodeReviewResult> {
     const startTime = Date.now()
-    const model = request.model || 'qwen2.5-coder:7b'
+
+    // 确定使用的提供商和模型
+    const { provider, model } = this.selectProviderAndModel(request.model)
 
     const prompt = this.buildReviewPrompt(request, 'comprehensive')
-    const response = await this.ollamaClient.generate({
-      model,
-      prompt,
-      system: this.getSystemPrompt(request.language),
-      temperature: 0.3, // 较低温度，更确定性的输出
-      maxTokens: 8192,
-    })
 
-    const result = this.parseReviewResponse(response, model)
-    result.duration = Date.now() - startTime
-
-    this.logger.log(
-      `Comprehensive review completed for ${request.fileName || 'code'}: ${result.score}/100`,
+    // 使用统一的 AI 服务
+    const result = await this.aiService.complete(
+      {
+        provider,
+        model,
+        temperature: 0.3, // 较低温度，更确定性的输出
+        maxTokens: 8192,
+      },
+      {
+        messages: [
+          {
+            role: 'system',
+            content: this.getSystemPrompt(request.language),
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      },
+      {
+        userId: 'system', // 系统调用
+        projectId: request.context?.projectId,
+      },
     )
 
-    return result
+    const reviewResult = this.parseReviewResponse(result.content, model)
+    reviewResult.duration = Date.now() - startTime
+
+    this.logger.log(
+      `Comprehensive review completed for ${request.fileName || 'code'}: ${reviewResult.score}/100`,
+    )
+
+    return reviewResult
   }
 
   /**
@@ -52,21 +75,40 @@ export class CodeReviewService {
    */
   async quickReview(request: CodeReviewRequest): Promise<CodeReviewResult> {
     const startTime = Date.now()
-    const model = request.model || 'qwen2.5-coder:7b'
+
+    const { provider, model } = this.selectProviderAndModel(request.model)
 
     const prompt = this.buildReviewPrompt(request, 'quick')
-    const response = await this.ollamaClient.generate({
-      model,
-      prompt,
-      system: this.getSystemPrompt(request.language),
-      temperature: 0.2,
-      maxTokens: 4096,
-    })
 
-    const result = this.parseReviewResponse(response, model)
-    result.duration = Date.now() - startTime
+    const result = await this.aiService.complete(
+      {
+        provider,
+        model,
+        temperature: 0.2,
+        maxTokens: 4096,
+      },
+      {
+        messages: [
+          {
+            role: 'system',
+            content: this.getSystemPrompt(request.language),
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      },
+      {
+        userId: 'system',
+        projectId: request.context?.projectId,
+      },
+    )
 
-    return result
+    const reviewResult = this.parseReviewResponse(result.content, model)
+    reviewResult.duration = Date.now() - startTime
+
+    return reviewResult
   }
 
   /**
@@ -74,22 +116,41 @@ export class CodeReviewService {
    */
   async securityFocusedReview(request: CodeReviewRequest): Promise<CodeReviewResult> {
     const startTime = Date.now()
-    const model = request.model || 'qwen2.5-coder:7b'
+
+    const { provider, model } = this.selectProviderAndModel(request.model)
 
     const prompt = this.buildReviewPrompt(request, 'security-focused')
-    const response = await this.ollamaClient.generate({
-      model,
-      prompt,
-      system:
-        'You are a security expert code reviewer. Focus on finding security vulnerabilities, injection risks, authentication issues, and other security concerns.',
-      temperature: 0.1, // 极低温度，专注安全问题
-      maxTokens: 6144,
-    })
 
-    const result = this.parseReviewResponse(response, model)
-    result.duration = Date.now() - startTime
+    const result = await this.aiService.complete(
+      {
+        provider,
+        model,
+        temperature: 0.1, // 极低温度，专注安全问题
+        maxTokens: 6144,
+      },
+      {
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a security expert code reviewer. Focus on finding security vulnerabilities, injection risks, authentication issues, and other security concerns.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      },
+      {
+        userId: 'system',
+        projectId: request.context?.projectId,
+      },
+    )
 
-    return result
+    const reviewResult = this.parseReviewResponse(result.content, model)
+    reviewResult.duration = Date.now() - startTime
+
+    return reviewResult
   }
 
   /**
@@ -345,5 +406,42 @@ Provide the review in JSON format:
       type_safety: CodeReviewCategory.TYPE_SAFETY,
     }
     return mapping[normalized] || CodeReviewCategory.CODE_SMELL
+  }
+
+  /**
+   * 选择提供商和模型
+   * 根据模型名称自动选择合适的提供商
+   */
+  private selectProviderAndModel(model?: AIModel): { provider: AIProvider; model: AIModel } {
+    // 如果没有指定模型，使用默认的 Qwen2.5-Coder
+    if (!model) {
+      return {
+        provider: 'qwen',
+        model: 'qwen2.5-coder',
+      }
+    }
+
+    // Claude 模型
+    if (model.startsWith('claude-')) {
+      return { provider: 'anthropic', model }
+    }
+
+    // OpenAI 模型
+    if (model.startsWith('gpt-')) {
+      return { provider: 'openai', model }
+    }
+
+    // 智谱 GLM 模型
+    if (model.startsWith('glm-')) {
+      return { provider: 'zhipu', model }
+    }
+
+    // 阿里 Qwen 模型
+    if (model.startsWith('qwen')) {
+      return { provider: 'qwen', model }
+    }
+
+    // 默认使用 Ollama (本地模型)
+    return { provider: 'ollama', model }
   }
 }

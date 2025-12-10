@@ -57,11 +57,10 @@ export interface ExtendedProjectConfig {
 }
 
 /**
- * 创建项目输入（扩展版本，包含模板和仓库配置）
- * 注意：实际使用时请使用 schemas.ts 中的 CreateProjectWithTemplateInput
- * 这里保留接口定义仅用于类型参考
+ * 创建项目输入
+ * 统一的项目创建接口，支持简单创建、模板创建和仓库创建
  */
-export interface CreateProjectWithTemplateInputType {
+export interface CreateProjectInput {
   organizationId: string
   name: string
   slug: string
@@ -69,7 +68,7 @@ export interface CreateProjectWithTemplateInputType {
   visibility?: 'public' | 'private' | 'internal'
   logoUrl?: string
 
-  // 模板相关
+  // 模板相关（可选）
   templateId?: string
   templateConfig?: Record<string, any>
 

@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Button,
@@ -81,12 +81,12 @@ import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
 const appStore = useAppStore()
-const { organizations, loading, fetchOrganizations } = useOrganizations()
+const { organizations, loading } = useOrganizations()
 
 const currentOrganizationId = computed(() => appStore.currentOrganizationId)
 
 const currentOrganization = computed(() => {
-  if (!currentOrganizationId.value) return null
+  if (!currentOrganizationId.value || !organizations.value) return null
   return organizations.value.find((org: any) => org.id === currentOrganizationId.value)
 })
 
@@ -100,17 +100,20 @@ const currentOrgInitials = computed(() => {
   return getInitials(currentOrganization.value.name)
 })
 
-onMounted(async () => {
-  await fetchOrganizations()
-  
-  // 如果没有选中的组织，自动选择第一个
-  if (!currentOrganizationId.value && organizations.value.length > 0) {
-    const firstOrg = organizations.value[0]
-    if (firstOrg) {
-      appStore.setCurrentOrganization(firstOrg.id)
+// TanStack Query 会自动获取数据，只需要在数据加载完成后设置默认组织
+watch(
+  () => organizations.value,
+  (orgs) => {
+    // 如果没有选中的组织，自动选择第一个
+    if (!currentOrganizationId.value && orgs && orgs.length > 0) {
+      const firstOrg = orgs[0]
+      if (firstOrg) {
+        appStore.setCurrentOrganization(firstOrg.id)
+      }
     }
-  }
-})
+  },
+  { immediate: true },
+)
 
 function getInitials(name: string): string {
   return name

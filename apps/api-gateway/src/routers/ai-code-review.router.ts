@@ -1,29 +1,27 @@
-// TODO: CodeReviewService 尚未实现,暂时注释
-// import { CodeReviewService } from '@juanie/service-extensions'
+import { CodeReviewService } from '@juanie/service-extensions'
+import { aiModelSchema } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'
 
 /**
- * AI 代码审查 Router
- * 提供代码审查相关的 API
- *
- * TODO: 等待 CodeReviewService 实现后启用
+ * AI 代码审查 Router (增强版)
+ * 提供代码审查相关的 API，支持多种 AI 提供商
  */
 @Injectable()
 export class AICodeReviewRouter {
   constructor(
     private readonly trpc: TrpcService,
-    // private readonly codeReviewService: CodeReviewService,
+    private readonly codeReviewService: CodeReviewService,
   ) {}
 
   get router() {
     return this.trpc.router({
       /**
        * 全面代码审查
-       * TODO: 等待 CodeReviewService 实现
+       * 支持多种 AI 提供商和模型
        */
-      comprehensive: this.trpc.procedure
+      comprehensive: this.trpc.protectedProcedure
         .input(
           z.object({
             code: z.string().min(1, 'Code cannot be empty'),
@@ -50,17 +48,10 @@ export class AICodeReviewRouter {
               'markdown',
             ]),
             fileName: z.string().optional(),
-            model: z
-              .enum([
-                'qwen2.5-coder:7b',
-                'deepseek-coder:6.7b',
-                'codellama:7b',
-                'mistral:7b',
-                'llama3.1:8b',
-              ])
-              .optional(),
+            model: aiModelSchema.optional(),
             context: z
               .object({
+                projectId: z.string().optional(),
                 projectType: z.string().optional(),
                 framework: z.string().optional(),
                 relatedFiles: z.array(z.string()).optional(),
@@ -68,17 +59,17 @@ export class AICodeReviewRouter {
               .optional(),
           }),
         )
-        .mutation(async ({ input: _input }) => {
-          // TODO: 实现 CodeReviewService 后启用
-          throw new Error('CodeReviewService not implemented yet')
-          // return this.codeReviewService.comprehensiveReview(_input)
+        .mutation(async ({ input }) => {
+          return this.codeReviewService.comprehensiveReview({
+            ...input,
+            model: input.model as any,
+          })
         }),
 
       /**
-       * 快速代码审查
-       * TODO: 等待 CodeReviewService 实现
+       * 快速代码审查（仅关键问题）
        */
-      quick: this.trpc.procedure
+      quick: this.trpc.protectedProcedure
         .input(
           z.object({
             code: z.string().min(1),
@@ -105,28 +96,25 @@ export class AICodeReviewRouter {
               'markdown',
             ]),
             fileName: z.string().optional(),
-            model: z
-              .enum([
-                'qwen2.5-coder:7b',
-                'deepseek-coder:6.7b',
-                'codellama:7b',
-                'mistral:7b',
-                'llama3.1:8b',
-              ])
+            model: aiModelSchema.optional(),
+            context: z
+              .object({
+                projectId: z.string().optional(),
+              })
               .optional(),
           }),
         )
-        .mutation(async ({ input: _input }) => {
-          // TODO: 实现 CodeReviewService 后启用
-          throw new Error('CodeReviewService not implemented yet')
-          // return this.codeReviewService.quickReview(input)
+        .mutation(async ({ input }) => {
+          return this.codeReviewService.quickReview({
+            ...input,
+            model: input.model as any,
+          })
         }),
 
       /**
        * 安全聚焦审查
-       * TODO: 等待 CodeReviewService 实现
        */
-      security: this.trpc.procedure
+      security: this.trpc.protectedProcedure
         .input(
           z.object({
             code: z.string().min(1),
@@ -153,28 +141,25 @@ export class AICodeReviewRouter {
               'markdown',
             ]),
             fileName: z.string().optional(),
-            model: z
-              .enum([
-                'qwen2.5-coder:7b',
-                'deepseek-coder:6.7b',
-                'codellama:7b',
-                'mistral:7b',
-                'llama3.1:8b',
-              ])
+            model: aiModelSchema.optional(),
+            context: z
+              .object({
+                projectId: z.string().optional(),
+              })
               .optional(),
           }),
         )
-        .mutation(async ({ input: _input }) => {
-          // TODO: 实现 CodeReviewService 后启用
-          throw new Error('CodeReviewService not implemented yet')
-          // return this.codeReviewService.securityFocusedReview(input)
+        .mutation(async ({ input }) => {
+          return this.codeReviewService.securityFocusedReview({
+            ...input,
+            model: input.model as any,
+          })
         }),
 
       /**
        * 批量代码审查
-       * TODO: 等待 CodeReviewService 实现
        */
-      batch: this.trpc.procedure
+      batch: this.trpc.protectedProcedure
         .input(
           z.object({
             files: z
@@ -209,21 +194,11 @@ export class AICodeReviewRouter {
               .min(1, 'At least one file is required')
               .max(20, 'Maximum 20 files allowed'),
             mode: z.enum(['comprehensive', 'quick', 'security-focused']).optional(),
-            model: z
-              .enum([
-                'qwen2.5-coder:7b',
-                'deepseek-coder:6.7b',
-                'codellama:7b',
-                'mistral:7b',
-                'llama3.1:8b',
-              ])
-              .optional(),
+            model: aiModelSchema.optional(),
           }),
         )
-        .mutation(async ({ input: _input }) => {
-          // TODO: 实现 CodeReviewService 后启用
-          throw new Error('CodeReviewService not implemented yet')
-          // return this.codeReviewService.batchReview(input)
+        .mutation(async ({ input }) => {
+          return this.codeReviewService.batchReview(input)
         }),
     })
   }

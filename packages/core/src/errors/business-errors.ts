@@ -72,18 +72,84 @@ export class ProjectAlreadyExistsError extends BusinessError {
 }
 
 export class ProjectInitializationError extends BusinessError {
-  constructor(projectId: string, reason: string) {
+  constructor(
+    projectId: string,
+    reason: string,
+    public readonly step?: string,
+    retryable: boolean = false,
+  ) {
     super(
       `Failed to initialize project ${projectId}: ${reason}`,
       'PROJECT_INIT_FAILED',
       500,
-      true,
-      { projectId, reason },
+      retryable,
+      { projectId, reason, step },
     )
   }
 
   getUserMessage(): string {
-    return '项目初始化失败，请重试或联系管理员'
+    const stepMsg = this.step ? ` (步骤: ${this.step})` : ''
+    return `项目初始化失败${stepMsg}，请重试或联系管理员`
+  }
+}
+
+export class ProjectCreationFailedError extends ProjectInitializationError {
+  constructor(projectId: string, cause: Error) {
+    super(projectId, `Failed to create project: ${cause.message}`, 'CREATING_PROJECT', false)
+  }
+
+  override getUserMessage(): string {
+    return '创建项目失败，请检查项目名称和配置'
+  }
+}
+
+export class TemplateLoadFailedError extends ProjectInitializationError {
+  constructor(projectId: string, templateId: string, cause: Error) {
+    super(
+      projectId,
+      `Failed to load template ${templateId}: ${cause.message}`,
+      'LOADING_TEMPLATE',
+      true,
+    )
+  }
+
+  override getUserMessage(): string {
+    return '加载模板失败，请稍后重试'
+  }
+}
+
+export class EnvironmentCreationFailedError extends ProjectInitializationError {
+  constructor(projectId: string, cause: Error) {
+    super(
+      projectId,
+      `Failed to create environments: ${cause.message}`,
+      'CREATING_ENVIRONMENTS',
+      true,
+    )
+  }
+
+  override getUserMessage(): string {
+    return '创建环境失败，请稍后重试'
+  }
+}
+
+export class RepositorySetupFailedError extends ProjectInitializationError {
+  constructor(projectId: string, cause: Error) {
+    super(projectId, `Failed to setup repository: ${cause.message}`, 'SETTING_UP_REPOSITORY', true)
+  }
+
+  override getUserMessage(): string {
+    return '设置仓库失败，请检查 Git 配置'
+  }
+}
+
+export class FinalizationFailedError extends ProjectInitializationError {
+  constructor(projectId: string, cause: Error) {
+    super(projectId, `Failed to finalize project: ${cause.message}`, 'FINALIZING', false)
+  }
+
+  override getUserMessage(): string {
+    return '完成项目初始化失败，请联系管理员'
   }
 }
 

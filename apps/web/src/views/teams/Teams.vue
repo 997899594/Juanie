@@ -33,8 +33,7 @@
       <ErrorState
         v-if="error && !loading"
         title="加载失败"
-        :message="error"
-        @retry="() => currentOrganizationId && fetchTeams(currentOrganizationId)"
+        :message="error?.message"
       />
 
       <!-- 加载状态 -->
@@ -144,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Button,
   Card,
@@ -153,7 +152,15 @@ import { Button,
   CardHeader,
   CardTitle,
   Input,
-  Label , log } from '@juanie/ui'
+  Label,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  log } from '@juanie/ui'
+import { Loader2 } from 'lucide-vue-next'
 import { Plus, Users, Building, Edit, Trash2 } from 'lucide-vue-next'
 import { useTeams } from '@/composables/useTeams'
 import { useAppStore } from '@/stores/app'
@@ -164,18 +171,18 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const router = useRouter()
 const appStore = useAppStore()
+const currentOrganizationId = computed(() => appStore.currentOrganizationId)
+
+// 使用 TanStack Query - 自动获取数据
 const {
   teams,
   loading,
   error,
   hasTeams,
-  fetchTeams,
   createTeam,
   updateTeam,
   deleteTeam,
-} = useTeams()
-
-const currentOrganizationId = computed(() => appStore.currentOrganizationId)
+} = useTeams(currentOrganizationId.value)
 
 // 对话框状态
 const isModalOpen = ref(false)
@@ -192,11 +199,12 @@ const formData = ref({
 // 搜索功能
 const searchQuery = ref('')
 const filteredTeams = computed(() => {
+  const teamList = teams.value ?? []
   if (!searchQuery.value.trim()) {
-    return teams.value
+    return teamList
   }
   const query = searchQuery.value.toLowerCase()
-  return teams.value.filter(team => 
+  return teamList.filter(team => 
     team.name.toLowerCase().includes(query) ||
     (team.description && team.description.toLowerCase().includes(query))
   )
@@ -206,18 +214,8 @@ function filterTeams() {
   // 触发计算属性更新
 }
 
-// 监听组织变化
-watch(currentOrganizationId, async (orgId) => {
-  if (orgId) {
-    await fetchTeams(orgId)
-  }
-})
-
-onMounted(async () => {
-  if (currentOrganizationId.value) {
-    await fetchTeams(currentOrganizationId.value)
-  }
-})
+// TanStack Query 会自动响应 currentOrganizationId 的变化并重新获取数据
+// 不需要手动 watch 或 onMounted
 
 function openCreateModal() {
   isEdit.value = false

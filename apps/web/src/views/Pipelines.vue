@@ -145,7 +145,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePipelines } from '@/composables/usePipelines'
-import { useProjects } from '@/composables/useProjects'
+import { useProjectCRUD } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
 import { useToast } from '@/composables/useToast'
 import {
@@ -177,8 +177,12 @@ import ErrorState from '@/components/ErrorState.vue'
 const route = useRoute()
 const toast = useToast()
 const appStore = useAppStore()
-const { projects, fetchProjects } = useProjects()
 const currentOrganizationId = computed(() => appStore.currentOrganizationId)
+
+// 使用 TanStack Query - 自动获取项目列表
+const { useProjectsQuery } = useProjectCRUD()
+const { data: projects } = useProjectsQuery(currentOrganizationId.value!)
+
 const initialProjectId = (route.query.projectId as string | undefined) ?? null
 const selectedProjectId = ref<string | null>(initialProjectId)
 
@@ -186,6 +190,7 @@ const projectSelectPlaceholder = computed(() =>
   currentOrganizationId.value ? '选择项目' : '请先选择组织',
 )
 
+// Pipelines 还未迁移到 TanStack Query，保持原有逻辑
 const {
   pipelines,
   loading,
@@ -205,24 +210,7 @@ const form = ref({
   projectId: selectedProjectId.value || '',
 })
 
-onMounted(async () => {
-  if (currentOrganizationId.value) {
-    await fetchProjects(currentOrganizationId.value)
-  }
-  if (selectedProjectId.value) {
-    await fetchPipelines(selectedProjectId.value)
-  }
-})
-
-watch(currentOrganizationId, async (orgId) => {
-  if (orgId) {
-    await fetchProjects(orgId)
-    // 重置选择，避免跨组织误选
-    selectedProjectId.value = null
-    form.value.projectId = ''
-  }
-})
-
+// 当选择项目时，获取 pipelines
 watch(selectedProjectId, async (pid) => {
   form.value.projectId = pid || ''
   if (pid) {

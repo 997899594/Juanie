@@ -2,6 +2,9 @@
 // 所有表的 schema 将在这里统一导出
 
 export * from './ai-assistants.schema'
+export * from './ai-conversations.schema'
+export * from './ai-prompt-templates.schema'
+export * from './ai-usage.schema'
 export * from './audit-logs.schema'
 export * from './cost-tracking.schema'
 export * from './deployment-approvals.schema'

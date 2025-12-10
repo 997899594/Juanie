@@ -1,5 +1,71 @@
 # 文档变更日志
 
+## 2025-12-05 - 文档和规则大幅精简
+
+### 文档精简（删除 16 个文件，约 3500 行）
+
+**删除历史记录（3 个文件）:**
+- `docs/archive/` 整个目录 - 历史清理记录
+
+**删除重复文档（10 个文件）:**
+- `docs/troubleshooting/refactoring/01-05_*.md` - 已有更新版本
+- `docs/troubleshooting/refactoring/PHASE1_PRIORITY.md`
+- `docs/troubleshooting/refactoring/EXECUTION_PLAN.md`
+- `docs/troubleshooting/refactoring/PRIORITY_TASKS.md`
+- `docs/troubleshooting/refactoring/SOLUTION_OVERVIEW.md`
+- `docs/troubleshooting/refactoring/QUICK_REFERENCE.md`
+
+**删除总结文档（2 个文件）:**
+- `docs/troubleshooting/refactoring/priority/00-overview.md`
+- `docs/troubleshooting/refactoring/priority/TASKS_5_6_SUMMARY.md`
+
+**删除空文件（6 个）:**
+- 各种空的 Markdown 文件
+
+**效果**: 从 52 个文档减少到 37 个，减少约 25%
+
+### AI 规则精简（减少 60%）
+
+**精简 `.kiro/steering/collaboration.md`:**
+- 从 472 行减少到 40 行（减少 91%）
+- 保留核心原则，删除冗余示例
+
+**精简 `.kiro/steering/ai-collaboration.md`:**
+- 从 303 行减少到 36 行（减少 88%）
+- 保留关键指导，删除详细示例
+
+**效果**: 
+- 总行数从 1789 行减少到 1090 行（减少 39%）
+- 核心规则更清晰，上下文消耗更少
+
+### 文档组织优化
+- ✨ 创建 `docs/guides/README.md` - 完整的操作指南索引
+- ✨ 创建 `docs/guides/MODERNIZATION_PROGRESS.md` - 现代化进度总结（89% 完成）
+- 📦 移动 Task 8 总结到正确位置：`docs/troubleshooting/refactoring/TASK_8_OPENTELEMETRY.md`
+- 🗑️ 删除 `docs/guides/CHANGELOG.md` - 与 `docs/CHANGELOG.md` 重复
+
+### 主 README 更新
+- 修复所有失效的文档链接
+- 添加新文档的引用
+- 按类别组织文档链接（操作指南、技术指南、架构文档、故障排查）
+
+### 新增文档
+- `docs/guides/opentelemetry-integration.md` - 完整的可观测性解决方案
+- `docs/guides/using-declarations.md` - TypeScript 5.2+ 自动资源管理
+- `docs/guides/TODO_CLEANUP_ISSUES.md` - GitHub Issues 模板
+- `docs/troubleshooting/refactoring/TASK_8_OPENTELEMETRY.md` - Task 8 完成总结
+
+### 更新文档
+- `docs/guides/MODERNIZATION_TASKS.md` - 更新 Task 3、7、8 完成状态
+- `docs/troubleshooting/README.md` - 添加 Task 8 链接
+- `.env.example` - 添加前端可观测性环境变量
+
+### 精简原则
+- 只保留一个统一的 CHANGELOG
+- 删除历史记录和重复文档
+- AI 规则保留核心原则，删除冗余示例
+- 文档之间通过链接引用，而非复制内容
+
 ## 2025-11-28 - 进度条回退问题修复
 
 ### 问题修复

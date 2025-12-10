@@ -27,11 +27,12 @@ export class CreateProjectHandler implements StateHandler {
   async execute(context: InitializationContext): Promise<void> {
     this.logger.log(`Creating project: ${context.projectData.name}`)
 
+    const db = context.tx || this.db
+
     try {
-      // 自动生成 slug（时间戳 + 随机数，用户不可见）
       const slug = `project-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
 
-      const [project] = await this.db
+      const [project] = await db
         .insert(schema.projects)
         .values({
           organizationId: context.organizationId,
@@ -60,7 +61,6 @@ export class CreateProjectHandler implements StateHandler {
         throw new Error('Failed to create project record')
       }
 
-      // 保存项目 ID 到上下文
       context.projectId = project.id
       this.logger.log(`Project created: ${project.id}`)
     } catch (error) {

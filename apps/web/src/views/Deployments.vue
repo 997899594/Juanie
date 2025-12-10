@@ -18,8 +18,7 @@
     <ErrorState
       v-if="error && !loading"
       title="加载失败"
-      :message="error"
-      @retry="fetchDeployments"
+      :message="error?.message"
     />
 
     <!-- 加载状态 -->
@@ -95,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDeployments } from '@/composables/useDeployments'
 import DeploymentStatusBadge from '@/components/DeploymentStatusBadge.vue'
@@ -112,27 +111,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@juanie/ui'
-import { Rocket, ChevronRight, GitCommit, ExternalLink } from 'lucide-vue-next'
+import { Rocket, ChevronRight, GitCommit } from 'lucide-vue-next'
 import LoadingState from '@/components/LoadingState.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ErrorState from '@/components/ErrorState.vue'
 
 const router = useRouter()
-const { deployments, loading, error, fetchDeployments } = useDeployments()
-
 const selectedEnvironment = ref('all')
 
-onMounted(async () => {
-  await fetchDeployments()
+// 使用 TanStack Query - 自动获取数据并响应 filters 变化
+const filters = computed(() => {
+  const f: any = {}
+  if (selectedEnvironment.value !== 'all') {
+    f.environmentId = selectedEnvironment.value
+  }
+  return f
 })
 
-watch(selectedEnvironment, async (newValue) => {
-  const filters: any = {}
-  if (newValue !== 'all') {
-    filters.environmentId = newValue
-  }
-  await fetchDeployments(filters)
-})
+const { deployments, loading, error } = useDeployments(filters.value)
+
+// TanStack Query 会自动响应 filters 的变化并重新获取数据
+// 不需要手动 watch 或 onMounted
 
 const formatDate = (date: string) => {
   return new Date(date).toLocaleString('zh-CN')

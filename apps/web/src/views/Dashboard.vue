@@ -148,14 +148,17 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useDeployments } from '@/composables/useDeployments'
 import { usePipelines } from '@/composables/usePipelines'
-import { useProjects } from '@/composables/useProjects'
+import { useProjectCRUD } from '@/composables/useProjects'
 
 const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
-const { fetchProjects, projects } = useProjects()
-const { fetchDeployments, deployments } = useDeployments()
-const { fetchPipelines, pipelines } = usePipelines()
+
+// 使用 TanStack Query - 自动获取数据
+const { useProjectsQuery } = useProjectCRUD()
+const { data: projects } = useProjectsQuery(appStore.currentOrganizationId!)
+const { deployments } = useDeployments()
+const { pipelines } = usePipelines()
 
 // 统计数据
 const stats = ref({
@@ -223,25 +226,19 @@ function getDeploymentStatusText(status: string) {
   }
 }
 
-// 加载数据
+// 加载数据 - TanStack Query 会自动获取数据
 async function loadData() {
   try {
-    // 如果有当前组织，加载该组织的数据
-    if (appStore.currentOrganizationId) {
-      // 加载项目
-      await fetchProjects(appStore.currentOrganizationId)
-
+    // 如果有当前组织，计算统计数据
+    if (appStore.currentOrganizationId && projects.value) {
       // 计算项目统计
       stats.value.totalProjects = projects.value.length
       stats.value.activeProjects = projects.value.length
 
-      // 加载部署（所有项目）
-      await fetchDeployments()
-
       // 计算部署统计
       const now = new Date()
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      const monthlyDeployments = deployments.value.filter(
+      const monthlyDeployments = (deployments.value ?? []).filter(
         (d) => new Date(d.createdAt) >= firstDayOfMonth,
       )
 
