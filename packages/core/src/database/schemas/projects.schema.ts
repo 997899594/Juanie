@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
+import { environments } from './environments.schema'
 import { organizations } from './organizations.schema'
 import { projectMembers } from './project-members.schema'
 import { projectTemplates } from './project-templates.schema'
@@ -110,4 +111,5 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     references: [projectTemplates.id],
   }),
   members: many(projectMembers),
+  environments: many(environments),
 }))

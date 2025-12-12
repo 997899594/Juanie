@@ -12,6 +12,15 @@
 | `monitor-progress-events.ts` | 监控项目初始化进度事件 | 高 |
 | `watch-gitops-logs.ts` | 实时查看 GitOps 日志 | 高 |
 
+### 🤖 AI 测试工具
+| 脚本 | 用途 | 使用频率 |
+|------|------|---------|
+| `test-ai-ollama.ts` | 测试 Ollama 本地模型 | 中 |
+| `test-ai-glm.ts` | 测试智谱 GLM 模型 | 中 |
+| `test-ai-glm-flash.ts` | 测试智谱 GLM-4-Flash 模型 | 中 |
+| `test-ai-glm-direct.ts` | 直接测试智谱 API | 中 |
+| `test-ai-multimodal.ts` | 测试多模态服务 | 中 |
+
 **使用示例**：
 ```bash
 # 检查队列任务
@@ -22,6 +31,11 @@ bun run scripts/clean-database.ts
 
 # 监控进度事件
 bun run scripts/monitor-progress-events.ts
+
+# 测试 AI 模型
+bun run scripts/test-ai-ollama.ts
+bun run scripts/test-ai-glm.ts
+bun run scripts/test-ai-multimodal.ts
 ```
 
 ### 🚀 部署和配置

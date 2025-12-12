@@ -96,16 +96,20 @@ export class CreateEnvironmentsHandler implements StateHandler {
       })
 
       try {
-        const environment = await this.environments.create(context.userId, {
-          projectId: context.projectId!,
-          name: envConfig.name,
-          type: envConfig.type,
-          status: 'active',
-          config: {
-            approvalRequired: envConfig.approvalRequired,
-            minApprovals: envConfig.minApprovals,
+        const environment = await this.environments.create(
+          context.userId,
+          {
+            projectId: context.projectId!,
+            name: envConfig.name,
+            type: envConfig.type,
+            status: 'active',
+            config: {
+              approvalRequired: envConfig.approvalRequired,
+              minApprovals: envConfig.minApprovals,
+            },
           },
-        })
+          context.tx, // 传入事务，确保权限检查在同一事务中
+        )
 
         if (environment) {
           environmentIds.push(environment.id)

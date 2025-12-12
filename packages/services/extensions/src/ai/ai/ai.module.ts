@@ -6,6 +6,7 @@ import { CodeReviewService } from '../code-review.service'
 import { ConfigGeneratorService } from '../config-gen/config-generator.service'
 import { ConversationService } from '../conversations/conversation.service'
 import { FunctionCallingService } from '../functions/function-calling.service'
+import { MultimodalService } from '../multimodal/multimodal.service'
 import { OllamaClient } from '../ollama.client'
 import { PromptService } from '../prompts/prompt.service'
 import { RAGService } from '../rag/rag.service'
@@ -37,6 +38,7 @@ import { AITroubleshooter } from './ai-troubleshooter.service'
     AICacheService,
     ContentFilterService,
     FunctionCallingService,
+    MultimodalService,
   ],
   exports: [
     OllamaClient,
@@ -55,6 +57,7 @@ import { AITroubleshooter } from './ai-troubleshooter.service'
     AICacheService,
     ContentFilterService,
     FunctionCallingService,
+    MultimodalService,
   ],
 })
 export class AIModule {}

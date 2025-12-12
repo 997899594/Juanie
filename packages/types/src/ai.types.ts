@@ -10,7 +10,7 @@
  * AI 提供商类型 (用于非 zod 场景)
  * 注意: 优先使用 schemas.ts 中从 zod 推断的类型
  */
-export type AIProvider = 'anthropic' | 'openai' | 'zhipu' | 'qwen' | 'ollama'
+export type AIProvider = 'anthropic' | 'openai' | 'google' | 'zhipu' | 'qwen' | 'ollama'
 
 /**
  * 支持的 AI 模型
@@ -22,24 +22,32 @@ export type AIModel =
   | 'codellama:7b' // Meta CodeLlama
   | 'mistral:7b' // Mistral 通用模型
   | 'llama3.1:8b' // Meta Llama 3.1
-  // Claude 模型
-  | 'claude-3-5-sonnet-20241022'
-  | 'claude-3-opus-20240229'
-  | 'claude-3-sonnet-20240229'
-  | 'claude-3-haiku-20240307'
-  // OpenAI 模型
-  | 'gpt-4-turbo'
-  | 'gpt-4'
-  | 'gpt-3.5-turbo'
-  // 智谱 GLM 模型
+  // Claude 3.5 模型（2024年10月最新）
+  | 'claude-3-5-sonnet-20241022' // 最强多模态
+  | 'claude-3-5-haiku-20241022' // 最快最便宜
+  // OpenAI GPT-4o 模型（2024年最新）
+  | 'gpt-4o' // 最新多模态
+  | 'gpt-4o-mini' // 性价比最高
+  | 'gpt-4-turbo' // 旧版本
+  | 'gpt-4' // 旧版本
+  | 'gpt-3.5-turbo' // 旧版本
+  // Google Gemini 模型（2024年12月最新）
+  | 'gemini-2.0-flash-exp' // 最新实验版本，免费
+  | 'gemini-1.5-pro' // 稳定版本
+  | 'gemini-1.5-flash' // 快速版本
+  // 智谱 GLM 模型（2025年最新）
+  | 'glm-4.6' // 最新旗舰多模态，支持深度思考
   | 'glm-4'
   | 'glm-4-flash'
-  | 'glm-4v'
-  | 'glm-6'
-  // 阿里 Qwen 模型
+  | 'glm-4v-plus' // 增强多模态
+  | 'glm-4v-flash' // 快速多模态
+  | 'glm-4v' // 旧版本
+  // 阿里 Qwen 模型（2024年最新）
   | 'qwen2.5'
   | 'qwen2.5-coder'
-  | 'qwenvl'
+  | 'qwen2-vl-72b' // 最新多模态
+  | 'qwen2-vl-7b' // 性价比多模态
+  | 'qwenvl' // 旧版本
 
 /**
  * AI 客户端配置

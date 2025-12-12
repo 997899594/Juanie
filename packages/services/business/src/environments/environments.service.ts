@@ -38,13 +38,19 @@ export class EnvironmentsService {
     @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
   ) {}
 
-  async create(userId: string, data: CreateEnvironmentInput) {
-    const hasPermission = await this.checkProjectPermission(userId, data.projectId, 'admin')
+  async create(
+    userId: string,
+    data: CreateEnvironmentInput,
+    tx?: PostgresJsDatabase<typeof schema>,
+  ) {
+    const db = tx || this.db
+
+    const hasPermission = await this.checkProjectPermission(userId, data.projectId, 'admin', db)
     if (!hasPermission) {
       throw new Error('没有权限创建环境')
     }
 
-    const [environment] = await this.db
+    const [environment] = await db
       .insert(schema.environments)
       .values({
         projectId: data.projectId,
@@ -206,8 +212,11 @@ export class EnvironmentsService {
     userId: string,
     projectId: string,
     requiredRole: 'admin' | 'developer',
+    db?: PostgresJsDatabase<typeof schema>,
   ): Promise<boolean> {
-    const [project] = await this.db
+    const database = db || this.db
+
+    const [project] = await database
       .select()
       .from(schema.projects)
       .where(eq(schema.projects.id, projectId))
@@ -217,7 +226,7 @@ export class EnvironmentsService {
       return false
     }
 
-    const [orgMember] = await this.db
+    const [orgMember] = await database
       .select()
       .from(schema.organizationMembers)
       .where(
@@ -232,7 +241,7 @@ export class EnvironmentsService {
       return true
     }
 
-    const [projectMember] = await this.db
+    const [projectMember] = await database
       .select()
       .from(schema.projectMembers)
       .where(

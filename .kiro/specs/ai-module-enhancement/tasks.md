@@ -338,8 +338,8 @@
   - **Validates: Requirements 10.5**
   - 测试函数被执行且结果返回
 
-- [ ] 14. 实现多模态支持
-- [ ] 14.1 创建多模态服务
+- [x] 14. 实现多模态支持
+- [x] 14.1 创建多模态服务
   - 创建 `packages/services/extensions/src/ai/multimodal/multimodal.service.ts`
   - 实现图片上传处理
   - 实现图文混合输入处理

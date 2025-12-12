@@ -56,3 +56,13 @@ export const environments = pgTable(
 
 export type Environment = typeof environments.$inferSelect
 export type NewEnvironment = typeof environments.$inferInsert
+
+// Relations
+import { relations } from 'drizzle-orm'
+
+export const environmentsRelations = relations(environments, ({ one }) => ({
+  project: one(projects, {
+    fields: [environments.projectId],
+    references: [projects.id],
+  }),
+}))

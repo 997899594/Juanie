@@ -257,6 +257,13 @@ export class CredentialManagerService {
       const secretName = `${projectId}-git-auth`
 
       try {
+        // 确保 namespace 存在
+        const namespaceExists = await this.k3s.namespaceExists(namespace)
+        if (!namespaceExists) {
+          this.logger.warn(`Namespace ${namespace} does not exist yet, skipping secret sync`)
+          continue
+        }
+
         await this.k3s.createSecret(
           namespace,
           secretName,

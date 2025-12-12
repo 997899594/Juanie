@@ -99,6 +99,17 @@ export class K3sService implements OnModuleInit {
     return this.client.deleteNamespace(name)
   }
 
+  async namespaceExists(name: string): Promise<boolean> {
+    if (!this.isConnected) return false
+    try {
+      const namespaces = await this.client.listNamespaces()
+      return namespaces.some((ns: any) => ns.metadata?.name === name)
+    } catch (error) {
+      this.logger.error(`Failed to check namespace existence: ${error}`)
+      return false
+    }
+  }
+
   // Pod 操作
   async getPods(namespace: string, labelSelector?: string) {
     if (!this.isConnected) return []
