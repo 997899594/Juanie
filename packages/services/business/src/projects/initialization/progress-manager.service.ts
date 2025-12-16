@@ -19,10 +19,13 @@ import Redis from 'ioredis'
  */
 @Injectable()
 export class ProgressManagerService {
-  private readonly logger = new Logger(ProgressManagerService.name)
   private readonly redis: Redis
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ProgressManagerService.name)
     const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
     this.redis = new Redis(redisUrl)
   }
@@ -155,7 +158,7 @@ export class ProgressManagerService {
    */
   async resetProgress(projectId: string): Promise<void> {
     await this.redis.del(`project:${projectId}:progress`)
-    this.logger.log(`Progress reset for ${projectId}`)
+    this.logger.info(`Progress reset for ${projectId}`)
   }
 
   /**

@@ -9,9 +9,12 @@ import type { InitializationContext, StateHandler } from '../types'
 @Injectable()
 export class LoadTemplateHandler implements StateHandler {
   readonly name = 'LOADING_TEMPLATE' as const
-  private readonly logger = new Logger(LoadTemplateHandler.name)
 
-  constructor(private templates: TemplateManager) {}
+  constructor(
+    private templates: TemplateManager,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(LoadTemplateHandler.name)}
 
   canHandle(context: InitializationContext): boolean {
     // 只有指定了模板才需要加载
@@ -27,7 +30,7 @@ export class LoadTemplateHandler implements StateHandler {
       return
     }
 
-    this.logger.log(`Loading template: ${context.templateId}`)
+    this.logger.info(`Loading template: ${context.templateId}`)
 
     const template = await this.templates.getTemplate(context.templateId)
     if (!template) {
@@ -36,6 +39,6 @@ export class LoadTemplateHandler implements StateHandler {
 
     // 保存模板路径到上下文
     context.templatePath = template.slug
-    this.logger.log(`Template loaded: ${template.slug}`)
+    this.logger.info(`Template loaded: ${template.slug}`)
   }
 }

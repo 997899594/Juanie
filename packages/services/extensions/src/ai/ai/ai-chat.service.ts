@@ -61,11 +61,11 @@ export interface ChatResponse {
  */
 @Injectable()
 export class AIChatService {
-  private readonly logger = new Logger(AIChatService.name)
   private readonly anthropic: Anthropic
   private readonly conversationHistory = new Map<string, ChatMessage[]>()
 
-  constructor() {
+  constructor(private readonly logger: Logger) {
+    this.logger.setContext(AIChatService.name)
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     })
@@ -80,7 +80,7 @@ export class AIChatService {
     context?: Record<string, any>,
   ): Promise<ChatResponse> {
     try {
-      this.logger.log(`Processing chat message for user ${userId}`)
+      this.logger.info(`Processing chat message for user ${userId}`)
 
       // 获取对话历史
       const history = this.getConversationHistory(userId)
@@ -129,7 +129,7 @@ export class AIChatService {
     context?: Record<string, any>,
   ): Promise<IntentDetectionResult> {
     try {
-      this.logger.log('Detecting user intent')
+      this.logger.info('Detecting user intent')
 
       // 使用 Claude 进行意图检测
       const response = await this.anthropic.messages.create({
@@ -209,7 +209,7 @@ Extract relevant entities like project names, template types, technologies, etc.
     context?: Record<string, any>,
   ): Promise<any> {
     try {
-      this.logger.log(`Executing action for intent: ${intentResult.intent}`)
+      this.logger.info(`Executing action for intent: ${intentResult.intent}`)
 
       switch (intentResult.intent) {
         case UserIntent.CREATE_PROJECT:
@@ -317,7 +317,7 @@ Extract relevant entities like project names, template types, technologies, etc.
     history: ChatMessage[],
   ): Promise<ChatResponse> {
     try {
-      this.logger.log('Generating response')
+      this.logger.info('Generating response')
 
       // 构建对话历史
       const conversationContext = history
@@ -436,7 +436,7 @@ Keep the tone friendly and professional. Use emojis sparingly.`,
    */
   clearHistory(userId: string): void {
     this.conversationHistory.delete(userId)
-    this.logger.log(`Cleared conversation history for user ${userId}`)
+    this.logger.info(`Cleared conversation history for user ${userId}`)
   }
 
   /**

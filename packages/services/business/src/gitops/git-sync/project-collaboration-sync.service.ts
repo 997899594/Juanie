@@ -32,14 +32,15 @@ export interface ProjectCollaborationSyncResult {
 
 @Injectable()
 export class ProjectCollaborationSyncService {
-  private readonly logger = new Logger(ProjectCollaborationSyncService.name)
 
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     readonly _config: ConfigService,
     private readonly gitProvider: GitProviderService,
     private readonly errorService: GitSyncErrorService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ProjectCollaborationSyncService.name)}
 
   /**
    * 同步项目协作者到 Git 仓库
@@ -47,7 +48,7 @@ export class ProjectCollaborationSyncService {
    * Requirements: Personal Workspace Collaboration
    */
   async syncProjectCollaborators(projectId: string): Promise<ProjectCollaborationSyncResult> {
-    this.logger.log(`Starting project collaboration sync for: ${projectId}`)
+    this.logger.info(`Starting project collaboration sync for: ${projectId}`)
 
     try {
       // 获取项目信息
@@ -203,7 +204,7 @@ export class ProjectCollaborationSyncService {
             )
 
           results.syncedCollaborators++
-          this.logger.log(
+          this.logger.info(
             `Synced collaborator ${member.user.displayName || member.user.email} to ${project.gitProvider} repository`,
           )
 
@@ -258,7 +259,7 @@ export class ProjectCollaborationSyncService {
         }
       }
 
-      this.logger.log(
+      this.logger.info(
         `Project collaboration sync completed. Synced: ${results.syncedCollaborators}, Errors: ${results.errors.length}`,
       )
 
@@ -297,7 +298,7 @@ export class ProjectCollaborationSyncService {
     userId: string,
     role: string,
   ): Promise<{ success: boolean; error?: string }> {
-    this.logger.log(`Adding collaborator ${userId} to project ${projectId} with role ${role}`)
+    this.logger.info(`Adding collaborator ${userId} to project ${projectId} with role ${role}`)
 
     try {
       // 获取项目信息
@@ -328,7 +329,7 @@ export class ProjectCollaborationSyncService {
         }
       }
 
-      this.logger.log(`Successfully added collaborator ${userId} to project ${projectId}`)
+      this.logger.info(`Successfully added collaborator ${userId} to project ${projectId}`)
       return { success: true }
     } catch (error) {
       this.logger.error(`Failed to add project collaborator:`, error)
@@ -358,7 +359,7 @@ export class ProjectCollaborationSyncService {
     projectId: string,
     userId: string,
   ): Promise<{ success: boolean; error?: string }> {
-    this.logger.log(`Removing collaborator ${userId} from project ${projectId}`)
+    this.logger.info(`Removing collaborator ${userId} from project ${projectId}`)
 
     try {
       // 获取项目信息
@@ -448,7 +449,7 @@ export class ProjectCollaborationSyncService {
           ),
         )
 
-      this.logger.log(`Successfully removed collaborator ${userId} from project ${projectId}`)
+      this.logger.info(`Successfully removed collaborator ${userId} from project ${projectId}`)
 
       // 记录成功
       await this.errorService.recordSuccess({

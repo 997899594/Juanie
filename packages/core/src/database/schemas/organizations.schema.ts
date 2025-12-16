@@ -55,15 +55,3 @@ export const organizations = pgTable(
 
 export type Organization = typeof organizations.$inferSelect
 export type NewOrganization = typeof organizations.$inferInsert
-
-// Relations
-import { relations } from 'drizzle-orm'
-import { organizationMembers } from './organization-members.schema'
-
-export const organizationsRelations = relations(organizations, ({ one, many }) => ({
-  owner: one(users, {
-    fields: [organizations.ownerId],
-    references: [users.id],
-  }),
-  members: many(organizationMembers),
-}))

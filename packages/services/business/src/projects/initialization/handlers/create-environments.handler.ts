@@ -17,17 +17,18 @@ import type { InitializationContext, StateHandler } from '../types'
 @Injectable()
 export class CreateEnvironmentsHandler implements StateHandler {
   readonly name = 'CREATING_ENVIRONMENTS' as const
-  private readonly logger = new Logger(CreateEnvironmentsHandler.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private environments: EnvironmentsService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(CreateEnvironmentsHandler.name)}
 
   canHandle(context: InitializationContext): boolean {
     // 智能判断: 如果模板已定义环境，跳过默认环境创建
     if (context.templateId && context.templateConfig?.environments) {
-      this.logger.log('Template defines environments, skipping default creation')
+      this.logger.info('Template defines environments, skipping default creation')
       return false
     }
     return true
@@ -42,7 +43,7 @@ export class CreateEnvironmentsHandler implements StateHandler {
       throw new Error('Project ID is required')
     }
 
-    this.logger.log(`Creating environments for project: ${context.projectId}`)
+    this.logger.info(`Creating environments for project: ${context.projectId}`)
 
     const db = context.tx || this.db
 
@@ -52,7 +53,7 @@ export class CreateEnvironmentsHandler implements StateHandler {
     })
 
     if (existingEnvs.length > 0) {
-      this.logger.log(`Template already created ${existingEnvs.length} environments`)
+      this.logger.info(`Template already created ${existingEnvs.length} environments`)
       context.environmentIds = existingEnvs.map((e: { id: string }) => e.id)
       return
     }
@@ -113,7 +114,7 @@ export class CreateEnvironmentsHandler implements StateHandler {
 
         if (environment) {
           environmentIds.push(environment.id)
-          this.logger.log(`Environment created: ${environment.name} (${environment.id})`)
+          this.logger.info(`Environment created: ${environment.name} (${environment.id})`)
         }
       } catch (error) {
         this.logger.error(`Failed to create environment ${envConfig.name}:`, error)
@@ -125,6 +126,6 @@ export class CreateEnvironmentsHandler implements StateHandler {
     }
 
     context.environmentIds = environmentIds
-    this.logger.log(`Created ${environmentIds.length} default environments`)
+    this.logger.info(`Created ${environmentIds.length} default environments`)
   }
 }

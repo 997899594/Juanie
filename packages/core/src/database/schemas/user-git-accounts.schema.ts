@@ -1,4 +1,3 @@
-import { relations } from 'drizzle-orm'
 import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { users } from './users.schema'
 
@@ -39,11 +38,3 @@ export const userGitAccounts = pgTable(
 
 export type UserGitAccount = typeof userGitAccounts.$inferSelect
 export type NewUserGitAccount = typeof userGitAccounts.$inferInsert
-
-// Relations
-export const userGitAccountsRelations = relations(userGitAccounts, ({ one }) => ({
-  user: one(users, {
-    fields: [userGitAccounts.userId],
-    references: [users.id],
-  }),
-}))

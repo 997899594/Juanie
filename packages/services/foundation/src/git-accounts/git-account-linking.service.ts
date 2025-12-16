@@ -30,18 +30,19 @@ export interface GitAccountStatus {
 
 @Injectable()
 export class GitAccountLinkingService {
-  private readonly logger = new Logger(GitAccountLinkingService.name)
-
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly encryptionService: EncryptionService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitAccountLinkingService.name)
+  }
 
   /**
    * 关联用户的 Git 账号
    */
   async linkGitAccount(input: LinkGitAccountInput): Promise<schema.UserGitAccount> {
-    this.logger.log(
+    this.logger.info(
       `Linking ${input.provider} account for user ${input.userId}: ${input.gitUsername}`,
     )
 
@@ -75,7 +76,7 @@ export class GitAccountLinkingService {
         .where(eq(schema.userGitAccounts.id, existing.id))
         .returning()
 
-      this.logger.log(`Updated Git account link for user ${input.userId}`)
+      this.logger.info(`Updated Git account link for user ${input.userId}`)
       const result = updated[0]
       if (!result) throw new Error('Failed to update Git account')
       return result
@@ -98,7 +99,7 @@ export class GitAccountLinkingService {
       })
       .returning()
 
-    this.logger.log(`Created Git account link for user ${input.userId}`)
+    this.logger.info(`Created Git account link for user ${input.userId}`)
     if (!created) throw new Error('Failed to create Git account')
     return created
   }
@@ -107,11 +108,11 @@ export class GitAccountLinkingService {
    * 取消关联 Git 账号
    */
   async unlinkGitAccount(userId: string, provider: GitProvider): Promise<void> {
-    this.logger.log(`Unlinking ${provider} account for user ${userId}`)
+    this.logger.info(`Unlinking ${provider} account for user ${userId}`)
 
     await this.db.delete(schema.userGitAccounts).where(eq(schema.userGitAccounts.userId, userId))
 
-    this.logger.log(`Unlinked Git account for user ${userId}`)
+    this.logger.info(`Unlinked Git account for user ${userId}`)
   }
 
   /**
@@ -181,7 +182,7 @@ export class GitAccountLinkingService {
       })
       .where(eq(schema.userGitAccounts.userId, userId))
 
-    this.logger.log(`Updated sync status for user ${userId} to ${status}`)
+    this.logger.info(`Updated sync status for user ${userId} to ${status}`)
   }
 
   /**
@@ -210,6 +211,6 @@ export class GitAccountLinkingService {
       })
       .where(eq(schema.userGitAccounts.userId, userId))
 
-    this.logger.log(`Refreshed access token for user ${userId}`)
+    this.logger.info(`Refreshed access token for user ${userId}`)
   }
 }

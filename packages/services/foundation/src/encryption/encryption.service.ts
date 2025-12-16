@@ -9,8 +9,11 @@ import { Injectable } from '@nestjs/common'
  */
 @Injectable()
 export class EncryptionService {
-  private readonly logger = new Logger(EncryptionService.name)
   private readonly algorithm = 'aes-256-gcm'
+
+  constructor(private readonly logger: Logger) {
+    this.logger.setContext(EncryptionService.name)
+  }
 
   /**
    * 获取加密密钥（32 字节）

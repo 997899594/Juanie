@@ -16,7 +16,10 @@ import { OnEvent } from '@nestjs/event-emitter'
  */
 @Injectable()
 export class WebhookEventListener {
-  private readonly logger = new Logger(WebhookEventListener.name)
+  constructor(private readonly logger: Logger) {
+    this.logger.setContext(WebhookEventListener.name)
+  }
+
 
   /**
    * 处理 Git 仓库变更事件
@@ -25,7 +28,7 @@ export class WebhookEventListener {
    */
   @OnEvent(DomainEvents.GIT_REPOSITORY_CHANGED)
   async handleRepositoryChanged(event: any) {
-    this.logger.log('Received repository changed event', {
+    this.logger.info('Received repository changed event', {
       provider: event.provider,
       action: event.action,
       repositoryId: event.repository.gitId,
@@ -42,7 +45,7 @@ export class WebhookEventListener {
    */
   @OnEvent(DomainEvents.GIT_COLLABORATOR_CHANGED)
   async handleCollaboratorChanged(event: any) {
-    this.logger.log('Received collaborator changed event', {
+    this.logger.info('Received collaborator changed event', {
       provider: event.provider,
       action: event.action,
       repositoryId: event.repository.gitId,
@@ -61,7 +64,7 @@ export class WebhookEventListener {
    */
   @OnEvent(DomainEvents.GIT_PUSH)
   async handlePushEvent(event: any) {
-    this.logger.log('Received push event', {
+    this.logger.info('Received push event', {
       provider: event.provider,
       repositoryId: event.repository.gitId,
       commitsCount: event.commits.length,
@@ -87,7 +90,7 @@ export class WebhookEventListener {
    */
   @OnEvent(DomainEvents.GIT_ORGANIZATION_CHANGED)
   async handleOrganizationChanged(event: any) {
-    this.logger.log('Received organization changed event', {
+    this.logger.info('Received organization changed event', {
       provider: event.provider,
       action: event.action,
       organizationId: event.organization.gitId,
@@ -112,7 +115,7 @@ export class WebhookEventListener {
    */
   @OnEvent(DomainEvents.GIT_MEMBER_CHANGED)
   async handleMemberChanged(event: any) {
-    this.logger.log('Received member changed event', {
+    this.logger.info('Received member changed event', {
       provider: event.provider,
       action: event.action,
       organizationId: event.organization.gitId,

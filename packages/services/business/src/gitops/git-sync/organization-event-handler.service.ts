@@ -7,9 +7,12 @@ import { OrganizationSyncService } from './organization-sync.service'
 
 @Injectable()
 export class OrganizationEventHandler {
-  private readonly logger = new Logger(OrganizationEventHandler.name)
 
-  constructor(_organizationSyncService: OrganizationSyncService, _gitSyncService: GitSyncService) {}
+  constructor(
+    _organizationSyncService: OrganizationSyncService, _gitSyncService: GitSyncService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(OrganizationEventHandler.name)}
 
   @OnEvent(DomainEvents.ORGANIZATION_CREATED)
   async handleOrganizationCreated(event: any) {
@@ -31,7 +34,7 @@ export class OrganizationEventHandler {
       //   triggeredBy: event.userId,
       // })
 
-      this.logger.log(`Organization sync not yet implemented for: ${name}`)
+      this.logger.info(`Organization sync not yet implemented for: ${name}`)
     } catch (error) {
       this.logger.error('Failed to queue organization creation:', error)
     }
@@ -50,7 +53,7 @@ export class OrganizationEventHandler {
       //   triggeredBy: event.userId,
       // })
 
-      this.logger.log(
+      this.logger.info(
         `Organization member sync not yet implemented for user: ${event.data.memberId}`,
       )
     } catch (error) {
@@ -70,7 +73,7 @@ export class OrganizationEventHandler {
       //   triggeredBy: event.userId,
       // })
 
-      this.logger.log(
+      this.logger.info(
         `Organization member removal sync not yet implemented for user: ${event.data.memberId}`,
       )
     } catch (error) {
@@ -92,7 +95,7 @@ export class OrganizationEventHandler {
       //   triggeredBy: event.userId,
       // })
 
-      this.logger.log(`Queued member role update sync for user: ${event.data.memberId}`)
+      this.logger.info(`Queued member role update sync for user: ${event.data.memberId}`)
     } catch (error) {
       this.logger.error('Failed to queue member role update sync:', error)
     }

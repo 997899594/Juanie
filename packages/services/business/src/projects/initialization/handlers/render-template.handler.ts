@@ -13,12 +13,13 @@ import type { InitializationContext, StateHandler } from '../types'
 @Injectable()
 export class RenderTemplateHandler implements StateHandler {
   readonly name = 'RENDERING_TEMPLATE' as const
-  private readonly logger = new Logger(RenderTemplateHandler.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private renderer: TemplateRenderer,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(RenderTemplateHandler.name)}
 
   canHandle(context: InitializationContext): boolean {
     // 只有有模板且有仓库配置时才需要渲染
@@ -34,7 +35,7 @@ export class RenderTemplateHandler implements StateHandler {
       return
     }
 
-    this.logger.log(`Rendering template: ${context.templatePath}`)
+    this.logger.info(`Rendering template: ${context.templatePath}`)
 
     const db = context.tx || this.db
 
@@ -64,6 +65,6 @@ export class RenderTemplateHandler implements StateHandler {
       throw new Error(`Template rendering failed: ${result.errors.join(', ')}`)
     }
 
-    this.logger.log(`Template rendered to: ${result.outputDir}`)
+    this.logger.info(`Template rendered to: ${result.outputDir}`)
   }
 }

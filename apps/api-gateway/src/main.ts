@@ -20,7 +20,12 @@ if (process.env.NODE_ENV === 'development' || process.env.K3S_SKIP_TLS_VERIFY ==
 const otelSdk = setupObservability()
 
 async function bootstrap() {
-  const fastifyAdapter = new FastifyAdapter({ logger: true })
+  const fastifyAdapter = new FastifyAdapter({
+    logger: false, // 禁用 Fastify 原生 logger，使用 NestJS pino
+    routerOptions: {
+      maxParamLength: 500, // 增加 URL 参数长度限制，支持 tRPC batch 请求
+    },
+  })
   const fastify = fastifyAdapter.getInstance()
 
   // 临时 logger（在 NestJS app 创建前）

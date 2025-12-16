@@ -35,17 +35,3 @@ export const projectMembers = pgTable(
 
 export type ProjectMember = typeof projectMembers.$inferSelect
 export type NewProjectMember = typeof projectMembers.$inferInsert
-
-// Relations
-import { relations } from 'drizzle-orm'
-
-export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
-  project: one(projects, {
-    fields: [projectMembers.projectId],
-    references: [projects.id],
-  }),
-  user: one(users, {
-    fields: [projectMembers.userId],
-    references: [users.id],
-  }),
-}))

@@ -14,12 +14,13 @@ import { OllamaService } from '../ollama/ollama.service'
 
 @Injectable()
 export class AiAssistantsService {
-  private readonly logger = new Logger(AiAssistantsService.name)
-
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private ollamaService: OllamaService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(AiAssistantsService.name)
+  }
 
   // 创建 AI 助手
   @Trace('ai-assistants.create')
@@ -264,7 +265,7 @@ export class AiAssistantsService {
         temperature,
       })
     } catch (error) {
-      console.error('Ollama error:', error)
+      this.logger.error('Ollama error', { error })
       throw new Error(
         `Ollama 调用失败。请确保 Ollama 服务正在运行。错误:${error instanceof Error ? error.message : '未知错误'}`,
       )

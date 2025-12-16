@@ -1,4 +1,3 @@
-import { relations } from 'drizzle-orm'
 import {
   boolean,
   index,
@@ -176,22 +175,3 @@ export const gitSyncLogs = pgTable(
     ),
   }),
 )
-
-export const gitSyncLogsRelations = relations(gitSyncLogs, ({ one }) => ({
-  organization: one(organizations, {
-    fields: [gitSyncLogs.organizationId],
-    references: [organizations.id],
-  }),
-  project: one(projects, {
-    fields: [gitSyncLogs.projectId],
-    references: [projects.id],
-  }),
-  user: one(users, {
-    fields: [gitSyncLogs.userId],
-    references: [users.id],
-  }),
-  resolvedByUser: one(users, {
-    fields: [gitSyncLogs.resolvedBy],
-    references: [users.id],
-  }),
-}))

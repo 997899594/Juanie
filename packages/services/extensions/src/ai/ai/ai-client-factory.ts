@@ -1,3 +1,4 @@
+import { Logger } from '@juanie/core/logger'
 import type { AIClientConfig } from '@juanie/types'
 import { ErrorFactory } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
@@ -15,7 +16,12 @@ import type { IAIClient } from './ai-client.interface'
  */
 @Injectable()
 export class AIClientFactory {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(AIClientFactory.name)
+  }
 
   /**
    * 创建 AI 客户端
@@ -37,7 +43,7 @@ export class AIClientFactory {
       case 'qwen':
         return new QwenAdapter({ ...config, apiKey })
       case 'ollama':
-        return new OllamaAdapter(config, this.configService)
+        return new OllamaAdapter(config, this.configService, this.logger)
       default:
         throw ErrorFactory.ai.inferenceFailed(`Unsupported provider: ${config.provider}`)
     }

@@ -26,12 +26,13 @@ import { DomainEvents, IntegrationEvents, RealtimeEvents } from './event-types'
  */
 @Injectable()
 export class EventPublisher {
-  private readonly logger = new Logger(EventPublisher.name)
-
   constructor(
     private readonly eventEmitter: EventEmitter2,
     @Inject(REDIS) private readonly redis: Redis,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(EventPublisher.name)
+  }
 
   /**
    * 发布领域事件（同步）

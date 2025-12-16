@@ -1,4 +1,4 @@
-import { relations, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import {
   index,
   integer,
@@ -9,9 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
-import { environments } from './environments.schema'
 import { organizations } from './organizations.schema'
-import { projectMembers } from './project-members.schema'
 import { projectTemplates } from './project-templates.schema'
 export const projects = pgTable(
   'projects',
@@ -98,18 +96,3 @@ export const projects = pgTable(
 
 export type Project = typeof projects.$inferSelect
 export type NewProject = typeof projects.$inferInsert
-
-// Relations
-
-export const projectsRelations = relations(projects, ({ one, many }) => ({
-  organization: one(organizations, {
-    fields: [projects.organizationId],
-    references: [organizations.id],
-  }),
-  template: one(projectTemplates, {
-    fields: [projects.templateId],
-    references: [projectTemplates.id],
-  }),
-  members: many(projectMembers),
-  environments: many(environments),
-}))

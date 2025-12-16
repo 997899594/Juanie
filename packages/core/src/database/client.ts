@@ -1,6 +1,10 @@
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
-import * as schema from './schemas'
+import * as relations from './relations'
+import * as tables from './schemas'
+
+// 合并表定义和关系定义，确保类型推断正确
+const schema = { ...tables, ...relations }
 
 /**
  * 创建数据库客户端

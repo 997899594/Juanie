@@ -44,7 +44,6 @@ export interface RenderResult {
  */
 @Injectable()
 export class TemplateRenderer {
-  private readonly logger = new Logger(TemplateRenderer.name)
   private handlebars: typeof Handlebars
 
   // 二进制文件扩展名（不需要渲染）
@@ -81,7 +80,11 @@ export class TemplateRenderer {
     'coverage',
   ]
 
-  constructor(private readonly templateLoader: TemplateLoader) {
+  constructor(
+    private readonly templateLoader: TemplateLoader,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(TemplateRenderer.name)
     this.handlebars = Handlebars.create()
     this.registerHelpers()
   }
@@ -169,8 +172,8 @@ export class TemplateRenderer {
     variables: TemplateVariables,
     outputDir: string,
   ): Promise<RenderResult> {
-    this.logger.log(`🎨 Rendering template: ${templateSlug}`)
-    this.logger.log(`📁 Output directory: ${outputDir}`)
+    this.logger.info(`🎨 Rendering template: ${templateSlug}`)
+    this.logger.info(`📁 Output directory: ${outputDir}`)
 
     const result: RenderResult = {
       outputDir,
@@ -185,7 +188,7 @@ export class TemplateRenderer {
         throw new Error(`Template not found: ${templateSlug}`)
       }
 
-      this.logger.log(`📂 Template path: ${templatePath}`)
+      this.logger.info(`📂 Template path: ${templatePath}`)
 
       // 2. 确保输出目录存在
       await fs.mkdir(outputDir, { recursive: true })
@@ -194,7 +197,7 @@ export class TemplateRenderer {
       const files = await this.copyAndRenderDirectory(templatePath, outputDir, variables)
       result.files = files
 
-      this.logger.log(`✅ Successfully rendered ${files.length} files`)
+      this.logger.info(`✅ Successfully rendered ${files.length} files`)
     } catch (error) {
       this.logger.error(`❌ Failed to render template:`, error)
       result.errors.push(error instanceof Error ? error.message : String(error))
@@ -384,7 +387,7 @@ export class TemplateRenderer {
   async cleanOutputDirectory(outputDir: string): Promise<void> {
     try {
       await fs.rm(outputDir, { recursive: true, force: true })
-      this.logger.log(`🗑️  Cleaned output directory: ${outputDir}`)
+      this.logger.info(`🗑️  Cleaned output directory: ${outputDir}`)
     } catch (err) {
       this.logger.error(`Failed to clean output directory:`, err)
     }

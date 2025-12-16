@@ -1,7 +1,8 @@
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import { OAuthAccountsService } from '@juanie/service-foundation'
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { Inject, Injectable, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Job, Worker } from 'bullmq'
 import { eq } from 'drizzle-orm'
@@ -24,7 +25,6 @@ import { ProjectsService } from '../projects/projects.service'
  */
 @Injectable()
 export class ProjectInitializationWorker implements OnModuleInit {
-  private readonly logger = new Logger(ProjectInitializationWorker.name)
   private worker!: Worker
 
   constructor(
@@ -34,7 +34,10 @@ export class ProjectInitializationWorker implements OnModuleInit {
     private readonly projectsService: ProjectsService,
     private readonly gitProvider: GitProviderService,
     private readonly progressManager: ProgressManagerService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ProjectInitializationWorker.name)
+  }
 
   onModuleInit() {
     const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
@@ -42,7 +45,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
     this.worker = new Worker(
       'project-initialization',
       async (job: Job) => {
-        this.logger.log(`Processing project initialization (${job.id})`)
+        this.logger.info(`Processing project initialization (${job.id})`)
         try {
           await this.handleProjectInitialization(job)
         } catch (error) {
@@ -57,9 +60,9 @@ export class ProjectInitializationWorker implements OnModuleInit {
       },
     )
 
-    this.worker.on('completed', (job) => this.logger.log(`Job ${job.id} completed`))
+    this.worker.on('completed', (job) => this.logger.info(`Job ${job.id} completed`))
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.id} failed:`, err))
-    this.logger.log('Project Initialization Worker initialized')
+    this.logger.info('Project Initialization Worker initialized')
   }
 
   /**
@@ -189,7 +192,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
       // 标记完成（自动发布完成事件）
       await this.progressManager.markCompleted(projectId)
 
-      this.logger.log(`Project ${projectId} initialization completed successfully`)
+      this.logger.info(`Project ${projectId} initialization completed successfully`)
 
       return {
         success: true,
@@ -335,7 +338,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
       const k8sFiles = this.getDefaultK8sFiles()
       files.push(...k8sFiles)
 
-      this.logger.log(`Added ${k8sFiles.length} k8s files to template`)
+      this.logger.info(`Added ${k8sFiles.length} k8s files to template`)
     }
 
     await this.updateStepProgress(job, 'push_template', 40, `准备推送 ${files.length} 个文件...`)
@@ -607,7 +610,7 @@ namePrefix: prod-
         branch,
         `Initial commit: Add ${files.length} project files`,
       )
-      this.logger.log(`✅ Successfully pushed ${files.length} files`)
+      this.logger.info(`✅ Successfully pushed ${files.length} files`)
     } catch (error) {
       this.logger.error(`Failed to push files:`, error)
       throw error
@@ -707,7 +710,7 @@ namePrefix: prod-
 
         if (oauthAccount?.accessToken && oauthAccount.status === 'active') {
           accessToken = oauthAccount.accessToken
-          this.logger.log(`✅ Retrieved OAuth token for ${repository.provider}`)
+          this.logger.info(`✅ Retrieved OAuth token for ${repository.provider}`)
         } else {
           this.logger.warn(`No valid OAuth token found for ${repository.provider}`)
         }
@@ -770,7 +773,7 @@ namePrefix: prod-
 
       await this.updateStepProgress(job, 'setup_gitops', 80, '配置 Flux CD...')
       await job.log('✅ GitOps 资源创建成功')
-      this.logger.log('GitOps resources created successfully')
+      this.logger.info('GitOps resources created successfully')
 
       return true
     } catch (error) {
@@ -790,7 +793,7 @@ namePrefix: prod-
       return repository
     }
 
-    this.logger.log(`Resolving OAuth token for user ${userId}, provider: ${repository.provider}`)
+    this.logger.info(`Resolving OAuth token for user ${userId}, provider: ${repository.provider}`)
 
     try {
       // 从数据库获取 OAuth 账户

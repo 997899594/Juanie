@@ -1,5 +1,6 @@
 import type { AIUsage, Database } from '@juanie/core/database'
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import type { AIProvider } from '@juanie/types'
 import { ErrorFactory } from '@juanie/types'
@@ -93,7 +94,12 @@ export class UsageTrackingService {
     'llama3.1:8b': { input: 0, output: 0 },
   }
 
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(UsageTrackingService.name)
+  }
 
   /**
    * 记录 AI 使用
@@ -160,7 +166,7 @@ export class UsageTrackingService {
       })
     } catch (error) {
       // 缓存命中记录失败不应该影响主流程
-      console.error('Failed to record cache hit:', error)
+      this.logger.warn('Failed to record cache hit', { error })
     }
   }
 

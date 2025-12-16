@@ -1,5 +1,6 @@
 import { EventPublisher, SystemEvents } from '@juanie/core/events'
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
+import { Injectable, type OnModuleInit } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import { K3sService } from '../k3s/k3s.service'
 import { FluxCliService } from './flux-cli.service'
@@ -23,14 +24,15 @@ export interface FluxInstallation {
 @Injectable()
 export class FluxService implements OnModuleInit {
   private fluxStatus: 'unknown' | 'checking' | 'installed' | 'not-installed' = 'unknown'
-  private readonly logger = new Logger(FluxService.name)
 
   constructor(
     private k3s: K3sService,
     _fluxCli: FluxCliService,
     private metrics: FluxMetricsService,
     private eventPublisher: EventPublisher,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(FluxService.name)}
 
   async onModuleInit() {
     // 不在这里检查，等待 K3s 连接事件
@@ -42,7 +44,7 @@ export class FluxService implements OnModuleInit {
    */
   @OnEvent(SystemEvents.K3S_CONNECTED)
   async handleK3sConnected() {
-    this.logger.log('收到 K3s 连接成功事件，开始检查 Flux 状态')
+    this.logger.info('收到 K3s 连接成功事件，开始检查 Flux 状态')
     await this.checkFluxInstallationAsync()
   }
 
@@ -71,7 +73,7 @@ export class FluxService implements OnModuleInit {
     this.checkFluxInstallation()
       .then(async (installed) => {
         this.fluxStatus = installed ? 'installed' : 'not-installed'
-        this.logger.log(`Flux status: ${this.fluxStatus}`)
+        this.logger.info(`Flux status: ${this.fluxStatus}`)
 
         // 发出 Flux 状态检查完成事件
         const eventType = installed ? SystemEvents.FLUX_INSTALLED : SystemEvents.FLUX_NOT_INSTALLED

@@ -31,13 +31,14 @@ export interface OrganizationSyncResult {
 
 @Injectable()
 export class OrganizationSyncService {
-  private readonly logger = new Logger(OrganizationSyncService.name)
 
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly gitProvider: GitProviderService,
     private readonly errorService: GitSyncErrorService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(OrganizationSyncService.name)}
 
   /**
    * 同步组织成员到 Git 平台
@@ -45,7 +46,7 @@ export class OrganizationSyncService {
    * Requirements: 2.1, 2.2, 4.1
    */
   async syncOrganizationMembers(organizationId: string): Promise<OrganizationSyncResult> {
-    this.logger.log(`Starting organization sync for: ${organizationId}`)
+    this.logger.info(`Starting organization sync for: ${organizationId}`)
 
     try {
       // 获取组织信息
@@ -99,7 +100,7 @@ export class OrganizationSyncService {
   private async syncPersonalWorkspace(
     organization: typeof schema.organizations.$inferSelect,
   ): Promise<OrganizationSyncResult> {
-    this.logger.log(`Skipping sync for personal workspace: ${organization.name}`)
+    this.logger.info(`Skipping sync for personal workspace: ${organization.name}`)
 
     return {
       success: true,
@@ -121,7 +122,7 @@ export class OrganizationSyncService {
   private async syncTeamWorkspace(
     organization: typeof schema.organizations.$inferSelect,
   ): Promise<OrganizationSyncResult> {
-    this.logger.log(`Syncing team workspace: ${organization.name}`)
+    this.logger.info(`Syncing team workspace: ${organization.name}`)
 
     // 检查是否启用了 Git 同步
     if (!organization.gitSyncEnabled || !organization.gitProvider || !organization.gitOrgId) {
@@ -230,7 +231,7 @@ export class OrganizationSyncService {
         }
 
         results.syncedMembers++
-        this.logger.log(
+        this.logger.info(
           `Synced member ${member.user.displayName || member.user.email} to ${organization.gitProvider} organization`,
         )
 
@@ -277,7 +278,7 @@ export class OrganizationSyncService {
       })
       .where(eq(schema.organizations.id, organization.id))
 
-    this.logger.log(
+    this.logger.info(
       `Organization sync completed. Synced: ${results.syncedMembers}, Errors: ${results.errors.length}`,
     )
 
@@ -292,7 +293,7 @@ export class OrganizationSyncService {
     organizationId: string,
     userId: string,
   ): Promise<{ success: boolean; error?: string }> {
-    this.logger.log(`Removing member ${userId} from organization ${organizationId}`)
+    this.logger.info(`Removing member ${userId} from organization ${organizationId}`)
 
     try {
       // 获取组织信息
@@ -306,13 +307,13 @@ export class OrganizationSyncService {
 
       // 个人工作空间不需要移除组织成员
       if (organization.type === 'personal') {
-        this.logger.log('Personal workspace does not sync organization members')
+        this.logger.info('Personal workspace does not sync organization members')
         return { success: true }
       }
 
       // 检查是否启用了 Git 同步
       if (!organization.gitSyncEnabled || !organization.gitProvider || !organization.gitOrgId) {
-        this.logger.log('Git sync is not enabled, skipping Git removal')
+        this.logger.info('Git sync is not enabled, skipping Git removal')
         return { success: true }
       }
 
@@ -334,7 +335,7 @@ export class OrganizationSyncService {
       )
 
       if (!userGitAccount) {
-        this.logger.log(`User ${userId} does not have ${organization.gitProvider} account`)
+        this.logger.info(`User ${userId} does not have ${organization.gitProvider} account`)
         return { success: true }
       }
 
@@ -381,7 +382,7 @@ export class OrganizationSyncService {
         )
       }
 
-      this.logger.log(
+      this.logger.info(
         `Successfully removed ${user.displayName || user.email} from ${organization.gitProvider} organization`,
       )
 
@@ -422,7 +423,7 @@ export class OrganizationSyncService {
    * Requirements: 2.1, 2.2
    */
   async syncNewOrganization(organizationId: string): Promise<OrganizationSyncResult> {
-    this.logger.log(`Initial sync for new organization: ${organizationId}`)
+    this.logger.info(`Initial sync for new organization: ${organizationId}`)
 
     const organization = await this.db.query.organizations.findFirst({
       where: eq(schema.organizations.id, organizationId),
@@ -434,7 +435,7 @@ export class OrganizationSyncService {
 
     // 个人工作空间不需要初始同步
     if (organization.type === 'personal') {
-      this.logger.log('Personal workspace created, no Git organization sync needed')
+      this.logger.info('Personal workspace created, no Git organization sync needed')
       return {
         success: true,
         syncedMembers: 0,
@@ -560,7 +561,7 @@ export class OrganizationSyncService {
         status: 'success',
       })
 
-      this.logger.log(`Marked Git organization for manual setup: ${gitOrgName}`)
+      this.logger.info(`Marked Git organization for manual setup: ${gitOrgName}`)
     } catch (error) {
       await this.errorService.updateSyncLog(logId, {
         status: 'failed',
@@ -674,7 +675,7 @@ export class OrganizationSyncService {
         status: 'success',
       })
 
-      this.logger.log(`Added member ${userId} to Git organization ${org.gitOrgName}`)
+      this.logger.info(`Added member ${userId} to Git organization ${org.gitOrgName}`)
     } catch (error) {
       await this.errorService.updateSyncLog(logId, {
         status: 'failed',
@@ -786,7 +787,7 @@ export class OrganizationSyncService {
         status: 'success',
       })
 
-      this.logger.log(`Removed member ${userId} from Git organization ${org.gitOrgName}`)
+      this.logger.info(`Removed member ${userId} from Git organization ${org.gitOrgName}`)
     } catch (error) {
       await this.errorService.updateSyncLog(logId, {
         status: 'failed',
@@ -915,7 +916,7 @@ export class OrganizationSyncService {
         status: 'success',
       })
 
-      this.logger.log(`Updated member ${userId} role in Git organization ${org.gitOrgName}`)
+      this.logger.info(`Updated member ${userId} role in Git organization ${org.gitOrgName}`)
     } catch (error) {
       await this.errorService.updateSyncLog(logId, {
         status: 'failed',

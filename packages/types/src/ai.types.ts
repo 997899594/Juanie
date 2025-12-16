@@ -1,53 +1,49 @@
 /**
  * AI 服务类型定义
  * 统一管理所有 AI 相关的类型
+ *
+ * 类型从 schemas.ts 中的 zod schema 推断，保持单一数据源
  */
 
-// 注意: AIProvider 和 AIMessage 在 schemas.ts 中定义(从 zod schema 推断)
-// 这里只定义其他 AI 相关类型
+import type { z } from 'zod'
+import type {
+  aiModelSchema,
+  aiProviderSchema,
+  batchCodeReviewRequestSchema,
+  codeReviewModeSchema,
+  codeReviewRequestSchema,
+  programmingLanguageSchema,
+} from './schemas'
 
 /**
- * AI 提供商类型 (用于非 zod 场景)
- * 注意: 优先使用 schemas.ts 中从 zod 推断的类型
+ * AI 提供商类型
  */
-export type AIProvider = 'anthropic' | 'openai' | 'google' | 'zhipu' | 'qwen' | 'ollama'
+export type AIProvider = z.infer<typeof aiProviderSchema>
 
 /**
  * 支持的 AI 模型
  */
-export type AIModel =
-  // Ollama 本地模型
-  | 'qwen2.5-coder:7b' // 通义千问代码模型
-  | 'deepseek-coder:6.7b' // DeepSeek 代码模型
-  | 'codellama:7b' // Meta CodeLlama
-  | 'mistral:7b' // Mistral 通用模型
-  | 'llama3.1:8b' // Meta Llama 3.1
-  // Claude 3.5 模型（2024年10月最新）
-  | 'claude-3-5-sonnet-20241022' // 最强多模态
-  | 'claude-3-5-haiku-20241022' // 最快最便宜
-  // OpenAI GPT-4o 模型（2024年最新）
-  | 'gpt-4o' // 最新多模态
-  | 'gpt-4o-mini' // 性价比最高
-  | 'gpt-4-turbo' // 旧版本
-  | 'gpt-4' // 旧版本
-  | 'gpt-3.5-turbo' // 旧版本
-  // Google Gemini 模型（2024年12月最新）
-  | 'gemini-2.0-flash-exp' // 最新实验版本，免费
-  | 'gemini-1.5-pro' // 稳定版本
-  | 'gemini-1.5-flash' // 快速版本
-  // 智谱 GLM 模型（2025年最新）
-  | 'glm-4.6' // 最新旗舰多模态，支持深度思考
-  | 'glm-4'
-  | 'glm-4-flash'
-  | 'glm-4v-plus' // 增强多模态
-  | 'glm-4v-flash' // 快速多模态
-  | 'glm-4v' // 旧版本
-  // 阿里 Qwen 模型（2024年最新）
-  | 'qwen2.5'
-  | 'qwen2.5-coder'
-  | 'qwen2-vl-72b' // 最新多模态
-  | 'qwen2-vl-7b' // 性价比多模态
-  | 'qwenvl' // 旧版本
+export type AIModel = z.infer<typeof aiModelSchema>
+
+/**
+ * 编程语言类型
+ */
+export type ProgrammingLanguage = z.infer<typeof programmingLanguageSchema>
+
+/**
+ * 代码审查模式
+ */
+export type CodeReviewMode = z.infer<typeof codeReviewModeSchema>
+
+/**
+ * 代码审查请求
+ */
+export type CodeReviewRequest = z.infer<typeof codeReviewRequestSchema>
+
+/**
+ * 批量代码审查请求
+ */
+export type BatchCodeReviewRequest = z.infer<typeof batchCodeReviewRequestSchema>
 
 /**
  * AI 客户端配置
@@ -111,31 +107,6 @@ export interface AIFunction {
   description: string
   parameters: Record<string, unknown> // JSON Schema
 }
-
-/**
- * 编程语言类型
- */
-export type ProgrammingLanguage =
-  | 'typescript'
-  | 'javascript'
-  | 'python'
-  | 'java'
-  | 'go'
-  | 'rust'
-  | 'cpp'
-  | 'csharp'
-  | 'php'
-  | 'ruby'
-  | 'swift'
-  | 'kotlin'
-  | 'vue'
-  | 'react'
-  | 'sql'
-  | 'html'
-  | 'css'
-  | 'yaml'
-  | 'json'
-  | 'markdown'
 
 /**
  * 代码审查严重级别
@@ -217,49 +188,6 @@ export interface CodeReviewResult {
   duration: number
   /** 使用的模型 */
   model: AIModel
-}
-
-/**
- * 代码审查请求
- */
-export interface CodeReviewRequest {
-  /** 要审查的代码 */
-  code: string
-  /** 编程语言 */
-  language: ProgrammingLanguage
-  /** 文件名（可选） */
-  fileName?: string
-  /** 审查模式 */
-  mode?: 'comprehensive' | 'quick' | 'security-focused'
-  /** 使用的模型 */
-  model?: AIModel
-  /** 上下文信息 */
-  context?: {
-    /** 项目 ID */
-    projectId?: string
-    /** 项目类型 */
-    projectType?: string
-    /** 框架 */
-    framework?: string
-    /** 相关文件 */
-    relatedFiles?: string[]
-  }
-}
-
-/**
- * 批量代码审查请求
- */
-export interface BatchCodeReviewRequest {
-  /** 文件列表 */
-  files: Array<{
-    path: string
-    code: string
-    language: ProgrammingLanguage
-  }>
-  /** 审查模式 */
-  mode?: 'comprehensive' | 'quick' | 'security-focused'
-  /** 使用的模型 */
-  model?: AIModel
 }
 
 /**

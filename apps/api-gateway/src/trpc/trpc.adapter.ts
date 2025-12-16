@@ -20,6 +20,9 @@ export async function setupTrpc(app: FastifyInstance, trpcRouter: TrpcRouter) {
           reply: res as FastifyReply,
         }
       },
+      batching: {
+        enabled: true,
+      },
     },
     // 启用 SSE 支持 subscription
     useWSS: false, // 使用 HTTP/SSE 而不是 WebSocket

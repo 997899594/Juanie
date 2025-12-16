@@ -31,7 +31,6 @@ export interface Diagnosis {
  */
 @Injectable()
 export class AITroubleshooter {
-  private readonly logger = new Logger(AITroubleshooter.name)
   private ollama: Ollama
   private readonly model = 'codellama'
 
@@ -65,7 +64,9 @@ Focus on:
   constructor(
     private readonly config: ConfigService,
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private readonly logger: Logger,
   ) {
+    this.logger.setContext(AITroubleshooter.name)
     const ollamaHost = this.config.get<string>('OLLAMA_HOST') || 'http://localhost:11434'
     this.ollama = new Ollama({ host: ollamaHost })
   }
@@ -74,7 +75,7 @@ Focus on:
    * 诊断项目问题
    */
   async diagnose(projectId: string, symptoms: string): Promise<Diagnosis> {
-    this.logger.log(`Diagnosing project ${projectId}: ${symptoms}`)
+    this.logger.info(`Diagnosing project ${projectId}: ${symptoms}`)
 
     try {
       // 1. 收集项目信息
@@ -103,7 +104,7 @@ Focus on:
       // 6. 解析诊断结果
       const diagnosis = this.parseDiagnosis(response.response)
 
-      this.logger.log(`Diagnosis completed: ${diagnosis.severity} severity`)
+      this.logger.info(`Diagnosis completed: ${diagnosis.severity} severity`)
 
       return diagnosis
     } catch (error) {

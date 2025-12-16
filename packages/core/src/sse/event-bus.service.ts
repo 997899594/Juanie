@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import Redis from 'ioredis'
+import { Logger } from '../logger'
 import type { SSEEvent } from './types'
 
 /**
@@ -9,12 +10,15 @@ import type { SSEEvent } from './types'
  */
 @Injectable()
 export class EventBusService {
-  private readonly logger = new Logger(EventBusService.name)
   private publisher: Redis
   private subscriber: Redis
   private handlers = new Map<string, Set<(event: SSEEvent) => void>>()
 
-  constructor(private config: ConfigService) {
+  constructor(
+    private config: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(EventBusService.name)
     const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
 
     this.publisher = new Redis(redisUrl)
@@ -29,7 +33,7 @@ export class EventBusService {
       }
     })
 
-    this.logger.log('EventBus initialized')
+    this.logger.info('EventBus initialized')
   }
 
   /**
@@ -102,6 +106,6 @@ export class EventBusService {
       this.logger.debug('Subscriber quit error (ignored)', error)
     }
 
-    this.logger.log('EventBus destroyed')
+    this.logger.info('EventBus destroyed')
   }
 }

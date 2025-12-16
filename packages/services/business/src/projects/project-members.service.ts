@@ -22,13 +22,14 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
  */
 @Injectable()
 export class ProjectMembersService {
-  private readonly logger = new Logger(ProjectMembersService.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private auditLogs: AuditLogsService,
     private eventPublisher: EventPublisher,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ProjectMembersService.name)}
 
   /**
    * 添加项目成员
@@ -98,7 +99,7 @@ export class ProjectMembersService {
         role: this.mapRoleToProjectRole(data.role),
       },
     })
-    this.logger.log(`Published member added event for ${data.userId} in project ${projectId}`)
+    this.logger.info(`Published member added event for ${data.userId} in project ${projectId}`)
 
     return member
   }
@@ -207,7 +208,7 @@ export class ProjectMembersService {
         oldRole: this.mapRoleToProjectRole(existing.role),
       },
     })
-    this.logger.log(`Published member updated event for ${data.userId} in project ${projectId}`)
+    this.logger.info(`Published member updated event for ${data.userId} in project ${projectId}`)
 
     return updated
   }
@@ -275,7 +276,7 @@ export class ProjectMembersService {
         memberId: data.userId,
       },
     })
-    this.logger.log(`Published member removed event for ${data.userId} in project ${projectId}`)
+    this.logger.info(`Published member removed event for ${data.userId} in project ${projectId}`)
 
     return { success: true }
   }

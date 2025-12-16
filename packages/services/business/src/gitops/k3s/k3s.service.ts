@@ -1,5 +1,6 @@
 import { EventPublisher, SystemEvents } from '@juanie/core/events'
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
+import { Injectable, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { BunK8sClient } from './bun-k8s-client'
 
@@ -7,12 +8,13 @@ import { BunK8sClient } from './bun-k8s-client'
 export class K3sService implements OnModuleInit {
   private client!: BunK8sClient
   private isConnected = false
-  private readonly logger = new Logger(K3sService.name)
 
   constructor(
     private config: ConfigService,
     private eventPublisher: EventPublisher,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(K3sService.name)}
 
   async onModuleInit() {
     await this.connect()
@@ -26,9 +28,9 @@ export class K3sService implements OnModuleInit {
       if (!kubeconfigPath) {
         const homeDir = process.env.HOME || process.env.USERPROFILE
         kubeconfigPath = `${homeDir}/.kube/config`
-        this.logger.log('ℹ️  使用默认 kubeconfig 路径')
+        this.logger.info('ℹ️  使用默认 kubeconfig 路径')
       } else {
-        this.logger.log('📁 加载 kubeconfig:', kubeconfigPath)
+        this.logger.info('📁 加载 kubeconfig:', kubeconfigPath)
         if (kubeconfigPath.startsWith('~')) {
           const homeDir = process.env.HOME || process.env.USERPROFILE
           kubeconfigPath = kubeconfigPath.replace('~', homeDir || '')
@@ -39,7 +41,7 @@ export class K3sService implements OnModuleInit {
       await this.client.listNamespaces()
 
       this.isConnected = true
-      this.logger.log('✅ K3s 连接成功')
+      this.logger.info('✅ K3s 连接成功')
 
       await this.eventPublisher.publishDomain({
         type: SystemEvents.K3S_CONNECTED,
@@ -52,7 +54,7 @@ export class K3sService implements OnModuleInit {
     } catch (error: any) {
       this.isConnected = false
       this.logger.warn(`⚠️ K3s 连接失败: ${error.message || error}`)
-      this.logger.log('提示: 确保 K3s 集群正在运行，并且 kubeconfig 配置正确')
+      this.logger.info('提示: 确保 K3s 集群正在运行，并且 kubeconfig 配置正确')
 
       await this.eventPublisher.publishDomain({
         type: SystemEvents.K3S_CONNECTION_FAILED,

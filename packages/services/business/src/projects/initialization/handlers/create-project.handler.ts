@@ -11,9 +11,12 @@ import type { InitializationContext, StateHandler } from '../types'
 @Injectable()
 export class CreateProjectHandler implements StateHandler {
   readonly name = 'CREATING_PROJECT' as const
-  private readonly logger = new Logger(CreateProjectHandler.name)
 
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(CreateProjectHandler.name)}
 
   canHandle(_context: InitializationContext): boolean {
     // 总是需要创建项目
@@ -25,7 +28,7 @@ export class CreateProjectHandler implements StateHandler {
   }
 
   async execute(context: InitializationContext): Promise<void> {
-    this.logger.log(`Creating project: ${context.projectData.name}`)
+    this.logger.info(`Creating project: ${context.projectData.name}`)
 
     const db = context.tx || this.db
 
@@ -62,7 +65,7 @@ export class CreateProjectHandler implements StateHandler {
       }
 
       context.projectId = project.id
-      this.logger.log(`Project created: ${project.id}`)
+      this.logger.info(`Project created: ${project.id}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : '数据库错误'
       throw new Error(`创建项目失败: ${message}`)

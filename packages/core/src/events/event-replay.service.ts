@@ -15,12 +15,13 @@ import type { BaseEvent } from './event-types'
  */
 @Injectable()
 export class EventReplayService {
-  private readonly logger = new Logger(EventReplayService.name)
-
   constructor(
     @Inject(REDIS) private readonly redis: Redis,
     private readonly eventPublisher: EventPublisher,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(EventReplayService.name)
+  }
 
   /**
    * 获取资源的所有事件
@@ -108,7 +109,7 @@ export class EventReplayService {
       throw new Error(`Event ${eventId} not found for resource ${resourceId}`)
     }
 
-    this.logger.log(`Replaying event ${eventId} for resource ${resourceId}`)
+    this.logger.info(`Replaying event ${eventId} for resource ${resourceId}`)
 
     // 使用 EventPublisher 重新发布事件
     await this.eventPublisher.publish(event as any, {
@@ -162,7 +163,7 @@ export class EventReplayService {
       // 删除指定时间之前的事件
       const removed = await this.redis.zremrangebyscore(key, 0, olderThan)
 
-      this.logger.log(`Cleaned up ${removed} events for resource ${resourceId}`)
+      this.logger.info(`Cleaned up ${removed} events for resource ${resourceId}`)
 
       return removed
     } catch (error) {
@@ -179,7 +180,7 @@ export class EventReplayService {
       const key = `events:${resourceId}`
       await this.redis.del(key)
 
-      this.logger.log(`Deleted all events for resource ${resourceId}`)
+      this.logger.info(`Deleted all events for resource ${resourceId}`)
     } catch (error) {
       this.logger.error(`Failed to delete events for resource ${resourceId}:`, error)
     }

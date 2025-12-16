@@ -1,15 +1,19 @@
+import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { Injectable, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Ollama } from 'ollama'
 
 @Injectable()
 export class OllamaService implements OnModuleInit {
-  private readonly logger = new Logger(OllamaService.name)
   private ollama: Ollama
   private isConnected = false
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(OllamaService.name)
     this.ollama = new Ollama({
       host: config.get('OLLAMA_HOST') || 'http://localhost:11434',
     })
@@ -25,7 +29,7 @@ export class OllamaService implements OnModuleInit {
     try {
       await this.ollama.list()
       this.isConnected = true
-      this.logger.log('✅ Ollama 连接成功')
+      this.logger.info('✅ Ollama 连接成功')
     } catch {
       this.isConnected = false
       this.logger.warn('⚠️ Ollama 连接失败，将使用模拟响应')
@@ -55,9 +59,9 @@ export class OllamaService implements OnModuleInit {
       })
 
       if (missingModels.length > 0) {
-        this.logger.log('📥 推荐下载以下模型以获得最佳体验:')
+        this.logger.info('📥 推荐下载以下模型以获得最佳体验:')
         missingModels.forEach((model) => {
-          this.logger.log(`   ollama pull ${model}`)
+          this.logger.info(`   ollama pull ${model}`)
         })
       }
     } catch (error) {
@@ -211,9 +215,9 @@ export class OllamaService implements OnModuleInit {
     }
 
     try {
-      this.logger.log(`📥 开始下载模型: ${model}`)
+      this.logger.info(`📥 开始下载模型: ${model}`)
       await this.ollama.pull({ model })
-      this.logger.log(`✅ 模型下载完成: ${model}`)
+      this.logger.info(`✅ 模型下载完成: ${model}`)
     } catch (error) {
       this.logger.error(`模型下载失败: ${model}`, error)
       throw error
@@ -229,7 +233,7 @@ export class OllamaService implements OnModuleInit {
 
     try {
       await this.ollama.delete({ model })
-      this.logger.log(`🗑️ 模型已删除: ${model}`)
+      this.logger.info(`🗑️ 模型已删除: ${model}`)
     } catch (error) {
       this.logger.error(`删除模型失败: ${model}`, error)
       throw error

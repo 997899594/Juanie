@@ -16,13 +16,14 @@ import type { InitializationContext, StateHandler } from '../types'
 @Injectable()
 export class SetupRepositoryHandler implements StateHandler {
   readonly name = 'SETTING_UP_REPOSITORY' as const
-  private readonly logger = new Logger(SetupRepositoryHandler.name)
 
   constructor(
     private repositories: RepositoriesService,
     private oauthAccounts: OAuthAccountsService,
     @Inject(PROJECT_INITIALIZATION_QUEUE) private queue: Queue,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(SetupRepositoryHandler.name)}
 
   canHandle(context: InitializationContext): boolean {
     // 只有配置了仓库才需要处理
@@ -38,7 +39,7 @@ export class SetupRepositoryHandler implements StateHandler {
       return
     }
 
-    this.logger.log(`Setting up repository for project: ${context.projectId}`)
+    this.logger.info(`Setting up repository for project: ${context.projectId}`)
 
     // 解析访问令牌
     const resolvedConfig = await this.resolveAccessToken(context)
@@ -59,7 +60,7 @@ export class SetupRepositoryHandler implements StateHandler {
     context: InitializationContext,
     config: any,
   ): Promise<void> {
-    this.logger.log('Connecting existing repository')
+    this.logger.info('Connecting existing repository')
 
     const repository = await this.repositories.connect(context.userId, {
       projectId: context.projectId!,
@@ -71,7 +72,7 @@ export class SetupRepositoryHandler implements StateHandler {
 
     if (repository) {
       context.repositoryId = repository.id
-      this.logger.log(`Repository connected: ${repository.id}`)
+      this.logger.info(`Repository connected: ${repository.id}`)
     }
   }
 
@@ -84,7 +85,7 @@ export class SetupRepositoryHandler implements StateHandler {
     context: InitializationContext,
     config: any,
   ): Promise<void> {
-    this.logger.log('Queueing project initialization (repository + GitOps)')
+    this.logger.info('Queueing project initialization (repository + GitOps)')
 
     // 使用 project-initialization worker，它会：
     // 1. 创建 Git 仓库
@@ -104,7 +105,7 @@ export class SetupRepositoryHandler implements StateHandler {
     context.jobIds = context.jobIds || []
     context.jobIds.push(job.id!)
 
-    this.logger.log(`Project initialization queued: ${job.id}`)
+    this.logger.info(`Project initialization queued: ${job.id}`)
   }
 
   /**
@@ -118,7 +119,7 @@ export class SetupRepositoryHandler implements StateHandler {
       return repository
     }
 
-    this.logger.log(`Resolving OAuth token for provider: ${repository.provider}`)
+    this.logger.info(`Resolving OAuth token for provider: ${repository.provider}`)
 
     const oauthAccount = await this.oauthAccounts.getAccountByProvider(
       context.userId,

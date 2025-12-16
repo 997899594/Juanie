@@ -1,6 +1,7 @@
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { PinoInstrumentation } from '@opentelemetry/instrumentation-pino'
 import { Resource } from '@opentelemetry/resources'
 import { NodeSDK } from '@opentelemetry/sdk-node'
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions'
@@ -25,6 +26,8 @@ export function setupObservability() {
       port: 9465, // API Gateway 使用不同的端口（原 API 用 9464）
     }),
     instrumentations: [
+      // Pino 日志自动注入 traceId/spanId
+      new PinoInstrumentation(),
       getNodeAutoInstrumentations({
         // 禁用不需要的
         '@opentelemetry/instrumentation-fs': { enabled: false },

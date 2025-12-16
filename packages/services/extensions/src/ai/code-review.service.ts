@@ -18,9 +18,12 @@ import { AIService } from './ai/ai.service'
  */
 @Injectable()
 export class CodeReviewService {
-  private readonly logger = new Logger(CodeReviewService.name)
 
-  constructor(private readonly aiService: AIService) {}
+  constructor(
+    private readonly aiService: AIService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(CodeReviewService.name)}
 
   /**
    * 全面代码审查
@@ -63,7 +66,7 @@ export class CodeReviewService {
     const reviewResult = this.parseReviewResponse(result.content, model)
     reviewResult.duration = Date.now() - startTime
 
-    this.logger.log(
+    this.logger.info(
       `Comprehensive review completed for ${request.fileName || 'code'}: ${reviewResult.score}/100`,
     )
 

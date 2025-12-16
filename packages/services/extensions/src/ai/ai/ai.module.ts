@@ -1,6 +1,7 @@
 import { DatabaseModule } from '@juanie/core/database'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { LoggerModule } from 'nestjs-pino'
 import { AICacheService } from '../cache/ai-cache.service'
 import { CodeReviewService } from '../code-review.service'
 import { ConfigGeneratorService } from '../config-gen/config-generator.service'
@@ -20,7 +21,7 @@ import { AIConfigGenerator } from './ai-config-generator.service'
 import { AITroubleshooter } from './ai-troubleshooter.service'
 
 @Module({
-  imports: [ConfigModule, DatabaseModule],
+  imports: [ConfigModule, DatabaseModule, LoggerModule],
   providers: [
     OllamaClient,
     CodeReviewService,

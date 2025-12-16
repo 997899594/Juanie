@@ -1,5 +1,6 @@
 import type { CreateProjectInput } from '@juanie/types'
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { Logger } from '@juanie/core/logger'
+import { Injectable, type OnModuleInit } from '@nestjs/common'
 import {
   CreateEnvironmentsHandler,
   CreateProjectHandler,
@@ -28,7 +29,6 @@ import {
  */
 @Injectable()
 export class ProjectOrchestrator implements OnModuleInit {
-  private readonly logger = new Logger(ProjectOrchestrator.name)
 
   constructor(
     private stateMachine: ProjectInitializationStateMachine,
@@ -38,7 +38,9 @@ export class ProjectOrchestrator implements OnModuleInit {
     private createEnvironmentsHandler: CreateEnvironmentsHandler,
     private setupRepositoryHandler: SetupRepositoryHandler,
     private finalizeHandler: FinalizeHandler,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ProjectOrchestrator.name)}
 
   onModuleInit() {
     // 注册所有状态处理器
@@ -49,7 +51,7 @@ export class ProjectOrchestrator implements OnModuleInit {
     this.stateMachine.registerHandler(this.setupRepositoryHandler)
     this.stateMachine.registerHandler(this.finalizeHandler)
 
-    this.logger.log('ProjectOrchestrator initialized with state machine')
+    this.logger.info('ProjectOrchestrator initialized with state machine')
   }
 
   /**
@@ -62,7 +64,7 @@ export class ProjectOrchestrator implements OnModuleInit {
     userId: string,
     data: CreateProjectInput,
   ): Promise<InitializationResult> {
-    this.logger.log(`Creating project: ${data.name}`)
+    this.logger.info(`Creating project: ${data.name}`)
 
     // 创建初始化上下文
     const context: InitializationContext = {
@@ -86,7 +88,7 @@ export class ProjectOrchestrator implements OnModuleInit {
     const result = await this.stateMachine.execute(context)
 
     if (result.success) {
-      this.logger.log(`Project ${result.projectId} created successfully`)
+      this.logger.info(`Project ${result.projectId} created successfully`)
     } else {
       this.logger.error(`Project creation failed: ${result.error}`)
     }

@@ -27,7 +27,6 @@ import { ProjectOrchestrator } from './project-orchestrator.service'
 
 @Injectable()
 export class ProjectsService {
-  private readonly logger = new Logger(ProjectsService.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
@@ -36,7 +35,9 @@ export class ProjectsService {
     private auditLogs: AuditLogsService,
     private eventPublisher: EventPublisher,
     private caslAbilityFactory: CaslAbilityFactory,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ProjectsService.name)}
 
   /**
    * 检查权限（CASL）
@@ -446,7 +447,7 @@ export class ProjectsService {
 
     // TODO: 实现 handleRepositoryOnDelete
     if (repositoryAction !== 'keep') {
-      this.logger.log(`Repository action: ${repositoryAction} (not implemented yet)`)
+      this.logger.info(`Repository action: ${repositoryAction} (not implemented yet)`)
     }
 
     await this.auditLogs.log({
@@ -984,7 +985,7 @@ export class ProjectsService {
     }>
     jobId?: string
   }): Promise<boolean> {
-    this.logger.log(`Requesting GitOps setup for project: ${data.projectId}`)
+    this.logger.info(`Requesting GitOps setup for project: ${data.projectId}`)
 
     try {
       // 使用新的 EventPublisher 发布领域事件
@@ -1004,7 +1005,7 @@ export class ProjectsService {
         },
       })
 
-      this.logger.log('GitOps setup request completed successfully')
+      this.logger.info('GitOps setup request completed successfully')
       return true
     } catch (error) {
       this.logger.error('GitOps setup request failed:', error)
@@ -1067,7 +1068,7 @@ export class ProjectsService {
     subscriber.on('pmessage', (_pattern: string, channel: string, message: string) => {
       try {
         const eventData = JSON.parse(message)
-        this.logger.log(`Received subscription event on ${channel}:`, eventData)
+        this.logger.info(`Received subscription event on ${channel}:`, eventData)
 
         if (resolve) {
           resolve(eventData)

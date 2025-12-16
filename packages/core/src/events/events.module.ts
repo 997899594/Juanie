@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common'
 import { EventEmitterModule } from '@nestjs/event-emitter'
+import { LoggerModule } from 'nestjs-pino'
 import { EventPublisher } from './event-publisher.service'
 import { EventReplayService } from './event-replay.service'
 
@@ -16,6 +17,7 @@ import { EventReplayService } from './event-replay.service'
 @Global()
 @Module({
   imports: [
+    LoggerModule,
     EventEmitterModule.forRoot({
       // 使用通配符
       wildcard: true,

@@ -15,12 +15,15 @@ import { ConfigService } from '@nestjs/config'
  */
 @Injectable()
 export class OllamaClient {
-  private readonly logger = new Logger(OllamaClient.name)
   private readonly baseUrl: string
   private readonly defaultModel: AIModel
   private readonly timeout: number
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(OllamaClient.name)
     this.baseUrl = this.configService.get('OLLAMA_BASE_URL', 'http://localhost:11434')
     this.defaultModel = this.configService.get('OLLAMA_DEFAULT_MODEL', 'qwen2.5-coder:7b')
     this.timeout = this.configService.get('OLLAMA_TIMEOUT', 120000) // 2 分钟
@@ -197,7 +200,7 @@ export class OllamaClient {
         throw ErrorFactory.ai.inferenceFailed(`Failed to pull model ${model}`)
       }
 
-      this.logger.log(`Model ${model} pulled successfully`)
+      this.logger.info(`Model ${model} pulled successfully`)
     } catch (error) {
       this.logger.error(`Failed to pull model ${model}:`, error)
       throw error

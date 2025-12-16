@@ -50,7 +50,6 @@ export interface OptimizationSuggestion {
  */
 @Injectable()
 export class AIConfigGenerator {
-  private readonly logger = new Logger(AIConfigGenerator.name)
   private ollama: Ollama
   private readonly model = 'codellama' // 使用 CodeLlama 模型
 
@@ -81,17 +80,21 @@ Rules:
 - Provide specific code examples
 - Consider security, performance, and cost`
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(AIConfigGenerator.name)
     const ollamaHost = this.config.get<string>('OLLAMA_HOST') || 'http://localhost:11434'
     this.ollama = new Ollama({ host: ollamaHost })
-    this.logger.log(`AI Config Generator initialized with Ollama at ${ollamaHost}`)
+    this.logger.info(`AI Config Generator initialized with Ollama at ${ollamaHost}`)
   }
 
   /**
    * 生成 Kubernetes Deployment 配置
    */
   async generateK8sConfig(options: GenerateK8sConfigOptions): Promise<string> {
-    this.logger.log(`Generating K8s config for ${options.appName}`)
+    this.logger.info(`Generating K8s config for ${options.appName}`)
 
     const prompt = this.buildK8sPrompt(options)
 
@@ -107,7 +110,7 @@ Rules:
       })
 
       const config = this.extractYaml(response.response)
-      this.logger.log(`Generated K8s config (${config.length} chars)`)
+      this.logger.info(`Generated K8s config (${config.length} chars)`)
 
       return config
     } catch (error) {
@@ -120,7 +123,7 @@ Rules:
    * 生成 Dockerfile
    */
   async generateDockerfile(options: GenerateDockerfileOptions): Promise<string> {
-    this.logger.log(`Generating Dockerfile for ${options.language}`)
+    this.logger.info(`Generating Dockerfile for ${options.language}`)
 
     const prompt = this.buildDockerfilePrompt(options)
 
@@ -136,7 +139,7 @@ Rules:
       })
 
       const dockerfile = this.extractCode(response.response)
-      this.logger.log(`Generated Dockerfile (${dockerfile.length} chars)`)
+      this.logger.info(`Generated Dockerfile (${dockerfile.length} chars)`)
 
       return dockerfile
     } catch (error) {
@@ -152,7 +155,7 @@ Rules:
     config: string,
     type: 'k8s' | 'dockerfile',
   ): Promise<OptimizationSuggestion[]> {
-    this.logger.log(`Analyzing ${type} configuration`)
+    this.logger.info(`Analyzing ${type} configuration`)
 
     const prompt = `Analyze this ${type} configuration and provide optimization suggestions:
 
@@ -184,7 +187,7 @@ Provide suggestions in JSON format:
       })
 
       const suggestions = this.parseOptimizationSuggestions(response.response)
-      this.logger.log(`Generated ${suggestions.length} optimization suggestions`)
+      this.logger.info(`Generated ${suggestions.length} optimization suggestions`)
 
       return suggestions
     } catch (error) {

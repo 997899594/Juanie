@@ -102,9 +102,12 @@ export interface TroubleshootingResult {
  */
 @Injectable()
 export class TroubleshootingService {
-  private readonly logger = new Logger(TroubleshootingService.name)
 
-  constructor(private readonly aiService: AIService) {}
+  constructor(
+    private readonly aiService: AIService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(TroubleshootingService.name)}
 
   /**
    * 分析应用日志
@@ -113,7 +116,7 @@ export class TroubleshootingService {
     options: LogAnalysisOptions,
     aiConfig?: AIClientConfig,
   ): Promise<TroubleshootingResult> {
-    this.logger.log(`Analyzing ${options.logs.length} log entries`)
+    this.logger.info(`Analyzing ${options.logs.length} log entries`)
 
     const prompt = this.buildLogAnalysisPrompt(options)
     const result = await this.performAnalysis(prompt, 'log-analysis', aiConfig)
@@ -128,7 +131,7 @@ export class TroubleshootingService {
     options: K8sEventAnalysisOptions,
     aiConfig?: AIClientConfig,
   ): Promise<TroubleshootingResult> {
-    this.logger.log(`Analyzing ${options.events.length} Kubernetes events`)
+    this.logger.info(`Analyzing ${options.events.length} Kubernetes events`)
 
     const prompt = this.buildK8sEventAnalysisPrompt(options)
     const result = await this.performAnalysis(prompt, 'k8s-events', aiConfig)
@@ -144,7 +147,7 @@ export class TroubleshootingService {
     k8sOptions: K8sEventAnalysisOptions,
     aiConfig?: AIClientConfig,
   ): Promise<TroubleshootingResult> {
-    this.logger.log('Performing comprehensive diagnosis')
+    this.logger.info('Performing comprehensive diagnosis')
 
     const prompt = this.buildComprehensiveDiagnosisPrompt(logOptions, k8sOptions)
     const result = await this.performAnalysis(prompt, 'comprehensive', aiConfig)
@@ -278,7 +281,7 @@ export class TroubleshootingService {
       const result = await this.aiService.complete(config, { messages })
       const troubleshootingResult = this.parseAnalysisResult(result.content)
 
-      this.logger.log(
+      this.logger.info(
         `Completed ${analysisType} analysis: ${troubleshootingResult.rootCause.severity} severity`,
       )
       return troubleshootingResult

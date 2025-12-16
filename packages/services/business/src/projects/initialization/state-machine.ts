@@ -30,10 +30,13 @@ import type {
  */
 @Injectable()
 export class ProjectInitializationStateMachine {
-  private readonly logger = new Logger(ProjectInitializationStateMachine.name)
   private handlers = new Map<InitializationState, StateHandler>()
 
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ProjectInitializationStateMachine.name)}
 
   // 状态转换表
   private readonly transitions: Record<
@@ -79,7 +82,7 @@ export class ProjectInitializationStateMachine {
    * 执行初始化流程（带事务支持）
    */
   async execute(context: InitializationContext): Promise<InitializationResult> {
-    this.logger.log(`Starting initialization for project: ${context.projectData.name}`)
+    this.logger.info(`Starting initialization for project: ${context.projectData.name}`)
 
     try {
       // 使用数据库事务包裹整个流程
@@ -99,7 +102,7 @@ export class ProjectInitializationStateMachine {
           throw context.error || new Error('Initialization failed')
         }
 
-        this.logger.log(`Initialization completed for project: ${context.projectId}`)
+        this.logger.info(`Initialization completed for project: ${context.projectId}`)
 
         return {
           success: true,
@@ -139,12 +142,12 @@ export class ProjectInitializationStateMachine {
     }
 
     if (!handler.canHandle(context)) {
-      this.logger.log(`Skipping state: ${context.currentState}`)
+      this.logger.info(`Skipping state: ${context.currentState}`)
       await this.transitionToNext(context)
       return
     }
 
-    this.logger.log(`Executing state: ${context.currentState}`)
+    this.logger.info(`Executing state: ${context.currentState}`)
 
     try {
       context.progress = handler.getProgress()
@@ -187,7 +190,7 @@ export class ProjectInitializationStateMachine {
       throw new Error(`Invalid transition: ${currentState} -> ${event}`)
     }
 
-    this.logger.log(`Transition: ${currentState} --[${event}]--> ${nextState}`)
+    this.logger.info(`Transition: ${currentState} --[${event}]--> ${nextState}`)
     context.currentState = nextState
   }
 

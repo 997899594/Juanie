@@ -7,8 +7,25 @@ import { FoundationModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { LoggerModule } from 'nestjs-pino'
+import pretty from 'pino-pretty'
 import { AppController } from './app.controller'
 import { TrpcModule } from './trpc/trpc.module'
+
+// 开发环境使用同步 stream（兼容 Bun，避免 worker threads）
+const isDev = process.env.NODE_ENV !== 'production'
+const prettyStream = isDev
+  ? pretty({
+      colorize: true,
+      translateTime: 'SYS:HH:MM:ss',
+      ignore: 'pid,hostname,context', // 忽略 context（已在 messageFormat 中显示）
+      singleLine: true,
+      messageFormat: (log: Record<string, unknown>, messageKey: string) => {
+        const ctx = log.context || 'App'
+        const msg = log[messageKey] || ''
+        return `[${ctx}] ${msg}`
+      },
+    })
+  : undefined
 
 /**
  * App Module - 应用主模块
@@ -25,41 +42,15 @@ import { TrpcModule } from './trpc/trpc.module'
       envFilePath: ['../../.env.local', '../../.env'],
     }),
     // Pino Logger（全局日志）
+    // traceId/spanId 由 @opentelemetry/instrumentation-pino 自动注入
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL || 'info',
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? {
-                target: 'pino-pretty',
-                options: {
-                  colorize: true,
-                  translateTime: 'SYS:standard',
-                  ignore: 'pid,hostname',
-                  singleLine: false,
-                  // 美化应用日志
-                  messageFormat: '{context} {msg}',
-                },
-              }
-            : undefined,
-        // 自定义日志格式
-        customProps: (_req, _res) => ({
-          context: 'HTTP',
-        }),
-        // 序列化配置
+        // 开发环境使用同步 pretty stream（兼容 Bun）
+        ...(isDev ? { stream: prettyStream } : {}),
         serializers: {
-          req(req) {
-            return {
-              method: req.method,
-              url: req.url,
-              // 不记录完整的 headers（可能包含敏感信息）
-            }
-          },
-          res(res) {
-            return {
-              statusCode: res.statusCode,
-            }
-          },
+          req: (req) => ({ method: req.method, url: req.url }),
+          res: (res) => ({ statusCode: res.statusCode }),
         },
       },
     }),

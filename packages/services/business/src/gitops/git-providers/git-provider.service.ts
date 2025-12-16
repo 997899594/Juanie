@@ -29,9 +29,12 @@ export interface RepositoryInfo {
  */
 @Injectable()
 export class GitProviderService {
-  private readonly logger = new Logger(GitProviderService.name)
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitProviderService.name)}
 
   /**
    * 清理仓库名称，使其符合 GitHub/GitLab 命名规范
@@ -72,7 +75,7 @@ export class GitProviderService {
       this.logger.warn(`Repository name sanitized: "${options.name}" -> "${sanitizedName}"`)
     }
 
-    this.logger.log(`Creating GitHub repository: ${sanitizedName}`)
+    this.logger.info(`Creating GitHub repository: ${sanitizedName}`)
 
     const response = await fetch('https://api.github.com/user/repos', {
       method: 'POST',
@@ -135,7 +138,7 @@ export class GitProviderService {
       this.logger.warn(`Repository name sanitized: "${options.name}" -> "${sanitizedName}"`)
     }
 
-    this.logger.log(`Creating GitLab repository: ${sanitizedName}`)
+    this.logger.info(`Creating GitLab repository: ${sanitizedName}`)
 
     const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
     const apiUrl = `${gitlabUrl.replace(/\/+$/, '')}/api/v4/projects`
@@ -318,7 +321,7 @@ export class GitProviderService {
     branch: string = 'main',
     commitMessage: string = 'Initial commit: Add project files',
   ): Promise<void> {
-    this.logger.log(`Pushing ${files.length} files to ${provider} repository: ${fullName}`)
+    this.logger.info(`Pushing ${files.length} files to ${provider} repository: ${fullName}`)
 
     if (provider === 'github') {
       await this.pushToGitHubBatch(accessToken, fullName, files, branch, commitMessage)
@@ -423,7 +426,7 @@ export class GitProviderService {
       throw new Error(`Failed to update ref: ${error.message || updateRefResponse.statusText}`)
     }
 
-    this.logger.log(`✅ Successfully pushed ${files.length} files to GitHub in a single commit`)
+    this.logger.info(`✅ Successfully pushed ${files.length} files to GitHub in a single commit`)
   }
 
   /**
@@ -467,7 +470,7 @@ export class GitProviderService {
       throw new Error(`Failed to push files to GitLab: ${JSON.stringify(error)}`)
     }
 
-    this.logger.log(`✅ Successfully pushed ${files.length} files to GitLab in a single commit`)
+    this.logger.info(`✅ Successfully pushed ${files.length} files to GitLab in a single commit`)
   }
 
   /**
@@ -516,7 +519,7 @@ export class GitProviderService {
     accessToken: string,
     fullName: string,
   ): Promise<{ valid: boolean; error?: string }> {
-    this.logger.log(`Validating ${provider} repository: ${fullName}`)
+    this.logger.info(`Validating ${provider} repository: ${fullName}`)
 
     try {
       if (provider === 'github') {
@@ -594,7 +597,7 @@ export class GitProviderService {
     accessToken: string,
     options: CreateRepositoryOptions,
   ): Promise<RepositoryInfo> {
-    this.logger.log(`Creating ${provider} repository: ${options.name}`)
+    this.logger.info(`Creating ${provider} repository: ${options.name}`)
 
     try {
       if (provider === 'github') {
@@ -695,7 +698,7 @@ export class GitProviderService {
               default_branch: options.defaultBranch || 'main',
             }
 
-      this.logger.log(`Creating ${provider} repository (attempt ${attempt + 1}):`, {
+      this.logger.info(`Creating ${provider} repository (attempt ${attempt + 1}):`, {
         url,
         name: options.name,
       })
@@ -936,7 +939,7 @@ export class GitProviderService {
     username: string,
     permission: 'pull' | 'push' | 'admin' | 'maintain' | 'triage' = 'push',
   ): Promise<void> {
-    this.logger.log(`Adding collaborator ${username} to GitHub repository ${fullName}`)
+    this.logger.info(`Adding collaborator ${username} to GitHub repository ${fullName}`)
 
     const response = await fetch(
       `https://api.github.com/repos/${fullName}/collaborators/${username}`,
@@ -957,7 +960,7 @@ export class GitProviderService {
       throw new Error(`Failed to add GitHub collaborator: ${error.message || response.statusText}`)
     }
 
-    this.logger.log(`Successfully added ${username} as collaborator with ${permission} permission`)
+    this.logger.info(`Successfully added ${username} as collaborator with ${permission} permission`)
   }
 
   /**
@@ -970,7 +973,7 @@ export class GitProviderService {
     userId: number,
     accessLevel: 10 | 20 | 30 | 40 | 50 = 30,
   ): Promise<void> {
-    this.logger.log(`Adding member ${userId} to GitLab project ${projectId}`)
+    this.logger.info(`Adding member ${userId} to GitLab project ${projectId}`)
 
     const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
     const encodedProjectId = encodeURIComponent(projectId)
@@ -996,7 +999,7 @@ export class GitProviderService {
       throw new Error(`Failed to add GitLab member: ${error.message || response.statusText}`)
     }
 
-    this.logger.log(`Successfully added user ${userId} as member with access level ${accessLevel}`)
+    this.logger.info(`Successfully added user ${userId} as member with access level ${accessLevel}`)
   }
 
   /**
@@ -1008,7 +1011,7 @@ export class GitProviderService {
     fullName: string,
     username: string,
   ): Promise<void> {
-    this.logger.log(`Removing collaborator ${username} from GitHub repository ${fullName}`)
+    this.logger.info(`Removing collaborator ${username} from GitHub repository ${fullName}`)
 
     const response = await fetch(
       `https://api.github.com/repos/${fullName}/collaborators/${username}`,
@@ -1029,7 +1032,7 @@ export class GitProviderService {
       )
     }
 
-    this.logger.log(`Successfully removed ${username} from repository`)
+    this.logger.info(`Successfully removed ${username} from repository`)
   }
 
   /**
@@ -1041,7 +1044,7 @@ export class GitProviderService {
     projectId: string | number,
     userId: number,
   ): Promise<void> {
-    this.logger.log(`Removing member ${userId} from GitLab project ${projectId}`)
+    this.logger.info(`Removing member ${userId} from GitLab project ${projectId}`)
 
     const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
     const encodedProjectId = encodeURIComponent(projectId)
@@ -1062,7 +1065,7 @@ export class GitProviderService {
       throw new Error(`Failed to remove GitLab member: ${error.message || response.statusText}`)
     }
 
-    this.logger.log(`Successfully removed user ${userId} from project`)
+    this.logger.info(`Successfully removed user ${userId} from project`)
   }
 
   /**
@@ -1075,7 +1078,7 @@ export class GitProviderService {
     username: string,
     permission: 'pull' | 'push' | 'admin' | 'maintain' | 'triage',
   ): Promise<void> {
-    this.logger.log(
+    this.logger.info(
       `Updating collaborator ${username} permission to ${permission} in GitHub repository ${fullName}`,
     )
 
@@ -1093,7 +1096,7 @@ export class GitProviderService {
     userId: number,
     accessLevel: 10 | 20 | 30 | 40 | 50,
   ): Promise<void> {
-    this.logger.log(
+    this.logger.info(
       `Updating member ${userId} access level to ${accessLevel} in GitLab project ${projectId}`,
     )
 
@@ -1122,7 +1125,7 @@ export class GitProviderService {
       )
     }
 
-    this.logger.log(`Successfully updated user ${userId} access level to ${accessLevel}`)
+    this.logger.info(`Successfully updated user ${userId} access level to ${accessLevel}`)
   }
 
   /**
@@ -1140,7 +1143,7 @@ export class GitProviderService {
       role_name: string
     }>
   > {
-    this.logger.log(`Listing collaborators for GitHub repository ${fullName}`)
+    this.logger.info(`Listing collaborators for GitHub repository ${fullName}`)
 
     const response = await fetch(
       `https://api.github.com/repos/${fullName}/collaborators?affiliation=direct`,
@@ -1187,7 +1190,7 @@ export class GitProviderService {
       access_level_description: string
     }>
   > {
-    this.logger.log(`Listing members for GitLab project ${projectId}`)
+    this.logger.info(`Listing members for GitLab project ${projectId}`)
 
     const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
     const encodedProjectId = encodeURIComponent(projectId)
@@ -1372,7 +1375,7 @@ export class GitProviderService {
     url: string
     avatarUrl: string
   }> {
-    this.logger.log(`Creating GitHub organization: ${name}`)
+    this.logger.info(`Creating GitHub organization: ${name}`)
 
     const response = await fetch('https://api.github.com/admin/organizations', {
       method: 'POST',
@@ -1431,7 +1434,7 @@ export class GitProviderService {
     url: string
     avatarUrl: string | null
   }> {
-    this.logger.log(`Creating GitLab group: ${name} (path: ${path})`)
+    this.logger.info(`Creating GitLab group: ${name} (path: ${path})`)
 
     const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
 
@@ -1482,7 +1485,7 @@ export class GitProviderService {
     username: string,
     role: 'admin' | 'member' = 'member',
   ): Promise<void> {
-    this.logger.log(`Adding member ${username} to GitHub organization ${orgName} with role ${role}`)
+    this.logger.info(`Adding member ${username} to GitHub organization ${orgName} with role ${role}`)
 
     // GitHub 需要先邀请用户，然后用户接受邀请
     const response = await fetch(`https://api.github.com/orgs/${orgName}/memberships/${username}`, {
@@ -1503,7 +1506,7 @@ export class GitProviderService {
       )
     }
 
-    this.logger.log(`Successfully added ${username} to organization ${orgName}`)
+    this.logger.info(`Successfully added ${username} to organization ${orgName}`)
   }
 
   /**
@@ -1516,7 +1519,7 @@ export class GitProviderService {
     userId: number,
     accessLevel: 10 | 20 | 30 | 40 | 50 = 30,
   ): Promise<void> {
-    this.logger.log(
+    this.logger.info(
       `Adding member ${userId} to GitLab group ${groupId} with access level ${accessLevel}`,
     )
 
@@ -1544,7 +1547,7 @@ export class GitProviderService {
       throw new Error(`Failed to add GitLab group member: ${error.message || response.statusText}`)
     }
 
-    this.logger.log(`Successfully added user ${userId} to group ${groupId}`)
+    this.logger.info(`Successfully added user ${userId} to group ${groupId}`)
   }
 
   /**
@@ -1556,7 +1559,7 @@ export class GitProviderService {
     orgName: string,
     username: string,
   ): Promise<void> {
-    this.logger.log(`Removing member ${username} from GitHub organization ${orgName}`)
+    this.logger.info(`Removing member ${username} from GitHub organization ${orgName}`)
 
     const response = await fetch(`https://api.github.com/orgs/${orgName}/memberships/${username}`, {
       method: 'DELETE',
@@ -1574,7 +1577,7 @@ export class GitProviderService {
       )
     }
 
-    this.logger.log(`Successfully removed ${username} from organization ${orgName}`)
+    this.logger.info(`Successfully removed ${username} from organization ${orgName}`)
   }
 
   /**
@@ -1586,7 +1589,7 @@ export class GitProviderService {
     groupId: string | number,
     userId: number,
   ): Promise<void> {
-    this.logger.log(`Removing member ${userId} from GitLab group ${groupId}`)
+    this.logger.info(`Removing member ${userId} from GitLab group ${groupId}`)
 
     const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
     const encodedGroupId = encodeURIComponent(groupId)
@@ -1609,7 +1612,7 @@ export class GitProviderService {
       )
     }
 
-    this.logger.log(`Successfully removed user ${userId} from group ${groupId}`)
+    this.logger.info(`Successfully removed user ${userId} from group ${groupId}`)
   }
 
   /**

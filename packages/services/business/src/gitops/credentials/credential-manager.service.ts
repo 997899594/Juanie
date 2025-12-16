@@ -16,7 +16,6 @@ import type { GitCredential, GitCredentialExtended } from './git-credential.inte
  */
 @Injectable()
 export class CredentialManagerService {
-  private readonly logger = new Logger(CredentialManagerService.name)
 
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
@@ -24,7 +23,9 @@ export class CredentialManagerService {
     private readonly oauthService: OAuthAccountsService,
     private readonly credentialFactory: CredentialFactory,
     private readonly encryption: EncryptionService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(CredentialManagerService.name)}
 
   /**
    * 创建 PAT 凭证
@@ -37,7 +38,7 @@ export class CredentialManagerService {
     scopes?: string[],
     expiresAt?: Date,
   ): Promise<GitCredential> {
-    this.logger.log(`Creating PAT credential for project ${projectId}`)
+    this.logger.info(`Creating PAT credential for project ${projectId}`)
 
     // 加密 token
     const encryptedToken = this.encryption.encrypt(token)
@@ -65,7 +66,7 @@ export class CredentialManagerService {
     // 同步到 K8s
     await this.syncToK8s(projectId, credential)
 
-    this.logger.log(`Created PAT credential for project ${projectId}`)
+    this.logger.info(`Created PAT credential for project ${projectId}`)
 
     return credential
   }
@@ -75,7 +76,7 @@ export class CredentialManagerService {
    * 默认使用 OAuth Token
    */
   async createProjectCredential(options: CreateCredentialOptions): Promise<GitCredential> {
-    this.logger.log(`Creating credential for project ${options.projectId}`)
+    this.logger.info(`Creating credential for project ${options.projectId}`)
 
     const authType = options.preferredType || 'oauth'
 
@@ -132,7 +133,7 @@ export class CredentialManagerService {
     // 同步到 K8s
     await this.syncToK8s(projectId, credential)
 
-    this.logger.log(`Created OAuth credential for project ${projectId}`)
+    this.logger.info(`Created OAuth credential for project ${projectId}`)
 
     return credential
   }
@@ -209,7 +210,7 @@ export class CredentialManagerService {
    * 自动修复
    */
   private async autoFix(projectId: string, credential: GitCredential): Promise<boolean> {
-    this.logger.log(`Attempting auto-fix for project ${projectId}`)
+    this.logger.info(`Attempting auto-fix for project ${projectId}`)
 
     // 1. 尝试刷新 token
     if (credential.refresh) {
@@ -220,7 +221,7 @@ export class CredentialManagerService {
         if (isValid) {
           // 刷新成功，同步到 K8s
           await this.syncToK8s(projectId, credential)
-          this.logger.log(`Auto-fix successful: refreshed token`)
+          this.logger.info(`Auto-fix successful: refreshed token`)
           return true
         }
       } catch (error: any) {
@@ -293,6 +294,6 @@ export class CredentialManagerService {
       .delete(schema.projectGitAuth)
       .where(eq(schema.projectGitAuth.projectId, projectId))
 
-    this.logger.log(`Deleted credential for project ${projectId}`)
+    this.logger.info(`Deleted credential for project ${projectId}`)
   }
 }

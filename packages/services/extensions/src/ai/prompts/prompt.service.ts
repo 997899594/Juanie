@@ -1,5 +1,6 @@
 import type { Database, NewPromptTemplate, PromptTemplate } from '@juanie/core/database'
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
 import { ErrorFactory } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
@@ -11,7 +12,12 @@ import { and, eq } from 'drizzle-orm'
  */
 @Injectable()
 export class PromptService {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Database,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(PromptService.name)
+  }
 
   /**
    * 创建提示词模板
@@ -111,7 +117,7 @@ export class PromptService {
         .where(eq(schema.promptTemplates.id, templateId))
     } catch (error) {
       // 使用计数更新失败不应该阻止渲染
-      console.error('Failed to update usage count:', error)
+      this.logger.warn('Failed to update usage count', { error })
     }
 
     // 替换变量

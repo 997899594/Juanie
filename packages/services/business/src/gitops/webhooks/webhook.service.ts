@@ -14,12 +14,13 @@ import { WebhookEventProcessor } from './webhook-event-processor.service'
  */
 @Injectable()
 export class WebhookService {
-  private readonly logger = new Logger(WebhookService.name)
 
   constructor(
     private readonly config: ConfigService,
     private readonly eventProcessor: WebhookEventProcessor,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(WebhookService.name)}
 
   /**
    * 验证 GitHub Webhook 签名
@@ -115,7 +116,7 @@ export class WebhookService {
       const action = payload.action || 'unknown'
       const eventName = this.extractGitHubEventName(payload, eventType)
 
-      this.logger.log(`Processing GitHub ${eventName} event: ${action}`, {
+      this.logger.info(`Processing GitHub ${eventName} event: ${action}`, {
         eventName,
         eventType,
         action,
@@ -132,7 +133,7 @@ export class WebhookService {
         timestamp: new Date(),
       })
 
-      this.logger.log(`Successfully processed GitHub ${eventName} event`)
+      this.logger.info(`Successfully processed GitHub ${eventName} event`)
     } catch (error) {
       this.logger.error('Error processing GitHub event:', error)
       throw error
@@ -155,7 +156,7 @@ export class WebhookService {
       const eventType = payload.event_type || payload.object_kind || 'unknown'
       const eventName = this.extractGitLabEventName(payload)
 
-      this.logger.log(`Processing GitLab ${eventName} event: ${eventType}`, {
+      this.logger.info(`Processing GitLab ${eventName} event: ${eventType}`, {
         eventName,
         eventType,
         user: payload.user?.name,
@@ -171,7 +172,7 @@ export class WebhookService {
         timestamp: new Date(),
       })
 
-      this.logger.log(`Successfully processed GitLab ${eventName} event`)
+      this.logger.info(`Successfully processed GitLab ${eventName} event`)
     } catch (error) {
       this.logger.error('Error processing GitLab event:', error)
       throw error

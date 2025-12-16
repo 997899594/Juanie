@@ -22,12 +22,15 @@ export interface GitHubUserInfo {
 
 @Injectable()
 export class GitHubOAuthService {
-  private readonly logger = new Logger(GitHubOAuthService.name)
   private readonly clientId: string
   private readonly clientSecret: string
   private readonly redirectUri: string
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitHubOAuthService.name)
     this.clientId = this.configService.get<string>('GITHUB_CLIENT_ID') || ''
     this.clientSecret = this.configService.get<string>('GITHUB_CLIENT_SECRET') || ''
     this.redirectUri = this.configService.get<string>('GITHUB_REDIRECT_URI') || ''
@@ -51,7 +54,7 @@ export class GitHubOAuthService {
    * 使用授权码交换 Access Token
    */
   async exchangeCodeForToken(code: string): Promise<GitHubOAuthTokenResponse> {
-    this.logger.log('Exchanging GitHub authorization code for access token')
+    this.logger.info('Exchanging GitHub authorization code for access token')
 
     try {
       const response = await axios.post<GitHubOAuthTokenResponse>(
@@ -69,7 +72,7 @@ export class GitHubOAuthService {
         },
       )
 
-      this.logger.log('Successfully exchanged code for GitHub access token')
+      this.logger.info('Successfully exchanged code for GitHub access token')
       return response.data
     } catch (error) {
       this.logger.error('Failed to exchange code for GitHub access token', error)
@@ -81,7 +84,7 @@ export class GitHubOAuthService {
    * 获取用户信息
    */
   async getUserInfo(accessToken: string): Promise<GitHubUserInfo> {
-    this.logger.log('Fetching GitHub user info')
+    this.logger.info('Fetching GitHub user info')
 
     try {
       const response = await axios.get<GitHubUserInfo>('https://api.github.com/user', {
@@ -109,7 +112,7 @@ export class GitHubOAuthService {
         }
       }
 
-      this.logger.log(`Fetched GitHub user info for ${response.data.login}`)
+      this.logger.info(`Fetched GitHub user info for ${response.data.login}`)
       return response.data
     } catch (error) {
       this.logger.error('Failed to fetch GitHub user info', error)
@@ -121,7 +124,7 @@ export class GitHubOAuthService {
    * 刷新 Access Token
    */
   async refreshAccessToken(refreshToken: string): Promise<GitHubOAuthTokenResponse> {
-    this.logger.log('Refreshing GitHub access token')
+    this.logger.info('Refreshing GitHub access token')
 
     try {
       const response = await axios.post<GitHubOAuthTokenResponse>(
@@ -139,7 +142,7 @@ export class GitHubOAuthService {
         },
       )
 
-      this.logger.log('Successfully refreshed GitHub access token')
+      this.logger.info('Successfully refreshed GitHub access token')
       return response.data
     } catch (error) {
       this.logger.error('Failed to refresh GitHub access token', error)
@@ -151,7 +154,7 @@ export class GitHubOAuthService {
    * 撤销 Access Token
    */
   async revokeAccessToken(accessToken: string): Promise<void> {
-    this.logger.log('Revoking GitHub access token')
+    this.logger.info('Revoking GitHub access token')
 
     try {
       await axios.delete(`https://api.github.com/applications/${this.clientId}/token`, {
@@ -164,7 +167,7 @@ export class GitHubOAuthService {
         },
       })
 
-      this.logger.log('Successfully revoked GitHub access token')
+      this.logger.info('Successfully revoked GitHub access token')
     } catch (error) {
       this.logger.error('Failed to revoke GitHub access token', error)
       throw new Error('Failed to revoke GitHub access token')

@@ -26,13 +26,14 @@ export interface DeployWithGitOpsInput {
 
 @Injectable()
 export class DeploymentsService {
-  private readonly logger = new Logger(DeploymentsService.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
     private gitOpsService: GitOpsService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(DeploymentsService.name)}
 
   // 创建部署
   async create(userId: string, data: CreateDeploymentInput) {
@@ -200,7 +201,7 @@ export class DeploymentsService {
    * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 6.1, 6.2, 6.3
    */
   async deployWithGitOps(userId: string, data: DeployWithGitOpsInput) {
-    this.logger.log(
+    this.logger.info(
       `Starting GitOps deployment for project ${data.projectId}, environment ${data.environmentId}`,
     )
 
@@ -244,7 +245,7 @@ export class DeploymentsService {
         commitMessage: data.commitMessage,
       })
 
-      this.logger.log(`Git commit created: ${gitCommitSha}`)
+      this.logger.info(`Git commit created: ${gitCommitSha}`)
     } catch (error) {
       this.logger.error('Failed to commit changes to Git:', error)
       throw new Error(
@@ -281,13 +282,13 @@ export class DeploymentsService {
       throw new Error('创建部署记录失败')
     }
 
-    this.logger.log(`Deployment record created: ${deployment.id}`)
+    this.logger.info(`Deployment record created: ${deployment.id}`)
 
     // 7. If environment requires approval, create approval request
     const requiresApproval = environment.type === 'production'
     if (requiresApproval) {
       await this.createApprovalRequest(deployment.id, data.projectId)
-      this.logger.log(`Approval request created for deployment ${deployment.id}`)
+      this.logger.info(`Approval request created for deployment ${deployment.id}`)
     } else {
       // For non-production environments, mark as running immediately
       // Flux will handle the actual deployment
@@ -299,7 +300,7 @@ export class DeploymentsService {
         })
         .where(eq(schema.deployments.id, deployment.id))
 
-      this.logger.log(`Deployment ${deployment.id} marked as running, waiting for Flux`)
+      this.logger.info(`Deployment ${deployment.id} marked as running, waiting for Flux`)
     }
 
     return deployment
@@ -319,7 +320,7 @@ export class DeploymentsService {
     status: 'success' | 'failed'
     errorMessage?: string
   }) {
-    this.logger.log(
+    this.logger.info(
       `Creating deployment record from Git for project ${data.projectId}, commit ${data.gitCommitSha}`,
     )
 
@@ -347,7 +348,7 @@ export class DeploymentsService {
         })
         .where(eq(schema.deployments.id, existingDeployment.id))
 
-      this.logger.log(`Updated existing deployment ${existingDeployment.id} to ${data.status}`)
+      this.logger.info(`Updated existing deployment ${existingDeployment.id} to ${data.status}`)
       return existingDeployment
     }
 
@@ -392,7 +393,7 @@ export class DeploymentsService {
       throw new Error('创建部署记录失败')
     }
 
-    this.logger.log(
+    this.logger.info(
       `Deployment record created from Git: ${deployment.id} with status ${data.status}`,
     )
 
@@ -624,7 +625,7 @@ export class DeploymentsService {
         },
       })
 
-      this.logger.log(`Published deployment.completed event for deployment ${deployment.id}`)
+      this.logger.info(`Published deployment.completed event for deployment ${deployment.id}`)
     } catch (error) {
       this.logger.error(`Failed to publish deployment.completed event:`, error)
       // 不抛出错误，避免影响主流程

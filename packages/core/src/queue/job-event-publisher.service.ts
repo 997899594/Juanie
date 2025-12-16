@@ -1,8 +1,9 @@
-import { EventBusService } from '@juanie/core/sse'
 import type { OnModuleInit } from '@nestjs/common'
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { QueueEvents as BullMQQueueEvents } from 'bullmq'
+import { Logger } from '../logger'
+import { EventBusService } from '../sse'
 
 /**
  * 任务事件发布器
@@ -10,15 +11,18 @@ import { QueueEvents as BullMQQueueEvents } from 'bullmq'
  */
 @Injectable()
 export class JobEventPublisher implements OnModuleInit {
-  private readonly logger = new Logger(JobEventPublisher.name)
-
-  constructor(private eventBus: EventBusService) {}
+  constructor(
+    private eventBus: EventBusService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(JobEventPublisher.name)
+  }
 
   /**
    * 注册队列事件监听
    */
   registerQueue(queue: Queue, queueName: string): void {
-    this.logger.log(`Registering event publisher for queue: ${queueName}`)
+    this.logger.info(`Registering event publisher for queue: ${queueName}`)
 
     // 创建 QueueEvents 来监听事件
     const queueEvents = new BullMQQueueEvents(queueName, {
@@ -122,6 +126,6 @@ export class JobEventPublisher implements OnModuleInit {
   }
 
   onModuleInit() {
-    this.logger.log('JobEventPublisher initialized')
+    this.logger.info('JobEventPublisher initialized')
   }
 }

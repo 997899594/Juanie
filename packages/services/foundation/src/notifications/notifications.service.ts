@@ -9,9 +9,12 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 @Injectable()
 export class NotificationsService {
-  private readonly logger = new Logger(NotificationsService.name)
-
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(NotificationsService.name)
+  }
 
   // 创建通知
   @Trace('notifications.create')
@@ -93,7 +96,7 @@ export class NotificationsService {
   ) {
     // 在真实场景中，这里会使用邮件服务（如 SendGrid, AWS SES）
     // 简化实现：只记录日志
-    this.logger.log(`[Email] Sending notification to ${email}`, {
+    this.logger.info(`[Email] Sending notification to ${email}`, {
       title: notification.title,
       content: notification.content,
       priority: notification.priority,

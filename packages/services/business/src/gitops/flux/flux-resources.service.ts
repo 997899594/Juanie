@@ -42,7 +42,6 @@ export interface Kustomization {
  */
 @Injectable()
 export class FluxResourcesService {
-  private readonly logger = new Logger(FluxResourcesService.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
@@ -51,7 +50,9 @@ export class FluxResourcesService {
     private yamlGenerator: YamlGeneratorService,
     private metrics: FluxMetricsService,
     private credentialManager: CredentialManagerService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(FluxResourcesService.name)}
 
   /**
    * 创建 GitOps 资源（Kustomization 或 HelmRelease）
@@ -485,7 +486,7 @@ export class FluxResourcesService {
 
     try {
       // 1. 创建项目凭证（自动同步到所有环境的 K8s Secret）
-      this.logger.log(`Creating credential for project ${projectId}`)
+      this.logger.info(`Creating credential for project ${projectId}`)
       await this.credentialManager.createProjectCredential({ projectId, userId })
 
       // 2. 为每个环境设置 GitOps 资源
@@ -496,19 +497,19 @@ export class FluxResourcesService {
 
         try {
           // 2.1 创建 Namespace
-          this.logger.log(`Creating namespace: ${namespace}`)
+          this.logger.info(`Creating namespace: ${namespace}`)
           await this.k3s.createNamespace(namespace)
           result.namespaces.push(namespace)
 
           // 2.2 Git Secret 已由 CredentialManager 自动创建 ✅
-          this.logger.log(`Git secret synced to ${namespace}`)
+          this.logger.info(`Git secret synced to ${namespace}`)
 
           // 2.3 创建 GitRepository
-          this.logger.log(`Creating GitRepository: ${gitRepoName} in ${namespace}`)
+          this.logger.info(`Creating GitRepository: ${gitRepoName} in ${namespace}`)
 
           // 确保使用 HTTPS URL
           const httpsUrl = this.convertToHttpsUrl(repositoryUrl)
-          this.logger.log(`Using HTTPS URL: ${httpsUrl}`)
+          this.logger.info(`Using HTTPS URL: ${httpsUrl}`)
 
           const gitRepo = await this.createGitRepository({
             name: gitRepoName,
@@ -538,7 +539,7 @@ export class FluxResourcesService {
           })
 
           // 2.5 创建 Kustomization
-          this.logger.log(`Creating Kustomization: ${kustomizationName} in ${namespace}`)
+          this.logger.info(`Creating Kustomization: ${kustomizationName} in ${namespace}`)
           const kustomization = await this.createKustomization({
             name: kustomizationName,
             namespace,
@@ -568,7 +569,7 @@ export class FluxResourcesService {
             status: kustomization.status,
           })
 
-          this.logger.log(`✅ GitOps setup completed for environment: ${environment.type}`)
+          this.logger.info(`✅ GitOps setup completed for environment: ${environment.type}`)
         } catch (error: any) {
           this.logger.error(`Failed to setup GitOps for ${environment.type}:`, error)
           result.errors.push(`${environment.type}: ${error.message}`)
@@ -617,7 +618,7 @@ export class FluxResourcesService {
         const namespace = `project-${projectId}-${environment.type}`
 
         try {
-          this.logger.log(`Deleting namespace: ${namespace}`)
+          this.logger.info(`Deleting namespace: ${namespace}`)
           await this.k3s.deleteNamespace(namespace)
           result.deletedResources.push(namespace)
         } catch (error: any) {

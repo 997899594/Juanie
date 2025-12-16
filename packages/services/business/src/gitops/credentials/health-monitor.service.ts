@@ -12,19 +12,20 @@ import { CredentialManagerService } from './credential-manager.service'
  */
 @Injectable()
 export class CredentialHealthMonitorService {
-  private readonly logger = new Logger(CredentialHealthMonitorService.name)
 
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly credentialManager: CredentialManagerService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(CredentialHealthMonitorService.name)}
 
   /**
    * 每小时检查所有项目的凭证健康状态
    */
   @Cron(CronExpression.EVERY_HOUR)
   async checkAllCredentials(): Promise<void> {
-    this.logger.log('Starting credential health check for all projects')
+    this.logger.info('Starting credential health check for all projects')
 
     try {
       // 获取所有有凭证的项目
@@ -32,7 +33,7 @@ export class CredentialHealthMonitorService {
         .select({ projectId: schema.projectGitAuth.projectId })
         .from(schema.projectGitAuth)
 
-      this.logger.log(`Checking ${projects.length} project credentials`)
+      this.logger.info(`Checking ${projects.length} project credentials`)
 
       let healthyCount = 0
       let unhealthyCount = 0
@@ -53,7 +54,7 @@ export class CredentialHealthMonitorService {
         }
       }
 
-      this.logger.log(`Health check complete: ${healthyCount} healthy, ${unhealthyCount} unhealthy`)
+      this.logger.info(`Health check complete: ${healthyCount} healthy, ${unhealthyCount} unhealthy`)
     } catch (error: any) {
       this.logger.error('Failed to run credential health check:', error)
     }
@@ -63,7 +64,7 @@ export class CredentialHealthMonitorService {
    * 检查单个项目的凭证健康状态
    */
   async checkProjectCredential(projectId: string): Promise<void> {
-    this.logger.log(`Checking credential health for project ${projectId}`)
+    this.logger.info(`Checking credential health for project ${projectId}`)
 
     try {
       const health = await this.credentialManager.healthCheck(projectId)

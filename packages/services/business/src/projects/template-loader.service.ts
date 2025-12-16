@@ -2,8 +2,9 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import type { NewProjectTemplate } from '@juanie/core/database'
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { Inject, Injectable, type OnModuleInit } from '@nestjs/common'
 import * as chokidar from 'chokidar'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -58,11 +59,14 @@ interface TemplateMetadata {
  */
 @Injectable()
 export class TemplateLoader implements OnModuleInit {
-  private readonly logger = new Logger(TemplateLoader.name)
   private readonly templatesDir: string
   private watcher?: chokidar.FSWatcher
 
-  constructor(@Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>) {
+  constructor(
+    @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(TemplateLoader.name)
     // 模板目录路径（项目根目录下的 templates/）
     // 优先使用环境变量，否则使用相对路径
     const templatesPath =
@@ -75,7 +79,7 @@ export class TemplateLoader implements OnModuleInit {
    */
   async onModuleInit() {
     try {
-      this.logger.log('🔄 Loading templates from file system...')
+      this.logger.info('🔄 Loading templates from file system...')
 
       // 加载所有模板
       const templates = await this.loadFromFileSystem()
@@ -83,7 +87,7 @@ export class TemplateLoader implements OnModuleInit {
       // 同步到数据库
       await this.syncToDatabase(templates)
 
-      this.logger.log(`✅ Successfully loaded ${templates.length} templates`)
+      this.logger.info(`✅ Successfully loaded ${templates.length} templates`)
 
       // 开发模式下监听文件变化
       if (process.env.NODE_ENV === 'development') {
@@ -120,7 +124,7 @@ export class TemplateLoader implements OnModuleInit {
 
           if (template) {
             templates.push(template)
-            this.logger.log(`  ✓ Loaded template: ${template.name}`)
+            this.logger.info(`  ✓ Loaded template: ${template.name}`)
           }
         } catch (error) {
           this.logger.error(`  ✗ Failed to load template ${dir.name}:`, error)
@@ -273,7 +277,7 @@ export class TemplateLoader implements OnModuleInit {
    * 监听模板文件变化（开发模式）
    */
   private watchTemplates(): void {
-    this.logger.log('👀 Watching templates directory for changes...')
+    this.logger.info('👀 Watching templates directory for changes...')
 
     this.watcher = chokidar.watch(`${this.templatesDir}/**/template.yaml`, {
       ignored: /node_modules/,
@@ -282,17 +286,17 @@ export class TemplateLoader implements OnModuleInit {
     })
 
     this.watcher.on('change', async (filePath: string) => {
-      this.logger.log(`📝 Template changed: ${filePath}`)
+      this.logger.info(`📝 Template changed: ${filePath}`)
       await this.reloadTemplates()
     })
 
     this.watcher.on('add', async (filePath: string) => {
-      this.logger.log(`➕ Template added: ${filePath}`)
+      this.logger.info(`➕ Template added: ${filePath}`)
       await this.reloadTemplates()
     })
 
     this.watcher.on('unlink', async (filePath: string) => {
-      this.logger.log(`➖ Template removed: ${filePath}`)
+      this.logger.info(`➖ Template removed: ${filePath}`)
       await this.reloadTemplates()
     })
   }
@@ -304,7 +308,7 @@ export class TemplateLoader implements OnModuleInit {
     try {
       const templates = await this.loadFromFileSystem()
       await this.syncToDatabase(templates)
-      this.logger.log('✅ Templates reloaded successfully')
+      this.logger.info('✅ Templates reloaded successfully')
     } catch (error) {
       this.logger.error('❌ Failed to reload templates:', error)
     }
@@ -365,7 +369,7 @@ export class TemplateLoader implements OnModuleInit {
   async onModuleDestroy() {
     if (this.watcher) {
       await this.watcher.close()
-      this.logger.log('👋 Stopped watching templates')
+      this.logger.info('👋 Stopped watching templates')
     }
   }
 }

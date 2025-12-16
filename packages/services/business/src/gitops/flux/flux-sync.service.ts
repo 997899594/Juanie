@@ -24,7 +24,6 @@ import { FluxResourcesService } from './flux-resources.service'
  */
 @Injectable()
 export class FluxSyncService {
-  private readonly logger = new Logger(FluxSyncService.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
@@ -32,7 +31,9 @@ export class FluxSyncService {
     private fluxCli: FluxCliService,
     private metrics: FluxMetricsService,
     private fluxResources: FluxResourcesService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(FluxSyncService.name)}
 
   /**
    * 处理 GitOps 设置请求
@@ -44,7 +45,7 @@ export class FluxSyncService {
   @Trace('gitops.handleSetupRequest')
   async handleSetupRequest(event: GitOpsSetupRequestedEvent): Promise<void> {
     const { data } = event
-    this.logger.log(`Handling GitOps setup request for project: ${data.projectId}`)
+    this.logger.info(`Handling GitOps setup request for project: ${data.projectId}`)
 
     try {
       // 检查 K3s 连接和认证
@@ -62,7 +63,7 @@ export class FluxSyncService {
         throw new Error(`K3s authentication failed: ${error.message}`)
       }
 
-      this.logger.log(`Setting up GitOps for project ${data.projectId}`)
+      this.logger.info(`Setting up GitOps for project ${data.projectId}`)
 
       // 创建 GitOps 资源（凭证由 FluxResourcesService 内部自动创建）
       const result = await this.fluxResources.setupProjectGitOps({
@@ -79,7 +80,7 @@ export class FluxSyncService {
         throw new Error(`GitOps setup failed: ${result.errors.join(', ')}`)
       }
 
-      this.logger.log('GitOps setup completed successfully:', {
+      this.logger.info('GitOps setup completed successfully:', {
         projectId: data.projectId,
         namespaces: result.namespaces.length,
         gitRepositories: result.gitRepositories.length,

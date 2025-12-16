@@ -2,6 +2,7 @@ import { DatabaseModule } from '@juanie/core/database'
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { Queue } from 'bullmq'
+import { LoggerModule } from 'nestjs-pino'
 import {
   DEPLOYMENT_QUEUE,
   GIT_SYNC_QUEUE,
@@ -15,7 +16,7 @@ import { RepositoryWorker } from './workers/repository.worker'
 
 @Global()
 @Module({
-  imports: [ConfigModule, DatabaseModule],
+  imports: [ConfigModule, DatabaseModule, LoggerModule],
   providers: [
     {
       provide: PIPELINE_QUEUE,

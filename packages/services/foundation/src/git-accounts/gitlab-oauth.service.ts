@@ -23,13 +23,16 @@ export interface GitLabUserInfo {
 
 @Injectable()
 export class GitLabOAuthService {
-  private readonly logger = new Logger(GitLabOAuthService.name)
   private readonly clientId: string
   private readonly clientSecret: string
   private readonly redirectUri: string
   private readonly gitlabUrl: string
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitLabOAuthService.name)
     this.clientId = this.configService.get<string>('GITLAB_CLIENT_ID') || ''
     this.clientSecret = this.configService.get<string>('GITLAB_CLIENT_SECRET') || ''
     this.redirectUri = this.configService.get<string>('GITLAB_REDIRECT_URI') || ''
@@ -57,7 +60,7 @@ export class GitLabOAuthService {
    */
   async exchangeCodeForToken(code: string, serverUrl?: string): Promise<GitLabOAuthTokenResponse> {
     const baseUrl = serverUrl || this.gitlabUrl
-    this.logger.log(`Exchanging GitLab authorization code for access token (${baseUrl})`)
+    this.logger.info(`Exchanging GitLab authorization code for access token (${baseUrl})`)
 
     try {
       const response = await axios.post<GitLabOAuthTokenResponse>(
@@ -76,7 +79,7 @@ export class GitLabOAuthService {
         },
       )
 
-      this.logger.log('Successfully exchanged code for GitLab access token')
+      this.logger.info('Successfully exchanged code for GitLab access token')
       return response.data
     } catch (error) {
       this.logger.error('Failed to exchange code for GitLab access token', error)
@@ -89,7 +92,7 @@ export class GitLabOAuthService {
    */
   async getUserInfo(accessToken: string, serverUrl?: string): Promise<GitLabUserInfo> {
     const baseUrl = serverUrl || this.gitlabUrl
-    this.logger.log(`Fetching GitLab user info (${baseUrl})`)
+    this.logger.info(`Fetching GitLab user info (${baseUrl})`)
 
     try {
       const response = await axios.get<GitLabUserInfo>(`${baseUrl}/api/v4/user`, {
@@ -98,7 +101,7 @@ export class GitLabOAuthService {
         },
       })
 
-      this.logger.log(`Fetched GitLab user info for ${response.data.username}`)
+      this.logger.info(`Fetched GitLab user info for ${response.data.username}`)
       return response.data
     } catch (error) {
       this.logger.error('Failed to fetch GitLab user info', error)
@@ -114,7 +117,7 @@ export class GitLabOAuthService {
     serverUrl?: string,
   ): Promise<GitLabOAuthTokenResponse> {
     const baseUrl = serverUrl || this.gitlabUrl
-    this.logger.log(`Refreshing GitLab access token (${baseUrl})`)
+    this.logger.info(`Refreshing GitLab access token (${baseUrl})`)
 
     try {
       const response = await axios.post<GitLabOAuthTokenResponse>(
@@ -133,7 +136,7 @@ export class GitLabOAuthService {
         },
       )
 
-      this.logger.log('Successfully refreshed GitLab access token')
+      this.logger.info('Successfully refreshed GitLab access token')
       return response.data
     } catch (error) {
       this.logger.error('Failed to refresh GitLab access token', error)
@@ -146,7 +149,7 @@ export class GitLabOAuthService {
    */
   async revokeAccessToken(accessToken: string, serverUrl?: string): Promise<void> {
     const baseUrl = serverUrl || this.gitlabUrl
-    this.logger.log(`Revoking GitLab access token (${baseUrl})`)
+    this.logger.info(`Revoking GitLab access token (${baseUrl})`)
 
     try {
       await axios.post(
@@ -163,7 +166,7 @@ export class GitLabOAuthService {
         },
       )
 
-      this.logger.log('Successfully revoked GitLab access token')
+      this.logger.info('Successfully revoked GitLab access token')
     } catch (error) {
       this.logger.error('Failed to revoke GitLab access token', error)
       throw new Error('Failed to revoke GitLab access token')

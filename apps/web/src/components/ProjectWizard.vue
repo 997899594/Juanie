@@ -527,41 +527,6 @@ function handleCancel() {
 }
 
 // 创建项目
-const onSubmit = handleSubmit(async (values) => {
-  log.info('提交表单，values:', values)
-  loading.value = true
-
-  try {
-    // 构建项目数据
-    const projectData = {
-      organizationId: appStore.currentOrganizationId!,
-      name: values.name,
-      slug: values.slug,
-      description: values.description,
-      visibility: values.visibility,
-      templateId: values.templateId || undefined,
-      templateConfig: values.templateConfig || undefined,
-      repository: values.repository || undefined,
-    }
-
-    log.info('创建项目，数据:', projectData)
-    const { project } = await createProject(projectData)
-    createdProjectId.value = project.id
-
-    toast.success('项目创建成功', '正在初始化项目资源...')
-    
-    // 关闭弹窗并跳转到项目详情页
-    emit('close')
-    router.push(`/projects/${project.id}`)
-  } catch (error: any) {
-    // 错误已经在 useProjects 中通过 toast 显示
-    log.error('Project creation failed:', error)
-    toast.error('创建失败', error.message || '未知错误')
-  } finally {
-    loading.value = false
-  }
-})
-
 async function handleCreateProject() {
   log.info('点击创建项目按钮')
   log.info('当前表单数据:', formData)
@@ -591,16 +556,20 @@ async function handleCreateProject() {
     }
 
     log.info('创建项目，数据:', projectData)
-    const { project } = await createProject(projectData)
+    const project = await createProject(projectData)
+    log.info('项目创建成功，返回数据:', project)
     createdProjectId.value = project.id
 
-    toast.success('项目创建成功', '正在初始化项目资源...')
+    // toast 已经在 useProjectCRUD 中显示，不需要重复
     
+    // 先跳转到项目详情页，再关闭弹窗
+    log.info('准备跳转到项目详情页:', `/projects/${project.id}`)
+    await router.push(`/projects/${project.id}`)
+    log.info('跳转完成，准备关闭弹窗')
     emit('close')
-    router.push(`/projects/${project.id}`)
   } catch (error: any) {
     log.error('Project creation failed:', error)
-    toast.error('创建失败', error.message || '未知错误')
+    // 错误已经在 useProjectCRUD 中通过 toast 显示
   } finally {
     loading.value = false
   }

@@ -19,12 +19,13 @@ import { ProgressManagerService } from './initialization/progress-manager.servic
  */
 @Injectable()
 export class ProjectStatusService {
-  private readonly logger = new Logger(ProjectStatusService.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly progressManager: ProgressManagerService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ProjectStatusService.name)}
 
   /**
    * 获取项目完整状态（包括所有关联资源）
@@ -225,7 +226,7 @@ export class ProjectStatusService {
       })
       .where(eq(schema.projects.id, projectId))
 
-    this.logger.log(`Updated health for project ${projectId}: ${health.score} (${health.status})`)
+    this.logger.info(`Updated health for project ${projectId}: ${health.score} (${health.status})`)
 
     return health
   }
@@ -247,7 +248,7 @@ export class ProjectStatusService {
     const successful = results.filter((r) => r.status === 'fulfilled').length
     const failed = results.filter((r) => r.status === 'rejected').length
 
-    this.logger.log(`Updated health for ${successful} projects, ${failed} failed`)
+    this.logger.info(`Updated health for ${successful} projects, ${failed} failed`)
 
     return {
       total: activeProjects.length,

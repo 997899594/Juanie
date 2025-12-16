@@ -20,13 +20,14 @@ import type { InitializationContext, ProjectWithRelations, StateHandler } from '
 @Injectable()
 export class FinalizeHandler implements StateHandler {
   readonly name = 'FINALIZING' as const
-  private readonly logger = new Logger(FinalizeHandler.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private notifications: NotificationsService,
     private audit: AuditLogsService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(FinalizeHandler.name)}
 
   canHandle(_context: InitializationContext): boolean {
     return true
@@ -41,7 +42,7 @@ export class FinalizeHandler implements StateHandler {
       throw new Error('Project ID is required')
     }
 
-    this.logger.log(`Finalizing project: ${context.projectId}`)
+    this.logger.info(`Finalizing project: ${context.projectId}`)
 
     const db = context.tx || this.db
 
@@ -90,7 +91,7 @@ export class FinalizeHandler implements StateHandler {
     // 5. 查询完整项目对象
     context.projectWithRelations = await this.loadCompleteProject(context.projectId, db)
 
-    this.logger.log(
+    this.logger.info(
       `Project ${context.projectId} finalized ${repositoryPending ? '(pending repository)' : 'successfully'}`,
     )
   }
@@ -104,7 +105,7 @@ export class FinalizeHandler implements StateHandler {
       userId: context.userId,
       role: 'owner',
     })
-    this.logger.log(`Added owner member: ${context.userId}`)
+    this.logger.info(`Added owner member: ${context.userId}`)
   }
 
   /**

@@ -6,10 +6,11 @@
  */
 
 import * as schema from '@juanie/core/database'
+import { Logger } from '@juanie/core/logger'
 import { GIT_SYNC_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
 import type { GitProvider, ProjectRole } from '@juanie/types'
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common'
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { Job, Queue } from 'bullmq'
 import { Worker } from 'bullmq'
@@ -27,7 +28,6 @@ import { mapPermissionForProvider, mapProjectRoleToGitPermission } from './permi
  */
 @Injectable()
 export class GitSyncWorker implements OnModuleInit {
-  private readonly logger = new Logger(GitSyncWorker.name)
   private worker: Worker | null = null
 
   constructor(
@@ -36,7 +36,10 @@ export class GitSyncWorker implements OnModuleInit {
     private readonly gitProvider: GitProviderService,
     private readonly credentialManager: CredentialManagerService,
     private readonly config: ConfigService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitSyncWorker.name)
+  }
 
   async onModuleInit() {
     const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
@@ -44,7 +47,7 @@ export class GitSyncWorker implements OnModuleInit {
     this.worker = new Worker(
       'git-sync',
       async (job: Job) => {
-        this.logger.log(`Processing job: ${job.name} (${job.id})`)
+        this.logger.info(`Processing job: ${job.name} (${job.id})`)
 
         try {
           switch (job.name) {
@@ -75,14 +78,14 @@ export class GitSyncWorker implements OnModuleInit {
     )
 
     this.worker.on('completed', (job) => {
-      this.logger.log(`Job ${job.id} completed`)
+      this.logger.info(`Job ${job.id} completed`)
     })
 
     this.worker.on('failed', (job, err) => {
       this.logger.error(`Job ${job?.id} failed:`, err)
     })
 
-    this.logger.log('Git Sync Worker started')
+    this.logger.info('Git Sync Worker started')
   }
 
   /**
@@ -91,7 +94,7 @@ export class GitSyncWorker implements OnModuleInit {
   private async handleSyncMember(job: Job<GitSyncMemberJob & { syncLogId: string }>) {
     const { projectId, userId, role, syncLogId } = job.data
 
-    this.logger.log(`Syncing member: project=${projectId}, user=${userId}, role=${role}`)
+    this.logger.info(`Syncing member: project=${projectId}, user=${userId}, role=${role}`)
 
     try {
       // 更新同步日志状态
@@ -181,7 +184,7 @@ export class GitSyncWorker implements OnModuleInit {
         })
         .where(eq(schema.gitSyncLogs.id, syncLogId))
 
-      this.logger.log(`Member sync completed: ${syncLogId}`)
+      this.logger.info(`Member sync completed: ${syncLogId}`)
     } catch (error) {
       // 更新同步日志为失败
       await this.db
@@ -208,7 +211,7 @@ export class GitSyncWorker implements OnModuleInit {
   private async handleRemoveMember(job: Job<GitSyncRemoveMemberJob & { syncLogId: string }>) {
     const { projectId, userId, syncLogId } = job.data
 
-    this.logger.log(`Removing member access: project=${projectId}, user=${userId}`)
+    this.logger.info(`Removing member access: project=${projectId}, user=${userId}`)
 
     try {
       // 更新同步日志状态
@@ -297,7 +300,7 @@ export class GitSyncWorker implements OnModuleInit {
         })
         .where(eq(schema.gitSyncLogs.id, syncLogId))
 
-      this.logger.log(`Member removal completed: ${syncLogId}`)
+      this.logger.info(`Member removal completed: ${syncLogId}`)
     } catch (error) {
       // 更新同步日志为失败
       await this.db
@@ -324,7 +327,7 @@ export class GitSyncWorker implements OnModuleInit {
   private async handleBatchSync(job: Job<GitSyncBatchJob & { syncLogId: string }>) {
     const { projectId, syncLogId } = job.data
 
-    this.logger.log(`Batch syncing project: ${projectId}`)
+    this.logger.info(`Batch syncing project: ${projectId}`)
 
     try {
       // 更新同步日志状态
@@ -360,7 +363,7 @@ export class GitSyncWorker implements OnModuleInit {
         .from(schema.projectMembers)
         .where(eq(schema.projectMembers.projectId, projectId))
 
-      this.logger.log(`Found ${members.length} members to sync`)
+      this.logger.info(`Found ${members.length} members to sync`)
 
       let successCount = 0
       let failCount = 0
@@ -410,7 +413,7 @@ export class GitSyncWorker implements OnModuleInit {
           )
 
           successCount++
-          this.logger.log(`Synced member ${member.userId}`)
+          this.logger.info(`Synced member ${member.userId}`)
         } catch (error) {
           failCount++
           errors.push({
@@ -439,7 +442,7 @@ export class GitSyncWorker implements OnModuleInit {
         })
         .where(eq(schema.gitSyncLogs.id, syncLogId))
 
-      this.logger.log(`Batch sync completed: ${successCount} success, ${failCount} failed`)
+      this.logger.info(`Batch sync completed: ${successCount} success, ${failCount} failed`)
 
       if (failCount > 0) {
         throw new Error(`Batch sync partially failed: ${failCount} members failed`)
@@ -506,7 +509,7 @@ export class GitSyncWorker implements OnModuleInit {
   async onModuleDestroy() {
     if (this.worker) {
       await this.worker.close()
-      this.logger.log('Git Sync Worker stopped')
+      this.logger.info('Git Sync Worker stopped')
     }
   }
 }

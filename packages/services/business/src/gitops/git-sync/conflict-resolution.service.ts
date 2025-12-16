@@ -17,12 +17,13 @@ import { mapProjectRoleToGitPermission } from './permission-mapper'
  */
 @Injectable()
 export class ConflictResolutionService {
-  private readonly logger = new Logger(ConflictResolutionService.name)
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly gitProvider: GitProviderService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ConflictResolutionService.name)}
 
   /**
    * 检测项目成员的权限冲突
@@ -46,7 +47,7 @@ export class ConflictResolutionService {
       conflictType: 'permission_mismatch' | 'missing_on_git' | 'extra_on_git'
     }>
   > {
-    this.logger.log('Detecting project member conflicts', { projectId })
+    this.logger.info('Detecting project member conflicts', { projectId })
 
     try {
       // 获取项目信息
@@ -87,7 +88,7 @@ export class ConflictResolutionService {
       const membersWithGit = membersWithGitAccounts.filter((m) => m.gitAccount)
 
       if (membersWithGit.length === 0) {
-        this.logger.log('No members with Git accounts found', { projectId })
+        this.logger.info('No members with Git accounts found', { projectId })
         return []
       }
 
@@ -166,7 +167,7 @@ export class ConflictResolutionService {
         }
       }
 
-      this.logger.log('Conflict detection completed', {
+      this.logger.info('Conflict detection completed', {
         projectId,
         conflictsFound: conflicts.length,
       })
@@ -204,7 +205,7 @@ export class ConflictResolutionService {
       error?: string
     }>
   }> {
-    this.logger.log('Resolving project member conflicts', { projectId, options })
+    this.logger.info('Resolving project member conflicts', { projectId, options })
 
     const { autoResolve = true, conflictTypes = ['permission_mismatch', 'missing_on_git'] } =
       options
@@ -214,7 +215,7 @@ export class ConflictResolutionService {
       const conflicts = await this.detectProjectMemberConflicts(projectId, accessToken)
 
       if (conflicts.length === 0) {
-        this.logger.log('No conflicts found', { projectId })
+        this.logger.info('No conflicts found', { projectId })
         return {
           resolved: 0,
           failed: 0,
@@ -366,7 +367,7 @@ export class ConflictResolutionService {
         }
       }
 
-      this.logger.log('Conflict resolution completed', {
+      this.logger.info('Conflict resolution completed', {
         projectId,
         resolved,
         failed,

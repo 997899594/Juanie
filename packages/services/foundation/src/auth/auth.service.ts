@@ -12,15 +12,16 @@ import type Redis from 'ioredis'
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name)
   private github: GitHub
   private gitlab: GitLab
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @Inject(REDIS) private redis: Redis,
+    private readonly logger: Logger,
     config: ConfigService,
   ) {
+    this.logger.setContext(AuthService.name)
     // 初始化 Arctic OAuth providers
     this.github = new GitHub(
       config.get('GITHUB_CLIENT_ID')!,
@@ -100,7 +101,7 @@ export class AuthService {
     // 如果 email 为空，从 /user/emails 获取
     let email = githubUser.email
     if (!email) {
-      this.logger.log('[GitHub OAuth] email 为空，尝试从 /user/emails 获取')
+      this.logger.info('[GitHub OAuth] email 为空，尝试从 /user/emails 获取')
       const emailsResponse = await fetch('https://api.github.com/user/emails', {
         headers: { Authorization: `Bearer ${tokens.accessToken()}` },
       })
@@ -118,7 +119,7 @@ export class AuthService {
         verified: boolean
       }>
 
-      this.logger.log('[GitHub OAuth] 获取到邮箱列表', { count: emails.length })
+      this.logger.info('[GitHub OAuth] 获取到邮箱列表', { count: emails.length })
 
       // 优先使用 primary + verified 的邮箱
       const primaryEmail = emails.find((e) => e.primary && e.verified)
@@ -129,9 +130,9 @@ export class AuthService {
         throw new Error('无法获取 GitHub 邮箱，请确保至少有一个已验证的邮箱')
       }
 
-      this.logger.log('[GitHub OAuth] 使用邮箱', { email })
+      this.logger.info('[GitHub OAuth] 使用邮箱', { email })
     } else {
-      this.logger.log('[GitHub OAuth] 从用户信息获取到邮箱', { email })
+      this.logger.info('[GitHub OAuth] 从用户信息获取到邮箱', { email })
     }
 
     // 创建或更新用户
@@ -275,7 +276,7 @@ export class AuthService {
           status: 'active',
         })
 
-        this.logger.log(`[Auth] 为新用户 ${user.username} 创建了组织: ${org.name}`)
+        this.logger.info(`[Auth] 为新用户 ${user.username} 创建了组织: ${org.name}`)
       }
 
       // 创建或更新 OAuth 账号（保存完整的 token 信息）

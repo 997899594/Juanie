@@ -109,9 +109,12 @@ export interface ConfigGenerationResult {
  */
 @Injectable()
 export class ConfigGeneratorService {
-  private readonly logger = new Logger(ConfigGeneratorService.name)
 
-  constructor(private readonly aiService: AIService) {}
+  constructor(
+    private readonly aiService: AIService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(ConfigGeneratorService.name)}
 
   /**
    * 生成 Kubernetes Deployment 配置
@@ -120,7 +123,7 @@ export class ConfigGeneratorService {
     options: K8sDeploymentOptions,
     aiConfig?: AIClientConfig,
   ): Promise<ConfigGenerationResult> {
-    this.logger.log(`Generating K8s Deployment for ${options.appName}`)
+    this.logger.info(`Generating K8s Deployment for ${options.appName}`)
 
     const prompt = this.buildK8sDeploymentPrompt(options)
     const config = await this.generateConfig(prompt, 'kubernetes', aiConfig)
@@ -136,7 +139,7 @@ export class ConfigGeneratorService {
     options: DockerfileOptions,
     aiConfig?: AIClientConfig,
   ): Promise<ConfigGenerationResult> {
-    this.logger.log(`Generating Dockerfile for ${options.language}`)
+    this.logger.info(`Generating Dockerfile for ${options.language}`)
 
     const prompt = this.buildDockerfilePrompt(options)
     const config = await this.generateConfig(prompt, 'dockerfile', aiConfig)
@@ -152,7 +155,7 @@ export class ConfigGeneratorService {
     options: GitHubActionsOptions,
     aiConfig?: AIClientConfig,
   ): Promise<ConfigGenerationResult> {
-    this.logger.log(`Generating GitHub Actions for ${options.appName}`)
+    this.logger.info(`Generating GitHub Actions for ${options.appName}`)
 
     const prompt = this.buildGitHubActionsPrompt(options)
     const config = await this.generateConfig(prompt, 'github-actions', aiConfig)
@@ -168,7 +171,7 @@ export class ConfigGeneratorService {
     options: GitLabCIOptions,
     aiConfig?: AIClientConfig,
   ): Promise<ConfigGenerationResult> {
-    this.logger.log(`Generating GitLab CI for ${options.appName}`)
+    this.logger.info(`Generating GitLab CI for ${options.appName}`)
 
     const prompt = this.buildGitLabCIPrompt(options)
     const config = await this.generateConfig(prompt, 'gitlab-ci', aiConfig)
@@ -438,7 +441,7 @@ export class ConfigGeneratorService {
       const result = await this.aiService.complete(config, { messages })
       const extractedConfig = this.extractConfig(result.content)
 
-      this.logger.log(`Generated ${configType} config (${extractedConfig.length} chars)`)
+      this.logger.info(`Generated ${configType} config (${extractedConfig.length} chars)`)
       return extractedConfig
     } catch (error) {
       this.logger.error(`Failed to generate ${configType} config:`, error)
@@ -495,7 +498,7 @@ Output ONLY the JSON array, no explanations.`
       const result = await this.aiService.complete(aiConfigToUse, { messages })
       const suggestions = this.parseOptimizations(result.content)
 
-      this.logger.log(`Generated ${suggestions.length} optimization suggestions`)
+      this.logger.info(`Generated ${suggestions.length} optimization suggestions`)
       return suggestions
     } catch (error) {
       this.logger.warn(`Failed to generate optimization suggestions:`, error)

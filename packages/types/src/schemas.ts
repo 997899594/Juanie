@@ -1358,7 +1358,7 @@ export type GetEventStatsInput = z.infer<typeof getEventStatsSchema>
 // ============================================
 
 // AI 提供商和模型
-export const aiProviderSchema = z.enum(['anthropic', 'openai', 'zhipu', 'qwen', 'ollama'])
+export const aiProviderSchema = z.enum(['anthropic', 'openai', 'google', 'zhipu', 'qwen', 'ollama'])
 
 export const aiModelSchema = z.enum([
   // Ollama 本地模型
@@ -1367,25 +1367,93 @@ export const aiModelSchema = z.enum([
   'codellama:7b',
   'mistral:7b',
   'llama3.1:8b',
-  // Claude 模型
+  // Claude 3.5 模型（2024年10月最新）
   'claude-3-5-sonnet-20241022',
-  'claude-3-opus-20240229',
-  'claude-3-sonnet-20240229',
-  'claude-3-haiku-20240307',
-  // OpenAI 模型
+  'claude-3-5-haiku-20241022',
+  // OpenAI GPT-4o 模型（2024年最新）
+  'gpt-4o',
+  'gpt-4o-mini',
   'gpt-4-turbo',
   'gpt-4',
   'gpt-3.5-turbo',
-  // 智谱 GLM 模型
+  // Google Gemini 模型（2024年12月最新）
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash',
+  // 智谱 GLM 模型（2025年最新）
+  'glm-4.6',
   'glm-4',
   'glm-4-flash',
+  'glm-4v-plus',
+  'glm-4v-flash',
   'glm-4v',
-  'glm-6',
-  // 阿里 Qwen 模型
+  // 阿里 Qwen 模型（2024年最新）
   'qwen2.5',
   'qwen2.5-coder',
+  'qwen2-vl-72b',
+  'qwen2-vl-7b',
   'qwenvl',
 ])
+
+// 编程语言
+export const programmingLanguageSchema = z.enum([
+  'typescript',
+  'javascript',
+  'python',
+  'java',
+  'go',
+  'rust',
+  'cpp',
+  'csharp',
+  'php',
+  'ruby',
+  'swift',
+  'kotlin',
+  'vue',
+  'react',
+  'sql',
+  'html',
+  'css',
+  'yaml',
+  'json',
+  'markdown',
+])
+
+// 代码审查模式
+export const codeReviewModeSchema = z.enum(['comprehensive', 'quick', 'security-focused'])
+
+// 代码审查请求
+export const codeReviewRequestSchema = z.object({
+  code: z.string().min(1, 'Code cannot be empty'),
+  language: programmingLanguageSchema,
+  fileName: z.string().optional(),
+  model: aiModelSchema.optional(),
+  mode: codeReviewModeSchema.optional(),
+  context: z
+    .object({
+      projectId: z.string().optional(),
+      projectType: z.string().optional(),
+      framework: z.string().optional(),
+      relatedFiles: z.array(z.string()).optional(),
+    })
+    .optional(),
+})
+
+// 批量代码审查请求
+export const batchCodeReviewRequestSchema = z.object({
+  files: z
+    .array(
+      z.object({
+        path: z.string(),
+        code: z.string().min(1),
+        language: programmingLanguageSchema,
+      }),
+    )
+    .min(1, 'At least one file is required')
+    .max(20, 'Maximum 20 files allowed'),
+  mode: codeReviewModeSchema.optional(),
+  model: aiModelSchema.optional(),
+})
 
 export const aiMessageRoleSchema = z.enum(['system', 'user', 'assistant', 'function'])
 

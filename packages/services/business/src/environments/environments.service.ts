@@ -31,12 +31,13 @@ export interface ConfigureGitOpsInput {
 
 @Injectable()
 export class EnvironmentsService {
-  private readonly logger = new Logger(EnvironmentsService.name)
 
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(EnvironmentsService.name)}
 
   async create(
     userId: string,
@@ -272,7 +273,7 @@ export class EnvironmentsService {
     environmentId: string,
     gitopsConfig: ConfigureGitOpsInput,
   ): Promise<schema.Environment> {
-    this.logger.log(`Configuring GitOps for environment ${environmentId}`)
+    this.logger.info(`Configuring GitOps for environment ${environmentId}`)
 
     // Get environment and check permissions
     const environment = await this.get(userId, environmentId)
@@ -320,7 +321,7 @@ export class EnvironmentsService {
       throw new Error('更新环境配置失败')
     }
 
-    this.logger.log(`GitOps configured for environment ${environmentId}`)
+    this.logger.info(`GitOps configured for environment ${environmentId}`)
 
     // Publish environment.updated event
     await this.publishEnvironmentUpdatedEvent(updated, ['gitops'], userId)
@@ -333,7 +334,7 @@ export class EnvironmentsService {
    * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5
    */
   async getGitOpsConfig(userId: string, environmentId: string): Promise<GitOpsConfig | null> {
-    this.logger.log(`Getting GitOps config for environment ${environmentId}`)
+    this.logger.info(`Getting GitOps config for environment ${environmentId}`)
 
     const environment = await this.get(userId, environmentId)
     if (!environment) {
@@ -365,7 +366,7 @@ export class EnvironmentsService {
     gitBranch: string,
     gitPath: string,
   ): Promise<void> {
-    this.logger.log(
+    this.logger.info(
       `Validating Git branch ${gitBranch} and path ${gitPath} for project ${projectId}`,
     )
 
@@ -396,7 +397,7 @@ export class EnvironmentsService {
 
       // Note: We cannot validate the path without cloning the repository
       // Path validation will be done during actual GitOps operations
-      this.logger.log(`Git branch ${gitBranch} validated successfully`)
+      this.logger.info(`Git branch ${gitBranch} validated successfully`)
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       this.logger.error(`Failed to validate Git branch and path:`, error)
@@ -416,7 +417,7 @@ export class EnvironmentsService {
    * Requirements: 8.1, 8.2
    */
   async disableGitOps(userId: string, environmentId: string): Promise<schema.Environment> {
-    this.logger.log(`Disabling GitOps for environment ${environmentId}`)
+    this.logger.info(`Disabling GitOps for environment ${environmentId}`)
 
     const environment = await this.get(userId, environmentId)
     if (!environment) {
@@ -450,7 +451,7 @@ export class EnvironmentsService {
       throw new Error('更新环境配置失败')
     }
 
-    this.logger.log(`GitOps disabled for environment ${environmentId}`)
+    this.logger.info(`GitOps disabled for environment ${environmentId}`)
 
     // Publish environment.updated event
     await this.publishEnvironmentUpdatedEvent(updated, ['gitops'], userId)
@@ -486,7 +487,7 @@ export class EnvironmentsService {
         },
       })
 
-      this.logger.log(`Published environment.updated event for environment ${environment.id}`)
+      this.logger.info(`Published environment.updated event for environment ${environment.id}`)
     } catch (error) {
       this.logger.error(`Failed to publish environment.updated event:`, error)
       // 不抛出错误，避免影响主流程

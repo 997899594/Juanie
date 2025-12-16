@@ -40,12 +40,13 @@ export interface GitSyncBatchJob {
  */
 @Injectable()
 export class GitSyncService {
-  private readonly logger = new Logger(GitSyncService.name)
 
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     @Inject(GIT_SYNC_QUEUE) private readonly queue: Queue,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitSyncService.name)}
 
   /**
    * 从认证类型推断 Git 提供商
@@ -72,7 +73,7 @@ export class GitSyncService {
    * @param role - 项目角色
    */
   async syncProjectMember(projectId: string, userId: string, role: ProjectRole): Promise<void> {
-    this.logger.log(`Queueing member sync: project=${projectId}, user=${userId}, role=${role}`)
+    this.logger.info(`Queueing member sync: project=${projectId}, user=${userId}, role=${role}`)
 
     // 检查项目是否启用了 Git 同步
     const [project] = await this.db
@@ -139,7 +140,7 @@ export class GitSyncService {
       },
     )
 
-    this.logger.log(`Member sync queued: ${syncLog.id}`)
+    this.logger.info(`Member sync queued: ${syncLog.id}`)
   }
 
   /**
@@ -150,7 +151,7 @@ export class GitSyncService {
    * @param userId - 用户 ID
    */
   async removeMemberAccess(projectId: string, userId: string): Promise<void> {
-    this.logger.log(`Queueing member removal: project=${projectId}, user=${userId}`)
+    this.logger.info(`Queueing member removal: project=${projectId}, user=${userId}`)
 
     // 检查项目
     const [project] = await this.db
@@ -214,7 +215,7 @@ export class GitSyncService {
       },
     )
 
-    this.logger.log(`Member removal queued: ${syncLog.id}`)
+    this.logger.info(`Member removal queued: ${syncLog.id}`)
   }
 
   /**
@@ -224,7 +225,7 @@ export class GitSyncService {
    * @param projectId - 项目 ID
    */
   async batchSyncProject(projectId: string): Promise<void> {
-    this.logger.log(`Queueing batch sync for project: ${projectId}`)
+    this.logger.info(`Queueing batch sync for project: ${projectId}`)
 
     // 检查项目
     const [project] = await this.db
@@ -283,7 +284,7 @@ export class GitSyncService {
       },
     )
 
-    this.logger.log(`Batch sync queued: ${syncLog.id}`)
+    this.logger.info(`Batch sync queued: ${syncLog.id}`)
   }
 
   /**
@@ -335,7 +336,7 @@ export class GitSyncService {
    * @param syncLogId - 同步日志 ID
    */
   async retrySyncTask(syncLogId: string): Promise<void> {
-    this.logger.log(`Retrying sync task: ${syncLogId}`)
+    this.logger.info(`Retrying sync task: ${syncLogId}`)
 
     // 获取同步日志
     const [syncLog] = await this.db
@@ -405,6 +406,6 @@ export class GitSyncService {
       )
     }
 
-    this.logger.log(`Sync task retried: ${syncLogId}`)
+    this.logger.info(`Sync task retried: ${syncLogId}`)
   }
 }

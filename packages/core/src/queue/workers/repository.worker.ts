@@ -1,20 +1,23 @@
-import * as schema from '@juanie/core/database'
-import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { Inject, Injectable, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Job, Worker } from 'bullmq'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import * as schema from '../../database'
+import { Logger } from '../../logger'
+import { DATABASE } from '../../tokens'
 
 @Injectable()
 export class RepositoryWorker implements OnModuleInit {
-  private readonly logger = new Logger(RepositoryWorker.name)
   private worker!: Worker
 
   constructor(
     private readonly config: ConfigService,
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(RepositoryWorker.name)
+  }
 
   onModuleInit() {
     const redisUrl = this.config.get<string>('REDIS_URL') || 'redis://localhost:6379'
@@ -22,7 +25,7 @@ export class RepositoryWorker implements OnModuleInit {
     this.worker = new Worker(
       'repository',
       async (job: Job) => {
-        this.logger.log(`Processing ${job.name} (${job.id})`)
+        this.logger.info(`Processing ${job.name} (${job.id})`)
         try {
           switch (job.name) {
             case 'create-repository':
@@ -49,9 +52,9 @@ export class RepositoryWorker implements OnModuleInit {
       },
     )
 
-    this.worker.on('completed', (job) => this.logger.log(`Job ${job.id} completed`))
+    this.worker.on('completed', (job) => this.logger.info(`Job ${job.id} completed`))
     this.worker.on('failed', (job, err) => this.logger.error(`Job ${job?.id} failed:`, err))
-    this.logger.log('Repository Worker initialized')
+    this.logger.info('Repository Worker initialized')
   }
 
   private async handleCreateRepository(job: Job) {
@@ -68,13 +71,13 @@ export class RepositoryWorker implements OnModuleInit {
     try {
       await job.updateProgress(10)
       await job.log(`开始创建 ${provider} 仓库: ${name}`)
-      this.logger.log(`Creating repository: ${name} on ${provider}`)
+      this.logger.info(`Creating repository: ${name} on ${provider}`)
 
       const result = await this.callAPI(provider, 'create', { name, visibility, accessToken })
 
       await job.updateProgress(40)
       await job.log(`仓库创建成功: ${result.fullName}`)
-      this.logger.log(`Repository ${name} created on ${provider}`)
+      this.logger.info(`Repository ${name} created on ${provider}`)
 
       if (result.success && projectId) {
         // 创建数据库记录
@@ -93,12 +96,12 @@ export class RepositoryWorker implements OnModuleInit {
 
         await job.updateProgress(60)
         await job.log('数据库记录已创建')
-        this.logger.log(`Database record created for repository ${repository?.id}`)
+        this.logger.info(`Database record created for repository ${repository?.id}`)
 
         // 如果需要推送初始代码
         if (pushInitialCode && repository) {
           await job.log('准备推送初始代码...')
-          this.logger.log(`Pushing initial code to ${result.fullName}`)
+          this.logger.info(`Pushing initial code to ${result.fullName}`)
 
           try {
             await this.pushInitialCode(
@@ -109,7 +112,7 @@ export class RepositoryWorker implements OnModuleInit {
             )
             await job.updateProgress(80)
             await job.log('初始代码推送完成')
-            this.logger.log(`Initial code pushed to ${result.fullName}`)
+            this.logger.info(`Initial code pushed to ${result.fullName}`)
           } catch (error) {
             // 推送失败不应该导致整个流程失败（非致命错误）
             this.logger.error(`Failed to push initial code (non-fatal):`, error)
@@ -141,12 +144,12 @@ export class RepositoryWorker implements OnModuleInit {
           .where(eq(schema.projects.id, projectId))
 
         await job.log('项目初始化完成')
-        this.logger.log(`Project ${projectId} initialization completed`)
+        this.logger.info(`Project ${projectId} initialization completed`)
       }
 
       await job.updateProgress(100)
       await job.log('仓库创建流程完成')
-      this.logger.log(`Repository ${name} created successfully`)
+      this.logger.info(`Repository ${name} created successfully`)
 
       return result
     } catch (error) {
@@ -180,23 +183,23 @@ export class RepositoryWorker implements OnModuleInit {
     try {
       await job.updateProgress(10)
       await job.log(`开始删除仓库: ${fullName}`)
-      this.logger.log(`Deleting repository: ${fullName} from ${provider}`)
+      this.logger.info(`Deleting repository: ${fullName} from ${provider}`)
 
       await this.callAPI(provider, 'delete', { fullName, accessToken })
 
       await job.updateProgress(50)
       await job.log(`仓库已从 ${provider} 删除`)
-      this.logger.log(`Repository ${fullName} deleted from ${provider}`)
+      this.logger.info(`Repository ${fullName} deleted from ${provider}`)
 
       if (repositoryId) {
         await this.db.delete(schema.repositories).where(eq(schema.repositories.id, repositoryId))
         await job.log('数据库记录已删除')
-        this.logger.log(`Database record deleted for repository ${repositoryId}`)
+        this.logger.info(`Database record deleted for repository ${repositoryId}`)
       }
 
       await job.updateProgress(100)
       await job.log('删除完成')
-      this.logger.log(`Repository ${fullName} deleted successfully`)
+      this.logger.info(`Repository ${fullName} deleted successfully`)
     } catch (error) {
       this.logger.error(`Failed to delete repository ${fullName}:`, error)
       await job.log(`删除失败: ${error instanceof Error ? error.message : '未知错误'}`)
@@ -210,13 +213,13 @@ export class RepositoryWorker implements OnModuleInit {
     try {
       await job.updateProgress(10)
       await job.log(`开始归档仓库: ${fullName}`)
-      this.logger.log(`Archiving repository: ${fullName} on ${provider}`)
+      this.logger.info(`Archiving repository: ${fullName} on ${provider}`)
 
       await this.callAPI(provider, 'archive', { fullName, accessToken })
 
       await job.updateProgress(50)
       await job.log(`仓库已在 ${provider} 归档`)
-      this.logger.log(`Repository ${fullName} archived on ${provider}`)
+      this.logger.info(`Repository ${fullName} archived on ${provider}`)
 
       if (repositoryId) {
         await this.db
@@ -224,12 +227,12 @@ export class RepositoryWorker implements OnModuleInit {
           .set({ syncStatus: 'archived', updatedAt: new Date() })
           .where(eq(schema.repositories.id, repositoryId))
         await job.log('数据库状态已更新')
-        this.logger.log(`Database record updated for repository ${repositoryId}`)
+        this.logger.info(`Database record updated for repository ${repositoryId}`)
       }
 
       await job.updateProgress(100)
       await job.log('归档完成')
-      this.logger.log(`Repository ${fullName} archived successfully`)
+      this.logger.info(`Repository ${fullName} archived successfully`)
     } catch (error) {
       this.logger.error(`Failed to archive repository ${fullName}:`, error)
       await job.log(`归档失败: ${error instanceof Error ? error.message : '未知错误'}`)
@@ -462,7 +465,7 @@ spec:
           ? `${baseUrl}/repos/${fullName}`
           : `${baseUrl}/api/v4/projects/${encodeURIComponent(fullName)}`
 
-      this.logger.log(`Calling ${provider} API to delete: ${url}`)
+      this.logger.info(`Calling ${provider} API to delete: ${url}`)
 
       const response = await fetch(url, {
         method: 'DELETE',
@@ -490,7 +493,7 @@ spec:
       if (response.status === 404) {
         this.logger.warn(`Repository ${fullName} not found (404), considering as deleted`)
       } else {
-        this.logger.log(`Repository ${fullName} deleted successfully (${response.status})`)
+        this.logger.info(`Repository ${fullName} deleted successfully (${response.status})`)
       }
 
       return { success: true }
@@ -503,7 +506,7 @@ spec:
           ? `${baseUrl}/repos/${fullName}`
           : `${baseUrl}/api/v4/projects/${encodeURIComponent(fullName)}`
 
-      this.logger.log(`Calling ${provider} API to archive: ${url}`)
+      this.logger.info(`Calling ${provider} API to archive: ${url}`)
 
       const response = await fetch(url, {
         method: provider === 'github' ? 'PATCH' : 'PUT',
@@ -530,7 +533,7 @@ spec:
         throw new Error(errorMessage)
       }
 
-      this.logger.log(`Repository ${fullName} archived successfully (${response.status})`)
+      this.logger.info(`Repository ${fullName} archived successfully (${response.status})`)
       return { success: true }
     }
 

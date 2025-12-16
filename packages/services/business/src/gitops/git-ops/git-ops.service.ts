@@ -51,7 +51,6 @@ export interface ConflictResolution {
 
 @Injectable()
 export class GitOpsService {
-  private readonly logger = new Logger(GitOpsService.name)
   private readonly repoBasePath: string
   private gitInstances: Map<string, SimpleGit> = new Map()
 
@@ -59,7 +58,9 @@ export class GitOpsService {
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly config: ConfigService,
     private readonly metrics: FluxMetricsService,
+    private readonly logger: Logger,
   ) {
+    this.logger.setContext(GitOpsService.name)
     this.repoBasePath = this.config.get('GIT_REPOS_PATH', '/tmp/git-repos')
   }
 
@@ -75,7 +76,7 @@ export class GitOpsService {
       credentials?: { username?: string; password?: string; sshKey?: string }
     },
   ): Promise<SimpleGit> {
-    this.logger.log(`Initializing repository: ${repoUrl} at ${localPath}`)
+    this.logger.info(`Initializing repository: ${repoUrl} at ${localPath}`)
     const startTime = Date.now()
 
     try {
@@ -107,14 +108,14 @@ export class GitOpsService {
       const repoExists = await this.repoExists(localPath)
 
       if (!repoExists) {
-        this.logger.log(`Cloning repository from ${repoUrl}`)
+        this.logger.info(`Cloning repository from ${repoUrl}`)
         await git.clone(repoUrl, localPath)
 
         // Record clone operation
         const duration = (Date.now() - startTime) / 1000
         this.metrics.recordGitOperation('clone', repoUrl, 'success', duration)
       } else {
-        this.logger.log(`Repository exists, pulling latest changes`)
+        this.logger.info(`Repository exists, pulling latest changes`)
         await git.cwd(localPath)
         await git.fetch()
 
@@ -158,7 +159,7 @@ export class GitOpsService {
    * Requirement: 2.2, 4.1
    */
   async checkoutBranch(git: SimpleGit, branch: string): Promise<void> {
-    this.logger.log(`Checking out branch: ${branch}`)
+    this.logger.info(`Checking out branch: ${branch}`)
 
     try {
       // Check if branch exists locally
@@ -182,7 +183,7 @@ export class GitOpsService {
    * Requirement: 2.2, 4.1
    */
   async pullLatest(git: SimpleGit, branch?: string): Promise<void> {
-    this.logger.log(`Pulling latest changes${branch ? ` from ${branch}` : ''}`)
+    this.logger.info(`Pulling latest changes${branch ? ` from ${branch}` : ''}`)
 
     try {
       if (branch) {
@@ -246,7 +247,7 @@ export class GitOpsService {
   async commitFromUI(input: CommitFromUIInput): Promise<string> {
     const { projectId, environmentId, changes, userId, commitMessage } = input
 
-    this.logger.log(
+    this.logger.info(
       `Creating commit from UI for project ${projectId}, environment ${environmentId}`,
     )
 
@@ -310,7 +311,7 @@ export class GitOpsService {
         throw new Error('Failed to get commit SHA')
       }
 
-      this.logger.log(`Successfully created commit: ${commitSha}`)
+      this.logger.info(`Successfully created commit: ${commitSha}`)
 
       // Record overall deployment operation
       const totalDuration = (Date.now() - startTime) / 1000
@@ -364,10 +365,10 @@ export class GitOpsService {
       // Try to read existing file
       const existingContent = await fs.readFile(filePath, 'utf-8')
       doc = yaml.parseDocument(existingContent)
-      this.logger.log('Updating existing YAML file')
+      this.logger.info('Updating existing YAML file')
     } catch {
       // File doesn't exist, create new document
-      this.logger.log('Creating new YAML file')
+      this.logger.info('Creating new YAML file')
       doc = new yaml.Document({
         apiVersion: 'apps/v1',
         kind: 'Deployment',

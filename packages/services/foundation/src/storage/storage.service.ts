@@ -5,11 +5,14 @@ import { Client } from 'minio'
 
 @Injectable()
 export class StorageService {
-  private readonly logger = new Logger(StorageService.name)
   private minioClient: Client
   private bucketName = 'juanie'
 
-  constructor(private config: ConfigService) {
+  constructor(
+    private config: ConfigService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(StorageService.name)
     this.minioClient = new Client({
       endPoint: config.get('MINIO_ENDPOINT') || 'localhost',
       port: Number(config.get('MINIO_PORT')) || 9000,
@@ -27,7 +30,7 @@ export class StorageService {
       const exists = await this.minioClient.bucketExists(this.bucketName)
       if (!exists) {
         await this.minioClient.makeBucket(this.bucketName, 'us-east-1')
-        this.logger.log(`✅ Created MinIO bucket: ${this.bucketName}`)
+        this.logger.info(`✅ Created MinIO bucket: ${this.bucketName}`)
 
         // 设置公开访问策略（用于 Logo）
         const policy = {
@@ -43,7 +46,7 @@ export class StorageService {
         }
         await this.minioClient.setBucketPolicy(this.bucketName, JSON.stringify(policy))
       } else {
-        this.logger.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
+        this.logger.info(`✅ MinIO bucket already exists: ${this.bucketName}`)
       }
     } catch (error) {
       // 忽略 bucket 已存在的错误
@@ -52,7 +55,7 @@ export class StorageService {
         minioError.code === 'BucketAlreadyOwnedByYou' ||
         minioError.code === 'BucketAlreadyExists'
       ) {
-        this.logger.log(`✅ MinIO bucket already exists: ${this.bucketName}`)
+        this.logger.info(`✅ MinIO bucket already exists: ${this.bucketName}`)
       } else {
         this.logger.error('MinIO bucket setup error', error)
       }

@@ -1,4 +1,5 @@
 import { ErrorFactory } from '@juanie/core/errors'
+import { Logger } from '@juanie/core/logger'
 import type { AIMessage } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 
@@ -71,7 +72,8 @@ export class ContentFilterService {
       /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |EC )?PRIVATE KEY-----/g,
   }
 
-  constructor() {
+  constructor(private readonly logger: Logger) {
+    this.logger.setContext(ContentFilterService.name)
     this.initializeDefaultRules()
   }
 
@@ -279,7 +281,7 @@ export class ContentFilterService {
     try {
       // TODO: 实现审计日志持久化
       // 可以写入专门的审计日志表或发送到日志收集系统
-      console.log('[AUDIT]', {
+      this.logger.info('Audit log', {
         userId: entry.userId,
         projectId: entry.projectId,
         action: entry.action,
@@ -289,7 +291,7 @@ export class ContentFilterService {
       })
     } catch (error) {
       // 审计日志失败不应该影响主流程
-      console.error('Failed to log audit entry:', error)
+      this.logger.warn('Failed to log audit entry', { error })
     }
   }
 
@@ -318,7 +320,7 @@ export class ContentFilterService {
 
       // TODO: 发送告警通知
       // 可以通过事件系统发送告警
-      console.warn('[SECURITY ALERT]', {
+      this.logger.warn('Security alert: sensitive info detected', {
         userId: context.userId,
         projectId: context.projectId,
         sensitiveInfoTypes: sensitiveInfo.map((info) => info.type),

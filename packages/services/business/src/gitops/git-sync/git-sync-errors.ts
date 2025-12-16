@@ -485,9 +485,12 @@ export interface GetSyncLogsInput {
  */
 @Injectable()
 export class GitSyncErrorService {
-  private readonly logger = new Logger(GitSyncErrorService.name)
-
-  constructor(@Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitSyncErrorService.name)
+  }
 
   /**
    * 记录同步日志
@@ -524,7 +527,7 @@ export class GitSyncErrorService {
 
       const id = inserted?.id || crypto.randomUUID()
 
-      this.logger.log(`Recorded sync log: ${input.syncType}/${input.action} - ${input.status}`)
+      this.logger.info(`Recorded sync log: ${input.syncType}/${input.action} - ${input.status}`)
       return id
     } catch (error) {
       this.logger.error('Failed to record sync log:', error)
@@ -570,7 +573,7 @@ export class GitSyncErrorService {
       })
       .where(eq(schema.gitSyncLogs.id, logId))
 
-    this.logger.log(`Updated sync log ${logId}: ${update.status}`)
+    this.logger.info(`Updated sync log ${logId}: ${update.status}`)
   }
 
   /**
@@ -754,7 +757,7 @@ export class GitSyncErrorService {
       })
       .where(eq(schema.gitSyncLogs.id, logId))
 
-    this.logger.log(`Resolved sync error ${logId} by ${resolvedBy}`)
+    this.logger.info(`Resolved sync error ${logId} by ${resolvedBy}`)
   }
 
   /**

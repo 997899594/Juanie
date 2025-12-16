@@ -43,9 +43,12 @@ export interface ProjectMemberRemovedEvent {
  */
 @Injectable()
 export class GitSyncEventHandler {
-  private readonly logger = new Logger(GitSyncEventHandler.name)
 
-  constructor(private readonly gitSync: GitSyncService) {}
+  constructor(
+    private readonly gitSync: GitSyncService,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitSyncEventHandler.name)}
 
   /**
    * 处理成员添加事件
@@ -54,13 +57,13 @@ export class GitSyncEventHandler {
   async handleMemberAdded(event: any): Promise<void> {
     const projectId = event.resourceId
     const userId = event.data.memberId
-    this.logger.log(
+    this.logger.info(
       `Handling member added event: project=${projectId}, user=${userId}, role=${event.data.role}`,
     )
 
     try {
       await this.gitSync.syncProjectMember(projectId, userId, event.data.role)
-      this.logger.log(`Successfully queued Git sync for member ${userId}`)
+      this.logger.info(`Successfully queued Git sync for member ${userId}`)
     } catch (error) {
       // Git 同步失败不应影响业务流程
       // 错误会被记录到 git_sync_logs 表中
@@ -76,13 +79,13 @@ export class GitSyncEventHandler {
     const projectId = event.resourceId
     const userId = event.data.memberId
 
-    this.logger.log(
+    this.logger.info(
       `Handling member updated event: project=${projectId}, user=${userId}, role=${event.data.role}`,
     )
 
     try {
       await this.gitSync.syncProjectMember(projectId, userId, event.data.role)
-      this.logger.log(`Successfully queued Git permission update for member ${userId}`)
+      this.logger.info(`Successfully queued Git permission update for member ${userId}`)
     } catch (error) {
       this.logger.error(`Failed to queue Git permission update for member ${userId}:`, error)
     }
@@ -96,11 +99,11 @@ export class GitSyncEventHandler {
     const projectId = event.resourceId
     const userId = event.data.memberId
 
-    this.logger.log(`Handling member removed event: project=${projectId}, user=${userId}`)
+    this.logger.info(`Handling member removed event: project=${projectId}, user=${userId}`)
 
     try {
       await this.gitSync.removeMemberAccess(projectId, userId)
-      this.logger.log(`Successfully queued Git access removal for member ${userId}`)
+      this.logger.info(`Successfully queued Git access removal for member ${userId}`)
     } catch (error) {
       this.logger.error(`Failed to queue Git access removal for member ${userId}:`, error)
     }

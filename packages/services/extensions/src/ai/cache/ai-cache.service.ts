@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { Logger } from '@juanie/core/logger'
 import { REDIS } from '@juanie/core/tokens'
 import type { AIClientConfig, AICompletionOptions, AICompletionResult } from '@juanie/types'
 import { ErrorFactory } from '@juanie/types'
@@ -15,7 +16,12 @@ export class AICacheService {
   private readonly CACHE_TTL = 24 * 60 * 60 // 24 小时 (秒)
   private readonly STATS_PREFIX = 'ai:cache:stats:'
 
-  constructor(@Inject(REDIS) private readonly redis: Redis) {}
+  constructor(
+    @Inject(REDIS) private readonly redis: Redis,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(AICacheService.name)
+  }
 
   /**
    * 生成缓存键
@@ -65,7 +71,7 @@ export class AICacheService {
       return JSON.parse(cached) as AICompletionResult
     } catch (error) {
       // 缓存读取失败不应该影响主流程
-      console.error('Failed to get cache:', error)
+      this.logger.warn('Failed to get cache', { error })
       return null
     }
   }
@@ -82,7 +88,7 @@ export class AICacheService {
       await this.redis.setex(key, ttlSeconds, JSON.stringify(value))
     } catch (error) {
       // 缓存写入失败不应该影响主流程
-      console.error('Failed to set cache:', error)
+      this.logger.warn('Failed to set cache', { error })
     }
   }
 
@@ -182,7 +188,7 @@ export class AICacheService {
       await this.redis.incr(key)
     } catch (error) {
       // 统计失败不应该影响主流程
-      console.error('Failed to record cache hit:', error)
+      this.logger.warn('Failed to record cache hit', { error })
     }
   }
 
@@ -195,7 +201,7 @@ export class AICacheService {
       await this.redis.incr(key)
     } catch (error) {
       // 统计失败不应该影响主流程
-      console.error('Failed to record cache miss:', error)
+      this.logger.warn('Failed to record cache miss', { error })
     }
   }
 

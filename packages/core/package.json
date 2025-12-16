@@ -71,6 +71,10 @@
     "bullmq": "^5.36.3",
     "drizzle-orm": "0.45.0",
     "ioredis": "^5.4.2",
+    "nestjs-pino": "^4.5.0",
+    "pino": "^9.6.0",
+    "pino-http": "^10.0.0",
+    "pino-pretty": "^13.0.0",
     "postgres": "^3.4.7"
   },
   "devDependencies": {

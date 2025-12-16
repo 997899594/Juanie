@@ -42,7 +42,10 @@ export interface FunctionExecutionResult {
  */
 @Injectable()
 export class FunctionCallingService {
-  private readonly logger = new Logger(FunctionCallingService.name)
+  constructor(private readonly logger: Logger) {
+    this.logger.setContext(FunctionCallingService.name)
+  }
+
   private readonly functions = new Map<string, ExecutableFunction>()
 
   /**
@@ -58,7 +61,7 @@ export class FunctionCallingService {
     }
 
     this.functions.set(func.name, func)
-    this.logger.log(`Registered function: ${func.name}`)
+    this.logger.info(`Registered function: ${func.name}`)
   }
 
   /**
@@ -80,7 +83,7 @@ export class FunctionCallingService {
   unregisterFunction(name: string): boolean {
     const deleted = this.functions.delete(name)
     if (deleted) {
-      this.logger.log(`Unregistered function: ${name}`)
+      this.logger.info(`Unregistered function: ${name}`)
     }
     return deleted
   }
@@ -220,11 +223,11 @@ export class FunctionCallingService {
       }
 
       // 执行函数
-      this.logger.log(`Executing function: ${functionName}`, { args })
+      this.logger.info(`Executing function: ${functionName}`, { args })
       const result = await func.handler(args)
 
       const duration = Date.now() - startTime
-      this.logger.log(`Function ${functionName} executed successfully`, {
+      this.logger.info(`Function ${functionName} executed successfully`, {
         duration,
       })
 
@@ -295,6 +298,6 @@ export class FunctionCallingService {
    */
   clearFunctions(): void {
     this.functions.clear()
-    this.logger.log('Cleared all registered functions')
+    this.logger.info('Cleared all registered functions')
   }
 }

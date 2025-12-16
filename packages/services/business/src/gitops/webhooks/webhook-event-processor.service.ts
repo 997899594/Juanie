@@ -19,9 +19,12 @@ export interface WebhookEvent {
 
 @Injectable()
 export class WebhookEventProcessor {
-  private readonly logger = new Logger(WebhookEventProcessor.name)
 
-  constructor(private readonly eventPublisher: EventPublisher) {}
+  constructor(
+    private readonly eventPublisher: EventPublisher,
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(WebhookEventProcessor.name)}
 
   /**
    * 处理 GitHub 事件
@@ -95,7 +98,7 @@ export class WebhookEventProcessor {
   private async processGitHubRepositoryEvent(payload: any): Promise<void> {
     const { action, repository, sender, changes } = payload
 
-    this.logger.log(`Processing GitHub repository ${action}`, {
+    this.logger.info(`Processing GitHub repository ${action}`, {
       repositoryName: repository.name,
       senderLogin: sender.login,
     })
@@ -136,7 +139,7 @@ export class WebhookEventProcessor {
       return
     }
 
-    this.logger.log(`Processing GitHub collaborator ${action}`, {
+    this.logger.info(`Processing GitHub collaborator ${action}`, {
       repositoryName: repository.name,
       collaboratorLogin: collaborator.login,
       senderLogin: sender.login,
@@ -180,7 +183,7 @@ export class WebhookEventProcessor {
       return
     }
 
-    this.logger.log(`Processing GitHub member ${action}`, {
+    this.logger.info(`Processing GitHub member ${action}`, {
       organizationLogin: organization.login,
       memberLogin: member.login,
       role: membership?.role,
@@ -220,7 +223,7 @@ export class WebhookEventProcessor {
   private async processGitHubOrganizationEvent(payload: any): Promise<void> {
     const { action, organization, sender } = payload
 
-    this.logger.log(`Processing GitHub organization ${action}`, {
+    this.logger.info(`Processing GitHub organization ${action}`, {
       organizationId: organization.id,
       organizationLogin: organization.login,
       senderLogin: sender.login,
@@ -254,7 +257,7 @@ export class WebhookEventProcessor {
   private async processGitHubPushEvent(payload: any): Promise<void> {
     const { repository, pusher, commits, ref } = payload
 
-    this.logger.log(`Processing GitHub push event`, {
+    this.logger.info(`Processing GitHub push event`, {
       repositoryName: repository.name,
       pusherName: pusher.name,
       commitsCount: commits.length,
@@ -294,7 +297,7 @@ export class WebhookEventProcessor {
   private async processGitLabProjectEvent(payload: any): Promise<void> {
     const { event_type, project, user_name } = payload
 
-    this.logger.log(`Processing GitLab project ${event_type}`, {
+    this.logger.info(`Processing GitLab project ${event_type}`, {
       projectName: project.name,
       projectPath: project.path_with_namespace,
       userName: user_name,
@@ -327,7 +330,7 @@ export class WebhookEventProcessor {
   private async processGitLabGroupEvent(payload: any): Promise<void> {
     const { event_type, group } = payload
 
-    this.logger.log(`Processing GitLab group ${event_type}`, {
+    this.logger.info(`Processing GitLab group ${event_type}`, {
       groupId: group.id,
       groupName: group.name,
       groupPath: group.path,
@@ -357,7 +360,7 @@ export class WebhookEventProcessor {
   private async processGitLabGroupMemberEvent(payload: any): Promise<void> {
     const { event_type, group, user_id, user_username, user_name, group_access } = payload
 
-    this.logger.log(`Processing GitLab group member ${event_type}`, {
+    this.logger.info(`Processing GitLab group member ${event_type}`, {
       groupName: group.name,
       userName: user_name,
       userAccess: group_access,
@@ -391,7 +394,7 @@ export class WebhookEventProcessor {
   private async processGitLabPushEvent(payload: any): Promise<void> {
     const { project, user_name, user_email, commits, ref } = payload
 
-    this.logger.log(`Processing GitLab push event`, {
+    this.logger.info(`Processing GitLab push event`, {
       projectName: project.name,
       userName: user_name,
       commitsCount: commits.length,

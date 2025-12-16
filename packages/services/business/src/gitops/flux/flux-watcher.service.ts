@@ -1,8 +1,9 @@
 import * as schema from '@juanie/core/database'
 import { SystemEvents } from '@juanie/core/events'
+import { Logger } from '@juanie/core/logger'
 import { DEPLOYMENT_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
-import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
+import { Inject, Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { OnEvent } from '@nestjs/event-emitter'
 import type { Queue } from 'bullmq'
@@ -12,7 +13,6 @@ import { FluxMetricsService } from './flux-metrics.service'
 
 @Injectable()
 export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(FluxWatcherService.name)
   private watchers: Map<string, AbortController> = new Map()
   private isWatching = false
 
@@ -22,18 +22,21 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
     private config: ConfigService,
     private k3s: K3sService,
     _metrics: FluxMetricsService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(FluxWatcherService.name)
+  }
 
   async onModuleInit() {
     // 检查是否启用 Flux Watcher
     const enableFluxWatcher = this.config.get<string>('ENABLE_FLUX_WATCHER') !== 'false'
 
     if (!enableFluxWatcher) {
-      this.logger.log('ℹ️  Flux Watcher 已禁用（ENABLE_FLUX_WATCHER=false）')
+      this.logger.info('ℹ️  Flux Watcher 已禁用（ENABLE_FLUX_WATCHER=false）')
       return
     }
 
-    this.logger.log('ℹ️  Flux Watcher 已初始化，等待 K3s 连接')
+    this.logger.info('ℹ️  Flux Watcher 已初始化，等待 K3s 连接')
   }
 
   /**
@@ -42,7 +45,7 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
    */
   @OnEvent(SystemEvents.K3S_CONNECTED)
   async handleK3sConnected() {
-    this.logger.log('收到 K3s 连接成功事件，启动 Flux 监听')
+    this.logger.info('收到 K3s 连接成功事件，启动 Flux 监听')
     await this.startWatching()
   }
 
@@ -55,12 +58,12 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
    */
   async startWatching() {
     if (!this.k3s.isK3sConnected()) {
-      this.logger.log('ℹ️  K3s 未连接，跳过 Flux 监听')
+      this.logger.info('ℹ️  K3s 未连接，跳过 Flux 监听')
       return
     }
 
     if (this.isWatching) {
-      this.logger.log('ℹ️  Flux Watcher 已在运行')
+      this.logger.info('ℹ️  Flux Watcher 已在运行')
       return
     }
 
@@ -75,10 +78,10 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
       await this.watchResource('helm.toolkit.fluxcd.io', 'v2', 'helmreleases')
 
       this.isWatching = true
-      this.logger.log('✅ Flux Watcher 启动成功')
+      this.logger.info('✅ Flux Watcher 启动成功')
     } catch (_error: any) {
       // 静默失败
-      this.logger.log('ℹ️  Flux Watcher 启动失败（Flux 可能未安装）')
+      this.logger.info('ℹ️  Flux Watcher 启动失败（Flux 可能未安装）')
     }
   }
 
@@ -89,7 +92,7 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
     for (const [key, controller] of this.watchers.entries()) {
       try {
         controller.abort()
-        this.logger.log(`✅ 停止监听: ${key}`)
+        this.logger.info(`✅ 停止监听: ${key}`)
       } catch (error: any) {
         this.logger.warn(`⚠️  停止监听失败 ${key}:`, error.message)
       }
@@ -107,8 +110,8 @@ export class FluxWatcherService implements OnModuleInit, OnModuleDestroy {
   private async watchResource(group: string, version: string, plural: string) {
     const key = `${group}/${version}/${plural}`
 
-    this.logger.log(`ℹ️  Flux Watcher for ${key} is not yet implemented with BunK8sClient`)
-    this.logger.log(`ℹ️  Consider using polling or kubectl watch as an alternative`)
+    this.logger.info(`ℹ️  Flux Watcher for ${key} is not yet implemented with BunK8sClient`)
+    this.logger.info(`ℹ️  Consider using polling or kubectl watch as an alternative`)
 
     // TODO: Implement watch using one of these approaches:
     // 1. Polling with listCustomResources and comparing resourceVersion

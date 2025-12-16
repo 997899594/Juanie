@@ -16,13 +16,14 @@ import { ProjectsService } from '../../projects/projects.service'
  */
 @Injectable()
 export class GitPlatformSyncService {
-  private readonly logger = new Logger(GitPlatformSyncService.name)
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly projectMembersService: ProjectMembersService,
     readonly _projectsService: ProjectsService,
-  ) {}
+    private readonly logger: Logger,
+  ) {
+    this.logger.setContext(GitPlatformSyncService.name)}
 
   /**
    * 处理仓库删除事件
@@ -43,7 +44,7 @@ export class GitPlatformSyncService {
     }
     timestamp: Date
   }): Promise<void> {
-    this.logger.log('Handling repository deleted event', {
+    this.logger.info('Handling repository deleted event', {
       provider: event.provider,
       repositoryId: event.repository.gitId,
       repositoryName: event.repository.fullName,
@@ -67,7 +68,7 @@ export class GitPlatformSyncService {
 
       // 更新所有关联的项目
       for (const project of projects) {
-        this.logger.log('Marking project as Git disconnected', {
+        this.logger.info('Marking project as Git disconnected', {
           projectId: project.id,
           projectName: project.name,
         })
@@ -101,7 +102,7 @@ export class GitPlatformSyncService {
         })
       }
 
-      this.logger.log('Successfully handled repository deleted event', {
+      this.logger.info('Successfully handled repository deleted event', {
         projectsAffected: projects.length,
       })
     } catch (error) {
@@ -135,7 +136,7 @@ export class GitPlatformSyncService {
     }
     timestamp: Date
   }): Promise<void> {
-    this.logger.log('Handling collaborator added event', {
+    this.logger.info('Handling collaborator added event', {
       provider: event.provider,
       repositoryId: event.repository.gitId,
       collaboratorLogin: event.collaborator.gitLogin,
@@ -202,7 +203,7 @@ export class GitPlatformSyncService {
       })
 
       if (existingMember) {
-        this.logger.log('User is already a project member', {
+        this.logger.info('User is already a project member', {
           userId: gitAccount.userId,
           projectId: project.id,
         })
@@ -219,7 +220,7 @@ export class GitPlatformSyncService {
         role,
       })
 
-      this.logger.log('Successfully added collaborator as project member', {
+      this.logger.info('Successfully added collaborator as project member', {
         userId: gitAccount.userId,
         projectId: project.id,
         role,
@@ -288,7 +289,7 @@ export class GitPlatformSyncService {
     }
     timestamp: Date
   }): Promise<void> {
-    this.logger.log('Handling collaborator removed event', {
+    this.logger.info('Handling collaborator removed event', {
       provider: event.provider,
       repositoryId: event.repository.gitId,
       collaboratorLogin: event.collaborator.gitLogin,
@@ -331,7 +332,7 @@ export class GitPlatformSyncService {
         userId: gitAccount.userId,
       })
 
-      this.logger.log('Successfully removed collaborator from project', {
+      this.logger.info('Successfully removed collaborator from project', {
         userId: gitAccount.userId,
         projectId: project.id,
       })
@@ -401,7 +402,7 @@ export class GitPlatformSyncService {
     }
     timestamp: Date
   }): Promise<void> {
-    this.logger.log('Handling repository updated event', {
+    this.logger.info('Handling repository updated event', {
       provider: event.provider,
       repositoryId: event.repository.gitId,
       changes: Object.keys(event.changes),
@@ -438,7 +439,7 @@ export class GitPlatformSyncService {
         // 如果默认分支变更,更新项目配置
         if (event.changes.defaultBranch) {
           // TODO: 更新项目的默认分支配置
-          this.logger.log('Default branch changed', {
+          this.logger.info('Default branch changed', {
             projectId: project.id,
             from: event.changes.defaultBranch.from,
             to: event.changes.defaultBranch.to,
@@ -447,7 +448,7 @@ export class GitPlatformSyncService {
 
         // 如果可见性变更,记录日志
         if (event.changes.visibility) {
-          this.logger.log('Repository visibility changed', {
+          this.logger.info('Repository visibility changed', {
             projectId: project.id,
             from: event.changes.visibility.from,
             to: event.changes.visibility.to,
@@ -481,7 +482,7 @@ export class GitPlatformSyncService {
         })
       }
 
-      this.logger.log('Successfully handled repository updated event', {
+      this.logger.info('Successfully handled repository updated event', {
         projectsAffected: projects.length,
       })
     } catch (error) {
