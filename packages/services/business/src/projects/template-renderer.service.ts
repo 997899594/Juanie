@@ -165,6 +165,36 @@ export class TemplateRenderer {
   }
 
   /**
+   * 渲染模板到内存（不依赖文件系统）
+   * 用于 Worker 直接推送到 Git
+   */
+  async renderTemplateToMemory(
+    templateSlug: string,
+    variables: TemplateVariables,
+  ): Promise<Array<{ path: string; content: string }>> {
+    this.logger.info(`🎨 Rendering template to memory: ${templateSlug}`)
+
+    try {
+      // 1. 获取模板路径
+      const templatePath = await this.templateLoader.getTemplatePath(templateSlug)
+      if (!templatePath) {
+        throw new Error(`Template not found: ${templateSlug}`)
+      }
+
+      this.logger.info(`📂 Template path: ${templatePath}`)
+
+      // 2. 递归读取并渲染所有文件
+      const files = await this.readAndRenderDirectory(templatePath, variables)
+
+      this.logger.info(`✅ Successfully rendered ${files.length} files to memory`)
+      return files
+    } catch (error) {
+      this.logger.error(`❌ Failed to render template to memory:`, error)
+      throw error
+    }
+  }
+
+  /**
    * 渲染模板到指定目录
    */
   async renderTemplate(
@@ -204,6 +234,53 @@ export class TemplateRenderer {
     }
 
     return result
+  }
+
+  /**
+   * 递归读取并渲染目录（内存操作）
+   */
+  private async readAndRenderDirectory(
+    sourceDir: string,
+    variables: TemplateVariables,
+    relativePath = '',
+  ): Promise<Array<{ path: string; content: string }>> {
+    const files: Array<{ path: string; content: string }> = []
+
+    try {
+      const entries = await fs.readdir(sourceDir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        // 跳过忽略的文件和目录
+        if (this.shouldIgnore(entry.name)) {
+          continue
+        }
+
+        const sourcePath = path.join(sourceDir, entry.name)
+        const currentRelativePath = path.join(relativePath, entry.name)
+
+        if (entry.isDirectory()) {
+          // 递归处理目录
+          const subFiles = await this.readAndRenderDirectory(
+            sourcePath,
+            variables,
+            currentRelativePath,
+          )
+          files.push(...subFiles)
+        } else if (entry.isFile()) {
+          // 读取并渲染文件
+          const content = await this.readAndRenderFile(sourcePath, variables)
+          files.push({
+            path: currentRelativePath,
+            content,
+          })
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Failed to process directory ${sourceDir}:`, error)
+      throw error
+    }
+
+    return files
   }
 
   /**
@@ -255,6 +332,40 @@ export class TemplateRenderer {
   }
 
   /**
+   * 读取并渲染单个文件（内存操作）
+   */
+  private async readAndRenderFile(
+    sourcePath: string,
+    variables: TemplateVariables,
+  ): Promise<string> {
+    const ext = path.extname(sourcePath).toLowerCase()
+
+    // 二进制文件读取为 base64（如果需要支持二进制文件）
+    if (this.isBinaryFile(ext)) {
+      const buffer = await fs.readFile(sourcePath)
+      this.logger.debug(`  📄 Read binary: ${path.basename(sourcePath)}`)
+      return buffer.toString('base64')
+    }
+
+    try {
+      // 读取文件内容
+      const content = await fs.readFile(sourcePath, 'utf-8')
+
+      // 渲染模板
+      const rendered = this.renderContent(content, variables, sourcePath)
+
+      this.logger.debug(`  ✓ Rendered: ${path.basename(sourcePath)}`)
+      return rendered
+    } catch (error) {
+      this.logger.error(`Failed to render file ${sourcePath}:`, error)
+      // 如果渲染失败，返回原始内容
+      const content = await fs.readFile(sourcePath, 'utf-8')
+      this.logger.warn(`  ⚠ Returned without rendering: ${path.basename(sourcePath)}`)
+      return content
+    }
+  }
+
+  /**
    * 复制并渲染单个文件
    */
   private async copyAndRenderFile(
@@ -276,7 +387,7 @@ export class TemplateRenderer {
       const content = await fs.readFile(sourcePath, 'utf-8')
 
       // 渲染模板
-      const rendered = this.renderContent(content, variables)
+      const rendered = this.renderContent(content, variables, sourcePath)
 
       // 写入文件
       await fs.writeFile(targetPath, rendered, 'utf-8')
@@ -292,7 +403,7 @@ export class TemplateRenderer {
   /**
    * 渲染文件内容
    */
-  private renderContent(content: string, variables: TemplateVariables): string {
+  private renderContent(content: string, variables: TemplateVariables, filePath?: string): string {
     try {
       const template = this.handlebars.compile(content, {
         noEscape: true, // 不转义 HTML
@@ -300,7 +411,8 @@ export class TemplateRenderer {
       })
       return template(variables)
     } catch (error) {
-      this.logger.warn(`Failed to compile template:`, error)
+      const fileName = filePath ? path.basename(filePath) : 'unknown'
+      this.logger.warn(`Failed to compile template [${fileName}]:`, error)
       // 如果编译失败，返回原始内容
       return content
     }

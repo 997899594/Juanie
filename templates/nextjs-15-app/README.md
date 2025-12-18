@@ -189,7 +189,7 @@ kubectl create secret generic {{ appName }}-secrets \
 
 3. **应用 Kustomize 配置**
 ```bash
-kubectl apply -k .k8s/overlays/dev
+kubectl apply -k k8s/overlays/development
 ```
 
 4. **检查部署状态**

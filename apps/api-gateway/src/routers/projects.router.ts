@@ -384,17 +384,6 @@ export class ProjectsRouter {
           })
         }),
 
-      // getById 别名（兼容前端）
-      getById: this.trpc.protectedProcedure
-        .input(z.object({ id: z.string() }))
-        .query(async ({ ctx, input }) => {
-          try {
-            return await this.projectsService.get(ctx.user.id, input.id)
-          } catch (error) {
-            handleServiceError(error)
-          }
-        }),
-
       // 获取最近活动
       getRecentActivities: this.trpc.protectedProcedure
         .input(z.object({ projectId: z.string(), limit: z.number().optional() }))

@@ -5,12 +5,6 @@ import { DEFAULT_THEME_STATE, THEMES } from './types'
 // 存储键
 const STORAGE_KEY = 'theme-state'
 
-// 获取系统偏好的主题模式
-// @ts-expect-error - Reserved for future auto-detect system theme feature
-function _getSystemMode(): ThemeMode {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
 // 应用主题到DOM
 function applyThemeToDOM(state: ThemeState) {
   const root = document.documentElement

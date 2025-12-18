@@ -1,7 +1,10 @@
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { EventPublisher, SystemEvents } from '@juanie/core/events'
 import { Logger } from '@juanie/core/logger'
 import { Injectable, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { findUp } from 'find-up'
 import { BunK8sClient } from './bun-k8s-client'
 
 @Injectable()
@@ -14,27 +17,51 @@ export class K3sService implements OnModuleInit {
     private eventPublisher: EventPublisher,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(K3sService.name)}
+    this.logger.setContext(K3sService.name)
+  }
 
   async onModuleInit() {
     await this.connect()
   }
 
   private async connect() {
-    let kubeconfigPath =
-      this.config.get<string>('KUBECONFIG_PATH') || this.config.get<string>('K3S_KUBECONFIG_PATH')
+    let kubeconfigPath = process.env.KUBECONFIG || this.config.get<string>('KUBECONFIG')
 
     try {
       if (!kubeconfigPath) {
         const homeDir = process.env.HOME || process.env.USERPROFILE
-        kubeconfigPath = `${homeDir}/.kube/config`
+        kubeconfigPath = resolve(homeDir || '', '.kube/config')
         this.logger.info('ℹ️  使用默认 kubeconfig 路径')
       } else {
-        this.logger.info('📁 加载 kubeconfig:', kubeconfigPath)
+        // 处理 ~ 开头的路径
         if (kubeconfigPath.startsWith('~')) {
           const homeDir = process.env.HOME || process.env.USERPROFILE
-          kubeconfigPath = kubeconfigPath.replace('~', homeDir || '')
+          kubeconfigPath = resolve(homeDir || '', kubeconfigPath.slice(1))
         }
+        // 处理相对路径：向上查找项目根目录（包含 package.json 且 name 为 "juanie"）
+        else if (!kubeconfigPath.startsWith('/')) {
+          const projectRoot = await findUp(
+            async (directory) => {
+              const pkgPath = resolve(directory, 'package.json')
+              try {
+                const content = await readFile(pkgPath, 'utf-8')
+                const pkg = JSON.parse(content)
+                return pkg.name === 'juanie' ? directory : undefined
+              } catch {
+                return undefined
+              }
+            },
+            { cwd: process.cwd(), type: 'directory' },
+          )
+
+          if (!projectRoot) {
+            throw new Error('无法找到项目根目录（包含 name="juanie" 的 package.json）')
+          }
+
+          kubeconfigPath = resolve(projectRoot, kubeconfigPath)
+        }
+
+        this.logger.info('📁 加载 kubeconfig:', kubeconfigPath)
       }
 
       this.client = new BunK8sClient(kubeconfigPath)
@@ -127,6 +154,11 @@ export class K3sService implements OnModuleInit {
   ) {
     if (!this.isConnected) throw new Error('K3s 未连接')
     return this.client.createSecret(namespace, name, data, type)
+  }
+
+  async deleteSecret(namespace: string, name: string) {
+    if (!this.isConnected) throw new Error('K3s 未连接')
+    return this.client.deleteSecret(namespace, name)
   }
 
   // Deployment 操作

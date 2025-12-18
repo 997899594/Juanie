@@ -45,8 +45,7 @@ const schema = { ...tables, ...relations }
 
         const client = postgres(connectionString)
 
-        // SQL 日志（开发调试用，生产环境通过 OpenTelemetry 追踪）
-        // 推荐使用 `bun drizzle-kit studio` 可视化调试
+        // SQL 日志（开发调试用）
         const shouldLogQueries = process.env.LOG_SQL === 'true'
         const customLogger = shouldLogQueries
           ? {

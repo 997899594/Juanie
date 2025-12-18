@@ -111,6 +111,13 @@ export class BunK8sClient {
       fetchOptions.headers.Authorization = `Bearer ${this.token}`
     }
 
+    // 如果配置了跳过 TLS 验证，需要显式设置（用于 Token 认证）
+    if (!this.cert && !this.rejectUnauthorized) {
+      fetchOptions.tls = {
+        rejectUnauthorized: false,
+      }
+    }
+
     const response = await fetch(url, fetchOptions)
 
     if (!response.ok) {
@@ -187,6 +194,12 @@ export class BunK8sClient {
         type,
         data: encodedData,
       }),
+    })
+  }
+
+  async deleteSecret(namespace: string, name: string) {
+    return this.request(`/api/v1/namespaces/${namespace}/secrets/${name}`, {
+      method: 'DELETE',
     })
   }
 

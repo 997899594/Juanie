@@ -6,6 +6,7 @@ import { DeploymentsModule } from '../deployments/deployments.module'
 import { EnvironmentsModule } from '../environments/environments.module'
 import { RepositoriesModule } from '../repositories/repositories.module'
 import { ProjectInitializationModule } from './initialization'
+import { ProjectCleanupService } from './project-cleanup.service'
 import { ProjectMembersModule } from './project-members.module'
 import { ProjectOrchestrator } from './project-orchestrator.service'
 import { ProjectStatusService } from './project-status.service'
@@ -31,7 +32,7 @@ import { TemplatesModule } from './templates'
     ProjectInitializationModule,
     ProjectMembersModule,
   ],
-  providers: [ProjectsService, ProjectOrchestrator, ProjectStatusService],
+  providers: [ProjectsService, ProjectOrchestrator, ProjectStatusService, ProjectCleanupService],
   exports: [
     ProjectsService,
     ProjectOrchestrator,

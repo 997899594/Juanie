@@ -226,6 +226,8 @@ export interface CreateCredentialOptions {
   userId: string
   /** 首选认证类型 */
   preferredType?: GitAuthType
+  /** Git 提供商 */
+  provider?: 'github' | 'gitlab'
   /** 自定义 token */
   customToken?: string
   /** 强制创建（即使已存在） */

@@ -16,7 +16,6 @@ import type { GitCredential, GitCredentialExtended } from './git-credential.inte
  */
 @Injectable()
 export class CredentialManagerService {
-
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly k3s: K3sService,
@@ -25,7 +24,8 @@ export class CredentialManagerService {
     private readonly encryption: EncryptionService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(CredentialManagerService.name)}
+    this.logger.setContext(CredentialManagerService.name)
+  }
 
   /**
    * 创建 PAT 凭证
@@ -34,7 +34,7 @@ export class CredentialManagerService {
     projectId: string,
     userId: string,
     token: string,
-    _provider: 'github' | 'gitlab',
+    provider: 'github' | 'gitlab',
     scopes?: string[],
     expiresAt?: Date,
   ): Promise<GitCredential> {
@@ -50,6 +50,7 @@ export class CredentialManagerService {
         projectId,
         authType: 'project_token',
         projectToken: encryptedToken,
+        patProvider: provider,
         tokenScopes: scopes || [],
         tokenExpiresAt: expiresAt,
         createdBy: userId,
@@ -85,11 +86,12 @@ export class CredentialManagerService {
     }
 
     if (authType === 'pat' && options.customToken) {
+      const provider = options.provider || 'github'
       return await this.createPATCredential(
         options.projectId,
         options.userId,
         options.customToken,
-        'github', // TODO: 从选项中获取
+        provider,
       )
     }
 
@@ -265,17 +267,42 @@ export class CredentialManagerService {
           continue
         }
 
-        await this.k3s.createSecret(
-          namespace,
-          secretName,
-          {
-            username: _username,
-            password: token,
-          },
-          'kubernetes.io/basic-auth',
-        )
-
-        this.logger.debug(`Synced credential to ${namespace}/${secretName}`)
+        try {
+          await this.k3s.createSecret(
+            namespace,
+            secretName,
+            {
+              username: _username,
+              password: token,
+            },
+            'kubernetes.io/basic-auth',
+          )
+          this.logger.debug(`Created credential secret ${namespace}/${secretName}`)
+        } catch (createError: any) {
+          // 如果 Secret 已存在，尝试更新
+          if (createError.statusCode === 409) {
+            this.logger.debug(`Secret ${namespace}/${secretName} already exists, updating...`)
+            // TODO: 实现 updateSecret 方法
+            // 暂时先删除再创建
+            try {
+              await this.k3s.deleteSecret(namespace, secretName)
+              await this.k3s.createSecret(
+                namespace,
+                secretName,
+                {
+                  username: _username,
+                  password: token,
+                },
+                'kubernetes.io/basic-auth',
+              )
+              this.logger.debug(`Updated credential secret ${namespace}/${secretName}`)
+            } catch (updateError: any) {
+              throw new Error(`Failed to update secret: ${updateError.message}`)
+            }
+          } else {
+            throw createError
+          }
+        }
       } catch (error: any) {
         this.logger.error(`Failed to sync to ${namespace}: ${error.message || error}`, {
           namespace,

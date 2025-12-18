@@ -20,9 +20,10 @@
 - ✅ `k8s/base/service.yaml` - 服务配置
 - ✅ `k8s/base/ingress.yaml` - Ingress 配置
 - ✅ `k8s/base/kustomization.yaml` - Kustomize 基础
-- ✅ `k8s/overlays/dev/kustomization.yaml` - 开发环境
-- ✅ `k8s/overlays/prod/kustomization.yaml` - 生产环境
-- ✅ `k8s/overlays/prod/hpa.yaml` - 自动扩缩容
+- ✅ `k8s/overlays/development/kustomization.yaml` - 开发环境
+- ✅ `k8s/overlays/staging/kustomization.yaml` - 预发布环境
+- ✅ `k8s/overlays/production/kustomization.yaml` - 生产环境
+- ✅ `k8s/overlays/production/hpa.yaml` - 自动扩缩容
 
 ### CI/CD
 - ✅ `ci/github-actions.yaml` - GitHub Actions 工作流

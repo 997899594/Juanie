@@ -23,11 +23,11 @@ import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { Redis } from 'ioredis'
+import { GitProviderService } from '../gitops/git-providers/git-provider.service'
 import { ProjectOrchestrator } from './project-orchestrator.service'
 
 @Injectable()
 export class ProjectsService {
-
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private orchestrator: ProjectOrchestrator,
@@ -35,9 +35,11 @@ export class ProjectsService {
     private auditLogs: AuditLogsService,
     private eventPublisher: EventPublisher,
     private caslAbilityFactory: CaslAbilityFactory,
+    private gitProviderService: GitProviderService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(ProjectsService.name)}
+    this.logger.setContext(ProjectsService.name)
+  }
 
   /**
    * 检查权限（CASL）
@@ -445,9 +447,55 @@ export class ProjectsService {
     const repositoryAction = options?.repositoryAction || 'keep'
     const jobIds: string[] = []
 
-    // TODO: 实现 handleRepositoryOnDelete
-    if (repositoryAction !== 'keep') {
-      this.logger.info(`Repository action: ${repositoryAction} (not implemented yet)`)
+    this.logger.info(`Repository action: ${repositoryAction}`)
+
+    if (repositoryAction === 'delete') {
+      this.logger.info(`Attempting to delete Git repository for project ${projectId}`)
+      try {
+        // 从 repositories 表获取 Git 信息
+        const [repository] = await this.db
+          .select()
+          .from(schema.repositories)
+          .where(eq(schema.repositories.projectId, projectId))
+          .limit(1)
+
+        this.logger.info(`Repository data:`, {
+          provider: repository?.provider,
+          fullName: repository?.fullName,
+        })
+
+        if (repository) {
+          // 使用 oauthAccounts 表（和创建项目时一致）
+          const [oauthAccount] = await this.db
+            .select()
+            .from(schema.oauthAccounts)
+            .where(
+              and(
+                eq(schema.oauthAccounts.userId, userId),
+                eq(schema.oauthAccounts.provider, repository.provider),
+              ),
+            )
+            .limit(1)
+
+          if (oauthAccount?.accessToken) {
+            this.logger.info(`Calling deleteRepository API for ${repository.fullName}...`)
+            await this.gitProviderService.deleteRepository(
+              repository.provider as 'github' | 'gitlab',
+              repository.fullName,
+              oauthAccount.accessToken,
+            )
+            this.logger.info(`✅ Deleted Git repository: ${repository.fullName}`)
+          } else {
+            this.logger.warn(
+              `Cannot delete repository: no OAuth account found for ${repository.provider}`,
+            )
+          }
+        } else {
+          this.logger.warn(`Cannot delete repository: no repository record found`)
+        }
+      } catch (error) {
+        this.logger.error(`Failed to delete Git repository:`, error)
+      }
     }
 
     await this.auditLogs.log({

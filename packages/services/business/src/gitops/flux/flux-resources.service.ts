@@ -42,7 +42,6 @@ export interface Kustomization {
  */
 @Injectable()
 export class FluxResourcesService {
-
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     _config: ConfigService,
@@ -52,7 +51,8 @@ export class FluxResourcesService {
     private credentialManager: CredentialManagerService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(FluxResourcesService.name)}
+    this.logger.setContext(FluxResourcesService.name)
+  }
 
   /**
    * 创建 GitOps 资源（Kustomization 或 HelmRelease）
@@ -306,12 +306,13 @@ export class FluxResourcesService {
     branch?: string
     secretRef?: string
     interval?: string
+    timeout?: string
   }): Promise<GitRepository> {
     if (!this.k3s.isK3sConnected()) {
       throw new Error('K3s is not connected')
     }
 
-    const { name, namespace, url, branch = 'main', secretRef, interval = '5m' } = data
+    const { name, namespace, url, branch = 'main', secretRef, interval = '5m', timeout } = data
 
     // 生成 GitRepository YAML
     const gitRepoYaml = this.yamlGenerator.generateGitRepositoryYAML({
@@ -321,6 +322,7 @@ export class FluxResourcesService {
       branch,
       secretRef,
       interval,
+      timeout,
     })
 
     try {
@@ -485,9 +487,9 @@ export class FluxResourcesService {
     }
 
     try {
-      // 1. 创建项目凭证（自动同步到所有环境的 K8s Secret）
+      // 1. 创建项目凭证
       this.logger.info(`Creating credential for project ${projectId}`)
-      await this.credentialManager.createProjectCredential({ projectId, userId })
+      const credential = await this.credentialManager.createProjectCredential({ projectId, userId })
 
       // 2. 为每个环境设置 GitOps 资源
       for (const environment of environments) {
@@ -501,8 +503,9 @@ export class FluxResourcesService {
           await this.k3s.createNamespace(namespace)
           result.namespaces.push(namespace)
 
-          // 2.2 Git Secret 已由 CredentialManager 自动创建 ✅
-          this.logger.info(`Git secret synced to ${namespace}`)
+          // 2.2 同步 Git Secret 到新创建的 namespace
+          this.logger.info(`Syncing Git secret to ${namespace}`)
+          await this.credentialManager.syncToK8s(projectId, credential)
 
           // 2.3 创建 GitRepository
           this.logger.info(`Creating GitRepository: ${gitRepoName} in ${namespace}`)
@@ -517,7 +520,8 @@ export class FluxResourcesService {
             url: httpsUrl,
             branch: repositoryBranch,
             secretRef: `${projectId}-git-auth`,
-            interval: '1m',
+            interval: '5m',
+            timeout: '5m',
           })
           result.gitRepositories.push(`${namespace}/${gitRepoName}`)
 
@@ -533,7 +537,8 @@ export class FluxResourcesService {
               url: httpsUrl,
               branch: repositoryBranch,
               secretRef: `${projectId}-git-auth`,
-              interval: '1m',
+              interval: '5m',
+              timeout: '5m',
             } as any,
             status: gitRepo.status,
           })
@@ -747,14 +752,6 @@ export class FluxResourcesService {
 
     try {
       const client = this.k3s.getCustomObjectsApi()
-
-      // Server-Side Apply requires fieldManager as query parameter
-      // @ts-expect-error - Reserved for future use
-      const _options = {
-        headers: {
-          'Content-Type': 'application/apply-patch+yaml',
-        },
-      }
 
       // 使用 Server-Side Apply
       await client.patchNamespacedCustomObject({

@@ -1,149 +1,178 @@
-# Juanie 项目文档
+# 项目文档
 
-AI DevOps Platform - 现代化的 AI 驱动 DevOps 平台
+欢迎来到 Juanie DevOps 平台文档中心。
+
+---
 
 ## 📚 文档导航
 
-### 快速开始
-- [快速开始指南](guides/quick-start.md) - 5 分钟快速上手
-- [K3s 远程访问配置](guides/k3s-remote-access.md) - 配置远程 Kubernetes 集群
-- [Flux CD 安装](guides/flux-installation.md) - GitOps 工具安装指南
-- [部署测试](guides/deployment-test.md) - 测试部署流程
+### 🚀 [快速开始](./guides/quick-start.md)
+新手入门，5 分钟了解项目
 
-### 架构设计
-- [系统架构](ARCHITECTURE.md) - 整体架构设计
-- [数据库 Schema 关系](architecture/database-schema-relationships.md) - 数据模型设计
-- [Bun K8s 客户端](architecture/bun-k8s-client.md) - Kubernetes 客户端实现
-- [进度系统设计](architecture/progress-system-final.md) - 实时进度追踪系统
+### 📖 [操作指南](./guides/)
+功能使用、配置、部署指南
 
-### API 文档
-- [API 参考](API_REFERENCE.md) - tRPC API 完整文档
-- [API 概览](api/README.md) - API 使用指南
+### 🏗️ [架构设计](./architecture/)
+系统架构、模块设计、技术选型
 
-### 教程
-- [Monorepo 与 Turborepo](tutorials/monorepo-turborepo.md) - Monorepo 架构实践
-- [Ollama AI 集成](tutorials/ollama-ai-integration.md) - AI 功能集成指南
-- [tRPC 全栈类型安全](tutorials/trpc-fullstack-typesafety.md) - 端到端类型安全实践
+### 🔧 [问题排查](./troubleshooting/)
+常见问题、解决方案、最佳实践
 
-### 故障排查
-- [故障排查索引](troubleshooting/README.md) - 常见问题解决方案
-- **Flux CD 相关**
-  - [SSH 认证问题](troubleshooting/flux/ssh-authentication.md)
-  - [网络策略问题](troubleshooting/flux/network-policy.md)
-  - [Kustomization 协调问题](troubleshooting/flux/kustomization-reconciling.md)
-- **Kubernetes 相关**
-  - [Namespace 时序问题](troubleshooting/kubernetes/namespace-timing.md)
-  - [快速参考](troubleshooting/kubernetes/QUICK_REFERENCE.md)
-- **Git 相关**
-  - [仓库名称验证](troubleshooting/git/repository-name-validation.md)
+### 🎓 [深入教程](./tutorials/)
+技术深度解析、实战案例
 
-### 其他
-- [变更日志](CHANGELOG.md) - 版本更新记录
-- [文档组织规则](ORGANIZATION.md) - 文档管理规范
+### 📡 [API 参考](./api/)
+API 接口文档
 
-## 🚀 核心功能
+---
 
-### 项目管理
-- 多项目、多团队支持
-- 内置模板系统（Next.js 15 等）
-- 统一的项目创建流程（支持简单创建、模板创建、仓库创建）
-- 异步初始化流程（状态机 + 队列）
-- 实时进度追踪（SSE）
-
-### GitOps
-- 自动化部署，集成 Flux CD
-- 智能 Git 认证（GitHub Deploy Keys, GitLab Tokens）
-- SSH known_hosts 动态管理
-- Kubernetes 资源自动创建
-
-### 环境管理
-- Development/Staging/Production 环境隔离
-- 环境变量管理
-- 配置版本控制
-
-### AI 助手
-- 代码审查
-- DevOps 建议
-- 安全分析
-
-## 🛠️ 技术栈
-
-### 后端
-- **框架**: NestJS 11 + Fastify
-- **API**: tRPC（类型安全）
-- **数据库**: PostgreSQL 15 + Drizzle ORM
-- **缓存**: Dragonfly（Redis 兼容）
-- **队列**: BullMQ
-- **运行时**: Bun
-
-### 前端
-- **框架**: Vue 3 + Composition API
-- **构建**: Vite 7
-- **状态**: Pinia
-- **UI**: shadcn-vue + Tailwind CSS 4
-- **路由**: Vue Router
+## 🎯 核心文档
 
 ### 基础设施
-- **容器**: Docker
-- **编排**: K3s（轻量级 Kubernetes）
-- **GitOps**: Flux CD
-- **监控**: Prometheus + Grafana + Jaeger
+- **[K3s + Flux 安装指南（中国网络）](./troubleshooting/k3s-flux-reinstall-china-network.md)** ⭐
+- [K3s 远程访问配置](./guides/k3s-remote-access.md)
+- [Flux HTTP 代理设置](./guides/flux-http-proxy-setup.md)
 
-## 📖 开发指南
+### 架构设计
+- [项目初始化流程分析](./architecture/project-initialization-flow-analysis.md)
+- [K8s 模板设计](./architecture/k8s-template-design.md)
+- [数据库 Schema 关系](./architecture/database-schema-relationships.md)
 
-### 环境要求
-- Bun >= 1.0.0
-- Node.js >= 22.0.0
-- PostgreSQL 15+
-- Redis/Dragonfly 7+
-- K3s（可选，用于 GitOps）
+### 开发指南
+- [AI 模块使用](./guides/ai-module-usage.md)
+- [项目创建手动测试](./guides/project-creation-manual-testing.md)
+- [部署测试](./guides/deployment-test.md)
 
-### 快速开始
-```bash
-# 安装依赖
-bun install
+### 技术教程
+- [Monorepo + Turborepo](./tutorials/monorepo-turborepo.md)
+- [tRPC 全栈类型安全](./tutorials/trpc-fullstack-typesafety.md)
+- [Ollama AI 集成](./tutorials/ollama-ai-integration.md)
 
-# 启动核心服务
-docker compose up -d
+---
 
-# 数据库迁移
-bun run db:push
+## 🔍 按技术栈查找
 
-# 启动开发服务器
-bun run dev
+### 后端
+- **NestJS**: [架构设计](./architecture/), [问题排查](./troubleshooting/nestjs/)
+- **tRPC**: [全栈类型安全教程](./tutorials/trpc-fullstack-typesafety.md)
+- **Drizzle ORM**: [Relations 问题](./troubleshooting/drizzle-relations-circular-dependency.md)
+- **BullMQ**: [队列系统](./architecture/project-initialization-flow-analysis.md)
+
+### 前端
+- **Vue 3**: [组件开发](./guides/), [问题排查](./troubleshooting/frontend/)
+- **Vite**: [配置优化](./guides/)
+- **Tailwind CSS**: [样式系统](./guides/)
+- **shadcn-vue**: [UI 组件库](./guides/)
+
+### 基础设施
+- **K3s**: [安装配置](./troubleshooting/k3s-flux-reinstall-china-network.md), [远程访问](./guides/k3s-remote-access.md)
+- **Flux CD**: [性能优化](./troubleshooting/flux-performance-optimization.md), [代理配置](./guides/flux-http-proxy-setup.md)
+- **Docker**: [镜像构建](./guides/)
+
+### AI & 监控
+- **Ollama**: [集成教程](./tutorials/ollama-ai-integration.md), [使用指南](./guides/ai-module-usage.md)
+- **OpenTelemetry**: [集成指南](./guides/opentelemetry-integration.md)
+
+---
+
+## 📋 文档规范
+
+### 文档分类
+
+| 目录 | 用途 | 示例 |
+|------|------|------|
+| `guides/` | 操作指南、配置说明 | 如何配置 K3s |
+| `architecture/` | 架构设计、技术选型 | 项目初始化流程 |
+| `troubleshooting/` | 问题排查、解决方案 | Flux 性能优化 |
+| `tutorials/` | 深入教程、实战案例 | tRPC 使用教程 |
+| `api/` | API 接口文档 | REST/tRPC API |
+
+### 命名规范
+
+- 使用 **kebab-case**
+- 描述性名称，体现文档核心内容
+- 例如：`k3s-flux-reinstall-china-network.md`
+
+### 文档结构
+
+```markdown
+# 标题
+
+**日期**: YYYY-MM-DD  
+**状态**: 进行中 / 已完成  
+**相关**: 相关文档链接
+
+## 概述
+简要说明
+
+## 详细内容
+具体内容
+
+## 相关资源
+- 链接1
+- 链接2
 ```
 
-### 常用命令
-```bash
-# 开发
-bun run dev                    # 启动所有服务
-bun run dev:web                # 只启动 Web
-bun run dev:api                # 只启动 API
-
-# 数据库
-bun run db:generate            # 生成迁移
-bun run db:push                # 应用迁移
-bun run db:studio              # Drizzle Studio
-
-# 测试和检查
-bun test                       # 运行测试
-bun run type-check             # 类型检查
-biome check --write            # 代码检查
-
-# 构建
-bun run build                  # 构建所有包
-```
+---
 
 ## 🤝 贡献指南
 
-请参考 [协作原则](.kiro/steering/collaboration.md) 和 [AI 协作指南](.kiro/steering/ai-collaboration.md)
+### 添加新文档
 
-## 📝 许可证
+1. 确定文档类型（guide / architecture / troubleshooting / tutorial）
+2. 在对应目录创建 markdown 文件
+3. 遵循命名规范和文档结构
+4. 更新相应的 README.md 索引
 
-MIT License
+### 更新现有文档
 
-## 🔗 相关链接
+1. 在文档末尾添加更新日志
+2. 更新文档头部的日期和状态
+3. 如果有重大变更，更新索引
 
-- [项目仓库](https://github.com/your-org/juanie)
-- [问题追踪](https://github.com/your-org/juanie/issues)
-- [讨论区](https://github.com/your-org/juanie/discussions)
+### 归档过时文档
+
+1. 将过时文档移到 `archive/` 目录
+2. 在原位置添加重定向说明
+3. 更新索引，移除过时链接
+
+---
+
+## 📊 文档统计
+
+- **操作指南**: 15+ 篇
+- **架构设计**: 5+ 篇
+- **问题排查**: 10+ 篇
+- **深入教程**: 3+ 篇
+
+---
+
+## 🔗 外部资源
+
+### 官方文档
+- [NestJS](https://docs.nestjs.com/)
+- [Vue 3](https://vuejs.org/)
+- [tRPC](https://trpc.io/)
+- [Drizzle ORM](https://orm.drizzle.team/)
+- [K3s](https://docs.k3s.io/)
+- [Flux CD](https://fluxcd.io/docs/)
+
+### 社区资源
+- [Turborepo](https://turbo.build/repo/docs)
+- [Bun](https://bun.sh/docs)
+- [shadcn-vue](https://www.shadcn-vue.com/)
+
+---
+
+## 📮 反馈
+
+发现文档问题或有改进建议？
+
+1. 创建 Issue 描述问题
+2. 提交 PR 修复文档
+3. 在团队讨论中提出
+
+---
+
+**最后更新**: 2024-12-18  
+**维护者**: Juanie DevOps Team

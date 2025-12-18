@@ -7,10 +7,11 @@ import { ConfigService } from '@nestjs/config'
 import { Job, Worker } from 'bullmq'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { FluxResourcesService } from '../gitops/flux/flux-resources.service'
 import { GitProviderService } from '../gitops/git-providers/git-provider.service'
 import { calculateStepProgress } from '../projects/initialization/initialization-steps'
 import { ProgressManagerService } from '../projects/initialization/progress-manager.service'
-import { ProjectsService } from '../projects/projects.service'
+import { TemplateRenderer } from '../projects/template-renderer.service'
 
 /**
  * 项目初始化 Worker
@@ -31,9 +32,10 @@ export class ProjectInitializationWorker implements OnModuleInit {
     private readonly config: ConfigService,
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly oauthAccounts: OAuthAccountsService,
-    private readonly projectsService: ProjectsService,
     private readonly gitProvider: GitProviderService,
     private readonly progressManager: ProgressManagerService,
+    private readonly templateRenderer: TemplateRenderer,
+    private readonly fluxResources: FluxResourcesService,
     private readonly logger: Logger,
   ) {
     this.logger.setContext(ProjectInitializationWorker.name)
@@ -121,13 +123,24 @@ export class ProjectInitializationWorker implements OnModuleInit {
       // 步骤 2: 推送模板代码 (20-50%)
       await this.updateStepProgress(job, 'push_template', 0, '准备推送模板代码...')
 
-      const templateOutputDir = `/tmp/projects/${projectId}`
-      await this.pushRenderedTemplate(
+      // 获取项目信息用于模板变量
+      const [project] = await this.db
+        .select()
+        .from(schema.projects)
+        .where(eq(schema.projects.id, projectId))
+        .limit(1)
+
+      if (!project) {
+        throw new Error('Project not found')
+      }
+
+      // 使用模板系统推送代码
+      await this.pushTemplateCode(
         job,
+        project,
         resolvedRepository.provider,
         resolvedRepository.accessToken,
         repoInfo,
-        templateOutputDir,
       )
 
       await this.updateStepProgress(job, 'push_template', 100, '模板代码推送完成')
@@ -266,83 +279,67 @@ export class ProjectInitializationWorker implements OnModuleInit {
   }
 
   /**
-   * 推送渲染后的模板文件到 Git 仓库
+   * 推送模板代码（使用模板系统）
    */
-  private async pushRenderedTemplate(
+  private async pushTemplateCode(
     job: Job,
+    project: typeof schema.projects.$inferSelect,
     provider: 'github' | 'gitlab',
     accessToken: string,
-    repoInfo: { fullName: string; defaultBranch: string },
-    templateOutputDir: string,
+    repoInfo: { fullName: string; cloneUrl: string; defaultBranch: string },
   ): Promise<void> {
-    const fs = await import('node:fs/promises')
-    const path = await import('node:path')
+    await this.updateStepProgress(job, 'push_template', 10, '准备模板变量...')
 
-    // 递归读取目录中的所有文件
-    const files: Array<{ path: string; content: string }> = []
+    // 准备模板变量
+    const templateVariables = {
+      // 项目信息
+      projectId: project.id,
+      projectName: project.name,
+      projectSlug: project.slug,
+      description: project.description || `${project.name} - AI DevOps Platform`,
 
-    const readDirectory = async (dir: string, basePath = '') => {
-      try {
-        const entries = await fs.readdir(dir, { withFileTypes: true })
+      // K8s 配置
+      appName: project.slug,
+      registry: this.config.get('REGISTRY_URL') || 'registry.example.com',
+      port: 3000,
+      domain: this.config.get('APP_DOMAIN') || 'example.com',
+      replicas: 1,
 
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name)
-          const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name
+      // 可选功能（从项目配置获取，默认 false）
+      enableDatabase: false,
+      enableCache: false,
+      enableAuth: false,
+      enableSentry: false,
 
-          // 跳过 .git 目录和其他不需要的文件
-          if (entry.name === '.git' || entry.name === 'node_modules') {
-            continue
-          }
+      // 资源配置
+      resources: {
+        requests: { cpu: '200m', memory: '512Mi' },
+        limits: { cpu: '1000m', memory: '1Gi' },
+      },
 
-          if (entry.isDirectory()) {
-            await readDirectory(fullPath, relativePath)
-          } else if (entry.isFile()) {
-            try {
-              const content = await fs.readFile(fullPath, 'utf-8')
-              files.push({
-                path: relativePath,
-                content,
-              })
-            } catch (error) {
-              // 跳过无法读取的文件（可能是二进制文件）
-              this.logger.warn(`Skipping file ${relativePath}: ${error}`)
-            }
-          }
-        }
-      } catch (error) {
-        this.logger.error(`Failed to read directory ${dir}:`, error)
-      }
+      // 仓库信息
+      repository: {
+        url: repoInfo.cloneUrl,
+        branch: repoInfo.defaultBranch,
+      },
     }
 
-    // 读取模板文件
-    await readDirectory(templateOutputDir)
+    await this.updateStepProgress(job, 'push_template', 20, '渲染模板文件...')
 
-    await this.updateStepProgress(job, 'push_template', 20, `找到 ${files.length} 个文件...`)
+    // 使用模板系统渲染（内存操作）
+    const files = await this.templateRenderer.renderTemplateToMemory(
+      'nextjs-15-app',
+      templateVariables,
+    )
 
-    // 检查是否有 k8s 目录
-    const hasK8sFiles = files.some((f) => f.path.startsWith('k8s/'))
+    await this.updateStepProgress(
+      job,
+      'push_template',
+      40,
+      `已渲染 ${files.length} 个文件，准备推送...`,
+    )
 
-    if (files.length === 0) {
-      this.logger.warn('No files found in template output directory, using fallback')
-      await this.updateStepProgress(job, 'push_template', 30, '使用默认模板文件...')
-      await this.pushInitialCode(job, provider, accessToken, repoInfo)
-      return
-    }
-
-    // 如果模板文件中没有 k8s 目录，添加默认的 k8s 配置
-    if (!hasK8sFiles) {
-      this.logger.warn('Template files do not include k8s directory, adding default k8s config')
-      await this.updateStepProgress(job, 'push_template', 30, '添加 Kubernetes 配置...')
-
-      // 添加默认的 k8s 文件
-      const k8sFiles = this.getDefaultK8sFiles()
-      files.push(...k8sFiles)
-
-      this.logger.info(`Added ${k8sFiles.length} k8s files to template`)
-    }
-
-    await this.updateStepProgress(job, 'push_template', 40, `准备推送 ${files.length} 个文件...`)
-
+    // 推送到 Git 仓库
     await this.pushFilesToRepository(
       job,
       provider,
@@ -353,238 +350,6 @@ export class ProjectInitializationWorker implements OnModuleInit {
     )
 
     await this.updateStepProgress(job, 'push_template', 80, `成功推送 ${files.length} 个文件`)
-  }
-
-  /**
-   * 获取默认的 k8s 配置文件
-   */
-  private getDefaultK8sFiles(): Array<{ path: string; content: string }> {
-    return [
-      {
-        path: 'k8s/base/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - deployment.yaml
-  - service.yaml
-`,
-      },
-      {
-        path: 'k8s/base/deployment.yaml',
-        content: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: app
-  template:
-    metadata:
-      labels:
-        app: app
-    spec:
-      containers:
-      - name: app
-        image: nginx:latest
-        ports:
-        - containerPort: 80
-`,
-      },
-      {
-        path: 'k8s/base/service.yaml',
-        content: `apiVersion: v1
-kind: Service
-metadata:
-  name: app
-spec:
-  selector:
-    app: app
-  ports:
-  - port: 80
-    targetPort: 80
-`,
-      },
-      {
-        path: 'k8s/overlays/development/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../../base
-
-namePrefix: development-
-`,
-      },
-      {
-        path: 'k8s/overlays/staging/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../../base
-
-namePrefix: staging-
-`,
-      },
-      {
-        path: 'k8s/overlays/production/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../../base
-
-namePrefix: production-
-`,
-      },
-    ]
-  }
-
-  /**
-   * 推送初始代码（后备方案）
-   */
-  private async pushInitialCode(
-    job: Job,
-    provider: 'github' | 'gitlab',
-    accessToken: string,
-    repoInfo: { fullName: string; defaultBranch: string },
-  ): Promise<void> {
-    const files = [
-      {
-        path: '.gitignore',
-        content: `# Dependencies
-node_modules/
-.pnp
-.pnp.js
-
-# Testing
-coverage/
-
-# Production
-build/
-dist/
-
-# Misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-`,
-      },
-      {
-        path: 'README.md',
-        content: `# Project
-
-This repository was created by AI DevOps Platform.
-
-## Getting Started
-
-Add your application code here.
-
-## Deployment
-
-This project is configured for GitOps deployment with Flux.
-`,
-      },
-      {
-        path: 'k8s/base/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - deployment.yaml
-  - service.yaml
-`,
-      },
-      {
-        path: 'k8s/base/deployment.yaml',
-        content: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: app
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: app
-  template:
-    metadata:
-      labels:
-        app: app
-    spec:
-      containers:
-      - name: app
-        image: nginx:latest
-        ports:
-        - containerPort: 80
-`,
-      },
-      {
-        path: 'k8s/base/service.yaml',
-        content: `apiVersion: v1
-kind: Service
-metadata:
-  name: app
-spec:
-  selector:
-    app: app
-  ports:
-  - port: 80
-    targetPort: 80
-`,
-      },
-      {
-        path: 'k8s/overlays/development/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../../base
-
-namePrefix: dev-
-`,
-      },
-      {
-        path: 'k8s/overlays/staging/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../../base
-
-namePrefix: staging-
-`,
-      },
-      {
-        path: 'k8s/overlays/production/kustomization.yaml',
-        content: `apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - ../../base
-
-namePrefix: prod-
-`,
-      },
-    ]
-
-    await this.pushFilesToRepository(
-      job,
-      provider,
-      accessToken,
-      repoInfo.fullName,
-      files,
-      repoInfo.defaultBranch,
-    )
   }
 
   /**
@@ -747,33 +512,34 @@ namePrefix: prod-
         return false
       }
 
-      // 使用事件驱动架构：发布 GitOps 设置请求事件
+      // 直接同步创建 GitOps 资源（不使用事件）
       await this.updateStepProgress(job, 'setup_gitops', 50, '创建 Kubernetes 资源...')
       await job.log('🚀 开始创建 GitOps 资源...')
 
-      const success = await this.projectsService.requestGitOpsSetup({
+      const result = await this.fluxResources.setupProjectGitOps({
         projectId,
         repositoryId,
         repositoryUrl: repository.cloneUrl,
         repositoryBranch: repository.defaultBranch || 'main',
-        userId, // 用于获取 OAuth token
+        userId,
         environments: environments.map((env) => ({
           id: env.id,
           type: env.type as 'development' | 'staging' | 'production',
           name: env.name,
         })),
-        jobId: job.id,
       })
 
-      if (!success) {
-        await job.log('❌ GitOps 资源创建失败')
-        this.logger.error('GitOps setup failed')
+      if (!result.success) {
+        await job.log(`❌ GitOps 资源创建失败: ${result.errors.join(', ')}`)
+        this.logger.error('GitOps setup failed:', result.errors)
         return false
       }
 
       await this.updateStepProgress(job, 'setup_gitops', 80, '配置 Flux CD...')
-      await job.log('✅ GitOps 资源创建成功')
-      this.logger.info('GitOps resources created successfully')
+      await job.log(
+        `✅ GitOps 资源创建成功: ${result.namespaces.length} namespaces, ${result.gitRepositories.length} repos, ${result.kustomizations.length} kustomizations`,
+      )
+      this.logger.info('GitOps resources created successfully:', result)
 
       return true
     } catch (error) {

@@ -885,7 +885,7 @@ interface EnvironmentGitOpsConfig {
   
   // Git 配置
   branch: string; // 'develop', 'staging', 'main'
-  path: string;   // './k8s/overlays/dev', './k8s/overlays/prod'
+  path: string;   // './k8s/overlays/development', './k8s/overlays/production'
   
   // 同步策略
   autoSync: boolean; // 开发环境自动同步，生产环境需要审批
@@ -909,7 +909,7 @@ const environmentConfigs: EnvironmentGitOpsConfig[] = [
     environmentId: 'dev-env-id',
     environmentName: 'development',
     branch: 'develop',
-    path: './k8s/overlays/dev',
+    path: './k8s/overlays/development',
     autoSync: true,
     syncInterval: '1m',
     requiresApproval: false,
@@ -920,7 +920,7 @@ const environmentConfigs: EnvironmentGitOpsConfig[] = [
     environmentId: 'prod-env-id',
     environmentName: 'production',
     branch: 'main',
-    path: './k8s/overlays/prod',
+    path: './k8s/overlays/production',
     autoSync: false, // 需要手动触发
     syncInterval: '10m',
     requiresApproval: true,

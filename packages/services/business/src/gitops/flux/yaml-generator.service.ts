@@ -70,6 +70,10 @@ export class YamlGeneratorService {
       metadata: {
         name: input.name,
         namespace: input.namespace,
+        annotations: {
+          // 触发立即 reconcile，避免等待 Flux 的默认扫描间隔
+          'reconcile.fluxcd.io/requestedAt': new Date().toISOString(),
+        },
       },
       spec: {
         interval: input.interval || '1m',
@@ -91,6 +95,9 @@ export class YamlGeneratorService {
       resource.spec.timeout = input.timeout
     }
 
+    // 限制重试次数，避免失败资源无限重试
+    resource.spec.suspend = false
+
     return yaml.stringify(resource, {
       lineWidth: 0, // 禁用自动换行
       indent: 2,
@@ -108,6 +115,10 @@ export class YamlGeneratorService {
       metadata: {
         name: input.name,
         namespace: input.namespace,
+        annotations: {
+          // 触发立即 reconcile，避免等待 Flux 的默认扫描间隔
+          'reconcile.fluxcd.io/requestedAt': new Date().toISOString(),
+        },
       },
       spec: {
         interval: input.interval || '5m',
