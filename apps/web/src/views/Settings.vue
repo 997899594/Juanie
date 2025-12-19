@@ -280,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Badge,
   Button,
@@ -305,14 +305,16 @@ import { Badge,
 import { LogOut, Monitor, Moon, Sun, GitBranch } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { usePreferencesStore } from '@/stores/preferences'
-import { useGitOps } from '@/composables/useGitOps'
-import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const preferencesStore = usePreferencesStore()
-const toast = useToast()
-const { fluxHealth } = useGitOps()
+
+// TODO: 实现 Flux 健康检查 API
+const fluxHealth = ref<{
+  overall: 'healthy' | 'unhealthy'
+  components: Array<{ name: string; ready: boolean }>
+} | null>(null)
 
 
 

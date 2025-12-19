@@ -1,6 +1,6 @@
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { OAuthAccountsService } from '@juanie/service-foundation'
+import { GitConnectionsService } from '@juanie/service-foundation'
 import type { ConnectRepositoryInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
@@ -14,7 +14,7 @@ export class RepositoriesService {
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly config: ConfigService,
     private readonly gitProvider: GitProviderService,
-    private readonly oauthAccounts: OAuthAccountsService,
+    private readonly gitConnections: GitConnectionsService,
   ) {}
 
   // 连接仓库
@@ -146,20 +146,20 @@ export class RepositoriesService {
       throw new Error('没有权限同步仓库')
     }
 
-    // 获取用户的 OAuth token
-    const [oauthAccount] = await this.db
+    // 获取用户的 Git 连接
+    const [gitConnection] = await this.db
       .select()
-      .from(schema.oauthAccounts)
+      .from(schema.gitConnections)
       .where(
         and(
-          eq(schema.oauthAccounts.userId, userId),
-          eq(schema.oauthAccounts.provider, repository.provider),
+          eq(schema.gitConnections.userId, userId),
+          eq(schema.gitConnections.provider, repository.provider),
         ),
       )
       .limit(1)
 
-    if (!oauthAccount) {
-      throw new Error(`未找到 ${repository.provider} OAuth 授权`)
+    if (!gitConnection) {
+      throw new Error(`未找到 ${repository.provider} Git 连接`)
     }
 
     try {
@@ -174,7 +174,7 @@ export class RepositoriesService {
       if (repository.provider === 'github') {
         const response = await fetch(`https://api.github.com/repos/${repository.fullName}`, {
           headers: {
-            Authorization: `Bearer ${oauthAccount.accessToken}`,
+            Authorization: `Bearer ${gitConnection.accessToken}`,
             Accept: 'application/vnd.github.v3+json',
             'User-Agent': 'AI-DevOps-Platform',
           },
@@ -196,7 +196,7 @@ export class RepositoriesService {
         ).replace(/\/+$/, '')
         const response = await fetch(`${gitlabBase}/api/v4/projects/${projectPath}`, {
           headers: {
-            Authorization: `Bearer ${oauthAccount.accessToken}`,
+            Authorization: `Bearer ${gitConnection.accessToken}`,
             'User-Agent': 'AI-DevOps-Platform',
           },
         })
@@ -220,7 +220,7 @@ export class RepositoriesService {
           defaultBranch: repoData.default_branch || repository.defaultBranch,
           cloneUrl: repoData.clone_url || repoData.http_url_to_repo || repository.cloneUrl,
           lastSyncAt: new Date(),
-          syncStatus: 'success',
+          status: 'success',
         })
         .where(eq(schema.repositories.id, repositoryId))
         .returning()
@@ -231,7 +231,7 @@ export class RepositoriesService {
       await this.db
         .update(schema.repositories)
         .set({
-          syncStatus: 'failed',
+          status: 'failed',
           lastSyncAt: new Date(),
         })
         .where(eq(schema.repositories.id, repositoryId))
@@ -358,8 +358,7 @@ export class RepositoriesService {
           ...currentConfig,
           enabled: false,
         },
-        fluxSyncStatus: null,
-        fluxErrorMessage: null,
+        status: null,
         updatedAt: new Date(),
       })
       .where(eq(schema.repositories.id, repositoryId))
@@ -391,10 +390,10 @@ export class RepositoriesService {
 
     return {
       enabled: true,
-      status: repository.fluxSyncStatus || 'pending',
-      lastSyncCommit: repository.fluxLastSyncCommit,
-      lastSyncTime: repository.fluxLastSyncTime,
-      errorMessage: repository.fluxErrorMessage,
+      status: repository.status || 'pending',
+      lastSyncCommit: null, // 已废弃，从 gitops_resources 查询
+      lastSyncTime: repository.lastSyncAt,
+      errorMessage: null, // 已废弃，从 gitops_resources 查询
       config: repository.gitopsConfig,
     }
   }
@@ -406,7 +405,7 @@ export class RepositoriesService {
   async updateFluxStatus(
     repositoryId: string,
     status: {
-      syncStatus: 'ready' | 'reconciling' | 'failed'
+      status: 'ready' | 'reconciling' | 'failed'
       lastSyncCommit?: string
       errorMessage?: string
     },
@@ -421,14 +420,12 @@ export class RepositoriesService {
       throw new Error('仓库不存在')
     }
 
-    // 更新 Flux 状态
+    // 更新同步状态
     const [updated] = await this.db
       .update(schema.repositories)
       .set({
-        fluxSyncStatus: status.syncStatus,
-        fluxLastSyncCommit: status.lastSyncCommit || repository.fluxLastSyncCommit,
-        fluxLastSyncTime: new Date(),
-        fluxErrorMessage: status.errorMessage || null,
+        status: status.status,
+        lastSyncAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(schema.repositories.id, repositoryId))
@@ -552,22 +549,35 @@ export class RepositoriesService {
     return await this.gitProvider.listUserRepositories(provider, accessToken)
   }
 
-  // 从 OAuth 账户解析访问令牌
+  // 从 Git 连接解析访问令牌
   async resolveOAuthToken(userId: string, provider: 'github' | 'gitlab'): Promise<string> {
-    const oauthAccount = await this.oauthAccounts.getAccountByProvider(userId, provider)
+    const gitConnection = await this.gitConnections.getConnectionByProvider(userId, provider)
 
-    if (!oauthAccount) {
+    if (!gitConnection) {
       const providerName = provider === 'github' ? 'GitHub' : 'GitLab'
       throw new Error(
-        `未找到 ${providerName} OAuth 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
+        `未找到 ${providerName} Git 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
       )
     }
 
-    if (!oauthAccount.accessToken || oauthAccount.status !== 'active') {
+    if (!gitConnection.accessToken || gitConnection.status !== 'active') {
       const providerName = provider === 'github' ? 'GitHub' : 'GitLab'
       throw new Error(`${providerName} 访问令牌无效，请重新连接账户`)
     }
 
-    return oauthAccount.accessToken
+    return gitConnection.accessToken
+  }
+
+  /**
+   * 根据项目 ID 查找仓库
+   */
+  async findByProjectId(projectId: string): Promise<schema.Repository | null> {
+    const [repository] = await this.db
+      .select()
+      .from(schema.repositories)
+      .where(eq(schema.repositories.projectId, projectId))
+      .limit(1)
+
+    return repository || null
   }
 }

@@ -26,14 +26,14 @@ export interface DeployWithGitOpsInput {
 
 @Injectable()
 export class DeploymentsService {
-
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
     private gitOpsService: GitOpsService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(DeploymentsService.name)}
+    this.logger.setContext(DeploymentsService.name)
+  }
 
   // 创建部署
   async create(userId: string, data: CreateDeploymentInput) {
@@ -235,9 +235,9 @@ export class DeploymentsService {
     }
 
     // 4. Call GitOpsService to commit changes to Git
-    let gitCommitSha: string
+    let commitHash: string
     try {
-      gitCommitSha = await this.gitOpsService.commitFromUI({
+      commitHash = await this.gitOpsService.commitFromUI({
         projectId: data.projectId,
         environmentId: data.environmentId,
         changes: data.changes,
@@ -245,7 +245,7 @@ export class DeploymentsService {
         commitMessage: data.commitMessage,
       })
 
-      this.logger.info(`Git commit created: ${gitCommitSha}`)
+      this.logger.info(`Git commit created: ${commitHash}`)
     } catch (error) {
       this.logger.error('Failed to commit changes to Git:', error)
       throw new Error(
@@ -261,7 +261,7 @@ export class DeploymentsService {
       version = imageParts.length > 1 ? imageParts[1]! : 'latest'
     }
 
-    // 6. Create deployment record with gitops-ui method
+    // 6. Create deployment record with gitops method
     const [deployment] = await this.db
       .insert(schema.deployments)
       .values({
@@ -269,10 +269,9 @@ export class DeploymentsService {
         environmentId: data.environmentId,
         gitopsResourceId: data.gitopsResourceId || null,
         version,
-        commitHash: gitCommitSha.substring(0, 7), // Short SHA for display
+        commitHash, // 完整的 commit SHA
         branch: gitopsConfig.gitBranch || 'main',
-        deploymentMethod: 'gitops-ui',
-        gitCommitSha, // Full SHA for GitOps tracking
+        deploymentMethod: 'gitops', // 简化为 'gitops'
         deployedBy: userId,
         status: 'pending',
       })
@@ -315,13 +314,13 @@ export class DeploymentsService {
     projectId: string
     environmentId: string
     gitopsResourceId: string
-    gitCommitSha: string
+    commitHash: string
     version?: string
     status: 'success' | 'failed'
     errorMessage?: string
   }) {
     this.logger.info(
-      `Creating deployment record from Git for project ${data.projectId}, commit ${data.gitCommitSha}`,
+      `Creating deployment record from Git for project ${data.projectId}, commit ${data.commitHash}`,
     )
 
     // 1. Check if deployment record already exists for this commit
@@ -332,7 +331,7 @@ export class DeploymentsService {
         and(
           eq(schema.deployments.projectId, data.projectId),
           eq(schema.deployments.environmentId, data.environmentId),
-          eq(schema.deployments.gitCommitSha, data.gitCommitSha),
+          eq(schema.deployments.commitHash, data.commitHash),
           isNull(schema.deployments.deletedAt),
         ),
       )
@@ -368,9 +367,9 @@ export class DeploymentsService {
     const branch = gitopsConfig?.gitBranch || 'main'
 
     // 3. Extract version from commit SHA or use provided version
-    const version = data.version || data.gitCommitSha.substring(0, 7)
+    const version = data.version || data.commitHash.substring(0, 7)
 
-    // 4. Create new deployment record with gitops-git method
+    // 4. Create new deployment record with gitops method
     const [deployment] = await this.db
       .insert(schema.deployments)
       .values({
@@ -378,10 +377,9 @@ export class DeploymentsService {
         environmentId: data.environmentId,
         gitopsResourceId: data.gitopsResourceId,
         version,
-        commitHash: data.gitCommitSha.substring(0, 7),
+        commitHash: data.commitHash, // 完整的 commit SHA
         branch,
-        deploymentMethod: 'gitops-git',
-        gitCommitSha: data.gitCommitSha,
+        deploymentMethod: 'gitops', // 简化为 'gitops'
         deployedBy: null, // No specific user for Git-triggered deployments
         status: data.status,
         startedAt: new Date(),

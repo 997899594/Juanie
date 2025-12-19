@@ -25,7 +25,7 @@ export function useProjectAssets() {
     }) => {
       return await trpc.projects.uploadLogo.mutate({ projectId, file, contentType })
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       // 使项目详情缓存失效，以获取新的 Logo URL
       queryClient.invalidateQueries({ queryKey: ['projects', 'detail', variables.projectId] })
       queryClient.invalidateQueries({ queryKey: ['projects', 'list'] })
@@ -46,7 +46,7 @@ export function useProjectAssets() {
     mutationFn: async (projectId: string) => {
       return await trpc.projects.deleteLogo.mutate({ projectId })
     },
-    onSuccess: (result, projectId) => {
+    onSuccess: (_result, projectId) => {
       // 使项目详情缓存失效
       queryClient.invalidateQueries({ queryKey: ['projects', 'detail', projectId] })
       queryClient.invalidateQueries({ queryKey: ['projects', 'list'] })

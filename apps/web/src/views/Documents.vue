@@ -50,7 +50,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { trpc } from '../lib/trpc'
 import PageContainer from '@/components/PageContainer.vue'
 import AnimatedCard from '@/components/AnimatedCard.vue'
 import { Button, CardHeader, CardTitle, CardContent, log } from '@juanie/ui'

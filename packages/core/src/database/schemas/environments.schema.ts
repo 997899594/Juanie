@@ -14,21 +14,16 @@ export const environments = pgTable(
     status: text('status').notNull().default('active'), // 'active', 'inactive', 'error'
     healthCheckUrl: text('health_check_url'), // 健康检查 URL
 
-    // 环境配置（JSONB）
+    // 注意：GitOps 配置通过 gitops_resources 表的 environmentId 外键关联
+    // 不需要在这里添加 gitopsResourceId，避免循环依赖
+
+    // 环境配置（JSONB）- 简化版，GitOps 配置已移至 gitops_resources 表
     config: jsonb('config')
       .$type<{
         cloudProvider?: 'aws' | 'gcp' | 'azure'
         region?: string
         approvalRequired: boolean
         minApprovals: number
-        // GitOps 配置
-        gitops?: {
-          enabled: boolean
-          autoSync: boolean // 是否自动同步
-          gitBranch: string // 对应的 Git 分支
-          gitPath: string // K8s 配置路径
-          syncInterval: string
-        }
       }>()
       .default({ approvalRequired: false, minApprovals: 1 }),
 

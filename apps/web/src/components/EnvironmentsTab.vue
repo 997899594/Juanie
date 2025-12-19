@@ -162,18 +162,19 @@ const props = defineProps<{
   projectId: string
 }>()
 
-const projectIdRef = computed(() => props.projectId)
-
+// ✅ 简洁的 API
 const {
-  environments,
+  environments: environmentsData,
   isLoading,
   create,
-  update,
-  delete: deleteEnvironment,
   isCreating,
+  update,
   isUpdating,
+  delete: deleteEnvironment,
   isDeleting,
-} = useEnvironments(projectIdRef)
+} = useEnvironments(computed(() => props.projectId))
+
+const environments = computed(() => environmentsData.value || [])
 
 const showDialog = ref(false)
 const showDeleteDialog = ref(false)
@@ -213,18 +214,18 @@ const openEditDialog = (environment: any) => {
 }
 
 const confirmDelete = (id: string) => {
-  deletingEnvironment.value = environments.value.find((env: any) => env.id === id)
+  deletingEnvironment.value = environments.value.find((env) => env.id === id)
   showDeleteDialog.value = true
 }
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
   if (isEditing.value && editingEnvironment.value) {
-    update({
+    await update({
       environmentId: editingEnvironment.value.id,
       ...form.value,
     })
   } else {
-    create({
+    await create({
       projectId: props.projectId,
       ...form.value,
     })
@@ -232,9 +233,9 @@ const handleSubmit = () => {
   showDialog.value = false
 }
 
-const handleDelete = () => {
+const handleDelete = async () => {
   if (deletingEnvironment.value) {
-    deleteEnvironment({ environmentId: deletingEnvironment.value.id })
+    await deleteEnvironment({ environmentId: deletingEnvironment.value.id })
     showDeleteDialog.value = false
     deletingEnvironment.value = null
   }

@@ -1,7 +1,7 @@
 import * as schema from '@juanie/core/database'
 import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
-import { OAuthAccountsService } from '@juanie/service-foundation'
+import { GitConnectionsService } from '@juanie/service-foundation'
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Job, Worker } from 'bullmq'
@@ -10,6 +10,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { FluxResourcesService } from '../gitops/flux/flux-resources.service'
 import { GitProviderService } from '../gitops/git-providers/git-provider.service'
 import { calculateStepProgress } from '../projects/initialization/initialization-steps'
+import { InitializationStepsService } from '../projects/initialization/initialization-steps.service'
 import { ProgressManagerService } from '../projects/initialization/progress-manager.service'
 import { TemplateRenderer } from '../projects/template-renderer.service'
 
@@ -31,9 +32,10 @@ export class ProjectInitializationWorker implements OnModuleInit {
   constructor(
     private readonly config: ConfigService,
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    private readonly oauthAccounts: OAuthAccountsService,
+    private readonly gitConnections: GitConnectionsService,
     private readonly gitProvider: GitProviderService,
     private readonly progressManager: ProgressManagerService,
+    private readonly initializationSteps: InitializationStepsService,
     private readonly templateRenderer: TemplateRenderer,
     private readonly fluxResources: FluxResourcesService,
     private readonly logger: Logger,
@@ -109,6 +111,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
       const resolvedRepository = await this.resolveAccessToken(userId, repository)
 
       // 步骤 1: 创建 Git 仓库 (0-20%)
+      await this.initializationSteps.startStep(projectId, 'create_repository')
       await this.updateStepProgress(job, 'create_repository', 0, '开始创建 Git 仓库...')
 
       const repoInfo = await this.createRepository(job, resolvedRepository)
@@ -119,8 +122,10 @@ export class ProjectInitializationWorker implements OnModuleInit {
         100,
         `仓库创建成功: ${repoInfo.fullName}`,
       )
+      await this.initializationSteps.completeStep(projectId, 'create_repository')
 
       // 步骤 2: 推送模板代码 (20-50%)
+      await this.initializationSteps.startStep(projectId, 'push_template')
       await this.updateStepProgress(job, 'push_template', 0, '准备推送模板代码...')
 
       // 获取项目信息用于模板变量
@@ -144,8 +149,10 @@ export class ProjectInitializationWorker implements OnModuleInit {
       )
 
       await this.updateStepProgress(job, 'push_template', 100, '模板代码推送完成')
+      await this.initializationSteps.completeStep(projectId, 'push_template')
 
       // 步骤 3: 创建数据库记录 (50-60%)
+      await this.initializationSteps.startStep(projectId, 'create_database_records')
       await this.updateStepProgress(job, 'create_database_records', 0, '创建数据库记录...')
 
       const dbRepository = await this.createRepositoryRecord(
@@ -155,8 +162,10 @@ export class ProjectInitializationWorker implements OnModuleInit {
       )
 
       await this.updateStepProgress(job, 'create_database_records', 100, '数据库记录已创建')
+      await this.initializationSteps.completeStep(projectId, 'create_database_records')
 
       // 步骤 4: 配置 GitOps (60-90%)
+      await this.initializationSteps.startStep(projectId, 'setup_gitops')
       await this.updateStepProgress(job, 'setup_gitops', 0, '开始配置 GitOps...')
 
       const gitopsCreated = await this.createGitOpsResources(
@@ -169,6 +178,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
 
       if (gitopsCreated) {
         await this.updateStepProgress(job, 'setup_gitops', 100, 'GitOps 资源创建完成')
+        await this.initializationSteps.completeStep(projectId, 'setup_gitops')
       } else {
         await this.updateStepProgress(
           job,
@@ -176,31 +186,24 @@ export class ProjectInitializationWorker implements OnModuleInit {
           100,
           'GitOps 资源创建跳过（Flux 未安装）',
         )
+        await this.initializationSteps.skipStep(projectId, 'setup_gitops', 'Flux 未安装')
       }
 
       // 步骤 5: 完成初始化 (90-100%)
+      await this.initializationSteps.startStep(projectId, 'finalize')
       await this.updateStepProgress(job, 'finalize', 0, '更新项目状态...')
 
       await this.db
         .update(schema.projects)
         .set({
           status: 'active',
-          initializationStatus: {
-            step: 'completed',
-            progress: 100,
-            completedSteps: [
-              'create_repository',
-              'push_template',
-              'create_database_records',
-              'setup_gitops',
-              'finalize',
-            ],
-          },
+          initializationCompletedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(schema.projects.id, projectId))
 
       await this.updateStepProgress(job, 'finalize', 100, '项目初始化完成！')
+      await this.initializationSteps.completeStep(projectId, 'finalize')
 
       // 标记完成（自动发布完成事件）
       await this.progressManager.markCompleted(projectId)
@@ -217,17 +220,23 @@ export class ProjectInitializationWorker implements OnModuleInit {
       this.logger.error(`Failed to initialize project ${projectId}:`, error)
       await job.log(`初始化失败: ${error instanceof Error ? error.message : '未知错误'}`)
 
+      // 标记当前步骤失败
+      const currentStep = await this.initializationSteps.getCurrentStep(projectId)
+      if (currentStep && currentStep.status === 'running') {
+        await this.initializationSteps.failStep(
+          projectId,
+          currentStep.step,
+          error instanceof Error ? error.message : '未知错误',
+          error instanceof Error ? error.stack : undefined,
+        )
+      }
+
       // 更新项目状态为失败
       await this.db
         .update(schema.projects)
         .set({
           status: 'failed',
-          initializationStatus: {
-            step: 'failed',
-            progress: 0,
-            error: error instanceof Error ? error.message : '项目初始化失败',
-            completedSteps: ['create_project', 'load_template', 'create_environments'],
-          },
+          initializationError: error instanceof Error ? error.message : '项目初始化失败',
           updatedAt: new Date(),
         })
         .where(eq(schema.projects.id, projectId))
@@ -398,7 +407,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
         fullName: repoInfo.fullName,
         cloneUrl: repoInfo.cloneUrl,
         defaultBranch: repoInfo.defaultBranch,
-        syncStatus: 'success',
+        status: 'success',
         lastSyncAt: new Date(),
       })
       .returning()
@@ -468,13 +477,13 @@ export class ProjectInitializationWorker implements OnModuleInit {
 
       try {
         // 获取用户的 OAuth 账户
-        const oauthAccount = await this.oauthAccounts.getAccountByProvider(
+        const gitConnection = await this.gitConnections.getConnectionByProvider(
           userId,
           repository.provider as 'github' | 'gitlab',
         )
 
-        if (oauthAccount?.accessToken && oauthAccount.status === 'active') {
-          accessToken = oauthAccount.accessToken
+        if (gitConnection?.accessToken && gitConnection.status === 'active') {
+          accessToken = gitConnection.accessToken
           this.logger.info(`✅ Retrieved OAuth token for ${repository.provider}`)
         } else {
           this.logger.warn(`No valid OAuth token found for ${repository.provider}`)
@@ -562,27 +571,27 @@ export class ProjectInitializationWorker implements OnModuleInit {
     this.logger.info(`Resolving OAuth token for user ${userId}, provider: ${repository.provider}`)
 
     try {
-      // 从数据库获取 OAuth 账户
-      const oauthAccount = await this.oauthAccounts.getAccountByProvider(
+      // 从数据库获取 Git 连接
+      const gitConnection = await this.gitConnections.getConnectionByProvider(
         userId,
         repository.provider,
       )
 
-      if (!oauthAccount) {
+      if (!gitConnection) {
         const providerName = repository.provider === 'github' ? 'GitHub' : 'GitLab'
         throw new Error(
           `未找到 ${providerName} OAuth 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
         )
       }
 
-      if (!oauthAccount.accessToken || oauthAccount.status !== 'active') {
+      if (!gitConnection.accessToken || gitConnection.status !== 'active') {
         const providerName = repository.provider === 'github' ? 'GitHub' : 'GitLab'
         throw new Error(`${providerName} 访问令牌无效，请重新连接账户`)
       }
 
       return {
         ...repository,
-        accessToken: oauthAccount.accessToken,
+        accessToken: gitConnection.accessToken,
       }
     } catch (error) {
       this.logger.error(`Failed to resolve OAuth token:`, error)

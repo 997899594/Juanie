@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useAppStore } from '@/stores/app'
-import { useAIAssistants, type AIAssistant, type ChatMessage } from '@/composables/useAIAssistants'
+import { useAIAssistants, type AIAssistant } from '@/composables/useAIAssistants'
 import PageContainer from '@/components/PageContainer.vue'
 import {
   Button,
@@ -10,22 +10,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  Badge,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-  Label,
   Textarea,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Separator,
 } from '@juanie/ui'
 import {
   Bot,
@@ -65,53 +50,6 @@ const selectedRating = ref(0)
 
 // 创建助手对话框
 const showCreateDialog = ref(false)
-const createForm = ref<{
-  name: string
-  type: 'code_review' | 'devops_engineer' | 'cost_optimizer' | 'security_analyst'
-  systemPrompt: string
-  provider: 'openai' | 'anthropic' | 'google' | 'ollama'
-  model: string
-}>({
-  name: '',
-  type: 'code_review',
-  systemPrompt: '',
-  provider: 'ollama',
-  model: 'llama2',
-})
-
-// 创建助手
-async function createAssistant() {
-  if (!appStore.currentOrganizationId) return
-  
-  try {
-    await trpc.aiAssistants.create.mutate({
-      organizationId: appStore.currentOrganizationId,
-      name: createForm.value.name,
-      type: createForm.value.type,
-      systemPrompt: createForm.value.systemPrompt,
-      modelConfig: {
-        provider: createForm.value.provider,
-        model: createForm.value.model,
-        temperature: 0.7,
-        maxTokens: 2000,
-      },
-    })
-    
-    showCreateDialog.value = false
-    createForm.value = {
-      name: '',
-      type: 'code_review',
-      systemPrompt: '',
-      provider: 'ollama',
-      model: 'llama2',
-    }
-    
-    // 刷新列表
-    await fetchAssistants({ organizationId: appStore.currentOrganizationId })
-  } catch (error) {
-    log.error('Failed to create assistant:', error)
-  }
-}
 
 // 助手类型映射
 const assistantTypeMap: Record<string, { label: string; icon: string; color: string }> = {
@@ -241,7 +179,7 @@ onMounted(async () => {
                     {{ getAssistantTypeInfo(assistant.type).label }}
                   </div>
                   <div class="text-xs text-muted-foreground mt-1">
-                    {{ getRatingStars(assistant.averageRating) }}
+                    {{ getRatingStars(null) }}
                   </div>
                 </div>
               </div>

@@ -77,8 +77,7 @@ const props = defineProps<{
 
 // 使用 TanStack Query - 自动获取数据
 const { deployments, loading } = useDeployments({ projectId: props.projectId })
-const { useEnvironmentsQuery } = useEnvironments()
-const { data: environments } = useEnvironmentsQuery(props.projectId)
+const { environments } = useEnvironments(computed(() => props.projectId))
 
 const showGitOpsDeployDialog = ref(false)
 const showDeployDialog = ref(false)
@@ -89,7 +88,7 @@ watch(
   () => environments.value,
   (envs) => {
     if (envs && envs.length > 0 && !selectedEnvironmentId.value) {
-      selectedEnvironmentId.value = envs[0].id
+      selectedEnvironmentId.value = envs[0]?.id || ''
     }
   },
   { immediate: true }
@@ -99,7 +98,7 @@ const formatDate = (date: string) => {
   return new Date(date).toLocaleString('zh-CN')
 }
 
-const handleGitOpsDeploy = (result: any) => {
+const handleGitOpsDeploy = () => {
   showGitOpsDeployDialog.value = false
   // TanStack Query 会自动刷新数据（通过 mutation 的 invalidateQueries）
 }

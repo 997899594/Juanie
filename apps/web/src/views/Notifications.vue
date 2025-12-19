@@ -112,7 +112,7 @@
               </div>
               
               <p class="text-sm text-muted-foreground">
-                {{ notification.content }}
+                {{ notification.message }}
               </p>
               
               <div class="flex items-center gap-4 text-xs text-muted-foreground">
@@ -172,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { Badge,
   Button,
   Card,

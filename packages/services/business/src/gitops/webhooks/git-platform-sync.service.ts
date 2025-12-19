@@ -16,14 +16,14 @@ import { ProjectsService } from '../../projects/projects.service'
  */
 @Injectable()
 export class GitPlatformSyncService {
-
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly projectMembersService: ProjectMembersService,
     readonly _projectsService: ProjectsService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(GitPlatformSyncService.name)}
+    this.logger.setContext(GitPlatformSyncService.name)
+  }
 
   /**
    * 处理仓库删除事件
@@ -51,37 +51,36 @@ export class GitPlatformSyncService {
     })
 
     try {
-      // 查找关联的项目
-      const projects = await this.db.query.projects.findMany({
+      // 查找关联的仓库
+      const repositories = await this.db.query.repositories.findMany({
         where: and(
-          eq(schema.projects.gitProvider, event.provider),
-          eq(schema.projects.gitRepoUrl, event.repository.gitId),
+          eq(schema.repositories.provider, event.provider),
+          eq(schema.repositories.fullName, event.repository.fullName),
         ),
       })
 
-      if (projects.length === 0) {
-        this.logger.warn('No projects found for deleted repository', {
+      if (repositories.length === 0) {
+        this.logger.warn('No repositories found for deleted repository', {
           repositoryId: event.repository.gitId,
         })
         return
       }
 
-      // 更新所有关联的项目
-      for (const project of projects) {
+      // 更新所有关联的仓库和项目
+      for (const repository of repositories) {
+        const project = await this.db.query.projects.findFirst({
+          where: eq(schema.projects.id, repository.projectId),
+        })
+
+        if (!project) continue
+
         this.logger.info('Marking project as Git disconnected', {
           projectId: project.id,
           projectName: project.name,
         })
 
-        // 清除 Git 相关信息
-        await this.db
-          .update(schema.projects)
-          .set({
-            gitRepoUrl: null,
-            gitRepoName: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.projects.id, project.id))
+        // 删除仓库记录
+        await this.db.delete(schema.repositories).where(eq(schema.repositories.id, repository.id))
 
         // 记录同步日志
         await this.db.insert(schema.gitSyncLogs).values({
@@ -103,7 +102,7 @@ export class GitPlatformSyncService {
       }
 
       this.logger.info('Successfully handled repository deleted event', {
-        projectsAffected: projects.length,
+        projectsAffected: repositories.length,
       })
     } catch (error) {
       this.logger.error('Error handling repository deleted event:', error)
@@ -145,29 +144,26 @@ export class GitPlatformSyncService {
 
     try {
       // 查找关联的项目
-      const project = await this.db.query.projects.findFirst({
-        where: and(
-          eq(schema.projects.gitProvider, event.provider),
-          eq(schema.projects.gitRepoUrl, event.repository.gitId),
-        ),
-      })
+      const result = await this.findProjectByRepository(event.provider, event.repository.fullName)
 
-      if (!project) {
+      if (!result) {
         this.logger.warn('No project found for repository', {
           repositoryId: event.repository.gitId,
         })
         return
       }
 
+      const { project } = result
+
       // 查找关联的用户
-      const gitAccount = await this.db.query.userGitAccounts.findFirst({
+      const gitConnection = await this.db.query.gitConnections.findFirst({
         where: and(
-          eq(schema.userGitAccounts.provider, event.provider),
-          eq(schema.userGitAccounts.gitUserId, event.collaborator.gitId),
+          eq(schema.gitConnections.provider, event.provider),
+          eq(schema.gitConnections.providerAccountId, event.collaborator.gitId),
         ),
       })
 
-      if (!gitAccount) {
+      if (!gitConnection) {
         this.logger.warn('No user found for Git collaborator', {
           gitLogin: event.collaborator.gitLogin,
           gitId: event.collaborator.gitId,
@@ -198,13 +194,13 @@ export class GitPlatformSyncService {
       const existingMember = await this.db.query.projectMembers.findFirst({
         where: and(
           eq(schema.projectMembers.projectId, project.id),
-          eq(schema.projectMembers.userId, gitAccount.userId),
+          eq(schema.projectMembers.userId, gitConnection.userId),
         ),
       })
 
       if (existingMember) {
         this.logger.info('User is already a project member', {
-          userId: gitAccount.userId,
+          userId: gitConnection.userId,
           projectId: project.id,
         })
         return
@@ -216,12 +212,12 @@ export class GitPlatformSyncService {
       // 添加为项目成员
       // 使用系统用户 ID 作为操作者（webhook 触发）
       await this.projectMembersService.addMember('system', project.id, {
-        userId: gitAccount.userId,
+        userId: gitConnection.userId,
         role,
       })
 
       this.logger.info('Successfully added collaborator as project member', {
-        userId: gitAccount.userId,
+        userId: gitConnection.userId,
         projectId: project.id,
         role,
       })
@@ -231,7 +227,7 @@ export class GitPlatformSyncService {
         syncType: 'member',
         action: 'add',
         projectId: project.id,
-        userId: gitAccount.userId,
+        userId: gitConnection.userId,
         provider: event.provider,
         status: 'success',
         gitResourceId: event.collaborator.gitId,
@@ -297,29 +293,26 @@ export class GitPlatformSyncService {
 
     try {
       // 查找关联的项目
-      const project = await this.db.query.projects.findFirst({
-        where: and(
-          eq(schema.projects.gitProvider, event.provider),
-          eq(schema.projects.gitRepoUrl, event.repository.gitId),
-        ),
-      })
+      const result = await this.findProjectByRepository(event.provider, event.repository.fullName)
 
-      if (!project) {
+      if (!result) {
         this.logger.warn('No project found for repository', {
           repositoryId: event.repository.gitId,
         })
         return
       }
 
+      const { project } = result
+
       // 查找关联的用户
-      const gitAccount = await this.db.query.userGitAccounts.findFirst({
+      const gitConnection = await this.db.query.gitConnections.findFirst({
         where: and(
-          eq(schema.userGitAccounts.provider, event.provider),
-          eq(schema.userGitAccounts.gitUserId, event.collaborator.gitId),
+          eq(schema.gitConnections.provider, event.provider),
+          eq(schema.gitConnections.providerAccountId, event.collaborator.gitId),
         ),
       })
 
-      if (!gitAccount) {
+      if (!gitConnection) {
         this.logger.warn('No user found for Git collaborator', {
           gitLogin: event.collaborator.gitLogin,
         })
@@ -329,11 +322,11 @@ export class GitPlatformSyncService {
       // 从项目成员中移除
       // 使用系统用户 ID 作为操作者（webhook 触发）
       await this.projectMembersService.removeMember('system', project.id, {
-        userId: gitAccount.userId,
+        userId: gitConnection.userId,
       })
 
       this.logger.info('Successfully removed collaborator from project', {
-        userId: gitAccount.userId,
+        userId: gitConnection.userId,
         projectId: project.id,
       })
 
@@ -342,7 +335,7 @@ export class GitPlatformSyncService {
         syncType: 'member',
         action: 'remove',
         projectId: project.id,
-        userId: gitAccount.userId,
+        userId: gitConnection.userId,
         provider: event.provider,
         status: 'success',
         gitResourceId: event.collaborator.gitId,
@@ -409,38 +402,34 @@ export class GitPlatformSyncService {
     })
 
     try {
-      // 查找关联的项目
-      const projects = await this.db.query.projects.findMany({
-        where: and(
-          eq(schema.projects.gitProvider, event.provider),
-          eq(schema.projects.gitRepoUrl, event.repository.gitId),
-        ),
-      })
+      // 查找关联的项目和仓库
+      const results = await this.findProjectsByRepository(event.provider, event.repository.fullName)
 
-      if (projects.length === 0) {
+      if (results.length === 0) {
         this.logger.warn('No projects found for repository', {
           repositoryId: event.repository.gitId,
         })
         return
       }
 
-      // 更新所有关联的项目
-      for (const project of projects) {
+      // 更新所有关联的仓库
+      for (const { project, repository } of results) {
         const updates: any = {
           updatedAt: new Date(),
         }
 
-        // 如果仓库名称变更,更新项目的 Git 仓库信息
+        // 如果仓库名称变更,更新仓库信息
         if (event.changes.name) {
-          updates.gitRepoName = event.repository.name
-          updates.gitRepoUrl = event.repository.url
+          updates.fullName = event.repository.fullName
+          updates.cloneUrl = event.repository.url
         }
 
-        // 如果默认分支变更,更新项目配置
+        // 如果默认分支变更,更新仓库配置
         if (event.changes.defaultBranch) {
-          // TODO: 更新项目的默认分支配置
+          updates.defaultBranch = event.changes.defaultBranch.to
           this.logger.info('Default branch changed', {
             projectId: project.id,
+            repositoryId: repository.id,
             from: event.changes.defaultBranch.from,
             to: event.changes.defaultBranch.to,
           })
@@ -450,17 +439,18 @@ export class GitPlatformSyncService {
         if (event.changes.visibility) {
           this.logger.info('Repository visibility changed', {
             projectId: project.id,
+            repositoryId: repository.id,
             from: event.changes.visibility.from,
             to: event.changes.visibility.to,
           })
         }
 
-        // 更新项目
+        // 更新仓库
         if (Object.keys(updates).length > 1) {
           await this.db
-            .update(schema.projects)
+            .update(schema.repositories)
             .set(updates)
-            .where(eq(schema.projects.id, project.id))
+            .where(eq(schema.repositories.id, repository.id))
         }
 
         // 记录同步日志
@@ -483,7 +473,7 @@ export class GitPlatformSyncService {
       }
 
       this.logger.info('Successfully handled repository updated event', {
-        projectsAffected: projects.length,
+        projectsAffected: results.length,
       })
     } catch (error) {
       this.logger.error('Error handling repository updated event:', error)
@@ -511,5 +501,64 @@ export class GitPlatformSyncService {
 
     // 默认为 viewer
     return 'viewer'
+  }
+
+  /**
+   * 通过 Git 仓库信息查找项目
+   * @private
+   */
+  private async findProjectByRepository(
+    provider: 'github' | 'gitlab',
+    repositoryFullName: string,
+  ): Promise<{ project: any; repository: any } | null> {
+    const repository = await this.db.query.repositories.findFirst({
+      where: and(
+        eq(schema.repositories.provider, provider),
+        eq(schema.repositories.fullName, repositoryFullName),
+      ),
+    })
+
+    if (!repository) {
+      return null
+    }
+
+    const project = await this.db.query.projects.findFirst({
+      where: eq(schema.projects.id, repository.projectId),
+    })
+
+    if (!project) {
+      return null
+    }
+
+    return { project, repository }
+  }
+
+  /**
+   * 通过 Git 仓库信息查找所有关联的项目
+   * @private
+   */
+  private async findProjectsByRepository(
+    provider: 'github' | 'gitlab',
+    repositoryFullName: string,
+  ): Promise<Array<{ project: any; repository: any }>> {
+    const repositories = await this.db.query.repositories.findMany({
+      where: and(
+        eq(schema.repositories.provider, provider),
+        eq(schema.repositories.fullName, repositoryFullName),
+      ),
+    })
+
+    const results = []
+    for (const repository of repositories) {
+      const project = await this.db.query.projects.findFirst({
+        where: eq(schema.projects.id, repository.projectId),
+      })
+
+      if (project) {
+        results.push({ project, repository })
+      }
+    }
+
+    return results
   }
 }

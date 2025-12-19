@@ -287,7 +287,7 @@ export class AuthService {
           : process.env.GITLAB_BASE_URL || 'https://gitlab.com'
 
       await tx
-        .insert(schema.oauthAccounts)
+        .insert(schema.gitConnections)
         .values({
           userId: user.id,
           provider: data.provider,
@@ -297,13 +297,16 @@ export class AuthService {
           expiresAt: data.expiresAt,
           status: 'active',
           serverUrl: serverUrl.replace(/\/+$/, ''), // 移除尾部斜杠
-          serverType: 'cloud',
+          purpose: 'auth',
+          username: data.username,
+          email: data.email,
+          avatarUrl: data.avatarUrl,
         })
         .onConflictDoUpdate({
           target: [
-            schema.oauthAccounts.userId,
-            schema.oauthAccounts.provider,
-            schema.oauthAccounts.serverUrl,
+            schema.gitConnections.userId,
+            schema.gitConnections.provider,
+            schema.gitConnections.serverUrl,
           ],
           set: {
             providerAccountId: sql`excluded.provider_account_id`,
@@ -311,6 +314,9 @@ export class AuthService {
             refreshToken: sql`excluded.refresh_token`,
             expiresAt: sql`excluded.expires_at`,
             status: sql`excluded.status`,
+            username: sql`excluded.username`,
+            email: sql`excluded.email`,
+            avatarUrl: sql`excluded.avatar_url`,
             updatedAt: sql`now()`,
           },
         })
@@ -372,9 +378,9 @@ export class AuthService {
       login: string
     }
 
-    // 保存或更新 OAuth 账户
+    // 保存或更新 Git 连接
     await this.db
-      .insert(schema.oauthAccounts)
+      .insert(schema.gitConnections)
       .values({
         userId,
         provider: 'github',
@@ -382,18 +388,20 @@ export class AuthService {
         accessToken: tokens.accessToken(),
         status: 'active',
         serverUrl: 'https://github.com',
-        serverType: 'cloud',
+        purpose: 'auth',
+        username: githubUser.login,
       })
       .onConflictDoUpdate({
         target: [
-          schema.oauthAccounts.userId,
-          schema.oauthAccounts.provider,
-          schema.oauthAccounts.serverUrl,
+          schema.gitConnections.userId,
+          schema.gitConnections.provider,
+          schema.gitConnections.serverUrl,
         ],
         set: {
           providerAccountId: sql`excluded.provider_account_id`,
           accessToken: sql`excluded.access_token`,
           status: sql`excluded.status`,
+          username: sql`excluded.username`,
           updatedAt: sql`now()`,
         },
       })
@@ -425,9 +433,9 @@ export class AuthService {
       username: string
     }
 
-    // 保存或更新 OAuth 账户（包含 refresh token）
+    // 保存或更新 Git 连接（包含 refresh token）
     await this.db
-      .insert(schema.oauthAccounts)
+      .insert(schema.gitConnections)
       .values({
         userId,
         provider: 'gitlab',
@@ -437,13 +445,14 @@ export class AuthService {
         expiresAt: tokens.accessTokenExpiresAt(),
         status: 'active',
         serverUrl: gitlabBase,
-        serverType: 'cloud',
+        purpose: 'auth',
+        username: gitlabUser.username,
       })
       .onConflictDoUpdate({
         target: [
-          schema.oauthAccounts.userId,
-          schema.oauthAccounts.provider,
-          schema.oauthAccounts.serverUrl,
+          schema.gitConnections.userId,
+          schema.gitConnections.provider,
+          schema.gitConnections.serverUrl,
         ],
         set: {
           providerAccountId: sql`excluded.provider_account_id`,
@@ -451,6 +460,7 @@ export class AuthService {
           refreshToken: sql`excluded.refresh_token`,
           expiresAt: sql`excluded.expires_at`,
           status: sql`excluded.status`,
+          username: sql`excluded.username`,
           updatedAt: sql`now()`,
         },
       })

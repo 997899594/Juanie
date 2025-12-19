@@ -9,17 +9,20 @@ export { AuditLogsService } from './audit-logs/audit-logs.service'
 // 认证服务
 export { AuthModule } from './auth/auth.module'
 export { AuthService } from './auth/auth.service'
-export { OAuthAccountsService } from './auth/oauth-accounts.service'
+// OAuthAccountsService 已被 GitConnectionsService 替代
 // 加密服务
 export { EncryptionModule } from './encryption/encryption.module'
 export { EncryptionService } from './encryption/encryption.service'
 // 模块导出
 export { FoundationModule } from './foundation.module'
 export { GitAccountLinkingService } from './git-accounts/git-account-linking.service'
-// Git 账户服务
-export { GitAccountsModule } from './git-accounts/git-accounts.module'
+// Git OAuth 服务
+export { GitOAuthModule } from './git-accounts/git-accounts.module'
 export { GitHubOAuthService } from './git-accounts/github-oauth.service'
 export { GitLabOAuthService } from './git-accounts/gitlab-oauth.service'
+// Git 连接服务（新）
+export { GitConnectionsModule } from './git-connections/git-connections.module'
+export { GitConnectionsService } from './git-connections/git-connections.service'
 // 通知服务
 export { NotificationsModule } from './notifications/notifications.module'
 export { NotificationsService } from './notifications/notifications.service'

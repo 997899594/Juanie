@@ -1,5 +1,5 @@
 import { jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { oauthAccounts } from './oauth-accounts.schema'
+import { gitConnections } from './git-connections.schema'
 import { projects } from './projects.schema'
 import { users } from './users.schema'
 
@@ -25,10 +25,10 @@ export const projectGitAuth = pgTable('project_git_auth', {
   // 认证类型
   authType: text('auth_type').notNull().default('oauth'), // 'oauth' | 'project_token' | 'pat' | 'github_app' | 'gitlab_group_token'
 
-  // OAuth 方式（关联到 oauthAccounts）
+  // OAuth 方式（关联到 gitConnections）
   // 优势：简单、快速、用户体验好
   // 劣势：绑定到个人账户、权限范围大
-  oauthAccountId: uuid('oauth_account_id').references(() => oauthAccounts.id, {
+  oauthAccountId: uuid('oauth_account_id').references(() => gitConnections.id, {
     onDelete: 'set null',
   }),
 

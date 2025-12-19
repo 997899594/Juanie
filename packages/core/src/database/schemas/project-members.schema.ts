@@ -16,9 +16,9 @@ export const projectMembers = pgTable(
     joinedAt: timestamp('joined_at').notNull().defaultNow(),
 
     // Git 同步状态 (用于个人工作空间的项目级协作)
-    gitSyncStatus: text('git_sync_status').default('pending'), // 'pending' | 'synced' | 'failed'
-    gitSyncedAt: timestamp('git_synced_at'),
-    gitSyncError: text('git_sync_error'),
+    status: text('status').default('pending'), // 'pending' | 'synced' | 'failed'
+    syncedAt: timestamp('synced_at'),
+    syncError: text('sync_error'),
   },
   (table) => [
     uniqueIndex('project_members_unique').on(table.projectId, table.userId),
@@ -29,7 +29,7 @@ export const projectMembers = pgTable(
     index('idx_project_members_role').on(table.role),
 
     // 原有索引
-    index('project_members_git_sync_status_idx').on(table.gitSyncStatus),
+    index('project_members_status_idx').on(table.status),
   ],
 )
 

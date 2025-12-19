@@ -89,7 +89,7 @@ export class RepositoryWorker implements OnModuleInit {
             fullName: result.fullName,
             cloneUrl: result.cloneUrl,
             defaultBranch: result.defaultBranch || 'main',
-            syncStatus: 'success',
+            status: 'success',
             lastSyncAt: new Date(),
           })
           .returning()
@@ -129,16 +129,7 @@ export class RepositoryWorker implements OnModuleInit {
           .update(schema.projects)
           .set({
             status: 'active',
-            initializationStatus: {
-              step: 'completed',
-              progress: 100,
-              completedSteps: [
-                'create_project',
-                'load_template',
-                'create_environments',
-                'setup_repository',
-              ],
-            },
+            initializationCompletedAt: new Date(),
             updatedAt: new Date(),
           })
           .where(eq(schema.projects.id, projectId))
@@ -162,12 +153,7 @@ export class RepositoryWorker implements OnModuleInit {
           .update(schema.projects)
           .set({
             status: 'failed',
-            initializationStatus: {
-              step: 'failed',
-              progress: 0,
-              error: error instanceof Error ? error.message : '仓库创建失败',
-              completedSteps: ['create_project', 'load_template', 'create_environments'],
-            },
+            initializationError: error instanceof Error ? error.message : '仓库创建失败',
             updatedAt: new Date(),
           })
           .where(eq(schema.projects.id, projectId))
@@ -224,7 +210,7 @@ export class RepositoryWorker implements OnModuleInit {
       if (repositoryId) {
         await this.db
           .update(schema.repositories)
-          .set({ syncStatus: 'archived', updatedAt: new Date() })
+          .set({ status: 'archived', updatedAt: new Date() })
           .where(eq(schema.repositories.id, repositoryId))
         await job.log('数据库状态已更新')
         this.logger.info(`Database record updated for repository ${repositoryId}`)

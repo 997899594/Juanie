@@ -33,6 +33,7 @@ export { ProjectCollaborationSyncService } from './gitops/git-sync/project-colla
 export { K3sService } from './gitops/k3s/k3s.service'
 export { GitPlatformSyncService } from './gitops/webhooks/git-platform-sync.service'
 export { PipelinesService } from './pipelines/pipelines.service'
+export { InitializationStepsService } from './projects/initialization/initialization-steps.service'
 export { ProjectMembersModule } from './projects/project-members.module'
 export { ProjectMembersService } from './projects/project-members.service'
 export { ProjectStatusService } from './projects/project-status.service'

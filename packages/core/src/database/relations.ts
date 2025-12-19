@@ -11,16 +11,17 @@ import { relations } from 'drizzle-orm'
 // 导入所有表定义
 import {
   environments,
+  gitConnections,
   gitSyncLogs,
   organizationMembers,
   organizations,
+  projectInitializationSteps,
   projectMembers,
   projects,
   projectTemplates,
   teamMembers,
   teamProjects,
   teams,
-  userGitAccounts,
   users,
 } from './schemas'
 
@@ -28,7 +29,7 @@ import {
 // Users Relations
 // ============================================================================
 export const usersRelations = relations(users, ({ many }) => ({
-  gitAccounts: many(userGitAccounts),
+  gitConnections: many(gitConnections),
   projectMembers: many(projectMembers),
   organizationMembers: many(organizationMembers),
   teamMembers: many(teamMembers),
@@ -72,6 +73,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   members: many(projectMembers),
   environments: many(environments),
   teamProjects: many(teamProjects),
+  initializationSteps: many(projectInitializationSteps),
 }))
 
 export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
@@ -130,11 +132,11 @@ export const teamProjectsRelations = relations(teamProjects, ({ one }) => ({
 }))
 
 // ============================================================================
-// User Git Accounts Relations
+// Git Connections Relations
 // ============================================================================
-export const userGitAccountsRelations = relations(userGitAccounts, ({ one }) => ({
+export const gitConnectionsRelations = relations(gitConnections, ({ one }) => ({
   user: one(users, {
-    fields: [userGitAccounts.userId],
+    fields: [gitConnections.userId],
     references: [users.id],
   }),
 }))
@@ -156,3 +158,16 @@ export const gitSyncLogsRelations = relations(gitSyncLogs, ({ one }) => ({
     references: [users.id],
   }),
 }))
+
+// ============================================================================
+// Project Initialization Steps Relations
+// ============================================================================
+export const projectInitializationStepsRelations = relations(
+  projectInitializationSteps,
+  ({ one }) => ({
+    project: one(projects, {
+      fields: [projectInitializationSteps.projectId],
+      references: [projects.id],
+    }),
+  }),
+)

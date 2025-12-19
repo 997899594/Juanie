@@ -19,7 +19,7 @@ export const deployments = pgTable(
 
     // 版本信息
     version: text('version').notNull(),
-    commitHash: text('commit_hash').notNull(),
+    commitHash: text('commit_hash').notNull(), // 完整的 commit SHA（显示时截取前 7 位）
     commitMessage: text('commit_message'), // 提交信息
     branch: text('branch').notNull(),
 
@@ -36,8 +36,7 @@ export const deployments = pgTable(
 
     // GitOps 相关字段
     gitopsResourceId: uuid('gitops_resource_id').references(() => gitopsResources.id),
-    deploymentMethod: text('deployment_method').default('manual'), // 'manual' | 'gitops-ui' | 'gitops-git' | 'pipeline'
-    gitCommitSha: text('git_commit_sha'), // 用于 GitOps 的完整 commit SHA
+    deploymentMethod: text('deployment_method').default('manual'), // 'manual' | 'gitops' (简化为 2 种)
 
     deletedAt: timestamp('deleted_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),

@@ -9,7 +9,7 @@
 import { Badge } from '@juanie/ui'
 import { CheckCircle, XCircle, Clock, Loader2, AlertCircle } from 'lucide-vue-next'
 
-defineProps<{
+const props = defineProps<{
   status: string
 }>()
 

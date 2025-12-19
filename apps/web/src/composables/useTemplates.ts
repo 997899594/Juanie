@@ -1,7 +1,7 @@
 import { log } from '@juanie/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import type { AppRouter } from '@/lib/trpc'
 import { isTRPCClientError, trpc } from '@/lib/trpc'
@@ -126,7 +126,7 @@ export function useTemplates() {
     mutationFn: async (data: RouterInput['projectTemplates']['create']) => {
       return await trpc.projectTemplates.create.mutate(data)
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['templates', 'list'] })
       toast.success('创建成功', `模板 "${variables.name}" 已创建`)
     },

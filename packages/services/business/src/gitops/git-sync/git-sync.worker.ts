@@ -125,25 +125,25 @@ export class GitSyncWorker implements OnModuleInit {
       // 推断 provider
       const provider = this.inferProviderFromAuthType(projectAuth.authType)
 
-      // 获取用户的 Git 账号信息
-      const [userGitAccount] = await this.db
+      // 获取用户的 Git 连接信息
+      const [gitConnection] = await this.db
         .select()
-        .from(schema.userGitAccounts)
+        .from(schema.gitConnections)
         .where(
           and(
-            eq(schema.userGitAccounts.userId, userId),
-            eq(schema.userGitAccounts.provider, provider),
+            eq(schema.gitConnections.userId, userId),
+            eq(schema.gitConnections.provider, provider),
           ),
         )
         .limit(1)
 
-      if (!userGitAccount) {
+      if (!gitConnection) {
         throw new Error(`User ${userId} has not linked their ${provider} account`)
       }
 
       // 检查 token 是否过期
-      if (userGitAccount.syncStatus !== 'active') {
-        throw new Error(`User ${userId}'s ${provider} account is ${userGitAccount.syncStatus}`)
+      if (gitConnection.status !== 'active') {
+        throw new Error(`User ${userId}'s ${provider} account is ${gitConnection.status}`)
       }
 
       // 映射权限
@@ -164,7 +164,7 @@ export class GitSyncWorker implements OnModuleInit {
         provider as 'github' | 'gitlab',
         accessToken,
         repoFullName,
-        userGitAccount.gitUsername,
+        gitConnection.username,
         platformPermission as string,
       )
 
@@ -177,7 +177,7 @@ export class GitSyncWorker implements OnModuleInit {
           metadata: {
             attemptCount: (job.attemptsMade || 0) + 1,
             gitApiResponse: {
-              username: userGitAccount.gitUsername,
+              username: gitConnection.username,
               permission: platformPermission,
             },
           },
@@ -241,19 +241,19 @@ export class GitSyncWorker implements OnModuleInit {
 
       const provider = this.inferProviderFromAuthType(projectAuth.authType)
 
-      // 获取用户的 Git 账号信息
-      const [userGitAccount] = await this.db
+      // 获取用户的 Git 连接信息
+      const [gitConnection] = await this.db
         .select()
-        .from(schema.userGitAccounts)
+        .from(schema.gitConnections)
         .where(
           and(
-            eq(schema.userGitAccounts.userId, userId),
-            eq(schema.userGitAccounts.provider, provider),
+            eq(schema.gitConnections.userId, userId),
+            eq(schema.gitConnections.provider, provider),
           ),
         )
         .limit(1)
 
-      if (!userGitAccount) {
+      if (!gitConnection) {
         // 用户没有关联 Git 账号，无需移除
         this.logger.warn(`User ${userId} has no ${provider} account, skipping removal`)
         await this.db
@@ -281,7 +281,7 @@ export class GitSyncWorker implements OnModuleInit {
         provider as 'github' | 'gitlab',
         accessToken,
         repoFullName,
-        userGitAccount.gitUsername,
+        gitConnection.username,
       )
 
       // 更新同步日志为成功
@@ -293,7 +293,7 @@ export class GitSyncWorker implements OnModuleInit {
           metadata: {
             attemptCount: (job.attemptsMade || 0) + 1,
             gitApiResponse: {
-              username: userGitAccount.gitUsername,
+              username: gitConnection.username,
               action: 'removed',
             },
           },
@@ -377,19 +377,19 @@ export class GitSyncWorker implements OnModuleInit {
       // 逐个同步成员
       for (const member of members) {
         try {
-          // 获取用户的 Git 账号
-          const [userGitAccount] = await this.db
+          // 获取用户的 Git 连接
+          const [gitConnection] = await this.db
             .select()
-            .from(schema.userGitAccounts)
+            .from(schema.gitConnections)
             .where(
               and(
-                eq(schema.userGitAccounts.userId, member.userId),
-                eq(schema.userGitAccounts.provider, provider),
+                eq(schema.gitConnections.userId, member.userId),
+                eq(schema.gitConnections.provider, provider),
               ),
             )
             .limit(1)
 
-          if (!userGitAccount) {
+          if (!gitConnection) {
             this.logger.warn(`User ${member.userId} has no Git account, skipping`)
             failCount++
             errors.push({
@@ -408,7 +408,7 @@ export class GitSyncWorker implements OnModuleInit {
             provider as 'github' | 'gitlab',
             accessToken,
             repoFullName,
-            userGitAccount.gitUsername,
+            gitConnection.username,
             platformPermission as string,
           )
 

@@ -33,13 +33,15 @@ export class GitSyncRouter {
         .input(
           z.object({
             provider: z.enum(['github', 'gitlab']),
-            gitUserId: z.string(),
-            gitUsername: z.string(),
-            gitEmail: z.string().optional(),
-            gitAvatarUrl: z.string().optional(),
+            providerAccountId: z.string(), // Git 平台的用户 ID
+            username: z.string(), // Git 用户名
+            email: z.string().optional(),
+            avatarUrl: z.string().optional(),
             accessToken: z.string(),
             refreshToken: z.string().optional(),
-            tokenExpiresAt: z.date().optional(),
+            expiresAt: z.date().optional(),
+            serverUrl: z.string(), // Git 服务器地址（必传）
+            serverType: z.enum(['cloud', 'self-hosted']).optional(),
           }),
         )
         .mutation(async ({ ctx, input }) => {
@@ -55,9 +57,9 @@ export class GitSyncRouter {
               account: {
                 id: account.id,
                 provider: account.provider,
-                gitUsername: account.gitUsername,
-                gitEmail: account.gitEmail,
-                syncStatus: account.syncStatus,
+                username: account.username,
+                email: account.email,
+                status: account.status,
                 connectedAt: account.connectedAt,
               },
             }

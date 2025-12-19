@@ -175,6 +175,5 @@ import {
   useTheme 
 } from '@juanie/ui'
 
-const { currentTheme, setTheme, toggleMode, themes, isDark } = useTheme()
-  const availableThemes = themes
+const { themes, currentTheme, setTheme, toggleMode, isDark } = useTheme()
 </script>

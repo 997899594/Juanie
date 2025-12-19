@@ -1,119 +1,45 @@
-import type {
-  ConfigChange,
-  ConfigChangePreview,
-  DeploymentConfig,
-  FluxHealth,
-  FluxResourceKind,
-  GitOpsResource,
-  SyncResult,
-  YAMLValidationResult,
-} from '@juanie/types'
+import type { ConfigChange, DeploymentConfig, FluxResourceKind } from '@juanie/types'
 import { log } from '@juanie/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { computed } from 'vue'
+import type { MaybeRef } from 'vue'
+import { computed, unref } from 'vue'
 import { isTRPCClientError, trpc } from '@/lib/trpc'
 import { useToast } from './useToast'
 
 /**
  * GitOps 管理 Composable (TanStack Query)
  */
-export function useGitOps() {
+export function useGitOps(projectId?: MaybeRef<string>) {
   const toast = useToast()
   const queryClient = useQueryClient()
+  const pid = computed(() => (projectId ? unref(projectId) : ''))
 
   // ==================== Queries ====================
 
   /**
    * 获取项目的 GitOps 资源列表
    */
-  function useGitOpsResourcesQuery(projectId: string) {
-    return useQuery({
-      queryKey: ['gitops', 'resources', projectId],
-      queryFn: async () => {
-        try {
-          return await trpc.gitops.listGitOpsResources.query({ projectId })
-        } catch (err) {
-          log.error('Failed to fetch GitOps resources:', err)
-          if (isTRPCClientError(err)) {
-            toast.error('获取 GitOps 资源失败', err.message)
-          }
-          throw err
+  const {
+    data: resources,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ['gitops', 'resources', pid],
+    queryFn: async () => {
+      if (!pid.value) return []
+      try {
+        return await trpc.gitops.listGitOpsResources.query({ projectId: pid.value })
+      } catch (err) {
+        log.error('Failed to fetch GitOps resources:', err)
+        if (isTRPCClientError(err)) {
+          toast.error('获取 GitOps 资源失败', err.message)
         }
-      },
-      staleTime: 1000 * 30, // 30 秒 - GitOps 资源状态变化较快
-      enabled: !!projectId,
-    })
-  }
-
-  /**
-   * 获取单个 GitOps 资源详情
-   */
-  function useGitOpsResourceQuery(resourceId: string) {
-    return useQuery({
-      queryKey: ['gitops', 'resource', resourceId],
-      queryFn: async () => {
-        try {
-          return await trpc.gitops.getGitOpsResource.query({ id: resourceId })
-        } catch (err) {
-          log.error('Failed to fetch GitOps resource:', err)
-          if (isTRPCClientError(err)) {
-            toast.error('获取资源详情失败', err.message)
-          }
-          throw err
-        }
-      },
-      staleTime: 1000 * 30,
-      enabled: !!resourceId,
-    })
-  }
-
-  /**
-   * 预览配置变更
-   */
-  function usePreviewChangesQuery(data: {
-    projectId: string
-    environmentId: string
-    changes: ConfigChange[]
-  }) {
-    return useQuery({
-      queryKey: ['gitops', 'preview', data.projectId, data.environmentId, data.changes],
-      queryFn: async () => {
-        try {
-          return (await trpc.gitops.previewChanges.query(data)) as ConfigChangePreview
-        } catch (err) {
-          log.error('Failed to preview changes:', err)
-          if (isTRPCClientError(err)) {
-            toast.error('预览变更失败', err.message)
-          }
-          throw err
-        }
-      },
-      staleTime: 0, // 不缓存预览结果
-      enabled: false, // 手动触发
-    })
-  }
-
-  /**
-   * 验证 YAML 语法
-   */
-  function useValidateYAMLQuery(content: string) {
-    return useQuery({
-      queryKey: ['gitops', 'validate-yaml', content],
-      queryFn: async () => {
-        try {
-          return (await trpc.gitops.validateYAML.query({ content })) as YAMLValidationResult
-        } catch (err) {
-          log.error('Failed to validate YAML:', err)
-          if (isTRPCClientError(err)) {
-            toast.error('验证 YAML 失败', err.message)
-          }
-          throw err
-        }
-      },
-      staleTime: 0,
-      enabled: false, // 手动触发
-    })
-  }
+        throw err
+      }
+    },
+    staleTime: 1000 * 30, // 30 秒 - GitOps 资源状态变化较快
+    enabled: computed(() => !!pid.value),
+  })
 
   // ==================== Mutations ====================
 
@@ -125,16 +51,16 @@ export function useGitOps() {
       projectId: string
       environmentId: string
       repositoryId: string
-      type: string
+      type: 'kustomization' | 'helm'
       name: string
       namespace: string
-      config: Record<string, unknown>
+      config: any
     }) => {
       return await trpc.gitops.createGitOpsResource.mutate(data)
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['gitops', 'resources', variables.projectId] })
-      toast.success('GitOps 资源已创建', `${result.name} 创建成功`)
+      toast.success('GitOps 资源已创建')
     },
     onError: (err) => {
       log.error('Failed to create GitOps resource:', err)
@@ -148,16 +74,16 @@ export function useGitOps() {
    * 更新 GitOps 资源
    */
   const updateGitOpsResourceMutation = useMutation({
-    mutationFn: async ({
-      resourceId,
-      ...data
-    }: {
-      resourceId: string
-    } & Partial<Omit<GitOpsResource, 'id' | 'createdAt' | 'updatedAt'>>) => {
-      return await trpc.gitops.updateGitOpsResource.mutate({ resourceId, ...data })
+    mutationFn: async (data: {
+      id: string
+      config?: any
+      status?: string
+      errorMessage?: string
+    }) => {
+      return await trpc.gitops.updateGitOpsResource.mutate(data)
     },
-    onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['gitops', 'resource', variables.resourceId] })
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['gitops', 'resource', variables.id] })
       queryClient.invalidateQueries({ queryKey: ['gitops', 'resources'] })
       toast.success('GitOps 资源已更新')
     },
@@ -176,7 +102,7 @@ export function useGitOps() {
     mutationFn: async (resourceId: string) => {
       return await trpc.gitops.deleteGitOpsResource.mutate({ id: resourceId })
     },
-    onSuccess: (result, resourceId) => {
+    onSuccess: (_result, resourceId) => {
       queryClient.removeQueries({ queryKey: ['gitops', 'resource', resourceId] })
       queryClient.invalidateQueries({ queryKey: ['gitops', 'resources'] })
       toast.success('GitOps 资源已删除')
@@ -267,24 +193,17 @@ export function useGitOps() {
   })
 
   return {
-    // Queries
-    useGitOpsResourcesQuery,
-    useGitOpsResourceQuery,
-    usePreviewChangesQuery,
-    useValidateYAMLQuery,
+    // Query 数据
+    resources,
+    isLoading,
+    error,
 
     // Mutations
     createGitOpsResource: createGitOpsResourceMutation.mutateAsync,
-    createGitOpsResourceMutation,
     updateGitOpsResource: updateGitOpsResourceMutation.mutateAsync,
-    updateGitOpsResourceMutation,
     deleteGitOpsResource: deleteGitOpsResourceMutation.mutateAsync,
-    deleteGitOpsResourceMutation,
     triggerSync: triggerSyncMutation.mutateAsync,
-    triggerSyncMutation,
     deployWithGitOps: deployWithGitOpsMutation.mutateAsync,
-    deployWithGitOpsMutation,
     commitConfigChanges: commitConfigChangesMutation.mutateAsync,
-    commitConfigChangesMutation,
   }
 }

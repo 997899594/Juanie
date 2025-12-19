@@ -34,6 +34,21 @@
         </Button>
       </div>
 
+      <!-- 初始化进度条（仅在初始化中显示） -->
+      <div
+        v-if="currentProject.status === 'initializing'"
+        v-motion
+        :initial="{ opacity: 0, y: -10 }"
+        :enter="{ opacity: 1, y: 0, transition: { duration: 300, delay: 200 } }"
+        class="border rounded-lg bg-blue-50 dark:bg-blue-950/20 p-6"
+      >
+        <InitializationProgress
+          :project-id="projectId"
+          @complete="handleInitializationComplete"
+          @error="handleInitializationError"
+        />
+      </div>
+
       <!-- 标签页 -->
       <Tabs :default-value="activeTab" @update:model-value="(value) => activeTab = String(value)">
         <TabsList class="grid w-full grid-cols-8">
@@ -703,7 +718,6 @@ import {
   Loader2,
   AlertCircle,
   ChevronRight,
-  Activity,
   Check,
   X,
   ExternalLink,
@@ -726,7 +740,7 @@ const projectId = String(route.params.id)
 
 // 使用 TanStack Query - 自动获取数据
 const { useProjectQuery, updateProject, deleteProject } = useProjectCRUD()
-const { useMembersQuery, updateMemberRole, removeMember } = useProjectMembers()
+const { useMembersQuery, updateMemberRole } = useProjectMembers()
 const { useTeamsQuery } = useProjectTeams()
 
 // 查询项目详情
@@ -736,7 +750,7 @@ const { data: currentProject, isLoading: loadingProject } = useProjectQuery(proj
 const { data: members, isLoading: loadingMembers } = useMembersQuery(projectId)
 
 // 查询项目团队
-const { data: teams, isLoading: loadingTeams } = useTeamsQuery(projectId)
+const { isLoading: loadingTeams } = useTeamsQuery(projectId)
 
 // 综合加载状态
 const loading = computed(() => loadingProject.value || loadingMembers.value || loadingTeams.value)
@@ -803,15 +817,6 @@ function confirmRemoveMember(memberId: string) {
   // TODO: 实现移除成员确认对话框
 }
 
-async function handleUpdate(data: any) {
-  try {
-    await updateProject(projectId, data)
-    isEditModalOpen.value = false
-  } catch (error) {
-    log.error('Failed to update project:', error)
-  }
-}
-
 async function handleProjectUpdated() {
   isEditModalOpen.value = false
   // TanStack Query 会自动刷新数据（通过 mutation 的 invalidateQueries）
@@ -843,13 +848,14 @@ function formatDate(dateString: string | Date): string {
 
 function handleInitializationComplete() {
   // 初始化完成，重新加载项目状态
+  toast.success('项目初始化完成！')
   loadProjectStatus()
   loadPendingApprovals()
 }
 
 function handleInitializationError(error: string) {
   log.error('Initialization error:', error)
-  // 可以显示错误提示
+  toast.error(`初始化失败: ${error}`)
 }
 
 function calculateSuccessRate(stats: any): number {

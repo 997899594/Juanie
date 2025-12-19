@@ -465,29 +465,29 @@ export class ProjectsService {
         })
 
         if (repository) {
-          // 使用 oauthAccounts 表（和创建项目时一致）
-          const [oauthAccount] = await this.db
+          // 使用 gitConnections 表获取访问令牌
+          const [gitConnection] = await this.db
             .select()
-            .from(schema.oauthAccounts)
+            .from(schema.gitConnections)
             .where(
               and(
-                eq(schema.oauthAccounts.userId, userId),
-                eq(schema.oauthAccounts.provider, repository.provider),
+                eq(schema.gitConnections.userId, userId),
+                eq(schema.gitConnections.provider, repository.provider),
               ),
             )
             .limit(1)
 
-          if (oauthAccount?.accessToken) {
+          if (gitConnection?.accessToken) {
             this.logger.info(`Calling deleteRepository API for ${repository.fullName}...`)
             await this.gitProviderService.deleteRepository(
               repository.provider as 'github' | 'gitlab',
               repository.fullName,
-              oauthAccount.accessToken,
+              gitConnection.accessToken,
             )
             this.logger.info(`✅ Deleted Git repository: ${repository.fullName}`)
           } else {
             this.logger.warn(
-              `Cannot delete repository: no OAuth account found for ${repository.provider}`,
+              `Cannot delete repository: no Git connection found for ${repository.provider}`,
             )
           }
         } else {
@@ -1150,13 +1150,28 @@ export class ProjectsService {
         .limit(1)
 
       if (project) {
-        const initStatus = project.initializationStatus as any
+        // 查询初始化步骤
+        const steps = await this.db.query.projectInitializationSteps.findMany({
+          where: eq(schema.projectInitializationSteps.projectId, projectId),
+        })
+
+        // 计算总进度（基于已完成步骤）
+        const completedSteps = steps.filter((s) => s.status === 'completed').length
+        const totalSteps = steps.length || 5 // 默认 5 个步骤
+        const progress = Math.floor((completedSteps / totalSteps) * 100)
+
         yield {
           type: 'init',
           data: {
             status: project.status,
-            progress: initStatus?.progress || 0,
-            state: initStatus?.state || 'IDLE',
+            progress,
+            state:
+              project.status === 'active'
+                ? 'COMPLETED'
+                : project.status === 'failed'
+                  ? 'FAILED'
+                  : 'RUNNING',
+            steps, // 发送所有步骤详情
           },
         }
 

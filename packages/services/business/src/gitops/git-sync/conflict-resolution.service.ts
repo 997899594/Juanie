@@ -17,13 +17,13 @@ import { mapProjectRoleToGitPermission } from './permission-mapper'
  */
 @Injectable()
 export class ConflictResolutionService {
-
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly gitProvider: GitProviderService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(ConflictResolutionService.name)}
+    this.logger.setContext(ConflictResolutionService.name)
+  }
 
   /**
    * 检测项目成员的权限冲突
@@ -55,10 +55,23 @@ export class ConflictResolutionService {
         where: eq(schema.projects.id, projectId),
       })
 
-      if (!project || !project.gitProvider || !project.gitRepoUrl) {
+      if (!project) {
+        this.logger.warn('Project not found', { projectId })
+        return []
+      }
+
+      // 获取项目的 Git 仓库信息
+      const repository = await this.db.query.repositories.findFirst({
+        where: eq(schema.repositories.projectId, projectId),
+      })
+
+      if (!repository) {
         this.logger.warn('Project not linked to Git repository', { projectId })
         return []
       }
+
+      const gitProvider = repository.provider as 'github' | 'gitlab'
+      const gitRepoUrl = repository.cloneUrl
 
       // 获取系统中的项目成员
       const systemMembers = await this.db.query.projectMembers.findMany({
@@ -68,24 +81,24 @@ export class ConflictResolutionService {
         },
       })
 
-      // 获取成员的 Git 账号
-      const membersWithGitAccounts = await Promise.all(
+      // 获取成员的 Git 连接
+      const membersWithGitConnections = await Promise.all(
         systemMembers.map(async (member) => {
-          const gitAccount = await this.db.query.userGitAccounts.findFirst({
+          const gitConnection = await this.db.query.gitConnections.findFirst({
             where: and(
-              eq(schema.userGitAccounts.userId, member.userId),
-              eq(schema.userGitAccounts.provider, project.gitProvider!),
+              eq(schema.gitConnections.userId, member.userId),
+              eq(schema.gitConnections.provider, gitProvider),
             ),
           })
           return {
             ...member,
-            gitAccount,
+            gitConnection,
           }
         }),
       )
 
-      // 过滤出有 Git 账号的成员
-      const membersWithGit = membersWithGitAccounts.filter((m) => m.gitAccount)
+      // 过滤出有 Git 连接的成员
+      const membersWithGit = membersWithGitConnections.filter((m) => m.gitConnection)
 
       if (membersWithGit.length === 0) {
         this.logger.info('No members with Git accounts found', { projectId })
@@ -94,8 +107,8 @@ export class ConflictResolutionService {
 
       // 获取 Git 平台上的协作者列表
       const gitCollaborators = await this.gitProvider.listCollaborators(
-        project.gitProvider,
-        project.gitRepoUrl,
+        gitProvider,
+        gitRepoUrl,
         accessToken,
       )
 
@@ -116,7 +129,7 @@ export class ConflictResolutionService {
       }> = []
 
       for (const member of membersWithGit) {
-        const gitUsername = member.gitAccount!.gitUsername.toLowerCase()
+        const gitUsername = member.gitConnection!.username.toLowerCase()
         const systemRole = member.role
         const expectedGitPermission = mapProjectRoleToGitPermission(systemRole as any)
 
@@ -127,7 +140,7 @@ export class ConflictResolutionService {
           conflicts.push({
             userId: member.userId,
             userName: member.user.displayName || member.user.email,
-            gitLogin: member.gitAccount!.gitUsername,
+            gitLogin: member.gitConnection!.username,
             systemRole,
             gitPermission: 'none',
             expectedGitPermission,
@@ -138,7 +151,7 @@ export class ConflictResolutionService {
           conflicts.push({
             userId: member.userId,
             userName: member.user.displayName || member.user.email,
-            gitLogin: member.gitAccount!.gitUsername,
+            gitLogin: member.gitConnection!.username,
             systemRole,
             gitPermission: actualGitPermission,
             expectedGitPermission,
@@ -149,7 +162,7 @@ export class ConflictResolutionService {
 
       // 检测 Git 平台上多余的协作者
       const systemGitUsernames = new Set(
-        membersWithGit.map((m) => m.gitAccount!.gitUsername.toLowerCase()),
+        membersWithGit.map((m) => m.gitConnection!.username.toLowerCase()),
       )
 
       for (const collaborator of gitCollaborators) {
@@ -229,9 +242,21 @@ export class ConflictResolutionService {
         where: eq(schema.projects.id, projectId),
       })
 
-      if (!project || !project.gitProvider || !project.gitRepoUrl) {
+      if (!project) {
+        throw new Error('Project not found')
+      }
+
+      // 获取项目的 Git 仓库信息
+      const repository = await this.db.query.repositories.findFirst({
+        where: eq(schema.repositories.projectId, projectId),
+      })
+
+      if (!repository) {
         throw new Error('Project not linked to Git repository')
       }
+
+      const gitProvider = repository.provider as 'github' | 'gitlab'
+      const gitRepoUrl = repository.cloneUrl
 
       // 过滤要解决的冲突
       const conflictsToResolve = conflicts.filter((c) => conflictTypes.includes(c.conflictType))
@@ -270,8 +295,8 @@ export class ConflictResolutionService {
               // 添加协作者到 Git 平台
               action = 'add_collaborator'
               await this.gitProvider.addCollaborator(
-                project.gitProvider,
-                project.gitRepoUrl,
+                gitProvider,
+                gitRepoUrl,
                 accessToken,
                 conflict.gitLogin,
                 conflict.expectedGitPermission,
@@ -284,8 +309,8 @@ export class ConflictResolutionService {
               // 更新协作者权限
               action = 'update_permission'
               await this.gitProvider.updateCollaboratorPermission(
-                project.gitProvider,
-                project.gitRepoUrl,
+                gitProvider,
+                gitRepoUrl,
                 accessToken,
                 conflict.gitLogin,
                 conflict.expectedGitPermission,
@@ -320,7 +345,7 @@ export class ConflictResolutionService {
             gitResourceId: projectId,
             action: 'sync',
             syncType: 'member',
-            provider: project.gitProvider!,
+            provider: gitProvider,
             status: status === 'success' ? 'success' : 'failed',
             metadata: {
               conflictType: conflict.conflictType,
@@ -350,7 +375,7 @@ export class ConflictResolutionService {
             gitResourceId: projectId,
             action: 'sync',
             syncType: 'member',
-            provider: project.gitProvider!,
+            provider: gitProvider,
             status: 'failed',
             error: errorMessage,
             metadata: {

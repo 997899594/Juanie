@@ -39,6 +39,7 @@ import { TemplatesModule } from './templates'
     ProjectStatusService,
     // 重新导出模块
     TemplatesModule,
+    RepositoriesModule, // 导出以便其他模块使用（包含 GitConnectionsModule）
     ProjectInitializationModule, // 导出以便其他模块访问 ProgressManager
     ProjectMembersModule, // 导出以便其他模块使用
   ],

@@ -1,7 +1,22 @@
-import type { Notification, NotificationStatus } from '@juanie/types'
+import type { NotificationStatus } from '@juanie/types'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import { isTRPCClientError, trpc } from '@/lib/trpc'
+
+// 通知类型定义（从 API 返回）
+interface Notification {
+  id: string
+  userId: string
+  type: string
+  title: string
+  message: string
+  status: NotificationStatus
+  priority: string
+  metadata: Record<string, unknown> | null
+  readAt: Date | null
+  createdAt: Date | string
+  updatedAt: Date | string
+}
 
 /**
  * 通知管理组合式函数

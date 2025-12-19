@@ -1,6 +1,7 @@
 import { handleServiceError } from '@juanie/core/errors'
 import { REDIS } from '@juanie/core/tokens'
 import {
+  InitializationStepsService,
   ProjectMembersService,
   ProjectStatusService,
   ProjectsService,
@@ -31,6 +32,7 @@ export class ProjectsRouter {
     private readonly projectsService: ProjectsService,
     private readonly projectMembers: ProjectMembersService,
     private readonly projectStatus: ProjectStatusService,
+    private readonly initializationSteps: InitializationStepsService,
     private readonly storageService: StorageService,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
@@ -354,10 +356,29 @@ export class ProjectsRouter {
 
             subscriber.subscribe(channel)
 
-            subscriber.on('message', (_channel, message) => {
+            subscriber.on('message', async (_channel, message) => {
               try {
                 const event = JSON.parse(message)
-                emit.next(event)
+
+                // 查询当前所有步骤
+                const steps = await this.initializationSteps.getProjectSteps(input.projectId)
+
+                // 发送事件和步骤数组
+                emit.next({
+                  ...event,
+                  steps: steps.map((step) => ({
+                    step: step.step,
+                    status: step.status,
+                    progress: step.progress,
+                    error: step.error,
+                    startedAt: step.startedAt,
+                    completedAt: step.completedAt,
+                    duration:
+                      step.startedAt && step.completedAt
+                        ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
+                        : null,
+                  })),
+                })
 
                 // 如果完成或失败，自动关闭连接
                 if (

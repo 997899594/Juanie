@@ -1,5 +1,5 @@
-import type { OAuthAccount } from '@juanie/core/database'
-import { OAuthAccountsService } from '@juanie/service-foundation'
+import type { GitConnection } from '@juanie/core/database'
+import { GitConnectionsService } from '@juanie/service-foundation'
 import type { CredentialMetadata, GitProvider } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import type { GitCredential } from './git-credential.interface'
@@ -15,24 +15,25 @@ export class OAuthCredential implements GitCredential {
 
   constructor(
     public readonly id: string,
-    private readonly oauthAccount: OAuthAccount,
-    private readonly oauthService: OAuthAccountsService,
+    private readonly gitConnection: GitConnection,
+    private readonly gitConnectionsService: GitConnectionsService,
   ) {
-    this.provider = this.oauthAccount.provider as GitProvider
+    this.provider = this.gitConnection.provider as GitProvider
   }
 
   async getAccessToken(): Promise<string> {
     // 自动刷新过期的 token（GitLab）
-    const account = await this.oauthService.getAccountByProvider(
-      this.oauthAccount.userId,
-      this.oauthAccount.provider as 'github' | 'gitlab',
+    const connection = await this.gitConnectionsService.getConnectionByProvider(
+      this.gitConnection.userId,
+      this.gitConnection.provider as 'github' | 'gitlab',
+      this.gitConnection.serverUrl,
     )
 
-    if (!account?.accessToken) {
-      throw new Error(`OAuth account not found or token missing`)
+    if (!connection?.accessToken) {
+      throw new Error(`Git connection not found or token missing`)
     }
 
-    return account.accessToken
+    return connection.accessToken
   }
 
   async validate(): Promise<boolean> {
@@ -46,7 +47,7 @@ export class OAuthCredential implements GitCredential {
 
   private async validateWithGitAPI(token: string): Promise<boolean> {
     try {
-      if (this.oauthAccount.provider === 'github') {
+      if (this.gitConnection.provider === 'github') {
         const response = await fetch('https://api.github.com/user', {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -55,7 +56,7 @@ export class OAuthCredential implements GitCredential {
         })
         return response.ok
       } else {
-        const gitlabUrl = this.oauthAccount.serverUrl || 'https://gitlab.com'
+        const gitlabUrl = this.gitConnection.serverUrl || 'https://gitlab.com'
         const response = await fetch(`${gitlabUrl}/api/v4/user`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -69,17 +70,17 @@ export class OAuthCredential implements GitCredential {
   }
 
   async refresh(): Promise<void> {
-    // GitLab token 自动刷新由 OAuthAccountsService 处理
-    if (this.oauthAccount.provider === 'gitlab') {
-      await this.oauthService.getAccountByProvider(
-        this.oauthAccount.userId,
-        this.oauthAccount.provider,
-      )
+    // GitLab token 自动刷新由 GitConnectionsService 处理
+    if (this.gitConnection.provider === 'gitlab' && this.gitConnection.refreshToken) {
+      // 这里需要调用 OAuth 服务来刷新 token
+      // refreshAccessToken 方法用于更新已刷新的 token，不是用来刷新的
+      // 实际刷新逻辑应该在 GitAccountLinkingService 中
+      throw new Error('Token refresh should be handled by GitAccountLinkingService')
     }
   }
 
   getScopes(): string[] {
-    return this.oauthAccount.provider === 'github'
+    return this.gitConnection.provider === 'github'
       ? ['repo', 'workflow', 'admin:repo_hook']
       : ['api', 'write_repository']
   }
@@ -95,15 +96,15 @@ export class OAuthCredential implements GitCredential {
       type: this.type,
       provider: this.provider,
       scopes: this.getScopes(),
-      expiresAt: this.oauthAccount.expiresAt || undefined,
-      createdAt: this.oauthAccount.createdAt,
-      updatedAt: this.oauthAccount.updatedAt,
+      expiresAt: this.gitConnection.expiresAt || undefined,
+      createdAt: this.gitConnection.createdAt,
+      updatedAt: this.gitConnection.updatedAt,
       isValid: true,
       lastValidatedAt: undefined,
     }
   }
 
   getUsername(): string {
-    return this.oauthAccount.provider === 'github' ? 'x-access-token' : 'oauth2'
+    return this.gitConnection.provider === 'github' ? 'x-access-token' : 'oauth2'
   }
 }

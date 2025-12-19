@@ -180,14 +180,6 @@
 
           <!-- 步骤 4: 确认创建 -->
           <div v-if="currentStep === 3">
-            <!-- 进度显示 -->
-            <div v-if="showProgress" class="mb-6 p-4 border rounded-lg bg-muted/50">
-              <div class="flex items-center gap-3">
-                <Loader2 class="h-5 w-5 animate-spin text-primary" />
-                <p class="text-sm font-medium">{{ progressMessage }}</p>
-              </div>
-            </div>
-
             <div class="border rounded-lg divide-y">
               <!-- 基本信息 -->
               <div class="p-4 space-y-2">
@@ -293,10 +285,10 @@
             <Button
               v-else-if="currentStep === 3"
               @click="handleCreateProject"
-              :disabled="loading || showProgress"
+              :disabled="loading"
             >
-              <Loader2 v-if="loading || showProgress" class="mr-2 h-4 w-4 animate-spin" />
-              {{ showProgress ? '创建中...' : '创建项目' }}
+              <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
+              {{ loading ? '创建中...' : '创建项目' }}
             </Button>
           </div>
         </div>
@@ -306,7 +298,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
@@ -321,19 +313,7 @@ import { Button,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Progress,
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage , log } from '@juanie/ui'
+  log } from '@juanie/ui'
 import {
   CheckCircle2,
   ChevronLeft,
@@ -367,10 +347,7 @@ const steps = [
 
 const currentStep = ref(0)
 const loading = ref(false)
-const createdProjectId = ref<string | null>(null)
 const repositoryCanProceed = ref(false)
-const showProgress = ref(false)
-const progressMessage = ref('')
 const selectedTemplate = ref<any>(null)
 
 // 表单验证 schema
@@ -411,7 +388,7 @@ const formSchema = toTypedSchema(
 )
 
 // 使用 vee-validate 的字段级别 API
-const { defineField, handleSubmit, errors, values: formData, setFieldValue } = useForm({
+const { defineField, errors, values: formData, setFieldValue } = useForm({
   validationSchema: formSchema,
   initialValues: {
     name: '',
@@ -428,26 +405,7 @@ const { defineField, handleSubmit, errors, values: formData, setFieldValue } = u
 const [name, nameAttrs] = defineField('name', { validateOnBlur: true, validateOnModelUpdate: false })
 const [slug, slugAttrs] = defineField('slug', { validateOnBlur: true, validateOnModelUpdate: false })
 const [description, descriptionAttrs] = defineField('description', { validateOnBlur: true, validateOnModelUpdate: false })
-const [visibility, visibilityAttrs] = defineField('visibility')
-
-// 默认环境配置（当没有选择模板时使用）
-const defaultEnvironments = [
-  {
-    name: 'Development',
-    type: 'development',
-    description: '开发环境 - 用于日常开发和测试'
-  },
-  {
-    name: 'Staging',
-    type: 'staging',
-    description: '预发布环境 - 用于上线前验证'
-  },
-  {
-    name: 'Production',
-    type: 'production',
-    description: '生产环境 - 正式对外服务'
-  }
-]
+const [visibility] = defineField('visibility')
 
 // 计算属性
 const canProceed = computed(() => {
@@ -526,15 +484,11 @@ function handleCancel() {
   emit('close')
 }
 
+
+
 // 创建项目
 async function handleCreateProject() {
-  log.info('点击创建项目按钮')
-  log.info('当前表单数据:', formData)
-  log.info('name:', name.value)
-  log.info('slug:', slug.value)
-  log.info('visibility:', visibility.value)
-  log.info('repository:', formData.repository)
-  log.info('errors:', errors.value)
+  log.info('点击创建项目按钮', { formData, name: name.value, slug: slug.value, visibility: visibility.value, repository: formData.repository, errors: errors.value })
   
   // 直接调用，不通过 handleSubmit
   if (!name.value || !slug.value) {
@@ -543,6 +497,7 @@ async function handleCreateProject() {
   }
   
   loading.value = true
+  
   try {
     const projectData: any = {
       organizationId: appStore.currentOrganizationId!,
@@ -555,18 +510,16 @@ async function handleCreateProject() {
       repository: formData.repository || undefined,
     }
 
-    log.info('创建项目，数据:', projectData)
+    log.info('创建项目', { projectData })
     const project = await createProject(projectData)
-    log.info('项目创建成功，返回数据:', project)
-    createdProjectId.value = project.id
-
-    // toast 已经在 useProjectCRUD 中显示，不需要重复
+    log.info('项目创建成功', { project })
     
-    // 先跳转到项目详情页，再关闭弹窗
-    log.info('准备跳转到项目详情页:', `/projects/${project.id}`)
-    await router.push(`/projects/${project.id}`)
-    log.info('跳转完成，准备关闭弹窗')
-    emit('close')
+    // 显示成功提示
+    toast.success('项目创建成功，正在初始化...')
+    
+    // 立即跳转到项目详情页，在那里展示详细的初始化进度
+    router.push(`/projects/${project.id}`)
+    
   } catch (error: any) {
     log.error('Project creation failed:', error)
     // 错误已经在 useProjectCRUD 中通过 toast 显示

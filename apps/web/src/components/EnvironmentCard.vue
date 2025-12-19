@@ -21,14 +21,14 @@
           </Badge>
         </div>
         <div class="flex items-center justify-between text-sm">
-          <span class="text-muted-foreground">URL</span>
+          <span class="text-muted-foreground">健康检查</span>
           <a
-            v-if="environment.url"
-            :href="environment.url"
+            v-if="environment.healthCheckUrl"
+            :href="environment.healthCheckUrl"
             target="_blank"
             class="text-primary hover:underline flex items-center"
           >
-            {{ truncateUrl(environment.url) }}
+            {{ truncateUrl(environment.healthCheckUrl) }}
             <ExternalLink class="ml-1 h-3 w-3" />
           </a>
           <span v-else class="text-muted-foreground">-</span>
@@ -37,29 +37,12 @@
           <span class="text-muted-foreground">创建时间</span>
           <span>{{ formatDate(environment.createdAt) }}</span>
         </div>
-        <div v-if="environment.config?.gitops?.enabled" class="pt-2 border-t">
-          <div class="flex items-center justify-between text-sm mb-2">
-            <span class="text-muted-foreground flex items-center gap-1">
-              <GitBranch class="h-3 w-3" />
-              GitOps
-            </span>
-            <Badge variant="default" class="text-xs">
-              已启用
+        <div v-if="environment.config?.approvalRequired" class="pt-2 border-t">
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-muted-foreground">部署审批</span>
+            <Badge variant="secondary" class="text-xs">
+              需要 {{ environment.config.minApprovals }} 人审批
             </Badge>
-          </div>
-          <div class="space-y-1 text-xs text-muted-foreground">
-            <div class="flex items-center justify-between">
-              <span>分支:</span>
-              <code class="font-mono">{{ environment.config.gitops.gitBranch }}</code>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>路径:</span>
-              <code class="font-mono">{{ environment.config.gitops.gitPath }}</code>
-            </div>
-            <div class="flex items-center justify-between">
-              <span>同步:</span>
-              <span>{{ environment.config.gitops.autoSync ? '自动' : '手动' }} ({{ environment.config.gitops.syncInterval }})</span>
-            </div>
           </div>
         </div>
       </div>
@@ -89,31 +72,16 @@ import {
   Button,
 } from '@juanie/ui'
 import { Server, ExternalLink, Edit, Trash2, GitBranch } from 'lucide-vue-next'
+import { trpc } from '@/lib/trpc'
 
-interface Environment {
-  id: string
-  name: string
-  description?: string
-  type: string
-  status: string
-  url?: string
-  createdAt: string
-  config?: {
-    gitops?: {
-      enabled: boolean
-      gitBranch: string
-      gitPath: string
-      syncInterval: string
-      autoSync: boolean
-    }
-  }
-}
+// 从 tRPC 推断类型
+type Environment = Awaited<ReturnType<typeof trpc.environments.list.query>>[number]
 
-defineProps<{
+const props = defineProps<{
   environment: Environment
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   edit: [environment: Environment]
   delete: [id: string]
 }>()

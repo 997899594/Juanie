@@ -208,6 +208,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useGitOps } from '@/composables/useGitOps'
+import { log } from '@juanie/ui'
 import {
   Alert,
   AlertDescription,
@@ -248,7 +249,7 @@ const emit = defineEmits<{
   'deployed': []
 }>()
 
-const { deployWithGitOps, previewChanges, validateYAML } = useGitOps()
+const { deployWithGitOps } = useGitOps()
 
 const activeTab = ref('config')
 const loading = ref(false)
@@ -293,12 +294,10 @@ const removeEnv = (index: number) => {
 const handlePreview = async () => {
   previewLoading.value = true
   try {
+    // TODO: 后端需要实现 previewChanges API
     const changes = yamlContent.value || formData.value
-    preview.value = await previewChanges({
-      projectId: props.projectId,
-      environmentId: props.environmentId,
-      changes,
-    })
+    preview.value = JSON.stringify(changes, null, 2)
+    log.warn('previewChanges API not implemented, showing local preview')
   } catch (error) {
     log.error('Failed to preview changes:', error)
   } finally {
@@ -311,7 +310,15 @@ const handleValidateYAML = async () => {
 
   validating.value = true
   try {
-    yamlValidation.value = await validateYAML(yamlContent.value)
+    // TODO: 后端需要实现 validateYAML API
+    // 简单的本地验证
+    try {
+      JSON.parse(yamlContent.value)
+      yamlValidation.value = { valid: true }
+    } catch {
+      yamlValidation.value = { valid: false, error: 'Invalid JSON format' }
+    }
+    log.warn('validateYAML API not implemented, using local validation')
   } catch (error) {
     log.error('Failed to validate YAML:', error)
   } finally {

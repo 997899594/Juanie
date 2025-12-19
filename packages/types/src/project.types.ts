@@ -258,6 +258,20 @@ export interface ProjectStatus {
     errorMessage: string | null
   }>
 
+  // 初始化步骤（如果项目正在初始化或刚完成）
+  initializationSteps?: Array<{
+    id: string
+    step: string
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+    progress: string | null
+    error: string | null
+    errorStack: string | null
+    startedAt: Date | null
+    completedAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+  }>
+
   // 统计信息
   stats: DeploymentStats
 

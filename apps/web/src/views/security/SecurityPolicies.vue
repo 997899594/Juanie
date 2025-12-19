@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSecurityPolicies, type SecurityPolicy } from '@/composables/useSecurityPolicies'
 import PageContainer from '@/components/PageContainer.vue'
@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  log,
 } from '@juanie/ui'
 import { Plus, Shield, Loader2, Edit, Trash2, Power, PowerOff } from 'lucide-vue-next'
 

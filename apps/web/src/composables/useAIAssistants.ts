@@ -1,13 +1,26 @@
-import type {
-  AiAssistant,
-  ChatMessage,
-  ChatResponse,
-  OllamaModel,
-  OllamaStatus,
-} from '@juanie/types'
+import type { ChatMessage, ChatResponse, OllamaModel, OllamaStatus } from '@juanie/types'
 import { computed, ref } from 'vue'
 import { useToast } from '@/composables/useToast'
 import { trpc } from '@/lib/trpc'
+
+// AI 助手类型定义（从 API 返回）
+interface AiAssistant {
+  id: string
+  organizationId: string | null
+  userId: string | null
+  name: string
+  type: 'code_review' | 'devops_engineer' | 'cost_optimizer' | 'security_analyst'
+  modelConfig: {
+    provider: 'anthropic' | 'openai' | 'google' | 'ollama'
+    model: string
+    temperature?: number
+    maxTokens?: number
+  }
+  systemPrompt: string | null
+  isActive: boolean
+  createdAt: Date | string
+  updatedAt: Date | string
+}
 
 export function useAIAssistants() {
   const toast = useToast()

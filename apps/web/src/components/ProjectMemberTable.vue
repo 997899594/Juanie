@@ -89,16 +89,16 @@
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-2">
                     <Badge
-                      v-if="member.gitSyncStatus"
-                      :variant="getGitSyncVariant(member.gitSyncStatus)"
+                      v-if="member.status"
+                      :variant="getGitSyncVariant(member.status)"
                       class="text-xs"
                     >
                       <div class="flex items-center gap-1">
-                        <CheckCircle2 v-if="member.gitSyncStatus === 'synced'" class="h-3 w-3" />
-                        <AlertCircle v-else-if="member.gitSyncStatus === 'failed'" class="h-3 w-3" />
-                        <Loader2 v-else-if="member.gitSyncStatus === 'pending'" class="h-3 w-3 animate-spin" />
+                        <CheckCircle2 v-if="member.status === 'synced'" class="h-3 w-3" />
+                        <AlertCircle v-else-if="member.status === 'failed'" class="h-3 w-3" />
+                        <Loader2 v-else-if="member.status === 'pending'" class="h-3 w-3 animate-spin" />
                         <XCircle v-else class="h-3 w-3" />
-                        {{ getGitSyncLabel(member.gitSyncStatus) }}
+                        {{ getGitSyncLabel(member.status) }}
                       </div>
                     </Badge>
                     <Badge v-else variant="outline" class="text-xs">
@@ -159,7 +159,7 @@ interface Member {
   id: string
   role: string
   joinedAt: string
-  gitSyncStatus?: 'synced' | 'pending' | 'failed' | 'not_linked'
+  status?: 'synced' | 'pending' | 'failed' | 'not_linked'
   user: {
     id: string
     username: string | null
@@ -178,7 +178,7 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false,
 })
 
-defineEmits<{
+const emit = defineEmits<{
   add: []
   'update-role': [memberId: string, role: string]
   remove: [memberId: string]
@@ -212,12 +212,12 @@ function formatDate(dateString: string): string {
   return format(new Date(dateString), 'yyyy-MM-dd HH:mm')
 }
 
-function canEditRole(member: Member): boolean {
+function canEditRole(_member: Member): boolean {
   // 简化版本：允许编辑所有成员角色
   return true
 }
 
-function canRemove(member: Member): boolean {
+function canRemove(_member: Member): boolean {
   // 简化版本：允许移除所有成员
   return true
 }

@@ -8,6 +8,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  varchar,
 } from 'drizzle-orm/pg-core'
 import { organizations } from './organizations.schema'
 import { projectTemplates } from './project-templates.schema'
@@ -27,14 +28,11 @@ export const projects = pgTable(
     // 项目状态：'initializing', 'active', 'inactive', 'archived', 'failed'
     status: text('status').notNull().default('active'),
 
-    // 初始化状态
-    initializationStatus: jsonb('initialization_status').$type<{
-      step: string // 当前步骤
-      progress: number // 0-100
-      error?: string // 错误信息
-      completedSteps: string[] // 已完成的步骤
-      jobId?: string // 异步任务 ID，用于 SSE 连接
-    }>(),
+    // 初始化状态（简化版）
+    initializationJobId: varchar('initialization_job_id', { length: 255 }), // BullMQ 任务 ID
+    initializationStartedAt: timestamp('initialization_started_at', { withTimezone: true }),
+    initializationCompletedAt: timestamp('initialization_completed_at', { withTimezone: true }),
+    initializationError: text('initialization_error'), // 初始化失败的错误信息
 
     // 模板信息
     templateId: uuid('template_id').references(() => projectTemplates.id, { onDelete: 'set null' }), // 使用的模板 ID
@@ -45,11 +43,7 @@ export const projects = pgTable(
     healthStatus: text('health_status'), // 'healthy', 'warning', 'critical'
     lastHealthCheck: timestamp('last_health_check'),
 
-    // Git 仓库信息
-    gitProvider: text('git_provider', { enum: ['github', 'gitlab'] }).$type<'github' | 'gitlab'>(),
-    gitRepoUrl: text('git_repo_url'),
-    gitRepoName: text('git_repo_name'),
-    gitDefaultBranch: text('git_default_branch').default('main'),
+    // 注意：Git 仓库信息已移至 repositories 表，通过关联查询获取
 
     // 项目配置（JSONB）
     config: jsonb('config')

@@ -226,14 +226,15 @@ import { Switch } from '@juanie/ui'
 const route = useRoute()
 const projectId = computed(() => route.params.projectId as string)
 
+// ✅ 简洁的 API
 const {
   environments,
   isLoading,
   create,
-  update,
-  delete: deleteEnvironment,
   isCreating,
+  update,
   isUpdating,
+  delete: deleteEnvironment,
   isDeleting,
 } = useEnvironments(projectId)
 

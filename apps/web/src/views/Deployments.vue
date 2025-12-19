@@ -61,17 +61,17 @@
                   部署到 {{ deployment.environmentId }} · {{ formatDate(deployment.createdAt) }}
                 </p>
                 <div 
-                  v-if="deployment.gitCommitSha && (deployment.deploymentMethod === 'gitops-ui' || deployment.deploymentMethod === 'gitops-git')"
+                  v-if="deployment.commitHash && deployment.deploymentMethod === 'gitops'"
                   class="flex items-center gap-2 mt-1"
                 >
                   <GitCommit class="h-3 w-3 text-muted-foreground" />
                   <code class="text-xs text-muted-foreground font-mono">
-                    {{ deployment.gitCommitSha.slice(0, 7) }}
+                    {{ deployment.commitHash.slice(0, 7) }}
                   </code>
                   <!-- TODO: 需要从项目的 git 配置中构建 commit URL -->
                   <!-- <a 
-                    v-if="deployment.gitCommitSha"
-                    :href="`https://github.com/org/repo/commit/${deployment.gitCommitSha}`"
+                    v-if="deployment.commitHash"
+                    :href="`https://github.com/org/repo/commit/${deployment.commitHash}`"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center gap-1 text-xs text-primary hover:underline"

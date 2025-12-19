@@ -32,7 +32,6 @@ export interface ProjectCollaborationSyncResult {
 
 @Injectable()
 export class ProjectCollaborationSyncService {
-
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     readonly _config: ConfigService,
@@ -40,7 +39,8 @@ export class ProjectCollaborationSyncService {
     private readonly errorService: GitSyncErrorService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(ProjectCollaborationSyncService.name)}
+    this.logger.setContext(ProjectCollaborationSyncService.name)
+  }
 
   /**
    * 同步项目协作者到 Git 仓库
@@ -63,8 +63,12 @@ export class ProjectCollaborationSyncService {
         throw new Error(`Project not found: ${projectId}`)
       }
 
-      // 检查项目是否有 Git 仓库配置
-      if (!project.gitProvider || !project.gitRepoUrl) {
+      // 获取项目的 Git 仓库信息
+      const repository = await this.db.query.repositories.findFirst({
+        where: eq(schema.repositories.projectId, projectId),
+      })
+
+      if (!repository) {
         return {
           success: true,
           syncedCollaborators: 0,
@@ -76,13 +80,16 @@ export class ProjectCollaborationSyncService {
         }
       }
 
+      const gitProvider = repository.provider as 'github' | 'gitlab'
+      const gitRepoUrl = repository.cloneUrl
+
       // 获取项目成员
       const members = await this.db.query.projectMembers.findMany({
         where: eq(schema.projectMembers.projectId, projectId),
         with: {
           user: {
             with: {
-              gitAccounts: true,
+              gitConnections: true,
             },
           },
         },
@@ -113,17 +120,15 @@ export class ProjectCollaborationSyncService {
         throw new Error('Project owner not found')
       }
 
-      const ownerGitAccount = owner.user.gitAccounts?.find(
-        (acc) => acc.provider === project.gitProvider,
-      )
+      const ownerGitAccount = owner.user.gitConnections?.find((acc) => acc.provider === gitProvider)
       if (!ownerGitAccount) {
-        throw new Error(`Owner does not have ${project.gitProvider} account linked`)
+        throw new Error(`Owner does not have ${gitProvider} account linked`)
       }
 
       // 解析仓库信息
-      const repoInfo = this.parseGitRepoUrl(project.gitRepoUrl)
+      const repoInfo = this.parseGitRepoUrl(gitRepoUrl)
       if (!repoInfo) {
-        throw new Error(`Invalid Git repository URL: ${project.gitRepoUrl}`)
+        throw new Error(`Invalid Git repository URL: ${gitRepoUrl}`)
       }
 
       // 同步每个协作者
@@ -134,23 +139,23 @@ export class ProjectCollaborationSyncService {
             continue
           }
 
-          const memberGitAccount = member.user.gitAccounts?.find(
-            (acc) => acc.provider === project.gitProvider,
+          const memberGitAccount = member.user.gitConnections?.find(
+            (acc) => acc.provider === gitProvider,
           )
 
           if (!memberGitAccount) {
             results.errors.push({
               userId: member.userId,
-              error: `User does not have ${project.gitProvider} account linked`,
+              error: `User does not have ${gitProvider} account linked`,
             })
 
             // 更新同步状态为失败
             await this.db
               .update(schema.projectMembers)
               .set({
-                gitSyncStatus: 'failed',
-                gitSyncError: `User does not have ${project.gitProvider} account linked`,
-                gitSyncedAt: new Date(),
+                status: 'failed',
+                syncError: `User does not have ${gitProvider} account linked`,
+                syncedAt: new Date(),
               })
               .where(
                 and(
@@ -163,27 +168,24 @@ export class ProjectCollaborationSyncService {
           }
 
           // 映射角色到 Git 权限
-          const gitPermission = this.mapProjectRoleToGitPermission(
-            member.role,
-            project.gitProvider!,
-          )
+          const gitPermission = this.mapProjectRoleToGitPermission(member.role, gitProvider)
 
           // 添加协作者到 Git 仓库
           const repoPath = `${repoInfo.owner}/${repoInfo.repo}`
-          if (project.gitProvider === 'github') {
+          if (gitProvider === 'github') {
             await this.gitProvider.addGitHubCollaborator(
               ownerGitAccount.accessToken,
               repoPath,
-              memberGitAccount.gitUsername,
+              memberGitAccount.username,
               gitPermission as 'pull' | 'push' | 'admin',
             )
-          } else if (project.gitProvider === 'gitlab') {
+          } else if (gitProvider === 'gitlab') {
             // GitLab access levels: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner
             const accessLevel = typeof gitPermission === 'number' ? gitPermission : 30
             await this.gitProvider.addGitLabMember(
               ownerGitAccount.accessToken,
               repoPath,
-              Number.parseInt(memberGitAccount.gitUserId!, 10),
+              Number.parseInt(memberGitAccount.providerAccountId!, 10),
               accessLevel as 10 | 20 | 30 | 40 | 50,
             )
           }
@@ -192,9 +194,9 @@ export class ProjectCollaborationSyncService {
           await this.db
             .update(schema.projectMembers)
             .set({
-              gitSyncStatus: 'synced',
-              gitSyncedAt: new Date(),
-              gitSyncError: null,
+              status: 'synced',
+              syncedAt: new Date(),
+              syncError: null,
             })
             .where(
               and(
@@ -205,18 +207,18 @@ export class ProjectCollaborationSyncService {
 
           results.syncedCollaborators++
           this.logger.info(
-            `Synced collaborator ${member.user.displayName || member.user.email} to ${project.gitProvider} repository`,
+            `Synced collaborator ${member.user.displayName || member.user.email} to ${gitProvider} repository`,
           )
 
           // 记录成功
           await this.errorService.recordSuccess({
             syncType: 'member',
             action: 'add',
-            provider: project.gitProvider as 'github' | 'gitlab',
+            provider: gitProvider,
             projectId,
             userId: member.userId,
-            gitResourceId: memberGitAccount.gitUserId,
-            gitResourceUrl: project.gitRepoUrl,
+            gitResourceId: memberGitAccount.providerAccountId,
+            gitResourceUrl: gitRepoUrl,
             gitResourceType: 'member',
           })
         } catch (error) {
@@ -229,9 +231,9 @@ export class ProjectCollaborationSyncService {
           await this.db
             .update(schema.projectMembers)
             .set({
-              gitSyncStatus: 'failed',
-              gitSyncError: error instanceof Error ? error.message : 'Unknown error',
-              gitSyncedAt: new Date(),
+              status: 'failed',
+              syncError: error instanceof Error ? error.message : 'Unknown error',
+              syncedAt: new Date(),
             })
             .where(
               and(
@@ -250,7 +252,7 @@ export class ProjectCollaborationSyncService {
           await this.errorService.recordError({
             syncType: 'member',
             action: 'add',
-            provider: project.gitProvider as 'github' | 'gitlab',
+            provider: gitProvider,
             projectId,
             userId: member.userId,
             error: error instanceof Error ? error.message : 'Unknown error',
@@ -318,11 +320,15 @@ export class ProjectCollaborationSyncService {
         projectId,
         userId,
         role,
-        gitSyncStatus: 'pending',
+        status: 'pending',
       })
 
       // 如果项目有 Git 仓库，同步到 Git
-      if (project.gitProvider && project.gitRepoUrl) {
+      const repository = await this.db.query.repositories.findFirst({
+        where: eq(schema.repositories.projectId, projectId),
+      })
+
+      if (repository) {
         const syncResult = await this.syncProjectCollaborators(projectId)
         if (!syncResult.success) {
           this.logger.warn(`Git sync failed for new collaborator, but database record created`)
@@ -380,7 +386,7 @@ export class ProjectCollaborationSyncService {
         with: {
           user: {
             with: {
-              gitAccounts: true,
+              gitConnections: true,
             },
           },
         },
@@ -391,13 +397,20 @@ export class ProjectCollaborationSyncService {
       }
 
       // 从 Git 仓库移除协作者
-      if (project.gitProvider && project.gitRepoUrl) {
-        const memberGitAccount = member.user.gitAccounts?.find(
-          (acc) => acc.provider === project.gitProvider,
+      const repository = await this.db.query.repositories.findFirst({
+        where: eq(schema.repositories.projectId, projectId),
+      })
+
+      if (repository) {
+        const gitProvider = repository.provider as 'github' | 'gitlab'
+        const gitRepoUrl = repository.cloneUrl
+
+        const memberGitAccount = member.user.gitConnections?.find(
+          (acc) => acc.provider === gitProvider,
         )
 
         if (memberGitAccount) {
-          const repoInfo = this.parseGitRepoUrl(project.gitRepoUrl)
+          const repoInfo = this.parseGitRepoUrl(gitRepoUrl)
           if (repoInfo) {
             // 获取项目所有者的访问令牌
             const owner = await this.db.query.projectMembers.findFirst({
@@ -408,29 +421,29 @@ export class ProjectCollaborationSyncService {
               with: {
                 user: {
                   with: {
-                    gitAccounts: true,
+                    gitConnections: true,
                   },
                 },
               },
             })
 
             if (owner) {
-              const ownerGitAccount = owner.user.gitAccounts?.find(
-                (acc) => acc.provider === project.gitProvider,
+              const ownerGitAccount = owner.user.gitConnections?.find(
+                (acc) => acc.provider === gitProvider,
               )
 
               if (ownerGitAccount && repoInfo.owner && repoInfo.repo) {
-                if (project.gitProvider === 'github') {
+                if (gitProvider === 'github') {
                   await this.gitProvider.removeGitHubCollaborator(
                     ownerGitAccount.accessToken,
                     `${repoInfo.owner}/${repoInfo.repo}`,
-                    memberGitAccount.gitUsername,
+                    memberGitAccount.username,
                   )
-                } else if (project.gitProvider === 'gitlab') {
+                } else if (gitProvider === 'gitlab') {
                   await this.gitProvider.removeGitLabMember(
                     ownerGitAccount.accessToken,
                     `${repoInfo.owner}/${repoInfo.repo}`,
-                    Number.parseInt(memberGitAccount.gitUserId!, 10),
+                    Number.parseInt(memberGitAccount.providerAccountId!, 10),
                   )
                 }
               }
@@ -451,14 +464,17 @@ export class ProjectCollaborationSyncService {
 
       this.logger.info(`Successfully removed collaborator ${userId} from project ${projectId}`)
 
-      // 记录成功
-      await this.errorService.recordSuccess({
-        syncType: 'member',
-        action: 'remove',
-        provider: project.gitProvider as 'github' | 'gitlab',
-        projectId,
-        userId,
-      })
+      // 记录成功（如果有 repository）
+      if (repository) {
+        const gitProvider = repository.provider as 'github' | 'gitlab'
+        await this.errorService.recordSuccess({
+          syncType: 'member',
+          action: 'remove',
+          provider: gitProvider,
+          projectId,
+          userId,
+        })
+      }
 
       return { success: true }
     } catch (error) {
@@ -506,18 +522,23 @@ export class ProjectCollaborationSyncService {
     })
 
     const collaborators = members.filter((m) => m.role !== 'owner' && m.role !== 'maintainer')
-    const syncedCollaborators = collaborators.filter((m) => m.gitSyncStatus === 'synced')
-    const pendingCollaborators = collaborators.filter((m) => m.gitSyncStatus === 'pending')
-    const failedCollaborators = collaborators.filter((m) => m.gitSyncStatus === 'failed')
+    const syncedCollaborators = collaborators.filter((m) => m.status === 'synced')
+    const pendingCollaborators = collaborators.filter((m) => m.status === 'pending')
+    const failedCollaborators = collaborators.filter((m) => m.status === 'failed')
 
     const lastSyncAt =
       collaborators
-        .map((m) => m.gitSyncedAt)
+        .map((m) => m.syncedAt)
         .filter(Boolean)
         .sort((a, b) => b!.getTime() - a!.getTime())[0] || null
 
+    // 检查是否有 Git 仓库
+    const repository = await this.db.query.repositories.findFirst({
+      where: eq(schema.repositories.projectId, projectId),
+    })
+
     return {
-      enabled: !!(project.gitProvider && project.gitRepoUrl),
+      enabled: !!repository,
       collaboratorCount: collaborators.length,
       syncedCollaboratorCount: syncedCollaborators.length,
       pendingCollaborators: pendingCollaborators.length,

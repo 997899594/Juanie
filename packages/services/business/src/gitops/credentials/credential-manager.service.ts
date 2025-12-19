@@ -1,7 +1,7 @@
 import * as schema from '@juanie/core/database'
 import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
-import { EncryptionService, OAuthAccountsService } from '@juanie/service-foundation'
+import { EncryptionService, GitConnectionsService } from '@juanie/service-foundation'
 import type { CreateCredentialOptions, GitAuthHealthStatus } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { eq } from 'drizzle-orm'
@@ -19,7 +19,7 @@ export class CredentialManagerService {
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly k3s: K3sService,
-    private readonly oauthService: OAuthAccountsService,
+    private readonly gitConnectionsService: GitConnectionsService,
     private readonly credentialFactory: CredentialFactory,
     private readonly encryption: EncryptionService,
     private readonly logger: Logger,
@@ -102,15 +102,15 @@ export class CredentialManagerService {
    * 创建 OAuth 凭证
    */
   private async createOAuthCredential(projectId: string, userId: string): Promise<GitCredential> {
-    // 获取用户的 OAuth 账户（优先 GitHub）
-    let oauthAccount = await this.oauthService.getAccountByProvider(userId, 'github')
+    // 获取用户的 Git 连接（优先 GitHub）
+    let gitConnection = await this.gitConnectionsService.getConnectionByProvider(userId, 'github')
 
-    if (!oauthAccount) {
+    if (!gitConnection) {
       // 尝试 GitLab
-      oauthAccount = await this.oauthService.getAccountByProvider(userId, 'gitlab')
+      gitConnection = await this.gitConnectionsService.getConnectionByProvider(userId, 'gitlab')
     }
 
-    if (!oauthAccount) {
+    if (!gitConnection) {
       throw new Error('User has no connected Git account')
     }
 
@@ -120,7 +120,7 @@ export class CredentialManagerService {
       .values({
         projectId,
         authType: 'oauth',
-        oauthAccountId: oauthAccount.id,
+        oauthAccountId: gitConnection.id,
         createdBy: userId,
       })
       .returning()

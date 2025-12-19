@@ -107,7 +107,7 @@ const props = withDefaults(defineProps<Props>(), {
   memberCount: 0,
 })
 
-defineEmits<{
+const emit = defineEmits<{
   click: []
   edit: [project: Project]
   delete: [project: Project]

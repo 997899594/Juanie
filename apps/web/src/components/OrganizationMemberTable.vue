@@ -147,7 +147,7 @@ const props = withDefaults(defineProps<Props>(), {
   currentUserRole: 'member',
 })
 
-defineEmits<{
+const emit = defineEmits<{
   invite: []
   'update-role': [memberId: string, role: string]
   remove: [memberId: string]

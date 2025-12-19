@@ -142,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePipelines } from '@/composables/usePipelines'
 import { useProjectCRUD } from '@/composables/useProjects'

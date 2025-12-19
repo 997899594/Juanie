@@ -10,20 +10,23 @@ import { EncryptionService } from '../encryption/encryption.service'
 export interface LinkGitAccountInput {
   userId: string
   provider: GitProvider
-  gitUserId: string
-  gitUsername: string
-  gitEmail?: string
-  gitAvatarUrl?: string
+  providerAccountId: string // Git 平台的用户 ID（原 gitUserId）
+  username: string // Git 用户名（原 gitUsername）
+  email?: string // Git 邮箱（原 gitEmail）
+  avatarUrl?: string // Git 头像（原 gitAvatarUrl）
   accessToken: string
   refreshToken?: string
-  tokenExpiresAt?: Date
+  expiresAt?: Date // Token 过期时间（原 tokenExpiresAt）
+  // Git 服务器配置（必传，支持私有部署）
+  serverUrl: string // 例如: https://github.com, https://gitlab.com, https://gitlab.company.com
+  serverType?: 'cloud' | 'self-hosted' // 可选: 根据 serverUrl 自动判断
 }
 
 export interface GitAccountStatus {
   isLinked: boolean
   provider?: GitProvider
-  gitUsername?: string
-  syncStatus?: 'active' | 'expired' | 'revoked'
+  username?: string // Git 用户名（原 gitUsername）
+  status?: 'active' | 'expired' | 'revoked' // 连接状态（原 syncStatus）
   lastSyncAt?: Date
   connectedAt?: Date
 }
@@ -41,9 +44,9 @@ export class GitAccountLinkingService {
   /**
    * 关联用户的 Git 账号
    */
-  async linkGitAccount(input: LinkGitAccountInput): Promise<schema.UserGitAccount> {
+  async linkGitAccount(input: LinkGitAccountInput): Promise<schema.GitConnection> {
     this.logger.info(
-      `Linking ${input.provider} account for user ${input.userId}: ${input.gitUsername}`,
+      `Linking ${input.provider} account for user ${input.userId}: ${input.username}`,
     )
 
     // 加密 Token
@@ -53,54 +56,65 @@ export class GitAccountLinkingService {
       : null
 
     // 检查是否已存在
-    const existing = await this.db.query.userGitAccounts.findFirst({
-      where: eq(schema.userGitAccounts.userId, input.userId),
+    const existing = await this.db.query.gitConnections.findFirst({
+      where: eq(schema.gitConnections.userId, input.userId),
     })
 
     if (existing) {
       // 更新现有记录
       const updated = await this.db
-        .update(schema.userGitAccounts)
+        .update(schema.gitConnections)
         .set({
-          gitUserId: input.gitUserId,
-          gitUsername: input.gitUsername,
-          gitEmail: input.gitEmail,
-          gitAvatarUrl: input.gitAvatarUrl,
+          providerAccountId: input.providerAccountId,
+          username: input.username,
+          email: input.email,
+          avatarUrl: input.avatarUrl,
           accessToken: encryptedAccessToken,
           refreshToken: encryptedRefreshToken,
-          tokenExpiresAt: input.tokenExpiresAt,
-          syncStatus: 'active',
+          expiresAt: input.expiresAt,
+          status: 'active',
           connectedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(schema.userGitAccounts.id, existing.id))
+        .where(eq(schema.gitConnections.id, existing.id))
         .returning()
 
-      this.logger.info(`Updated Git account link for user ${input.userId}`)
+      this.logger.info(`Updated Git connection for user ${input.userId}`)
       const result = updated[0]
-      if (!result) throw new Error('Failed to update Git account')
+      if (!result) throw new Error('Failed to update Git connection')
       return result
     }
 
     // 创建新记录
+    // 自动判断 serverType（如果未提供）
+    const isCloudServer =
+      input.serverUrl === 'https://github.com' ||
+      input.serverUrl === 'https://gitlab.com' ||
+      input.serverUrl === 'https://www.github.com' ||
+      input.serverUrl === 'https://www.gitlab.com'
+    const serverType = input.serverType ?? (isCloudServer ? 'cloud' : 'self-hosted')
+
     const [created] = await this.db
-      .insert(schema.userGitAccounts)
+      .insert(schema.gitConnections)
       .values({
         userId: input.userId,
         provider: input.provider,
-        gitUserId: input.gitUserId,
-        gitUsername: input.gitUsername,
-        gitEmail: input.gitEmail,
-        gitAvatarUrl: input.gitAvatarUrl,
+        providerAccountId: input.providerAccountId,
+        username: input.username,
+        email: input.email,
+        avatarUrl: input.avatarUrl,
         accessToken: encryptedAccessToken,
         refreshToken: encryptedRefreshToken,
-        tokenExpiresAt: input.tokenExpiresAt,
-        syncStatus: 'active',
+        expiresAt: input.expiresAt,
+        status: 'active',
+        purpose: 'both',
+        serverUrl: input.serverUrl,
+        serverType,
       })
       .returning()
 
-    this.logger.info(`Created Git account link for user ${input.userId}`)
-    if (!created) throw new Error('Failed to create Git account')
+    this.logger.info(`Created Git connection for user ${input.userId}`)
+    if (!created) throw new Error('Failed to create Git connection')
     return created
   }
 
@@ -110,7 +124,7 @@ export class GitAccountLinkingService {
   async unlinkGitAccount(userId: string, provider: GitProvider): Promise<void> {
     this.logger.info(`Unlinking ${provider} account for user ${userId}`)
 
-    await this.db.delete(schema.userGitAccounts).where(eq(schema.userGitAccounts.userId, userId))
+    await this.db.delete(schema.gitConnections).where(eq(schema.gitConnections.userId, userId))
 
     this.logger.info(`Unlinked Git account for user ${userId}`)
   }
@@ -119,21 +133,21 @@ export class GitAccountLinkingService {
    * 获取用户的 Git 账号状态
    */
   async getGitAccountStatus(userId: string, _provider: GitProvider): Promise<GitAccountStatus> {
-    const account = await this.db.query.userGitAccounts.findFirst({
-      where: eq(schema.userGitAccounts.userId, userId),
+    const connection = await this.db.query.gitConnections.findFirst({
+      where: eq(schema.gitConnections.userId, userId),
     })
 
-    if (!account) {
+    if (!connection) {
       return { isLinked: false }
     }
 
     return {
       isLinked: true,
-      provider: account.provider as GitProvider,
-      gitUsername: account.gitUsername,
-      syncStatus: account.syncStatus as 'active' | 'expired' | 'revoked',
-      lastSyncAt: account.lastSyncAt || undefined,
-      connectedAt: account.connectedAt,
+      provider: connection.provider as GitProvider,
+      username: connection.username,
+      status: connection.status as 'active' | 'expired' | 'revoked',
+      lastSyncAt: connection.lastSyncAt || undefined,
+      connectedAt: connection.connectedAt,
     }
   }
 
@@ -143,23 +157,23 @@ export class GitAccountLinkingService {
   async getGitAccount(
     userId: string,
     _provider: GitProvider,
-  ): Promise<schema.UserGitAccount | null> {
-    const account = await this.db.query.userGitAccounts.findFirst({
-      where: eq(schema.userGitAccounts.userId, userId),
+  ): Promise<schema.GitConnection | null> {
+    const connection = await this.db.query.gitConnections.findFirst({
+      where: eq(schema.gitConnections.userId, userId),
     })
 
-    if (!account) {
+    if (!connection) {
       return null
     }
 
     // 解密 Token
-    const decryptedAccessToken = await this.encryptionService.decrypt(account.accessToken)
-    const decryptedRefreshToken = account.refreshToken
-      ? await this.encryptionService.decrypt(account.refreshToken)
+    const decryptedAccessToken = await this.encryptionService.decrypt(connection.accessToken)
+    const decryptedRefreshToken = connection.refreshToken
+      ? await this.encryptionService.decrypt(connection.refreshToken)
       : null
 
     return {
-      ...account,
+      ...connection,
       accessToken: decryptedAccessToken,
       refreshToken: decryptedRefreshToken,
     }
@@ -174,13 +188,13 @@ export class GitAccountLinkingService {
     status: 'active' | 'expired' | 'revoked',
   ): Promise<void> {
     await this.db
-      .update(schema.userGitAccounts)
+      .update(schema.gitConnections)
       .set({
-        syncStatus: status,
+        status: status,
         lastSyncAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(schema.userGitAccounts.userId, userId))
+      .where(eq(schema.gitConnections.userId, userId))
 
     this.logger.info(`Updated sync status for user ${userId} to ${status}`)
   }
@@ -201,15 +215,15 @@ export class GitAccountLinkingService {
       : null
 
     await this.db
-      .update(schema.userGitAccounts)
+      .update(schema.gitConnections)
       .set({
         accessToken: encryptedAccessToken,
         refreshToken: encryptedRefreshToken,
-        tokenExpiresAt: expiresAt,
-        syncStatus: 'active',
+        expiresAt: expiresAt,
+        status: 'active',
         updatedAt: new Date(),
       })
-      .where(eq(schema.userGitAccounts.userId, userId))
+      .where(eq(schema.gitConnections.userId, userId))
 
     this.logger.info(`Refreshed access token for user ${userId}`)
   }

@@ -34,15 +34,10 @@
               <CardTitle class="text-lg">{{ repo.name }}</CardTitle>
             </div>
             <div class="flex items-center gap-2">
-              <Badge :variant="repo.syncStatus === 'synced' ? 'default' : 'secondary'">
-                {{ getSyncStatusText(repo.syncStatus) }}
+              <Badge :variant="repo.status === 'success' ? 'default' : 'secondary'">
+                {{ getSyncStatusText(repo.status) }}
               </Badge>
-              <Badge 
-                v-if="repo.gitopsConfig?.enabled && repo.fluxSyncStatus"
-                :variant="getFluxStatusVariant(repo.fluxSyncStatus)"
-              >
-                Flux: {{ getFluxStatusText(repo.fluxSyncStatus) }}
-              </Badge>
+              <!-- Flux 状态已移至 gitops_resources 表，需要单独查询 -->
             </div>
           </div>
           <CardDescription>{{ repo.url }}</CardDescription>
@@ -103,23 +98,9 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
   Badge,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-  Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from '@juanie/ui'
 import {
   GitBranch,
@@ -151,7 +132,7 @@ const selectedRepository = ref<any>(null)
 
 const getSyncStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    synced: '已同步',
+    success: '已同步',
     syncing: '同步中',
     failed: '同步失败',
     pending: '待同步',
@@ -162,24 +143,6 @@ const getSyncStatusText = (status: string) => {
 const formatDate = (date: string | null) => {
   if (!date) return '从未同步'
   return new Date(date).toLocaleString('zh-CN')
-}
-
-const getFluxStatusText = (status: string) => {
-  const statusMap: Record<string, string> = {
-    ready: '就绪',
-    reconciling: '同步中',
-    failed: '失败',
-  }
-  return statusMap[status] || status
-}
-
-const getFluxStatusVariant = (status: string): 'default' | 'secondary' | 'destructive' => {
-  const variantMap: Record<string, 'default' | 'secondary' | 'destructive'> = {
-    ready: 'default',
-    reconciling: 'secondary',
-    failed: 'destructive',
-  }
-  return variantMap[status] || 'secondary'
 }
 
 // 打开GitOps配置对话框

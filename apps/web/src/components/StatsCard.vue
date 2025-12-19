@@ -17,7 +17,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@juanie/ui'
 import type { Component } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   title: string
   value: string | number
   description?: string

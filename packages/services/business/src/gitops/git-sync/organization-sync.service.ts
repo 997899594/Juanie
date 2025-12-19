@@ -31,14 +31,14 @@ export interface OrganizationSyncResult {
 
 @Injectable()
 export class OrganizationSyncService {
-
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly gitProvider: GitProviderService,
     private readonly errorService: GitSyncErrorService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(OrganizationSyncService.name)}
+    this.logger.setContext(OrganizationSyncService.name)
+  }
 
   /**
    * 同步组织成员到 Git 平台
@@ -143,7 +143,7 @@ export class OrganizationSyncService {
       with: {
         user: {
           with: {
-            gitAccounts: true,
+            gitConnections: true,
           },
         },
       },
@@ -152,7 +152,7 @@ export class OrganizationSyncService {
     // 类型断言 - 确保关系类型正确
     type MemberWithUser = typeof schema.organizationMembers.$inferSelect & {
       user: typeof schema.users.$inferSelect & {
-        gitAccounts: Array<typeof schema.userGitAccounts.$inferSelect>
+        gitConnections: Array<typeof schema.gitConnections.$inferSelect>
       }
     }
     const members = membersResult as unknown as MemberWithUser[]
@@ -181,11 +181,11 @@ export class OrganizationSyncService {
       throw new Error('Organization owner not found')
     }
 
-    const ownerGitAccount = owner.user.gitAccounts?.find(
-      (acc: typeof schema.userGitAccounts.$inferSelect) =>
-        acc.provider === organization.gitProvider,
+    const ownerGitConnection = owner.user.gitConnections?.find(
+      (conn: typeof schema.gitConnections.$inferSelect) =>
+        conn.provider === organization.gitProvider,
     )
-    if (!ownerGitAccount) {
+    if (!ownerGitConnection) {
       throw new Error(`Owner does not have ${organization.gitProvider} account linked`)
     }
 
@@ -197,12 +197,12 @@ export class OrganizationSyncService {
           continue
         }
 
-        const memberGitAccount = member.user.gitAccounts?.find(
-          (acc: typeof schema.userGitAccounts.$inferSelect) =>
-            acc.provider === organization.gitProvider,
+        const memberGitConnection = member.user.gitConnections?.find(
+          (conn: typeof schema.gitConnections.$inferSelect) =>
+            conn.provider === organization.gitProvider,
         )
 
-        if (!memberGitAccount) {
+        if (!memberGitConnection) {
           results.errors.push({
             userId: member.userId,
             error: `User does not have ${organization.gitProvider} account linked`,
@@ -216,16 +216,16 @@ export class OrganizationSyncService {
         // 添加成员到 Git 组织
         if (organization.gitProvider === 'github') {
           await this.gitProvider.addGitHubOrgMember(
-            ownerGitAccount.accessToken,
+            ownerGitConnection.accessToken,
             organization.gitOrgName!,
-            memberGitAccount.gitUsername,
+            memberGitConnection.username,
             gitRole as 'admin' | 'member',
           )
         } else if (organization.gitProvider === 'gitlab') {
           await this.gitProvider.addGitLabGroupMember(
-            ownerGitAccount.accessToken,
+            ownerGitConnection.accessToken,
             organization.gitOrgId!,
-            Number.parseInt(memberGitAccount.gitUserId!, 10),
+            Number.parseInt(memberGitConnection.providerAccountId!, 10),
             gitRole as 10 | 20 | 30 | 40 | 50,
           )
         }
@@ -242,7 +242,7 @@ export class OrganizationSyncService {
           provider: organization.gitProvider as 'github' | 'gitlab',
           organizationId: organization.id,
           userId: member.userId,
-          gitResourceId: memberGitAccount.gitUserId,
+          gitResourceId: memberGitConnection.providerAccountId,
           gitResourceType: 'user',
         })
       } catch (error) {
@@ -321,7 +321,7 @@ export class OrganizationSyncService {
       const user = await this.db.query.users.findFirst({
         where: eq(schema.users.id, userId),
         with: {
-          gitAccounts: true,
+          gitConnections: true,
         },
       })
 
@@ -329,12 +329,12 @@ export class OrganizationSyncService {
         throw new Error(`User not found: ${userId}`)
       }
 
-      const userGitAccount = user.gitAccounts?.find(
-        (acc: typeof schema.userGitAccounts.$inferSelect) =>
-          acc.provider === organization.gitProvider,
+      const userGitConnection = user.gitConnections?.find(
+        (conn: typeof schema.gitConnections.$inferSelect) =>
+          conn.provider === organization.gitProvider,
       )
 
-      if (!userGitAccount) {
+      if (!userGitConnection) {
         this.logger.info(`User ${userId} does not have ${organization.gitProvider} account`)
         return { success: true }
       }
@@ -348,7 +348,7 @@ export class OrganizationSyncService {
         with: {
           user: {
             with: {
-              gitAccounts: true,
+              gitConnections: true,
             },
           },
         },
@@ -358,27 +358,27 @@ export class OrganizationSyncService {
         throw new Error('Organization owner not found')
       }
 
-      const ownerGitAccount = owner.user.gitAccounts?.find(
-        (acc: typeof schema.userGitAccounts.$inferSelect) =>
-          acc.provider === organization.gitProvider,
+      const ownerGitConnection = owner.user.gitConnections?.find(
+        (conn: typeof schema.gitConnections.$inferSelect) =>
+          conn.provider === organization.gitProvider,
       )
 
-      if (!ownerGitAccount) {
-        throw new Error('Organization owner Git account not found')
+      if (!ownerGitConnection) {
+        throw new Error('Organization owner Git connection not found')
       }
 
       // 从 Git 组织移除成员
       if (organization.gitProvider === 'github') {
         await this.gitProvider.removeGitHubOrgMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           organization.gitOrgName!,
-          userGitAccount.gitUsername,
+          userGitConnection.username,
         )
       } else if (organization.gitProvider === 'gitlab') {
         await this.gitProvider.removeGitLabGroupMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           organization.gitOrgId!,
-          Number.parseInt(userGitAccount.gitUserId!, 10),
+          Number.parseInt(userGitConnection.providerAccountId!, 10),
         )
       }
 
@@ -393,7 +393,7 @@ export class OrganizationSyncService {
         provider: organization.gitProvider as 'github' | 'gitlab',
         organizationId,
         userId,
-        gitResourceId: userGitAccount.gitUserId,
+        gitResourceId: userGitConnection.providerAccountId,
         gitResourceType: 'user',
       })
 
@@ -605,18 +605,18 @@ export class OrganizationSyncService {
 
     try {
       // 获取用户的 Git 账号
-      const [gitAccount] = await this.db
+      const [gitConnection] = await this.db
         .select()
-        .from(schema.userGitAccounts)
+        .from(schema.gitConnections)
         .where(
           and(
-            eq(schema.userGitAccounts.userId, userId),
-            eq(schema.userGitAccounts.provider, org.gitProvider),
+            eq(schema.gitConnections.userId, userId),
+            eq(schema.gitConnections.provider, org.gitProvider),
           ),
         )
         .limit(1)
 
-      if (!gitAccount) {
+      if (!gitConnection) {
         throw new Error(`User does not have ${org.gitProvider} account linked`)
       }
 
@@ -636,18 +636,18 @@ export class OrganizationSyncService {
         throw new Error('Organization owner not found')
       }
 
-      const [ownerGitAccount] = await this.db
+      const [ownerGitConnection] = await this.db
         .select()
-        .from(schema.userGitAccounts)
+        .from(schema.gitConnections)
         .where(
           and(
-            eq(schema.userGitAccounts.userId, owner.userId),
-            eq(schema.userGitAccounts.provider, org.gitProvider),
+            eq(schema.gitConnections.userId, owner.userId),
+            eq(schema.gitConnections.provider, org.gitProvider),
           ),
         )
         .limit(1)
 
-      if (!ownerGitAccount) {
+      if (!ownerGitConnection) {
         throw new Error(`Owner does not have ${org.gitProvider} account linked`)
       }
 
@@ -657,16 +657,16 @@ export class OrganizationSyncService {
       // 添加成员到 Git 组织
       if (org.gitProvider === 'github') {
         await this.gitProvider.addGitHubOrgMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           org.gitOrgName!,
-          gitAccount.gitUsername,
+          gitConnection.username,
           gitRole as 'admin' | 'member',
         )
       } else if (org.gitProvider === 'gitlab') {
         await this.gitProvider.addGitLabGroupMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           org.gitOrgId,
-          Number.parseInt(gitAccount.gitUserId!, 10),
+          Number.parseInt(gitConnection.providerAccountId!, 10),
           gitRole as 10 | 20 | 30 | 40 | 50,
         )
       }
@@ -718,18 +718,18 @@ export class OrganizationSyncService {
 
     try {
       // 获取用户的 Git 账号
-      const [gitAccount] = await this.db
+      const [gitConnection] = await this.db
         .select()
-        .from(schema.userGitAccounts)
+        .from(schema.gitConnections)
         .where(
           and(
-            eq(schema.userGitAccounts.userId, userId),
-            eq(schema.userGitAccounts.provider, org.gitProvider),
+            eq(schema.gitConnections.userId, userId),
+            eq(schema.gitConnections.provider, org.gitProvider),
           ),
         )
         .limit(1)
 
-      if (!gitAccount) {
+      if (!gitConnection) {
         // 用户没有关联 Git 账号,无需移除
         await this.errorService.updateSyncLog(logId, {
           status: 'success',
@@ -753,33 +753,33 @@ export class OrganizationSyncService {
         throw new Error('Organization owner not found')
       }
 
-      const [ownerGitAccount] = await this.db
+      const [ownerGitConnection] = await this.db
         .select()
-        .from(schema.userGitAccounts)
+        .from(schema.gitConnections)
         .where(
           and(
-            eq(schema.userGitAccounts.userId, owner.userId),
-            eq(schema.userGitAccounts.provider, org.gitProvider),
+            eq(schema.gitConnections.userId, owner.userId),
+            eq(schema.gitConnections.provider, org.gitProvider),
           ),
         )
         .limit(1)
 
-      if (!ownerGitAccount) {
+      if (!ownerGitConnection) {
         throw new Error(`Owner does not have ${org.gitProvider} account linked`)
       }
 
       // 从 Git 组织移除成员
       if (org.gitProvider === 'github') {
         await this.gitProvider.removeGitHubOrgMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           org.gitOrgName!,
-          gitAccount.gitUsername,
+          gitConnection.username,
         )
       } else if (org.gitProvider === 'gitlab') {
         await this.gitProvider.removeGitLabGroupMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           org.gitOrgId,
-          Number.parseInt(gitAccount.gitUserId!, 10),
+          Number.parseInt(gitConnection.providerAccountId!, 10),
         )
       }
 
@@ -831,18 +831,18 @@ export class OrganizationSyncService {
 
     try {
       // 获取用户的 Git 账号
-      const [gitAccount] = await this.db
+      const [gitConnection] = await this.db
         .select()
-        .from(schema.userGitAccounts)
+        .from(schema.gitConnections)
         .where(
           and(
-            eq(schema.userGitAccounts.userId, userId),
-            eq(schema.userGitAccounts.provider, org.gitProvider),
+            eq(schema.gitConnections.userId, userId),
+            eq(schema.gitConnections.provider, org.gitProvider),
           ),
         )
         .limit(1)
 
-      if (!gitAccount) {
+      if (!gitConnection) {
         throw new Error(`User does not have ${org.gitProvider} account linked`)
       }
 
@@ -862,18 +862,18 @@ export class OrganizationSyncService {
         throw new Error('Organization owner not found')
       }
 
-      const [ownerGitAccount] = await this.db
+      const [ownerGitConnection] = await this.db
         .select()
-        .from(schema.userGitAccounts)
+        .from(schema.gitConnections)
         .where(
           and(
-            eq(schema.userGitAccounts.userId, owner.userId),
-            eq(schema.userGitAccounts.provider, org.gitProvider),
+            eq(schema.gitConnections.userId, owner.userId),
+            eq(schema.gitConnections.provider, org.gitProvider),
           ),
         )
         .limit(1)
 
-      if (!ownerGitAccount) {
+      if (!ownerGitConnection) {
         throw new Error(`Owner does not have ${org.gitProvider} account linked`)
       }
 
@@ -887,27 +887,27 @@ export class OrganizationSyncService {
       if (org.gitProvider === 'github') {
         // GitHub 需要先移除再添加来更新角色
         await this.gitProvider.removeGitHubOrgMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           org.gitOrgName!,
-          gitAccount.gitUsername,
+          gitConnection.username,
         )
         await this.gitProvider.addGitHubOrgMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           org.gitOrgName!,
-          gitAccount.gitUsername,
+          gitConnection.username,
           gitRole as 'admin' | 'member',
         )
       } else if (org.gitProvider === 'gitlab') {
         // GitLab 也需要先移除再添加来更新角色
         await this.gitProvider.removeGitLabGroupMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           org.gitOrgId,
-          Number.parseInt(gitAccount.gitUserId!, 10),
+          Number.parseInt(gitConnection.providerAccountId!, 10),
         )
         await this.gitProvider.addGitLabGroupMember(
-          ownerGitAccount.accessToken,
+          ownerGitConnection.accessToken,
           org.gitOrgId,
-          Number.parseInt(gitAccount.gitUserId!, 10),
+          Number.parseInt(gitConnection.providerAccountId!, 10),
           gitRole as 10 | 20 | 30 | 40 | 50,
         )
       }

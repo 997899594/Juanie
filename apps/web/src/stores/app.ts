@@ -8,7 +8,7 @@ export const useAppStore = defineStore(
     const sidebarCollapsed = ref(false)
 
     // 当前组织
-    const currentOrganizationId = ref<string | null>(null)
+    const currentOrganizationId = ref<string | undefined>(undefined)
 
     // 面包屑
     const breadcrumbs = ref<Array<{ label: string; to?: string }>>([])
@@ -18,7 +18,7 @@ export const useAppStore = defineStore(
       sidebarCollapsed.value = !sidebarCollapsed.value
     }
 
-    function setCurrentOrganization(orgId: string | null) {
+    function setCurrentOrganization(orgId: string | undefined) {
       currentOrganizationId.value = orgId
     }
 

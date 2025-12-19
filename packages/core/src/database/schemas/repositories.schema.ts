@@ -15,9 +15,10 @@ export const repositories = pgTable(
 
     // 同步状态
     lastSyncAt: timestamp('last_sync_at'),
-    syncStatus: text('sync_status').default('pending'), // 'pending', 'syncing', 'success', 'failed'
+    status: text('status').default('pending'), // 'pending', 'syncing', 'success', 'failed'
 
     // GitOps 配置（JSONB）
+    // 注意：Flux 运行时状态已移至 gitops_resources 表
     gitopsConfig: jsonb('gitops_config').$type<{
       enabled: boolean
       fluxNamespace: string
@@ -26,12 +27,6 @@ export const repositories = pgTable(
       secretRef?: string // K8s Secret 名称
       timeout?: string
     }>(),
-
-    // Flux 同步状态
-    fluxSyncStatus: text('flux_sync_status'), // 'ready', 'reconciling', 'failed'
-    fluxLastSyncCommit: text('flux_last_sync_commit'),
-    fluxLastSyncTime: timestamp('flux_last_sync_time'),
-    fluxErrorMessage: text('flux_error_message'),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

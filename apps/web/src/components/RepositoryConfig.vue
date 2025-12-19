@@ -257,14 +257,14 @@ const emit = defineEmits<{
 
 const toast = useToast()
 
-// 获取用户已连接的 OAuth 账户
-const oauthAccounts = ref<any[]>([])
+// 获取用户已连接的 Git 连接
+const gitConnections = ref<any[]>([])
 const loadingAccounts = ref(true)
 
-// 加载 OAuth 账户
-async function loadOAuthAccounts() {
+// 加载 Git 连接
+async function loadGitConnections() {
   try {
-    oauthAccounts.value = await trpc.users.oauthAccounts.list.query()
+    gitConnections.value = await trpc.users.gitConnections.list.query()
     
     // 自动选择第一个已连接的账户
     const connectedProvider = availableProviders.value.find(p => p.connected)
@@ -283,7 +283,7 @@ async function loadOAuthAccounts() {
 const availableProviders = computed(() => {
   const providers: any[] = []
 
-  if (oauthAccounts.value.length === 0) {
+  if (gitConnections.value.length === 0) {
     return [
       {
         type: 'github',
@@ -303,7 +303,7 @@ const availableProviders = computed(() => {
   }
 
   // GitHub
-  const githubAccount = oauthAccounts.value.find((a: any) => a.provider === 'github')
+  const githubAccount = gitConnections.value.find((a: any) => a.provider === 'github')
   if (githubAccount) {
     providers.push({
       type: 'github',
@@ -316,7 +316,7 @@ const availableProviders = computed(() => {
   }
 
   // GitLab 账户（可能有多个）
-  const gitlabAccounts = oauthAccounts.value.filter((a: any) => a.provider === 'gitlab')
+  const gitlabAccounts = gitConnections.value.filter((a: any) => a.provider === 'gitlab')
   for (const account of gitlabAccounts) {
     const serverUrl = account.serverUrl || 'https://gitlab.com'
     const hostname = new URL(serverUrl).hostname
@@ -547,8 +547,8 @@ watch(
   { deep: true },
 )
 
-// 组件挂载时加载 OAuth 账户
+// 组件挂载时加载 Git 连接
 onMounted(() => {
-  loadOAuthAccounts()
+  loadGitConnections()
 })
 </script>

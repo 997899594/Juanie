@@ -56,7 +56,7 @@ export function useProjectMembers() {
     }) => {
       return await trpc.projects.addMember.mutate({ projectId, memberId, role })
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['projects', 'members', variables.projectId] })
       toast.success('添加成功', '成员已添加到项目')
     },
@@ -83,7 +83,7 @@ export function useProjectMembers() {
     }) => {
       return await trpc.projects.updateMemberRole.mutate({ projectId, memberId, role })
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['projects', 'members', variables.projectId] })
       toast.success('更新成功', '成员角色已更新')
     },
@@ -102,7 +102,7 @@ export function useProjectMembers() {
     mutationFn: async ({ projectId, memberId }: { projectId: string; memberId: string }) => {
       return await trpc.projects.removeMember.mutate({ projectId, memberId })
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       // 乐观更新：从缓存中移除成员
       queryClient.setQueryData<ProjectMember[]>(
         ['projects', 'members', variables.projectId],

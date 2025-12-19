@@ -110,8 +110,8 @@ import { Label } from '@juanie/ui'
 import { Lock, Globe, Loader2, Building } from 'lucide-vue-next'
 import { log } from '@juanie/ui'
 
-// 使用后端实际实现的getById API类型
-type Project = NonNullable<Awaited<ReturnType<typeof trpc.projects.getById.query>>>
+// 使用后端实际实现的 get API 类型
+type Project = NonNullable<Awaited<ReturnType<typeof trpc.projects.get.query>>>
 
 const props = defineProps<{
   project: Project

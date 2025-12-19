@@ -6,7 +6,7 @@ import type { ProjectStatus } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import { ProgressManagerService } from './initialization/progress-manager.service'
+import { InitializationStepsService } from './initialization/initialization-steps.service'
 
 /**
  * ProjectStatusService
@@ -19,13 +19,13 @@ import { ProgressManagerService } from './initialization/progress-manager.servic
  */
 @Injectable()
 export class ProjectStatusService {
-
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    private readonly progressManager: ProgressManagerService,
+    private readonly initializationSteps: InitializationStepsService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(ProjectStatusService.name)}
+    this.logger.setContext(ProjectStatusService.name)
+  }
 
   /**
    * 获取项目完整状态（包括所有关联资源）
@@ -43,18 +43,10 @@ export class ProjectStatusService {
       throw new Error('项目不存在')
     }
 
-    // 如果项目正在初始化，使用 Redis 的实时进度
-    if (project.status === 'initializing') {
-      const realtimeProgress = await this.progressManager.getProgressInfo(projectId)
-      if (realtimeProgress) {
-        project.initializationStatus = {
-          step: realtimeProgress.message,
-          progress: realtimeProgress.progress,
-          completedSteps: project.initializationStatus?.completedSteps || [],
-          error: project.initializationStatus?.error,
-          jobId: project.initializationStatus?.jobId,
-        }
-      }
+    // 获取初始化步骤（如果项目正在初始化或刚完成初始化）
+    let initializationSteps: schema.ProjectInitializationStep[] = []
+    if (project.status === 'initializing' || project.status === 'active') {
+      initializationSteps = await this.initializationSteps.getProjectSteps(projectId)
     }
 
     // 获取环境
@@ -89,6 +81,7 @@ export class ProjectStatusService {
       repositories: repositories as any,
       repository: repositories.length > 0 ? (repositories[0] as any) : null,
       gitopsResources: gitopsResources as any,
+      initializationSteps: initializationSteps as any,
       stats: {
         totalDeployments: deployments.length,
         successfulDeployments: 0,

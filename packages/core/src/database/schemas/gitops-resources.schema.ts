@@ -63,9 +63,16 @@ export const gitopsResources = pgTable(
 
     // 状态
     status: text('status').notNull().default('pending'), // 'pending', 'ready', 'reconciling', 'failed'
+    statusReason: text('status_reason'), // 状态原因（简短描述）
+    statusMessage: text('status_message'), // 详细状态消息
     lastAppliedRevision: text('last_applied_revision'),
     lastAttemptedRevision: text('last_attempted_revision'),
     errorMessage: text('error_message'),
+
+    // 状态时间戳
+    lastStatusUpdateAt: timestamp('last_status_update_at', { withTimezone: true }), // 最后状态更新时间
+    lastAppliedAt: timestamp('last_applied_at', { withTimezone: true }), // 最后成功应用时间
+    lastAttemptedAt: timestamp('last_attempted_at', { withTimezone: true }), // 最后尝试时间
 
     deletedAt: timestamp('deleted_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),

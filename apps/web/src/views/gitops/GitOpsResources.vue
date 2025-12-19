@@ -291,7 +291,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useGitOps } from '@/composables/useGitOps'
 import { useProjectCRUD } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
@@ -336,7 +336,9 @@ const appStore = useAppStore()
 const { useProjectsQuery } = useProjectCRUD()
 const { data: projects } = useProjectsQuery(appStore.currentOrganizationId!)
 
-const { loading, resources, listGitOpsResources, triggerSync } = useGitOps()
+// ✅ 简洁的 API
+const selectedProjectId = ref(route.query.project as string || '')
+const { resources, isLoading: loading, triggerSync } = useGitOps(selectedProjectId)
 
 // 状态
 const error = ref<string | null>(null)

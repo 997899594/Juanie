@@ -48,7 +48,7 @@ export function useProjectTeams() {
     mutationFn: async ({ projectId, teamId }: { projectId: string; teamId: string }) => {
       return await trpc.projects.assignTeam.mutate({ projectId, teamId })
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['projects', 'teams', variables.projectId] })
       toast.success('分配成功', '团队已分配到项目')
     },
@@ -67,7 +67,7 @@ export function useProjectTeams() {
     mutationFn: async ({ projectId, teamId }: { projectId: string; teamId: string }) => {
       return await trpc.projects.removeTeam.mutate({ projectId, teamId })
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       // 乐观更新：从缓存中移除团队
       queryClient.setQueryData<ProjectTeam[]>(['projects', 'teams', variables.projectId], (old) =>
         old?.filter((t) => t.id !== variables.teamId),

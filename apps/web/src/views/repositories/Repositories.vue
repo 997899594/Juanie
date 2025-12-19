@@ -177,7 +177,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+
 import { trpc } from '@/lib/trpc'
 import { useToast } from '@/composables/useToast'
 import { 
@@ -212,7 +212,6 @@ import {
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 
-const router = useRouter()
 const toast = useToast()
 
 // 状态
@@ -243,7 +242,7 @@ const loadProjects = async () => {
     // 这里简化处理，假设有一个默认组织
     projects.value = []
   } catch (error) {
-    log.error('加载项目失败:', error)
+    console.error('加载项目失败:', error)
     toast.error('加载失败', '无法加载项目列表')
   }
 }
@@ -268,7 +267,7 @@ const loadUserRepositories = async () => {
 
     userRepositories.value = result
   } catch (error: any) {
-    log.error('加载仓库列表失败:', error)
+    console.error('加载仓库列表失败:', error)
     
     if (error.message?.includes('未找到') || error.message?.includes('OAuth')) {
       toast.error('未连接账户', `请先在设置中连接您的 ${selectedProvider.value === 'github' ? 'GitHub' : 'GitLab'} 账户`)
@@ -302,7 +301,7 @@ const connectRepository = async () => {
     // 重新加载仓库列表
     await loadRepositories()
   } catch (error: any) {
-    log.error('连接仓库失败:', error)
+    console.error('连接仓库失败:', error)
     toast.error('连接失败', error.message || '无法连接仓库')
   } finally {
     isConnecting.value = false

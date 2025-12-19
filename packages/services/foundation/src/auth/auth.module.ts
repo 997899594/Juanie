@@ -1,18 +1,19 @@
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { AuthService } from './auth.service'
-import { OAuthAccountsService } from './oauth-accounts.service'
 
 /**
  * Auth Module
  *
- * 提供认证和 OAuth 账户管理服务
+ * 提供认证服务
  * 设为全局模块，因为被多个业务模块共享使用
+ *
+ * 注意：OAuthAccountsService 已被 GitConnectionsService 替代
  */
 @Global()
 @Module({
   imports: [ConfigModule],
-  providers: [AuthService, OAuthAccountsService],
-  exports: [AuthService, OAuthAccountsService],
+  providers: [AuthService],
+  exports: [AuthService],
 })
 export class AuthModule {}

@@ -109,7 +109,7 @@ export function useProjectCRUD() {
 
       return await trpc.projects.create.mutate(data)
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['projects', 'list', variables.organizationId] })
 
       if (variables.repository || variables.templateId) {
@@ -158,7 +158,7 @@ export function useProjectCRUD() {
     }) => {
       return await trpc.projects.delete.mutate({ projectId, repositoryAction })
     },
-    onSuccess: (result, variables) => {
+    onSuccess: (_result, variables) => {
       queryClient.removeQueries({ queryKey: ['projects', 'detail', variables.projectId] })
       queryClient.invalidateQueries({ queryKey: ['projects', 'list'] })
 
@@ -187,7 +187,7 @@ export function useProjectCRUD() {
     mutationFn: async (projectId: string) => {
       return await trpc.projects.archive.mutate({ projectId })
     },
-    onSuccess: (result, projectId) => {
+    onSuccess: (_result, projectId) => {
       queryClient.setQueryData<ProjectDetail>(['projects', 'detail', projectId], (old) =>
         old ? { ...old, status: 'archived' } : undefined,
       )
@@ -209,7 +209,7 @@ export function useProjectCRUD() {
     mutationFn: async (projectId: string) => {
       return await trpc.projects.restore.mutate({ projectId })
     },
-    onSuccess: (result, projectId) => {
+    onSuccess: (_result, projectId) => {
       queryClient.setQueryData<ProjectDetail>(['projects', 'detail', projectId], (old) =>
         old ? { ...old, status: 'active' } : undefined,
       )

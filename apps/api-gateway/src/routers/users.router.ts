@@ -1,4 +1,4 @@
-import { AuthService, OAuthAccountsService, UsersService } from '@juanie/service-foundation'
+import { AuthService, GitConnectionsService, UsersService } from '@juanie/service-foundation'
 import {
   updateUserPreferencesSchema,
   updateUserSchema,
@@ -15,7 +15,7 @@ export class UsersRouter {
   constructor(
     private readonly trpc: TrpcService,
     private readonly usersService: UsersService,
-    private readonly oauthAccountsService: OAuthAccountsService,
+    private readonly gitConnectionsService: GitConnectionsService,
     private readonly authService: AuthService,
   ) {}
 
@@ -86,11 +86,11 @@ export class UsersRouter {
         return await this.usersService.listUsers(input.userIds)
       }),
 
-      // OAuth 账户管理
-      oauthAccounts: this.trpc.router({
-        // 获取当前用户的 OAuth 账户列表
+      // Git 连接管理
+      gitConnections: this.trpc.router({
+        // 获取当前用户的 Git 连接列表
         list: this.trpc.protectedProcedure.query(async ({ ctx }) => {
-          return await this.oauthAccountsService.listUserAccounts(ctx.user.id)
+          return await this.gitConnectionsService.listUserConnections(ctx.user.id)
         }),
 
         // 检查是否已连接指定提供商
@@ -101,7 +101,7 @@ export class UsersRouter {
             }),
           )
           .query(async ({ ctx, input }) => {
-            const hasProvider = await this.oauthAccountsService.hasProvider(
+            const hasProvider = await this.gitConnectionsService.hasProvider(
               ctx.user.id,
               input.provider,
             )

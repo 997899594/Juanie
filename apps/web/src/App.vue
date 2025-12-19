@@ -7,7 +7,7 @@
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { Toaster, toast } from '@juanie/ui'
+import { Toaster } from '@juanie/ui'
 import { useAuthStore } from '@/stores/auth'
 import { usePreferencesStore } from '@/stores/preferences'
 

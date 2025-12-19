@@ -373,7 +373,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { generateNavigationConfig } from '@/router'
+
 import { Avatar,
   AvatarFallback,
   AvatarImage,
@@ -391,7 +391,6 @@ import { Avatar,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Separator,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -458,72 +457,7 @@ const notificationUnreadCount = ref(0)
 // 使用主题功能
 const { isDark, toggleMode } = preferencesStore
 
-// 图标映射
-const iconMap: Record<string, any> = {
-  AppWindow,
-  FolderOpen,
-  GitBranch,
-  Rocket,
-  Bot,
-  Brain,
-  Code,
-  Shield,
-  AlertTriangle,
-  Lock,
-  FileSearch,
-  BarChart3,
-  Activity,
-  Bell,
-  AlertCircle,
-  TrendingUp,
-  DollarSign,
-  Server,
-  Leaf,
-  TestTube,
-  ToggleLeft,
-  Users,
-  UserCheck,
-  Building,
-  Webhook,
-  Zap,
-  FileText,
-  Settings,
-}
 
-// 从路由配置生成导航菜单
-const navigationGroups = computed(() => {
-  const config = generateNavigationConfig()
-  
-  // 转换为组件需要的格式
-  const groups: Array<{
-    title: string
-    items: Array<{
-      title: string
-      href: string
-      icon: any
-      badge?: string
-    }>
-  }> = []
-
-  Object.entries(config).forEach(([groupName, items]) => {
-    groups.push({
-      title: groupName,
-      items: items.map(item => ({
-        title: item.title,
-        href: item.path,
-        icon: iconMap[item.icon] || AppWindow,
-        badge: item.badge
-      }))
-    })
-  })
-
-  return groups
-})
-
-// 页面标题映射 - 从路由元数据获取
-const currentPageTitle = computed(() => {
-  return route.meta?.title || '仪表盘'
-})
 
 // 动态生成面包屑
 const breadcrumbItems = computed(() => {

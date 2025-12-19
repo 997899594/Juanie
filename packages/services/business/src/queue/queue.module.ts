@@ -11,13 +11,15 @@ import { ProjectInitializationWorker } from './project-initialization.worker'
  *
  * 包含业务相关的 Workers
  * 这些 Workers 包含具体的业务逻辑，所以放在 business 包中
+ *
+ * 注意：GitConnectionsModule 通过 ProjectsModule → RepositoriesModule 传递
  */
 @Module({
   imports: [
     CoreQueueModule, // 导入基础的 Queue 模块
     ConfigModule,
     AuthModule,
-    ProjectsModule, // 提供 ProjectInitializationService
+    ProjectsModule, // 提供 ProjectInitializationService，包含 RepositoriesModule（含 GitConnectionsModule）
   ],
   providers: [
     ProgressManagerService, // 直接提供 ProgressManagerService

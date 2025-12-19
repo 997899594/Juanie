@@ -81,7 +81,135 @@
             backgroundColor: progressBarBgColor
           }"
         >
-          <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+          <div class="absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 详细步骤列表 -->
+    <div 
+      v-if="steps.length > 0"
+      v-motion
+      :initial="{ opacity: 0, y: 20 }"
+      :enter="{ opacity: 1, y: 0, transition: { duration: 400, delay: 400 } }"
+      class="space-y-3"
+    >
+      <h4 class="text-sm font-medium text-muted-foreground">初始化步骤</h4>
+      <div class="space-y-2">
+        <div
+          v-for="(step, index) in steps"
+          :key="step.step"
+          v-motion
+          :initial="{ opacity: 0, x: -20 }"
+          :enter="{ opacity: 1, x: 0, transition: { duration: 300, delay: 100 * index } }"
+          class="border rounded-lg p-4 space-y-3 transition-colors"
+          :class="{
+            'border-primary bg-primary/5': step.status === 'running',
+            'border-green-200 bg-green-50': step.status === 'completed',
+            'border-destructive bg-destructive/5': step.status === 'failed',
+            'border-muted': step.status === 'pending' || step.status === 'skipped'
+          }"
+        >
+          <!-- 步骤头部 -->
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <!-- 状态图标 -->
+              <div class="shrink-0 mt-0.5">
+                <Loader2 
+                  v-if="step.status === 'running'" 
+                  class="h-5 w-5 text-primary animate-spin" 
+                />
+                <CheckCircle2 
+                  v-else-if="step.status === 'completed'" 
+                  class="h-5 w-5 text-green-600" 
+                />
+                <AlertCircle 
+                  v-else-if="step.status === 'failed'" 
+                  class="h-5 w-5 text-destructive" 
+                />
+                <Clock 
+                  v-else-if="step.status === 'pending'" 
+                  class="h-5 w-5 text-muted-foreground" 
+                />
+                <SkipForward 
+                  v-else-if="step.status === 'skipped'" 
+                  class="h-5 w-5 text-muted-foreground" 
+                />
+              </div>
+
+              <!-- 步骤信息 -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-medium text-sm">{{ getStepLabel(step.step) }}</span>
+                  <span 
+                    v-if="step.status === 'running' && step.progress" 
+                    class="text-xs text-muted-foreground tabular-nums"
+                  >
+                    {{ step.progress }}%
+                  </span>
+                </div>
+                
+                <!-- 时间信息 -->
+                <div class="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                  <span v-if="step.startedAt">
+                    开始: {{ formatTime(step.startedAt) }}
+                  </span>
+                  <span v-if="step.duration !== null && step.duration !== undefined">
+                    耗时: {{ formatDuration(step.duration) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 展开按钮（仅在有错误时显示） -->
+            <button
+              v-if="step.error"
+              @click="toggleStepExpanded(step.step)"
+              class="shrink-0 p-1 hover:bg-muted rounded transition-colors"
+            >
+              <ChevronDown 
+                class="h-4 w-4 transition-transform"
+                :class="{ 'rotate-180': expandedSteps.has(step.step) }"
+              />
+            </button>
+          </div>
+
+          <!-- 当前子任务消息 -->
+          <div 
+            v-if="step.status === 'running' && currentStepMessage(step.step)"
+            class="text-xs text-muted-foreground mt-2 animate-pulse"
+          >
+            {{ currentStepMessage(step.step) }}
+          </div>
+
+          <!-- 步骤进度条 -->
+          <div 
+            v-if="step.status === 'running' && step.progress"
+            class="relative w-full h-1.5 bg-secondary rounded-full overflow-hidden mt-2"
+          >
+            <div 
+              class="absolute top-0 left-0 h-full bg-primary rounded-full transition-all duration-300"
+              :style="{ width: `${step.progress}%` }"
+            />
+          </div>
+
+          <!-- 错误详情（可展开） -->
+          <div
+            v-if="step.error && expandedSteps.has(step.step)"
+            v-motion
+            :initial="{ opacity: 0, height: 0 }"
+            :enter="{ opacity: 1, height: 'auto', transition: { duration: 200 } }"
+            class="space-y-2"
+          >
+            <div class="text-sm text-destructive bg-destructive/10 rounded p-3">
+              <div class="font-medium mb-1">错误信息:</div>
+              <div class="text-xs font-mono">{{ step.error }}</div>
+            </div>
+            <div v-if="step.errorStack" class="text-xs text-muted-foreground bg-muted rounded p-3 font-mono overflow-x-auto">
+              <div class="font-medium mb-1">错误堆栈:</div>
+              <pre class="whitespace-pre-wrap">{{ step.errorStack }}</pre>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -147,7 +275,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Alert, AlertDescription, AlertTitle, log } from '@juanie/ui'
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+import { Loader2, CheckCircle2, AlertCircle, Clock, SkipForward, ChevronDown } from 'lucide-vue-next'
 import { trpc } from '@/lib/trpc'
 
 const props = defineProps<{
@@ -159,11 +287,26 @@ const emit = defineEmits<{
   error: [error: string]
 }>()
 
+// 步骤类型定义
+interface InitializationStep {
+  step: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+  progress: string | null
+  error: string | null
+  errorStack?: string | null
+  startedAt: string | null
+  completedAt: string | null
+  duration: number | null
+}
+
 // 状态（由后端事件驱动）
 const status = ref<'initializing' | 'completed' | 'failed'>('initializing')
 const progress = ref(0)
 const currentMessage = ref<string>('')
 const errorMessage = ref<string | null>(null)
+const steps = ref<InitializationStep[]>([])
+const expandedSteps = ref<Set<string>>(new Set())
+const stepMessages = ref<Map<string, string>>(new Map()) // 存储每个步骤的当前消息
 let unsubscribe: { unsubscribe: () => void } | null = null
 
 // UI 样式计算
@@ -233,19 +376,15 @@ async function fetchCurrentStatus() {
       // 已失败
       if (project.status === 'failed') {
         status.value = 'failed'
-        const initStatus = project.initializationStatus as any
-        errorMessage.value = initStatus?.error || '初始化失败'
+        errorMessage.value = (project as any).initializationError || '初始化失败'
         emit('error', errorMessage.value!)
         return
       }
       
-      // 正在初始化 - 从 ProgressManager 恢复实时进度
+      // 正在初始化 - 等待 SSE 推送实时进度
       if (project.status === 'initializing') {
-        const initStatus = project.initializationStatus as any
-        if (initStatus?.progress !== undefined) {
-          progress.value = initStatus.progress
-          currentMessage.value = initStatus.step || '正在初始化...'
-        }
+        currentMessage.value = '正在初始化...'
+        // 实时进度由 SSE 订阅推送，不从数据库读取
       }
     }
   } catch (error) {
@@ -269,6 +408,11 @@ function connectSubscription() {
         onData: (event: any) => {
           if (!event?.type) return
           
+          // 更新步骤列表（如果有）
+          if (event.steps && Array.isArray(event.steps)) {
+            steps.value = event.steps
+          }
+          
           // 进度更新（完全信任后端 ProgressManager）
           if (event.type === 'initialization.progress') {
             const newProgress = event.data?.progress || 0
@@ -277,6 +421,12 @@ function connectSubscription() {
             // 直接更新，后端已经控制了速度
             progress.value = newProgress
             currentMessage.value = newMessage
+            
+            // 根据进度范围判断当前步骤，并更新该步骤的消息
+            const currentStep = getCurrentStepByProgress(newProgress)
+            if (currentStep) {
+              stepMessages.value.set(currentStep, newMessage)
+            }
           } 
           // 初始化完成
           else if (event.type === 'initialization.completed') {
@@ -302,6 +452,77 @@ function connectSubscription() {
     status.value = 'failed'
     errorMessage.value = '连接失败，请刷新页面重试'
   }
+}
+
+/**
+ * 切换步骤展开状态
+ */
+function toggleStepExpanded(step: string) {
+  if (expandedSteps.value.has(step)) {
+    expandedSteps.value.delete(step)
+  } else {
+    expandedSteps.value.add(step)
+  }
+}
+
+/**
+ * 获取步骤的友好名称
+ */
+function getStepLabel(step: string): string {
+  const labels: Record<string, string> = {
+    create_repository: '创建 Git 仓库',
+    push_template: '推送项目模板',
+    create_database_records: '创建数据库记录',
+    setup_gitops: '配置 GitOps',
+    finalize: '完成初始化',
+  }
+  return labels[step] || step
+}
+
+/**
+ * 格式化时间
+ */
+function formatTime(time: string | null): string {
+  if (!time) return ''
+  const date = new Date(time)
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+/**
+ * 格式化持续时间
+ */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  const seconds = Math.floor(ms / 1000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}m ${remainingSeconds}s`
+}
+
+/**
+ * 根据总进度判断当前步骤
+ * 进度范围：
+ * - create_repository: 0-20%
+ * - push_template: 20-50%
+ * - create_database_records: 50-60%
+ * - setup_gitops: 60-90%
+ * - finalize: 90-100%
+ */
+function getCurrentStepByProgress(progress: number): string | null {
+  if (progress < 20) return 'create_repository'
+  if (progress < 50) return 'push_template'
+  if (progress < 60) return 'create_database_records'
+  if (progress < 90) return 'setup_gitops'
+  if (progress <= 100) return 'finalize'
+  return null
+}
+
+/**
+ * 获取步骤的当前消息
+ */
+function currentStepMessage(step: string): string {
+  return stepMessages.value.get(step) || ''
 }
 
 onMounted(() => {

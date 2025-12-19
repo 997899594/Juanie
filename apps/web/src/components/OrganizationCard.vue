@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Badge } from '@juanie/ui'
 import { Users, FolderOpen, Edit, Trash2 } from 'lucide-vue-next'
 import { format } from 'date-fns'
@@ -89,7 +89,7 @@ const props = withDefaults(defineProps<Props>(), {
   projectCount: 0,
 })
 
-defineEmits<{
+const emit = defineEmits<{
   click: []
   edit: [organization: Organization]
   delete: [organization: Organization]

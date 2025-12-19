@@ -89,6 +89,7 @@
         <EditProjectModal
           v-else
           :project="editingProject"
+          :open="isModalOpen"
           @close="isModalOpen = false"
           @updated="handleProjectUpdated"
         />

@@ -176,6 +176,7 @@ import {
 } from 'lucide-vue-next'
 import { trpc } from '@/lib/trpc'
 import { useToast } from '@/composables/useToast'
+import { log } from '@juanie/ui'
 
 interface Props {
   projectId: string
@@ -217,15 +218,15 @@ const filteredLogs = computed(() => {
 async function loadLogs() {
   loading.value = true
   try {
-    const result = await trpc.gitSync.getProjectSyncLogs.query({
+    const result = await trpc.gitSync.getSyncLogs.query({
       projectId: props.projectId,
       limit: limit.value,
-      status: filterStatus.value || undefined,
     })
 
     logs.value = result.logs
     hasMore.value = result.logs.length >= limit.value
   } catch (error: any) {
+    log.error('Failed to load sync logs:', error)
     toast.error('加载失败', error.message)
   } finally {
     loading.value = false
@@ -233,23 +234,17 @@ async function loadLogs() {
 }
 
 /**
- * 手动触发同步
+ * 手动触发同步 - 功能暂时禁用
  */
 async function handleManualSync() {
   syncing.value = true
 
   try {
-    await trpc.gitSync.syncProjectMembers.mutate({
-      projectId: props.projectId,
-    })
-
-    toast.success('同步已触发', '正在同步项目成员权限...')
-
-    // 延迟后重新加载日志
-    setTimeout(() => {
-      loadLogs()
-    }, 2000)
+    // TODO: 后端需要实现手动同步 API
+    toast.error('功能暂未实现', '手动同步功能正在开发中')
+    log.warn('Manual sync not implemented yet')
   } catch (error: any) {
+    log.error('Failed to trigger sync:', error)
     toast.error('同步失败', error.message)
   } finally {
     syncing.value = false
@@ -263,7 +258,7 @@ async function handleRetry(syncLogId: string) {
   retrying.value = syncLogId
 
   try {
-    await trpc.gitSync.retrySyncTask.mutate({ syncLogId })
+    await trpc.gitSync.retrySyncMember.mutate({ syncLogId })
 
     toast.success('重试已触发', '正在重新同步...')
 
@@ -272,6 +267,7 @@ async function handleRetry(syncLogId: string) {
       loadLogs()
     }, 2000)
   } catch (error: any) {
+    log.error('Failed to retry sync:', error)
     toast.error('重试失败', error.message)
   } finally {
     retrying.value = null

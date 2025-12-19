@@ -177,7 +177,7 @@ export interface Repository {
   cloneUrl: string
   defaultBranch: string | null
   lastSyncAt: Date | null
-  syncStatus: 'pending' | 'syncing' | 'success' | 'failed' | null
+  status: 'pending' | 'syncing' | 'success' | 'failed' | null
   createdAt: Date
   updatedAt: Date
 }

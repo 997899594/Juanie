@@ -28,13 +28,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import GitAuthStatus from '@/components/GitAuthStatus.vue'
 import GitAuthSelector from '@/components/GitAuthSelector.vue'
 import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
-const router = useRouter()
 const toast = useToast()
 
 const projectId = route.params.id as string

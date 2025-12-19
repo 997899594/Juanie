@@ -1,7 +1,7 @@
 import type { ProjectGitAuth } from '@juanie/core/database'
 import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { EncryptionService, OAuthAccountsService } from '@juanie/service-foundation'
+import { EncryptionService, GitConnectionsService } from '@juanie/service-foundation'
 import type { GitProvider } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { eq } from 'drizzle-orm'
@@ -20,7 +20,7 @@ import { PATCredential } from './pat-credential'
 export class CredentialFactory implements GitCredentialFactory {
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
-    private readonly oauthService: OAuthAccountsService,
+    private readonly gitConnectionsService: GitConnectionsService,
     private readonly encryption: EncryptionService,
   ) {}
 
@@ -51,21 +51,21 @@ export class CredentialFactory implements GitCredentialFactory {
 
   private async createOAuthCredential(authRecord: ProjectGitAuth): Promise<OAuthCredential> {
     if (!authRecord.oauthAccountId) {
-      throw new Error('OAuth account ID is required for OAuth credential')
+      throw new Error('Git connection ID is required for OAuth credential')
     }
 
-    // 直接通过 oauthAccountId 获取账户（更高效）
-    const [oauthAccount] = await this.db
+    // 直接通过 gitConnectionId 获取连接（更高效）
+    const [gitConnection] = await this.db
       .select()
-      .from(schema.oauthAccounts)
-      .where(eq(schema.oauthAccounts.id, authRecord.oauthAccountId))
+      .from(schema.gitConnections)
+      .where(eq(schema.gitConnections.id, authRecord.oauthAccountId))
       .limit(1)
 
-    if (!oauthAccount) {
-      throw new Error('OAuth account not found')
+    if (!gitConnection) {
+      throw new Error('Git connection not found')
     }
 
-    return new OAuthCredential(authRecord.id, oauthAccount, this.oauthService)
+    return new OAuthCredential(authRecord.id, gitConnection, this.gitConnectionsService)
   }
 
   private async createPATCredential(authRecord: ProjectGitAuth): Promise<PATCredential> {

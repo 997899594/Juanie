@@ -22,7 +22,7 @@ export function setupErrorHandler(app: App) {
 
   // Vue 警告处理（仅开发环境）
   if (import.meta.env.DEV) {
-    app.config.warnHandler = (msg, instance, trace) => {
+    app.config.warnHandler = (msg, _instance, trace) => {
       console.warn('Vue Warning:', msg, trace)
     }
   }

@@ -1,4 +1,8 @@
-import { EncryptionService, FoundationModule } from '@juanie/service-foundation'
+import {
+  EncryptionService,
+  FoundationModule,
+  GitConnectionsModule,
+} from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { ScheduleModule } from '@nestjs/schedule'
 import { K3sModule } from '../k3s/k3s.module'
@@ -15,6 +19,7 @@ import { CredentialHealthMonitorService } from './health-monitor.service'
   imports: [
     ScheduleModule.forRoot(), // 启用定时任务
     FoundationModule, // OAuth 服务
+    GitConnectionsModule, // Git 连接服务
     K3sModule, // K8s 服务
   ],
   providers: [

@@ -146,7 +146,10 @@ Focus on:
         project: {
           name: project.name,
           status: project.status,
-          initializationStatus: project.initializationStatus,
+          initializationJobId: project.initializationJobId,
+          initializationStartedAt: project.initializationStartedAt,
+          initializationCompletedAt: project.initializationCompletedAt,
+          initializationError: project.initializationError,
         },
         environments: environments.map((e) => ({
           name: e.name,

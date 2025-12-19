@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
 import { useCostTracking, type CostFilters } from '@/composables/useCostTracking'
 import { useAppStore } from '@/stores/app'
 import PageContainer from '@/components/PageContainer.vue'
@@ -18,7 +17,6 @@ import {
   Alert,
   AlertTitle,
   AlertDescription,
-  Badge,
 } from '@juanie/ui'
 import {
   TrendingUp,
@@ -36,7 +34,6 @@ import { useProjectCRUD } from '@/composables/useProjects'
 import { VisXYContainer, VisLine, VisArea, VisAxis, VisTooltip } from '@unovis/vue'
 import { VisDonut, VisSingleContainer } from '@unovis/vue'
 
-const route = useRoute()
 const appStore = useAppStore()
 
 // 使用 TanStack Query - 自动获取项目列表

@@ -1,6 +1,6 @@
 import { Logger } from '@juanie/core/logger'
 import { PROJECT_INITIALIZATION_QUEUE } from '@juanie/core/queue'
-import { OAuthAccountsService } from '@juanie/service-foundation'
+import { GitConnectionsService } from '@juanie/service-foundation'
 import { Inject, Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { RepositoriesService } from '../../../repositories/repositories.service'
@@ -19,11 +19,12 @@ export class SetupRepositoryHandler implements StateHandler {
 
   constructor(
     private repositories: RepositoriesService,
-    private oauthAccounts: OAuthAccountsService,
+    private gitConnections: GitConnectionsService,
     @Inject(PROJECT_INITIALIZATION_QUEUE) private queue: Queue,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(SetupRepositoryHandler.name)}
+    this.logger.setContext(SetupRepositoryHandler.name)
+  }
 
   canHandle(context: InitializationContext): boolean {
     // 只有配置了仓库才需要处理
@@ -121,26 +122,26 @@ export class SetupRepositoryHandler implements StateHandler {
 
     this.logger.info(`Resolving OAuth token for provider: ${repository.provider}`)
 
-    const oauthAccount = await this.oauthAccounts.getAccountByProvider(
+    const gitConnection = await this.gitConnections.getConnectionByProvider(
       context.userId,
       repository.provider,
     )
 
-    if (!oauthAccount) {
+    if (!gitConnection) {
       const providerName = repository.provider === 'github' ? 'GitHub' : 'GitLab'
       throw new Error(
-        `未找到 ${providerName} OAuth 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
+        `未找到 ${providerName} Git 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
       )
     }
 
-    if (!oauthAccount.accessToken || oauthAccount.status !== 'active') {
+    if (!gitConnection.accessToken || gitConnection.status !== 'active') {
       const providerName = repository.provider === 'github' ? 'GitHub' : 'GitLab'
       throw new Error(`${providerName} 访问令牌无效，请重新连接账户`)
     }
 
     return {
       ...repository,
-      accessToken: oauthAccount.accessToken,
+      accessToken: gitConnection.accessToken,
     }
   }
 }
