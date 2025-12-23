@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { Trace } from '@juanie/core/observability'
 import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
-import Handlebars from 'handlebars'
+import ejs from 'ejs'
 import { z } from 'zod'
 
 // 从 Zod schemas 推导类型
@@ -15,9 +15,28 @@ export type CICDConfig = z.infer<typeof cicdConfigSchema>
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
+/**
+ * 模板服务 - AI 辅助生成工具
+ *
+ * 注意：这个服务用于独立生成 Dockerfile 和 CI/CD 配置文件
+ * 不是项目初始化模板系统（那个在 templates/nextjs-15-app/）
+ *
+ * 使用场景：
+ * - 用户在前端 Templates 页面手动生成配置
+ * - AI 辅助生成单个文件
+ */
 @Injectable()
 export class TemplatesService {
   private templatesPath = join(__dirname, '../../templates')
+
+  private readonly ejsOptions: ejs.Options = {
+    delimiter: '%',
+    openDelimiter: '<',
+    closeDelimiter: '>',
+    async: false,
+    compileDebug: true,
+    rmWhitespace: false,
+  }
 
   @Trace('templates.generateDockerfile')
   async generateDockerfile(config: DockerfileConfig): Promise<string> {
@@ -29,7 +48,6 @@ export class TemplatesService {
     )
 
     const templateContent = await readFile(templatePath, 'utf-8')
-    const template = Handlebars.compile(templateContent)
 
     const context = {
       ...validatedConfig,
@@ -40,7 +58,7 @@ export class TemplatesService {
       usePnpm: validatedConfig.packageManager === 'pnpm',
     }
 
-    return template(context)
+    return ejs.render(templateContent, context, this.ejsOptions)
   }
 
   @Trace('templates.generateCICD')
@@ -53,7 +71,6 @@ export class TemplatesService {
     )
 
     const templateContent = await readFile(templatePath, 'utf-8')
-    const template = Handlebars.compile(templateContent)
 
     const context = {
       ...validatedConfig,
@@ -67,7 +84,7 @@ export class TemplatesService {
       IMAGE_NAME: validatedConfig.imageName || '${{ github.repository }}',
     }
 
-    return template(context)
+    return ejs.render(templateContent, context, this.ejsOptions)
   }
 
   private getTestImage(runtime: string, version: string): string {

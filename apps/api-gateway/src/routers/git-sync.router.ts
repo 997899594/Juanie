@@ -1,5 +1,5 @@
 import { ConflictResolutionService, GitSyncService } from '@juanie/service-business'
-import { GitAccountLinkingService } from '@juanie/service-foundation'
+import { GitConnectionsService } from '@juanie/service-foundation'
 import type { GitSyncLog } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
@@ -15,7 +15,7 @@ import { TrpcService } from '../trpc/trpc.service'
 export class GitSyncRouter {
   constructor(
     private readonly trpc: TrpcService,
-    private readonly gitAccountLinking: GitAccountLinkingService,
+    private readonly gitConnections: GitConnectionsService,
     private readonly gitSync: GitSyncService,
     private readonly conflictResolution: ConflictResolutionService,
   ) {}
@@ -46,21 +46,31 @@ export class GitSyncRouter {
         )
         .mutation(async ({ ctx, input }) => {
           try {
-            const account = await this.gitAccountLinking.linkGitAccount({
+            const connection = await this.gitConnections.upsertConnection({
               userId: ctx.user.id,
-              ...input,
+              provider: input.provider,
+              providerAccountId: input.providerAccountId,
+              username: input.username,
+              email: input.email,
+              avatarUrl: input.avatarUrl,
+              accessToken: input.accessToken,
+              refreshToken: input.refreshToken,
+              expiresAt: input.expiresAt,
+              serverUrl: input.serverUrl,
+              serverType: input.serverType,
+              purpose: 'both',
             })
 
             return {
               success: true,
               message: 'Git 账号关联成功',
               account: {
-                id: account.id,
-                provider: account.provider,
-                username: account.username,
-                email: account.email,
-                status: account.status,
-                connectedAt: account.connectedAt,
+                id: connection.id,
+                provider: connection.provider,
+                username: connection.username,
+                email: connection.email,
+                status: connection.status,
+                connectedAt: connection.connectedAt,
               },
             }
           } catch (error) {
@@ -83,12 +93,23 @@ export class GitSyncRouter {
         )
         .query(async ({ ctx, input }) => {
           try {
-            const status = await this.gitAccountLinking.getGitAccountStatus(
+            const connection = await this.gitConnections.getConnectionByProvider(
               ctx.user.id,
               input.provider,
             )
 
-            return status
+            if (!connection) {
+              return { isLinked: false }
+            }
+
+            return {
+              isLinked: true,
+              provider: connection.provider,
+              username: connection.username,
+              status: connection.status,
+              lastSyncAt: connection.lastSyncAt || undefined,
+              connectedAt: connection.connectedAt,
+            }
           } catch (error) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -109,7 +130,7 @@ export class GitSyncRouter {
         )
         .mutation(async ({ ctx, input }) => {
           try {
-            await this.gitAccountLinking.unlinkGitAccount(ctx.user.id, input.provider)
+            await this.gitConnections.deleteConnection(ctx.user.id, input.provider)
 
             return {
               success: true,

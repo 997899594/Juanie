@@ -10,6 +10,18 @@ hoisting = true
 flattenWorkspace = true
 # 不创建符号链接
 symlink = false
+# 自动安装 peer dependencies
+auto = "auto"
+# 使用更快的安装策略
+strategy = "hardlink"
+# 冻结 lockfile（CI 环境）
+# frozen-lockfile = true
+
+[install.cache]
+# 启用缓存
+dir = ".bun-cache"
+# 缓存过期时间（秒）
+ttl = 604800
 
 [run]
 # 禁用对 node_modules 的监听
@@ -18,7 +30,9 @@ watchExclude = [
   "dist/**",
   ".git/**",
   ".turbo/**",
-  "**/*.log"
+  "**/*.log",
+  ".bun-cache/**",
+  "coverage/**"
 ]
 
 # 只监听源代码目录
@@ -27,3 +41,11 @@ watchInclude = [
   "packages/*/src/**",
   "apps/*/src/**"
 ]
+
+# 启用 Bun 的快速刷新
+hot = true
+
+[test]
+# 测试配置
+coverage = true
+preload = ["./test/setup.ts"]

@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <%= projectSlug %>
+spec:
+  replicas: 1  # 改为 1，方便测试
+  template:
+    spec:
+      containers:
+      - name: <%= projectSlug %>
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi

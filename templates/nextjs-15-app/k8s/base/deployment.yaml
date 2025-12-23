@@ -1,28 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ appName }}
+  name: <%= projectSlug %>
   labels:
-    app: {{ appName }}
+    app: <%= projectSlug %>
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ appName }}
+      app: <%= projectSlug %>
   template:
     metadata:
       labels:
-        app: {{ appName }}
+        app: <%= projectSlug %>
     spec:
+      imagePullSecrets:
+      - name: ghcr-secret
       containers:
-      - name: {{ appName }}
-        image: {{ registry }}/{{ appName }}:latest
+      - name: <%= projectSlug %>
+        image: ghcr.io/<%= githubUsername %>/<%= projectSlug %>:latest
         ports:
         - name: http
-          containerPort: {{ port }}
+          containerPort: 3000
         env:
         - name: PORT
-          value: "{{ port }}"
+          value: "3000"
         livenessProbe:
           httpGet:
             path: /api/health
@@ -37,8 +39,8 @@ spec:
           periodSeconds: 5
         resources:
           requests:
-            cpu: 100m
-            memory: 256Mi
+            cpu: 50m
+            memory: 64Mi
           limits:
-            cpu: 500m
-            memory: 512Mi
+            cpu: 200m
+            memory: 256Mi

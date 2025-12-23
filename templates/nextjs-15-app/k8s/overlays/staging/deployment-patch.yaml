@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <%= projectSlug %>
+spec:
+  replicas: 0  # 默认不运行，按需启动
+  template:
+    spec:
+      containers:
+      - name: <%= projectSlug %>
+        resources:
+          requests:
+            cpu: 50m
+            memory: 96Mi
+          limits:
+            cpu: 200m
+            memory: 192Mi

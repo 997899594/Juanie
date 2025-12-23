@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useDeployments } from '@/composables/useDeployments'
 import { useEnvironments } from '@/composables/useEnvironments'
 import DeploymentStatusBadge from '@/components/DeploymentStatusBadge.vue'

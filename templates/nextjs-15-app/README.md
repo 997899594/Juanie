@@ -68,7 +68,7 @@
 1. **克隆项目**
 ```bash
 git clone <repository-url>
-cd {{ appName }}
+cd <%= projectSlug %>
 ```
 
 2. **安装依赖**
@@ -94,7 +94,7 @@ npm run db:push
 npm run dev
 ```
 
-访问 [http://localhost:{{ port }}](http://localhost:{{ port }})
+访问 [http://localhost:<%= port %>](http://localhost:<%= port %>)
 
 ## 📦 可用脚本
 

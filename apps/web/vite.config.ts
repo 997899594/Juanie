@@ -1,6 +1,8 @@
 import { resolve } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
 import { defineConfig, type PluginOption } from 'vite'
 
 export default defineConfig({
@@ -12,6 +14,29 @@ export default defineConfig({
       },
     }),
     tailwindcss() as unknown as PluginOption,
+    // 自动导入 Vue、VueUse、Pinia、Vue Router API
+    AutoImport({
+      imports: ['vue', 'vue-router', 'pinia', '@vueuse/core'],
+      dts: 'auto-imports.d.ts',
+      dirs: ['src/composables', 'src/stores'],
+      vueTemplate: true,
+    }),
+    // 自动导入 UI 组件
+    Components({
+      dts: 'components.d.ts',
+      dirs: ['src/components'],
+      resolvers: [
+        // 自动导入 @juanie/ui 组件
+        (componentName) => {
+          if (componentName.startsWith('Ui')) {
+            return {
+              name: componentName.slice(2), // 移除 Ui 前缀
+              from: '@juanie/ui',
+            }
+          }
+        },
+      ],
+    }),
   ],
   resolve: {
     alias: {

@@ -549,9 +549,12 @@ export class RepositoriesService {
     return await this.gitProvider.listUserRepositories(provider, accessToken)
   }
 
-  // 从 Git 连接解析访问令牌
+  // 从 Git 连接解析访问令牌（解密）
   async resolveOAuthToken(userId: string, provider: 'github' | 'gitlab'): Promise<string> {
-    const gitConnection = await this.gitConnections.getConnectionByProvider(userId, provider)
+    const gitConnection = await this.gitConnections.getConnectionWithDecryptedTokens(
+      userId,
+      provider,
+    )
 
     if (!gitConnection) {
       const providerName = provider === 'github' ? 'GitHub' : 'GitLab'

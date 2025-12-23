@@ -35,20 +35,6 @@
       </div>
 
       <!-- 初始化进度条（仅在初始化中显示） -->
-      <div
-        v-if="currentProject.status === 'initializing'"
-        v-motion
-        :initial="{ opacity: 0, y: -10 }"
-        :enter="{ opacity: 1, y: 0, transition: { duration: 300, delay: 200 } }"
-        class="border rounded-lg bg-blue-50 dark:bg-blue-950/20 p-6"
-      >
-        <InitializationProgress
-          :project-id="projectId"
-          @complete="handleInitializationComplete"
-          @error="handleInitializationError"
-        />
-      </div>
-
       <!-- 标签页 -->
       <Tabs :default-value="activeTab" @update:model-value="(value) => activeTab = String(value)">
         <TabsList class="grid w-full grid-cols-8">

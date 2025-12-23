@@ -26,11 +26,9 @@
   ],
   "scripts": {
     "dev": "vite build --watch",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vite build && vue-tsc --declaration --emitDeclarationOnly",
     "build:fast": "vite build",
     "build:ultra-fast": "vite build --config vite.config.fast.ts",
-    "build:types-only": "vue-tsc --noEmit --emitDeclarationOnly",
-    "type-check": "vue-tsc --noEmit",
     "clean": "rm -rf dist .tsbuildinfo node_modules/.vite",
     "clean:build": "./scripts/clean-build.sh && bun run build",
     "clean:fast": "./scripts/clean-build.sh && bun run build:fast"

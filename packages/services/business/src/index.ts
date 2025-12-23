@@ -39,6 +39,6 @@ export { ProjectMembersService } from './projects/project-members.service'
 export { ProjectStatusService } from './projects/project-status.service'
 // 服务导出
 export { ProjectsService } from './projects/projects.service'
-export { TemplateManager } from './projects/template-manager.service'
 export { RepositoriesService } from './repositories/repositories.service'
+export type { CICDConfig, DockerfileConfig } from './templates/templates.service'
 export { TemplatesService } from './templates/templates.service'

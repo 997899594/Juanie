@@ -22,8 +22,8 @@ export class OAuthCredential implements GitCredential {
   }
 
   async getAccessToken(): Promise<string> {
-    // 自动刷新过期的 token（GitLab）
-    const connection = await this.gitConnectionsService.getConnectionByProvider(
+    // 自动刷新过期的 token（GitLab）并解密
+    const connection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
       this.gitConnection.userId,
       this.gitConnection.provider as 'github' | 'gitlab',
       this.gitConnection.serverUrl,
@@ -72,10 +72,12 @@ export class OAuthCredential implements GitCredential {
   async refresh(): Promise<void> {
     // GitLab token 自动刷新由 GitConnectionsService 处理
     if (this.gitConnection.provider === 'gitlab' && this.gitConnection.refreshToken) {
-      // 这里需要调用 OAuth 服务来刷新 token
-      // refreshAccessToken 方法用于更新已刷新的 token，不是用来刷新的
-      // 实际刷新逻辑应该在 GitAccountLinkingService 中
-      throw new Error('Token refresh should be handled by GitAccountLinkingService')
+      // 调用 GitConnectionsService 的 refreshGitLabToken 方法
+      await this.gitConnectionsService.refreshGitLabToken(
+        this.gitConnection.userId,
+        'gitlab',
+        this.gitConnection.serverUrl,
+      )
     }
   }
 

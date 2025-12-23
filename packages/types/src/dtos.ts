@@ -6,6 +6,8 @@
  * 这里只保留响应类型和特殊的输入类型
  */
 
+import type { GitProvider } from './git-auth.types'
+
 // ============ 认证相关 DTO ============
 
 export interface CreateUserFromOAuthInput {
@@ -13,7 +15,7 @@ export interface CreateUserFromOAuthInput {
   username: string
   displayName: string
   avatarUrl: string
-  provider: string
+  provider: GitProvider
   providerAccountId: string
   accessToken: string
 }

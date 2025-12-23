@@ -336,19 +336,29 @@ const cicdForm = ref({
 })
 
 const handleGenerateDockerfile = () => {
-  generateDockerfile(dockerfileForm.value)
+  const config = {
+    runtime: dockerfileForm.value.runtime,
+    version: dockerfileForm.value.version,
+    workdir: dockerfileForm.value.workdir,
+    port: dockerfileForm.value.port,
+    startCommand: dockerfileForm.value.startCommand,
+    ...(dockerfileForm.value.buildCommand && {
+      hasBuildStep: true,
+      buildCommand: dockerfileForm.value.buildCommand,
+    }),
+  }
+  generateDockerfile(config)
 }
 
 const handleGenerateCICD = () => {
-  const stages = Object.entries(cicdForm.value.stages)
-    .filter(([_, enabled]) => enabled)
-    .map(([stage]) => stage)
-
-  generateCICD({
+  const config = {
     platform: cicdForm.value.platform,
     runtime: cicdForm.value.runtime,
-    stages,
-    dockerRegistry: cicdForm.value.dockerRegistry || undefined,
-  })
+    version: dockerfileForm.value.version, // 使用 Dockerfile 表单的版本
+    ...(cicdForm.value.dockerRegistry && {
+      registry: cicdForm.value.dockerRegistry,
+    }),
+  }
+  generateCICD(config)
 }
 </script>

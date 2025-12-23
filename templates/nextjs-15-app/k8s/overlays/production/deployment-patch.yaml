@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <%= projectSlug %>
+spec:
+  replicas: 1  # 始终运行
+  template:
+    spec:
+      containers:
+      - name: <%= projectSlug %>
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi

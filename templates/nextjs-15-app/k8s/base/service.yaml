@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ appName }}
+  name: <%= projectSlug %>
   labels:
-    app: {{ appName }}
+    app: <%= projectSlug %>
 spec:
   type: ClusterIP
   ports:
@@ -12,4 +12,4 @@ spec:
     protocol: TCP
     name: http
   selector:
-    app: {{ appName }}
+    app: <%= projectSlug %>

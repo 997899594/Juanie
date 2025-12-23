@@ -1,300 +1,413 @@
-# 文档组织结构
+# 文档组织说明
 
-本文档说明 docs 目录的组织方式和各目录的用途。
+> 本文档说明项目文档的组织结构和维护规范
 
-## 目录结构
+**最后更新**: 2024-12-22
+
+## 📁 目录结构
 
 ```
 docs/
-├── README.md                    # 文档总览
-├── API_REFERENCE.md             # API 参考
+├── README.md                    # 文档导航（主入口）
 ├── ORGANIZATION.md              # 本文件
+├── SUMMARY.md                   # 文档摘要
+├── ROADMAP.md                   # 项目路线图
+├── CHANGELOG.md                 # 变更日志
+├── API_REFERENCE.md             # API 参考
+├── ARCHITECTURE.md              # 架构概览
+├── IMPLEMENTATION_SUMMARY.md    # 实现总结
+│
 ├── guides/                      # 操作指南
-├── architecture/                # 架构设计文档
-├── troubleshooting/             # 问题排查和解决方案
-├── tutorials/                   # 教程
-└── api/                         # API 详细文档
+│   ├── README.md               # 指南索引
+│   ├── quick-start.md          # 快速开始
+│   ├── QUICK_REFERENCE.md      # 快速参考
+│   └── ...                     # 其他指南
+│
+├── architecture/                # 架构设计
+│   ├── authentication-architecture.md
+│   ├── template-system-ejs-migration.md
+│   ├── database-design-standards.md
+│   └── ...                     # 其他架构文档
+│
+├── troubleshooting/            # 问题排查
+│   ├── README.md               # 问题索引
+│   ├── template-system-handlebars-github-actions-conflict.md
+│   ├── flux-performance-optimization.md
+│   └── ...                     # 其他问题文档
+│
+├── tutorials/                   # 深入教程
+│   ├── monorepo-turborepo.md
+│   ├── trpc-fullstack-typesafety.md
+│   └── ...                     # 其他教程
+│
+└── archive/                     # 历史文档
+    ├── CLEANUP_SUMMARY.md
+    ├── COMPLETE_ANALYSIS.md
+    └── ...                     # 过时的文档
 ```
 
-## 各目录说明
+## 📚 文档分类
 
-### guides/ - 操作指南
+### 1. guides/ - 操作指南
 
-**用途：** 如何使用和操作系统的指南
+**目的**: 告诉读者"怎么做"
 
-**包含：**
-- `quick-start.md` - 快速开始指南
-- `development.md` - 开发环境设置
-- `deployment.md` - 部署指南
-- `flux-installation.md` - Flux 安装指南
-- `k3s-remote-access.md` - K3s 远程访问配置
-- `KNOWN_HOSTS_SERVICE.md` - KnownHostsService 使用指南
-- `deployment-test.md` - 部署测试
-
-**特点：**
-- 面向操作和使用
-- 提供步骤说明
-- 包含配置示例
-
-### architecture/ - 架构设计
-
-**用途：** 系统架构设计和技术决策文档
-
-**包含：**
-- `architecture.md` - 总体架构
-- `gitops.md` - GitOps 架构
-- `gitops-deep-dive.md` - GitOps 深入解析
-- `simplified-sse-architecture.md` - SSE 架构
-- `three-tier-architecture.md` - 三层架构
-- `TODO_FEATURES.md` - 待实现功能
-
-**特点：**
-- 描述系统设计
-- 解释技术选型
-- 记录架构决策
-
-### troubleshooting/ - 问题排查
-
-**用途：** 记录遇到的问题和解决方案
-
-**子目录：**
-
-#### flux/ - Flux GitOps 问题
-- SSH 认证问题
-- 网络策略问题
-- GitOps 初始化问题
-
-#### git/ - Git 认证问题
-- OAuth Token 管理
-- GitLab/GitHub 认证
-- Deploy Key 配置
-
-#### kubernetes/ - Kubernetes 问题
-- 资源创建时机
-- Namespace 管理
-- Secret 配置
-
-#### architecture/ - 架构问题
-- 代码冗余
-- 设计缺陷
-
-#### refactoring/ - 重构记录
-- 清理记录
-- 重构方案
-- 架构审查
-
-**特点：**
-- 问题导向
-- 包含症状、原因、解决方案
-- 提供诊断工具
-
-### tutorials/ - 教程
-
-**用途：** 深入的技术教程和最佳实践
-
-**包含：**
-- `monorepo-turborepo.md` - Monorepo 管理
-- `ollama-ai-integration.md` - AI 集成
-- `trpc-fullstack-typesafety.md` - tRPC 类型安全
-
-**特点：**
-- 深入讲解
-- 完整示例
+**内容类型**:
+- 快速开始指南
+- 配置指南
+- 部署指南
 - 最佳实践
+- 清单和检查表
 
-### api/ - API 文档
+**命名规范**:
+- 使用动词开头: `setup-github-container-registry.md`
+- 或使用名词 + 指南: `authentication-deployment-guide.md`
 
-**用途：** API 接口详细文档
+**示例**:
+- `quick-start.md` - 5 分钟上手
+- `k3s-optimization-checklist.md` - K3s 优化清单
+- `production-readiness-checklist.md` - 生产就绪清单
 
-**特点：**
-- 接口定义
-- 参数说明
-- 示例代码
+### 2. architecture/ - 架构设计
 
-## 文档命名规范
+**目的**: 告诉读者"为什么这样做"
 
-### 文件命名
+**内容类型**:
+- 系统架构
+- 技术决策
+- 设计模式
+- 对比分析
+- 迁移方案
 
-- **小写 + 连字符**：`quick-start.md`, `k3s-remote-access.md`
-- **大写（特殊情况）**：`README.md`, `API_REFERENCE.md`
-- **临时文档**：使用大写 + 下划线，如 `FIXES_SUMMARY.md`
+**命名规范**:
+- 使用名词描述: `authentication-architecture.md`
+- 或使用主题 + 类型: `template-system-ejs-migration.md`
 
-### 标题规范
+**示例**:
+- `authentication-architecture.md` - 认证系统架构
+- `template-system-ejs-migration.md` - 模板系统迁移决策
+- `deployment-strategies-comparison.md` - 部署策略对比
 
-- 使用中文或英文，保持一致
-- 清晰描述内容
-- 避免过长
+### 3. troubleshooting/ - 问题排查
 
-## 文档编写指南
+**目的**: 告诉读者"出错了怎么办"
 
-### guides/ 文档模板
+**内容类型**:
+- 问题描述
+- 根本原因
+- 解决方案
+- 验证步骤
+- 经验教训
+
+**命名规范**:
+- 使用问题描述: `drizzle-relations-circular-dependency.md`
+- 或使用组件 + 问题: `flux-performance-optimization.md`
+
+**示例**:
+- `template-system-handlebars-github-actions-conflict.md` - 模板系统冲突
+- `flux-performance-optimization.md` - Flux 性能问题
+- `drizzle-relations-circular-dependency.md` - 数据库关系问题
+
+### 4. tutorials/ - 深入教程
+
+**目的**: 告诉读者"完整的实现过程"
+
+**内容类型**:
+- 端到端教程
+- 集成指南
+- 深入解析
+- 实战案例
+
+**命名规范**:
+- 使用技术 + 主题: `monorepo-turborepo.md`
+- 或使用场景描述: `trpc-fullstack-typesafety.md`
+
+**示例**:
+- `monorepo-turborepo.md` - Monorepo 完整设置
+- `trpc-fullstack-typesafety.md` - tRPC 类型安全实现
+- `ollama-ai-integration.md` - AI 模型集成
+
+### 5. archive/ - 历史文档
+
+**目的**: 保存过时但有参考价值的文档
+
+**内容类型**:
+- 已废弃的方案
+- 历史分析文档
+- 临时总结文档
+
+**规则**:
+- 不在主索引中显示
+- 保留用于历史参考
+- 定期清理（6 个月以上）
+
+## 📝 文档模板
+
+### 操作指南模板
 
 ```markdown
-# 标题
+# [指南标题]
 
-## 概述
-简要说明本指南的目的
+> 一句话描述这个指南的目的
 
 ## 前置条件
+
 - 需要的环境
 - 需要的权限
+- 需要的知识
 
 ## 步骤
 
-### 1. 第一步
+### 1. [第一步]
+
 详细说明...
 
-### 2. 第二步
+### 2. [第二步]
+
 详细说明...
 
 ## 验证
-如何验证操作成功
 
-## 故障排查
-常见问题和解决方法
+如何确认操作成功...
 
-## 参考资料
-相关链接
+## 常见问题
+
+- Q: ...
+- A: ...
+
+## 相关文档
+
+- [相关文档1](link)
+- [相关文档2](link)
+
+---
+
+**最后更新**: YYYY-MM-DD  
+**维护者**: 团队/个人
 ```
 
-### troubleshooting/ 文档模板
+### 架构文档模板
 
 ```markdown
-# 问题标题
-
-## 问题描述
-简要描述问题现象
-
-## 症状
-- 错误信息
-- 日志输出
-- 观察到的行为
-
-## 根本原因
-解释为什么会出现这个问题
-
-## 解决方案
-
-### 方案 1: 标题
-步骤...
-
-### 方案 2: 标题（如果有）
-步骤...
-
-## 预防措施
-如何避免再次出现
-
-## 相关问题
-链接到相关的问题文档
-
-## 参考资料
-- 官方文档链接
-- 相关 Issue 链接
-```
-
-### architecture/ 文档模板
-
-```markdown
-# 架构名称
+# [架构标题]
 
 ## 概述
-架构的目的和范围
+
+简短描述这个架构的目的和范围...
+
+## 背景
+
+为什么需要这个架构...
 
 ## 设计目标
-- 目标 1
-- 目标 2
 
-## 架构图
-[图片或 ASCII 图]
+1. 目标1
+2. 目标2
 
-## 组件说明
+## 架构设计
 
-### 组件 1
-职责和实现
+### 核心组件
 
-### 组件 2
-职责和实现
+详细说明...
+
+### 数据流
+
+详细说明...
 
 ## 技术选型
-为什么选择这些技术
 
-## 权衡和决策
-设计中的权衡考虑
+| 技术 | 理由 |
+|------|------|
+| ... | ... |
 
-## 未来改进
-可能的优化方向
+## 对比分析
+
+### 方案 A vs 方案 B
+
+| 特性 | 方案 A | 方案 B |
+|------|--------|--------|
+| ... | ... | ... |
+
+## 实现细节
+
+详细说明...
+
+## 相关文档
+
+- [相关文档1](link)
+- [相关文档2](link)
+
+---
+
+**最后更新**: YYYY-MM-DD  
+**负责人**: 团队/个人
 ```
 
-## 文档维护
+### 问题排查模板
 
-### 添加新文档
+```markdown
+# [问题标题]
 
-1. 确定文档类型（指南/架构/问题）
-2. 选择合适的目录
-3. 使用规范的命名
-4. 遵循模板编写
-5. 更新相关索引
+## 问题描述
+
+**日期**: YYYY-MM-DD  
+**严重程度**: 高/中/低  
+**影响范围**: ...
+
+### 症状
+
+详细描述问题表现...
+
+### 根本原因
+
+为什么会出现这个问题...
+
+## 尝试过的方案
+
+### ❌ 方案 1: [方案名称]
+
+**尝试**: ...  
+**问题**: ...  
+**结果**: 放弃
+
+### ❌ 方案 2: [方案名称]
+
+**尝试**: ...  
+**问题**: ...  
+**结果**: 不采用
+
+## 最终解决方案
+
+### ✅ 方案: [方案名称]
+
+详细说明...
+
+### 实现步骤
+
+1. 步骤1
+2. 步骤2
+
+### 验证
+
+如何确认问题已解决...
+
+## 相关文档
+
+- [相关文档1](link)
+- [相关文档2](link)
+
+## 经验教训
+
+1. 教训1
+2. 教训2
+
+## 解决状态
+
+**状态**: 已解决/进行中  
+**解决方案**: ...  
+**验证**: ...  
+**文档**: 已完善
+
+---
+
+**最后更新**: YYYY-MM-DD  
+**负责人**: 团队/个人  
+**标签**: `tag1`, `tag2`, `tag3`
+```
+
+## 🔄 文档维护流程
+
+### 创建新文档
+
+1. **确定分类** - 选择合适的目录（guides/architecture/troubleshooting/tutorials）
+2. **使用模板** - 根据文档类型使用对应模板
+3. **命名规范** - 使用 kebab-case，描述性命名
+4. **编写内容** - 遵循模板结构
+5. **更新索引** - 在对应目录的 README.md 中添加链接
+6. **更新主索引** - 在 docs/README.md 中添加链接
+7. **格式化** - 运行 `biome check --write`
 
 ### 更新现有文档
 
-1. 保持文档最新
-2. 删除过时内容
-3. 更新链接
-4. 标注更新日期
+1. **修改内容** - 更新文档内容
+2. **更新日期** - 修改"最后更新"日期
+3. **检查链接** - 确保所有链接有效
+4. **格式化** - 运行 `biome check --write`
 
-### 清理文档
+### 归档文档
 
-1. 定期审查文档
-2. 移动临时文档到 troubleshooting/
-3. 删除重复内容
-4. 合并相似文档
+1. **评估价值** - 确认文档是否过时
+2. **移动文件** - 移动到 `docs/archive/`
+3. **更新索引** - 从主索引中移除
+4. **添加说明** - 在归档文档顶部添加归档原因
 
-## 文档查找
+### 定期清理
 
-### 按需求查找
+**频率**: 每季度一次
 
-| 需求 | 目录 |
-|------|------|
-| 学习如何使用 | guides/ |
-| 了解系统设计 | architecture/ |
-| 解决遇到的问题 | troubleshooting/ |
-| 深入学习技术 | tutorials/ |
-| 查看 API 接口 | api/ |
+**清理内容**:
+- 6 个月以上的归档文档
+- 重复的文档
+- 过时的临时文档
 
-### 按组件查找
+## 📊 文档质量标准
 
-| 组件 | 相关文档 |
-|------|----------|
-| Flux | guides/flux-installation.md<br>troubleshooting/flux/ |
-| K3s | guides/k3s-remote-access.md<br>troubleshooting/kubernetes/ |
-| Git 认证 | troubleshooting/git/ |
-| 架构 | architecture/ |
+### 必需元素
 
-## 贡献指南
+- [ ] 清晰的标题
+- [ ] 简短的概述
+- [ ] 结构化的内容
+- [ ] 代码示例（如适用）
+- [ ] 相关文档链接
+- [ ] 最后更新日期
 
-### 添加问题解决方案
+### 可选元素
 
-1. 在 `troubleshooting/` 对应子目录创建文档
-2. 使用问题模板
-3. 更新 `troubleshooting/README.md` 索引
-4. 添加到快速索引表格
+- [ ] 目标读者
+- [ ] 前置知识
+- [ ] 图表和示意图
+- [ ] 常见问题
+- [ ] 视频教程链接
 
-### 添加操作指南
+### 质量检查
 
-1. 在 `guides/` 创建文档
-2. 使用指南模板
-3. 提供完整的步骤
-4. 包含验证方法
+- [ ] 语法正确
+- [ ] 格式一致
+- [ ] 链接有效
+- [ ] 代码可运行
+- [ ] 截图清晰
 
-### 添加架构文档
+## 🎯 最佳实践
 
-1. 在 `architecture/` 创建文档
-2. 使用架构模板
-3. 包含架构图
-4. 解释设计决策
+### 写作风格
 
-## 相关资源
+1. **简洁明了** - 避免冗长的句子
+2. **使用列表** - 提高可读性
+3. **代码示例** - 提供实际可运行的代码
+4. **视觉辅助** - 使用表格、图表、emoji
+5. **链接相关** - 链接到相关文档
 
-- [README.md](./README.md) - 项目总览
-- [API_REFERENCE.md](./API_REFERENCE.md) - API 参考
-- [troubleshooting/README.md](./troubleshooting/README.md) - 问题排查索引
+### 组织结构
+
+1. **逻辑分组** - 相关内容放在一起
+2. **层级清晰** - 使用标题层级
+3. **索引完整** - 每个目录都有 README.md
+4. **交叉引用** - 文档之间相互链接
+
+### 维护原则
+
+1. **及时更新** - 代码变更后立即更新文档
+2. **定期审查** - 每季度审查一次
+3. **删除过时** - 不保留过时的文档
+4. **保持简洁** - 避免文档膨胀
+
+## 📞 获取帮助
+
+- 查看 [文档导航](README.md)
+- 参考 [项目指南](../.kiro/steering/project-guide.md)
+- 联系文档维护者
+
+---
+
+**最后更新**: 2024-12-22  
+**维护者**: 开发团队

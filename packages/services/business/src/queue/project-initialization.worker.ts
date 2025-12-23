@@ -146,6 +146,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
         resolvedRepository.provider,
         resolvedRepository.accessToken,
         repoInfo,
+        resolvedRepository.username, // 传递 GitHub 用户名
       )
 
       await this.updateStepProgress(job, 'push_template', 100, '模板代码推送完成')
@@ -274,7 +275,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
         },
       )
 
-      await this.updateStepProgress(job, 'create_repository', 70, '仓库创建成功，初始化分支...')
+      await this.updateStepProgress(job, 'create_repository', 70, '仓库创建成功')
 
       return {
         fullName: repoInfo.fullName,
@@ -296,6 +297,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
     provider: 'github' | 'gitlab',
     accessToken: string,
     repoInfo: { fullName: string; cloneUrl: string; defaultBranch: string },
+    githubUsername?: string, // 添加 GitHub 用户名参数
   ): Promise<void> {
     await this.updateStepProgress(job, 'push_template', 10, '准备模板变量...')
 
@@ -307,12 +309,18 @@ export class ProjectInitializationWorker implements OnModuleInit {
       projectSlug: project.slug,
       description: project.description || `${project.name} - AI DevOps Platform`,
 
+      // GitHub 信息（用于镜像路径）
+      githubUsername: githubUsername || 'unknown',
+
       // K8s 配置
       appName: project.slug,
-      registry: this.config.get('REGISTRY_URL') || 'registry.example.com',
+      registry: 'ghcr.io', // 固定为 ghcr.io
       port: 3000,
       domain: this.config.get('APP_DOMAIN') || 'example.com',
       replicas: 1,
+
+      // 平台 API 配置（用于 CI/CD 回调）
+      platformApiUrl: this.config.get('PLATFORM_API_URL') || 'http://localhost:3000',
 
       // 可选功能（从项目配置获取，默认 false）
       enableDatabase: false,
@@ -359,6 +367,14 @@ export class ProjectInitializationWorker implements OnModuleInit {
     )
 
     await this.updateStepProgress(job, 'push_template', 80, `成功推送 ${files.length} 个文件`)
+
+    // Push 事件会自动触发 GitHub Actions workflow
+    await this.updateStepProgress(
+      job,
+      'push_template',
+      95,
+      '代码推送完成，镜像构建将自动开始（约 3-5 分钟）',
+    )
   }
 
   /**
@@ -476,8 +492,8 @@ export class ProjectInitializationWorker implements OnModuleInit {
       let accessToken: string | null = null
 
       try {
-        // 获取用户的 OAuth 账户
-        const gitConnection = await this.gitConnections.getConnectionByProvider(
+        // 获取用户的 OAuth 账户（解密 Token）
+        const gitConnection = await this.gitConnections.getConnectionWithDecryptedTokens(
           userId,
           repository.provider as 'github' | 'gitlab',
         )
@@ -571,8 +587,8 @@ export class ProjectInitializationWorker implements OnModuleInit {
     this.logger.info(`Resolving OAuth token for user ${userId}, provider: ${repository.provider}`)
 
     try {
-      // 从数据库获取 Git 连接
-      const gitConnection = await this.gitConnections.getConnectionByProvider(
+      // 从数据库获取 Git 连接（解密 Token）
+      const gitConnection = await this.gitConnections.getConnectionWithDecryptedTokens(
         userId,
         repository.provider,
       )
@@ -592,6 +608,7 @@ export class ProjectInitializationWorker implements OnModuleInit {
       return {
         ...repository,
         accessToken: gitConnection.accessToken,
+        username: gitConnection.username, // 添加用户名，用于模板变量
       }
     } catch (error) {
       this.logger.error(`Failed to resolve OAuth token:`, error)

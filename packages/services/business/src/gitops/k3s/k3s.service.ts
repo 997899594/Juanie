@@ -250,6 +250,39 @@ export class K3sService implements OnModuleInit {
     return this.client.deleteService(namespace, name)
   }
 
+  /**
+   * 触发 Kustomization 立即 reconcile
+   * 通过添加 annotation 强制 Flux 立即同步
+   */
+  async reconcileKustomization(name: string, namespace: string): Promise<void> {
+    if (!this.isConnected) {
+      throw new Error('K3s is not connected')
+    }
+
+    try {
+      // 添加 annotation 触发 reconcile
+      await this.client.patchNamespacedCustomObject({
+        group: 'kustomize.toolkit.fluxcd.io',
+        version: 'v1',
+        namespace,
+        plural: 'kustomizations',
+        name,
+        body: {
+          metadata: {
+            annotations: {
+              'reconcile.fluxcd.io/requestedAt': new Date().toISOString(),
+            },
+          },
+        },
+      })
+
+      this.logger.info(`✅ Triggered reconcile for Kustomization ${name} in ${namespace}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to reconcile Kustomization ${name}:`, error)
+      throw new Error(`Failed to trigger reconcile: ${error.message}`)
+    }
+  }
+
   // Events
   async getEvents(namespace: string, limit?: number) {
     if (!this.isConnected) return []

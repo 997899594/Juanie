@@ -1,0 +1,112 @@
+name: Build and Push Image
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag'
+        required: false
+        default: 'latest'
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  PROJECT_ID: "<%projectId%>"
+  PLATFORM_API_URL: "<%platformApiUrl%>"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Extract metadata
+        id: meta
+        run: |
+          # 从仓库名提取项目 slug
+          PROJECT_SLUG=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          echo "project_slug=$PROJECT_SLUG" >> $GITHUB_OUTPUT
+          
+          # 生成镜像标签
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            # 自动触发：使用 commit SHA 短码
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "tag=$SHORT_SHA" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      
+      - name: Build complete
+        run: |
+          echo "✅ Image built and pushed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Images:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:${{ steps.meta.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:latest\`" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Trigger deployment
+        run: |
+          echo "🚀 Triggering deployment to development environment..."
+          
+          # 触发平台 API 进行部署
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ env.PLATFORM_API_URL }}/api/trpc/deployments.triggerDeploy" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "projectId": "${{ env.PROJECT_ID }}",
+              "environment": "development",
+              "image": "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:${{ steps.meta.outputs.tag }}",
+              "commitSha": "${{ github.sha }}"
+            }')
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment:**" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 201 ]; then
+            echo "✅ Deployment triggered successfully!"
+            echo "- ✅ Deployment triggered via API" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔄 Flux CD is deploying to K3s" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️  API trigger failed (HTTP $HTTP_CODE), but Flux will auto-deploy"
+            echo "- ⚠️  API trigger failed, but Flux will auto-deploy" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -44,7 +44,7 @@ export interface Kustomization {
 export class FluxResourcesService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    _config: ConfigService,
+    private config: ConfigService,
     private k3s: K3sService,
     private yamlGenerator: YamlGeneratorService,
     private metrics: FluxMetricsService,
@@ -312,7 +312,7 @@ export class FluxResourcesService {
       throw new Error('K3s is not connected')
     }
 
-    const { name, namespace, url, branch = 'main', secretRef, interval = '5m', timeout } = data
+    const { name, namespace, url, branch = 'main', secretRef, interval = '1m', timeout } = data // 默认 1m，可通过参数覆盖
 
     // 生成 GitRepository YAML
     const gitRepoYaml = this.yamlGenerator.generateGitRepositoryYAML({
@@ -408,7 +408,7 @@ export class FluxResourcesService {
       gitRepositoryName,
       path,
       prune = true,
-      interval = '5m',
+      interval = '1m', // 默认 1m，可通过参数覆盖
       timeout = '2m',
       dependsOn,
     } = data
@@ -444,8 +444,86 @@ export class FluxResourcesService {
   }
 
   /**
+   * 创建 ImagePullSecret（用于从 ghcr.io 拉取镜像）
+   * 使用用户自己的 GitHub Token，支持多用户
+   */
+  private async createImagePullSecret(
+    namespace: string,
+    githubUsername: string,
+    githubToken: string,
+  ): Promise<void> {
+    try {
+      const registryHost = 'ghcr.io'
+
+      this.logger.debug(
+        `Creating ImagePullSecret with registry: ${registryHost}, username: ${githubUsername}`,
+      )
+
+      // 创建 Docker config JSON
+      const dockerConfigJson = {
+        auths: {
+          [registryHost]: {
+            username: githubUsername,
+            password: githubToken,
+            auth: Buffer.from(`${githubUsername}:${githubToken}`).toString('base64'),
+          },
+        },
+      }
+
+      // 创建 Secret
+      await this.k3s.createSecret(
+        namespace,
+        'ghcr-secret',
+        {
+          '.dockerconfigjson': JSON.stringify(dockerConfigJson),
+        },
+        'kubernetes.io/dockerconfigjson',
+      )
+
+      this.logger.info(`✅ ImagePullSecret created in ${namespace} for user ${githubUsername}`)
+    } catch (error: any) {
+      // 如果 Secret 已存在，忽略错误
+      if (error.message?.includes('409') || error.message?.includes('already exists')) {
+        this.logger.debug(`ImagePullSecret already exists in ${namespace}`)
+      } else {
+        this.logger.error(`Failed to create ImagePullSecret in ${namespace}:`, error)
+        // 不抛出错误，因为这不应该阻止项目创建
+      }
+    }
+  }
+
+  /**
+   * 获取环境对应的轮询间隔
+   * Development: 1m（快速迭代）
+   * Staging: 3m（平衡）
+   * Production: 5m（稳定可靠）
+   */
+  private getIntervalForEnvironment(envType: 'development' | 'staging' | 'production'): {
+    gitRepo: string
+    kustomization: string
+  } {
+    const intervals = {
+      development: {
+        gitRepo: '1m',
+        kustomization: '1m',
+      },
+      staging: {
+        gitRepo: '3m',
+        kustomization: '3m',
+      },
+      production: {
+        gitRepo: '5m',
+        kustomization: '5m',
+      },
+    }
+
+    return intervals[envType]
+  }
+
+  /**
    * 为项目设置完整的 GitOps 资源栈
    * 使用新的凭证管理器，自动处理认证
+   * 使用环境差异化配置优化 API 调用
    */
   async setupProjectGitOps(data: {
     projectId: string
@@ -491,11 +569,50 @@ export class FluxResourcesService {
       this.logger.info(`Creating credential for project ${projectId}`)
       const credential = await this.credentialManager.createProjectCredential({ projectId, userId })
 
+      // 1.5 获取用户的 GitHub 连接信息（用于 ImagePullSecret）
+      let githubUsername: string | null = null
+      let githubToken: string | null = null
+
+      try {
+        const gitConnection = await this.db.query.gitConnections.findFirst({
+          where: (gitConnections, { and, eq }) =>
+            and(eq(gitConnections.userId, userId), eq(gitConnections.provider, 'github')),
+        })
+
+        if (gitConnection?.username && gitConnection.accessToken) {
+          githubUsername = gitConnection.username
+          // Token 已加密，需要解密
+          const crypto = await import('node:crypto')
+          const encryptionKey =
+            this.config.get<string>('ENCRYPTION_KEY') || 'dev_encryption_key_32_chars_min'
+          const algorithm = 'aes-256-cbc'
+          const key = crypto.scryptSync(encryptionKey, 'salt', 32)
+
+          try {
+            const [ivHex, encryptedHex] = gitConnection.accessToken.split(':')
+            if (ivHex && encryptedHex) {
+              const iv = Buffer.from(ivHex, 'hex')
+              const encrypted = Buffer.from(encryptedHex, 'hex')
+              const decipher = crypto.createDecipheriv(algorithm, key, iv)
+              githubToken = decipher.update(encrypted, undefined, 'utf8') + decipher.final('utf8')
+              this.logger.info(`✅ Retrieved GitHub credentials for user ${githubUsername}`)
+            }
+          } catch (decryptError) {
+            this.logger.error('Failed to decrypt GitHub token:', decryptError)
+          }
+        }
+      } catch (error) {
+        this.logger.error('Failed to retrieve GitHub connection:', error)
+      }
+
       // 2. 为每个环境设置 GitOps 资源
       for (const environment of environments) {
         const namespace = `project-${projectId}-${environment.type}`
         const gitRepoName = `${projectId}-repo`
         const kustomizationName = `${projectId}-${environment.type}`
+
+        // 获取环境对应的轮询间隔
+        const intervals = this.getIntervalForEnvironment(environment.type)
 
         try {
           // 2.1 创建 Namespace
@@ -503,12 +620,22 @@ export class FluxResourcesService {
           await this.k3s.createNamespace(namespace)
           result.namespaces.push(namespace)
 
-          // 2.2 同步 Git Secret 到新创建的 namespace
+          // 2.2 创建 ImagePullSecret（用于拉取镜像）
+          if (githubUsername && githubToken) {
+            this.logger.info(`Creating ImagePullSecret in ${namespace}`)
+            await this.createImagePullSecret(namespace, githubUsername, githubToken)
+          } else {
+            this.logger.warn(`Skipping ImagePullSecret creation (no GitHub credentials)`)
+          }
+
+          // 2.3 同步 Git Secret 到新创建的 namespace
           this.logger.info(`Syncing Git secret to ${namespace}`)
           await this.credentialManager.syncToK8s(projectId, credential)
 
           // 2.3 创建 GitRepository
-          this.logger.info(`Creating GitRepository: ${gitRepoName} in ${namespace}`)
+          this.logger.info(
+            `Creating GitRepository: ${gitRepoName} in ${namespace} (interval: ${intervals.gitRepo})`,
+          )
 
           // 确保使用 HTTPS URL
           const httpsUrl = this.convertToHttpsUrl(repositoryUrl)
@@ -520,8 +647,8 @@ export class FluxResourcesService {
             url: httpsUrl,
             branch: repositoryBranch,
             secretRef: `${projectId}-git-auth`,
-            interval: '5m',
-            timeout: '5m',
+            interval: intervals.gitRepo, // 环境差异化配置
+            timeout: '2m',
           })
           result.gitRepositories.push(`${namespace}/${gitRepoName}`)
 
@@ -537,22 +664,24 @@ export class FluxResourcesService {
               url: httpsUrl,
               branch: repositoryBranch,
               secretRef: `${projectId}-git-auth`,
-              interval: '5m',
-              timeout: '5m',
+              interval: intervals.gitRepo, // 环境差异化配置
+              timeout: '2m',
             } as any,
             status: gitRepo.status,
           })
 
           // 2.5 创建 Kustomization
-          this.logger.info(`Creating Kustomization: ${kustomizationName} in ${namespace}`)
+          this.logger.info(
+            `Creating Kustomization: ${kustomizationName} in ${namespace} (interval: ${intervals.kustomization})`,
+          )
           const kustomization = await this.createKustomization({
             name: kustomizationName,
             namespace,
             gitRepositoryName: gitRepoName,
             path: `./k8s/overlays/${environment.type}`,
             prune: true,
-            interval: '5m',
-            timeout: '3m',
+            interval: intervals.kustomization, // 环境差异化配置
+            timeout: '2m',
           })
           result.kustomizations.push(`${namespace}/${kustomizationName}`)
 
@@ -567,9 +696,9 @@ export class FluxResourcesService {
             config: {
               gitRepositoryName: gitRepoName,
               path: `./k8s/overlays/${environment.type}`,
-              interval: '5m',
+              interval: intervals.kustomization, // 环境差异化配置
               prune: true,
-              timeout: '3m',
+              timeout: '2m',
             } as any,
             status: kustomization.status,
           })
@@ -593,6 +722,22 @@ export class FluxResourcesService {
         errors: [...result.errors, error.message],
       }
     }
+  }
+
+  /**
+   * 手动触发项目部署
+   * 强制 Flux 立即同步指定环境的 Kustomization
+   */
+  async reconcileProject(projectId: string, environment: string): Promise<void> {
+    const namespace = `project-${projectId}-${environment}`
+    const kustomizationName = `${projectId}-${environment}`
+
+    this.logger.info(`Triggering deployment for project ${projectId} ${environment}`)
+
+    // 强制 Flux 立即同步
+    await this.k3s.reconcileKustomization(kustomizationName, namespace)
+
+    this.logger.info(`✅ Deployment triggered for ${projectId} ${environment}`)
   }
 
   /**

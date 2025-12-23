@@ -1,0 +1,58 @@
+# 依赖
+node_modules
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# 测试
+coverage
+*.log
+
+# Next.js
+.next/
+out/
+build
+dist
+
+# 生产
+.vercel
+
+# 调试
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 本地环境变量
+.env*.local
+.env.development
+.env.test
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# 文档
+README.md
+docs/
+
+# K8s 配置（不需要打包到镜像）
+k8s/
+
+# 其他
+*.md
+!README.md

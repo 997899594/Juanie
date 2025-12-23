@@ -1,3 +1,4 @@
+import { Logger } from '@juanie/core/logger'
 import { DeploymentsService } from '@juanie/service-business'
 import {
   approveDeploymentSchema,
@@ -17,7 +18,10 @@ export class DeploymentsRouter {
   constructor(
     private trpc: TrpcService,
     private deploymentsService: DeploymentsService,
-  ) {}
+    private logger: Logger,
+  ) {
+    this.logger.setContext(DeploymentsRouter.name)
+  }
 
   get router() {
     return this.trpc.router({
@@ -132,6 +136,47 @@ export class DeploymentsRouter {
             rolledBack: 0,
             successRate: 0, // 成功率百分比
             avgDeploymentTime: 0,
+          }
+        }),
+
+      // ==================== 触发部署 ====================
+
+      // 触发立即部署（公开 endpoint，用于 CI/CD 回调）
+      // 安全性：只验证项目是否存在，信任来自 GitHub Actions 的请求
+      trigger: this.trpc.procedure
+        .input(
+          z.object({
+            projectId: z.string(),
+            environment: z.enum(['development', 'staging', 'production']),
+            imageTag: z.string().optional(),
+            commitSha: z.string().optional(),
+            repository: z.string().optional(),
+          }),
+        )
+        .mutation(async ({ input }) => {
+          this.logger.info(`Deployment trigger request from CI/CD`, {
+            projectId: input.projectId,
+            environment: input.environment,
+            repository: input.repository,
+            commitSha: input.commitSha,
+          })
+
+          try {
+            await this.deploymentsService.triggerDeploy(
+              input.projectId,
+              input.environment,
+              input.imageTag,
+            )
+
+            return {
+              success: true,
+              message: `Deployment triggered for ${input.environment}`,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '触发部署失败',
+            })
           }
         }),
     })

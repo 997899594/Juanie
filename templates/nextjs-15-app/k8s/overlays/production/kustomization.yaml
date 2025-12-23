@@ -1,10 +1,16 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: project-{{ projectId }}-production
+namespace: project-<%= projectId %>-production
 
 resources:
   - ../../base
   - hpa.yaml
+
+patches:
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: <%= projectSlug %>
 
 namePrefix: prod-

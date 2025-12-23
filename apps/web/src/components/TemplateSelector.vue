@@ -40,7 +40,7 @@
     <Card v-else-if="selectedTemplate" class="border-2">
       <CardHeader>
         <div class="flex items-start gap-4">
-          <div class="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <div class="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <component
               :is="getTemplateIcon(selectedTemplate.category)"
               class="h-8 w-8 text-primary"
@@ -109,10 +109,6 @@
         </p>
       </CardContent>
     </Card>
-
-
-
-
   </div>
 </template>
 
@@ -213,7 +209,8 @@ function handleTemplateChange(value: any) {
 async function loadTemplates() {
   loading.value = true
   try {
-    const result = await trpc.projectTemplates.list.query({})
+    // ✅ 修复：使用正确的 API 路径 templates.list（而不是 projectTemplates.list）
+    const result = await trpc.templates.list.query({})
     templates.value = result
   } catch (error: any) {
     toast.error('加载模板失败', error.message)

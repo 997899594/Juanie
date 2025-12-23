@@ -12,11 +12,9 @@ export async function setupTrpc(app: FastifyInstance, trpcRouter: TrpcRouter) {
       router: trpcRouter.appRouter,
       createContext: async ({ req, res }): Promise<Context> => {
         const sessionId = getSessionId(req)
-        if (!sessionId) {
-          return { reply: res as FastifyReply }
-        }
         return {
           sessionId,
+          req: req as FastifyRequest,
           reply: res as FastifyReply,
         }
       },

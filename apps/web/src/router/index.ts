@@ -518,14 +518,6 @@ const routes: RouteRecordRaw[] = [
     name: 'login',
     component: Login,
   },
-  {
-    path: '/auth/callback',
-    name: 'auth-callback',
-    component: () => import('@/views/auth/Callback.vue'),
-    meta: {
-      title: '登录回调',
-    },
-  },
 ]
 
 const router = createRouter({

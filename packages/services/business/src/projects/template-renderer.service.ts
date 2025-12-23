@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { Logger } from '@juanie/core/logger'
 import { Injectable } from '@nestjs/common'
-import Handlebars from 'handlebars'
+import * as ejs from 'ejs'
 import { TemplateLoader } from './template-loader.service'
 
 /**
@@ -40,12 +40,16 @@ export interface RenderResult {
 
 /**
  * 模板渲染器服务
- * 负责将模板渲染成实际的项目文件
+ * 使用 EJS 模板引擎，支持自定义分隔符避免与 GitHub Actions 语法冲突
+ *
+ * 技术选型：
+ * - EJS: 行业标准，Express.js 默认模板引擎
+ * - 原生支持自定义分隔符 <% %>，与 ${{ }} 无冲突
+ * - 直接写 JavaScript，无需注册 helper
+ * - 更好的错误提示和调试体验
  */
 @Injectable()
 export class TemplateRenderer {
-  private handlebars: typeof Handlebars
-
   // 二进制文件扩展名（不需要渲染）
   private readonly binaryExtensions = new Set([
     '.png',
@@ -80,88 +84,21 @@ export class TemplateRenderer {
     'coverage',
   ]
 
+  // EJS 渲染选项
+  private readonly ejsOptions: ejs.Options = {
+    delimiter: '%', // 使用 <% %> 分隔符
+    openDelimiter: '<',
+    closeDelimiter: '>',
+    async: false, // 同步渲染
+    compileDebug: true, // 开启调试信息
+    rmWhitespace: false, // 保留空白字符
+  }
+
   constructor(
     private readonly templateLoader: TemplateLoader,
     private readonly logger: Logger,
   ) {
     this.logger.setContext(TemplateRenderer.name)
-    this.handlebars = Handlebars.create()
-    this.registerHelpers()
-  }
-
-  /**
-   * 注册 Handlebars 辅助函数
-   */
-  private registerHelpers() {
-    // 条件渲染
-    this.handlebars.registerHelper(
-      'ifCond',
-      function (this: any, v1: any, operator: string, v2: any, options: any) {
-        switch (operator) {
-          case '==':
-            // biome-ignore lint/suspicious/noDoubleEquals: intentional loose equality for template logic
-            return v1 == v2 ? options.fn(this) : options.inverse(this)
-          case '===':
-            return v1 === v2 ? options.fn(this) : options.inverse(this)
-          case '!=':
-            // biome-ignore lint/suspicious/noDoubleEquals: intentional loose equality for template logic
-            return v1 != v2 ? options.fn(this) : options.inverse(this)
-          case '!==':
-            return v1 !== v2 ? options.fn(this) : options.inverse(this)
-          case '<':
-            return v1 < v2 ? options.fn(this) : options.inverse(this)
-          case '<=':
-            return v1 <= v2 ? options.fn(this) : options.inverse(this)
-          case '>':
-            return v1 > v2 ? options.fn(this) : options.inverse(this)
-          case '>=':
-            return v1 >= v2 ? options.fn(this) : options.inverse(this)
-          case '&&':
-            return v1 && v2 ? options.fn(this) : options.inverse(this)
-          case '||':
-            return v1 || v2 ? options.fn(this) : options.inverse(this)
-          default:
-            return options.inverse(this)
-        }
-      },
-    )
-
-    // 转换为 kebab-case
-    this.handlebars.registerHelper('kebabCase', (str: string) => {
-      return str
-        .replace(/([a-z])([A-Z])/g, '$1-$2')
-        .replace(/[\s_]+/g, '-')
-        .toLowerCase()
-    })
-
-    // 转换为 camelCase
-    this.handlebars.registerHelper('camelCase', (str: string) => {
-      return str
-        .replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
-        .replace(/^(.)/, (c) => c.toLowerCase())
-    })
-
-    // 转换为 PascalCase
-    this.handlebars.registerHelper('pascalCase', (str: string) => {
-      return str
-        .replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
-        .replace(/^(.)/, (c) => c.toUpperCase())
-    })
-
-    // JSON 格式化
-    this.handlebars.registerHelper('json', (obj: any) => {
-      return JSON.stringify(obj, null, 2)
-    })
-
-    // YAML 环境变量格式化
-    this.handlebars.registerHelper('toYamlEnv', (envVars: Record<string, string>) => {
-      if (!envVars || Object.keys(envVars).length === 0) {
-        return ''
-      }
-      return Object.entries(envVars)
-        .map(([key, value]) => `        - name: ${key}\n          value: "${value}"`)
-        .join('\n')
-    })
   }
 
   /**
@@ -402,18 +339,21 @@ export class TemplateRenderer {
 
   /**
    * 渲染文件内容
+   * 使用 EJS 模板引擎，自动处理所有文件类型
    */
   private renderContent(content: string, variables: TemplateVariables, filePath?: string): string {
     try {
-      const template = this.handlebars.compile(content, {
-        noEscape: true, // 不转义 HTML
-        strict: false, // 宽松模式
+      // 使用 EJS 渲染（自定义分隔符 <% %>）
+      const rendered = ejs.render(content, variables, {
+        ...this.ejsOptions,
+        filename: filePath, // 用于错误提示
       })
-      return template(variables)
+
+      return rendered
     } catch (error) {
       const fileName = filePath ? path.basename(filePath) : 'unknown'
-      this.logger.warn(`Failed to compile template [${fileName}]:`, error)
-      // 如果编译失败，返回原始内容
+      this.logger.warn(`Failed to render template [${fileName}]:`, error)
+      // 如果渲染失败，返回原始内容
       return content
     }
   }

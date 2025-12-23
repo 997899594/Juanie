@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common'
 import { AuditLogsModule } from './audit-logs/audit-logs.module'
 import { AuthModule } from './auth/auth.module'
-import { GitOAuthModule } from './git-accounts/git-accounts.module'
+import { GitConnectionsModule } from './git-connections/git-connections.module'
 import { NotificationsModule } from './notifications/notifications.module'
 import { OrganizationsModule } from './organizations/organizations.module'
+import { RateLimitModule } from './rate-limit/rate-limit.module'
+import { SessionsModule } from './sessions/sessions.module'
 import { StorageModule } from './storage/storage.module'
 import { TeamsModule } from './teams/teams.module'
 import { UsersModule } from './users/users.module'
@@ -21,7 +23,9 @@ import { UsersModule } from './users/users.module'
     StorageModule,
     AuditLogsModule,
     NotificationsModule,
-    GitOAuthModule,
+    GitConnectionsModule,
+    RateLimitModule,
+    SessionsModule,
   ],
   exports: [
     AuthModule,
@@ -31,7 +35,9 @@ import { UsersModule } from './users/users.module'
     StorageModule,
     AuditLogsModule,
     NotificationsModule,
-    GitOAuthModule,
+    GitConnectionsModule,
+    RateLimitModule,
+    SessionsModule,
   ],
 })
 export class FoundationModule {}

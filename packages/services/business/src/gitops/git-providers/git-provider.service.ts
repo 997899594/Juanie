@@ -29,12 +29,12 @@ export interface RepositoryInfo {
  */
 @Injectable()
 export class GitProviderService {
-
   constructor(
     private readonly config: ConfigService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(GitProviderService.name)}
+    this.logger.setContext(GitProviderService.name)
+  }
 
   /**
    * 清理仓库名称，使其符合 GitHub/GitLab 命名规范
@@ -1485,7 +1485,9 @@ export class GitProviderService {
     username: string,
     role: 'admin' | 'member' = 'member',
   ): Promise<void> {
-    this.logger.info(`Adding member ${username} to GitHub organization ${orgName} with role ${role}`)
+    this.logger.info(
+      `Adding member ${username} to GitHub organization ${orgName} with role ${role}`,
+    )
 
     // GitHub 需要先邀请用户，然后用户接受邀请
     const response = await fetch(`https://api.github.com/orgs/${orgName}/memberships/${username}`, {
@@ -1736,5 +1738,394 @@ export class GitProviderService {
     }
 
     return roleMap[role.toLowerCase()] || 30 // 默认 Developer
+  }
+
+  /**
+   * 创建 GitHub Repository Secret
+   * 用于存储 PLATFORM_TOKEN 等敏感信息
+   */
+  async createGitHubSecret(
+    accessToken: string,
+    fullName: string,
+    secretName: string,
+    secretValue: string,
+  ): Promise<void> {
+    this.logger.info(`Creating GitHub secret ${secretName} for ${fullName}`)
+
+    // 1. 获取仓库的公钥（用于加密 secret）
+    const publicKeyResponse = await fetch(
+      `https://api.github.com/repos/${fullName}/actions/secrets/public-key`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+      },
+    )
+
+    if (!publicKeyResponse.ok) {
+      throw new Error(`Failed to get public key: ${publicKeyResponse.statusText}`)
+    }
+
+    const { key, key_id } = (await publicKeyResponse.json()) as any
+
+    // 2. 使用 libsodium 加密 secret（Node.js 原生实现）
+    // 注意：这里使用简化的加密方式，生产环境应该使用 @octokit/rest 或 tweetnacl
+    const encryptedValue = await this.encryptSecret(secretValue, key)
+
+    // 3. 创建或更新 secret
+    const response = await fetch(
+      `https://api.github.com/repos/${fullName}/actions/secrets/${secretName}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+        body: JSON.stringify({
+          encrypted_value: encryptedValue,
+          key_id,
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      const error: any = await response.json().catch(() => ({}))
+      throw new Error(`Failed to create secret: ${error.message || response.statusText}`)
+    }
+
+    this.logger.info(`✅ Successfully created secret ${secretName}`)
+  }
+
+  /**
+   * 加密 secret 值（使用 libsodium sealed box）
+   * 简化实现：使用 Node.js crypto 模块
+   */
+  private async encryptSecret(secretValue: string, publicKey: string): Promise<string> {
+    // 这里需要使用 libsodium 的 sealed box 加密
+    // 为了简化，我们使用 tweetnacl 库
+    // 使用 libsodium-wrappers 进行 sealed box 加密
+    // GitHub 使用 libsodium 的 crypto_box_seal 进行加密
+    try {
+      const sodium = await import('libsodium-wrappers')
+      await sodium.ready
+
+      // 将 base64 公钥转换为 Uint8Array
+      const publicKeyBytes = sodium.from_base64(publicKey, sodium.base64_variants.ORIGINAL)
+
+      // 将消息转换为 Uint8Array
+      const messageBytes = sodium.from_string(secretValue)
+
+      // 使用 sealed box 加密（匿名加密，不需要发送者的密钥对）
+      const encryptedBytes = sodium.crypto_box_seal(messageBytes, publicKeyBytes)
+
+      // 转换为 base64
+      return sodium.to_base64(encryptedBytes, sodium.base64_variants.ORIGINAL)
+    } catch (error) {
+      this.logger.error('Failed to encrypt secret with libsodium:', error)
+      // Fallback: 返回 base64 编码（不安全，仅用于开发）
+      this.logger.warn('⚠️ Using insecure base64 encoding for secret (libsodium not available)')
+      return Buffer.from(secretValue).toString('base64')
+    }
+  }
+
+  /**
+   * 创建 GitLab CI/CD Variable
+   * 用于存储 PLATFORM_TOKEN 等敏感信息
+   */
+  async createGitLabVariable(
+    accessToken: string,
+    projectId: string | number,
+    variableName: string,
+    variableValue: string,
+    options: {
+      protected?: boolean
+      masked?: boolean
+      environmentScope?: string
+    } = {},
+  ): Promise<void> {
+    this.logger.info(`Creating GitLab variable ${variableName} for project ${projectId}`)
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const encodedProjectId = encodeURIComponent(projectId)
+
+    const response = await fetch(
+      `${gitlabUrl.replace(/\/+$/, '')}/api/v4/projects/${encodedProjectId}/variables`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'AI-DevOps-Platform',
+        },
+        body: JSON.stringify({
+          key: variableName,
+          value: variableValue,
+          protected: options.protected ?? false,
+          masked: options.masked ?? true,
+          environment_scope: options.environmentScope || '*',
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      const error: any = await response.json().catch(() => ({}))
+      throw new Error(`Failed to create GitLab variable: ${error.message || response.statusText}`)
+    }
+
+    this.logger.info(`✅ Successfully created variable ${variableName}`)
+  }
+
+  /**
+   * 统一的创建 CI/CD Secret 接口
+   */
+  async createCISecret(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    repoIdentifier: string,
+    secretName: string,
+    secretValue: string,
+  ): Promise<void> {
+    if (provider === 'github') {
+      await this.createGitHubSecret(accessToken, repoIdentifier, secretName, secretValue)
+    } else {
+      await this.createGitLabVariable(accessToken, repoIdentifier, secretName, secretValue, {
+        masked: true,
+        protected: false,
+      })
+    }
+  }
+
+  /**
+   * 触发 GitHub Actions Workflow
+   * 用于自动触发首次镜像构建
+   */
+  async triggerWorkflow(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    fullName: string,
+    workflowFile: string,
+    options: {
+      ref: string
+      inputs?: Record<string, string>
+    },
+  ): Promise<void> {
+    if (provider === 'github') {
+      const [owner, repo] = fullName.split('/')
+
+      this.logger.info(`Triggering GitHub workflow: ${workflowFile} for ${fullName}`)
+
+      const response = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/dispatches`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'AI-DevOps-Platform',
+          },
+          body: JSON.stringify({
+            ref: options.ref,
+            inputs: options.inputs || {},
+          }),
+        },
+      )
+
+      if (!response.ok) {
+        const error: any = await response.json().catch(() => ({}))
+        const message = error.message || response.statusText
+        throw new Error(`Failed to trigger GitHub workflow: ${message}`)
+      }
+
+      this.logger.info(`✅ Successfully triggered workflow ${workflowFile} for ${fullName}`)
+    } else {
+      // GitLab CI 触发
+      this.logger.info(`Triggering GitLab pipeline for ${fullName}`)
+
+      const response = await fetch(
+        `https://gitlab.com/api/v4/projects/${encodeURIComponent(fullName)}/trigger/pipeline`,
+        {
+          method: 'POST',
+          headers: {
+            'PRIVATE-TOKEN': accessToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ref: options.ref,
+            variables: options.inputs || {},
+          }),
+        },
+      )
+
+      if (!response.ok) {
+        const error: any = await response.json().catch(() => ({}))
+        const message = error.message || response.statusText
+        throw new Error(`Failed to trigger GitLab pipeline: ${message}`)
+      }
+
+      this.logger.info(`✅ Successfully triggered pipeline for ${fullName}`)
+    }
+  }
+
+  /**
+   * 设置 GitHub Repository Variables
+   * 用于存储项目配置（非敏感信息）
+   */
+  async setGitHubRepositoryVariables(
+    accessToken: string,
+    fullName: string,
+    variables: Record<string, string>,
+  ): Promise<void> {
+    this.logger.info(
+      `Setting ${Object.keys(variables).length} repository variables for ${fullName}`,
+    )
+
+    const baseUrl = 'https://api.github.com'
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'AI-DevOps-Platform',
+      'X-GitHub-Api-Version': '2022-11-28',
+    }
+
+    // GitHub Actions Variables API
+    // https://docs.github.com/en/rest/actions/variables
+    for (const [name, value] of Object.entries(variables)) {
+      try {
+        // 先尝试更新（如果变量已存在）
+        const updateResponse = await fetch(
+          `${baseUrl}/repos/${fullName}/actions/variables/${name}`,
+          {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ name, value }),
+          },
+        )
+
+        if (updateResponse.ok) {
+          this.logger.debug(`✅ Updated variable: ${name}`)
+          continue
+        }
+
+        // 如果不存在（404），则创建
+        if (updateResponse.status === 404) {
+          const createResponse = await fetch(`${baseUrl}/repos/${fullName}/actions/variables`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ name, value }),
+          })
+
+          if (!createResponse.ok) {
+            const error: any = await createResponse.json().catch(() => ({}))
+            throw new Error(
+              `Failed to create variable ${name}: ${error.message || createResponse.statusText}`,
+            )
+          }
+
+          this.logger.debug(`✅ Created variable: ${name}`)
+        } else {
+          const error: any = await updateResponse.json().catch(() => ({}))
+          throw new Error(
+            `Failed to update variable ${name}: ${error.message || updateResponse.statusText}`,
+          )
+        }
+      } catch (error) {
+        this.logger.error(`Failed to set variable ${name}:`, error)
+        throw error
+      }
+    }
+
+    this.logger.info(`✅ Successfully set all repository variables`)
+  }
+
+  /**
+   * 设置 GitLab Project Variables
+   */
+  async setGitLabProjectVariables(
+    accessToken: string,
+    fullName: string,
+    variables: Record<string, string>,
+  ): Promise<void> {
+    this.logger.info(`Setting ${Object.keys(variables).length} project variables for ${fullName}`)
+
+    const gitlabUrl = this.config.get<string>('GITLAB_BASE_URL') || 'https://gitlab.com'
+    const headers = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'AI-DevOps-Platform',
+    }
+
+    // GitLab Project Variables API
+    // https://docs.gitlab.com/ee/api/project_level_variables.html
+    for (const [key, value] of Object.entries(variables)) {
+      try {
+        // 先尝试更新（如果变量已存在）
+        const updateResponse = await fetch(
+          `${gitlabUrl}/api/v4/projects/${encodeURIComponent(fullName)}/variables/${key}`,
+          {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ value }),
+          },
+        )
+
+        if (updateResponse.ok) {
+          this.logger.debug(`✅ Updated variable: ${key}`)
+          continue
+        }
+
+        // 如果不存在（404），则创建
+        if (updateResponse.status === 404) {
+          const createResponse = await fetch(
+            `${gitlabUrl}/api/v4/projects/${encodeURIComponent(fullName)}/variables`,
+            {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ key, value }),
+            },
+          )
+
+          if (!createResponse.ok) {
+            const error: any = await createResponse.json().catch(() => ({}))
+            throw new Error(
+              `Failed to create variable ${key}: ${error.message || createResponse.statusText}`,
+            )
+          }
+
+          this.logger.debug(`✅ Created variable: ${key}`)
+        } else {
+          const error: any = await updateResponse.json().catch(() => ({}))
+          throw new Error(
+            `Failed to update variable ${key}: ${error.message || updateResponse.statusText}`,
+          )
+        }
+      } catch (error) {
+        this.logger.error(`Failed to set variable ${key}:`, error)
+        throw error
+      }
+    }
+
+    this.logger.info(`✅ Successfully set all project variables`)
+  }
+
+  /**
+   * 统一接口：设置 Repository/Project Variables
+   */
+  async setRepositoryVariables(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    fullName: string,
+    variables: Record<string, string>,
+  ): Promise<void> {
+    if (provider === 'github') {
+      await this.setGitHubRepositoryVariables(accessToken, fullName, variables)
+    } else {
+      await this.setGitLabProjectVariables(accessToken, fullName, variables)
+    }
   }
 }

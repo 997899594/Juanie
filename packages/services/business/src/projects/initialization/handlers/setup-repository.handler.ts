@@ -122,7 +122,7 @@ export class SetupRepositoryHandler implements StateHandler {
 
     this.logger.info(`Resolving OAuth token for provider: ${repository.provider}`)
 
-    const gitConnection = await this.gitConnections.getConnectionByProvider(
+    const gitConnection = await this.gitConnections.getConnectionWithDecryptedTokens(
       context.userId,
       repository.provider,
     )

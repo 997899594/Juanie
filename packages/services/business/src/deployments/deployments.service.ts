@@ -12,6 +12,7 @@ import { Inject, Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { FluxResourcesService } from '../gitops/flux/flux-resources.service'
 import type { DeploymentChanges } from '../gitops/git-ops/git-ops.service'
 import { GitOpsService } from '../gitops/git-ops/git-ops.service'
 
@@ -30,6 +31,7 @@ export class DeploymentsService {
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
     private gitOpsService: GitOpsService,
+    private fluxResourcesService: FluxResourcesService,
     private readonly logger: Logger,
   ) {
     this.logger.setContext(DeploymentsService.name)
@@ -714,5 +716,32 @@ export class DeploymentsService {
       .limit(1)
 
     return projectMember?.role === 'admin'
+  }
+
+  /**
+   * 触发立即部署
+   * 用于 CI/CD 或手动触发
+   */
+  async triggerDeploy(projectId: string, environment: string, imageTag?: string): Promise<void> {
+    this.logger.info(`Triggering deployment for project ${projectId} ${environment}`, {
+      imageTag,
+    })
+
+    // 获取环境信息
+    const env = await this.db.query.environments.findFirst({
+      where: and(
+        eq(schema.environments.projectId, projectId),
+        eq(schema.environments.type, environment as any),
+      ),
+    })
+
+    if (!env) {
+      throw new Error(`Environment ${environment} not found`)
+    }
+
+    // 调用 FluxResourcesService 触发部署
+    await this.fluxResourcesService.reconcileProject(projectId, environment)
+
+    this.logger.info(`✅ Deployment triggered successfully`)
   }
 }

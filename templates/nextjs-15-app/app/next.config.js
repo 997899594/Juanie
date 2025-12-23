@@ -1,106 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 启用 React 19 特性
-  experimental: {
-    ppr: true, // Partial Prerendering
-    reactCompiler: true, // React Compiler
-    serverActions: {
-      bodySizeLimit: '2mb',
-    },
-  },
+  // 启用 standalone 输出模式（用于 Docker）
+  output: 'standalone',
+
+  // 生产优化
+  reactStrictMode: true,
 
   // 图片优化
   images: {
-    formats: ['image/avif', 'image/webp'],
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**.{{ appName }}.com',
-      },
-    ],
+    unoptimized: process.env.NODE_ENV === 'production',
   },
 
-  // 性能优化
-  compress: true,
-  poweredByHeader: false,
-
-  // 日志
-  logging: {
-    fetches: {
-      fullUrl: true,
-    },
+  // 环境变量
+  env: {
+    NEXT_PUBLIC_APP_NAME: 'My Next.js App',
   },
-
-{
-  -
-  if
-  .enableSentry
-}
-// Sentry
-{
-  hideSourceMaps: true, widenClientFileUpload
-  : true,
-}
-,
-{
-  ;-end
 }
 
-// 环境变量
-{
-  NEXT_PUBLIC_APP_NAME: '{{ appName }}', NEXT_PUBLIC_APP_URL
-  : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:{{ port }}',
-}
-,
-
-  // Webpack 配置
-  webpack: (config,
-{
-  isServer
-}
-) =>
-{
-  if (!isServer) {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      net: false,
-      tls: false,
-    }
-  }
-  return config
-}
-,
-}
-
-{
-  -
-  if
-  .enableSentry
-}
-// Sentry 配置
-const { withSentryConfig } = require('@sentry/nextjs')
-
-module.exports = withSentryConfig(
-  nextConfig,
-  {
-    silent: true,
-    org: process.env.SENTRY_ORG,
-    project: process.env.SENTRY_PROJECT,
-  },
-  {
-    widenClientFileUpload: true,
-    transpileClientSDK: true,
-    tunnelRoute: '/monitoring',
-    hideSourceMaps: true,
-    disableLogger: true,
-  },
-)
-{
-  -
-  else
-}
 module.exports = nextConfig
-{
-  ;-end
-}

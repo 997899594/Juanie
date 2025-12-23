@@ -53,7 +53,25 @@ bun run dev:api                # 只启动后端
 bun run db:push                # 应用数据库迁移
 biome check --write            # 格式化代码
 bun test                       # 运行测试
+bun run health                 # Monorepo 健康检查
+bun run reinstall              # 清理并重新安装依赖
 ```
+
+## Monorepo 管理
+
+**单一依赖树**: 所有依赖安装在根 `node_modules`，子包不创建独立的 `node_modules`
+
+**关键配置**:
+- `bunfig.toml`: `hoisting = true`, `flattenWorkspace = true`
+- `package.json`: 使用 `resolutions` 统一关键依赖版本
+- `.gitignore`: 忽略 `.bun-cache`, `.turbo`, `node_modules`
+
+**常见问题**:
+- 依赖版本冲突: 运行 `bun run reinstall`
+- 子包有 node_modules: 运行 `./scripts/enforce-single-dependency-tree.sh`
+- 构建失败: 运行 `bun run health` 检查配置
+
+参考: `docs/guides/monorepo-best-practices.md`
 
 ## 导入示例
 
@@ -81,21 +99,33 @@ import type { Project } from '@juanie/types'
 **图标**: lucide-vue-next  
 **状态**: Pinia + @vueuse/core
 
+**自动导入**: 
+- Vue API (`ref`, `computed`, `watch` 等) - 无需导入
+- VueUse (`useLocalStorage`, `useDebounce` 等) - 无需导入
+- Vue Router (`useRoute`, `useRouter`) - 无需导入
+- Pinia (`defineStore`, `storeToRefs`) - 无需导入
+- Composables (`src/composables/*`) - 无需导入
+- UI 组件 (`UiButton`, `UiCard` 等) - 无需导入，使用 `Ui` 前缀
+- 图标 (`lucide-vue-next`) - **需要手动导入**
+
 ```vue
 <script setup lang="ts">
-import { Button, Card } from '@juanie/ui'
+// ✅ 自动导入 - 无需 import
+// import { ref } from 'vue'
+// import { Button, Card } from '@juanie/ui'
+
+// ❌ 需要手动导入
 import { Plus } from 'lucide-vue-next'
-import { ref } from 'vue'
 
 const count = ref(0)
 </script>
 
 <template>
   <Card class="p-4">
-    <Button @click="count++">
+    <UiButton @click="count++">
       <Plus :size="16" class="mr-2" />
       点击 {{ count }}
-    </Button>
+    </UiButton>
   </Card>
 </template>
 ```

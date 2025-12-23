@@ -76,7 +76,7 @@ export class YamlGeneratorService {
         },
       },
       spec: {
-        interval: input.interval || '1m',
+        interval: input.interval || '1m', // 默认 1m，可通过参数覆盖
         url: input.url,
         ref: {
           branch: input.branch || 'main',
@@ -121,7 +121,7 @@ export class YamlGeneratorService {
         },
       },
       spec: {
-        interval: input.interval || '5m',
+        interval: input.interval || '1m', // 优化：从 5m 改为 1m
         path: input.path || './',
         prune: input.prune !== false, // 默认启用 prune（删除不在 Git 中的资源）
         sourceRef: {

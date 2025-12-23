@@ -292,6 +292,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { log } from '@juanie/ui'
 import { useGitOps } from '@/composables/useGitOps'
 import { useProjectCRUD } from '@/composables/useProjects'
 import { useAppStore } from '@/stores/app'
@@ -331,6 +333,7 @@ import {
 } from 'lucide-vue-next'
 
 const appStore = useAppStore()
+const route = useRoute()
 
 // 使用 TanStack Query - 自动获取项目列表
 const { useProjectsQuery } = useProjectCRUD()
