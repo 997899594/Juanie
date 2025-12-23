@@ -1,12 +1,12 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: <%= projectSlug %>
+  name: <%= projectName %>
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: <%= projectSlug %>
+    name: <%= projectName %>
   minReplicas: 2
   maxReplicas: 10
   metrics:

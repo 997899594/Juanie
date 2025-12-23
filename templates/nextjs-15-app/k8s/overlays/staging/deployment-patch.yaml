@@ -1,13 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: <%= projectSlug %>
+  name: <%= projectName %>
 spec:
   replicas: 0  # 默认不运行，按需启动
   template:
     spec:
       containers:
-      - name: <%= projectSlug %>
+      - name: <%= projectName %>
         resources:
           requests:
             cpu: 50m

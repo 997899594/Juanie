@@ -1,13 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: <%= projectSlug %>
+  name: <%= projectName %>
 spec:
   replicas: 1  # 改为 1，方便测试
   template:
     spec:
       containers:
-      - name: <%= projectSlug %>
+      - name: <%= projectName %>
         resources:
           requests:
             cpu: 50m

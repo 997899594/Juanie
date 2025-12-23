@@ -1,9 +1,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: <%= projectSlug %>
+  name: !!str <%= projectName %>
   labels:
-    app: <%= projectSlug %>
+    app: !!str <%= projectName %>
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -11,16 +11,16 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - <%= projectSlug %>.example.com
-    secretName: <%= projectSlug %>-tls
+    - <%= projectName %>.example.com
+    secretName: <%= projectName %>-tls
   rules:
-  - host: <%= projectSlug %>.example.com
+  - host: <%= projectName %>.example.com
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: <%= projectSlug %>
+            name: !!str <%= projectName %>
             port:
               number: 80
