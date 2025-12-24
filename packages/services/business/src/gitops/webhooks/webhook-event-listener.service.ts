@@ -20,7 +20,6 @@ export class WebhookEventListener {
     this.logger.setContext(WebhookEventListener.name)
   }
 
-
   /**
    * 处理 Git 仓库变更事件
    *

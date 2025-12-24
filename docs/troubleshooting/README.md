@@ -25,6 +25,7 @@
 
 ### ☸️ Kubernetes & K3s
 
+- [K8s Deployment 错误的镜像名称](k8s-deployment-wrong-image-name.md) - 模板渲染失败导致镜像名称错误 🔴
 - [K3s Flux 重装（国内网络）](k3s-flux-reinstall-china-network.md) - 国内网络环境下的 Flux 安装 🟢
 - [K3s 远程访问 IP 变更](k3s-remote-access-ip-change.md) - K3s 服务器 IP 变更后的配置更新 🟢
 - [K8s Namespace 时序](k8s-namespace-timing.md) - Namespace 创建时序问题
@@ -37,6 +38,8 @@
 
 ### 🚀 项目初始化
 
+- [项目初始化成功分析](project-initialization-success-analysis.md) - 完整的初始化流程分析和最佳实践 🟢
+- [凭证同步命名空间时序问题](credential-sync-namespace-timing.md) - 凭证同步时的正常警告日志 🟢
 - [初始化进度和 ImagePullSecret 修复](initialization-progress-and-imagepullsecret-fixes.md) - 进度显示和镜像拉取凭证问题 🟡
 - [模板中缺少 GitHub Workflow](missing-github-workflow-in-template.md) - 模板文件缺失问题 🟡
 
@@ -64,9 +67,11 @@
 
 ### 🟢 低优先级（配置或环境问题）
 
-1. [K3s 远程访问 IP 变更](k3s-remote-access-ip-change.md) - 配置更新
-2. [K3s Flux 重装（国内网络）](k3s-flux-reinstall-china-network.md) - 网络环境
-3. [GitHub Token 401 错误](github-token-401-error.md) - 令牌过期
+1. [项目初始化成功分析](project-initialization-success-analysis.md) - 最佳实践参考
+2. [凭证同步命名空间时序问题](credential-sync-namespace-timing.md) - 正常的时序警告
+3. [K3s 远程访问 IP 变更](k3s-remote-access-ip-change.md) - 配置更新
+4. [K3s Flux 重装（国内网络）](k3s-flux-reinstall-china-network.md) - 网络环境
+5. [GitHub Token 401 错误](github-token-401-error.md) - 令牌过期
 
 ## 📊 问题统计
 
@@ -77,9 +82,9 @@
 | GitOps & Flux | 7 | 0 | 7 |
 | Kubernetes | 4 | 0 | 4 |
 | 认证系统 | 2 | 0 | 2 |
-| 项目初始化 | 2 | 0 | 2 |
+| 项目初始化 | 4 | 0 | 4 |
 | Git 仓库 | 1 | 0 | 1 |
-| **总计** | **19** | **0** | **19** |
+| **总计** | **21** | **0** | **21** |
 
 ## 🎯 常见问题快速索引
 

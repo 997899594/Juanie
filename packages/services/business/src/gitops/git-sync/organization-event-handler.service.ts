@@ -7,12 +7,13 @@ import { OrganizationSyncService } from './organization-sync.service'
 
 @Injectable()
 export class OrganizationEventHandler {
-
   constructor(
-    _organizationSyncService: OrganizationSyncService, _gitSyncService: GitSyncService,
+    _organizationSyncService: OrganizationSyncService,
+    _gitSyncService: GitSyncService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(OrganizationEventHandler.name)}
+    this.logger.setContext(OrganizationEventHandler.name)
+  }
 
   @OnEvent(DomainEvents.ORGANIZATION_CREATED)
   async handleOrganizationCreated(event: any) {

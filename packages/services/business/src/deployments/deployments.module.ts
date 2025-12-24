@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common'
-import { GitOpsModule } from '../gitops/gitops.module'
+import { FluxModule } from '../gitops/flux/flux.module'
+import { GitOpsModule } from '../gitops/git-ops/git-ops.module'
 import { DeploymentsService } from './deployments.service'
 
 @Module({
-  imports: [GitOpsModule],
+  imports: [GitOpsModule, FluxModule],
   providers: [DeploymentsService],
   exports: [DeploymentsService],
 })

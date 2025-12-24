@@ -19,12 +19,12 @@ export interface WebhookEvent {
 
 @Injectable()
 export class WebhookEventProcessor {
-
   constructor(
     private readonly eventPublisher: EventPublisher,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(WebhookEventProcessor.name)}
+    this.logger.setContext(WebhookEventProcessor.name)
+  }
 
   /**
    * 处理 GitHub 事件

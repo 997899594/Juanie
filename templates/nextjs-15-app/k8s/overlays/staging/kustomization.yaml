@@ -10,6 +10,6 @@ patches:
   - path: deployment-patch.yaml
     target:
       kind: Deployment
-      name: !!str <%= projectName %>
+      name: <%= projectId %>
 
 namePrefix: staging-

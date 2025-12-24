@@ -154,10 +154,18 @@ export class GitSyncWorker implements OnModuleInit {
       const credential = await this.credentialManager.getProjectCredential(projectId)
       const accessToken = await credential.getAccessToken()
 
-      // 从项目认证配置中获取仓库信息
-      // 注意：这里需要从某处获取仓库的 full name
-      // 暂时使用项目 slug 作为仓库名（实际应该从配置中获取）
-      const repoFullName = `${project.organizationId}/${project.slug}`
+      // 获取项目的仓库信息
+      const [repository] = await this.db
+        .select()
+        .from(schema.repositories)
+        .where(eq(schema.repositories.projectId, projectId))
+        .limit(1)
+
+      if (!repository) {
+        throw new Error(`No repository found for project ${projectId}`)
+      }
+
+      const repoFullName = repository.fullName
 
       // 调用 Git Provider API 添加协作者
       await this.gitProvider.addCollaborator(
@@ -273,8 +281,18 @@ export class GitSyncWorker implements OnModuleInit {
       const credential = await this.credentialManager.getProjectCredential(projectId)
       const accessToken = await credential.getAccessToken()
 
-      // 获取仓库全名
-      const repoFullName = `${project.organizationId}/${project.slug}`
+      // 获取项目的仓库信息
+      const [repository] = await this.db
+        .select()
+        .from(schema.repositories)
+        .where(eq(schema.repositories.projectId, projectId))
+        .limit(1)
+
+      if (!repository) {
+        throw new Error(`No repository found for project ${projectId}`)
+      }
+
+      const repoFullName = repository.fullName
 
       // 调用 Git Provider API 移除协作者
       await this.gitProvider.removeCollaborator(
@@ -372,7 +390,19 @@ export class GitSyncWorker implements OnModuleInit {
       // 获取访问 token
       const credential = await this.credentialManager.getProjectCredential(projectId)
       const accessToken = await credential.getAccessToken()
-      const repoFullName = `${project.organizationId}/${project.slug}`
+
+      // 获取项目的仓库信息
+      const [repository] = await this.db
+        .select()
+        .from(schema.repositories)
+        .where(eq(schema.repositories.projectId, projectId))
+        .limit(1)
+
+      if (!repository) {
+        throw new Error(`No repository found for project ${projectId}`)
+      }
+
+      const repoFullName = repository.fullName
 
       // 逐个同步成员
       for (const member of members) {

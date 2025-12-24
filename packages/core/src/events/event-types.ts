@@ -115,12 +115,6 @@ export const IntegrationEvents = {
   INIT_COMPLETED: 'project.init.completed',
   INIT_FAILED: 'project.init.failed',
 
-  // GitOps 事件
-  GITOPS_SETUP_REQUESTED: 'gitops.setup.requested',
-  GITOPS_SETUP_STARTED: 'gitops.setup.started',
-  GITOPS_SETUP_COMPLETED: 'gitops.setup.completed',
-  GITOPS_SETUP_FAILED: 'gitops.setup.failed',
-
   // 部署事件
   DEPLOYMENT_QUEUED: 'deployment.queued',
   DEPLOYMENT_STARTED: 'deployment.started',
@@ -134,50 +128,6 @@ export const IntegrationEvents = {
 } as const
 
 export type IntegrationEventType = (typeof IntegrationEvents)[keyof typeof IntegrationEvents]
-
-// GitOps 设置请求事件
-export interface GitOpsSetupRequestedEventData {
-  projectId: string
-  repositoryId: string
-  repositoryUrl: string
-  repositoryBranch: string
-  userId: string
-  environments: Array<{
-    id: string
-    type: 'development' | 'staging' | 'production'
-    name: string
-  }>
-  jobId?: string
-}
-
-export interface GitOpsSetupRequestedEvent extends BaseEvent<GitOpsSetupRequestedEventData> {
-  type: typeof IntegrationEvents.GITOPS_SETUP_REQUESTED
-  version: 1
-}
-
-// GitOps 设置完成事件
-export interface GitOpsSetupCompletedEventData {
-  projectId: string
-  namespaces: string[]
-  gitRepositories: string[]
-  kustomizations: string[]
-}
-
-export interface GitOpsSetupCompletedEvent extends BaseEvent<GitOpsSetupCompletedEventData> {
-  type: typeof IntegrationEvents.GITOPS_SETUP_COMPLETED
-  version: 1
-}
-
-// GitOps 设置失败事件
-export interface GitOpsSetupFailedEventData {
-  projectId: string
-  errors: string[]
-}
-
-export interface GitOpsSetupFailedEvent extends BaseEvent<GitOpsSetupFailedEventData> {
-  type: typeof IntegrationEvents.GITOPS_SETUP_FAILED
-  version: 1
-}
 
 // ==================== 实时事件 (Realtime Events) ====================
 
@@ -292,9 +242,6 @@ export interface FluxHealthCheckedEvent extends BaseEvent<FluxHealthCheckedEvent
 export type AnyEvent =
   | ProjectCreatedEvent
   | ProjectUpdatedEvent
-  | GitOpsSetupRequestedEvent
-  | GitOpsSetupCompletedEvent
-  | GitOpsSetupFailedEvent
   | ProgressUpdatedEvent
   | StatusChangedEvent
   | K3sConnectedEvent

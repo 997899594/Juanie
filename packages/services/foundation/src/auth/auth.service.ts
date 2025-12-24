@@ -59,6 +59,8 @@ export class AuthService {
       'workflow', // 管理 GitHub Actions workflows
       'admin:repo_hook', // 管理仓库 webhooks
       'delete_repo', // 删除仓库
+      'read:packages', // 拉取 ghcr.io 镜像（多租户必需）
+      'write:packages', // 推送 ghcr.io 镜像（多租户必需）
     ])
 
     // 存储 state 到 Redis（10 分钟过期），标记为 github
@@ -509,13 +511,15 @@ export class AuthService {
     const state = generateId()
 
     if (provider === 'github') {
-      // 连接账户时也请求完整权限
+      // 连接账户时也请求完整权限（包括 packages 权限用于多租户镜像）
       const url = this.github.createAuthorizationURL(state, [
         'user:email',
         'repo',
         'workflow',
         'admin:repo_hook',
         'delete_repo',
+        'read:packages', // 拉取 ghcr.io 镜像（多租户必需）
+        'write:packages', // 推送 ghcr.io 镜像（多租户必需）
       ])
       // 存储 state 和 userId 的关联
       await this.redis.setex(`oauth:github:connect:${state}`, 600, userId)

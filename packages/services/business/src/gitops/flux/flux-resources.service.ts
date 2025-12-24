@@ -1,8 +1,8 @@
 import * as schema from '@juanie/core/database'
 import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
+import { GitConnectionsService } from '@juanie/service-foundation'
 import { Inject, Injectable } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { load as loadYaml } from 'js-yaml'
@@ -44,11 +44,11 @@ export interface Kustomization {
 export class FluxResourcesService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    private config: ConfigService,
     private k3s: K3sService,
     private yamlGenerator: YamlGeneratorService,
     private metrics: FluxMetricsService,
     private credentialManager: CredentialManagerService,
+    private gitConnectionsService: GitConnectionsService,
     private readonly logger: Logger,
   ) {
     this.logger.setContext(FluxResourcesService.name)
@@ -452,24 +452,24 @@ export class FluxResourcesService {
     githubUsername: string,
     githubToken: string,
   ): Promise<void> {
-    try {
-      const registryHost = 'ghcr.io'
+    const registryHost = 'ghcr.io'
 
-      this.logger.debug(
-        `Creating ImagePullSecret with registry: ${registryHost}, username: ${githubUsername}`,
-      )
+    this.logger.debug(
+      `Creating ImagePullSecret with registry: ${registryHost}, username: ${githubUsername}`,
+    )
 
-      // 创建 Docker config JSON
-      const dockerConfigJson = {
-        auths: {
-          [registryHost]: {
-            username: githubUsername,
-            password: githubToken,
-            auth: Buffer.from(`${githubUsername}:${githubToken}`).toString('base64'),
-          },
+    // 创建 Docker config JSON
+    const dockerConfigJson = {
+      auths: {
+        [registryHost]: {
+          username: githubUsername,
+          password: githubToken,
+          auth: Buffer.from(`${githubUsername}:${githubToken}`).toString('base64'),
         },
-      }
+      },
+    }
 
+    try {
       // 创建 Secret
       await this.k3s.createSecret(
         namespace,
@@ -486,8 +486,9 @@ export class FluxResourcesService {
       if (error.message?.includes('409') || error.message?.includes('already exists')) {
         this.logger.debug(`ImagePullSecret already exists in ${namespace}`)
       } else {
+        // 其他错误必须抛出，不能静默忽略
         this.logger.error(`Failed to create ImagePullSecret in ${namespace}:`, error)
-        // 不抛出错误，因为这不应该阻止项目创建
+        throw new Error(`Failed to create ImagePullSecret: ${error.message}`)
       }
     }
   }
@@ -570,39 +571,39 @@ export class FluxResourcesService {
       const credential = await this.credentialManager.createProjectCredential({ projectId, userId })
 
       // 1.5 获取用户的 GitHub 连接信息（用于 ImagePullSecret）
-      let githubUsername: string | null = null
-      let githubToken: string | null = null
+      let githubUsername: string
+      let githubToken: string
 
       try {
-        const gitConnection = await this.db.query.gitConnections.findFirst({
-          where: (gitConnections, { and, eq }) =>
-            and(eq(gitConnections.userId, userId), eq(gitConnections.provider, 'github')),
-        })
+        // 使用 GitConnectionsService 获取解密后的凭证
+        const gitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          userId,
+          'github',
+        )
 
-        if (gitConnection?.username && gitConnection.accessToken) {
-          githubUsername = gitConnection.username
-          // Token 已加密，需要解密
-          const crypto = await import('node:crypto')
-          const encryptionKey =
-            this.config.get<string>('ENCRYPTION_KEY') || 'dev_encryption_key_32_chars_min'
-          const algorithm = 'aes-256-cbc'
-          const key = crypto.scryptSync(encryptionKey, 'salt', 32)
-
-          try {
-            const [ivHex, encryptedHex] = gitConnection.accessToken.split(':')
-            if (ivHex && encryptedHex) {
-              const iv = Buffer.from(ivHex, 'hex')
-              const encrypted = Buffer.from(encryptedHex, 'hex')
-              const decipher = crypto.createDecipheriv(algorithm, key, iv)
-              githubToken = decipher.update(encrypted, undefined, 'utf8') + decipher.final('utf8')
-              this.logger.info(`✅ Retrieved GitHub credentials for user ${githubUsername}`)
-            }
-          } catch (decryptError) {
-            this.logger.error('Failed to decrypt GitHub token:', decryptError)
-          }
+        if (!gitConnection) {
+          throw new Error(`No GitHub connection found for user ${userId}`)
         }
+
+        if (!gitConnection.username) {
+          throw new Error(
+            `GitHub connection exists but username is missing. Please reconnect your GitHub account.`,
+          )
+        }
+
+        if (!gitConnection.accessToken) {
+          throw new Error(
+            `GitHub connection exists but access token is missing. Please reconnect your GitHub account.`,
+          )
+        }
+
+        githubUsername = gitConnection.username
+        githubToken = gitConnection.accessToken
+
+        this.logger.info(`✅ Retrieved GitHub credentials for user ${githubUsername}`)
       } catch (error) {
         this.logger.error('Failed to retrieve GitHub connection:', error)
+        throw error // 不隐藏错误，直接抛出
       }
 
       // 2. 为每个环境设置 GitOps 资源
@@ -621,12 +622,8 @@ export class FluxResourcesService {
           result.namespaces.push(namespace)
 
           // 2.2 创建 ImagePullSecret（用于拉取镜像）
-          if (githubUsername && githubToken) {
-            this.logger.info(`Creating ImagePullSecret in ${namespace}`)
-            await this.createImagePullSecret(namespace, githubUsername, githubToken)
-          } else {
-            this.logger.warn(`Skipping ImagePullSecret creation (no GitHub credentials)`)
-          }
+          this.logger.info(`Creating ImagePullSecret in ${namespace}`)
+          await this.createImagePullSecret(namespace, githubUsername, githubToken)
 
           // 2.3 同步 Git Secret 到新创建的 namespace
           this.logger.info(`Syncing Git secret to ${namespace}`)

@@ -36,7 +36,8 @@ export class ProjectInitializationStateMachine {
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(ProjectInitializationStateMachine.name)}
+    this.logger.setContext(ProjectInitializationStateMachine.name)
+  }
 
   // 状态转换表
   private readonly transitions: Record<

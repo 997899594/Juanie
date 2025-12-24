@@ -6,9 +6,7 @@ export { BusinessModule } from './business.module'
 export { DeploymentsService } from './deployments/deployments.service'
 export type { ConfigureGitOpsInput, GitOpsConfig } from './environments/environments.service'
 export { EnvironmentsService } from './environments/environments.service'
-// GitAuthService 已废弃，使用 CredentialManagerService 代替
 export { CredentialManagerService } from './gitops/credentials/credential-manager.service'
-// EncryptionService 已移至 @juanie/service-foundation
 export { FluxService } from './gitops/flux/flux.service'
 export { FluxMetricsService } from './gitops/flux/flux-metrics.service'
 export { FluxResourcesService } from './gitops/flux/flux-resources.service'

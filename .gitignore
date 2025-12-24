@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Package build outputs
+packages/*/dist/
+packages/*/build/
+
 # turbo
 .turbo
 
@@ -118,6 +122,7 @@ out
 # Temporary folders
 tmp/
 temp/
+.temp/
 
 # Vercel
 .vercel

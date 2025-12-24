@@ -10,12 +10,7 @@ export class AppError extends Error {
   public readonly details?: unknown
   public readonly timestamp: Date
 
-  constructor(
-    code: ErrorCode,
-    message?: string,
-    details?: unknown,
-    httpStatus?: number,
-  ) {
+  constructor(code: ErrorCode, message?: string, details?: unknown, httpStatus?: number) {
     // 如果没有提供 message，使用默认消息
     const errorMessage = message || ErrorMessages[code] || '未知错误'
     super(errorMessage)
@@ -167,8 +162,7 @@ export class ErrorFactory {
    * 创建项目相关错误
    */
   static project = {
-    notFound: (details?: unknown) =>
-      new AppError(ErrorCode.PROJECT_NOT_FOUND, undefined, details),
+    notFound: (details?: unknown) => new AppError(ErrorCode.PROJECT_NOT_FOUND, undefined, details),
     alreadyExists: (details?: unknown) =>
       new AppError(ErrorCode.PROJECT_ALREADY_EXISTS, undefined, details),
     slugExists: (details?: unknown) =>
@@ -204,8 +198,7 @@ export class ErrorFactory {
    * 创建部署相关错误
    */
   static deploy = {
-    notFound: (details?: unknown) =>
-      new AppError(ErrorCode.DEPLOY_NOT_FOUND, undefined, details),
+    notFound: (details?: unknown) => new AppError(ErrorCode.DEPLOY_NOT_FOUND, undefined, details),
     alreadyRunning: (details?: unknown) =>
       new AppError(ErrorCode.DEPLOY_ALREADY_RUNNING, undefined, details),
     failed: (message?: string, details?: unknown) =>

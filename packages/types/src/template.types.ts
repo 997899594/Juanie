@@ -219,7 +219,6 @@ export interface TemplateFilters {
 export interface TemplateVariables {
   // 项目信息
   projectName: string
-  projectSlug: string
   namespace: string
 
   // 镜像信息

@@ -23,7 +23,8 @@ export class CreateEnvironmentsHandler implements StateHandler {
     private environments: EnvironmentsService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(CreateEnvironmentsHandler.name)}
+    this.logger.setContext(CreateEnvironmentsHandler.name)
+  }
 
   canHandle(context: InitializationContext): boolean {
     // 智能判断: 如果模板已定义环境，跳过默认环境创建

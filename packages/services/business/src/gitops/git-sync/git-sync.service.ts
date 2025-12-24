@@ -40,13 +40,13 @@ export interface GitSyncBatchJob {
  */
 @Injectable()
 export class GitSyncService {
-
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     @Inject(GIT_SYNC_QUEUE) private readonly queue: Queue,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(GitSyncService.name)}
+    this.logger.setContext(GitSyncService.name)
+  }
 
   /**
    * 从认证类型推断 Git 提供商

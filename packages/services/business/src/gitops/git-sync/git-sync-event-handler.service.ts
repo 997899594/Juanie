@@ -43,12 +43,12 @@ export interface ProjectMemberRemovedEvent {
  */
 @Injectable()
 export class GitSyncEventHandler {
-
   constructor(
     private readonly gitSync: GitSyncService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(GitSyncEventHandler.name)}
+    this.logger.setContext(GitSyncEventHandler.name)
+  }
 
   /**
    * 处理成员添加事件

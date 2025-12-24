@@ -18,8 +18,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  PROJECT_ID: "<%projectId%>"
-  PLATFORM_API_URL: "<%platformApiUrl%>"
+  PROJECT_ID: "<%= projectId %>"
+  PROJECT_NAME: "<%= projectName %>"
+  PLATFORM_API_URL: "<%= platformApiUrl %>"
 
 jobs:
   build:
@@ -35,9 +36,8 @@ jobs:
       - name: Extract metadata
         id: meta
         run: |
-          # 从仓库名提取项目 slug
-          PROJECT_SLUG=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-          echo "project_slug=$PROJECT_SLUG" >> $GITHUB_OUTPUT
+          # 使用环境变量中的 PROJECT_NAME（从模板变量传入）
+          echo "project_name=${{ env.PROJECT_NAME }}" >> $GITHUB_OUTPUT
           
           # 生成镜像标签
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
@@ -64,8 +64,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:${{ steps.meta.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_name }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_name }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -78,12 +78,23 @@ jobs:
           echo "✅ Image built and pushed successfully!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Images:**" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:${{ steps.meta.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_name }}:${{ steps.meta.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_name }}:latest\`" >> $GITHUB_STEP_SUMMARY
       
       - name: Trigger deployment
+        continue-on-error: true
         run: |
           echo "🚀 Triggering deployment to development environment..."
+          
+          # 检查 PLATFORM_API_URL 是否配置
+          if [ -z "${{ env.PLATFORM_API_URL }}" ] || [ "${{ env.PLATFORM_API_URL }}" = "<%= platformApiUrl %>" ]; then
+            echo "⚠️  PLATFORM_API_URL not configured, skipping API trigger"
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Deployment:**" >> $GITHUB_STEP_SUMMARY
+            echo "- ⚠️  Platform API not configured" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔄 Flux CD will auto-deploy from Git" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
           
           # 触发平台 API 进行部署
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
@@ -92,9 +103,9 @@ jobs:
             -d '{
               "projectId": "${{ env.PROJECT_ID }}",
               "environment": "development",
-              "image": "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_slug }}:${{ steps.meta.outputs.tag }}",
+              "image": "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.meta.outputs.project_name }}:${{ steps.meta.outputs.tag }}",
               "commitSha": "${{ github.sha }}"
-            }')
+            }' || true)
           
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
@@ -109,4 +120,5 @@ jobs:
           else
             echo "⚠️  API trigger failed (HTTP $HTTP_CODE), but Flux will auto-deploy"
             echo "- ⚠️  API trigger failed, but Flux will auto-deploy" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔄 Flux CD will sync from Git automatically" >> $GITHUB_STEP_SUMMARY
           fi

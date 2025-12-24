@@ -10,7 +10,6 @@ import { TemplateLoader } from './template-loader.service'
  */
 export interface TemplateVariables {
   projectName: string
-  projectSlug: string
   description?: string
   author?: string
   repository?: {
@@ -347,7 +346,7 @@ export class TemplateRenderer {
       const rendered = ejs.render(content, variables, {
         ...this.ejsOptions,
         filename: filePath, // 用于错误提示
-      })
+      }) as string
 
       return rendered
     } catch (error) {

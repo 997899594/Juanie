@@ -1,5 +1,5 @@
-import type { CreateProjectInput } from '@juanie/types'
 import { Logger } from '@juanie/core/logger'
+import type { CreateProjectInput } from '@juanie/types'
 import { Injectable, type OnModuleInit } from '@nestjs/common'
 import {
   CreateEnvironmentsHandler,
@@ -29,7 +29,6 @@ import {
  */
 @Injectable()
 export class ProjectOrchestrator implements OnModuleInit {
-
   constructor(
     private stateMachine: ProjectInitializationStateMachine,
     private createProjectHandler: CreateProjectHandler,
@@ -40,7 +39,8 @@ export class ProjectOrchestrator implements OnModuleInit {
     private finalizeHandler: FinalizeHandler,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(ProjectOrchestrator.name)}
+    this.logger.setContext(ProjectOrchestrator.name)
+  }
 
   onModuleInit() {
     // 注册所有状态处理器

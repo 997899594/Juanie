@@ -33,7 +33,6 @@ export class CredentialStrategyService {
     this.logger.setContext(CredentialStrategyService.name)
   }
 
-
   /**
    * 为项目推荐最佳认证策略
    *

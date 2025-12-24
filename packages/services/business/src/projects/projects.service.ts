@@ -8,11 +8,6 @@ import {
   ResourceConflictError,
   ValidationError,
 } from '@juanie/core/errors'
-import {
-  EventPublisher,
-  type GitOpsSetupRequestedEvent,
-  IntegrationEvents,
-} from '@juanie/core/events'
 import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
 import { CaslAbilityFactory } from '@juanie/core/rbac'
@@ -33,7 +28,6 @@ export class ProjectsService {
     private orchestrator: ProjectOrchestrator,
     @Inject(REDIS) private redis: Redis,
     private auditLogs: AuditLogsService,
-    private eventPublisher: EventPublisher,
     private caslAbilityFactory: CaslAbilityFactory,
     private gitProviderService: GitProviderService,
     private readonly logger: Logger,
@@ -506,7 +500,6 @@ export class ProjectsService {
       resourceId: projectId,
       metadata: {
         projectName: project.name,
-        projectSlug: project.slug,
         repositoryAction,
         jobIds,
       },
@@ -1011,91 +1004,6 @@ export class ProjectsService {
     })
 
     return member || null
-  }
-
-  /**
-   * 请求 GitOps 资源创建
-   *
-   * 通过发布事件，让 FluxSyncService 处理实际创建
-   * （从 ProjectInitializationService 合并而来）
-   */
-  @Trace('projects.requestGitOpsSetup')
-  async requestGitOpsSetup(data: {
-    projectId: string
-    repositoryId: string
-    repositoryUrl: string
-    repositoryBranch: string
-    userId: string
-    environments: Array<{
-      id: string
-      type: 'development' | 'staging' | 'production'
-      name: string
-    }>
-    jobId?: string
-  }): Promise<boolean> {
-    this.logger.info(`Requesting GitOps setup for project: ${data.projectId}`)
-
-    try {
-      // 使用新的 EventPublisher 发布领域事件
-      await this.eventPublisher.publishDomain<GitOpsSetupRequestedEvent>({
-        type: IntegrationEvents.GITOPS_SETUP_REQUESTED,
-        version: 1,
-        resourceId: data.projectId,
-        userId: data.userId,
-        data: {
-          projectId: data.projectId,
-          repositoryId: data.repositoryId,
-          repositoryUrl: data.repositoryUrl,
-          repositoryBranch: data.repositoryBranch,
-          userId: data.userId,
-          environments: data.environments,
-          jobId: data.jobId,
-        },
-      })
-
-      this.logger.info('GitOps setup request completed successfully')
-      return true
-    } catch (error) {
-      this.logger.error('GitOps setup request failed:', error)
-
-      // 更新项目配置，标记 GitOps 设置失败
-      await this.markGitOpsSetupFailed(data.projectId, error as Error)
-
-      return false
-    }
-  }
-
-  /**
-   * 标记 GitOps 设置失败
-   * （从 ProjectInitializationService 合并而来）
-   */
-  private async markGitOpsSetupFailed(projectId: string, error: Error): Promise<void> {
-    try {
-      const [project] = await this.db
-        .select()
-        .from(schema.projects)
-        .where(eq(schema.projects.id, projectId))
-        .limit(1)
-
-      if (project) {
-        await this.db
-          .update(schema.projects)
-          .set({
-            config: {
-              ...(project.config as any),
-              gitops: {
-                enabled: false,
-                setupFailed: true,
-                error: error instanceof Error ? error.message : String(error),
-              },
-            },
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.projects.id, projectId))
-      }
-    } catch (err) {
-      this.logger.error('Failed to mark GitOps setup as failed:', err)
-    }
   }
 
   /**

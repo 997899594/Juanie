@@ -108,7 +108,11 @@ export class ProjectInitializationWorker implements OnModuleInit {
 
     try {
       // 解析 OAuth token（如果需要）
-      const resolvedRepository = await this.resolveAccessToken(userId, repository)
+      const resolvedRepository = await this.gitConnections.resolveRepositoryConfig(
+        userId,
+        repository,
+      )
+      this.logger.info(`✅ Resolved repository config, username: ${resolvedRepository.username}`)
 
       // 步骤 1: 创建 Git 仓库 (0-20%)
       await this.initializationSteps.startStep(projectId, 'create_repository')
@@ -492,14 +496,14 @@ export class ProjectInitializationWorker implements OnModuleInit {
       let accessToken: string | null = null
 
       try {
-        // 获取用户的 OAuth 账户（解密 Token）
-        const gitConnection = await this.gitConnections.getConnectionWithDecryptedTokens(
+        // 使用公共方法解析凭证
+        const credentials = await this.gitConnections.resolveCredentials(
           userId,
           repository.provider as 'github' | 'gitlab',
         )
 
-        if (gitConnection?.accessToken && gitConnection.status === 'active') {
-          accessToken = gitConnection.accessToken
+        if (credentials?.accessToken) {
+          accessToken = credentials.accessToken
           this.logger.info(`✅ Retrieved OAuth token for ${repository.provider}`)
         } else {
           this.logger.warn(`No valid OAuth token found for ${repository.provider}`)
@@ -571,48 +575,6 @@ export class ProjectInitializationWorker implements OnModuleInit {
       this.logger.error('Failed to create GitOps resources:', error)
       // GitOps 资源创建失败不应该导致整个流程失败
       return false
-    }
-  }
-
-  /**
-   * 解析访问令牌
-   * 如果令牌是 __USE_OAUTH__，则从数据库获取用户的 OAuth 令牌
-   */
-  private async resolveAccessToken(userId: string, repository: any): Promise<any> {
-    // 如果不是使用 OAuth，直接返回
-    if (repository.accessToken !== '__USE_OAUTH__') {
-      return repository
-    }
-
-    this.logger.info(`Resolving OAuth token for user ${userId}, provider: ${repository.provider}`)
-
-    try {
-      // 从数据库获取 Git 连接（解密 Token）
-      const gitConnection = await this.gitConnections.getConnectionWithDecryptedTokens(
-        userId,
-        repository.provider,
-      )
-
-      if (!gitConnection) {
-        const providerName = repository.provider === 'github' ? 'GitHub' : 'GitLab'
-        throw new Error(
-          `未找到 ${providerName} OAuth 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
-        )
-      }
-
-      if (!gitConnection.accessToken || gitConnection.status !== 'active') {
-        const providerName = repository.provider === 'github' ? 'GitHub' : 'GitLab'
-        throw new Error(`${providerName} 访问令牌无效，请重新连接账户`)
-      }
-
-      return {
-        ...repository,
-        accessToken: gitConnection.accessToken,
-        username: gitConnection.username, // 添加用户名，用于模板变量
-      }
-    } catch (error) {
-      this.logger.error(`Failed to resolve OAuth token:`, error)
-      throw error
     }
   }
 }

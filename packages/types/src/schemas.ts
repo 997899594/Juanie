@@ -182,7 +182,11 @@ export const repositoryConfigSchema = z.discriminatedUnion('mode', [
 
 export const createProjectSchema = z.object({
   organizationId: uuidSchema,
-  name: z.string().min(1).max(100),
+  name: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/[a-zA-Z]/, '项目名称必须包含至少一个字母（不能是纯数字）'),
   slug: slugSchema,
   description: z.string().max(1000).optional(),
   visibility: z.enum(['public', 'private', 'internal']).default('private'),
@@ -1239,7 +1243,6 @@ export const renderTemplateSchema = z.object({
   variables: z
     .object({
       projectName: z.string(),
-      projectSlug: z.string(),
       namespace: z.string(),
       image: z.string(),
       imageTag: z.string(),

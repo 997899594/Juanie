@@ -391,9 +391,7 @@ export class RepositoriesService {
     return {
       enabled: true,
       status: repository.status || 'pending',
-      lastSyncCommit: null, // 已废弃，从 gitops_resources 查询
       lastSyncTime: repository.lastSyncAt,
-      errorMessage: null, // 已废弃，从 gitops_resources 查询
       config: repository.gitopsConfig,
     }
   }

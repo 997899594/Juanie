@@ -32,7 +32,8 @@ export class FluxService implements OnModuleInit {
     private eventPublisher: EventPublisher,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(FluxService.name)}
+    this.logger.setContext(FluxService.name)
+  }
 
   async onModuleInit() {
     // 不在这里检查，等待 K3s 连接事件

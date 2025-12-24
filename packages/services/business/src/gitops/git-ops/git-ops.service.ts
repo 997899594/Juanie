@@ -258,16 +258,9 @@ export class GitOpsService {
       const gitConfig = await this.getProjectGitConfig(projectId, environmentId)
       const localPath = path.join(this.repoBasePath, projectId)
 
-      // 2. Get credentials from K8s Secret if configured
-      let credentials: any
-      if (gitConfig.secretRef) {
-        credentials = await this.getGitCredentials(gitConfig.secretRef)
-      }
-
-      // 3. Initialize repository
+      // 2. Initialize repository (credentials are handled by Git provider)
       const git = await this.initRepository(gitConfig.url, localPath, {
         branch: gitConfig.branch,
-        credentials,
       })
 
       // 4. Pull latest changes to avoid conflicts
@@ -600,23 +593,6 @@ export class GitOpsService {
     }
 
     return merged
-  }
-
-  /**
-   * Get Git credentials from K8s Secret
-   * Requirement: 2.2, 2.3
-   * Note: This method is deprecated and should use K3sService instead
-   */
-  private async getGitCredentials(_secretRef: string): Promise<{
-    username?: string
-    password?: string
-    sshKey?: string
-  }> {
-    // TODO: Implement using K3sService.getSecret()
-    this.logger.warn('getGitCredentials is not yet implemented with BunK8sClient')
-    throw new Error(
-      'Git credentials from K8s Secret not yet implemented. Use environment variables instead.',
-    )
   }
 
   /**

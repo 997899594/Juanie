@@ -12,13 +12,13 @@ import { CredentialManagerService } from './credential-manager.service'
  */
 @Injectable()
 export class CredentialHealthMonitorService {
-
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly credentialManager: CredentialManagerService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(CredentialHealthMonitorService.name)}
+    this.logger.setContext(CredentialHealthMonitorService.name)
+  }
 
   /**
    * 每小时检查所有项目的凭证健康状态
@@ -54,7 +54,9 @@ export class CredentialHealthMonitorService {
         }
       }
 
-      this.logger.info(`Health check complete: ${healthyCount} healthy, ${unhealthyCount} unhealthy`)
+      this.logger.info(
+        `Health check complete: ${healthyCount} healthy, ${unhealthyCount} unhealthy`,
+      )
     } catch (error: any) {
       this.logger.error('Failed to run credential health check:', error)
     }

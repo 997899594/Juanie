@@ -1,7 +1,7 @@
 /**
  * GitOps 相关类型定义
  * 用于 GitOps 资源管理、Flux 集成和双向部署
- * 
+ *
  * 注意: GitOpsResource 类型直接从 @juanie/core/database schema 导出
  * 这里只定义业务逻辑相关的非 DB 模型类型
  */

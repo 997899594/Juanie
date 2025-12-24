@@ -27,7 +27,8 @@ export class FinalizeHandler implements StateHandler {
     private audit: AuditLogsService,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(FinalizeHandler.name)}
+    this.logger.setContext(FinalizeHandler.name)
+  }
 
   canHandle(_context: InitializationContext): boolean {
     return true

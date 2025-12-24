@@ -22,14 +22,14 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
  */
 @Injectable()
 export class ProjectMembersService {
-
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private auditLogs: AuditLogsService,
     private eventPublisher: EventPublisher,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(ProjectMembersService.name)}
+    this.logger.setContext(ProjectMembersService.name)
+  }
 
   /**
    * 添加项目成员

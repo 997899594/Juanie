@@ -263,7 +263,7 @@ export class CredentialManagerService {
         // 确保 namespace 存在
         const namespaceExists = await this.k3s.namespaceExists(namespace)
         if (!namespaceExists) {
-          this.logger.warn(`Namespace ${namespace} does not exist yet, skipping secret sync`)
+          this.logger.debug(`Namespace ${namespace} does not exist yet, skipping secret sync`)
           continue
         }
 

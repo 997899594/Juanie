@@ -16,7 +16,8 @@ export class CreateProjectHandler implements StateHandler {
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(CreateProjectHandler.name)}
+    this.logger.setContext(CreateProjectHandler.name)
+  }
 
   canHandle(_context: InitializationContext): boolean {
     // 总是需要创建项目

@@ -33,26 +33,6 @@ export type GitLabAccessLevel = 50 | 40 | 30 | 20 | 10
 // Git 权限（联合类型）
 export type GitPermission = GitHubPermission | GitLabAccessLevel
 
-// 用户 Git 账号（已废弃，使用 GitConnection 替代）
-// @deprecated Use GitConnection from @juanie/core/database instead
-export interface UserGitAccount {
-  id: string
-  userId: string
-  provider: GitProvider
-  providerAccountId: string // 原 gitUserId
-  username: string // 原 gitUsername
-  email: string | null // 原 gitEmail
-  avatarUrl: string | null // 原 gitAvatarUrl
-  accessToken: string
-  refreshToken: string | null
-  expiresAt: Date | null // 原 tokenExpiresAt
-  connectedAt: Date
-  lastSyncAt: Date | null
-  status: GitAccountSyncStatus // 原 syncStatus
-  createdAt: Date
-  updatedAt: Date
-}
-
 // Git 同步日志
 export interface GitSyncLog {
   id: string

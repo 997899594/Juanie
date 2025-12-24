@@ -115,33 +115,7 @@ export class SetupRepositoryHandler implements StateHandler {
   private async resolveAccessToken(context: InitializationContext): Promise<any> {
     const repository = context.repository!
 
-    // 如果不是使用 OAuth，直接返回
-    if (repository.accessToken !== '__USE_OAUTH__') {
-      return repository
-    }
-
-    this.logger.info(`Resolving OAuth token for provider: ${repository.provider}`)
-
-    const gitConnection = await this.gitConnections.getConnectionWithDecryptedTokens(
-      context.userId,
-      repository.provider,
-    )
-
-    if (!gitConnection) {
-      const providerName = repository.provider === 'github' ? 'GitHub' : 'GitLab'
-      throw new Error(
-        `未找到 ${providerName} Git 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
-      )
-    }
-
-    if (!gitConnection.accessToken || gitConnection.status !== 'active') {
-      const providerName = repository.provider === 'github' ? 'GitHub' : 'GitLab'
-      throw new Error(`${providerName} 访问令牌无效，请重新连接账户`)
-    }
-
-    return {
-      ...repository,
-      accessToken: gitConnection.accessToken,
-    }
+    // 使用 GitConnectionsService 统一解析
+    return await this.gitConnections.resolveRepositoryConfig(context.userId, repository)
   }
 }

@@ -1,23 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: !!str <%= projectName %>
+  name: <%= projectId %>
   labels:
-    app: !!str <%= projectName %>
+    app: <%= projectId %>
+    project-name: <%= projectName %>
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: !!str <%= projectName %>
+      app: <%= projectId %>
   template:
     metadata:
       labels:
-        app: !!str <%= projectName %>
+        app: <%= projectId %>
     spec:
       imagePullSecrets:
       - name: ghcr-secret
       containers:
-      - name: !!str <%= projectName %>
+      - name: app
         image: ghcr.io/<%= githubUsername %>/<%= projectName %>:latest
         ports:
         - name: http

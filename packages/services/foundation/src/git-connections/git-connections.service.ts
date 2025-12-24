@@ -375,4 +375,76 @@ export class GitConnectionsService {
     }
     return decryptedConnection.accessToken
   }
+
+  /**
+   * 解析 Git 凭证（统一入口）
+   *
+   * 用于项目初始化、仓库操作、GitOps 资源创建等场景
+   *
+   * @param userId - 用户 ID
+   * @param provider - Git 提供商 (github | gitlab)
+   * @returns 包含 accessToken 和 username 的凭证对象
+   */
+  async resolveCredentials(
+    userId: string,
+    provider: 'github' | 'gitlab',
+  ): Promise<{
+    accessToken: string
+    username: string
+    email?: string
+  }> {
+    this.logger.info(`Resolving Git credentials for user ${userId}, provider: ${provider}`)
+
+    const gitConnection = await this.getConnectionWithDecryptedTokens(userId, provider)
+
+    if (!gitConnection) {
+      const providerName = provider === 'github' ? 'GitHub' : 'GitLab'
+      throw new Error(
+        `未找到 ${providerName} OAuth 连接。请前往"设置 > 账户连接"页面连接您的 ${providerName} 账户。`,
+      )
+    }
+
+    if (!gitConnection.accessToken || gitConnection.status !== 'active') {
+      const providerName = provider === 'github' ? 'GitHub' : 'GitLab'
+      throw new Error(`${providerName} 访问令牌无效，请重新连接账户`)
+    }
+
+    if (!gitConnection.username) {
+      const providerName = provider === 'github' ? 'GitHub' : 'GitLab'
+      throw new Error(`${providerName} 连接存在但缺少用户名。请重新连接您的 ${providerName} 账户。`)
+    }
+
+    this.logger.info(`✅ Resolved credentials for ${provider}, username: ${gitConnection.username}`)
+
+    return {
+      accessToken: gitConnection.accessToken,
+      username: gitConnection.username,
+      email: gitConnection.email || undefined,
+    }
+  }
+
+  /**
+   * 解析仓库配置（兼容 __USE_OAUTH__ 标记）
+   *
+   * 用于项目初始化时解析仓库配置，自动处理 OAuth 凭证
+   *
+   * @param userId - 用户 ID
+   * @param repository - 仓库配置对象
+   * @returns 解析后的仓库配置（包含 accessToken 和 username）
+   */
+  async resolveRepositoryConfig(userId: string, repository: any): Promise<any> {
+    // 如果不是使用 OAuth，直接返回
+    if (repository.accessToken !== '__USE_OAUTH__') {
+      return repository
+    }
+
+    const credentials = await this.resolveCredentials(userId, repository.provider)
+
+    return {
+      ...repository,
+      accessToken: credentials.accessToken,
+      username: credentials.username,
+      email: credentials.email,
+    }
+  }
 }

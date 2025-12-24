@@ -3,7 +3,7 @@ import { DATABASE } from '@juanie/core/tokens'
 import { TemplatesService } from '@juanie/service-business'
 import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { and, eq, isNull, or } from 'drizzle-orm'
+import { eq, or } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { TrpcService } from '../trpc/trpc.service'
 

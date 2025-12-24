@@ -31,13 +31,13 @@ export interface ConfigureGitOpsInput {
 
 @Injectable()
 export class EnvironmentsService {
-
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(EnvironmentsService.name)}
+    this.logger.setContext(EnvironmentsService.name)
+  }
 
   async create(
     userId: string,

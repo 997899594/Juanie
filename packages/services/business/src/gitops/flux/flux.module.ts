@@ -1,6 +1,6 @@
 import { DatabaseModule } from '@juanie/core/database'
 import { CoreEventsModule } from '@juanie/core/events'
-import { FoundationModule } from '@juanie/service-foundation'
+import { GitConnectionsModule } from '@juanie/service-foundation'
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { CredentialsModule } from '../credentials/credentials.module'
@@ -20,8 +20,8 @@ import { YamlGeneratorService } from './yaml-generator.service'
     DatabaseModule,
     K3sModule,
     CoreEventsModule,
-    FoundationModule,
-    CredentialsModule, // 新的凭证管理模块
+    GitConnectionsModule, // 显式导入 GitConnectionsModule
+    CredentialsModule,
   ],
   providers: [
     FluxService,

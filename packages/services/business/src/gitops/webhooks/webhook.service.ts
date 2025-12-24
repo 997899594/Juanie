@@ -14,13 +14,13 @@ import { WebhookEventProcessor } from './webhook-event-processor.service'
  */
 @Injectable()
 export class WebhookService {
-
   constructor(
     private readonly config: ConfigService,
     private readonly eventProcessor: WebhookEventProcessor,
     private readonly logger: Logger,
   ) {
-    this.logger.setContext(WebhookService.name)}
+    this.logger.setContext(WebhookService.name)
+  }
 
   /**
    * 验证 GitHub Webhook 签名
