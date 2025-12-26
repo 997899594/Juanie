@@ -3,8 +3,18 @@
   "version": "0.1.0",
   "description": "Foundation services - Auth, Users, Organizations, Teams, Storage",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "default": "./src/errors.ts"
+    }
+  },
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc",
@@ -12,13 +22,17 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@gitbeaker/rest": "^43.8.0",
     "@juanie/core": "workspace:*",
     "@juanie/types": "workspace:*",
+    "@octokit/rest": "^22.0.1",
     "arctic": "^2.3.2",
+    "libsodium-wrappers": "^0.7.15",
     "minio": "^8.0.2"
   },
   "devDependencies": {
     "@juanie/config-typescript": "workspace:*",
+    "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^24.7.0",
     "typescript": "^5.9.3"
   }

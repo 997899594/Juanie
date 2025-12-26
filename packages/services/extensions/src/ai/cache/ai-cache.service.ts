@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
-import { Logger } from '@juanie/core/logger'
 import { REDIS } from '@juanie/core/tokens'
 import type { AIClientConfig, AICompletionOptions, AICompletionResult } from '@juanie/types'
 import { ErrorFactory } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import type { Redis } from 'ioredis'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * AI 响应缓存服务
@@ -18,7 +18,7 @@ export class AICacheService {
 
   constructor(
     @Inject(REDIS) private readonly redis: Redis,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AICacheService.name)
   }

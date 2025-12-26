@@ -1,11 +1,12 @@
-import type { AIUsage, Database } from '@juanie/core/database'
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
+import type { AIUsage } from '@juanie/database'
+import * as schema from '@juanie/database'
 import type { AIProvider } from '@juanie/types'
 import { ErrorFactory } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, between, desc, eq, gte, sql } from 'drizzle-orm'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * 使用记录数据
@@ -95,8 +96,8 @@ export class UsageTrackingService {
   }
 
   constructor(
-    @Inject(DATABASE) private readonly db: Database,
-    private readonly logger: Logger,
+    @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(UsageTrackingService.name)
   }
@@ -230,8 +231,8 @@ export class UsageTrackingService {
 
       // 聚合统计
       const totalCalls = records.length
-      const totalTokens = records.reduce((sum, r) => sum + r.totalTokens, 0)
-      const totalCost = records.reduce((sum, r) => sum + r.cost, 0)
+      const totalTokens = records.reduce((sum: number, r) => sum + r.totalTokens, 0)
+      const totalCost = records.reduce((sum: number, r) => sum + r.cost, 0)
 
       // 按提供商统计
       const byProvider: Record<string, { calls: number; tokens: number; cost: number }> = {}

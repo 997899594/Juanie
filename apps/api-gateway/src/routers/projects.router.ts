@@ -1,12 +1,11 @@
 import { handleServiceError } from '@juanie/core/errors'
 import { REDIS } from '@juanie/core/tokens'
 import {
-  InitializationStepsService,
   ProjectMembersService,
   ProjectStatusService,
   ProjectsService,
 } from '@juanie/service-business'
-import { StorageService } from '@juanie/service-foundation'
+import { RbacService, StorageService } from '@juanie/service-foundation'
 import {
   archiveProjectSchema,
   createProjectSchema,
@@ -23,6 +22,7 @@ import { TRPCError } from '@trpc/server'
 import { observable } from '@trpc/server/observable'
 import type Redis from 'ioredis'
 import { z } from 'zod'
+import { withAbility } from '../trpc/rbac.middleware'
 import { TrpcService } from '../trpc/trpc.service'
 
 @Injectable()
@@ -32,15 +32,19 @@ export class ProjectsRouter {
     private readonly projectsService: ProjectsService,
     private readonly projectMembers: ProjectMembersService,
     private readonly projectStatus: ProjectStatusService,
-    private readonly initializationSteps: InitializationStepsService,
     private readonly storageService: StorageService,
+    private readonly rbacService: RbacService,
     @Inject(REDIS) private readonly redis: Redis,
   ) {}
 
   get router() {
     return this.trpc.router({
       // 创建项目（统一接口，支持简单创建、模板创建和仓库创建）
-      create: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 create Project 权限
+      create: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'create',
+        subject: 'Project',
+      })
         .input(createProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
@@ -51,7 +55,11 @@ export class ProjectsRouter {
         }),
 
       // 列出组织的项目
-      list: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 read Organization 权限
+      list: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Organization',
+      })
         .input(organizationIdQuerySchema)
         .query(async ({ ctx, input }) => {
           try {
@@ -62,16 +70,26 @@ export class ProjectsRouter {
         }),
 
       // 获取项目详情
-      get: this.trpc.protectedProcedure.input(projectIdSchema).query(async ({ ctx, input }) => {
-        try {
-          return await this.projectsService.get(ctx.user.id, input.projectId)
-        } catch (error) {
-          handleServiceError(error)
-        }
-      }),
+      // ✅ 权限检查：需要 read Project 权限
+      get: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Project',
+      })
+        .input(projectIdSchema)
+        .query(async ({ input }) => {
+          try {
+            return await this.projectsService.get(input.projectId)
+          } catch (error) {
+            handleServiceError(error)
+          }
+        }),
 
       // 更新项目
-      update: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 update Project 权限
+      update: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'update',
+        subject: 'Project',
+      })
         .input(updateProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
@@ -83,12 +101,16 @@ export class ProjectsRouter {
         }),
 
       // 删除项目
-      delete: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 delete Project 权限（只有 owner 可以）
+      delete: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'delete',
+        subject: 'Project',
+      })
         .input(deleteProjectSchema)
         .mutation(async ({ ctx, input }) => {
           try {
             return await this.projectsService.delete(ctx.user.id, input.projectId, {
-              repositoryAction: input.repositoryAction,
+              force: input.repositoryAction === 'delete',
             })
           } catch (error) {
             handleServiceError(error)
@@ -96,7 +118,11 @@ export class ProjectsRouter {
         }),
 
       // 添加成员
-      addMember: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 manage_members Project 权限
+      addMember: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Project',
+      })
         .input(
           z.object({
             projectId: z.string(),
@@ -121,16 +147,26 @@ export class ProjectsRouter {
         }),
 
       // 列出项目成员
-      listMembers: this.trpc.protectedProcedure.input(projectIdSchema).query(async ({ input }) => {
-        try {
-          return await this.projectMembers.listMembers(input.projectId)
-        } catch (error) {
-          handleServiceError(error)
-        }
-      }),
+      // ✅ 权限检查：需要 read Project 权限
+      listMembers: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Project',
+      })
+        .input(projectIdSchema)
+        .query(async ({ input }) => {
+          try {
+            return await this.projectMembers.listMembers(input.projectId)
+          } catch (error) {
+            handleServiceError(error)
+          }
+        }),
 
       // 更新成员角色
-      updateMemberRole: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 manage_members Project 权限
+      updateMemberRole: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Project',
+      })
         .input(
           z.object({
             projectId: z.string(),
@@ -155,7 +191,11 @@ export class ProjectsRouter {
         }),
 
       // 移除成员
-      removeMember: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 manage_members Project 权限
+      removeMember: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Project',
+      })
         .input(
           z.object({
             projectId: z.string(),
@@ -173,7 +213,11 @@ export class ProjectsRouter {
         }),
 
       // 分配团队
-      assignTeam: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 manage_members Project 权限
+      assignTeam: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Project',
+      })
         .input(
           z.object({
             projectId: z.string(),
@@ -190,16 +234,26 @@ export class ProjectsRouter {
         }),
 
       // 列出项目的团队
-      listTeams: this.trpc.protectedProcedure.input(projectIdSchema).query(async ({ input }) => {
-        try {
-          return await this.projectMembers.listTeams(input.projectId)
-        } catch (error) {
-          handleServiceError(error)
-        }
-      }),
+      // ✅ 权限检查：需要 read Project 权限
+      listTeams: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Project',
+      })
+        .input(projectIdSchema)
+        .query(async ({ input }) => {
+          try {
+            return await this.projectMembers.listTeams(input.projectId)
+          } catch (error) {
+            handleServiceError(error)
+          }
+        }),
 
       // 移除团队
-      removeTeam: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 manage_members Project 权限
+      removeTeam: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Project',
+      })
         .input(
           z.object({
             projectId: z.string(),
@@ -216,7 +270,11 @@ export class ProjectsRouter {
         }),
 
       // 上传项目 Logo
-      uploadLogo: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 update Project 权限
+      uploadLogo: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'update',
+        subject: 'Project',
+      })
         .input(
           z.object({
             projectId: z.string().uuid(),
@@ -276,7 +334,11 @@ export class ProjectsRouter {
         }),
 
       // 删除项目 Logo
-      deleteLogo: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 update Project 权限
+      deleteLogo: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'update',
+        subject: 'Project',
+      })
         .input(projectIdSchema)
         .mutation(async ({ ctx, input }) => {
           try {
@@ -303,7 +365,11 @@ export class ProjectsRouter {
         }),
 
       // 获取项目完整状态
-      getStatus: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 read Project 权限
+      getStatus: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Project',
+      })
         .input(getProjectStatusSchema)
         .query(async ({ input }) => {
           try {
@@ -314,7 +380,11 @@ export class ProjectsRouter {
         }),
 
       // 获取项目健康度
-      getHealth: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 read Project 权限
+      getHealth: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Project',
+      })
         .input(getProjectHealthSchema)
         .query(async ({ input }) => {
           try {
@@ -325,7 +395,11 @@ export class ProjectsRouter {
         }),
 
       // 归档项目
-      archive: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 update Project 权限
+      archive: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'update',
+        subject: 'Project',
+      })
         .input(archiveProjectSchema)
         .mutation(async ({ input }) => {
           try {
@@ -336,7 +410,11 @@ export class ProjectsRouter {
         }),
 
       // 恢复项目
-      restore: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 update Project 权限
+      restore: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'update',
+        subject: 'Project',
+      })
         .input(restoreProjectSchema)
         .mutation(async ({ input }) => {
           try {
@@ -360,25 +438,8 @@ export class ProjectsRouter {
               try {
                 const event = JSON.parse(message)
 
-                // 查询当前所有步骤
-                const steps = await this.initializationSteps.getProjectSteps(input.projectId)
-
-                // 发送事件和步骤数组
-                emit.next({
-                  ...event,
-                  steps: steps.map((step) => ({
-                    step: step.step,
-                    status: step.status,
-                    progress: step.progress,
-                    error: step.error,
-                    startedAt: step.startedAt,
-                    completedAt: step.completedAt,
-                    duration:
-                      step.startedAt && step.completedAt
-                        ? new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime()
-                        : null,
-                  })),
-                })
+                // 直接发送事件（不再查询步骤）
+                emit.next(event)
 
                 // 如果完成或失败，自动关闭连接
                 if (
@@ -440,13 +501,21 @@ export class ProjectsRouter {
 
       // 成员管理（嵌套 router）
       members: this.trpc.router({
-        list: this.trpc.protectedProcedure
+        // ✅ 权限检查：需要 read Project 权限
+        list: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+          action: 'read',
+          subject: 'Project',
+        })
           .input(z.object({ projectId: z.string() }))
           .query(async ({ input: _input }) => {
             return await this.projectMembers.listMembers(_input.projectId)
           }),
 
-        add: this.trpc.protectedProcedure
+        // ✅ 权限检查：需要 manage_members Project 权限
+        add: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+          action: 'manage_members',
+          subject: 'Project',
+        })
           .input(
             z.object({
               projectId: z.string(),
@@ -466,7 +535,11 @@ export class ProjectsRouter {
             return await this.projectMembers.addMember(ctx.user.id, projectId, data)
           }),
 
-        remove: this.trpc.protectedProcedure
+        // ✅ 权限检查：需要 manage_members Project 权限
+        remove: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+          action: 'manage_members',
+          subject: 'Project',
+        })
           .input(
             z.object({
               projectId: z.string(),

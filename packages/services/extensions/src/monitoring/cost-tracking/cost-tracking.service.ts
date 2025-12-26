@@ -1,6 +1,6 @@
-import * as schema from '@juanie/core/database'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
 import type { GetCostSummaryInput, ListCostsInput, RecordCostInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm'

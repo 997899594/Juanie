@@ -1,4 +1,3 @@
-import { Logger } from '@juanie/core/logger'
 import type {
   AIModel,
   OllamaGenerateRequest,
@@ -8,6 +7,7 @@ import type {
 import { ErrorFactory } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * Ollama 客户端服务
@@ -21,7 +21,7 @@ export class OllamaClient {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(OllamaClient.name)
     this.baseUrl = this.configService.get('OLLAMA_BASE_URL', 'http://localhost:11434')

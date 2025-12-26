@@ -18,20 +18,16 @@ export type GitSyncType = 'project' | 'member' | 'organization'
 // Git 同步操作
 export type GitSyncAction = 'create' | 'update' | 'delete'
 
-// 项目角色
-export type ProjectRole = 'maintainer' | 'developer' | 'viewer'
-
-// 组织角色
-export type OrgRole = 'owner' | 'admin' | 'member' | 'billing'
+// ⚠️ 已删除重复类型定义，请从统一类型文件导入：
+// - ProjectRole → 从 './roles' 导入
+// - GitPermission → 从 './permissions' 导入
+// - OrgRole (已废弃) → 使用 OrganizationRole 从 './roles' 导入
 
 // GitHub 权限
 export type GitHubPermission = 'admin' | 'write' | 'read'
 
 // GitLab 访问级别
 export type GitLabAccessLevel = 50 | 40 | 30 | 20 | 10
-
-// Git 权限（联合类型）
-export type GitPermission = GitHubPermission | GitLabAccessLevel
 
 // Git 同步日志
 export interface GitSyncLog {
@@ -65,7 +61,7 @@ export interface GitCollaborator {
   id: string | number
   username: string
   email?: string
-  permission: GitPermission
+  permission: GitHubPermission | GitLabAccessLevel // 使用具体类型而非 GitPermission
   avatarUrl?: string
 }
 

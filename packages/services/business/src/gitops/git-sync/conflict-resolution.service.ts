@@ -1,10 +1,10 @@
-import type { Database } from '@juanie/core/database'
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
+import { GitProviderService, GitSyncLogsService } from '@juanie/service-foundation'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq } from 'drizzle-orm'
-import { GitProviderService } from '../git-providers/git-provider.service'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { PinoLogger } from 'nestjs-pino'
 import { mapProjectRoleToGitPermission } from './permission-mapper'
 
 /**
@@ -14,13 +14,20 @@ import { mapProjectRoleToGitPermission } from './permission-mapper'
  * 以系统权限为准,同步到 Git 平台
  *
  * Requirements: 8.3
+ *
+ * ⚠️ 架构说明:
+ * 本服务保留了部分数据库访问用于简单的关联查询:
+ * - projects, projectMembers, repositories, gitConnections 表的查询
+ * 这些是简单的关联查询,不包含业务逻辑
+ * 所有的日志记录都通过 GitSyncLogsService (Foundation 层) 完成
  */
 @Injectable()
 export class ConflictResolutionService {
   constructor(
-    @Inject(DATABASE) private readonly db: Database,
+    @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly gitProvider: GitProviderService,
-    private readonly logger: Logger,
+    private readonly gitSyncLogs: GitSyncLogsService,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(ConflictResolutionService.name)
   }
@@ -339,14 +346,15 @@ export class ConflictResolutionService {
             status,
           })
 
-          // 记录冲突解决日志
-          await this.db.insert(schema.gitSyncLogs).values({
-            gitResourceType: 'repository',
-            gitResourceId: projectId,
-            action: 'sync',
+          // ✅ 使用 GitSyncLogsService 记录冲突解决日志
+          await this.gitSyncLogs.create({
+            projectId,
             syncType: 'member',
-            provider: gitProvider,
+            action: 'sync',
             status: status === 'success' ? 'success' : 'failed',
+            gitProvider,
+            gitResourceId: projectId,
+            gitResourceType: 'repository',
             metadata: {
               conflictType: conflict.conflictType,
               action,
@@ -354,8 +362,7 @@ export class ConflictResolutionService {
               gitPermission: conflict.gitPermission,
               expectedGitPermission: conflict.expectedGitPermission,
               gitLogin: conflict.gitLogin,
-            } as any,
-            completedAt: new Date(),
+            },
           })
         } catch (error) {
           failed++
@@ -369,20 +376,20 @@ export class ConflictResolutionService {
             error: errorMessage,
           })
 
-          // 记录错误日志
-          await this.db.insert(schema.gitSyncLogs).values({
-            gitResourceType: 'repository',
-            gitResourceId: projectId,
-            action: 'sync',
+          // ✅ 使用 GitSyncLogsService 记录错误日志
+          await this.gitSyncLogs.create({
+            projectId,
             syncType: 'member',
-            provider: gitProvider,
+            action: 'sync',
             status: 'failed',
+            gitProvider,
+            gitResourceId: projectId,
+            gitResourceType: 'repository',
             error: errorMessage,
             metadata: {
               gitLogin: conflict.gitLogin,
               conflictType: conflict.conflictType,
-            } as any,
-            completedAt: new Date(),
+            },
           })
 
           this.logger.error('Error resolving conflict:', {
@@ -432,21 +439,23 @@ export class ConflictResolutionService {
       syncedAt: Date
     }>
   > {
-    const { limit = 50, offset = 0 } = options
+    const { limit = 50 } = options
 
     try {
-      const logs = await this.db.query.gitSyncLogs.findMany({
-        where: and(
-          eq(schema.gitSyncLogs.gitResourceType, 'repository'),
-          eq(schema.gitSyncLogs.gitResourceId, projectId),
-          eq(schema.gitSyncLogs.action, 'sync'),
-        ),
-        orderBy: (logs, { desc }) => [desc(logs.completedAt)],
-        limit,
-        offset,
-      })
+      // ✅ 使用 GitSyncLogsService 查询日志
+      const logs = await this.gitSyncLogs.findByProject(projectId, limit)
 
-      return logs as any
+      // 过滤出冲突解决相关的日志
+      return logs
+        .filter((log) => log.action === 'sync' && log.syncType === 'member')
+        .map((log) => ({
+          id: log.id,
+          syncType: log.syncType,
+          status: log.status,
+          details: log.metadata,
+          error: log.error || null,
+          syncedAt: log.createdAt,
+        }))
     } catch (error) {
       this.logger.error('Error getting conflict history:', error)
       throw error

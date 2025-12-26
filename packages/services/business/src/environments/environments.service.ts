@@ -1,16 +1,18 @@
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
-import { DEPLOYMENT_QUEUE } from '@juanie/core/queue'
+import { DomainEvents } from '@juanie/core/events'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
 import type {
   CreateEnvironmentInput,
   EnvironmentUpdatedEvent,
   UpdateEnvironmentInput,
 } from '@juanie/types'
+import { InjectQueue } from '@nestjs/bullmq'
 import { Inject, Injectable } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
 import type { Queue } from 'bullmq'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { PinoLogger } from 'nestjs-pino'
 import simpleGit from 'simple-git'
 
 export interface GitOpsConfig {
@@ -33,8 +35,9 @@ export interface ConfigureGitOpsInput {
 export class EnvironmentsService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    @Inject(DEPLOYMENT_QUEUE) private queue: Queue,
-    private readonly logger: Logger,
+    @InjectQueue('deployment') private queue: Queue,
+    private readonly eventEmitter: EventEmitter2, // ✅ 直接注入 EventEmitter2
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(EnvironmentsService.name)
   }
@@ -67,6 +70,17 @@ export class EnvironmentsService {
           : { approvalRequired: false, minApprovals: 1 },
       })
       .returning()
+
+    // ✅ 发射领域事件 - 环境已创建
+    if (environment) {
+      this.eventEmitter.emit(DomainEvents.ENVIRONMENT_CREATED, {
+        environmentId: environment.id,
+        projectId: data.projectId,
+        name: data.name,
+        type: data.type,
+        createdBy: userId,
+      })
+    }
 
     return environment
   }
@@ -139,9 +153,18 @@ export class EnvironmentsService {
       .where(eq(schema.environments.id, environmentId))
       .returning()
 
-    // Publish environment.updated event
+    // ✅ 发射领域事件 - 环境已更新
     if (updated) {
       const updatedFields = Object.keys(updateData).filter((key) => key !== 'updatedAt')
+
+      this.eventEmitter.emit(DomainEvents.ENVIRONMENT_UPDATED, {
+        environmentId: updated.id,
+        projectId: updated.projectId,
+        updatedFields,
+        updatedBy: userId,
+      })
+
+      // 同时发布集成事件到队列（用于异步处理）
       await this.publishEnvironmentUpdatedEvent(updated, updatedFields, userId)
     }
 
@@ -165,6 +188,13 @@ export class EnvironmentsService {
         deletedAt: new Date(),
       })
       .where(eq(schema.environments.id, environmentId))
+
+    // ✅ 发射领域事件 - 环境已删除
+    this.eventEmitter.emit(DomainEvents.ENVIRONMENT_DELETED, {
+      environmentId: environment.id,
+      projectId: environment.projectId,
+      deletedBy: userId,
+    })
 
     return { success: true }
   }
@@ -323,7 +353,15 @@ export class EnvironmentsService {
 
     this.logger.info(`GitOps configured for environment ${environmentId}`)
 
-    // Publish environment.updated event
+    // ✅ 发射领域事件 - 环境已更新
+    this.eventEmitter.emit(DomainEvents.ENVIRONMENT_UPDATED, {
+      environmentId: updated.id,
+      projectId: updated.projectId,
+      updatedFields: ['gitops'],
+      updatedBy: userId,
+    })
+
+    // 同时发布集成事件到队列（用于异步处理）
     await this.publishEnvironmentUpdatedEvent(updated, ['gitops'], userId)
 
     return updated
@@ -453,7 +491,15 @@ export class EnvironmentsService {
 
     this.logger.info(`GitOps disabled for environment ${environmentId}`)
 
-    // Publish environment.updated event
+    // ✅ 发射领域事件 - 环境已更新
+    this.eventEmitter.emit(DomainEvents.ENVIRONMENT_UPDATED, {
+      environmentId: updated.id,
+      projectId: updated.projectId,
+      updatedFields: ['gitops'],
+      updatedBy: userId,
+    })
+
+    // 同时发布集成事件到队列（用于异步处理）
     await this.publishEnvironmentUpdatedEvent(updated, ['gitops'], userId)
 
     return updated

@@ -1,6 +1,6 @@
 import { DATABASE } from '@juanie/core/tokens'
+import { GitProviderService } from '@juanie/service-foundation'
 import { Test, TestingModule } from '@nestjs/testing'
-import { GitProviderService } from '../git-providers/git-provider.service'
 import { ConflictResolutionService } from './conflict-resolution.service'
 
 describe('ConflictResolutionService', () => {

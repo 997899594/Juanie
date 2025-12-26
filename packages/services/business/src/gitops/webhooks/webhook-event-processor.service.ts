@@ -1,6 +1,7 @@
-import { DomainEvents, EventPublisher } from '@juanie/core/events'
-import { Logger } from '@juanie/core/logger'
+import { DomainEvents } from '@juanie/core/events'
 import { Injectable } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * Webhook 事件处理器
@@ -20,8 +21,8 @@ export interface WebhookEvent {
 @Injectable()
 export class WebhookEventProcessor {
   constructor(
-    private readonly eventPublisher: EventPublisher,
-    private readonly logger: Logger,
+    private readonly eventEmitter: EventEmitter2,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(WebhookEventProcessor.name)
   }
@@ -103,27 +104,22 @@ export class WebhookEventProcessor {
       senderLogin: sender.login,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_REPOSITORY_CHANGED,
-      version: 1,
-      resourceId: repository.id.toString(),
-      data: {
-        provider: 'github',
-        action,
-        repository: {
-          gitId: repository.id.toString(),
-          name: repository.name,
-          fullName: repository.full_name,
-          url: repository.html_url,
-          defaultBranch: repository.default_branch,
-          visibility: repository.private ? 'private' : 'public',
-        },
-        changes: changes || {},
-        triggeredBy: {
-          gitId: sender.id.toString(),
-          gitLogin: sender.login,
-        },
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_REPOSITORY_CHANGED, {
+      provider: 'github',
+      action,
+      repository: {
+        gitId: repository.id.toString(),
+        name: repository.name,
+        fullName: repository.full_name,
+        url: repository.html_url,
+        defaultBranch: repository.default_branch,
+        visibility: repository.private ? 'private' : 'public',
+      },
+      changes: changes || {},
+      triggeredBy: {
+        gitId: sender.id.toString(),
+        gitLogin: sender.login,
       },
     })
   }
@@ -145,29 +141,24 @@ export class WebhookEventProcessor {
       senderLogin: sender.login,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_COLLABORATOR_CHANGED,
-      version: 1,
-      resourceId: repository.id.toString(),
-      data: {
-        provider: 'github',
-        action,
-        repository: {
-          gitId: repository.id.toString(),
-          name: repository.name,
-          fullName: repository.full_name,
-        },
-        collaborator: {
-          gitId: collaborator.id.toString(),
-          gitLogin: collaborator.login,
-          gitName: collaborator.name,
-          permission: payload.permission || 'read',
-        },
-        triggeredBy: {
-          gitId: sender.id.toString(),
-          gitLogin: sender.login,
-        },
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_COLLABORATOR_CHANGED, {
+      provider: 'github',
+      action,
+      repository: {
+        gitId: repository.id.toString(),
+        name: repository.name,
+        fullName: repository.full_name,
+      },
+      collaborator: {
+        gitId: collaborator.id.toString(),
+        gitLogin: collaborator.login,
+        gitName: collaborator.name,
+        permission: payload.permission || 'read',
+      },
+      triggeredBy: {
+        gitId: sender.id.toString(),
+        gitLogin: sender.login,
       },
     })
   }
@@ -190,29 +181,24 @@ export class WebhookEventProcessor {
       senderLogin: sender.login,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_MEMBER_CHANGED,
-      version: 1,
-      resourceId: organization.id.toString(),
-      data: {
-        provider: 'github',
-        action,
-        organization: {
-          gitId: organization.id.toString(),
-          gitLogin: organization.login,
-        },
-        member: {
-          gitId: member.id.toString(),
-          gitLogin: member.login,
-          gitName: member.name,
-        },
-        role: membership?.role,
-        state: membership?.state,
-        triggeredBy: {
-          gitId: sender.id.toString(),
-          gitLogin: sender.login,
-        },
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_MEMBER_CHANGED, {
+      provider: 'github',
+      action,
+      organization: {
+        gitId: organization.id.toString(),
+        gitLogin: organization.login,
+      },
+      member: {
+        gitId: member.id.toString(),
+        gitLogin: member.login,
+        gitName: member.name,
+      },
+      role: membership?.role,
+      state: membership?.state,
+      triggeredBy: {
+        gitId: sender.id.toString(),
+        gitLogin: sender.login,
       },
     })
   }
@@ -229,24 +215,19 @@ export class WebhookEventProcessor {
       senderLogin: sender.login,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_ORGANIZATION_CHANGED,
-      version: 1,
-      resourceId: organization.id.toString(),
-      data: {
-        provider: 'github',
-        action,
-        organization: {
-          gitId: organization.id.toString(),
-          gitLogin: organization.login,
-          gitName: organization.name,
-          gitUrl: organization.url,
-        },
-        triggeredBy: {
-          gitId: sender.id.toString(),
-          gitLogin: sender.login,
-        },
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_ORGANIZATION_CHANGED, {
+      provider: 'github',
+      action,
+      organization: {
+        gitId: organization.id.toString(),
+        gitLogin: organization.login,
+        gitName: organization.name,
+        gitUrl: organization.url,
+      },
+      triggeredBy: {
+        gitId: sender.id.toString(),
+        gitLogin: sender.login,
       },
     })
   }
@@ -264,30 +245,25 @@ export class WebhookEventProcessor {
       ref,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_PUSH,
-      version: 1,
-      resourceId: repository.id.toString(),
-      data: {
-        provider: 'github',
-        repository: {
-          gitId: repository.id.toString(),
-          name: repository.name,
-          fullName: repository.full_name,
-        },
-        pusher: {
-          name: pusher.name,
-          email: pusher.email,
-        },
-        commits: commits.map((commit: any) => ({
-          id: commit.id,
-          message: commit.message,
-          author: commit.author,
-          timestamp: commit.timestamp,
-        })),
-        ref,
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_PUSH, {
+      provider: 'github',
+      repository: {
+        gitId: repository.id.toString(),
+        name: repository.name,
+        fullName: repository.full_name,
       },
+      pusher: {
+        name: pusher.name,
+        email: pusher.email,
+      },
+      commits: commits.map((commit: any) => ({
+        id: commit.id,
+        message: commit.message,
+        author: commit.author,
+        timestamp: commit.timestamp,
+      })),
+      ref,
     })
   }
 
@@ -303,24 +279,19 @@ export class WebhookEventProcessor {
       userName: user_name,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_REPOSITORY_CHANGED,
-      version: 1,
-      resourceId: project.id.toString(),
-      data: {
-        provider: 'gitlab',
-        action: event_type,
-        repository: {
-          gitId: project.id.toString(),
-          name: project.name,
-          fullName: project.path_with_namespace,
-          url: project.web_url,
-          defaultBranch: project.default_branch,
-          visibility: project.visibility,
-        },
-        changes: payload.changes || {},
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_REPOSITORY_CHANGED, {
+      provider: 'gitlab',
+      action: event_type,
+      repository: {
+        gitId: project.id.toString(),
+        name: project.name,
+        fullName: project.path_with_namespace,
+        url: project.web_url,
+        defaultBranch: project.default_branch,
+        visibility: project.visibility,
       },
+      changes: payload.changes || {},
     })
   }
 
@@ -336,20 +307,15 @@ export class WebhookEventProcessor {
       groupPath: group.path,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_ORGANIZATION_CHANGED,
-      version: 1,
-      resourceId: group.id.toString(),
-      data: {
-        provider: 'gitlab',
-        action: event_type,
-        organization: {
-          gitId: group.id.toString(),
-          gitLogin: group.path,
-          gitName: group.name,
-          gitUrl: `https://gitlab.com/${group.full_path}`,
-        },
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_ORGANIZATION_CHANGED, {
+      provider: 'gitlab',
+      action: event_type,
+      organization: {
+        gitId: group.id.toString(),
+        gitLogin: group.path,
+        gitName: group.name,
+        gitUrl: `https://gitlab.com/${group.full_path}`,
       },
     })
   }
@@ -366,25 +332,20 @@ export class WebhookEventProcessor {
       userAccess: group_access,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_MEMBER_CHANGED,
-      version: 1,
-      resourceId: group.id.toString(),
-      data: {
-        provider: 'gitlab',
-        action: event_type,
-        organization: {
-          gitId: group.id.toString(),
-          gitLogin: group.path,
-        },
-        member: {
-          gitId: user_id?.toString(),
-          gitLogin: user_username,
-          gitName: user_name,
-        },
-        accessLevel: group_access,
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_MEMBER_CHANGED, {
+      provider: 'gitlab',
+      action: event_type,
+      organization: {
+        gitId: group.id.toString(),
+        gitLogin: group.path,
       },
+      member: {
+        gitId: user_id?.toString(),
+        gitLogin: user_username,
+        gitName: user_name,
+      },
+      accessLevel: group_access,
     })
   }
 
@@ -401,30 +362,25 @@ export class WebhookEventProcessor {
       ref,
     })
 
-    // 发布内部事件
-    await this.eventPublisher.publishDomain({
-      type: DomainEvents.GIT_PUSH,
-      version: 1,
-      resourceId: project.id.toString(),
-      data: {
-        provider: 'gitlab',
-        repository: {
-          gitId: project.id.toString(),
-          name: project.name,
-          fullName: project.path_with_namespace,
-        },
-        pusher: {
-          name: user_name,
-          email: user_email,
-        },
-        commits: commits.map((commit: any) => ({
-          id: commit.id,
-          message: commit.message,
-          author: commit.author,
-          timestamp: commit.timestamp,
-        })),
-        ref,
+    // ✅ 发布内部事件 - 使用 DomainEvents 和 emit()
+    this.eventEmitter.emit(DomainEvents.GIT_PUSH, {
+      provider: 'gitlab',
+      repository: {
+        gitId: project.id.toString(),
+        name: project.name,
+        fullName: project.path_with_namespace,
       },
+      pusher: {
+        name: user_name,
+        email: user_email,
+      },
+      commits: commits.map((commit: any) => ({
+        id: commit.id,
+        message: commit.message,
+        author: commit.author,
+        timestamp: commit.timestamp,
+      })),
+      ref,
     })
   }
 }

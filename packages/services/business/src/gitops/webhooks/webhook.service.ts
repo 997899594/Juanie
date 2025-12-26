@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto'
-import { Logger } from '@juanie/core/logger'
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { PinoLogger } from 'nestjs-pino'
 import { WebhookEventProcessor } from './webhook-event-processor.service'
 
 /**
@@ -17,7 +17,7 @@ export class WebhookService {
   constructor(
     private readonly config: ConfigService,
     private readonly eventProcessor: WebhookEventProcessor,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(WebhookService.name)
   }

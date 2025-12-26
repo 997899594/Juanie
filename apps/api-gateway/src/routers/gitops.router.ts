@@ -1,4 +1,5 @@
-import { FluxResourcesService, FluxSyncService } from '@juanie/service-business'
+import { FluxCliService } from '@juanie/core/flux'
+import { FluxMetricsService, FluxResourcesService, FluxSyncService } from '@juanie/service-business'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
@@ -14,6 +15,8 @@ export class GitOpsRouter {
     private trpc: TrpcService,
     private fluxResources: FluxResourcesService,
     private fluxSync: FluxSyncService,
+    private fluxCli: FluxCliService,
+    private fluxMetrics: FluxMetricsService,
   ) {}
 
   get router() {
@@ -195,7 +198,7 @@ export class GitOpsRouter {
         }),
 
       /**
-       * 触发同步
+       * 触发同步 - 直接使用 Core 层 FluxCliService
        */
       triggerSync: this.trpc.protectedProcedure
         .input(
@@ -206,8 +209,32 @@ export class GitOpsRouter {
           }),
         )
         .mutation(async ({ input }) => {
-          await this.fluxSync.triggerReconciliation(input.kind, input.name, input.namespace)
-          return { success: true, message: '同步已触发' }
+          const startTime = Date.now()
+
+          try {
+            await this.fluxCli.reconcile(input.kind, input.name, input.namespace)
+
+            const duration = (Date.now() - startTime) / 1000
+            this.fluxMetrics.recordReconciliation(
+              input.kind,
+              input.name,
+              input.namespace,
+              'success',
+              duration,
+            )
+
+            return { success: true, message: '同步已触发' }
+          } catch (error) {
+            const duration = (Date.now() - startTime) / 1000
+            this.fluxMetrics.recordReconciliation(
+              input.kind,
+              input.name,
+              input.namespace,
+              'failed',
+              duration,
+            )
+            throw error
+          }
         }),
 
       /**

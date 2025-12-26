@@ -1,10 +1,10 @@
+import { FluxModule } from '@juanie/core/flux'
+import { BullModule } from '@nestjs/bullmq'
 import { Module } from '@nestjs/common'
-import { FluxModule } from '../gitops/flux/flux.module'
-import { GitOpsModule } from '../gitops/git-ops/git-ops.module'
 import { DeploymentsService } from './deployments.service'
 
 @Module({
-  imports: [GitOpsModule, FluxModule],
+  imports: [FluxModule, BullModule.registerQueue({ name: 'deployment' })],
   providers: [DeploymentsService],
   exports: [DeploymentsService],
 })

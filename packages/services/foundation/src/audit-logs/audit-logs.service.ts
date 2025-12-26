@@ -1,6 +1,7 @@
-import * as schema from '@juanie/core/database'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
+import { PermissionDeniedError } from '@juanie/service-foundation/errors'
 import type { ListAuditLogsInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
@@ -52,7 +53,7 @@ export class AuditLogsService {
     if (filters.organizationId) {
       const hasAccess = await this.checkOrgAccess(userId, filters.organizationId)
       if (!hasAccess) {
-        throw new Error('没有权限访问该组织')
+        throw new PermissionDeniedError('organization', 'viewAuditLogs')
       }
       conditions.push(eq(schema.auditLogs.organizationId, filters.organizationId))
     }
@@ -98,7 +99,7 @@ export class AuditLogsService {
   ) {
     const hasAccess = await this.checkOrgAccess(userId, filters.organizationId)
     if (!hasAccess) {
-      throw new Error('没有权限访问该组织')
+      throw new PermissionDeniedError('organization', 'searchAuditLogs')
     }
 
     // 简化实现：使用 list 方法
@@ -122,7 +123,7 @@ export class AuditLogsService {
   ) {
     const hasAccess = await this.checkOrgAccess(userId, filters.organizationId)
     if (!hasAccess) {
-      throw new Error('没有权限访问该组织')
+      throw new PermissionDeniedError('organization', 'exportAuditLogs')
     }
 
     const logs = await this.list(userId, {

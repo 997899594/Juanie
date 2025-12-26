@@ -1,4 +1,3 @@
-import { Logger } from '@juanie/core/logger'
 import type {
   AIModel,
   AIProvider,
@@ -10,6 +9,7 @@ import type {
 } from '@juanie/types'
 import { CodeReviewCategory, CodeReviewSeverity } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
+import { PinoLogger } from 'nestjs-pino'
 import { AIService } from './ai/ai.service'
 
 /**
@@ -18,12 +18,12 @@ import { AIService } from './ai/ai.service'
  */
 @Injectable()
 export class CodeReviewService {
-
   constructor(
     private readonly aiService: AIService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
-    this.logger.setContext(CodeReviewService.name)}
+    this.logger.setContext(CodeReviewService.name)
+  }
 
   /**
    * 全面代码审查

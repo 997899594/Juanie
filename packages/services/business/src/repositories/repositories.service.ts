@@ -1,12 +1,11 @@
-import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
-import { GitConnectionsService } from '@juanie/service-foundation'
+import * as schema from '@juanie/database'
+import { GitConnectionsService, GitProviderService } from '@juanie/service-foundation'
 import type { ConnectRepositoryInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
-import { GitProviderService } from '../gitops/git-providers/git-provider.service'
 
 @Injectable()
 export class RepositoriesService {

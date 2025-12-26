@@ -1,6 +1,6 @@
-import { Logger } from '@juanie/core/logger'
 import type { AIClientConfig, AICompletionOptions, AICompletionResult } from '@juanie/types'
 import { ConfigService } from '@nestjs/config'
+import { PinoLogger } from 'nestjs-pino'
 import { OllamaClient } from '../../ollama.client'
 import type { IAIClient } from '../ai-client.interface'
 
@@ -14,7 +14,7 @@ export class OllamaAdapter implements IAIClient {
   constructor(
     private readonly config: AIClientConfig,
     configService: ConfigService,
-    logger: Logger,
+    logger: PinoLogger,
   ) {
     this.ollamaClient = new OllamaClient(configService, logger)
   }

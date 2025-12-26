@@ -1,7 +1,7 @@
 import { DomainEvents } from '@juanie/core/events'
-import { Logger } from '@juanie/core/logger'
 import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
+import { PinoLogger } from 'nestjs-pino'
 // import { GitPlatformSyncService } from './git-platform-sync.service'
 
 /**
@@ -16,7 +16,7 @@ import { OnEvent } from '@nestjs/event-emitter'
  */
 @Injectable()
 export class WebhookEventListener {
-  constructor(private readonly logger: Logger) {
+  constructor(private readonly logger: PinoLogger) {
     this.logger.setContext(WebhookEventListener.name)
   }
 

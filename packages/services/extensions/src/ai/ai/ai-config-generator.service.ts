@@ -1,6 +1,6 @@
-import { Logger } from '@juanie/core/logger'
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { PinoLogger } from 'nestjs-pino'
 import { Ollama } from 'ollama'
 
 /**
@@ -82,7 +82,7 @@ Rules:
 
   constructor(
     private readonly config: ConfigService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AIConfigGenerator.name)
     const ollamaHost = this.config.get<string>('OLLAMA_HOST') || 'http://localhost:11434'

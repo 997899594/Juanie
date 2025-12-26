@@ -1,6 +1,4 @@
-// 导出所有工具函数
-export * from './date'
-export * from './disposable'
+// 导出核心工具函数
+// 日期工具请使用 date-fns
+// 字符串工具请使用 lodash
 export * from './id'
-export * from './string'
-export * from './validation'

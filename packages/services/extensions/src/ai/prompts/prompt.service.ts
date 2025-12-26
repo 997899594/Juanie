@@ -1,10 +1,11 @@
-import type { Database, NewPromptTemplate, PromptTemplate } from '@juanie/core/database'
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
+import type { NewPromptTemplate, PromptTemplate } from '@juanie/database'
+import * as schema from '@juanie/database'
 import { ErrorFactory } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq } from 'drizzle-orm'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * 提示词模板服务
@@ -13,8 +14,8 @@ import { and, eq } from 'drizzle-orm'
 @Injectable()
 export class PromptService {
   constructor(
-    @Inject(DATABASE) private readonly db: Database,
-    private readonly logger: Logger,
+    @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(PromptService.name)
   }

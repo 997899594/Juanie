@@ -190,10 +190,10 @@ export const SystemEvents = {
   ALL_SERVICES_READY: 'system.all.services.ready',
   SHUTDOWN_INITIATED: 'system.shutdown.initiated',
 
-  // K3s 连接事件
-  K3S_CONNECTED: 'k3s.connected',
-  K3S_DISCONNECTED: 'k3s.disconnected',
-  K3S_CONNECTION_FAILED: 'k3s.connection.failed',
+  // K8s 连接事件
+  K8S_CONNECTED: 'k8s.connected',
+  K8S_DISCONNECTED: 'k8s.disconnected',
+  K8S_CONNECTION_FAILED: 'k8s.connection.failed',
 
   // Flux 事件
   FLUX_INSTALLED: 'flux.installed',
@@ -203,23 +203,23 @@ export const SystemEvents = {
 
 export type SystemEventType = (typeof SystemEvents)[keyof typeof SystemEvents]
 
-// K3s 连接事件
-export interface K3sConnectedEventData {
+// K8s 连接事件
+export interface K8sConnectedEventData {
   kubeconfigPath?: string
 }
 
-export interface K3sConnectedEvent extends BaseEvent<K3sConnectedEventData> {
-  type: typeof SystemEvents.K3S_CONNECTED
+export interface K8sConnectedEvent extends BaseEvent<K8sConnectedEventData> {
+  type: typeof SystemEvents.K8S_CONNECTED
   version: 1
 }
 
-export interface K3sConnectionFailedEventData {
+export interface K8sConnectionFailedEventData {
   error: string
   kubeconfigPath?: string
 }
 
-export interface K3sConnectionFailedEvent extends BaseEvent<K3sConnectionFailedEventData> {
-  type: typeof SystemEvents.K3S_CONNECTION_FAILED
+export interface K8sConnectionFailedEvent extends BaseEvent<K8sConnectionFailedEventData> {
+  type: typeof SystemEvents.K8S_CONNECTION_FAILED
   version: 1
 }
 
@@ -244,8 +244,8 @@ export type AnyEvent =
   | ProjectUpdatedEvent
   | ProgressUpdatedEvent
   | StatusChangedEvent
-  | K3sConnectedEvent
-  | K3sConnectionFailedEvent
+  | K8sConnectedEvent
+  | K8sConnectionFailedEvent
   | FluxHealthCheckedEvent
 
 /**

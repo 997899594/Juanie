@@ -2,24 +2,25 @@ import { AuditLogsModule, NotificationsModule } from '@juanie/service-foundation
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { EnvironmentsModule } from '../../environments/environments.module'
+import { FluxModule } from '../../gitops/flux/flux.module'
+// GitOpsModule 已删除 - Phase 9
+// import { GitOpsModule } from '../../gitops/git-ops/git-ops.module'
 import { RepositoriesModule } from '../../repositories/repositories.module'
 import { TemplatesModule } from '../templates'
-import { CreateEnvironmentsHandler } from './handlers/create-environments.handler'
-import { CreateProjectHandler } from './handlers/create-project.handler'
-import { FinalizeHandler } from './handlers/finalize.handler'
-import { LoadTemplateHandler } from './handlers/load-template.handler'
-import { RenderTemplateHandler } from './handlers/render-template.handler'
-import { SetupRepositoryHandler } from './handlers/setup-repository.handler'
-import { InitializationStepsService } from './initialization-steps.service'
-import { ProgressManagerService } from './progress-manager.service'
-import { ProjectInitializationStateMachine } from './state-machine'
+import { ProjectInitializationService } from './initialization.service'
 
 /**
- * Project Initialization Module
+ * Project Initialization Module（重构版）
+ *
+ * 简化后的模块：
+ * - 只保留核心的 ProjectInitializationService
+ * - 移除状态机、Handler、ProgressManager 等过度设计
+ * - 利用 BullMQ、Redis、EventEmitter2 等上游能力
  *
  * 注意：
  * - AuthModule 和 FluxModule 是全局模块，无需显式导入
  * - GitConnectionsModule 通过 RepositoriesModule 重新导出，无需直接导入
+ * - GitOpsModule 已删除 (Phase 9)
  */
 @Module({
   imports: [
@@ -27,38 +28,18 @@ import { ProjectInitializationStateMachine } from './state-machine'
     TemplatesModule,
     EnvironmentsModule,
     RepositoriesModule, // 包含 GitConnectionsModule
+    FluxModule, // 包含 FluxResourcesService
+    // GitOpsModule, // 已删除 - Phase 9
     NotificationsModule,
     AuditLogsModule,
   ],
   providers: [
-    // 进度管理器
-    ProgressManagerService,
-    // 步骤管理服务
-    InitializationStepsService,
-    // 状态机
-    ProjectInitializationStateMachine,
-    // 处理器
-    CreateProjectHandler,
-    LoadTemplateHandler,
-    RenderTemplateHandler,
-    CreateEnvironmentsHandler,
-    SetupRepositoryHandler,
-    FinalizeHandler,
+    // 核心初始化服务（所有逻辑都在这里）
+    ProjectInitializationService,
   ],
   exports: [
-    // 导出进度管理器
-    ProgressManagerService,
-    // 导出步骤管理服务
-    InitializationStepsService,
-    // 导出状态机
-    ProjectInitializationStateMachine,
-    // 导出所有处理器（供 ProjectOrchestrator 使用）
-    CreateProjectHandler,
-    LoadTemplateHandler,
-    RenderTemplateHandler,
-    CreateEnvironmentsHandler,
-    SetupRepositoryHandler,
-    FinalizeHandler,
+    // 导出初始化服务
+    ProjectInitializationService,
   ],
 })
 export class ProjectInitializationModule {}

@@ -1,6 +1,6 @@
-import { Logger } from '@juanie/core/logger'
 import type { AIClientConfig, AIMessage } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
+import { PinoLogger } from 'nestjs-pino'
 import { AIService } from '../ai/ai.service'
 
 /**
@@ -109,12 +109,12 @@ export interface ConfigGenerationResult {
  */
 @Injectable()
 export class ConfigGeneratorService {
-
   constructor(
     private readonly aiService: AIService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
-    this.logger.setContext(ConfigGeneratorService.name)}
+    this.logger.setContext(ConfigGeneratorService.name)
+  }
 
   /**
    * 生成 Kubernetes Deployment 配置

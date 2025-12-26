@@ -1,7 +1,11 @@
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { DATABASE, REDIS } from '@juanie/core/tokens'
 import { generateId } from '@juanie/core/utils'
+import * as schema from '@juanie/database'
+import {
+  InvalidStateError,
+  OAuthError,
+  OperationFailedError,
+} from '@juanie/service-foundation/errors'
 import type { CreateUserFromOAuthInput, OAuthUrlResponse } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
@@ -9,6 +13,7 @@ import { GitHub, GitLab } from 'arctic'
 import { eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type Redis from 'ioredis'
+import { PinoLogger } from 'nestjs-pino'
 import { AuditLogsService } from '../audit-logs/audit-logs.service'
 import { GitConnectionsService } from '../git-connections/git-connections.service'
 import { SessionService } from '../sessions/session.service'
@@ -21,7 +26,7 @@ export class AuthService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @Inject(REDIS) private redis: Redis,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
     private readonly gitConnectionsService: GitConnectionsService,
     private readonly sessionService: SessionService,
     private readonly auditLogsService: AuditLogsService,
@@ -80,7 +85,7 @@ export class AuthService {
     } else if (gitlabState) {
       return await this.handleGitLabCallback(code, state)
     } else {
-      throw new Error('Invalid or expired state')
+      throw new InvalidStateError('unknown')
     }
   }
 
@@ -93,7 +98,7 @@ export class AuthService {
         resourceType: 'auth',
         metadata: { provider: 'github', error: 'Invalid state' },
       })
-      throw new Error('Invalid state')
+      throw new InvalidStateError('github')
     }
 
     try {
@@ -129,7 +134,7 @@ export class AuthService {
             resourceType: 'auth',
             metadata: { provider: 'github', error: '无法获取 GitHub 邮箱列表' },
           })
-          throw new Error('无法获取 GitHub 邮箱列表，请确保授权了 user:email 权限')
+          throw new OAuthError('github', '无法获取 GitHub 邮箱列表，请确保授权了 user:email 权限')
         }
 
         const emails = (await emailsResponse.json()) as Array<{
@@ -151,7 +156,7 @@ export class AuthService {
             resourceType: 'auth',
             metadata: { provider: 'github', error: '无法获取 GitHub 邮箱' },
           })
-          throw new Error('无法获取 GitHub 邮箱，请确保至少有一个已验证的邮箱')
+          throw new OAuthError('github', '无法获取 GitHub 邮箱，请确保至少有一个已验证的邮箱')
         }
 
         this.logger.info('[GitHub OAuth] 使用邮箱', { email })
@@ -219,7 +224,7 @@ export class AuthService {
         resourceType: 'auth',
         metadata: { provider: 'gitlab', error: 'Invalid state' },
       })
-      throw new Error('Invalid state')
+      throw new InvalidStateError('gitlab')
     }
 
     try {
@@ -314,7 +319,7 @@ export class AuthService {
 
       // 确保用户存在
       if (!user) {
-        throw new Error('用户创建失败')
+        throw new OperationFailedError('createUser', 'Database insert returned no result')
       }
 
       // 如果是新用户，自动创建个人组织
@@ -333,7 +338,7 @@ export class AuthService {
           .returning()
 
         if (!org) {
-          throw new Error('组织创建失败')
+          throw new OperationFailedError('createOrganization', 'Database insert returned no result')
         }
 
         // 将用户加入组织（owner 角色）
@@ -423,7 +428,7 @@ export class AuthService {
     // 验证 state
     const storedState = await this.redis.get(`oauth:github:connect:${state}`)
     if (!storedState || storedState !== userId) {
-      throw new Error('Invalid state or user mismatch')
+      throw new InvalidStateError('github')
     }
 
     // 交换 access token
@@ -464,7 +469,7 @@ export class AuthService {
     // 验证 state
     const storedState = await this.redis.get(`oauth:gitlab:connect:${state}`)
     if (!storedState || storedState !== userId) {
-      throw new Error('Invalid state or user mismatch')
+      throw new InvalidStateError('gitlab')
     }
 
     // 交换 access token

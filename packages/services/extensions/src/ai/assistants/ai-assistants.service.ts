@@ -1,7 +1,6 @@
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
 import type {
   ChatWithAssistantInput,
   CreateAIAssistantInput,
@@ -10,6 +9,7 @@ import type {
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { PinoLogger } from 'nestjs-pino'
 import { OllamaService } from '../ollama/ollama.service'
 
 @Injectable()
@@ -17,7 +17,7 @@ export class AiAssistantsService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private ollamaService: OllamaService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AiAssistantsService.name)
   }

@@ -1,11 +1,11 @@
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { DATABASE, REDIS } from '@juanie/core/tokens'
 import { generateId } from '@juanie/core/utils'
+import * as schema from '@juanie/database'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq, ne } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type Redis from 'ioredis'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * Session 管理服务
@@ -19,7 +19,7 @@ export class SessionService {
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     @Inject(REDIS) private readonly redis: Redis,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(SessionService.name)
   }

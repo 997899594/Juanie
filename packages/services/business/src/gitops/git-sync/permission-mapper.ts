@@ -13,8 +13,11 @@ export type ProjectRole = 'owner' | 'maintainer' | 'developer' | 'viewer'
 
 /**
  * 组织成员角色
+ *
+ * ✅ 严格匹配 Schema 定义
+ * @see packages/database/src/schemas/organization/organization-members.schema.ts
  */
-export type OrganizationRole = 'owner' | 'admin' | 'member' | 'billing'
+export type OrganizationRole = 'owner' | 'admin' | 'member'
 
 /**
  * Git 权限级别
@@ -94,7 +97,7 @@ export function mapProjectRoleToGitPermission(role: ProjectRole): GitPermission 
  * ```typescript
  * mapOrgRoleToGitPermission('owner') // 'admin'
  * mapOrgRoleToGitPermission('admin') // 'admin'
- * mapOrgRoleToGitPermission('member') // 'write'
+ * mapOrgRoleToGitPermission('member') // 'read' ✅ 与 RBAC 一致
  * ```
  */
 export function mapOrgRoleToGitPermission(role: OrganizationRole): GitPermission {
@@ -103,9 +106,7 @@ export function mapOrgRoleToGitPermission(role: OrganizationRole): GitPermission
     case 'admin':
       return 'admin'
     case 'member':
-      return 'write'
-    case 'billing':
-      // billing 角色通常只需要读取权限
+      // ✅ 修正：组织 member 只有读权限，与 RBAC 一致
       return 'read'
     default:
       return 'read'
@@ -332,5 +333,5 @@ export function isValidProjectRole(role: string): role is ProjectRole {
  * @returns 是否有效
  */
 export function isValidOrganizationRole(role: string): role is OrganizationRole {
-  return ['owner', 'admin', 'member', 'billing'].includes(role)
+  return ['owner', 'admin', 'member'].includes(role)
 }

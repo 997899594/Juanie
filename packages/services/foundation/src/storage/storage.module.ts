@@ -1,10 +1,10 @@
-import { Global, Module } from '@nestjs/common'
-// import { ConfigModule } from '@nestjs/config'
+import { Module } from '@nestjs/common'
+import { ConfigModule } from '@nestjs/config'
+import { LoggerModule } from 'nestjs-pino'
 import { StorageService } from './storage.service'
 
-@Global()
 @Module({
-  imports: [], // ConfigModule removed due to build issues
+  imports: [ConfigModule, LoggerModule],
   providers: [StorageService],
   exports: [StorageService],
 })

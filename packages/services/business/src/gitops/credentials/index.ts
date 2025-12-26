@@ -1,5 +1,0 @@
-export * from './credential-factory'
-export * from './credential-manager.service'
-export * from './credentials.module'
-export * from './git-credential.interface'
-export * from './oauth-credential'

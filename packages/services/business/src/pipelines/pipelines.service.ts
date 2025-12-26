@@ -1,8 +1,8 @@
-import * as schema from '@juanie/core/database'
-import { PIPELINE_QUEUE } from '@juanie/core/queue'
 import { DATABASE } from '@juanie/core/tokens'
 import { generateId } from '@juanie/core/utils'
+import * as schema from '@juanie/database'
 import type { CreatePipelineInput, TriggerPipelineInput, UpdatePipelineInput } from '@juanie/types'
+import { InjectQueue } from '@nestjs/bullmq'
 import { Inject, Injectable } from '@nestjs/common'
 import type { Queue } from 'bullmq'
 import { and, desc, eq } from 'drizzle-orm'
@@ -12,7 +12,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 export class PipelinesService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    @Inject(PIPELINE_QUEUE) private pipelineQueue: Queue,
+    @InjectQueue('pipeline') private pipelineQueue: Queue,
   ) {}
 
   // 创建 Pipeline

@@ -1,41 +1,44 @@
+import * as schema from '@juanie/database'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
-import * as relations from './relations'
-import * as tables from './schemas'
 
-// 合并表定义和关系定义，确保类型推断正确
-const schema = { ...tables, ...relations }
+/**
+ * 数据库连接配置
+ */
+export interface DatabaseConfig {
+  connectionString: string
+  max?: number
+  idleTimeout?: number
+  connectTimeout?: number
+  prepare?: boolean
+  logger?:
+    | boolean
+    | {
+        logQuery: (query: string, params: unknown[]) => void
+      }
+}
 
 /**
  * 创建数据库客户端
- * @param connectionString - PostgreSQL 连接字符串
- * @param options - 连接选项
+ *
+ * 这是唯一的数据库连接创建函数
+ * database.module.ts 和脚本都使用这个函数
  */
-export function createDatabaseClient(
-  connectionString: string,
-  options?: {
-    max?: number
-    idle_timeout?: number
-    connect_timeout?: number
-    prepare?: boolean
-  },
-) {
-  const client = postgres(connectionString, {
-    max: options?.max ?? 10,
-    idle_timeout: options?.idle_timeout ?? 20,
-    connect_timeout: options?.connect_timeout ?? 10,
-    prepare: options?.prepare ?? false,
+export function createDatabaseClient(config: DatabaseConfig) {
+  const client = postgres(config.connectionString, {
+    max: config.max ?? 10,
+    idle_timeout: config.idleTimeout ?? 20,
+    connect_timeout: config.connectTimeout ?? 10,
+    prepare: config.prepare ?? false,
   })
 
-  return drizzle(client, { schema })
+  return drizzle(client, {
+    schema,
+    logger: config.logger || false,
+  })
 }
 
 /**
  * 数据库客户端类型
  */
 export type DatabaseClient = ReturnType<typeof createDatabaseClient>
-
-/**
- * 数据库类型（别名）
- */
-export type Database = DatabaseClient

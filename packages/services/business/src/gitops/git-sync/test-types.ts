@@ -3,7 +3,7 @@
  * 用于验证 Drizzle 类型推断是否正确
  */
 
-import * as schema from '@juanie/core/database'
+import * as schema from '@juanie/database'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 // 测试 Organization 类型

@@ -1,6 +1,6 @@
-import { Logger } from '@juanie/core/logger'
 import type { AIClientConfig, AIMessage } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
+import { PinoLogger } from 'nestjs-pino'
 import { AIService } from '../ai/ai.service'
 
 /**
@@ -102,12 +102,12 @@ export interface TroubleshootingResult {
  */
 @Injectable()
 export class TroubleshootingService {
-
   constructor(
     private readonly aiService: AIService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
-    this.logger.setContext(TroubleshootingService.name)}
+    this.logger.setContext(TroubleshootingService.name)
+  }
 
   /**
    * 分析应用日志

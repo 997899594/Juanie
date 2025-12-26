@@ -75,15 +75,190 @@ bun run reinstall              # 清理并重新安装依赖
 
 ## 导入示例
 
+### 数据库操作
+
 ```typescript
-// 数据库
-import * as schema from '@juanie/core/database'
+// ✅ Schema - 从 @juanie/database 导入
+import * as schema from '@juanie/database'
 
-// 队列
-import { QueueModule, DEPLOYMENT_QUEUE } from '@juanie/core/queue'
+// ✅ 数据库类型 - 从 drizzle-orm 导入
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
-// 服务
-import { ProjectsService } from '@juanie/service-business'
+// ✅ 注入令牌 - 从 @juanie/core/tokens 导入
+import { DATABASE } from '@juanie/core/tokens'
+
+// ✅ 使用示例
+@Injectable()
+export class MyService {
+  constructor(
+    @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
+  ) {}
+
+  async getProject(id: string) {
+    // 使用 Drizzle 关系查询
+    return this.db.query.projects.findFirst({
+      where: eq(schema.projects.id, id),
+      with: {
+        environments: true,
+        team: true
+      }
+    })
+  }
+}
+```
+
+### Flux 和 K8s 操作
+
+```typescript
+// ✅ Business 层直接使用 Core 层服务
+import { FluxCliService } from '@juanie/core/flux'
+import { K8sClientService } from '@juanie/core/k8s'
+
+@Injectable()
+export class GitSyncService {
+  constructor(
+    private readonly fluxCli: FluxCliService,      // 直接注入 Core 服务
+    private readonly k8sClient: K8sClientService,  // 直接注入 Core 服务
+  ) {}
+
+  async syncRepository(options: SyncOptions) {
+    // 直接使用 FluxCliService，不需要包装
+    await this.fluxCli.createGitRepository({
+      name: `project-${options.projectId}`,
+      namespace: options.namespace,
+      url: options.repoUrl,
+      branch: options.branch
+    })
+  }
+}
+```
+
+### 事件处理
+
+```typescript
+// ✅ 直接使用 EventEmitter2，不需要自定义包装器
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter'
+import { DomainEvents } from '@juanie/core/events'
+
+@Injectable()
+export class ProjectsService {
+  constructor(
+    private readonly eventEmitter: EventEmitter2,  // 直接注入
+  ) {}
+
+  async createProject(data: NewProject) {
+    const project = await this.db.insert(schema.projects).values(data).returning()
+
+    // 直接发射事件
+    this.eventEmitter.emit(DomainEvents.PROJECT_CREATED, {
+      projectId: project.id,
+      userId: data.userId
+    })
+
+    return project
+  }
+
+  // 直接监听事件
+  @OnEvent(DomainEvents.PROJECT_CREATED)
+  async handleProjectCreated(payload: ProjectCreatedEvent) {
+    // 处理事件
+  }
+
+  // 支持通配符
+  @OnEvent('project.*')
+  async handleAnyProjectEvent(payload: any) {
+    // 处理所有项目事件
+  }
+}
+```
+
+### 队列和作业
+
+```typescript
+// ✅ 使用 BullMQ 内置功能
+import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq'
+import { Job } from 'bullmq'
+import { QueueModule } from '@juanie/core/queue'
+
+@Processor('project-initialization')
+export class ProjectInitializationWorker extends WorkerHost {
+  async process(job: Job<InitJobData>) {
+    // 使用 BullMQ 内置进度跟踪
+    await job.updateProgress(10)
+    await this.step1()
+
+    await job.updateProgress(50)
+    await this.step2()
+
+    await job.updateProgress(100)
+  }
+
+  // 使用 BullMQ 内置事件
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job) {
+    this.logger.info({ jobId: job.id }, 'Job completed')
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job, error: Error) {
+    this.logger.error({ jobId: job.id, error }, 'Job failed')
+  }
+}
+```
+
+### 错误处理
+
+```typescript
+// ✅ 使用 SDK 原生错误类型
+import { RequestError } from '@octokit/request-error'
+import { GitbeakerRequestError } from '@gitbeaker/requester-utils'
+import { ErrorFactory } from '@juanie/types'
+
+@Injectable()
+export class GitService {
+  async createRepository(name: string) {
+    try {
+      return await this.githubClient.repos.create({ name })
+    } catch (error) {
+      // 直接使用 SDK 错误类型
+      if (error instanceof RequestError) {
+        if (error.status === 422) {
+          throw ErrorFactory.conflict('Repository already exists', { cause: error })
+        }
+        if (error.status === 404) {
+          throw ErrorFactory.notFound('Organization not found', { cause: error })
+        }
+      }
+      // 保留原始错误
+      throw error
+    }
+  }
+}
+```
+
+### 其他常用导入
+
+```typescript
+// 加密 - 纯函数从 Core 导入
+import { encrypt, decrypt, getEncryptionKey } from '@juanie/core/encryption'
+
+// Logger - 直接使用 nestjs-pino
+import { PinoLogger } from 'nestjs-pino'
+
+// 存储 - 从 Foundation 层导入
+import { StorageService } from '@juanie/service-foundation'
+
+// 日期工具 - 使用 date-fns
+import { format, parseISO, addDays } from 'date-fns'
+
+// 字符串工具 - 使用 lodash
+import { camelCase, kebabCase, startCase } from 'lodash'
+
+// ID 生成
+import { generateId } from '@juanie/core/utils'
+
+// 追踪装饰器
+import { Trace } from '@juanie/core/observability'
 
 // UI 组件
 import { Button, Card } from '@juanie/ui'

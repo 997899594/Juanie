@@ -1,5 +1,5 @@
-import { ErrorFactory } from '@juanie/core/errors'
 import type { AIClientConfig, AICompletionOptions, AICompletionResult } from '@juanie/types'
+import { ErrorFactory } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { AICacheService } from '../cache/ai-cache.service'
 import { ContentFilterService } from '../security/content-filter.service'
@@ -141,13 +141,13 @@ export class AIService {
       // 2. 流式调用不使用缓存 (因为需要实时返回)
       const client = this.clientFactory.createClient(config)
 
-      let totalChunks = 0
+      let _totalChunks = 0
       let totalLength = 0
       const chunks: string[] = []
 
       // 3. 流式生成
       for await (const chunk of client.streamComplete({ ...options, messages: filteredMessages })) {
-        totalChunks++
+        _totalChunks++
         totalLength += chunk.length
         chunks.push(chunk)
         yield chunk

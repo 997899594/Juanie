@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common'
-import { TemplateLoader } from '../template-loader.service'
-import { TemplateRenderer } from '../template-renderer.service'
+import { TemplateLoader } from './template-loader.service'
+import { TemplateRenderer } from './template-renderer.service'
 
 /**
  * 模板服务模块

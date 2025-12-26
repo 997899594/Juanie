@@ -1,5 +1,5 @@
-import { Logger } from '@juanie/core/logger'
 import { DeploymentsService } from '@juanie/service-business'
+import { RbacService } from '@juanie/service-foundation'
 import {
   approveDeploymentSchema,
   createDeploymentSchema,
@@ -10,7 +10,9 @@ import {
 } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
+import { PinoLogger } from 'nestjs-pino'
 import { z } from 'zod'
+import { withAbility } from '../trpc/rbac.middleware'
 import { TrpcService } from '../trpc/trpc.service'
 
 @Injectable()
@@ -18,20 +20,32 @@ export class DeploymentsRouter {
   constructor(
     private trpc: TrpcService,
     private deploymentsService: DeploymentsService,
-    private logger: Logger,
+    private rbacService: RbacService,
+    private logger: PinoLogger,
   ) {
     this.logger.setContext(DeploymentsRouter.name)
   }
 
   get router() {
     return this.trpc.router({
-      create: this.trpc.protectedProcedure
+      // 创建部署
+      // ✅ 权限检查：需要 deploy Deployment 权限
+      // 注意：developer 只能部署到非生产环境（在 RBAC 规则中已定义）
+      create: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'deploy',
+        subject: 'Deployment',
+      })
         .input(createDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
           return await this.deploymentsService.create(ctx.user.id, input)
         }),
 
-      list: this.trpc.protectedProcedure
+      // 列出部署
+      // ✅ 权限检查：需要 read Deployment 权限
+      list: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Deployment',
+      })
         .input(
           z.object({
             projectId: z.string().uuid().optional(),
@@ -43,24 +57,46 @@ export class DeploymentsRouter {
           return await this.deploymentsService.list(ctx.user.id, input)
         }),
 
-      get: this.trpc.protectedProcedure.input(deploymentIdSchema).query(async ({ ctx, input }) => {
-        return await this.deploymentsService.get(ctx.user.id, input.deploymentId)
-      }),
+      // 获取部署详情
+      // ✅ 权限检查：需要 read Deployment 权限
+      get: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Deployment',
+      })
+        .input(deploymentIdSchema)
+        .query(async ({ ctx, input }) => {
+          return await this.deploymentsService.get(ctx.user.id, input.deploymentId)
+        }),
 
-      rollback: this.trpc.protectedProcedure
+      // 回滚部署
+      // ✅ 权限检查：需要 deploy Deployment 权限
+      rollback: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'deploy',
+        subject: 'Deployment',
+      })
         .input(rollbackDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
           return await this.deploymentsService.rollback(ctx.user.id, input.deploymentId)
         }),
 
-      approve: this.trpc.protectedProcedure
+      // 批准部署
+      // ✅ 权限检查：需要 deploy Deployment 权限
+      approve: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'deploy',
+        subject: 'Deployment',
+      })
         .input(approveDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
           const { deploymentId, ...data } = input
           return await this.deploymentsService.approve(ctx.user.id, deploymentId, data)
         }),
 
-      reject: this.trpc.protectedProcedure
+      // 拒绝部署
+      // ✅ 权限检查：需要 deploy Deployment 权限
+      reject: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'deploy',
+        subject: 'Deployment',
+      })
         .input(rejectDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
           const { deploymentId, ...data } = input
@@ -70,7 +106,11 @@ export class DeploymentsRouter {
       // ==================== GitOps 相关端点 ====================
 
       // 通过 GitOps 部署（UI → Git 工作流）
-      deployWithGitOps: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 deploy Deployment 权限
+      deployWithGitOps: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'deploy',
+        subject: 'Deployment',
+      })
         .input(deployWithGitOpsSchema)
         .mutation(async ({ ctx, input }) => {
           try {
@@ -97,7 +137,11 @@ export class DeploymentsRouter {
         }),
 
       // 按项目获取部署列表
-      getByProject: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 read Deployment 权限
+      getByProject: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Deployment',
+      })
         .input(z.object({ projectId: z.string(), limit: z.number().optional() }))
         .query(async ({ input: _input }) => {
           // TODO: 实现获取项目部署列表的逻辑
@@ -122,7 +166,11 @@ export class DeploymentsRouter {
         }),
 
       // 获取部署统计
-      getStats: this.trpc.protectedProcedure
+      // ✅ 权限检查：需要 read Deployment 权限
+      getStats: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Deployment',
+      })
         .input(z.object({ projectId: z.string() }))
         .query(async ({ input: _input }) => {
           // TODO: 实现获取部署统计的逻辑

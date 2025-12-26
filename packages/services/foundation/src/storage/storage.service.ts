@@ -1,8 +1,29 @@
-import { Logger } from '@juanie/core/logger'
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Client } from 'minio'
+import { PinoLogger } from 'nestjs-pino'
+import { BaseError } from '../errors'
 
+/**
+ * 存储错误类
+ */
+export class StorageError extends BaseError {
+  constructor(operation: string, reason: string, retryable = false) {
+    super(`Storage operation ${operation} failed: ${reason}`, 'STORAGE_ERROR', 500, retryable, {
+      operation,
+      reason,
+    })
+  }
+
+  getUserMessage(): string {
+    return `存储操作失败: ${this.context?.reason || '未知错误'}`
+  }
+}
+
+/**
+ * 存储服务 (Core 层基础设施)
+ * 使用 MinIO 作为对象存储
+ */
 @Injectable()
 export class StorageService {
   private minioClient: Client
@@ -10,7 +31,7 @@ export class StorageService {
 
   constructor(
     private config: ConfigService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(StorageService.name)
     this.minioClient = new Client({
@@ -24,7 +45,6 @@ export class StorageService {
     this.ensureBucketExists()
   }
 
-  // 确保 bucket 存在
   private async ensureBucketExists() {
     try {
       const exists = await this.minioClient.bucketExists(this.bucketName)
@@ -32,7 +52,6 @@ export class StorageService {
         await this.minioClient.makeBucket(this.bucketName, 'us-east-1')
         this.logger.info(`✅ Created MinIO bucket: ${this.bucketName}`)
 
-        // 设置公开访问策略（用于 Logo）
         const policy = {
           Version: '2012-10-17',
           Statement: [
@@ -49,7 +68,6 @@ export class StorageService {
         this.logger.info(`✅ MinIO bucket already exists: ${this.bucketName}`)
       }
     } catch (error) {
-      // 忽略 bucket 已存在的错误
       const minioError = error as { code?: string }
       if (
         minioError.code === 'BucketAlreadyOwnedByYou' ||
@@ -62,7 +80,6 @@ export class StorageService {
     }
   }
 
-  // 上传文件
   async uploadFile(
     objectName: string,
     buffer: Buffer,
@@ -75,7 +92,6 @@ export class StorageService {
         ...metadata,
       })
 
-      // 返回公开访问 URL
       const endpoint = this.config.get('MINIO_ENDPOINT') || 'localhost'
       const port = this.config.get('MINIO_PORT') || '9000'
       const protocol = this.config.get('MINIO_USE_SSL') === 'true' ? 'https' : 'http'
@@ -83,78 +99,31 @@ export class StorageService {
       return `${protocol}://${endpoint}:${port}/${this.bucketName}/${objectName}`
     } catch (error) {
       this.logger.error('MinIO upload error', error)
-      throw new Error('Failed to upload file')
+      throw new StorageError('upload', error instanceof Error ? error.message : 'Unknown error')
     }
   }
 
-  // 上传项目 Logo
-  async uploadProjectLogo(projectId: string, buffer: Buffer, fileType: string): Promise<string> {
-    const extension = this.getExtension(fileType)
-    const objectName = `projects/${projectId}/logo${extension}`
-
-    return await this.uploadFile(objectName, buffer, fileType, {
-      'x-amz-meta-project-id': projectId,
-      'x-amz-meta-upload-date': new Date().toISOString(),
-    })
-  }
-
-  // 上传组织 Logo
-  async uploadOrganizationLogo(orgId: string, buffer: Buffer, fileType: string): Promise<string> {
-    const extension = this.getExtension(fileType)
-    const objectName = `organizations/${orgId}/logo${extension}`
-
-    return await this.uploadFile(objectName, buffer, fileType, {
-      'x-amz-meta-organization-id': orgId,
-      'x-amz-meta-upload-date': new Date().toISOString(),
-    })
-  }
-
-  // 删除文件
   async deleteFile(objectName: string): Promise<void> {
     try {
       await this.minioClient.removeObject(this.bucketName, objectName)
     } catch (error) {
       this.logger.error('MinIO delete error', error)
-      throw new Error('Failed to delete file')
+      throw new StorageError('delete', error instanceof Error ? error.message : 'Unknown error')
     }
   }
 
-  // 删除项目 Logo
-  async deleteProjectLogo(projectId: string): Promise<void> {
-    // 列出该项目的所有 logo 文件
-    const prefix = `projects/${projectId}/logo`
-    const objectsList: string[] = []
-
-    const stream = this.minioClient.listObjects(this.bucketName, prefix, true)
-
-    // 使用 Promise 包装来处理 stream
-    await new Promise<void>((resolve, reject) => {
-      stream.on('data', (obj) => {
-        if (obj.name) {
-          objectsList.push(obj.name)
-        }
-      })
-      stream.on('end', () => resolve())
-      stream.on('error', (err) => reject(err))
-    })
-
-    // 删除所有找到的文件
-    for (const objName of objectsList) {
-      await this.deleteFile(objName)
-    }
-  }
-
-  // 获取预签名 URL（用于临时访问私有文件）
   async getPresignedUrl(objectName: string, expiry = 3600): Promise<string> {
     try {
       return await this.minioClient.presignedGetObject(this.bucketName, objectName, expiry)
     } catch (error) {
       this.logger.error('MinIO presigned URL error', error)
-      throw new Error('Failed to generate presigned URL')
+      throw new StorageError(
+        'generatePresignedUrl',
+        error instanceof Error ? error.message : 'Unknown error',
+      )
     }
   }
 
-  // 检查文件是否存在
   async fileExists(objectName: string): Promise<boolean> {
     try {
       await this.minioClient.statObject(this.bucketName, objectName)
@@ -164,20 +133,13 @@ export class StorageService {
     }
   }
 
-  // 获取文件扩展名
-  private getExtension(contentType: string): string {
-    const mimeTypes: Record<string, string> = {
-      'image/jpeg': '.jpg',
-      'image/jpg': '.jpg',
-      'image/png': '.png',
-      'image/gif': '.gif',
-      'image/webp': '.webp',
-      'image/svg+xml': '.svg',
-    }
-    return mimeTypes[contentType] || '.png'
-  }
+  // ========================================
+  // 项目 Logo 相关方法
+  // ========================================
 
-  // 验证图片类型
+  /**
+   * 验证图片类型
+   */
   isValidImageType(contentType: string): boolean {
     const validTypes = [
       'image/jpeg',
@@ -187,11 +149,38 @@ export class StorageService {
       'image/webp',
       'image/svg+xml',
     ]
-    return validTypes.includes(contentType)
+    return validTypes.includes(contentType.toLowerCase())
   }
 
-  // 验证文件大小（默认 5MB）
+  /**
+   * 验证文件大小（最大 5MB）
+   */
   isValidFileSize(size: number, maxSize = 5 * 1024 * 1024): boolean {
     return size <= maxSize
+  }
+
+  /**
+   * 上传项目 Logo
+   */
+  async uploadProjectLogo(projectId: string, buffer: Buffer, contentType: string): Promise<string> {
+    const ext = contentType.split('/')[1] || 'png'
+    const objectName = `projects/${projectId}/logo.${ext}`
+    return await this.uploadFile(objectName, buffer, contentType)
+  }
+
+  /**
+   * 删除项目 Logo
+   */
+  async deleteProjectLogo(projectId: string): Promise<void> {
+    // 尝试删除所有可能的扩展名
+    const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
+    for (const ext of extensions) {
+      const objectName = `projects/${projectId}/logo.${ext}`
+      try {
+        await this.deleteFile(objectName)
+      } catch (_) {
+        // 忽略不存在的文件
+      }
+    }
   }
 }

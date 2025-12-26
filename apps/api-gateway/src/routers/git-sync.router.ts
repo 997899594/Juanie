@@ -1,9 +1,14 @@
-import { ConflictResolutionService, GitSyncService } from '@juanie/service-business'
-import { GitConnectionsService } from '@juanie/service-foundation'
+import {
+  ConflictResolutionService,
+  GitSyncService,
+  OrganizationSyncService,
+} from '@juanie/service-business'
+import { GitConnectionsService, RbacService } from '@juanie/service-foundation'
 import type { GitSyncLog } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
+import { withAbility } from '../trpc/rbac.middleware'
 import { TrpcService } from '../trpc/trpc.service'
 
 /**
@@ -17,7 +22,9 @@ export class GitSyncRouter {
     private readonly trpc: TrpcService,
     private readonly gitConnections: GitConnectionsService,
     private readonly gitSync: GitSyncService,
+    private readonly organizationSync: OrganizationSyncService,
     private readonly conflictResolution: ConflictResolutionService,
+    private readonly rbacService: RbacService,
   ) {}
 
   get router() {
@@ -147,11 +154,16 @@ export class GitSyncRouter {
       /**
        * 重试同步成员
        * Requirements: 6.6
+       * ✅ 权限检查：需要 manage_members Project 权限
        */
-      retrySyncMember: this.trpc.protectedProcedure
+      retrySyncMember: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Project',
+      })
         .input(
           z.object({
             syncLogId: z.string(),
+            projectId: z.string(), // 添加 projectId 用于权限检查
           }),
         )
         .mutation(async ({ input }) => {
@@ -173,8 +185,12 @@ export class GitSyncRouter {
       /**
        * 获取项目的同步日志
        * Requirements: 6.4
+       * ✅ 权限检查：需要 read Project 权限
        */
-      getSyncLogs: this.trpc.protectedProcedure
+      getSyncLogs: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Project',
+      })
         .input(
           z.object({
             projectId: z.string(),
@@ -208,6 +224,8 @@ export class GitSyncRouter {
       /**
        * 获取失败的同步任务
        * Requirements: 6.5
+       * ✅ 权限检查：需要 read Project 权限（如果指定了 projectId）
+       * 注意：如果没有 projectId，则需要组织级权限
        */
       getFailedSyncs: this.trpc.protectedProcedure
         .input(
@@ -244,11 +262,16 @@ export class GitSyncRouter {
       /**
        * 批量重试失败的同步任务
        * Requirements: 6.6
+       * ✅ 权限检查：需要 manage_members Project 权限
        */
-      retryFailedSyncs: this.trpc.protectedProcedure
+      retryFailedSyncs: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Project',
+      })
         .input(
           z.object({
             syncLogIds: z.array(z.string()),
+            projectId: z.string(), // 添加 projectId 用于权限检查
           }),
         )
         .mutation(async ({ input }) => {
@@ -277,8 +300,12 @@ export class GitSyncRouter {
       /**
        * 获取冲突历史
        * Requirements: 8.3
+       * ✅ 权限检查：需要 read Project 权限
        */
-      getConflictHistory: this.trpc.protectedProcedure
+      getConflictHistory: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Project',
+      })
         .input(
           z.object({
             projectId: z.string(),
@@ -307,6 +334,110 @@ export class GitSyncRouter {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message: error instanceof Error ? error.message : '获取冲突历史失败',
+            })
+          }
+        }),
+
+      // ==================== 组织级同步端点 (Phase 3) ====================
+
+      /**
+       * 手动触发组织成员全量同步
+       * Requirements: Phase 3
+       * ✅ 权限检查：需要 manage_members Organization 权限
+       */
+      syncOrganizationMembers: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Organization',
+      })
+        .input(
+          z.object({
+            organizationId: z.string(),
+          }),
+        )
+        .mutation(async ({ input }) => {
+          try {
+            const result = await this.organizationSync.syncOrganizationMembers(input.organizationId)
+
+            return {
+              success: result.success,
+              syncedMembers: result.syncedMembers,
+              errors: result.errors,
+              skipped: result.skipped,
+              message: result.success
+                ? `成功同步 ${result.syncedMembers} 个成员`
+                : `同步完成，但有 ${result.errors.length} 个错误`,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: error instanceof Error ? error.message : '同步组织成员失败',
+            })
+          }
+        }),
+
+      /**
+       * 获取组织同步状态
+       * Requirements: Phase 3
+       * ✅ 权限检查：需要 read Organization 权限
+       */
+      getOrganizationSyncStatus: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'read',
+        subject: 'Organization',
+      })
+        .input(
+          z.object({
+            organizationId: z.string(),
+          }),
+        )
+        .query(async ({ input }) => {
+          try {
+            const status = await this.organizationSync.getOrganizationSyncStatus(
+              input.organizationId,
+            )
+
+            return {
+              enabled: status.enabled,
+              lastSyncAt: status.lastSyncAt,
+              memberCount: status.memberCount,
+              syncedMemberCount: status.syncedMemberCount,
+              pendingErrors: status.pendingErrors,
+              workspaceType: status.workspaceType,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: error instanceof Error ? error.message : '获取组织同步状态失败',
+            })
+          }
+        }),
+
+      /**
+       * 手动触发项目协作者全量同步
+       * Requirements: Phase 3
+       * ✅ 权限检查：需要 manage_members Project 权限
+       */
+      syncProjectCollaborators: withAbility(this.trpc.protectedProcedure, this.rbacService, {
+        action: 'manage_members',
+        subject: 'Project',
+      })
+        .input(
+          z.object({
+            projectId: z.string(),
+          }),
+        )
+        .mutation(async ({ input }) => {
+          try {
+            // 使用现有的 batchSyncProject 方法
+            await this.gitSync.batchSyncProject(input.projectId)
+
+            return {
+              success: true,
+              message: '项目协作者同步任务已加入队列',
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: error instanceof Error ? error.message : '同步项目协作者失败',
             })
           }
         }),

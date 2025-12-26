@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { Logger } from '@juanie/core/logger'
 import { Injectable } from '@nestjs/common'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * 用户意图类型
@@ -64,7 +64,7 @@ export class AIChatService {
   private readonly anthropic: Anthropic
   private readonly conversationHistory = new Map<string, ChatMessage[]>()
 
-  constructor(private readonly logger: Logger) {
+  constructor(private readonly logger: PinoLogger) {
     this.logger.setContext(AIChatService.name)
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,

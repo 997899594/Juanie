@@ -1,6 +1,6 @@
-import { Logger } from '@juanie/core/logger'
 import type { AIFunction } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
+import { PinoLogger } from 'nestjs-pino'
 import { type ZodSchema, z } from 'zod'
 
 /**
@@ -42,7 +42,7 @@ export interface FunctionExecutionResult {
  */
 @Injectable()
 export class FunctionCallingService {
-  constructor(private readonly logger: Logger) {
+  constructor(private readonly logger: PinoLogger) {
     this.logger.setContext(FunctionCallingService.name)
   }
 

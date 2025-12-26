@@ -1,5 +1,5 @@
-import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, or } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'

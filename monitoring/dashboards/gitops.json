@@ -71,7 +71,7 @@
             "legendFormat": "P50 延迟 - {{resource_name}}",
             "refId": "B"
           }
-        },
+        ],
         "yaxes": [
           {
             "format": "s",

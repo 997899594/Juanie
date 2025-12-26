@@ -50,12 +50,9 @@ describe('Permission Mapper', () => {
       expect(mapOrgRoleToGitPermission('admin')).toBe('admin')
     })
 
-    it('should map member to write', () => {
-      expect(mapOrgRoleToGitPermission('member')).toBe('write')
-    })
-
-    it('should map billing to read', () => {
-      expect(mapOrgRoleToGitPermission('billing')).toBe('read')
+    it('should map member to read', () => {
+      // ✅ 修正：member 映射为 read，与 RBAC 一致
+      expect(mapOrgRoleToGitPermission('member')).toBe('read')
     })
 
     it('should default to read for unknown roles', () => {
@@ -144,10 +141,6 @@ describe('Permission Mapper', () => {
       expect(mapOrgRoleToGitHubOrgRole('member')).toBe(GitHubOrganizationRole.Member)
     })
 
-    it('should map billing to Member', () => {
-      expect(mapOrgRoleToGitHubOrgRole('billing')).toBe(GitHubOrganizationRole.Member)
-    })
-
     it('should map Admin to admin', () => {
       expect(mapGitHubOrgRoleToOrgRole(GitHubOrganizationRole.Admin)).toBe('admin')
     })
@@ -219,12 +212,13 @@ describe('Permission Mapper', () => {
       expect(isValidOrganizationRole('owner')).toBe(true)
       expect(isValidOrganizationRole('admin')).toBe(true)
       expect(isValidOrganizationRole('member')).toBe(true)
-      expect(isValidOrganizationRole('billing')).toBe(true)
+      // ✅ 删除 billing 角色
     })
 
     it('should reject invalid organization roles', () => {
       expect(isValidOrganizationRole('invalid')).toBe(false)
       expect(isValidOrganizationRole('developer')).toBe(false)
+      expect(isValidOrganizationRole('billing')).toBe(false) // ✅ billing 不再有效
     })
   })
 
@@ -264,12 +258,7 @@ describe('Permission Mapper', () => {
     })
 
     it('should maintain consistency for organization roles', () => {
-      const roles: Array<'owner' | 'admin' | 'member' | 'billing'> = [
-        'owner',
-        'admin',
-        'member',
-        'billing',
-      ]
+      const roles: Array<'owner' | 'admin' | 'member'> = ['owner', 'admin', 'member']
 
       for (const role of roles) {
         const gitPermission = mapOrgRoleToGitPermission(role)

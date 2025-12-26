@@ -1,6 +1,6 @@
-import * as schema from '@juanie/core/database'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
 import type {
   CreateOrganizationInput,
   InviteMemberInput,
@@ -12,6 +12,14 @@ import type {
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import {
+  CannotRemoveOwnerError,
+  NotOrganizationMemberError,
+  OperationFailedError,
+  OrganizationMemberAlreadyExistsError,
+  OrganizationNotFoundError,
+  PermissionDeniedError,
+} from '../errors'
 import { OrganizationEventsService } from './organization-events.service'
 
 @Injectable()
@@ -41,7 +49,7 @@ export class OrganizationsService {
         .returning()
 
       if (!org) {
-        throw new Error('组织创建失败')
+        throw new OperationFailedError('create_organization', 'Database insert returned no result')
       }
 
       // 添加创建者为 owner
@@ -86,6 +94,7 @@ export class OrganizationsService {
         name: m.organization.name,
         slug: m.organization.slug,
         displayName: m.organization.displayName,
+        type: m.organization.type, // ✅ 添加 type 字段
         quotas: m.organization.quotas,
         createdAt: m.organization.createdAt,
         gitSyncEnabled: m.organization.gitSyncEnabled,
@@ -123,6 +132,7 @@ export class OrganizationsService {
       name: org.name,
       slug: org.slug,
       displayName: org.displayName,
+      type: org.type, // ✅ 添加 type 字段
       quotas: org.quotas,
       createdAt: org.createdAt,
       updatedAt: org.updatedAt,
@@ -141,7 +151,7 @@ export class OrganizationsService {
     // 检查权限（只有 owner 和 admin 可以更新）
     const member = await this.getMember(orgId, userId)
     if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限更新组织')
+      throw new PermissionDeniedError('organization', 'update')
     }
 
     const [org] = await this.db
@@ -161,7 +171,7 @@ export class OrganizationsService {
     // 检查权限（只有 owner 可以删除）
     const member = await this.getMember(orgId, userId)
     if (!member || member.role !== 'owner') {
-      throw new Error('只有组织所有者可以删除组织')
+      throw new PermissionDeniedError('organization', 'delete')
     }
 
     await this.db
@@ -179,13 +189,13 @@ export class OrganizationsService {
     // 检查权限（owner 和 admin 可以邀请）
     const member = await this.getMember(orgId, userId)
     if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限邀请成员')
+      throw new PermissionDeniedError('organization', 'invite_member')
     }
 
     // 检查是否已经是成员
     const existing = await this.getMember(orgId, data.invitedUserId)
     if (existing) {
-      throw new Error('用户已经是组织成员')
+      throw new OrganizationMemberAlreadyExistsError(orgId, data.invitedUserId)
     }
 
     const [newMember] = await this.db
@@ -213,7 +223,7 @@ export class OrganizationsService {
     // 检查用户是否是组织成员
     const member = await this.getMember(orgId, userId)
     if (!member) {
-      throw new Error('不是组织成员')
+      throw new NotOrganizationMemberError(orgId, userId)
     }
 
     // 使用 Relational Query 加载用户信息
@@ -245,7 +255,7 @@ export class OrganizationsService {
     // 检查权限（只有 owner 可以更改角色）
     const member = await this.getMember(orgId, userId)
     if (!member || member.role !== 'owner') {
-      throw new Error('只有组织所有者可以更改成员角色')
+      throw new PermissionDeniedError('organization', 'update_member_role')
     }
 
     // 获取当前角色
@@ -256,7 +266,7 @@ export class OrganizationsService {
       .limit(1)
 
     if (!currentMember) {
-      throw new Error('成员不存在')
+      throw new OrganizationNotFoundError(data.memberId)
     }
 
     const oldRole = currentMember.role
@@ -270,7 +280,7 @@ export class OrganizationsService {
       .returning()
 
     if (!updatedMember) {
-      throw new Error('Failed to update member role')
+      throw new OperationFailedError('update_member_role', 'Database update returned no result')
     }
 
     // 发布角色更新事件 (用于自动同步)
@@ -294,7 +304,7 @@ export class OrganizationsService {
     // 检查权限（owner 和 admin 可以移除成员）
     const member = await this.getMember(orgId, userId)
     if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限移除成员')
+      throw new PermissionDeniedError('organization', 'remove_member')
     }
 
     // 不能移除 owner
@@ -305,7 +315,7 @@ export class OrganizationsService {
       .limit(1)
 
     if (targetMember[0]?.role === 'owner') {
-      throw new Error('不能移除组织所有者')
+      throw new CannotRemoveOwnerError(orgId)
     }
 
     await this.db
@@ -329,7 +339,7 @@ export class OrganizationsService {
     // 检查权限
     const member = await this.getMember(orgId, userId)
     if (!member) {
-      throw new Error('不是组织成员')
+      throw new NotOrganizationMemberError(orgId, userId)
     }
 
     // 获取组织配额
@@ -403,19 +413,89 @@ export class OrganizationsService {
     return false
   }
 
-  // 辅助方法：获取成员信息
-  private async getMember(orgId: string, userId: string) {
-    const [member] = await this.db
-      .select()
-      .from(schema.organizationMembers)
-      .where(
-        and(
-          eq(schema.organizationMembers.organizationId, orgId),
-          eq(schema.organizationMembers.userId, userId),
-        ),
-      )
-      .limit(1)
+  // ========================================
+  // 公共方法：供 Business 层使用
+  // ========================================
 
+  /**
+   * 检查组织是否存在
+   * @param organizationId 组织 ID
+   * @returns 是否存在
+   */
+  @Trace('organizations.exists')
+  async exists(organizationId: string): Promise<boolean> {
+    const org = await this.db.query.organizations.findFirst({
+      where: and(
+        eq(schema.organizations.id, organizationId),
+        isNull(schema.organizations.deletedAt),
+      ),
+      columns: { id: true },
+    })
+    return !!org
+  }
+
+  /**
+   * 获取组织成员信息（公共方法）
+   * @param organizationId 组织 ID
+   * @param userId 用户 ID
+   * @returns 成员信息或 null
+   */
+  @Trace('organizations.getMember')
+  async getMember(
+    organizationId: string,
+    userId: string,
+  ): Promise<typeof schema.organizationMembers.$inferSelect | null> {
+    const member = await this.db.query.organizationMembers.findFirst({
+      where: and(
+        eq(schema.organizationMembers.organizationId, organizationId),
+        eq(schema.organizationMembers.userId, userId),
+      ),
+    })
     return member || null
   }
+
+  /**
+   * 检查用户是否是组织成员
+   * @param organizationId 组织 ID
+   * @param userId 用户 ID
+   * @returns 是否是成员
+   */
+  @Trace('organizations.isMember')
+  async isMember(organizationId: string, userId: string): Promise<boolean> {
+    const member = await this.getMember(organizationId, userId)
+    return !!member
+  }
+
+  /**
+   * 检查用户是否是组织管理员（owner 或 admin）
+   * @param organizationId 组织 ID
+   * @param userId 用户 ID
+   * @returns 是否是管理员
+   */
+  @Trace('organizations.isAdmin')
+  async isAdmin(organizationId: string, userId: string): Promise<boolean> {
+    const member = await this.getMember(organizationId, userId)
+    return member ? ['owner', 'admin'].includes(member.role) : false
+  }
+
+  /**
+   * 获取组织的所有管理员
+   * @param organizationId 组织 ID
+   * @returns 管理员列表
+   */
+  @Trace('organizations.getAdmins')
+  async getAdmins(
+    organizationId: string,
+  ): Promise<Array<typeof schema.organizationMembers.$inferSelect>> {
+    return this.db.query.organizationMembers.findMany({
+      where: and(
+        eq(schema.organizationMembers.organizationId, organizationId),
+        sql`${schema.organizationMembers.role} IN ('owner', 'admin')`,
+      ),
+    })
+  }
+
+  // ========================================
+  // 私有辅助方法
+  // ========================================
 }

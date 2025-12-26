@@ -1,5 +1,5 @@
-import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
 import { TemplatesService } from '@juanie/service-business'
 import { cicdConfigSchema, dockerfileConfigSchema } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'

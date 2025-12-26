@@ -1,6 +1,6 @@
 import { DatabaseModule } from '@juanie/core/database'
 import { QueueModule } from '@juanie/core/queue'
-import { RBACModule } from '@juanie/core/rbac'
+import { RedisModule } from '@juanie/core/redis'
 import { BusinessModule } from '@juanie/service-business'
 import { ExtensionsModule } from '@juanie/service-extensions'
 import { FoundationModule } from '@juanie/service-foundation'
@@ -56,10 +56,10 @@ const prettyStream = isDev
     }),
     // Core modules
     DatabaseModule,
+    RedisModule,
     QueueModule,
-    RBACModule, // RBAC 权限系统（全局模块）
     // Three-tier service architecture
-    FoundationModule, // 基础层
+    FoundationModule, // 基础层（包含 RBAC）
     BusinessModule, // 业务层（包含业务 Workers）
     ExtensionsModule, // 扩展层
     // API module

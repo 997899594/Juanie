@@ -1,7 +1,7 @@
-import { ErrorFactory } from '@juanie/core/errors'
-import { Logger } from '@juanie/core/logger'
 import type { AIMessage } from '@juanie/types'
+import { ErrorFactory } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * 敏感信息类型
@@ -72,7 +72,7 @@ export class ContentFilterService {
       /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----[\s\S]+?-----END (?:RSA |EC )?PRIVATE KEY-----/g,
   }
 
-  constructor(private readonly logger: Logger) {
+  constructor(private readonly logger: PinoLogger) {
     this.logger.setContext(ContentFilterService.name)
     this.initializeDefaultRules()
   }
@@ -212,14 +212,14 @@ export class ContentFilterService {
       case SensitiveInfoType.EMAIL: {
         const [local, domain] = info.value.split('@')
         if (!local || !domain) return '***@***'
-        const maskedLocal = local.charAt(0) + '***' + local.charAt(local.length - 1)
+        const maskedLocal = `${local.charAt(0)}***${local.charAt(local.length - 1)}`
         return `${maskedLocal}@${domain}`
       }
       case SensitiveInfoType.PHONE: {
-        return info.value.substring(0, 3) + '****' + info.value.substring(7)
+        return `${info.value.substring(0, 3)}****${info.value.substring(7)}`
       }
       case SensitiveInfoType.CREDIT_CARD: {
-        return '****-****-****-' + info.value.slice(-4)
+        return `****-****-****-${info.value.slice(-4)}`
       }
       default:
         return '[REDACTED]'

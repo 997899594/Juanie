@@ -1,17 +1,18 @@
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
+import { NotificationNotFoundError, OperationFailedError } from '@juanie/service-foundation/errors'
 import type { CreateNotificationInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { PinoLogger } from 'nestjs-pino'
 
 @Injectable()
 export class NotificationsService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(NotificationsService.name)
   }
@@ -33,7 +34,7 @@ export class NotificationsService {
 
     const createdNotification = notification[0]
     if (!createdNotification) {
-      throw new Error('Failed to create notification')
+      throw new OperationFailedError('createNotification', 'Database insert returned no result')
     }
 
     // 触发通知投递
@@ -141,7 +142,7 @@ export class NotificationsService {
       .limit(1)
 
     if (!notification) {
-      throw new Error('通知不存在')
+      throw new NotificationNotFoundError(notificationId)
     }
 
     const [updated] = await this.db
@@ -184,7 +185,7 @@ export class NotificationsService {
       .limit(1)
 
     if (!notification) {
-      throw new Error('通知不存在')
+      throw new NotificationNotFoundError(notificationId)
     }
 
     await this.db.delete(schema.notifications).where(eq(schema.notifications.id, notificationId))

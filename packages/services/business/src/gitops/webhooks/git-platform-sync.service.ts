@@ -1,11 +1,11 @@
-import type { Database } from '@juanie/core/database'
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
+import { GitSyncLogsService } from '@juanie/service-foundation'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, eq } from 'drizzle-orm'
-import { ProjectMembersService } from '../../projects/project-members.service'
-import { ProjectsService } from '../../projects/projects.service'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { PinoLogger } from 'nestjs-pino'
+import { ProjectMembersService } from '../../projects/members/project-members.service'
 
 /**
  * Git 平台变更同步服务
@@ -13,14 +13,23 @@ import { ProjectsService } from '../../projects/projects.service'
  * 处理来自 Git 平台的变更事件,并同步到系统中
  *
  * Requirements: 8.2, 8.3, 8.4
+ *
+ * ⚠️ 架构说明:
+ * 本服务保留了部分数据库访问用于简单的关联查询:
+ * - repositories 表: 通过 Git 仓库信息查找项目 (一对一关联)
+ * - gitConnections 表: 通过 Git 账号 ID 查找用户 (一对一关联)
+ * - projectMembers 表: 检查用户是否已是项目成员 (简单查询)
+ *
+ * 这些是简单的关联查询,不包含业务逻辑,不需要通过 Service 层增加复杂度。
+ * 所有的日志记录都通过 GitSyncLogsService (Foundation 层) 完成。
  */
 @Injectable()
 export class GitPlatformSyncService {
   constructor(
-    @Inject(DATABASE) private readonly db: Database,
+    @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private readonly projectMembersService: ProjectMembersService,
-    readonly _projectsService: ProjectsService,
-    private readonly logger: Logger,
+    private readonly gitSyncLogs: GitSyncLogsService,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(GitPlatformSyncService.name)
   }
@@ -82,22 +91,20 @@ export class GitPlatformSyncService {
         // 删除仓库记录
         await this.db.delete(schema.repositories).where(eq(schema.repositories.id, repository.id))
 
-        // 记录同步日志
-        await this.db.insert(schema.gitSyncLogs).values({
+        // ✅ 使用 GitSyncLogsService 记录同步日志
+        await this.gitSyncLogs.create({
+          projectId: project.id,
           syncType: 'project',
           action: 'delete',
-          projectId: project.id,
-          provider: event.provider,
           status: 'success',
+          gitProvider: event.provider,
           gitResourceId: event.repository.gitId,
-          gitResourceUrl: event.repository.fullName,
           gitResourceType: 'repository',
           metadata: {
             repositoryId: event.repository.gitId,
             repositoryName: event.repository.fullName,
             action: 'disconnected',
           },
-          completedAt: new Date(),
         })
       }
 
@@ -169,23 +176,21 @@ export class GitPlatformSyncService {
           gitId: event.collaborator.gitId,
         })
 
-        // 记录日志 - 用户未关联
-        await this.db.insert(schema.gitSyncLogs).values({
+        // ✅ 使用 GitSyncLogsService 记录日志 - 用户未关联
+        await this.gitSyncLogs.create({
+          projectId: project.id,
           syncType: 'member',
           action: 'add',
-          projectId: project.id,
-          provider: event.provider,
           status: 'failed',
-          error: 'User not linked to Git account',
-          errorType: 'not_found',
+          gitProvider: event.provider,
           gitResourceId: event.collaborator.gitId,
           gitResourceType: 'user',
+          error: 'User not linked to Git account',
           metadata: {
             reason: 'user_not_linked',
             gitLogin: event.collaborator.gitLogin,
             gitId: event.collaborator.gitId,
           },
-          completedAt: new Date(),
         })
         return
       }
@@ -222,40 +227,48 @@ export class GitPlatformSyncService {
         role,
       })
 
-      // 记录同步日志
-      await this.db.insert(schema.gitSyncLogs).values({
+      // ✅ 使用 GitSyncLogsService 记录同步日志
+      await this.gitSyncLogs.create({
+        projectId: project.id,
         syncType: 'member',
         action: 'add',
-        projectId: project.id,
-        userId: gitConnection.userId,
-        provider: event.provider,
         status: 'success',
+        gitProvider: event.provider,
         gitResourceId: event.collaborator.gitId,
         gitResourceType: 'member',
         metadata: {
+          userId: gitConnection.userId,
           gitLogin: event.collaborator.gitLogin,
           gitPermission: event.collaborator.permission,
           systemRole: role,
         },
-        completedAt: new Date(),
       })
     } catch (error) {
       this.logger.error('Error handling collaborator added event:', error)
 
-      // 记录错误日志
-      await this.db.insert(schema.gitSyncLogs).values({
+      // ✅ 使用 GitSyncLogsService 记录错误日志
+      // 注意: 这里没有 projectId,因为可能在查找项目时就失败了
+      // 我们需要尝试获取 projectId,如果没有就记录为 null
+      let projectId: string | undefined
+      try {
+        const result = await this.findProjectByRepository(event.provider, event.repository.fullName)
+        projectId = result?.project.id
+      } catch {
+        // 忽略错误,继续记录日志
+      }
+
+      await this.gitSyncLogs.create({
+        projectId: projectId || 'unknown',
         syncType: 'member',
         action: 'add',
-        provider: event.provider,
         status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        errorType: 'unknown',
+        gitProvider: event.provider,
         gitResourceId: event.repository.gitId,
         gitResourceType: 'repository',
+        error: error instanceof Error ? error.message : 'Unknown error',
         metadata: {
           gitLogin: event.collaborator.gitLogin,
         },
-        completedAt: new Date(),
       })
 
       throw error
@@ -330,38 +343,44 @@ export class GitPlatformSyncService {
         projectId: project.id,
       })
 
-      // 记录同步日志
-      await this.db.insert(schema.gitSyncLogs).values({
+      // ✅ 使用 GitSyncLogsService 记录同步日志
+      await this.gitSyncLogs.create({
+        projectId: project.id,
         syncType: 'member',
         action: 'remove',
-        projectId: project.id,
-        userId: gitConnection.userId,
-        provider: event.provider,
         status: 'success',
+        gitProvider: event.provider,
         gitResourceId: event.collaborator.gitId,
         gitResourceType: 'member',
         metadata: {
+          userId: gitConnection.userId,
           gitLogin: event.collaborator.gitLogin,
         },
-        completedAt: new Date(),
       })
     } catch (error) {
       this.logger.error('Error handling collaborator removed event:', error)
 
-      // 记录错误日志
-      await this.db.insert(schema.gitSyncLogs).values({
+      // ✅ 使用 GitSyncLogsService 记录错误日志
+      let projectId: string | undefined
+      try {
+        const result = await this.findProjectByRepository(event.provider, event.repository.fullName)
+        projectId = result?.project.id
+      } catch {
+        // 忽略错误,继续记录日志
+      }
+
+      await this.gitSyncLogs.create({
+        projectId: projectId || 'unknown',
         syncType: 'member',
         action: 'remove',
-        provider: event.provider,
         status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        errorType: 'unknown',
+        gitProvider: event.provider,
         gitResourceId: event.repository.gitId,
         gitResourceType: 'repository',
+        error: error instanceof Error ? error.message : 'Unknown error',
         metadata: {
           gitLogin: event.collaborator.gitLogin,
         },
-        completedAt: new Date(),
       })
 
       throw error
@@ -453,22 +472,20 @@ export class GitPlatformSyncService {
             .where(eq(schema.repositories.id, repository.id))
         }
 
-        // 记录同步日志
-        await this.db.insert(schema.gitSyncLogs).values({
+        // ✅ 使用 GitSyncLogsService 记录同步日志
+        await this.gitSyncLogs.create({
+          projectId: project.id,
           syncType: 'project',
           action: 'update',
-          projectId: project.id,
-          provider: event.provider,
           status: 'success',
+          gitProvider: event.provider,
           gitResourceId: event.repository.gitId,
-          gitResourceUrl: event.repository.fullName,
           gitResourceType: 'repository',
           metadata: {
             repositoryId: event.repository.gitId,
             repositoryName: event.repository.fullName,
             changes: event.changes,
           },
-          completedAt: new Date(),
         })
       }
 

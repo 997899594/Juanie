@@ -1,7 +1,7 @@
-import { Logger } from '@juanie/core/logger'
 import { REDIS } from '@juanie/core/tokens'
 import { Inject, Injectable } from '@nestjs/common'
 import type Redis from 'ioredis'
+import { PinoLogger } from 'nestjs-pino'
 
 /**
  * 速率限制服务
@@ -13,7 +13,7 @@ import type Redis from 'ioredis'
 export class RateLimitService {
   constructor(
     @Inject(REDIS) private readonly redis: Redis,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(RateLimitService.name)
   }

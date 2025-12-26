@@ -1,8 +1,11 @@
-// 导出数据库客户端
+/**
+ * Database Module
+ *
+ * 提供 PostgreSQL 连接管理
+ *
+ * 注意：Schema 定义在 @juanie/database 包中
+ * 请直接从 @juanie/database 导入 Schema
+ */
+
 export * from './client'
-// 导出 DatabaseModule
-export { DatabaseModule } from './database.module'
-// 导出所有 relations（关系定义，必须在 schemas 之后）
-export * from './relations'
-// 导出所有 schemas（表定义）
-export * from './schemas'
+export * from './database.module'

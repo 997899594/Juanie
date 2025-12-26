@@ -1,6 +1,12 @@
-import * as schema from '@juanie/core/database'
 import { Trace } from '@juanie/core/observability'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
+import {
+  NotOrganizationMemberError,
+  PermissionDeniedError,
+  TeamMemberAlreadyExistsError,
+  TeamNotFoundError,
+} from '@juanie/service-foundation/errors'
 import type {
   AddTeamMemberInput,
   CreateTeamInput,
@@ -9,7 +15,7 @@ import type {
   UpdateTeamMemberRoleInput,
 } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
-import { eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 @Injectable()
@@ -22,12 +28,12 @@ export class TeamsService {
     // 检查用户是否是组织成员
     const member = await this.getOrgMember(data.organizationId, userId)
     if (!member) {
-      throw new Error('不是组织成员')
+      throw new NotOrganizationMemberError(data.organizationId, userId)
     }
 
     // 只有 owner 和 admin 可以创建团队
     if (!['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限创建团队')
+      throw new PermissionDeniedError('team', 'create')
     }
 
     const [team] = await this.db
@@ -49,7 +55,7 @@ export class TeamsService {
     // 检查用户是否是组织成员
     const member = await this.getOrgMember(organizationId, userId)
     if (!member) {
-      throw new Error('不是组织成员')
+      throw new NotOrganizationMemberError(organizationId, userId)
     }
 
     // 使用 Relational Query 的回调函数方式
@@ -93,7 +99,7 @@ export class TeamsService {
     // 检查用户是否是组织成员
     const member = await this.getOrgMember(team.organizationId, userId)
     if (!member) {
-      throw new Error('不是组织成员')
+      throw new NotOrganizationMemberError(team.organizationId, userId)
     }
 
     return team
@@ -105,13 +111,13 @@ export class TeamsService {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
-      throw new Error('团队不存在')
+      throw new TeamNotFoundError(teamId)
     }
 
     // 检查权限
     const member = await this.getOrgMember(team.organizationId, userId)
     if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限更新团队')
+      throw new PermissionDeniedError('team', 'update')
     }
 
     const [updated] = await this.db
@@ -132,13 +138,13 @@ export class TeamsService {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
-      throw new Error('团队不存在')
+      throw new TeamNotFoundError(teamId)
     }
 
     // 检查权限（只有 owner 和 admin 可以删除）
     const member = await this.getOrgMember(team.organizationId, userId)
     if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('没有权限删除团队')
+      throw new PermissionDeniedError('team', 'delete')
     }
 
     await this.db
@@ -157,25 +163,25 @@ export class TeamsService {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
-      throw new Error('团队不存在')
+      throw new TeamNotFoundError(teamId)
     }
 
     // 检查权限
     const orgMember = await this.getOrgMember(team.organizationId, userId)
     if (!orgMember || !['owner', 'admin'].includes(orgMember.role)) {
-      throw new Error('没有权限添加成员')
+      throw new PermissionDeniedError('team', 'addMember')
     }
 
     // 检查被添加的用户是否是组织成员
     const targetOrgMember = await this.getOrgMember(team.organizationId, data.userId)
     if (!targetOrgMember) {
-      throw new Error('用户不是组织成员')
+      throw new NotOrganizationMemberError(team.organizationId, data.userId)
     }
 
     // 检查是否已经是团队成员
     const existing = await this.getTeamMember(teamId, data.userId)
     if (existing) {
-      throw new Error('用户已经是团队成员')
+      throw new TeamMemberAlreadyExistsError(teamId, data.userId)
     }
 
     const [member] = await this.db
@@ -196,7 +202,7 @@ export class TeamsService {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
-      throw new Error('团队不存在')
+      throw new TeamNotFoundError(teamId)
     }
 
     // 使用 Relational Query 自动 join user
@@ -229,13 +235,13 @@ export class TeamsService {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
-      throw new Error('团队不存在')
+      throw new TeamNotFoundError(teamId)
     }
 
     // 检查权限
     const orgMember = await this.getOrgMember(team.organizationId, userId)
     if (!orgMember || !['owner', 'admin'].includes(orgMember.role)) {
-      throw new Error('没有权限更新成员角色')
+      throw new PermissionDeniedError('team', 'updateMemberRole')
     }
 
     const [updated] = await this.db
@@ -255,19 +261,132 @@ export class TeamsService {
     // 获取团队信息
     const team = await this.get(userId, teamId)
     if (!team) {
-      throw new Error('团队不存在')
+      throw new TeamNotFoundError(teamId)
     }
 
     // 检查权限
     const orgMember = await this.getOrgMember(team.organizationId, userId)
     if (!orgMember || !['owner', 'admin'].includes(orgMember.role)) {
-      throw new Error('没有权限移除成员')
+      throw new PermissionDeniedError('team', 'removeMember')
     }
 
     await this.db.delete(schema.teamMembers).where(eq(schema.teamMembers.id, data.memberId))
 
     return { success: true }
   }
+
+  // ==================== 新增方法（用于 Business 层调用，避免直接查询数据库）====================
+
+  /**
+   * 检查团队是否存在
+   */
+  @Trace('teams.exists')
+  async exists(teamId: string): Promise<boolean> {
+    const team = await this.db.query.teams.findFirst({
+      where: (teams, { eq, and, isNull }) => and(eq(teams.id, teamId), isNull(teams.deletedAt)),
+      columns: { id: true },
+    })
+
+    return !!team
+  }
+
+  /**
+   * 检查用户是否是团队成员
+   */
+  @Trace('teams.isMember')
+  async isMember(teamId: string, userId: string): Promise<boolean> {
+    const member = await this.getTeamMember(teamId, userId)
+    return !!member
+  }
+
+  /**
+   * 检查用户是否通过团队访问项目
+   * 用于权限检查：用户可能不是项目直接成员，但通过团队有访问权限
+   */
+  @Trace('teams.hasProjectAccess')
+  async hasProjectAccess(userId: string, projectId: string): Promise<boolean> {
+    const [result] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.teamProjects)
+      .innerJoin(schema.teamMembers, eq(schema.teamProjects.teamId, schema.teamMembers.teamId))
+      .where(
+        and(eq(schema.teamProjects.projectId, projectId), eq(schema.teamMembers.userId, userId)),
+      )
+
+    return (result?.count || 0) > 0
+  }
+
+  /**
+   * 获取用户在团队中的角色
+   */
+  @Trace('teams.getMemberRole')
+  async getMemberRole(teamId: string, userId: string): Promise<string | null> {
+    const member = await this.getTeamMember(teamId, userId)
+    return member?.role || null
+  }
+
+  /**
+   * 获取用户在项目中的团队角色（通过团队访问项目）
+   */
+  @Trace('teams.getUserProjectTeamRole')
+  async getUserProjectTeamRole(userId: string, projectId: string): Promise<string | null> {
+    const result = await this.db
+      .select({ role: schema.teamMembers.role })
+      .from(schema.teamProjects)
+      .innerJoin(schema.teamMembers, eq(schema.teamProjects.teamId, schema.teamMembers.teamId))
+      .where(
+        and(eq(schema.teamProjects.projectId, projectId), eq(schema.teamMembers.userId, userId)),
+      )
+      .limit(1)
+
+    return result[0]?.role || null
+  }
+
+  /**
+   * 验证团队属于组织
+   */
+  @Trace('teams.validateTeamBelongsToOrganization')
+  async validateTeamBelongsToOrganization(
+    teamId: string,
+    organizationId: string,
+  ): Promise<boolean> {
+    const team = await this.db.query.teams.findFirst({
+      where: (teams, { eq, and, isNull }) => and(eq(teams.id, teamId), isNull(teams.deletedAt)),
+      columns: { organizationId: true },
+    })
+
+    return team?.organizationId === organizationId
+  }
+
+  /**
+   * 获取团队详情（公共方法，不检查权限）
+   * 用于 Business 层内部调用
+   */
+  @Trace('teams.getTeam')
+  async getTeam(teamId: string): Promise<typeof schema.teams.$inferSelect> {
+    const team = await this.db.query.teams.findFirst({
+      where: (teams, { eq, and, isNull }) => and(eq(teams.id, teamId), isNull(teams.deletedAt)),
+    })
+
+    if (!team) {
+      throw new TeamNotFoundError(teamId)
+    }
+
+    return team
+  }
+
+  /**
+   * 获取团队成员信息（公共方法）
+   */
+  @Trace('teams.getMember')
+  async getMember(
+    teamId: string,
+    userId: string,
+  ): Promise<typeof schema.teamMembers.$inferSelect | null> {
+    return this.getTeamMember(teamId, userId)
+  }
+
+  // ==================== 辅助方法 ====================
 
   // 辅助方法：获取组织成员信息
   private async getOrgMember(organizationId: string, userId: string) {

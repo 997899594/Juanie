@@ -1,10 +1,10 @@
-import * as schema from '@juanie/core/database'
-import { Logger } from '@juanie/core/logger'
 import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { desc, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { PinoLogger } from 'nestjs-pino'
 import { Ollama } from 'ollama'
 
 /**
@@ -64,7 +64,7 @@ Focus on:
   constructor(
     private readonly config: ConfigService,
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AITroubleshooter.name)
     const ollamaHost = this.config.get<string>('OLLAMA_HOST') || 'http://localhost:11434'

@@ -1,7 +1,7 @@
 import { DomainEvents } from '@juanie/core/events'
-import { Logger } from '@juanie/core/logger'
 import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
+import { PinoLogger } from 'nestjs-pino'
 import { GitSyncService } from './git-sync.service'
 import { OrganizationSyncService } from './organization-sync.service'
 
@@ -10,7 +10,7 @@ export class OrganizationEventHandler {
   constructor(
     _organizationSyncService: OrganizationSyncService,
     _gitSyncService: GitSyncService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(OrganizationEventHandler.name)
   }

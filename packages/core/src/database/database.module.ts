@@ -1,27 +1,25 @@
-import { Logger } from '@juanie/core/logger'
-import { DATABASE, REDIS } from '@juanie/core/tokens'
+import { DATABASE } from '@juanie/core/tokens'
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
-import { drizzle } from 'drizzle-orm/postgres-js'
-import Redis from 'ioredis'
-import { LoggerModule } from 'nestjs-pino'
-import postgres from 'postgres'
-import * as relations from './relations'
-import * as tables from './schemas'
+import { LoggerModule, PinoLogger } from 'nestjs-pino'
+import { createDatabaseClient, type DatabaseClient } from './client'
 
-// 合并表定义和关系定义
-const schema = { ...tables, ...relations }
-
+/**
+ * Database Module
+ *
+ * 提供 PostgreSQL 连接的全局模块
+ * 使用 client.ts 中的 createDatabaseClient 创建连接
+ */
 @Global()
 @Module({
   imports: [ConfigModule, LoggerModule],
   providers: [
     {
       provide: DATABASE,
-      useFactory: (config: ConfigService, logger: Logger) => {
+      useFactory: (config: ConfigService, logger: PinoLogger): DatabaseClient => {
         logger.setContext('Database')
 
-        // 优先使用 DATABASE_URL,如果没有则从 POSTGRES_* 变量构建
+        // 获取连接字符串
         let connectionString = config.get<string>('DATABASE_URL')
 
         if (!connectionString) {
@@ -43,14 +41,11 @@ const schema = { ...tables, ...relations }
           )
         }
 
-        const client = postgres(connectionString)
-
-        // SQL 日志（开发调试用）
+        // SQL 日志配置
         const shouldLogQueries = process.env.LOG_SQL === 'true'
         const customLogger = shouldLogQueries
           ? {
               logQuery(query: string, params: unknown[]) {
-                // 截断过长的 SQL，保持日志简洁
                 const maxLen = 200
                 const shortQuery = query.length > maxLen ? `${query.slice(0, maxLen)}...` : query
                 logger.info(`SQL: ${shortQuery}`, { params })
@@ -58,31 +53,15 @@ const schema = { ...tables, ...relations }
             }
           : false
 
-        return drizzle(client, {
-          schema,
+        // 使用统一的 createDatabaseClient
+        return createDatabaseClient({
+          connectionString,
           logger: customLogger,
         })
       },
-      inject: [ConfigService, Logger],
-    },
-    {
-      provide: REDIS,
-      useFactory: (config: ConfigService, logger: Logger) => {
-        logger.setContext('Redis')
-        const redisUrl = config.get<string>('REDIS_URL') || 'redis://localhost:6379'
-        const redis = new Redis(redisUrl, {
-          lazyConnect: true,
-          enableReadyCheck: false, // 禁用版本检查，避免警告
-        })
-
-        redis.on('connect', () => logger.info('Redis connected'))
-        redis.on('error', (err) => logger.error('Redis error', { error: err.message }))
-
-        return redis
-      },
-      inject: [ConfigService, Logger],
+      inject: [ConfigService, PinoLogger],
     },
   ],
-  exports: [DATABASE, REDIS],
+  exports: [DATABASE],
 })
 export class DatabaseModule {}

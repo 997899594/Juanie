@@ -1,8 +1,8 @@
-import { Logger } from '@juanie/core/logger'
 import type { AIClientConfig } from '@juanie/types'
 import { ErrorFactory } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { PinoLogger } from 'nestjs-pino'
 import { ClaudeAdapter } from './adapters/claude.adapter'
 import { OllamaAdapter } from './adapters/ollama.adapter'
 import { OpenAIAdapter } from './adapters/openai.adapter'
@@ -18,7 +18,7 @@ import type { IAIClient } from './ai-client.interface'
 export class AIClientFactory {
   constructor(
     private readonly configService: ConfigService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AIClientFactory.name)
   }

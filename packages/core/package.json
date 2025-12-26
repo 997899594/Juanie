@@ -14,17 +14,37 @@
       "types": "./dist/database/index.d.ts",
       "default": "./dist/database/index.js"
     },
+    "./encryption": {
+      "types": "./dist/encryption/index.d.ts",
+      "default": "./dist/encryption/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors/index.d.ts",
+      "default": "./dist/errors/index.js"
+    },
     "./events": {
       "types": "./dist/events/index.d.ts",
       "default": "./dist/events/index.js"
+    },
+    "./k8s": {
+      "types": "./dist/k8s/index.d.ts",
+      "default": "./dist/k8s/index.js"
+    },
+    "./flux": {
+      "types": "./dist/flux/index.d.ts",
+      "default": "./dist/flux/index.js"
+    },
+    "./observability": {
+      "types": "./dist/observability/index.d.ts",
+      "default": "./dist/observability/index.js"
     },
     "./queue": {
       "types": "./dist/queue/index.d.ts",
       "default": "./dist/queue/index.js"
     },
-    "./sse": {
-      "types": "./dist/sse/index.d.ts",
-      "default": "./dist/sse/index.js"
+    "./redis": {
+      "types": "./dist/redis/index.d.ts",
+      "default": "./dist/redis/index.js"
     },
     "./tokens": {
       "types": "./dist/tokens/index.d.ts",
@@ -33,22 +53,6 @@
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "default": "./dist/utils/index.js"
-    },
-    "./observability": {
-      "types": "./dist/observability/index.d.ts",
-      "default": "./dist/observability/index.js"
-    },
-    "./errors": {
-      "types": "./dist/errors/index.d.ts",
-      "default": "./dist/errors/index.js"
-    },
-    "./logger": {
-      "types": "./dist/logger/index.d.ts",
-      "default": "./dist/logger/index.js"
-    },
-    "./rbac": {
-      "types": "./dist/rbac/index.d.ts",
-      "default": "./dist/rbac/index.js"
     }
   },
   "scripts": {
@@ -58,6 +62,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@juanie/database": "workspace:*",
     "@juanie/types": "workspace:*",
     "@nestjs/bull": "^10.2.1",
     "@nestjs/common": "^11.1.7",

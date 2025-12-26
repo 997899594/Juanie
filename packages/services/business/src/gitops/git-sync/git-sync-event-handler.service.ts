@@ -6,10 +6,10 @@
  */
 
 import { DomainEvents } from '@juanie/core/events'
-import { Logger } from '@juanie/core/logger'
 import type { ProjectRole } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
+import { PinoLogger } from 'nestjs-pino'
 import { GitSyncService } from './git-sync.service'
 
 /**
@@ -45,24 +45,24 @@ export interface ProjectMemberRemovedEvent {
 export class GitSyncEventHandler {
   constructor(
     private readonly gitSync: GitSyncService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(GitSyncEventHandler.name)
   }
 
   /**
-   * 处理成员添加事件
+   * ✅ 处理成员添加事件 - 使用 DomainEvents 常量
    */
   @OnEvent(DomainEvents.PROJECT_MEMBER_ADDED)
   async handleMemberAdded(event: any): Promise<void> {
-    const projectId = event.resourceId
-    const userId = event.data.memberId
+    const projectId = event.projectId
+    const userId = event.memberId
     this.logger.info(
-      `Handling member added event: project=${projectId}, user=${userId}, role=${event.data.role}`,
+      `Handling member added event: project=${projectId}, user=${userId}, role=${event.role}`,
     )
 
     try {
-      await this.gitSync.syncProjectMember(projectId, userId, event.data.role)
+      await this.gitSync.syncProjectMember(projectId, userId, event.role)
       this.logger.info(`Successfully queued Git sync for member ${userId}`)
     } catch (error) {
       // Git 同步失败不应影响业务流程
@@ -72,19 +72,19 @@ export class GitSyncEventHandler {
   }
 
   /**
-   * 处理成员更新事件
+   * ✅ 处理成员更新事件 - 使用 DomainEvents 常量
    */
   @OnEvent(DomainEvents.PROJECT_MEMBER_UPDATED)
   async handleMemberUpdated(event: any): Promise<void> {
-    const projectId = event.resourceId
-    const userId = event.data.memberId
+    const projectId = event.projectId
+    const userId = event.memberId
 
     this.logger.info(
-      `Handling member updated event: project=${projectId}, user=${userId}, role=${event.data.role}`,
+      `Handling member updated event: project=${projectId}, user=${userId}, role=${event.role}`,
     )
 
     try {
-      await this.gitSync.syncProjectMember(projectId, userId, event.data.role)
+      await this.gitSync.syncProjectMember(projectId, userId, event.role)
       this.logger.info(`Successfully queued Git permission update for member ${userId}`)
     } catch (error) {
       this.logger.error(`Failed to queue Git permission update for member ${userId}:`, error)
@@ -92,12 +92,12 @@ export class GitSyncEventHandler {
   }
 
   /**
-   * 处理成员移除事件
+   * ✅ 处理成员移除事件 - 使用 DomainEvents 常量
    */
   @OnEvent(DomainEvents.PROJECT_MEMBER_REMOVED)
   async handleMemberRemoved(event: any): Promise<void> {
-    const projectId = event.resourceId
-    const userId = event.data.memberId
+    const projectId = event.projectId
+    const userId = event.memberId
 
     this.logger.info(`Handling member removed event: project=${projectId}, user=${userId}`)
 

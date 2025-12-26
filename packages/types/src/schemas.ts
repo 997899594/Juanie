@@ -88,6 +88,13 @@ export const updateOrganizationSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   slug: slugSchema.optional(),
   displayName: z.string().max(500).optional(),
+  // Git 同步相关字段
+  gitSyncEnabled: z.boolean().optional(),
+  gitProvider: z.enum(['github', 'gitlab']).nullable().optional(),
+  gitOrgId: z.string().nullable().optional(),
+  gitOrgName: z.string().nullable().optional(),
+  gitOrgUrl: z.string().url().nullable().optional(),
+  gitLastSyncAt: z.date().nullable().optional(),
 })
 
 export const organizationIdSchema = z.object({

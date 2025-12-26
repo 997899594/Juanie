@@ -1,11 +1,12 @@
 import { DatabaseModule } from '@juanie/core/database'
+import { K8sModule } from '@juanie/core/k8s'
 import { Module } from '@nestjs/common'
-import { EncryptionService } from '../encryption/encryption.service'
+import { ConfigModule } from '@nestjs/config'
 import { GitConnectionsService } from './git-connections.service'
 
 @Module({
-  imports: [DatabaseModule],
-  providers: [GitConnectionsService, EncryptionService],
+  imports: [DatabaseModule, K8sModule, ConfigModule],
+  providers: [GitConnectionsService],
   exports: [GitConnectionsService],
 })
 export class GitConnectionsModule {}

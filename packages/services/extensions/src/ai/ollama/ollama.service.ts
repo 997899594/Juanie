@@ -1,7 +1,7 @@
-import { Logger } from '@juanie/core/logger'
 import { Trace } from '@juanie/core/observability'
 import { Injectable, type OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { PinoLogger } from 'nestjs-pino'
 import { Ollama } from 'ollama'
 
 @Injectable()
@@ -11,7 +11,7 @@ export class OllamaService implements OnModuleInit {
 
   constructor(
     config: ConfigService,
-    private readonly logger: Logger,
+    private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(OllamaService.name)
     this.ollama = new Ollama({

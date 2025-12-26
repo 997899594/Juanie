@@ -1,10 +1,11 @@
-import type { AIConversation, Database, NewAIConversation } from '@juanie/core/database'
-import * as schema from '@juanie/core/database'
 import { DATABASE } from '@juanie/core/tokens'
+import type { AIConversation, NewAIConversation } from '@juanie/database'
+import * as schema from '@juanie/database'
 import type { AIMessage } from '@juanie/types'
 import { ErrorFactory } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { and, desc, eq, ilike, or } from 'drizzle-orm'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 
 /**
  * 对话历史管理服务
@@ -12,7 +13,7 @@ import { and, desc, eq, ilike, or } from 'drizzle-orm'
  */
 @Injectable()
 export class ConversationService {
-  constructor(@Inject(DATABASE) private readonly db: Database) {}
+  constructor(@Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>) {}
 
   /**
    * 创建新对话
@@ -124,7 +125,7 @@ export class ConversationService {
         .orderBy(desc(schema.aiConversations.updatedAt))
 
       // 在内存中过滤消息内容
-      return conversations.filter((conv) => {
+      return conversations.filter((conv: AIConversation) => {
         const messages = conv.messages as AIMessage[]
         return messages.some((msg) => msg.content.toLowerCase().includes(keyword.toLowerCase()))
       })

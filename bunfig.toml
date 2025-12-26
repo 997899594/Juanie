@@ -48,4 +48,3 @@ hot = true
 [test]
 # 测试配置
 coverage = true
-preload = ["./test/setup.ts"]
