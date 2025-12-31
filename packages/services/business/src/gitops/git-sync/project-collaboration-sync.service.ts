@@ -15,7 +15,6 @@ import {
   GitSyncLogsService,
 } from '@juanie/service-foundation'
 import { Inject, Injectable } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { PinoLogger } from 'nestjs-pino'
@@ -37,7 +36,6 @@ export interface ProjectCollaborationSyncResult {
 export class ProjectCollaborationSyncService {
   constructor(
     @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
-    readonly _config: ConfigService,
     private readonly gitProvider: GitProviderService,
     private readonly gitSyncLogs: GitSyncLogsService,
     private readonly gitConnectionsService: GitConnectionsService,

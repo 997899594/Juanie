@@ -1,7 +1,10 @@
 import { FluxCliService } from '@juanie/core/flux'
-import { FluxMetricsService, FluxResourcesService, FluxSyncService } from '@juanie/service-business'
-import { Injectable } from '@nestjs/common'
-import { TRPCError } from '@trpc/server'
+import { Trace } from '@juanie/core/observability'
+import { DATABASE } from '@juanie/core/tokens'
+import * as schema from '@juanie/database'
+import { Inject, Injectable } from '@nestjs/common'
+import { eq } from 'drizzle-orm'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { z } from 'zod'
 import { TrpcService } from '../trpc/trpc.service'
 
@@ -13,124 +16,25 @@ import { TrpcService } from '../trpc/trpc.service'
 export class GitOpsRouter {
   constructor(
     private trpc: TrpcService,
-    private fluxResources: FluxResourcesService,
-    private fluxSync: FluxSyncService,
+    @Inject(DATABASE) private readonly db: PostgresJsDatabase<typeof schema>,
     private fluxCli: FluxCliService,
-    private fluxMetrics: FluxMetricsService,
   ) {}
 
   get router() {
     return this.trpc.router({
       /**
-       * 获取项目的 GitOps 状态
+       * 列出 GitOps 资源
        */
-      getProjectGitOpsStatus: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string().uuid(),
-          }),
-        )
+      listGitOpsResources: this.trpc.protectedProcedure
+        .input(z.object({ projectId: z.string().uuid() }))
         .query(async ({ input }) => {
-          const summary = await this.fluxSync.getProjectGitOpsSummary(input.projectId)
-          const resources = await this.fluxResources.listGitOpsResources(input.projectId)
-
-          return {
-            enabled: summary.totalResources > 0,
-            summary,
-            resources,
-          }
-        }),
-
-      /**
-       * 设置项目的 GitOps 资源栈
-       * 为项目创建完整的 K8s 资源（Namespace、GitRepository、Kustomization）
-       */
-      setupProjectGitOps: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string().uuid(),
-            repositoryId: z.string().uuid(),
-            repositoryUrl: z.string(),
-            repositoryBranch: z.string(),
-            userId: z.string().uuid(),
-            environments: z.array(
-              z.object({
-                id: z.string().uuid(),
-                type: z.enum(['development', 'staging', 'production']),
-                name: z.string(),
-              }),
-            ),
-          }),
-        )
-        .mutation(async ({ input, ctx }) => {
-          // 使用当前用户 ID
-          const result = await this.fluxResources.setupProjectGitOps({
-            ...input,
-            userId: ctx.user.id,
+          return await this.db.query.gitopsResources.findMany({
+            where: eq(schema.gitopsResources.projectId, input.projectId),
+            with: {
+              environment: true,
+              repository: true,
+            },
           })
-
-          if (!result.success) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: `GitOps 资源创建失败: ${result.errors.join(', ')}`,
-            })
-          }
-
-          return {
-            success: true,
-            message: 'GitOps 资源创建成功',
-            data: {
-              namespaces: result.namespaces,
-              gitRepositories: result.gitRepositories,
-              kustomizations: result.kustomizations,
-            },
-          }
-        }),
-
-      /**
-       * 同步项目的 GitOps 资源状态
-       */
-      syncProjectGitOpsStatus: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string().uuid(),
-          }),
-        )
-        .mutation(async ({ input }) => {
-          await this.fluxSync.syncProjectGitOpsStatus(input.projectId)
-
-          return {
-            success: true,
-            message: '状态同步完成',
-          }
-        }),
-
-      /**
-       * 清理项目的 GitOps 资源
-       */
-      cleanupProjectGitOps: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string().uuid(),
-          }),
-        )
-        .mutation(async ({ input }) => {
-          const result = await this.fluxResources.cleanupProjectGitOps(input.projectId)
-
-          if (!result.success) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: `资源清理失败: ${result.errors.join(', ')}`,
-            })
-          }
-
-          return {
-            success: true,
-            message: 'GitOps 资源清理成功',
-            data: {
-              deletedResources: result.deletedResources,
-            },
-          }
         }),
 
       /**
@@ -149,25 +53,21 @@ export class GitOpsRouter {
           }),
         )
         .mutation(async ({ input }) => {
-          return await this.fluxResources.createGitOpsResource(input)
-        }),
+          const [resource] = await this.db
+            .insert(schema.gitopsResources)
+            .values({
+              projectId: input.projectId,
+              environmentId: input.environmentId,
+              repositoryId: input.repositoryId,
+              type: input.type,
+              name: input.name,
+              namespace: input.namespace,
+              config: input.config,
+              status: 'pending',
+            })
+            .returning()
 
-      /**
-       * 列出 GitOps 资源
-       */
-      listGitOpsResources: this.trpc.protectedProcedure
-        .input(z.object({ projectId: z.string().uuid() }))
-        .query(async ({ input }) => {
-          return await this.fluxResources.listGitOpsResources(input.projectId)
-        }),
-
-      /**
-       * 获取单个 GitOps 资源
-       */
-      getGitOpsResource: this.trpc.protectedProcedure
-        .input(z.object({ id: z.string().uuid() }))
-        .query(async ({ input }) => {
-          return await this.fluxResources.getGitOpsResource(input.id)
+          return resource
         }),
 
       /**
@@ -178,13 +78,22 @@ export class GitOpsRouter {
           z.object({
             id: z.string().uuid(),
             config: z.any().optional(),
-            status: z.string().optional(),
+            status: z.enum(['pending', 'ready', 'reconciling', 'failed']).optional(),
             errorMessage: z.string().optional(),
           }),
         )
         .mutation(async ({ input }) => {
           const { id, ...data } = input
-          return await this.fluxResources.updateGitOpsResource(id, data)
+          const [resource] = await this.db
+            .update(schema.gitopsResources)
+            .set({
+              ...data,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.gitopsResources.id, id))
+            .returning()
+
+          return resource
         }),
 
       /**
@@ -193,7 +102,11 @@ export class GitOpsRouter {
       deleteGitOpsResource: this.trpc.protectedProcedure
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ input }) => {
-          await this.fluxResources.deleteGitOpsResource(input.id)
+          await this.db
+            .update(schema.gitopsResources)
+            .set({ deletedAt: new Date() })
+            .where(eq(schema.gitopsResources.id, input.id))
+
           return { success: true, message: '资源删除成功' }
         }),
 
@@ -209,131 +122,17 @@ export class GitOpsRouter {
           }),
         )
         .mutation(async ({ input }) => {
-          const startTime = Date.now()
-
-          try {
-            await this.fluxCli.reconcile(input.kind, input.name, input.namespace)
-
-            const duration = (Date.now() - startTime) / 1000
-            this.fluxMetrics.recordReconciliation(
-              input.kind,
-              input.name,
-              input.namespace,
-              'success',
-              duration,
-            )
-
-            return { success: true, message: '同步已触发' }
-          } catch (error) {
-            const duration = (Date.now() - startTime) / 1000
-            this.fluxMetrics.recordReconciliation(
-              input.kind,
-              input.name,
-              input.namespace,
-              'failed',
-              duration,
-            )
-            throw error
-          }
-        }),
-
-      /**
-       * 使用 GitOps 部署
-       */
-      deployWithGitOps: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string().uuid(),
-            environmentId: z.string().uuid(),
-            config: z.object({
-              image: z.string().optional(),
-              tag: z.string().optional(),
-              replicas: z.number().optional(),
-              resources: z
-                .object({
-                  cpu: z.string().optional(),
-                  memory: z.string().optional(),
-                })
-                .optional(),
-            }),
-            commitMessage: z.string().optional(),
-          }),
-        )
-        .mutation(async ({ input: _input }) => {
-          // TODO: 实现 GitOps 部署逻辑
-          // 1. 更新 Git 仓库中的配置文件
-          // 2. 提交变更
-          // 3. Flux 会自动检测并应用变更
-          return {
-            success: true,
-            message: '部署配置已提交到 Git',
-            commitHash: 'placeholder',
-          }
-        }),
-
-      /**
-       * 提交配置变更到 Git
-       */
-      commitConfigChanges: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string().uuid(),
-            environmentId: z.string().uuid(),
-            changes: z.any(),
-            commitMessage: z.string().optional(),
-          }),
-        )
-        .mutation(async ({ input: _input }) => {
-          // TODO: 实现配置提交逻辑
-          return {
-            success: true,
-            message: '配置变更已提交',
-            commitHash: 'placeholder',
-          }
-        }),
-
-      /**
-       * 预览配置变更
-       */
-      previewChanges: this.trpc.protectedProcedure
-        .input(
-          z.object({
-            projectId: z.string().uuid(),
-            environmentId: z.string().uuid(),
-            changes: z.any(),
-          }),
-        )
-        .query(async ({ input: _input }) => {
-          // TODO: 实现变更预览逻辑
-          return {
-            diff: '# 配置变更预览\n# TODO: 实现实际的 diff',
-            files: [],
-          }
-        }),
-
-      /**
-       * 验证 YAML 语法
-       */
-      validateYAML: this.trpc.protectedProcedure
-        .input(z.object({ content: z.string() }))
-        .query(async ({ input }) => {
-          try {
-            // 简单的 YAML 验证
-            const yaml = await import('yaml')
-            yaml.parse(input.content)
-            return {
-              valid: true,
-              message: 'YAML 语法正确',
-            }
-          } catch (error: any) {
-            return {
-              valid: false,
-              message: error.message,
-              line: error.linePos?.[0]?.line,
-              column: error.linePos?.[0]?.col,
-            }
-          }
+          await this.triggerSyncInternal(input)
+          return { success: true, message: '同步已触发' }
         }),
     })
+  }
+
+  /**
+   * 内部方法：触发同步（带追踪）
+   */
+  @Trace()
+  private async triggerSyncInternal(input: { kind: string; name: string; namespace: string }) {
+    await this.fluxCli.reconcile(input.kind, input.name, input.namespace)
   }
 }

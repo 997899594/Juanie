@@ -1,11 +1,24 @@
 import { DATABASE } from '@juanie/core/tokens'
-import { GitProviderService } from '@juanie/service-foundation'
+import { GitProviderService, GitSyncLogsService } from '@juanie/service-foundation'
 import { Test, TestingModule } from '@nestjs/testing'
+import { PinoLogger } from 'nestjs-pino'
 import { ConflictResolutionService } from './conflict-resolution.service'
+
+// 创建 PinoLogger mock 类
+class MockPinoLogger {
+  setContext = jest.fn().mockReturnThis()
+  info = jest.fn()
+  warn = jest.fn()
+  error = jest.fn()
+  debug = jest.fn()
+  trace = jest.fn()
+  fatal = jest.fn()
+}
 
 describe('ConflictResolutionService', () => {
   let service: ConflictResolutionService
   let _gitProvider: GitProviderService
+  let mockLogger: MockPinoLogger
 
   const mockDb = {
     query: {
@@ -16,6 +29,12 @@ describe('ConflictResolutionService', () => {
         findMany: jest.fn(),
       },
       userGitAccounts: {
+        findFirst: jest.fn(),
+      },
+      repositories: {
+        findFirst: jest.fn(),
+      },
+      gitConnections: {
         findFirst: jest.fn(),
       },
     },
@@ -31,7 +50,18 @@ describe('ConflictResolutionService', () => {
     updateCollaboratorPermission: jest.fn(),
   }
 
+  const mockGitSyncLogs = {
+    create: jest.fn().mockResolvedValue(undefined),
+    findByProject: jest.fn().mockResolvedValue([]),
+  }
+
   beforeEach(async () => {
+    // 重置所有 mock
+    jest.clearAllMocks()
+
+    // 重新创建 logger mock 实例
+    mockLogger = new MockPinoLogger()
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConflictResolutionService,
@@ -42,6 +72,14 @@ describe('ConflictResolutionService', () => {
         {
           provide: GitProviderService,
           useValue: mockGitProvider,
+        },
+        {
+          provide: GitSyncLogsService,
+          useValue: mockGitSyncLogs,
+        },
+        {
+          provide: PinoLogger,
+          useValue: mockLogger,
         },
       ],
     }).compile()
@@ -58,8 +96,12 @@ describe('ConflictResolutionService', () => {
     it('should detect permission mismatch conflicts', async () => {
       const mockProject = {
         id: 'project-1',
-        gitProvider: 'github',
-        gitRepoId: '123',
+      }
+
+      const mockRepository = {
+        projectId: 'project-1',
+        provider: 'github',
+        cloneUrl: 'https://github.com/org/repo.git',
       }
 
       const mockMembers = [
@@ -69,33 +111,32 @@ describe('ConflictResolutionService', () => {
           role: 'admin',
           user: {
             id: 'user-1',
-            name: 'Test User',
+            displayName: 'Test User',
             email: 'test@example.com',
           },
         },
       ]
 
-      const mockGitAccount = {
+      const mockGitConnection = {
         userId: 'user-1',
         provider: 'github',
-        gitLogin: 'testuser',
-        gitUserId: '456',
+        username: 'testuser',
       }
 
       const mockCollaborators = [
         {
-          gitLogin: 'testuser',
-          gitName: 'Test User',
+          username: 'testuser',
           permission: 'read', // 应该是 admin
         },
       ]
 
       mockDb.query.projects.findFirst.mockResolvedValue(mockProject)
+      mockDb.query.repositories.findFirst.mockResolvedValue(mockRepository)
       mockDb.query.projectMembers.findMany.mockResolvedValue(mockMembers)
-      mockDb.query.userGitAccounts.findFirst.mockResolvedValue(mockGitAccount)
+      mockDb.query.gitConnections.findFirst.mockResolvedValue(mockGitConnection)
       mockGitProvider.listCollaborators.mockResolvedValue(mockCollaborators)
 
-      const conflicts = await service.detectProjectMemberConflicts('project-1')
+      const conflicts = await service.detectProjectMemberConflicts('project-1', 'test-token')
 
       expect(conflicts).toHaveLength(1)
       expect(conflicts[0]).toMatchObject({
@@ -111,8 +152,12 @@ describe('ConflictResolutionService', () => {
     it('should detect missing on git conflicts', async () => {
       const mockProject = {
         id: 'project-1',
-        gitProvider: 'github',
-        gitRepoId: '123',
+      }
+
+      const mockRepository = {
+        projectId: 'project-1',
+        provider: 'github',
+        cloneUrl: 'https://github.com/org/repo.git',
       }
 
       const mockMembers = [
@@ -122,27 +167,27 @@ describe('ConflictResolutionService', () => {
           role: 'member',
           user: {
             id: 'user-1',
-            name: 'Test User',
+            displayName: 'Test User',
             email: 'test@example.com',
           },
         },
       ]
 
-      const mockGitAccount = {
+      const mockGitConnection = {
         userId: 'user-1',
         provider: 'github',
-        gitLogin: 'testuser',
-        gitUserId: '456',
+        username: 'testuser',
       }
 
       const mockCollaborators: any[] = [] // 空列表
 
       mockDb.query.projects.findFirst.mockResolvedValue(mockProject)
+      mockDb.query.repositories.findFirst.mockResolvedValue(mockRepository)
       mockDb.query.projectMembers.findMany.mockResolvedValue(mockMembers)
-      mockDb.query.userGitAccounts.findFirst.mockResolvedValue(mockGitAccount)
+      mockDb.query.gitConnections.findFirst.mockResolvedValue(mockGitConnection)
       mockGitProvider.listCollaborators.mockResolvedValue(mockCollaborators)
 
-      const conflicts = await service.detectProjectMemberConflicts('project-1')
+      const conflicts = await service.detectProjectMemberConflicts('project-1', 'test-token')
 
       expect(conflicts).toHaveLength(1)
       expect(conflicts[0]).toMatchObject({
@@ -157,25 +202,29 @@ describe('ConflictResolutionService', () => {
     it('should detect extra on git conflicts', async () => {
       const mockProject = {
         id: 'project-1',
-        gitProvider: 'github',
-        gitRepoId: '123',
+      }
+
+      const mockRepository = {
+        projectId: 'project-1',
+        provider: 'github',
+        cloneUrl: 'https://github.com/org/repo.git',
       }
 
       const mockMembers: any[] = [] // 空列表
 
       const mockCollaborators = [
         {
-          gitLogin: 'extrauser',
-          gitName: 'Extra User',
+          username: 'extrauser',
           permission: 'write',
         },
       ]
 
       mockDb.query.projects.findFirst.mockResolvedValue(mockProject)
+      mockDb.query.repositories.findFirst.mockResolvedValue(mockRepository)
       mockDb.query.projectMembers.findMany.mockResolvedValue(mockMembers)
       mockGitProvider.listCollaborators.mockResolvedValue(mockCollaborators)
 
-      const conflicts = await service.detectProjectMemberConflicts('project-1')
+      const conflicts = await service.detectProjectMemberConflicts('project-1', 'test-token')
 
       expect(conflicts).toHaveLength(1)
       expect(conflicts[0]).toMatchObject({
@@ -189,8 +238,12 @@ describe('ConflictResolutionService', () => {
     it('should return empty array when no conflicts', async () => {
       const mockProject = {
         id: 'project-1',
-        gitProvider: 'github',
-        gitRepoId: '123',
+      }
+
+      const mockRepository = {
+        projectId: 'project-1',
+        provider: 'github',
+        cloneUrl: 'https://github.com/org/repo.git',
       }
 
       const mockMembers = [
@@ -200,33 +253,32 @@ describe('ConflictResolutionService', () => {
           role: 'member',
           user: {
             id: 'user-1',
-            name: 'Test User',
+            displayName: 'Test User',
             email: 'test@example.com',
           },
         },
       ]
 
-      const mockGitAccount = {
+      const mockGitConnection = {
         userId: 'user-1',
         provider: 'github',
-        gitLogin: 'testuser',
-        gitUserId: '456',
+        username: 'testuser',
       }
 
       const mockCollaborators = [
         {
-          gitLogin: 'testuser',
-          gitName: 'Test User',
+          username: 'testuser',
           permission: 'write', // 正确的权限
         },
       ]
 
       mockDb.query.projects.findFirst.mockResolvedValue(mockProject)
+      mockDb.query.repositories.findFirst.mockResolvedValue(mockRepository)
       mockDb.query.projectMembers.findMany.mockResolvedValue(mockMembers)
-      mockDb.query.userGitAccounts.findFirst.mockResolvedValue(mockGitAccount)
+      mockDb.query.gitConnections.findFirst.mockResolvedValue(mockGitConnection)
       mockGitProvider.listCollaborators.mockResolvedValue(mockCollaborators)
 
-      const conflicts = await service.detectProjectMemberConflicts('project-1')
+      const conflicts = await service.detectProjectMemberConflicts('project-1', 'test-token')
 
       expect(conflicts).toHaveLength(0)
     })
@@ -236,8 +288,12 @@ describe('ConflictResolutionService', () => {
     it('should resolve permission mismatch conflicts', async () => {
       const mockProject = {
         id: 'project-1',
-        gitProvider: 'github',
-        gitRepoId: '123',
+      }
+
+      const mockRepository = {
+        projectId: 'project-1',
+        provider: 'github',
+        cloneUrl: 'https://github.com/org/repo.git',
       }
 
       const mockMembers = [
@@ -247,34 +303,33 @@ describe('ConflictResolutionService', () => {
           role: 'admin',
           user: {
             id: 'user-1',
-            name: 'Test User',
+            displayName: 'Test User',
             email: 'test@example.com',
           },
         },
       ]
 
-      const mockGitAccount = {
+      const mockGitConnection = {
         userId: 'user-1',
         provider: 'github',
-        gitLogin: 'testuser',
-        gitUserId: '456',
+        username: 'testuser',
       }
 
       const mockCollaborators = [
         {
-          gitLogin: 'testuser',
-          gitName: 'Test User',
+          username: 'testuser',
           permission: 'read',
         },
       ]
 
       mockDb.query.projects.findFirst.mockResolvedValue(mockProject)
+      mockDb.query.repositories.findFirst.mockResolvedValue(mockRepository)
       mockDb.query.projectMembers.findMany.mockResolvedValue(mockMembers)
-      mockDb.query.userGitAccounts.findFirst.mockResolvedValue(mockGitAccount)
+      mockDb.query.gitConnections.findFirst.mockResolvedValue(mockGitConnection)
       mockGitProvider.listCollaborators.mockResolvedValue(mockCollaborators)
       mockGitProvider.updateCollaboratorPermission.mockResolvedValue(undefined)
 
-      const result = await service.resolveProjectMemberConflicts('project-1', {
+      const result = await service.resolveProjectMemberConflicts('project-1', 'test-token', {
         autoResolve: true,
         conflictTypes: ['permission_mismatch'],
       })
@@ -283,7 +338,8 @@ describe('ConflictResolutionService', () => {
       expect(result.failed).toBe(0)
       expect(mockGitProvider.updateCollaboratorPermission).toHaveBeenCalledWith(
         'github',
-        '123',
+        'https://github.com/org/repo.git',
+        'test-token',
         'testuser',
         'admin',
       )
@@ -292,8 +348,12 @@ describe('ConflictResolutionService', () => {
     it('should resolve missing on git conflicts', async () => {
       const mockProject = {
         id: 'project-1',
-        gitProvider: 'github',
-        gitRepoId: '123',
+      }
+
+      const mockRepository = {
+        projectId: 'project-1',
+        provider: 'github',
+        cloneUrl: 'https://github.com/org/repo.git',
       }
 
       const mockMembers = [
@@ -303,28 +363,28 @@ describe('ConflictResolutionService', () => {
           role: 'member',
           user: {
             id: 'user-1',
-            name: 'Test User',
+            displayName: 'Test User',
             email: 'test@example.com',
           },
         },
       ]
 
-      const mockGitAccount = {
+      const mockGitConnection = {
         userId: 'user-1',
         provider: 'github',
-        gitLogin: 'testuser',
-        gitUserId: '456',
+        username: 'testuser',
       }
 
       const mockCollaborators: any[] = []
 
       mockDb.query.projects.findFirst.mockResolvedValue(mockProject)
+      mockDb.query.repositories.findFirst.mockResolvedValue(mockRepository)
       mockDb.query.projectMembers.findMany.mockResolvedValue(mockMembers)
-      mockDb.query.userGitAccounts.findFirst.mockResolvedValue(mockGitAccount)
+      mockDb.query.gitConnections.findFirst.mockResolvedValue(mockGitConnection)
       mockGitProvider.listCollaborators.mockResolvedValue(mockCollaborators)
       mockGitProvider.addCollaborator.mockResolvedValue(undefined)
 
-      const result = await service.resolveProjectMemberConflicts('project-1', {
+      const result = await service.resolveProjectMemberConflicts('project-1', 'test-token', {
         autoResolve: true,
         conflictTypes: ['missing_on_git'],
       })
@@ -333,7 +393,8 @@ describe('ConflictResolutionService', () => {
       expect(result.failed).toBe(0)
       expect(mockGitProvider.addCollaborator).toHaveBeenCalledWith(
         'github',
-        '123',
+        'https://github.com/org/repo.git',
+        'test-token',
         'testuser',
         'write',
       )
@@ -342,25 +403,29 @@ describe('ConflictResolutionService', () => {
     it('should skip extra on git conflicts by default', async () => {
       const mockProject = {
         id: 'project-1',
-        gitProvider: 'github',
-        gitRepoId: '123',
+      }
+
+      const mockRepository = {
+        projectId: 'project-1',
+        provider: 'github',
+        cloneUrl: 'https://github.com/org/repo.git',
       }
 
       const mockMembers: any[] = []
 
       const mockCollaborators = [
         {
-          gitLogin: 'extrauser',
-          gitName: 'Extra User',
+          username: 'extrauser',
           permission: 'write',
         },
       ]
 
       mockDb.query.projects.findFirst.mockResolvedValue(mockProject)
+      mockDb.query.repositories.findFirst.mockResolvedValue(mockRepository)
       mockDb.query.projectMembers.findMany.mockResolvedValue(mockMembers)
       mockGitProvider.listCollaborators.mockResolvedValue(mockCollaborators)
 
-      const result = await service.resolveProjectMemberConflicts('project-1', {
+      const result = await service.resolveProjectMemberConflicts('project-1', 'test-token', {
         autoResolve: true,
         conflictTypes: ['extra_on_git'],
       })
@@ -375,8 +440,12 @@ describe('ConflictResolutionService', () => {
     it('should return conflict statistics', async () => {
       const mockProject = {
         id: 'project-1',
-        gitProvider: 'github',
-        gitRepoId: '123',
+      }
+
+      const mockRepository = {
+        projectId: 'project-1',
+        provider: 'github',
+        cloneUrl: 'https://github.com/org/repo.git',
       }
 
       const mockMembers = [
@@ -386,7 +455,7 @@ describe('ConflictResolutionService', () => {
           role: 'admin',
           user: {
             id: 'user-1',
-            name: 'User 1',
+            displayName: 'User 1',
             email: 'user1@example.com',
           },
         },
@@ -396,46 +465,45 @@ describe('ConflictResolutionService', () => {
           role: 'member',
           user: {
             id: 'user-2',
-            name: 'User 2',
+            displayName: 'User 2',
             email: 'user2@example.com',
           },
         },
       ]
 
-      const mockGitAccount1 = {
+      const mockGitConnection1 = {
         userId: 'user-1',
         provider: 'github',
-        gitLogin: 'user1',
-        gitUserId: '456',
+        username: 'user1',
       }
 
-      const mockGitAccount2 = {
+      const mockGitConnection2 = {
         userId: 'user-2',
         provider: 'github',
-        gitLogin: 'user2',
-        gitUserId: '789',
+        username: 'user2',
       }
 
       const mockCollaborators = [
         {
-          gitLogin: 'user1',
+          username: 'user1',
           permission: 'read', // 应该是 admin
         },
         // user2 缺失
         {
-          gitLogin: 'extrauser',
+          username: 'extrauser',
           permission: 'write', // 多余的
         },
       ]
 
       mockDb.query.projects.findFirst.mockResolvedValue(mockProject)
+      mockDb.query.repositories.findFirst.mockResolvedValue(mockRepository)
       mockDb.query.projectMembers.findMany.mockResolvedValue(mockMembers)
-      mockDb.query.userGitAccounts.findFirst
-        .mockResolvedValueOnce(mockGitAccount1)
-        .mockResolvedValueOnce(mockGitAccount2)
+      mockDb.query.gitConnections.findFirst
+        .mockResolvedValueOnce(mockGitConnection1)
+        .mockResolvedValueOnce(mockGitConnection2)
       mockGitProvider.listCollaborators.mockResolvedValue(mockCollaborators)
 
-      const stats = await service.getConflictStats('project-1')
+      const stats = await service.getConflictStats('project-1', 'test-token')
 
       expect(stats.total).toBe(3)
       expect(stats.byType.permission_mismatch).toBe(1)

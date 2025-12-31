@@ -49,7 +49,7 @@
           <!-- 步骤信息 -->
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <span class="text-sm font-medium">{{ getStepLabel(step.step) }}</span>
+              <span class="text-sm font-medium">{{ step.displayName || getStepLabel(step.step) }}</span>
               <span v-if="step.duration" class="text-xs text-muted-foreground">
                 {{ formatDuration(step.duration) }}
               </span>
@@ -102,6 +102,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Loader2, CheckCircle2, AlertCircle, Clock, SkipForward } from 'lucide-vue-next'
 import { trpc } from '@/lib/trpc'
+import { log } from '@juanie/ui'
 
 const props = defineProps<{
   projectId: string | null
@@ -114,8 +115,9 @@ const emit = defineEmits<{
 
 interface InitializationStep {
   step: string
+  displayName?: string // ✅ 添加可选的 displayName 字段
   status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
-  progress: string | null
+  progress: number | null
   error: string | null
   startedAt: string | null
   completedAt: string | null
@@ -131,6 +133,19 @@ const errorMessage = ref<string | null>(null)
 const steps = ref<InitializationStep[]>([])
 const stepMessages = ref<Map<string, string>>(new Map())
 let unsubscribe: { unsubscribe: () => void } | null = null
+
+// 初始化步骤列表
+function initializeSteps() {
+  steps.value = [
+    { step: 'resolve_credentials', displayName: '解析凭证', status: 'pending', progress: null, error: null, startedAt: null, completedAt: null, duration: null },
+    { step: 'create_repository', displayName: '创建 Git 仓库', status: 'pending', progress: null, error: null, startedAt: null, completedAt: null, duration: null },
+    { step: 'push_template', displayName: '推送项目模板', status: 'pending', progress: null, error: null, startedAt: null, completedAt: null, duration: null },
+    { step: 'create_environments', displayName: '创建环境', status: 'pending', progress: null, error: null, startedAt: null, completedAt: null, duration: null },
+    { step: 'create_db_records', displayName: '创建数据库记录', status: 'pending', progress: null, error: null, startedAt: null, completedAt: null, duration: null },
+    { step: 'setup_gitops', displayName: '配置 GitOps', status: 'pending', progress: null, error: null, startedAt: null, completedAt: null, duration: null },
+    { step: 'finalize', displayName: '完成初始化', status: 'pending', progress: null, error: null, startedAt: null, completedAt: null, duration: null },
+  ]
+}
 
 // 样式计算
 const statusBorderClass = computed(() => {
@@ -156,11 +171,18 @@ function getStepClass(step: InitializationStep) {
 // 获取步骤标签
 function getStepLabel(step: string): string {
   const labels: Record<string, string> = {
+    resolve_credentials: '解析凭证',
     create_repository: '创建 Git 仓库',
     push_template: '推送项目模板',
-    create_database_records: '创建数据库记录',
+    create_db_records: '创建数据库记录',
     setup_gitops: '配置 GitOps',
     finalize: '完成初始化',
+    // 子步骤标签
+    create_repo: '创建仓库',
+    prepare_vars: '准备变量',
+    render_template: '渲染模板',
+    push_files: '推送文件',
+    create_gitops: '创建 GitOps 资源',
   }
   return labels[step] || step
 }
@@ -177,12 +199,41 @@ function formatDuration(ms: number): string {
 
 // 根据进度判断当前步骤
 function getCurrentStepByProgress(progress: number): string | null {
-  if (progress < 20) return 'create_repository'
-  if (progress < 50) return 'push_template'
-  if (progress < 60) return 'create_database_records'
+  if (progress < 5) return 'resolve_credentials'
+  if (progress < 25) return 'create_repository'
+  if (progress < 55) return 'push_template'
+  if (progress < 65) return 'create_db_records'
   if (progress < 90) return 'setup_gitops'
   if (progress <= 100) return 'finalize'
   return null
+}
+
+// 更新步骤状态
+function updateStepStatus(stepName: string, status: InitializationStep['status'], substepProgress?: number) {
+  const step = steps.value.find(s => s.step === stepName)
+  if (!step) return
+
+  step.status = status
+  
+  if (status === 'running') {
+    if (!step.startedAt) {
+      step.startedAt = new Date().toISOString()
+    }
+    if (substepProgress !== undefined) {
+      step.progress = substepProgress
+    }
+  } else if (status === 'completed') {
+    step.completedAt = new Date().toISOString()
+    step.progress = 100
+    if (step.startedAt) {
+      step.duration = Date.now() - new Date(step.startedAt).getTime()
+    }
+  } else if (status === 'failed') {
+    step.completedAt = new Date().toISOString()
+    if (step.startedAt) {
+      step.duration = Date.now() - new Date(step.startedAt).getTime()
+    }
+  }
 }
 
 // 获取当前状态
@@ -212,6 +263,9 @@ async function fetchCurrentStatus() {
       
       if (project.status === 'initializing') {
         currentMessage.value = '正在初始化...'
+        
+        // ✅ 从数据库恢复步骤状态
+        await restoreStepsFromDatabase()
       }
     }
   } catch (error) {
@@ -219,6 +273,46 @@ async function fetchCurrentStatus() {
   }
   
   connectSubscription()
+}
+
+// ✅ 从数据库恢复步骤状态
+async function restoreStepsFromDatabase() {
+  if (!props.projectId) return
+  
+  try {
+    const dbSteps = await trpc.projects.getInitializationSteps.query({ projectId: props.projectId })
+    
+    if (dbSteps && dbSteps.length > 0) {
+      // 将数据库步骤映射到前端格式
+      steps.value = dbSteps.map(dbStep => ({
+        step: dbStep.step,
+        displayName: dbStep.displayName, // ✅ 添加 displayName 字段
+        status: dbStep.status as InitializationStep['status'],
+        progress: dbStep.progress,
+        error: dbStep.error,
+        startedAt: dbStep.startedAt,
+        completedAt: dbStep.completedAt,
+        duration: dbStep.duration,
+      }))
+      
+      // 恢复当前步骤和进度
+      const runningStep = steps.value.find(s => s.status === 'running')
+      if (runningStep) {
+        currentStep.value = runningStep.step
+        // 根据已完成步骤估算总进度
+        const completedSteps = steps.value.filter(s => s.status === 'completed').length
+        progress.value = Math.floor((completedSteps / steps.value.length) * 100)
+      }
+      
+      log.info('恢复了步骤状态', { stepsCount: steps.value.length })
+    } else {
+      // 数据库没有步骤记录，初始化默认步骤
+      initializeSteps()
+    }
+  } catch (error) {
+    log.error('恢复步骤状态失败', error)
+    initializeSteps()
+  }
 }
 
 // 连接 SSE 订阅
@@ -232,37 +326,72 @@ function connectSubscription() {
         onData: (event: any) => {
           if (!event?.type) return
           
-          // 更新步骤列表
-          if (event.steps && Array.isArray(event.steps)) {
-            steps.value = event.steps
-          }
-          
-          // 进度更新
-          if (event.type === 'initialization.progress') {
-            const newProgress = event.data?.progress || 0
-            const newMessage = event.data?.message || ''
+          // ✅ 处理进度更新事件（后端发送 type: 'progress'）
+          if (event.type === 'progress') {
+            const newProgress = event.progress || 0
+            const newMessage = event.message || ''
             
             progress.value = newProgress
             currentMessage.value = newMessage
             
-            // 更新当前步骤
-            const step = getCurrentStepByProgress(newProgress)
-            if (step) {
-              currentStep.value = step
-              stepMessages.value.set(step, newMessage)
+            // ✅ 使用后端提供的 substep 数据更新步骤状态
+            if (event.substep) {
+              const { name: substepName, progress: substepProgress } = event.substep
+              
+              // 根据子步骤名称映射到主步骤
+              let mainStep: string | null = null
+              if (substepName === 'create_repo') {
+                mainStep = 'create_repository'
+              } else if (['prepare_vars', 'render_template', 'push_files'].includes(substepName)) {
+                mainStep = 'push_template'
+              } else if (substepName === 'create_gitops') {
+                mainStep = 'setup_gitops'
+              }
+              
+              if (mainStep) {
+                updateStepStatus(mainStep, 'running', substepProgress)
+                currentStep.value = mainStep
+                stepMessages.value.set(mainStep, newMessage)
+              }
+            } else {
+              // 没有 substep 数据时，根据总进度推断当前步骤
+              const step = getCurrentStepByProgress(newProgress)
+              if (step) {
+                currentStep.value = step
+                updateStepStatus(step, 'running')
+                stepMessages.value.set(step, newMessage)
+              }
             }
           } 
-          // 完成
+          // ✅ 完成事件
           else if (event.type === 'initialization.completed') {
             status.value = 'completed'
             progress.value = 100
             currentMessage.value = '初始化完成'
+            
+            // 标记所有步骤为完成
+            steps.value.forEach(step => {
+              if (step.status !== 'completed') {
+                updateStepStatus(step.step, 'completed')
+              }
+            })
+            
             emit('complete')
           } 
-          // 失败
+          // ✅ 失败事件
           else if (event.type === 'initialization.failed' || event.type === 'initialization.error') {
             status.value = 'failed'
-            errorMessage.value = event.data?.error || '初始化失败'
+            errorMessage.value = event.error || event.data?.error || '初始化失败'
+            
+            // 标记当前步骤为失败
+            if (currentStep.value) {
+              const step = steps.value.find(s => s.step === currentStep.value)
+              if (step) {
+                step.status = 'failed'
+                step.error = errorMessage.value
+              }
+            }
+            
             emit('error', errorMessage.value!)
           }
         },
@@ -279,6 +408,7 @@ function connectSubscription() {
 
 onMounted(() => {
   if (props.projectId) {
+    // 获取当前状态（会自动恢复步骤或初始化默认步骤）
     fetchCurrentStatus()
   }
 })

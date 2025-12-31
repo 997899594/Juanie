@@ -3,6 +3,7 @@ import {
   index,
   integer,
   jsonb,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -12,6 +13,19 @@ import {
 } from 'drizzle-orm/pg-core'
 import { organizations } from '../organization/organizations.schema'
 import { projectTemplates } from '../project/project-templates.schema'
+
+// ✅ 使用 Drizzle pgEnum 定义枚举类型
+export const projectVisibilityEnum = pgEnum('project_visibility', ['public', 'private', 'internal'])
+export const projectStatusEnum = pgEnum('project_status', [
+  'initializing',
+  'active',
+  'inactive',
+  'archived',
+  'failed',
+  'partial',
+])
+export const healthStatusEnum = pgEnum('health_status', ['healthy', 'warning', 'critical'])
+
 export const projects = pgTable(
   'projects',
   {
@@ -23,10 +37,10 @@ export const projects = pgTable(
     slug: text('slug').notNull(),
     description: text('description'),
     logoUrl: text('logo_url'), // 项目 Logo URL
-    visibility: text('visibility').notNull().default('private'), // 'public', 'private', 'internal'
+    visibility: projectVisibilityEnum('visibility').notNull().default('private'),
 
-    // 项目状态：'initializing', 'active', 'inactive', 'archived', 'failed'
-    status: text('status').notNull().default('active'),
+    // 项目状态
+    status: projectStatusEnum('status').notNull().default('active'),
 
     // 初始化状态（简化版）
     initializationJobId: varchar('initialization_job_id', { length: 255 }), // BullMQ 任务 ID
@@ -36,11 +50,11 @@ export const projects = pgTable(
 
     // 模板信息
     templateId: uuid('template_id').references(() => projectTemplates.id, { onDelete: 'set null' }), // 使用的模板 ID
-    templateConfig: jsonb('template_config'), // 模板配置
+    templateConfig: jsonb('template_config').$type<Record<string, any>>(), // 模板配置
 
     // 健康度信息
     healthScore: integer('health_score'), // 0-100
-    healthStatus: text('health_status'), // 'healthy', 'warning', 'critical'
+    healthStatus: healthStatusEnum('health_status'),
     lastHealthCheck: timestamp('last_health_check'),
 
     // 注意：Git 仓库信息已移至 repositories 表，通过关联查询获取

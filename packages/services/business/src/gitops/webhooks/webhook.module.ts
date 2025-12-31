@@ -1,4 +1,4 @@
-import { GitConnectionsModule } from '@juanie/service-foundation'
+import { GitConnectionsModule, GitSyncLogsModule } from '@juanie/service-foundation'
 import { forwardRef, Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { EventEmitterModule } from '@nestjs/event-emitter'
@@ -30,6 +30,7 @@ import { WebhookEventProcessor } from './webhook-event-processor.service'
     ConfigModule,
     EventEmitterModule,
     GitConnectionsModule,
+    GitSyncLogsModule, // 提供 GitSyncLogsService
     ProjectMembersModule,
     forwardRef(() => ProjectsModule),
     GitSyncModule,

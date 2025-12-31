@@ -102,11 +102,9 @@ export class EnvironmentsService {
   }
 
   async get(userId: string, environmentId: string): Promise<schema.Environment | null> {
-    const [environment] = await this.db
-      .select()
-      .from(schema.environments)
-      .where(and(eq(schema.environments.id, environmentId), isNull(schema.environments.deletedAt)))
-      .limit(1)
+    const environment = await this.db.query.environments.findFirst({
+      where: and(eq(schema.environments.id, environmentId), isNull(schema.environments.deletedAt)),
+    })
 
     if (!environment) {
       return null
@@ -138,7 +136,13 @@ export class EnvironmentsService {
     if (data.name !== undefined) updateData.name = data.name
 
     if (data.config) {
-      const currentConfig = environment.config as any
+      interface EnvironmentConfig {
+        cloudProvider?: string
+        region?: string
+        approvalRequired?: boolean
+        minApprovals?: number
+      }
+      const currentConfig = environment.config as EnvironmentConfig | null
       updateData.config = {
         cloudProvider: data.config.cloudProvider ?? currentConfig?.cloudProvider,
         region: data.config.region ?? currentConfig?.region,
@@ -326,8 +330,24 @@ export class EnvironmentsService {
     }
 
     // Update environment config with GitOps settings
-    const currentConfig = (environment.config as any) || {}
-    const updatedConfig = {
+    interface EnvironmentConfig {
+      cloudProvider?: 'aws' | 'gcp' | 'azure'
+      region?: string
+      approvalRequired: boolean
+      minApprovals: number
+      gitops?: {
+        enabled: boolean
+        autoSync: boolean
+        gitBranch: string
+        gitPath: string
+        syncInterval: string
+      }
+    }
+    const currentConfig = (environment.config as EnvironmentConfig) || {
+      approvalRequired: false,
+      minApprovals: 1,
+    }
+    const updatedConfig: EnvironmentConfig = {
       ...currentConfig,
       gitops: {
         enabled: gitopsConfig.enabled,
@@ -379,7 +399,16 @@ export class EnvironmentsService {
       throw new Error('环境不存在')
     }
 
-    const config = environment.config as any
+    interface EnvironmentConfig {
+      gitops?: {
+        enabled?: boolean
+        autoSync?: boolean
+        gitBranch?: string
+        gitPath?: string
+        syncInterval?: string
+      }
+    }
+    const config = environment.config as EnvironmentConfig
     const gitopsConfig = config?.gitops
 
     if (!gitopsConfig) {
@@ -467,11 +496,39 @@ export class EnvironmentsService {
       throw new Error('没有权限配置 GitOps')
     }
 
-    const currentConfig = (environment.config as any) || {}
-    const updatedConfig = {
+    interface EnvironmentConfig {
+      cloudProvider?: 'aws' | 'gcp' | 'azure'
+      region?: string
+      approvalRequired: boolean
+      minApprovals: number
+      gitops?: {
+        enabled: boolean
+        autoSync: boolean
+        gitBranch: string
+        gitPath: string
+        syncInterval: string
+      }
+    }
+    const currentConfig = (environment.config as EnvironmentConfig) || {
+      approvalRequired: false,
+      minApprovals: 1,
+    }
+
+    // 如果 gitops 不存在，创建默认配置
+    if (!currentConfig.gitops) {
+      currentConfig.gitops = {
+        enabled: false,
+        autoSync: true,
+        gitBranch: 'main',
+        gitPath: `k8s/overlays/${environment.name}`,
+        syncInterval: '5m',
+      }
+    }
+
+    const updatedConfig: EnvironmentConfig = {
       ...currentConfig,
       gitops: {
-        ...(currentConfig.gitops || {}),
+        ...currentConfig.gitops,
         enabled: false,
       },
     }

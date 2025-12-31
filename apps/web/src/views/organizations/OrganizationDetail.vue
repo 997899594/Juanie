@@ -274,6 +274,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  log,
 } from '@juanie/ui'
 import {
   ArrowLeft,

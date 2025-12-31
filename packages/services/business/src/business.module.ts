@@ -4,8 +4,6 @@ import { Module } from '@nestjs/common'
 import { DeploymentsModule } from './deployments/deployments.module'
 import { EnvironmentsModule } from './environments/environments.module'
 import { FluxModule } from './gitops/flux/flux.module'
-// GitOpsModule 已删除 - Phase 9
-// import { GitOpsModule } from './gitops/git-ops/git-ops.module'
 import { GitSyncModule } from './gitops/git-sync/git-sync.module'
 import { WebhookModule } from './gitops/webhooks/webhook.module'
 import { PipelinesModule } from './pipelines/pipelines.module'

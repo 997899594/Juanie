@@ -29,7 +29,7 @@ export class ConflictResolutionService {
     private readonly gitSyncLogs: GitSyncLogsService,
     private readonly logger: PinoLogger,
   ) {
-    this.logger.setContext(ConflictResolutionService.name)
+    this.logger?.setContext?.(ConflictResolutionService.name)
   }
 
   /**
@@ -54,7 +54,7 @@ export class ConflictResolutionService {
       conflictType: 'permission_mismatch' | 'missing_on_git' | 'extra_on_git'
     }>
   > {
-    this.logger.info('Detecting project member conflicts', { projectId })
+    this.logger?.info('Detecting project member conflicts', { projectId })
 
     try {
       // 获取项目信息
@@ -63,7 +63,7 @@ export class ConflictResolutionService {
       })
 
       if (!project) {
-        this.logger.warn('Project not found', { projectId })
+        this.logger?.warn('Project not found', { projectId })
         return []
       }
 
@@ -73,7 +73,7 @@ export class ConflictResolutionService {
       })
 
       if (!repository) {
-        this.logger.warn('Project not linked to Git repository', { projectId })
+        this.logger?.warn('Project not linked to Git repository', { projectId })
         return []
       }
 
@@ -108,7 +108,7 @@ export class ConflictResolutionService {
       const membersWithGit = membersWithGitConnections.filter((m) => m.gitConnection)
 
       if (membersWithGit.length === 0) {
-        this.logger.info('No members with Git accounts found', { projectId })
+        this.logger?.info('No members with Git accounts found', { projectId })
         return []
       }
 
@@ -187,14 +187,14 @@ export class ConflictResolutionService {
         }
       }
 
-      this.logger.info('Conflict detection completed', {
+      this.logger?.info('Conflict detection completed', {
         projectId,
         conflictsFound: conflicts.length,
       })
 
       return conflicts
     } catch (error) {
-      this.logger.error('Error detecting conflicts:', error)
+      this.logger?.error('Error detecting conflicts:', error)
       throw error
     }
   }
@@ -225,7 +225,7 @@ export class ConflictResolutionService {
       error?: string
     }>
   }> {
-    this.logger.info('Resolving project member conflicts', { projectId, options })
+    this.logger?.info('Resolving project member conflicts', { projectId, options })
 
     const { autoResolve = true, conflictTypes = ['permission_mismatch', 'missing_on_git'] } =
       options
@@ -235,7 +235,7 @@ export class ConflictResolutionService {
       const conflicts = await this.detectProjectMemberConflicts(projectId, accessToken)
 
       if (conflicts.length === 0) {
-        this.logger.info('No conflicts found', { projectId })
+        this.logger?.info('No conflicts found', { projectId })
         return {
           resolved: 0,
           failed: 0,
@@ -313,17 +313,45 @@ export class ConflictResolutionService {
               break
 
             case 'permission_mismatch':
-              // 更新协作者权限
+              // 更新协作者权限 (使用 remove + add 组合)
               action = 'update_permission'
-              await this.gitProvider.updateCollaboratorPermission(
-                gitProvider,
-                gitRepoUrl,
-                accessToken,
-                conflict.gitLogin,
-                conflict.expectedGitPermission,
-              )
-              status = 'success'
-              resolved++
+              try {
+                // 先移除协作者
+                await this.gitProvider.removeCollaborator(
+                  gitProvider,
+                  gitRepoUrl,
+                  accessToken,
+                  conflict.gitLogin,
+                )
+                // 再添加协作者（新权限）
+                await this.gitProvider.addCollaborator(
+                  gitProvider,
+                  gitRepoUrl,
+                  accessToken,
+                  conflict.gitLogin,
+                  conflict.expectedGitPermission,
+                )
+                status = 'success'
+                resolved++
+              } catch (error) {
+                // 如果移除失败（404），尝试直接添加
+                if (error instanceof Error && error.message.includes('404')) {
+                  this.logger?.warn('Collaborator not found during removal, adding directly', {
+                    gitLogin: conflict.gitLogin,
+                  })
+                  await this.gitProvider.addCollaborator(
+                    gitProvider,
+                    gitRepoUrl,
+                    accessToken,
+                    conflict.gitLogin,
+                    conflict.expectedGitPermission,
+                  )
+                  status = 'success'
+                  resolved++
+                } else {
+                  throw error
+                }
+              }
               break
 
             case 'extra_on_git':
@@ -332,7 +360,7 @@ export class ConflictResolutionService {
               action = 'remove_collaborator'
               status = 'skipped'
               skipped++
-              this.logger.warn('Skipping removal of extra collaborator', {
+              this.logger?.warn('Skipping removal of extra collaborator', {
                 gitLogin: conflict.gitLogin,
                 reason: 'potentially_dangerous',
               })
@@ -392,14 +420,14 @@ export class ConflictResolutionService {
             },
           })
 
-          this.logger.error('Error resolving conflict:', {
+          this.logger?.error('Error resolving conflict:', {
             gitLogin: conflict.gitLogin,
             error: errorMessage,
           })
         }
       }
 
-      this.logger.info('Conflict resolution completed', {
+      this.logger?.info('Conflict resolution completed', {
         projectId,
         resolved,
         failed,
@@ -413,7 +441,7 @@ export class ConflictResolutionService {
         details,
       }
     } catch (error) {
-      this.logger.error('Error resolving conflicts:', error)
+      this.logger?.error('Error resolving conflicts:', error)
       throw error
     }
   }
@@ -457,7 +485,7 @@ export class ConflictResolutionService {
           syncedAt: log.createdAt,
         }))
     } catch (error) {
-      this.logger.error('Error getting conflict history:', error)
+      this.logger?.error('Error getting conflict history:', error)
       throw error
     }
   }
@@ -498,7 +526,7 @@ export class ConflictResolutionService {
 
       return stats
     } catch (error) {
-      this.logger.error('Error getting conflict stats:', error)
+      this.logger?.error('Error getting conflict stats:', error)
       throw error
     }
   }

@@ -12,7 +12,7 @@ import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { PinoLogger } from 'nestjs-pino'
 import { z } from 'zod'
-import { withAbility } from '../trpc/rbac.middleware'
+import { checkPermission } from '../trpc/rbac.middleware'
 import { TrpcService } from '../trpc/trpc.service'
 
 @Injectable()
@@ -31,21 +31,30 @@ export class DeploymentsRouter {
       // 创建部署
       // ✅ 权限检查：需要 deploy Deployment 权限
       // 注意：developer 只能部署到非生产环境（在 RBAC 规则中已定义）
-      create: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'deploy',
-        subject: 'Deployment',
-      })
+      create: this.trpc.protectedProcedure
         .input(createDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
-          return await this.deploymentsService.create(ctx.user.id, input)
+          try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'deploy',
+              'Deployment',
+              input.projectId,
+            )
+            return await this.deploymentsService.create(ctx.user.id, input)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '创建部署失败',
+            })
+          }
         }),
 
       // 列出部署
       // ✅ 权限检查：需要 read Deployment 权限
-      list: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'read',
-        subject: 'Deployment',
-      })
+      list: this.trpc.protectedProcedure
         .input(
           z.object({
             projectId: z.string().uuid().optional(),
@@ -54,66 +63,151 @@ export class DeploymentsRouter {
           }),
         )
         .query(async ({ ctx, input }) => {
-          return await this.deploymentsService.list(ctx.user.id, input)
+          try {
+            // 在 resolver 内部检查权限
+            if (input.projectId) {
+              await checkPermission(
+                this.rbacService,
+                ctx.user.id,
+                'read',
+                'Deployment',
+                input.projectId,
+              )
+            }
+            return await this.deploymentsService.list(ctx.user.id, input)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '获取部署列表失败',
+            })
+          }
         }),
 
       // 获取部署详情
       // ✅ 权限检查：需要 read Deployment 权限
-      get: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'read',
-        subject: 'Deployment',
-      })
-        .input(deploymentIdSchema)
-        .query(async ({ ctx, input }) => {
-          return await this.deploymentsService.get(ctx.user.id, input.deploymentId)
-        }),
+      get: this.trpc.protectedProcedure.input(deploymentIdSchema).query(async ({ ctx, input }) => {
+        try {
+          const deployment = await this.deploymentsService.get(ctx.user.id, input.deploymentId)
+          if (!deployment) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: '部署不存在' })
+          }
+          // 在 resolver 内部检查权限
+          await checkPermission(
+            this.rbacService,
+            ctx.user.id,
+            'read',
+            'Deployment',
+            deployment.projectId,
+          )
+          return deployment
+        } catch (error) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: error instanceof Error ? error.message : '获取部署详情失败',
+          })
+        }
+      }),
 
       // 回滚部署
       // ✅ 权限检查：需要 deploy Deployment 权限
-      rollback: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'deploy',
-        subject: 'Deployment',
-      })
+      rollback: this.trpc.protectedProcedure
         .input(rollbackDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
-          return await this.deploymentsService.rollback(ctx.user.id, input.deploymentId)
+          try {
+            const deployment = await this.deploymentsService.get(ctx.user.id, input.deploymentId)
+            if (!deployment) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: '部署不存在' })
+            }
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'deploy',
+              'Deployment',
+              deployment.projectId,
+            )
+            return await this.deploymentsService.rollback(ctx.user.id, input.deploymentId)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '回滚部署失败',
+            })
+          }
         }),
 
       // 批准部署
       // ✅ 权限检查：需要 deploy Deployment 权限
-      approve: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'deploy',
-        subject: 'Deployment',
-      })
+      approve: this.trpc.protectedProcedure
         .input(approveDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
-          const { deploymentId, ...data } = input
-          return await this.deploymentsService.approve(ctx.user.id, deploymentId, data)
+          try {
+            const { deploymentId, ...data } = input
+            const deployment = await this.deploymentsService.get(ctx.user.id, deploymentId)
+            if (!deployment) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: '部署不存在' })
+            }
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'deploy',
+              'Deployment',
+              deployment.projectId,
+            )
+            return await this.deploymentsService.approve(ctx.user.id, deploymentId, data)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '批准部署失败',
+            })
+          }
         }),
 
       // 拒绝部署
       // ✅ 权限检查：需要 deploy Deployment 权限
-      reject: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'deploy',
-        subject: 'Deployment',
-      })
+      reject: this.trpc.protectedProcedure
         .input(rejectDeploymentSchema)
         .mutation(async ({ ctx, input }) => {
-          const { deploymentId, ...data } = input
-          return await this.deploymentsService.reject(ctx.user.id, deploymentId, data)
+          try {
+            const { deploymentId, ...data } = input
+            const deployment = await this.deploymentsService.get(ctx.user.id, deploymentId)
+            if (!deployment) {
+              throw new TRPCError({ code: 'NOT_FOUND', message: '部署不存在' })
+            }
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'deploy',
+              'Deployment',
+              deployment.projectId,
+            )
+            return await this.deploymentsService.reject(ctx.user.id, deploymentId, data)
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '拒绝部署失败',
+            })
+          }
         }),
 
       // ==================== GitOps 相关端点 ====================
 
       // 通过 GitOps 部署（UI → Git 工作流）
       // ✅ 权限检查：需要 deploy Deployment 权限
-      deployWithGitOps: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'deploy',
-        subject: 'Deployment',
-      })
+      deployWithGitOps: this.trpc.protectedProcedure
         .input(deployWithGitOpsSchema)
         .mutation(async ({ ctx, input }) => {
           try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'deploy',
+              'Deployment',
+              input.projectId,
+            )
+
             // Extract version from image if not provided
             let version = 'latest'
             if (input.changes.image) {
@@ -138,52 +232,76 @@ export class DeploymentsRouter {
 
       // 按项目获取部署列表
       // ✅ 权限检查：需要 read Deployment 权限
-      getByProject: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'read',
-        subject: 'Deployment',
-      })
+      getByProject: this.trpc.protectedProcedure
         .input(z.object({ projectId: z.string(), limit: z.number().optional() }))
-        .query(async ({ input: _input }) => {
-          // TODO: 实现获取项目部署列表的逻辑
-          return {
-            deployments: [] as Array<{
-              id: string
-              projectId: string
-              environmentId: string
-              pipelineRunId: string | null
-              status: 'pending' | 'running' | 'success' | 'failed' | 'rolled_back'
-              version: string
-              commitHash: string
-              branch: string
-              deployedBy: string | null
-              strategy: string // 使用 strategy 而不是 deploymentStrategy，与数据库字段一致
-              startedAt: string | null
-              finishedAt: string | null
-              commitMessage?: string
-              createdAt: string
-            }>,
+        .query(async ({ ctx, input }) => {
+          try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'read',
+              'Deployment',
+              input.projectId,
+            )
+            // TODO: 实现获取项目部署列表的逻辑
+            return {
+              deployments: [] as Array<{
+                id: string
+                projectId: string
+                environmentId: string
+                pipelineRunId: string | null
+                status: 'pending' | 'running' | 'success' | 'failed' | 'rolled_back'
+                version: string
+                commitHash: string
+                branch: string
+                deployedBy: string | null
+                strategy: string // 使用 strategy 而不是 deploymentStrategy，与数据库字段一致
+                startedAt: string | null
+                finishedAt: string | null
+                commitMessage?: string
+                createdAt: string
+              }>,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '获取项目部署列表失败',
+            })
           }
         }),
 
       // 获取部署统计
       // ✅ 权限检查：需要 read Deployment 权限
-      getStats: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'read',
-        subject: 'Deployment',
-      })
+      getStats: this.trpc.protectedProcedure
         .input(z.object({ projectId: z.string() }))
-        .query(async ({ input: _input }) => {
-          // TODO: 实现获取部署统计的逻辑
-          return {
-            total: 0,
-            success: 0,
-            failed: 0,
-            pending: 0,
-            cancelled: 0,
-            running: 0,
-            rolledBack: 0,
-            successRate: 0, // 成功率百分比
-            avgDeploymentTime: 0,
+        .query(async ({ ctx, input }) => {
+          try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'read',
+              'Deployment',
+              input.projectId,
+            )
+            // TODO: 实现获取部署统计的逻辑
+            return {
+              total: 0,
+              success: 0,
+              failed: 0,
+              pending: 0,
+              cancelled: 0,
+              running: 0,
+              rolledBack: 0,
+              successRate: 0, // 成功率百分比
+              avgDeploymentTime: 0,
+            }
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: error instanceof Error ? error.message : '获取部署统计失败',
+            })
           }
         }),
 

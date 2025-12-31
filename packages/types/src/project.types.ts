@@ -246,12 +246,12 @@ export interface ProjectStatus {
     fullName: string
     cloneUrl: string
     defaultBranch: string | null
-    status?: string
+    status?: 'pending' | 'syncing' | 'success' | 'failed' | null
   } | null
 
   gitopsResources: Array<{
     id: string
-    type: 'kustomization' | 'helm'
+    type: 'kustomization' | 'helm' | 'git-repository' | 'helm-release'
     name: string
     namespace: string
     status: string | null

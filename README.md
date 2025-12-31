@@ -4,13 +4,14 @@
 
 ## 📖 文档
 
-所有文档在 [`docs/`](./docs/) 目录：
-- [文档索引](./docs/README.md) - 完整的文档导航
-- [快速开始](./docs/guides/quick-start.md) - 项目快速上手
-- [系统架构](./docs/ARCHITECTURE.md) - 架构设计文档
-- [API 参考](./docs/API_REFERENCE.md) - API 接口文档
-- [现代化进度](./docs/guides/MODERNIZATION_PROGRESS.md) - 技术栈现代化进度（89% 完成）
-- [故障排查](./docs/troubleshooting/README.md) - 问题诊断和解决方案
+**[📚 完整文档导航](./docs/README.md)**
+
+### 快速链接
+- 🚀 [快速开始](./docs/guides/quick-start.md) - 5 分钟上手
+- 📘 [项目指南](./.kiro/steering/project-guide.md) - 开发规范和最佳实践
+- 🏗️ [架构文档](./docs/architecture/README.md) - 系统架构设计
+- 🔧 [问题排查](./docs/troubleshooting/README.md) - 常见问题解决
+- 📝 [变更日志](./docs/CHANGELOG.md) - 版本更新记录
 
 ## 快速开始
 
@@ -68,26 +69,14 @@ bun run dev
 
 ## 更多文档
 
-### 操作指南
-- [快速开始](./docs/guides/quick-start.md) - 项目快速上手
-- [K3s 远程访问](./docs/guides/k3s-remote-access.md) - 配置 K3s 集群
-- [Flux 安装](./docs/guides/flux-installation.md) - 安装 Flux CD
-- [OpenTelemetry 集成](./docs/guides/opentelemetry-integration.md) - 可观测性方案
+查看 **[完整文档导航](./docs/README.md)** 了解所有文档。
 
-### 技术指南
-- [现代化进度](./docs/guides/MODERNIZATION_PROGRESS.md) - 技术栈现代化（89% 完成）
-- [2025 实用指南](./docs/guides/pragmatic-2025-guide.md) - 技术选型和最佳实践
-- [Using Declarations](./docs/guides/using-declarations.md) - TypeScript 资源管理
-
-### 架构文档
-- [系统架构](./docs/ARCHITECTURE.md) - 总体架构设计
-- [三层服务架构](./docs/architecture/three-tier-architecture.md) - 服务分层设计
-- [GitOps 架构](./docs/architecture/gitops.md) - GitOps 实现方案
-
-### 故障排查
-- [问题排查索引](./docs/troubleshooting/README.md) - 常见问题和解决方案
-- [Flux 问题](./docs/troubleshooting/flux/) - Flux GitOps 相关问题
-- [Kubernetes 问题](./docs/troubleshooting/kubernetes/) - K8s 相关问题
+### 核心文档
+- [分层架构](./docs/architecture/layered-architecture-analysis.md) - 三层服务架构
+- [Business 层架构](./docs/architecture/business-layer-architecture.md) - 业务层设计
+- [数据库设计](./docs/architecture/database-schema-reference.md) - 数据库 Schema
+- [K3s 远程访问](./docs/guides/k3s-remote-access.md) - K3s 集群配置
+- [Monorepo 最佳实践](./docs/guides/monorepo-best-practices.md) - Turborepo + Bun
 
 ## 常用命令
 

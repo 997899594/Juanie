@@ -411,8 +411,7 @@ export class GitSyncService {
         gitRepoOptions.secretRef = secretRef
       }
 
-      // 注意：FluxCliService 目前没有 createGitRepository 方法
-      // 需要使用 K8sClientService 直接创建 Custom Resource
+      // Create GitRepository using K8sClientService
       await this.createGitRepositoryResource(gitRepoOptions)
 
       // ✅ 步骤 2: 创建 Kustomization
@@ -433,21 +432,27 @@ export class GitSyncService {
       await this.fluxCli.reconcile('kustomization', gitRepoName, namespace)
 
       // ✅ 步骤 4: 检查资源状态
-      const gitRepo = await this.k8sClient.getNamespacedCustomObject({
+      interface GitRepositoryStatus {
+        status?: {
+          conditions?: Array<{ type: string; status: string; reason?: string }>
+        }
+      }
+
+      const gitRepo = (await this.k8sClient.getNamespacedCustomObject({
         group: 'source.toolkit.fluxcd.io',
         version: 'v1',
         namespace,
         plural: 'gitrepositories',
         name: gitRepoName,
-      })
+      })) as GitRepositoryStatus
 
-      // ✅ 直接使用 EventEmitter2 发射事件，不使用自定义包装器
+      // ✅ 直接使用 EventEmitter2 发射事件
       this.eventEmitter.emit('git-sync.repository.synced', {
         projectId,
         repoUrl,
         branch,
         namespace,
-        status: (gitRepo as any).status,
+        status: gitRepo.status,
         timestamp: new Date(),
       })
 

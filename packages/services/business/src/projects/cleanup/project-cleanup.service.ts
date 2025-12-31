@@ -1,4 +1,3 @@
-import { FluxCliService } from '@juanie/core/flux'
 import { DATABASE } from '@juanie/core/tokens'
 import * as schema from '@juanie/database'
 import { Inject, Injectable } from '@nestjs/common'
@@ -19,7 +18,6 @@ import { PinoLogger } from 'nestjs-pino'
 export class ProjectCleanupService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
-    private fluxCli: FluxCliService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(ProjectCleanupService.name)
@@ -48,9 +46,33 @@ export class ProjectCleanupService {
         try {
           this.logger.info(`Cleaning up failed project: ${project.id} (${project.name})`)
 
-          // TODO: Re-implement GitOps cleanup using FluxCliService
-          // The old FluxResourcesService has been removed
-          // Need to implement cleanup using FluxCliService directly
+          // TODO: Implement GitOps cleanup using FluxCliService
+          //
+          // Required operations:
+          // 1. Delete Flux GitRepository resource
+          //    - Use FluxCliService.deleteGitRepository()
+          // 2. Delete Flux Kustomization resources
+          //    - Use FluxCliService.deleteKustomization()
+          // 3. Clean up K8s namespace if empty
+          //    - Use K8sClientService to check and delete namespace
+          // 4. Remove finalizers if stuck
+          //    - Handle resources with finalizers that block deletion
+          //
+          // Design considerations:
+          // - Handle resources in different namespaces
+          // - Respect resource dependencies (delete Kustomizations before GitRepository)
+          // - Implement proper error handling (don't fail entire cleanup if one resource fails)
+          // - Add retry logic for transient failures
+          // - Log all operations for audit trail
+          //
+          // Implementation guide:
+          // - Inject FluxCliService and K8sClientService in constructor
+          // - Get project's Flux resources from database (gitopsConfig)
+          // - Call FluxCliService methods with proper error handling
+          // - Update project status based on cleanup result
+          //
+          // See: docs/architecture/gitops-cleanup-design.md (to be created)
+          //
           this.logger.warn(`GitOps cleanup not yet implemented for project ${project.id}`)
 
           // 标记项目为已清理
@@ -105,7 +127,7 @@ export class ProjectCleanupService {
         try {
           this.logger.info(`Cleaning up stale test project: ${project.id} (${project.name})`)
 
-          // TODO: Re-implement GitOps cleanup using FluxCliService
+          // TODO: Implement GitOps cleanup (see cleanupFailedProjects for details)
           this.logger.warn(`GitOps cleanup not yet implemented for project ${project.id}`)
 
           // 标记项目为已清理
@@ -137,7 +159,7 @@ export class ProjectCleanupService {
     try {
       this.logger.info(`Manually cleaning up project: ${projectId}`)
 
-      // TODO: Re-implement GitOps cleanup using FluxCliService
+      // TODO: Implement GitOps cleanup (see cleanupFailedProjects for details)
       this.logger.warn(`GitOps cleanup not yet implemented for project ${projectId}`)
 
       // 标记项目为已清理

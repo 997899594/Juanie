@@ -1,152 +1,145 @@
 # 问题排查指南
 
-本目录包含项目开发和运维过程中遇到的问题及解决方案。
+> 常见问题的诊断和解决方案
+
+## 🔥 常见问题
+
+### K8s / Flux 相关
+- [Bun + K8s mTLS 连接](bun-k8s-mtls-solution.md) - Bun 运行时 K8s 连接方案
+- [K8s 连接修复总结](k8s-connection-fix-summary.md) - K8s 连接问题汇总
+- [Flux SSH 认证](flux-ssh-authentication.md) - Flux Git 仓库 SSH 认证
+- [Flux 网络策略](flux-network-policy.md) - Flux 网络配置
+- [Flux 性能优化](flux-performance-optimization.md) - Flux 性能调优
+- [Flux Source Controller 过载](flux-source-controller-overload.md) - Source Controller 问题
+- [K3s 远程访问 IP 变更](k3s-remote-access-ip-change.md) - K3s IP 变更处理
+- [K3s 清理和状态](k3s-cleanup-and-11444a-status.md) - K3s 清理操作
+- [K3s Flux 重装（中国网络）](k3s-flux-reinstall-china-network.md) - 国内网络环境安装
+
+### 部署相关
+- [GitOps Kustomization 路径未找到](gitops-kustomization-path-not-found.md) - Kustomization 路径问题
+- [K8s Deployment 错误镜像名](k8s-deployment-wrong-image-name.md) - 镜像名称错误
+- [Kustomization 数字名称最佳实践](kustomization-numeric-name-best-practice.md) - 数字命名规范
+- [YAML 数字名称最终方案](yaml-numeric-name-final-solution.md) - YAML 数字处理
+- [Next.js Hostname 绑定修复](nextjs-hostname-binding-fix.md) - Next.js 网络配置
+
+### 认证 / 权限相关
+- [GitHub Token 401 错误](github-token-401-error.md) - GitHub 认证失败
+- [GitHub Username Unknown 调查](github-username-unknown-investigation.md) - GitHub 用户名问题
+- [GHCR TLS 证书修复](ghcr-tls-certificate-fix.md) - GHCR 证书问题
+- [GHCR Hosts 修复](ghcr-hosts-fix-final.md) - GHCR 域名解析
+- [ImagePullSecret 多用户修复](imagepullsecret-multi-user-fix.md) - 多用户镜像拉取
+- [多租户 GitHub Packages 修复](multi-tenant-github-packages-fix.md) - 多租户镜像仓库
+- [Credential Sync Namespace 时序](credential-sync-namespace-timing.md) - 凭证同步时序
+
+### 模板 / 工作流相关
+- [模板渲染调试增强](template-rendering-debug-enhancement.md) - 模板调试
+- [模板渲染 ProjectId Undefined](template-rendering-projectid-undefined.md) - ProjectId 问题
+- [模板系统 Handlebars GitHub Actions 冲突](template-system-handlebars-github-actions-conflict.md) - 模板引擎冲突
+- [Workflow Project Slug 缺失](workflow-project-slug-missing.md) - Workflow 变量缺失
+- [GitHub Actions 部署触发失败](github-actions-deployment-trigger-failure.md) - Actions 触发问题
+
+### 数据库相关
+- [Drizzle Relations 循环依赖](drizzle-relations-circular-dependency.md) - Drizzle 循环依赖
+- [Drizzle Relations Undefined 错误](drizzle-relations-undefined-error.md) - Relations 未定义
+- [ProjectSlug 移除完成](projectslug-removal-complete.md) - Schema 字段移除
+
+### 日志 / 调试相关
+- [日志最佳实践](LOGGING-BEST-PRACTICES.md) - 日志规范
+- [Pino Logger 配置](pino-logger-configuration.md) - Pino 配置指南
+- [API Gateway 静默退出](api-gateway-silent-exit.md) - 启动问题诊断
+
+### 其他
+- [正确的解决方案](CORRECT_SOLUTION.md) - 通用问题解决思路
+- [TypeScript 缓存问题](typescript-cache-issue-gitops-refactoring.md) - TS 缓存清理
 
 ## 📋 问题分类
 
-### 🎨 模板系统
+### 按严重程度
+- 🔴 **Critical**: K8s 连接失败、部署失败、认证失败
+- 🟡 **Warning**: 性能问题、配置警告
+- 🟢 **Info**: 最佳实践、优化建议
 
-- [Handlebars 与 GitHub Actions 语法冲突](template-system-handlebars-github-actions-conflict.md) - 迁移到 EJS 解决分隔符冲突 🔴
+### 按组件
+- **K8s/Flux**: 集群、GitOps、部署
+- **认证**: OAuth、JWT、GitHub/GitLab
+- **数据库**: Drizzle、PostgreSQL、Schema
+- **模板**: EJS、变量渲染、工作流
+- **日志**: Pino、调试、追踪
 
-### 💾 数据库
+## 🔍 诊断流程
 
-- [Drizzle Relations 循环依赖](drizzle-relations-circular-dependency.md) - 关系定义导致的循环依赖问题 🔴
-- [Drizzle Relations Undefined 错误](drizzle-relations-undefined-error.md) - 导入顺序导致的 undefined 错误 🔴
+### 1. 收集信息
+```bash
+# 查看日志
+bun run dev:api
 
-### 🔄 GitOps & Flux CD
+# 查看 K8s 资源
+kubectl get pods -n <namespace>
+kubectl describe pod <pod-name> -n <namespace>
+kubectl logs <pod-name> -n <namespace>
 
-- [Flux 协调延迟](flux-reconcile-delay.md) - Flux 资源协调速度慢的问题 🟡
-- [Flux Source Controller 过载](flux-source-controller-overload.md) - Source Controller 资源不足 🔴
-- [Flux 性能优化](flux-performance-optimization.md) - 完整的 Flux 性能优化方案 🟡
-- [Flux Kustomization 协调](flux-kustomization-reconciling.md) - Kustomization 协调问题
-- [Flux 网络策略](flux-network-policy.md) - 网络策略配置问题
-- [Flux SSH 认证](flux-ssh-authentication.md) - SSH 认证问题
-- [GitOps Kustomization 路径未找到](gitops-kustomization-path-not-found.md) - Kustomization 路径配置错误 🟡
+# 查看 Flux 状态
+flux get all -n <namespace>
+flux logs -n flux-system
+```
 
-### ☸️ Kubernetes & K3s
+### 2. 定位问题
+- 检查错误日志
+- 查看相关资源状态
+- 验证配置是否正确
 
-- [K8s Deployment 错误的镜像名称](k8s-deployment-wrong-image-name.md) - 模板渲染失败导致镜像名称错误 🔴
-- [K3s Flux 重装（国内网络）](k3s-flux-reinstall-china-network.md) - 国内网络环境下的 Flux 安装 🟢
-- [K3s 远程访问 IP 变更](k3s-remote-access-ip-change.md) - K3s 服务器 IP 变更后的配置更新 🟢
-- [K8s Namespace 时序](k8s-namespace-timing.md) - Namespace 创建时序问题
-- [K8s 快速参考](k8s-quick-reference.md) - Kubernetes 常见问题快速参考
+### 3. 查找解决方案
+- 搜索本文档
+- 查看 [归档问题](../archive/troubleshooting/)
+- 查阅官方文档
 
-### 🔐 认证系统
+### 4. 应用修复
+- 测试修复方案
+- 验证问题解决
+- 更新文档
 
-- [认证重构 Bug 修复](authentication-refactoring-bug-fix.md) - Session 和 OAuth 相关问题 🔴
-- [GitHub Token 401 错误](github-token-401-error.md) - OAuth 令牌失效问题 🟢
+## 📝 报告问题
 
-### 🚀 项目初始化
+### 问题模板
+```markdown
+## 问题描述
+简要描述问题
 
-- [项目初始化成功分析](project-initialization-success-analysis.md) - 完整的初始化流程分析和最佳实践 🟢
-- [凭证同步命名空间时序问题](credential-sync-namespace-timing.md) - 凭证同步时的正常警告日志 🟢
-- [初始化进度和 ImagePullSecret 修复](initialization-progress-and-imagepullsecret-fixes.md) - 进度显示和镜像拉取凭证问题 🟡
-- [模板中缺少 GitHub Workflow](missing-github-workflow-in-template.md) - 模板文件缺失问题 🟡
+## 环境信息
+- OS: macOS / Linux
+- Runtime: Bun 1.x / Node.js 20.x
+- K8s: K3s v1.x
 
-### 📦 Git 仓库
+## 复现步骤
+1. 步骤 1
+2. 步骤 2
+3. 步骤 3
 
-- [Git 仓库名称验证](git-repository-name-validation.md) - 仓库名称验证规则
+## 错误日志
+```
+粘贴错误日志
+```
 
-## 🔍 按严重程度
+## 预期行为
+描述预期的正确行为
 
-### 🔴 高优先级（影响核心功能）
+## 实际行为
+描述实际发生的情况
+```
 
-1. [Handlebars 与 GitHub Actions 语法冲突](template-system-handlebars-github-actions-conflict.md) - 项目初始化失败
-2. [Drizzle Relations 循环依赖](drizzle-relations-circular-dependency.md) - 应用启动失败
-3. [Drizzle Relations Undefined 错误](drizzle-relations-undefined-error.md) - 数据库关系错误
-4. [Flux Source Controller 过载](flux-source-controller-overload.md) - GitOps 不可用
-5. [认证重构 Bug 修复](authentication-refactoring-bug-fix.md) - 认证系统故障
+### 提交问题
+1. 搜索是否已有相同问题
+2. 使用问题模板
+3. 提供完整的错误日志
+4. 标注严重程度和组件
 
-### 🟡 中优先级（影响性能或体验）
+## 🔗 相关资源
 
-1. [Flux 协调延迟](flux-reconcile-delay.md) - 部署速度慢
-2. [Flux 性能优化](flux-performance-optimization.md) - 整体性能问题
-3. [GitOps Kustomization 路径未找到](gitops-kustomization-path-not-found.md) - 配置错误
-4. [初始化进度和 ImagePullSecret 修复](initialization-progress-and-imagepullsecret-fixes.md) - 用户体验问题
-5. [模板中缺少 GitHub Workflow](missing-github-workflow-in-template.md) - 模板问题
-
-### 🟢 低优先级（配置或环境问题）
-
-1. [项目初始化成功分析](project-initialization-success-analysis.md) - 最佳实践参考
-2. [凭证同步命名空间时序问题](credential-sync-namespace-timing.md) - 正常的时序警告
-3. [K3s 远程访问 IP 变更](k3s-remote-access-ip-change.md) - 配置更新
-4. [K3s Flux 重装（国内网络）](k3s-flux-reinstall-china-network.md) - 网络环境
-5. [GitHub Token 401 错误](github-token-401-error.md) - 令牌过期
-
-## 📊 问题统计
-
-| 类别 | 已解决 | 进行中 | 总计 |
-|------|--------|--------|------|
-| 模板系统 | 1 | 0 | 1 |
-| 数据库 | 2 | 0 | 2 |
-| GitOps & Flux | 7 | 0 | 7 |
-| Kubernetes | 4 | 0 | 4 |
-| 认证系统 | 2 | 0 | 2 |
-| 项目初始化 | 4 | 0 | 4 |
-| Git 仓库 | 1 | 0 | 1 |
-| **总计** | **21** | **0** | **21** |
-
-## 🎯 常见问题快速索引
-
-### "项目初始化失败"
-
-1. 检查 [Handlebars 与 GitHub Actions 冲突](template-system-handlebars-github-actions-conflict.md)
-2. 检查 [模板中缺少 GitHub Workflow](missing-github-workflow-in-template.md)
-3. 检查 [初始化进度和 ImagePullSecret 修复](initialization-progress-and-imagepullsecret-fixes.md)
-
-### "Flux 部署很慢"
-
-1. 查看 [Flux 协调延迟](flux-reconcile-delay.md)
-2. 查看 [Flux 性能优化](flux-performance-optimization.md)
-3. 查看 [Flux Source Controller 过载](flux-source-controller-overload.md)
-
-### "数据库关系报错"
-
-1. 查看 [Drizzle Relations 循环依赖](drizzle-relations-circular-dependency.md)
-2. 查看 [Drizzle Relations Undefined 错误](drizzle-relations-undefined-error.md)
-
-### "GitHub OAuth 失败"
-
-1. 查看 [GitHub Token 401 错误](github-token-401-error.md)
-2. 查看 [认证重构 Bug 修复](authentication-refactoring-bug-fix.md)
-
-### "Flux 网络问题"
-
-1. 查看 [Flux 网络策略](flux-network-policy.md)
-2. 查看 [Flux SSH 认证](flux-ssh-authentication.md)
-3. 查看 [K3s Flux 重装（国内网络）](k3s-flux-reinstall-china-network.md)
-
-## 📝 文档规范
-
-每个问题文档应包含：
-
-1. **问题描述** - 症状、影响范围、严重程度
-2. **根本原因** - 为什么会出现这个问题
-3. **尝试过的方案** - 失败的尝试和原因
-4. **最终解决方案** - 正确的解决方法
-5. **验证步骤** - 如何确认问题已解决
-6. **相关文档** - 链接到相关资源
-7. **经验教训** - 避免类似问题的建议
-
-详见 [文档组织规范](../ORGANIZATION.md#问题排查模板)
-
-## 🤝 贡献指南
-
-遇到新问题时：
-
-1. 在本目录创建文档（不要创建子目录）
-2. 使用描述性文件名（kebab-case）
-3. 遵循 [问题排查模板](../ORGANIZATION.md#问题排查模板)
-4. 更新本索引文件
-5. 添加到 [docs/README.md](../README.md)
-
-## 📞 获取帮助
-
-- 查看 [快速参考](../guides/QUICK_REFERENCE.md)
-- 阅读 [架构文档](../architecture/)
-- 参考 [项目指南](../../.kiro/steering/project-guide.md)
+- [架构文档](../architecture/)
+- [操作指南](../guides/)
+- [历史问题](../archive/troubleshooting/)
+- [项目指南](../../.kiro/steering/project-guide.md)
 
 ---
 
-**最后更新**: 2024-12-22  
-**维护者**: 开发团队
+**提示**: 如果问题已解决，请考虑将解决方案添加到本文档！

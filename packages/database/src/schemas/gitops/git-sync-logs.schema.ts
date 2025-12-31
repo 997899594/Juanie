@@ -12,6 +12,7 @@ import {
 import { users } from '../auth/users.schema'
 import { organizations } from '../organization/organizations.schema'
 import { projects } from '../project/projects.schema'
+import { gitProviderEnum } from '../repository/repositories.schema'
 
 /**
  * Git 同步日志表 - 现代化版本
@@ -37,7 +38,7 @@ export const gitSyncActionEnum = pgEnum('git_sync_action', [
   'add',
   'remove',
 ])
-export const gitProviderEnum = pgEnum('git_provider', ['github', 'gitlab'])
+// ✅ 复用 repositories.schema.ts 中的 gitProviderEnum
 export const gitResourceTypeEnum = pgEnum('git_resource_type', [
   'repository',
   'organization',

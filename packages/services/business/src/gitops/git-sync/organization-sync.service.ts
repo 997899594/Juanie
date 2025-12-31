@@ -10,7 +10,8 @@
 import { DomainEvents } from '@juanie/core/events'
 import {
   GitConnectionsService,
-  GitProviderService,
+  GitHubClientService,
+  GitLabClientService,
   type OrganizationMemberAddedEvent,
   type OrganizationMemberRemovedEvent,
   type OrganizationMemberRoleUpdatedEvent,
@@ -21,7 +22,6 @@ import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import type { Queue } from 'bullmq'
 import { PinoLogger } from 'nestjs-pino'
-import { GitSyncErrorService } from './git-sync-errors'
 
 export interface OrganizationSyncResult {
   success: boolean
@@ -42,8 +42,8 @@ export class OrganizationSyncService {
     @InjectQueue('git-sync') private readonly gitSyncQueue: Queue,
     private readonly organizationsService: OrganizationsService,
     private readonly gitConnectionsService: GitConnectionsService,
-    private readonly gitProvider: GitProviderService,
-    private readonly errorService: GitSyncErrorService,
+    private readonly githubClient: GitHubClientService,
+    private readonly gitlabClient: GitLabClientService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(OrganizationSyncService.name)
@@ -245,15 +245,6 @@ export class OrganizationSyncService {
     } catch (error) {
       this.logger.error(`Organization sync failed for ${organizationId}:`, error)
 
-      await this.errorService.recordError({
-        syncType: 'organization',
-        action: 'sync',
-        provider: 'github', // 默认，实际应该从组织获取
-        organizationId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        errorType: 'unknown',
-      })
-
       return {
         success: false,
         syncedMembers: 0,
@@ -386,36 +377,23 @@ export class OrganizationSyncService {
 
         // 添加成员到 Git 组织
         if (organization.gitProvider === 'github') {
-          await this.gitProvider.addGitHubOrgMember(
-            ownerConnection.accessToken,
-            organization.gitOrgName!,
-            memberGitConnection.username,
-            gitRole as 'admin' | 'member',
-          )
+          const octokit = this.githubClient.createClient(ownerConnection.accessToken)
+          await octokit.orgs.setMembershipForUser({
+            org: organization.gitOrgName!,
+            username: memberGitConnection.username,
+            role: gitRole as 'admin' | 'member',
+          })
         } else if (organization.gitProvider === 'gitlab') {
-          await this.gitProvider.addGitLabGroupMember(
-            ownerConnection.accessToken,
-            organization.gitOrgId!,
-            Number.parseInt(memberGitConnection.providerAccountId!, 10),
-            gitRole as 10 | 20 | 30 | 40 | 50,
-          )
+          const gitlab = this.gitlabClient.createClient(ownerConnection.accessToken)
+          await gitlab.GroupMembers.add(organization.gitOrgId!, gitRole as 10 | 20 | 30 | 40 | 50, {
+            userId: Number.parseInt(memberGitConnection.providerAccountId!, 10),
+          })
         }
 
         results.syncedMembers++
         this.logger.info(
           `Synced member ${member.user.displayName || member.user.email} to ${organization.gitProvider} organization`,
         )
-
-        // 记录成功
-        await this.errorService.recordSuccess({
-          syncType: 'member',
-          action: 'create',
-          provider: organization.gitProvider as 'github' | 'gitlab',
-          organizationId: organization.id,
-          userId: member.user.id,
-          gitResourceId: memberGitConnection.providerAccountId,
-          gitResourceType: 'user',
-        })
       } catch (error) {
         this.logger.error(
           `Failed to sync member ${member.user.displayName || member.user.email}:`,
@@ -427,17 +405,6 @@ export class OrganizationSyncService {
           error: error instanceof Error ? error.message : 'Unknown error',
         })
         results.success = false
-
-        // 记录错误
-        await this.errorService.recordError({
-          syncType: 'member',
-          action: 'create',
-          provider: organization.gitProvider as 'github' | 'gitlab',
-          organizationId: organization.id,
-          userId: member.user.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          errorType: 'unknown',
-        })
       }
     }
 
@@ -514,14 +481,14 @@ export class OrganizationSyncService {
 
       // 从 Git 组织移除成员
       if (organization.gitProvider === 'github') {
-        await this.gitProvider.removeGitHubOrgMember(
-          ownerGitConnection.accessToken,
-          organization.gitOrgName!,
-          userGitConnection.username,
-        )
+        const octokit = this.githubClient.createClient(ownerGitConnection.accessToken)
+        await octokit.orgs.removeMembershipForUser({
+          org: organization.gitOrgName!,
+          username: userGitConnection.username,
+        })
       } else if (organization.gitProvider === 'gitlab') {
-        await this.gitProvider.removeGitLabGroupMember(
-          ownerGitConnection.accessToken,
+        const gitlab = this.gitlabClient.createClient(ownerGitConnection.accessToken)
+        await gitlab.GroupMembers.remove(
           organization.gitOrgId!,
           Number.parseInt(userGitConnection.providerAccountId!, 10),
         )
@@ -529,30 +496,9 @@ export class OrganizationSyncService {
 
       this.logger.info(`Successfully removed user from ${organization.gitProvider} organization`)
 
-      // 记录成功
-      await this.errorService.recordSuccess({
-        syncType: 'member',
-        action: 'delete',
-        provider: organization.gitProvider as 'github' | 'gitlab',
-        organizationId,
-        userId,
-        gitResourceId: userGitConnection.providerAccountId,
-        gitResourceType: 'user',
-      })
-
       return { success: true }
     } catch (error) {
       this.logger.error(`Failed to remove organization member:`, error)
-
-      await this.errorService.recordError({
-        syncType: 'member',
-        action: 'delete',
-        provider: 'github', // 默认
-        organizationId,
-        userId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        errorType: 'unknown',
-      })
 
       return {
         success: false,
@@ -629,12 +575,7 @@ export class OrganizationSyncService {
     }
 
     // 团队工作空间的状态
-    const pendingErrors = await this.errorService.getErrorCount({
-      syncType: 'member',
-      organizationId,
-      status: 'failed',
-      resolved: false,
-    })
+    const pendingErrors = 0 // TODO: 实现错误统计（可以从日志系统查询）
 
     return {
       enabled: organization.gitSyncEnabled || false,
@@ -656,15 +597,9 @@ export class OrganizationSyncService {
     gitOrgName: string,
     triggeredBy: string,
   ) {
-    const logId = await this.errorService.startSync({
-      syncType: 'organization',
-      action: 'create',
-      provider: gitProvider as 'github' | 'gitlab',
-      organizationId,
-      metadata: {
-        triggeredBy: triggeredBy as 'user' | 'system' | 'webhook',
-      },
-    })
+    this.logger.info(
+      `Creating Git organization: ${gitOrgName} (provider: ${gitProvider}, triggered by: ${triggeredBy})`,
+    )
 
     try {
       // ✅ 使用 Foundation 层服务获取组织信息
@@ -689,16 +624,9 @@ export class OrganizationSyncService {
         gitLastSyncAt: new Date(),
       })
 
-      await this.errorService.updateSyncLog(logId, {
-        status: 'success',
-      })
-
       this.logger.info(`Marked Git organization for manual setup: ${gitOrgName}`)
     } catch (error) {
-      await this.errorService.updateSyncLog(logId, {
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      })
+      this.logger.error(`Failed to create Git organization:`, error)
       throw error
     }
   }
@@ -713,23 +641,16 @@ export class OrganizationSyncService {
     role: 'owner' | 'admin' | 'member',
     triggeredBy: string,
   ) {
+    this.logger.info(
+      `Adding member ${userId} to Git organization (role: ${role}, triggered by: ${triggeredBy})`,
+    )
+
     // ✅ 使用 Foundation 层服务获取组织信息
     const org = await this.organizationsService.get(organizationId, 'system')
 
     if (!org || !org.gitSyncEnabled || !org.gitProvider || !org.gitOrgId) {
       throw new Error('Organization Git sync not configured')
     }
-
-    const logId = await this.errorService.startSync({
-      syncType: 'member',
-      action: 'create',
-      provider: org.gitProvider as 'github' | 'gitlab',
-      organizationId,
-      userId,
-      metadata: {
-        triggeredBy: triggeredBy as 'user' | 'system' | 'webhook',
-      },
-    })
 
     try {
       // ✅ 使用 Foundation 层服务获取用户的 Git 连接
@@ -765,31 +686,22 @@ export class OrganizationSyncService {
 
       // 添加成员到 Git 组织
       if (org.gitProvider === 'github') {
-        await this.gitProvider.addGitHubOrgMember(
-          ownerGitConnection.accessToken,
-          org.gitOrgName!,
-          gitConnection.username,
-          gitRole as 'admin' | 'member',
-        )
+        const octokit = this.githubClient.createClient(ownerGitConnection.accessToken)
+        await octokit.orgs.setMembershipForUser({
+          org: org.gitOrgName!,
+          username: gitConnection.username,
+          role: gitRole as 'admin' | 'member',
+        })
       } else if (org.gitProvider === 'gitlab') {
-        await this.gitProvider.addGitLabGroupMember(
-          ownerGitConnection.accessToken,
-          org.gitOrgId,
-          Number.parseInt(gitConnection.providerAccountId!, 10),
-          gitRole as 10 | 20 | 30 | 40 | 50,
-        )
+        const gitlab = this.gitlabClient.createClient(ownerGitConnection.accessToken)
+        await gitlab.GroupMembers.add(org.gitOrgId, gitRole as 10 | 20 | 30 | 40 | 50, {
+          userId: Number.parseInt(gitConnection.providerAccountId!, 10),
+        })
       }
-
-      await this.errorService.updateSyncLog(logId, {
-        status: 'success',
-      })
 
       this.logger.info(`Added member ${userId} to Git organization ${org.gitOrgName}`)
     } catch (error) {
-      await this.errorService.updateSyncLog(logId, {
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      })
+      this.logger.error(`Failed to add member to Git organization:`, error)
       throw error
     }
   }
@@ -803,23 +715,16 @@ export class OrganizationSyncService {
     userId: string,
     triggeredBy: string,
   ) {
+    this.logger.info(
+      `Removing member ${userId} from Git organization (triggered by: ${triggeredBy})`,
+    )
+
     // ✅ 使用 Foundation 层服务获取组织信息
     const org = await this.organizationsService.get(organizationId, 'system')
 
     if (!org || !org.gitSyncEnabled || !org.gitProvider || !org.gitOrgId) {
       throw new Error('Organization Git sync not configured')
     }
-
-    const logId = await this.errorService.startSync({
-      syncType: 'member',
-      action: 'delete',
-      provider: org.gitProvider as 'github' | 'gitlab',
-      organizationId,
-      userId,
-      metadata: {
-        triggeredBy: triggeredBy as 'user' | 'system' | 'webhook',
-      },
-    })
 
     try {
       // ✅ 使用 Foundation 层服务获取用户的 Git 连接
@@ -830,9 +735,7 @@ export class OrganizationSyncService {
 
       if (!gitConnection) {
         // 用户没有关联 Git 账号,无需移除
-        await this.errorService.updateSyncLog(logId, {
-          status: 'success',
-        })
+        this.logger.info(`User ${userId} does not have ${org.gitProvider} account, skipping`)
         return
       }
 
@@ -866,29 +769,22 @@ export class OrganizationSyncService {
 
       // 从 Git 组织移除成员
       if (org.gitProvider === 'github') {
-        await this.gitProvider.removeGitHubOrgMember(
-          ownerGitConnection.accessToken,
-          org.gitOrgName!,
-          userGitConnection.username,
-        )
+        const octokit = this.githubClient.createClient(ownerGitConnection.accessToken)
+        await octokit.orgs.removeMembershipForUser({
+          org: org.gitOrgName!,
+          username: userGitConnection.username,
+        })
       } else if (org.gitProvider === 'gitlab') {
-        await this.gitProvider.removeGitLabGroupMember(
-          ownerGitConnection.accessToken,
+        const gitlab = this.gitlabClient.createClient(ownerGitConnection.accessToken)
+        await gitlab.GroupMembers.remove(
           org.gitOrgId,
           Number.parseInt(userGitConnection.providerAccountId!, 10),
         )
       }
 
-      await this.errorService.updateSyncLog(logId, {
-        status: 'success',
-      })
-
       this.logger.info(`Removed member ${userId} from Git organization ${org.gitOrgName}`)
     } catch (error) {
-      await this.errorService.updateSyncLog(logId, {
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      })
+      this.logger.error(`Failed to remove member from Git organization:`, error)
       throw error
     }
   }
@@ -903,23 +799,16 @@ export class OrganizationSyncService {
     newRole: 'owner' | 'admin' | 'member',
     triggeredBy: string,
   ) {
+    this.logger.info(
+      `Updating member ${userId} role to ${newRole} in Git organization (triggered by: ${triggeredBy})`,
+    )
+
     // ✅ 使用 Foundation 层服务获取组织信息
     const org = await this.organizationsService.get(organizationId, 'system')
 
     if (!org || !org.gitSyncEnabled || !org.gitProvider || !org.gitOrgId) {
       throw new Error('Organization Git sync not configured')
     }
-
-    const logId = await this.errorService.startSync({
-      syncType: 'member',
-      action: 'update',
-      provider: org.gitProvider as 'github' | 'gitlab',
-      organizationId,
-      userId,
-      metadata: {
-        triggeredBy: triggeredBy as 'user' | 'system' | 'webhook',
-      },
-    })
 
     try {
       // ✅ 使用 Foundation 层服务获取用户的 Git 连接
@@ -958,43 +847,32 @@ export class OrganizationSyncService {
 
       // 更新 Git 组织成员角色
       if (org.gitProvider === 'github') {
+        const octokit = this.githubClient.createClient(ownerGitConnection.accessToken)
         // GitHub 需要先移除再添加来更新角色
-        await this.gitProvider.removeGitHubOrgMember(
-          ownerGitConnection.accessToken,
-          org.gitOrgName!,
-          gitConnection.username,
-        )
-        await this.gitProvider.addGitHubOrgMember(
-          ownerGitConnection.accessToken,
-          org.gitOrgName!,
-          gitConnection.username,
-          gitRole as 'admin' | 'member',
-        )
+        await octokit.orgs.removeMembershipForUser({
+          org: org.gitOrgName!,
+          username: gitConnection.username,
+        })
+        await octokit.orgs.setMembershipForUser({
+          org: org.gitOrgName!,
+          username: gitConnection.username,
+          role: gitRole as 'admin' | 'member',
+        })
       } else if (org.gitProvider === 'gitlab') {
+        const gitlab = this.gitlabClient.createClient(ownerGitConnection.accessToken)
         // GitLab 也需要先移除再添加来更新角色
-        await this.gitProvider.removeGitLabGroupMember(
-          ownerGitConnection.accessToken,
+        await gitlab.GroupMembers.remove(
           org.gitOrgId,
           Number.parseInt(gitConnection.providerAccountId!, 10),
         )
-        await this.gitProvider.addGitLabGroupMember(
-          ownerGitConnection.accessToken,
-          org.gitOrgId,
-          Number.parseInt(gitConnection.providerAccountId!, 10),
-          gitRole as 10 | 20 | 30 | 40 | 50,
-        )
+        await gitlab.GroupMembers.add(org.gitOrgId, gitRole as 10 | 20 | 30 | 40 | 50, {
+          userId: Number.parseInt(gitConnection.providerAccountId!, 10),
+        })
       }
-
-      await this.errorService.updateSyncLog(logId, {
-        status: 'success',
-      })
 
       this.logger.info(`Updated member ${userId} role in Git organization ${org.gitOrgName}`)
     } catch (error) {
-      await this.errorService.updateSyncLog(logId, {
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      })
+      this.logger.error(`Failed to update member role in Git organization:`, error)
       throw error
     }
   }

@@ -168,8 +168,20 @@ export class MultimodalService {
         content,
       })
 
+      // Get the model from the client adapter
+      interface AIClientWithModel {
+        model?: unknown
+        getModel?: () => unknown
+      }
+      const clientWithModel = client as AIClientWithModel
+      const modelInstance = clientWithModel.model || clientWithModel.getModel?.()
+
+      if (!modelInstance) {
+        throw ErrorFactory.ai.inferenceFailed('Failed to get model instance from AI client')
+      }
+
       const result = await generateText({
-        model: (client as any).model || (client as any).getModel(),
+        model: modelInstance,
         messages,
       })
 

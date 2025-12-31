@@ -16,6 +16,7 @@ import {
   GitConnectionsModule,
   GitProvidersModule,
   GitSyncLogsModule,
+  OrganizationsModule,
 } from '@juanie/service-foundation'
 import { BullModule } from '@nestjs/bullmq'
 import { Module } from '@nestjs/common'
@@ -25,7 +26,6 @@ import { ConflictResolutionService } from './conflict-resolution.service'
 import { GitSyncService } from './git-sync.service'
 import { GitSyncWorker } from './git-sync.worker'
 import { GitSyncEventHandler } from './git-sync-event-handler.service'
-import { OrganizationEventHandler } from './organization-event-handler.service'
 import { OrganizationSyncService } from './organization-sync.service'
 import { ProjectCollaborationSyncService } from './project-collaboration-sync.service'
 
@@ -49,6 +49,7 @@ import { ProjectCollaborationSyncService } from './project-collaboration-sync.se
     GitConnectionsModule,
     GitSyncLogsModule,
     GitProvidersModule,
+    OrganizationsModule, // 提供 OrganizationsService
 
     // ✅ Business 层服务
     ProjectsModule,
@@ -64,7 +65,6 @@ import { ProjectCollaborationSyncService } from './project-collaboration-sync.se
     GitSyncEventHandler,
     OrganizationSyncService,
     ProjectCollaborationSyncService,
-    OrganizationEventHandler,
     ConflictResolutionService,
   ],
   exports: [

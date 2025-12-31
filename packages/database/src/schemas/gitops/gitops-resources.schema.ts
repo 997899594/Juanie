@@ -1,7 +1,30 @@
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import {
+  index,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core'
 import { environments } from '../deployment/environments.schema'
 import { projects } from '../project/projects.schema'
 import { repositories } from '../repository/repositories.schema'
+
+// ✅ 使用 Drizzle pgEnum 定义枚举类型
+export const gitopsResourceTypeEnum = pgEnum('gitops_resource_type', [
+  'kustomization',
+  'helm',
+  'git-repository', // Flux GitRepository 资源
+  'helm-release', // Flux HelmRelease 资源
+])
+export const gitopsResourceStatusEnum = pgEnum('gitops_resource_status', [
+  'pending',
+  'ready',
+  'reconciling',
+  'failed',
+])
 
 export const gitopsResources = pgTable(
   'gitops_resources',
@@ -10,15 +33,13 @@ export const gitopsResources = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    environmentId: uuid('environment_id')
-      .notNull()
-      .references(() => environments.id, { onDelete: 'cascade' }),
-    repositoryId: uuid('repository_id')
-      .notNull()
-      .references(() => repositories.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environment_id').references(() => environments.id, {
+      onDelete: 'cascade',
+    }), // ✅ 可选：GitRepository 不属于特定环境
+    repositoryId: uuid('repository_id').references(() => repositories.id, { onDelete: 'cascade' }), // ✅ 可选：某些资源可能不关联仓库
 
     // 资源类型和标识
-    type: text('type').notNull(), // 'kustomization' | 'helm'
+    type: gitopsResourceTypeEnum('type').notNull(),
     name: text('name').notNull(),
     namespace: text('namespace').notNull(),
 
@@ -62,7 +83,7 @@ export const gitopsResources = pgTable(
     }>(),
 
     // 状态
-    status: text('status').notNull().default('pending'), // 'pending', 'ready', 'reconciling', 'failed'
+    status: gitopsResourceStatusEnum('status').notNull().default('pending'),
     statusReason: text('status_reason'), // 状态原因（简短描述）
     statusMessage: text('status_message'), // 详细状态消息
     lastAppliedRevision: text('last_applied_revision'),

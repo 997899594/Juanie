@@ -431,6 +431,14 @@ export class OrganizationsService {
       ),
       columns: { id: true },
     })
+
+    // ✅ 添加调试日志
+    console.log('[OrganizationsService.exists]', {
+      organizationId,
+      found: !!org,
+      org,
+    })
+
     return !!org
   }
 

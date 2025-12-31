@@ -2,7 +2,6 @@ import { DomainEvents } from '@juanie/core/events'
 import { Injectable } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import { PinoLogger } from 'nestjs-pino'
-// import { GitPlatformSyncService } from './git-platform-sync.service'
 
 /**
  * Webhook 事件监听器

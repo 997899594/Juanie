@@ -1,6 +1,10 @@
 import { DATABASE } from '@juanie/core/tokens'
 import * as schema from '@juanie/database'
-import { GitConnectionsService, GitProviderService } from '@juanie/service-foundation'
+import {
+  GitConnectionsService,
+  GitHubClientService,
+  GitLabClientService,
+} from '@juanie/service-foundation'
 import type { ConnectRepositoryInput } from '@juanie/types'
 import { Inject, Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
@@ -12,8 +16,9 @@ export class RepositoriesService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     private readonly config: ConfigService,
-    private readonly gitProvider: GitProviderService,
     private readonly gitConnections: GitConnectionsService,
+    private readonly githubClient: GitHubClientService,
+    private readonly gitlabClient: GitLabClientService,
   ) {}
 
   // 连接仓库
@@ -417,11 +422,15 @@ export class RepositoriesService {
       throw new Error('仓库不存在')
     }
 
+    // 映射 Flux 状态到 Repository 状态
+    const repositoryStatus: 'pending' | 'syncing' | 'success' | 'failed' =
+      status.status === 'ready' ? 'success' : status.status === 'reconciling' ? 'syncing' : 'failed'
+
     // 更新同步状态
     const [updated] = await this.db
       .update(schema.repositories)
       .set({
-        status: status.status,
+        status: repositoryStatus,
         lastSyncAt: new Date(),
         updatedAt: new Date(),
       })
@@ -436,12 +445,10 @@ export class RepositoriesService {
    * 用于 Flux Watcher 根据 K8s 资源名称更新状态
    */
   async findByFluxResourceName(fluxResourceName: string, fluxNamespace: string) {
-    const repositories = await this.db
-      .select()
-      .from(schema.repositories)
-      .where(eq(schema.repositories.gitopsConfig, { fluxResourceName, fluxNamespace } as any))
+    // Query all repositories and filter in application layer
+    // JSONB queries in Drizzle require application-level filtering for nested properties
+    const repositories = await this.db.select().from(schema.repositories)
 
-    // 由于 JSONB 查询的限制，我们需要在应用层过滤
     return repositories.find(
       (repo) =>
         repo.gitopsConfig?.fluxResourceName === fluxResourceName &&
@@ -542,8 +549,59 @@ export class RepositoriesService {
   }
 
   // 获取用户在 Git 平台上的仓库列表
-  async listUserRepositories(provider: 'github' | 'gitlab', accessToken: string) {
-    return await this.gitProvider.listUserRepositories(provider, accessToken)
+  async listUserRepositories(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+  ): Promise<
+    Array<{
+      id: string
+      name: string
+      fullName: string
+      description: string | null
+      cloneUrl: string
+      defaultBranch: string
+      isPrivate: boolean
+    }>
+  > {
+    if (provider === 'github') {
+      // ✅ 直接使用 GitHub SDK
+      const octokit = this.githubClient.createClient(accessToken)
+      const { data: repos } = await octokit.repos.listForAuthenticatedUser({
+        per_page: 100,
+        sort: 'updated',
+      })
+
+      return repos.map((repo) => ({
+        id: String(repo.id),
+        name: repo.name,
+        fullName: repo.full_name,
+        description: repo.description ?? null,
+        cloneUrl: repo.clone_url,
+        defaultBranch: repo.default_branch,
+        isPrivate: repo.private,
+      }))
+    }
+
+    if (provider === 'gitlab') {
+      // ✅ 直接使用 GitLab SDK
+      const gitbeaker = this.gitlabClient.createClient(accessToken)
+      const projects = await gitbeaker.Projects.all({
+        owned: true,
+        perPage: 100,
+      })
+
+      return projects.map((project) => ({
+        id: String(project.id),
+        name: String(project.name),
+        fullName: String(project.path_with_namespace),
+        description: project.description ? String(project.description) : null,
+        cloneUrl: String(project.http_url_to_repo),
+        defaultBranch: project.default_branch ? String(project.default_branch) : 'main',
+        isPrivate: project.visibility === 'private',
+      }))
+    }
+
+    throw new Error(`不支持的 provider: ${provider}`)
   }
 
   // 从 Git 连接解析访问令牌（解密）

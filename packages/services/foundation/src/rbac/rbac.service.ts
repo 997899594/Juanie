@@ -7,10 +7,11 @@
  */
 
 import type { DatabaseClient } from '@juanie/core/database'
+import { DATABASE } from '@juanie/core/tokens'
 import * as schema from '@juanie/database'
 import type { Action, ProjectRole, Subject } from '@juanie/types'
 import { mapTeamRoleToProjectRole } from '@juanie/types'
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { and, eq } from 'drizzle-orm'
 import { PinoLogger } from 'nestjs-pino'
 import {
@@ -26,7 +27,7 @@ import type { AppAbility } from './types'
 @Injectable()
 export class RbacService {
   constructor(
-    private readonly db: DatabaseClient,
+    @Inject(DATABASE) private readonly db: DatabaseClient,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(RbacService.name)
@@ -50,11 +51,37 @@ export class RbacService {
     // 查询组织成员角色
     let orgMember: AbilityOrgMember | undefined
     if (organizationId) {
+      // ✅ 使用 Relational Query 关联查询组织，检查是否被软删除
       const orgMemberRecord = await this.db.query.organizationMembers.findFirst({
-        where: eq(schema.organizationMembers.userId, userId),
+        where: and(
+          eq(schema.organizationMembers.userId, userId),
+          eq(schema.organizationMembers.organizationId, organizationId),
+        ),
+        with: {
+          organization: {
+            columns: {
+              id: true,
+              deletedAt: true,
+            },
+          },
+        },
       })
 
-      if (orgMemberRecord) {
+      // ✅ 添加调试日志
+      console.log('[RBAC defineAbilities] Organization member query:', {
+        userId,
+        organizationId,
+        found: !!orgMemberRecord,
+        role: orgMemberRecord?.role,
+        orgDeleted: orgMemberRecord?.organization?.deletedAt !== null,
+      })
+
+      // ✅ 只有组织未被删除时，才使用该角色
+      if (
+        orgMemberRecord &&
+        orgMemberRecord.organization &&
+        !orgMemberRecord.organization.deletedAt
+      ) {
         orgMember = {
           userId: orgMemberRecord.userId,
           organizationId: orgMemberRecord.organizationId,

@@ -1,6 +1,5 @@
 import * as k8s from '@kubernetes/client-node'
 import { Injectable, type OnModuleInit } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
 import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PinoLogger } from 'nestjs-pino'
 import { SystemEvents } from '../events'
@@ -10,6 +9,11 @@ import { SystemEvents } from '../events'
  *
  * 使用官方 @kubernetes/client-node 库
  * 提供 K8s 集群操作的统一接口
+ *
+ * 配置方式:
+ * 1. 设置 KUBECONFIG 环境变量（支持绝对路径、~、相对路径）
+ * 2. 使用默认路径 ~/.kube/config
+ * 3. 集群内自动配置
  */
 @Injectable()
 export class K8sClientService implements OnModuleInit {
@@ -20,7 +24,6 @@ export class K8sClientService implements OnModuleInit {
   private isConnected = false
 
   constructor(
-    private config: ConfigService,
     private eventEmitter: EventEmitter2,
     private readonly logger: PinoLogger,
   ) {
@@ -34,19 +37,11 @@ export class K8sClientService implements OnModuleInit {
 
   private async connect() {
     try {
-      // 加载 kubeconfig
-      const kubeconfigPath = this.config.get<string>('KUBECONFIG')
-
-      if (kubeconfigPath) {
-        this.kc.loadFromFile(kubeconfigPath)
-      } else {
-        // 尝试默认位置或集群内配置
-        try {
-          this.kc.loadFromDefault()
-        } catch {
-          this.kc.loadFromCluster()
-        }
-      }
+      // 使用官方的 loadFromDefault，自动处理:
+      // 1. KUBECONFIG 环境变量（支持多个文件，用 : 分隔）
+      // 2. ~/.kube/config 默认路径
+      // 3. 集群内配置
+      this.kc.loadFromDefault()
 
       // 初始化 API 客户端
       this.k8sApi = this.kc.makeApiClient(k8s.CoreV1Api)
@@ -64,7 +59,7 @@ export class K8sClientService implements OnModuleInit {
       })
     } catch (error: any) {
       this.isConnected = false
-      this.logger.warn(`⚠️ K8s 连接失败: ${error.message}`)
+      this.logger.warn({ error: error.message }, '⚠️ K8s 连接失败')
 
       this.eventEmitter.emit(SystemEvents.K8S_CONNECTION_FAILED, {
         error: error.message,

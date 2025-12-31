@@ -19,7 +19,7 @@ export const deployments = pgTable(
 
     // 版本信息
     version: text('version').notNull(),
-    commitHash: text('commit_hash').notNull(), // 完整的 commit SHA（显示时截取前 7 位）
+    commitHash: text('commit_hash'), // 完整的 commit SHA（GitOps 部署可为空）
     commitMessage: text('commit_message'), // 提交信息
     branch: text('branch').notNull(),
 

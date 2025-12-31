@@ -268,14 +268,25 @@ export class GitProviderService {
       }
       const [owner, repo] = parts
       const collaborators = await this.githubClient.listCollaborators(accessToken, owner, repo)
-      return collaborators.map((collab) => ({
-        username: collab.login,
-        id: collab.id,
-        permission: collab.permissions
-          ? Object.keys(collab.permissions).find((key) => (collab.permissions as any)[key]) ||
-            'read'
-          : 'read',
-      }))
+      return collaborators.map((collab) => {
+        // GitHub permissions object has boolean flags: admin, maintain, push, triage, pull
+        const permissions = collab.permissions
+        let permission = 'read'
+
+        if (permissions) {
+          if (permissions.admin) permission = 'admin'
+          else if (permissions.maintain) permission = 'maintain'
+          else if (permissions.push) permission = 'push'
+          else if (permissions.triage) permission = 'triage'
+          else if (permissions.pull) permission = 'pull'
+        }
+
+        return {
+          username: collab.login,
+          id: collab.id,
+          permission,
+        }
+      })
     } else {
       const members = await this.gitlabClient.listProjectMembers(accessToken, repoIdentifier)
       const accessLevelMap: Record<number, string> = {

@@ -1,10 +1,12 @@
-import { AuditLogsModule, NotificationsModule } from '@juanie/service-foundation'
+import {
+  AuditLogsModule,
+  GitProvidersModule,
+  NotificationsModule,
+} from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { EnvironmentsModule } from '../../environments/environments.module'
 import { FluxModule } from '../../gitops/flux/flux.module'
-// GitOpsModule 已删除 - Phase 9
-// import { GitOpsModule } from '../../gitops/git-ops/git-ops.module'
 import { RepositoriesModule } from '../../repositories/repositories.module'
 import { TemplatesModule } from '../templates'
 import { ProjectInitializationService } from './initialization.service'
@@ -28,6 +30,7 @@ import { ProjectInitializationService } from './initialization.service'
     TemplatesModule,
     EnvironmentsModule,
     RepositoriesModule, // 包含 GitConnectionsModule
+    GitProvidersModule, // 提供 GitProviderService, GitHubClientService, GitLabClientService
     FluxModule, // 包含 FluxResourcesService
     // GitOpsModule, // 已删除 - Phase 9
     NotificationsModule,

@@ -225,13 +225,16 @@ export class GitSyncLogsService {
     const logsToDelete = logs.slice(keepCount)
     const idsToDelete = logsToDelete.map((l) => l.id)
 
-    await this.db.delete(schema.gitSyncLogs).where(
-      and(
-        eq(schema.gitSyncLogs.projectId, projectId),
-        // @ts-expect-error - drizzle-orm types issue
-        schema.gitSyncLogs.id.in(idsToDelete),
-      ),
-    )
+    // Delete logs using inArray from drizzle-orm
+    const { inArray } = await import('drizzle-orm')
+    await this.db
+      .delete(schema.gitSyncLogs)
+      .where(
+        and(
+          eq(schema.gitSyncLogs.projectId, projectId),
+          inArray(schema.gitSyncLogs.id, idsToDelete),
+        ),
+      )
 
     this.logger.info(`Cleaned up ${idsToDelete.length} old sync logs for project ${projectId}`)
 

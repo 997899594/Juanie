@@ -199,7 +199,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Badge
+  Badge,
+  log
 } from '@juanie/ui'
 import { 
   Plus, 

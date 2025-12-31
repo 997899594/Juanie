@@ -1,4 +1,5 @@
 import { DatabaseModule } from '@juanie/core/database'
+import { CoreEventsModule } from '@juanie/core/events'
 import { QueueModule } from '@juanie/core/queue'
 import { RedisModule } from '@juanie/core/redis'
 import { BusinessModule } from '@juanie/service-business'
@@ -55,6 +56,7 @@ const prettyStream = isDev
       },
     }),
     // Core modules
+    CoreEventsModule, // 事件系统（必须在其他模块之前）
     DatabaseModule,
     RedisModule,
     QueueModule,

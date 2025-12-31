@@ -1,5 +1,23 @@
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import {
+  index,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core'
 import { projects } from '../project/projects.schema'
+
+// ✅ 使用 Drizzle pgEnum 定义枚举类型
+export const environmentTypeEnum = pgEnum('environment_type', [
+  'development',
+  'staging',
+  'production',
+  'testing',
+])
+export const environmentStatusEnum = pgEnum('environment_status', ['active', 'inactive', 'error'])
 
 export const environments = pgTable(
   'environments',
@@ -9,21 +27,28 @@ export const environments = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    type: text('type').notNull(), // 'development', 'staging', 'production', 'testing'
+    type: environmentTypeEnum('type').notNull(),
     description: text('description'), // 环境描述
-    status: text('status').notNull().default('active'), // 'active', 'inactive', 'error'
+    status: environmentStatusEnum('status').notNull().default('active'),
     healthCheckUrl: text('health_check_url'), // 健康检查 URL
 
     // 注意：GitOps 配置通过 gitops_resources 表的 environmentId 外键关联
     // 不需要在这里添加 gitopsResourceId，避免循环依赖
 
-    // 环境配置（JSONB）- 简化版，GitOps 配置已移至 gitops_resources 表
+    // 环境配置（JSONB）- 包含 GitOps 配置
     config: jsonb('config')
       .$type<{
         cloudProvider?: 'aws' | 'gcp' | 'azure'
         region?: string
         approvalRequired: boolean
         minApprovals: number
+        gitops?: {
+          enabled: boolean
+          autoSync: boolean
+          gitBranch: string
+          gitPath: string
+          syncInterval: string
+        }
       }>()
       .default({ approvalRequired: false, minApprovals: 1 }),
 

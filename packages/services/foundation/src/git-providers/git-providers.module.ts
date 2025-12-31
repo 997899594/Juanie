@@ -17,6 +17,6 @@ import { GitLabClientService } from './gitlab-client.service'
 @Module({
   imports: [ConfigModule],
   providers: [GitHubClientService, GitLabClientService, GitProviderService],
-  exports: [GitProviderService],
+  exports: [GitHubClientService, GitLabClientService, GitProviderService],
 })
 export class GitProvidersModule {}

@@ -41,8 +41,6 @@ export function setupObservability() {
   })
 
   sdk.start()
-  console.log('✅ OpenTelemetry 已启动')
-  console.log('📊 Prometheus 指标: http://localhost:9465/metrics')
 
   return sdk
 }

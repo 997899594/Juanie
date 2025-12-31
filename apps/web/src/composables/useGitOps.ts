@@ -1,4 +1,4 @@
-import type { ConfigChange, DeploymentConfig, FluxResourceKind } from '@juanie/types'
+import type { FluxResourceKind } from '@juanie/types'
 import { log } from '@juanie/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { MaybeRef } from 'vue'
@@ -134,64 +134,6 @@ export function useGitOps(projectId?: MaybeRef<string>) {
     },
   })
 
-  /**
-   * 通过 GitOps 部署
-   */
-  const deployWithGitOpsMutation = useMutation({
-    mutationFn: async (data: {
-      projectId: string
-      environmentId: string
-      changes: DeploymentConfig
-      commitMessage?: string
-    }) => {
-      const payload = {
-        projectId: data.projectId,
-        environmentId: data.environmentId,
-        config: {
-          image: data.changes.image,
-          replicas: data.changes.replicas,
-          resources: data.changes.resources,
-        },
-        commitMessage: data.commitMessage,
-      }
-      return await trpc.gitops.deployWithGitOps.mutate(payload)
-    },
-    onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['gitops', 'resources', variables.projectId] })
-      toast.success('部署已提交', result.message)
-    },
-    onError: (err) => {
-      log.error('Failed to deploy with GitOps:', err)
-      if (isTRPCClientError(err)) {
-        toast.error('GitOps 部署失败', err.message)
-      }
-    },
-  })
-
-  /**
-   * 提交配置变更到 Git
-   */
-  const commitConfigChangesMutation = useMutation({
-    mutationFn: async (data: {
-      projectId: string
-      environmentId: string
-      changes: ConfigChange[]
-      commitMessage?: string
-    }) => {
-      return await trpc.gitops.commitConfigChanges.mutate(data)
-    },
-    onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['gitops', 'resources', variables.projectId] })
-      toast.success('配置已提交', result.message)
-    },
-    onError: (err) => {
-      log.error('Failed to commit config changes:', err)
-      if (isTRPCClientError(err)) {
-        toast.error('提交配置失败', err.message)
-      }
-    },
-  })
-
   return {
     // Query 数据
     resources,
@@ -203,7 +145,5 @@ export function useGitOps(projectId?: MaybeRef<string>) {
     updateGitOpsResource: updateGitOpsResourceMutation.mutateAsync,
     deleteGitOpsResource: deleteGitOpsResourceMutation.mutateAsync,
     triggerSync: triggerSyncMutation.mutateAsync,
-    deployWithGitOps: deployWithGitOpsMutation.mutateAsync,
-    commitConfigChanges: commitConfigChangesMutation.mutateAsync,
   }
 }

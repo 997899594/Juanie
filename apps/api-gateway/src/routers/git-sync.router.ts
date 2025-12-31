@@ -8,7 +8,7 @@ import type { GitSyncLog } from '@juanie/types'
 import { Injectable } from '@nestjs/common'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { withAbility } from '../trpc/rbac.middleware'
+import { checkPermission } from '../trpc/rbac.middleware'
 import { TrpcService } from '../trpc/trpc.service'
 
 /**
@@ -156,18 +156,24 @@ export class GitSyncRouter {
        * Requirements: 6.6
        * ✅ 权限检查：需要 manage_members Project 权限
        */
-      retrySyncMember: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'manage_members',
-        subject: 'Project',
-      })
+      retrySyncMember: this.trpc.protectedProcedure
         .input(
           z.object({
             syncLogId: z.string(),
             projectId: z.string(), // 添加 projectId 用于权限检查
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ ctx, input }) => {
           try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'manage_members',
+              'Project',
+              input.projectId,
+            )
+
             await this.gitSync.retrySyncTask(input.syncLogId)
 
             return {
@@ -187,18 +193,18 @@ export class GitSyncRouter {
        * Requirements: 6.4
        * ✅ 权限检查：需要 read Project 权限
        */
-      getSyncLogs: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'read',
-        subject: 'Project',
-      })
+      getSyncLogs: this.trpc.protectedProcedure
         .input(
           z.object({
             projectId: z.string(),
             limit: z.number().optional().default(50),
           }),
         )
-        .query(async ({ input }) => {
+        .query(async ({ ctx, input }) => {
           try {
+            // 在 resolver 内部检查权限
+            await checkPermission(this.rbacService, ctx.user.id, 'read', 'Project', input.projectId)
+
             const logs = await this.gitSync.getSyncLogs(input.projectId, input.limit)
 
             return {
@@ -264,18 +270,24 @@ export class GitSyncRouter {
        * Requirements: 6.6
        * ✅ 权限检查：需要 manage_members Project 权限
        */
-      retryFailedSyncs: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'manage_members',
-        subject: 'Project',
-      })
+      retryFailedSyncs: this.trpc.protectedProcedure
         .input(
           z.object({
             syncLogIds: z.array(z.string()),
             projectId: z.string(), // 添加 projectId 用于权限检查
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ ctx, input }) => {
           try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'manage_members',
+              'Project',
+              input.projectId,
+            )
+
             const results = await Promise.allSettled(
               input.syncLogIds.map((id) => this.gitSync.retrySyncTask(id)),
             )
@@ -302,10 +314,7 @@ export class GitSyncRouter {
        * Requirements: 8.3
        * ✅ 权限检查：需要 read Project 权限
        */
-      getConflictHistory: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'read',
-        subject: 'Project',
-      })
+      getConflictHistory: this.trpc.protectedProcedure
         .input(
           z.object({
             projectId: z.string(),
@@ -313,8 +322,11 @@ export class GitSyncRouter {
             offset: z.number().optional().default(0),
           }),
         )
-        .query(async ({ input }) => {
+        .query(async ({ ctx, input }) => {
           try {
+            // 在 resolver 内部检查权限
+            await checkPermission(this.rbacService, ctx.user.id, 'read', 'Project', input.projectId)
+
             const history = await this.conflictResolution.getConflictHistory(input.projectId, {
               limit: input.limit,
               offset: input.offset,
@@ -345,17 +357,23 @@ export class GitSyncRouter {
        * Requirements: Phase 3
        * ✅ 权限检查：需要 manage_members Organization 权限
        */
-      syncOrganizationMembers: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'manage_members',
-        subject: 'Organization',
-      })
+      syncOrganizationMembers: this.trpc.protectedProcedure
         .input(
           z.object({
             organizationId: z.string(),
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ ctx, input }) => {
           try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'manage_members',
+              'Organization',
+              input.organizationId,
+            )
+
             const result = await this.organizationSync.syncOrganizationMembers(input.organizationId)
 
             return {
@@ -380,17 +398,23 @@ export class GitSyncRouter {
        * Requirements: Phase 3
        * ✅ 权限检查：需要 read Organization 权限
        */
-      getOrganizationSyncStatus: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'read',
-        subject: 'Organization',
-      })
+      getOrganizationSyncStatus: this.trpc.protectedProcedure
         .input(
           z.object({
             organizationId: z.string(),
           }),
         )
-        .query(async ({ input }) => {
+        .query(async ({ ctx, input }) => {
           try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'read',
+              'Organization',
+              input.organizationId,
+            )
+
             const status = await this.organizationSync.getOrganizationSyncStatus(
               input.organizationId,
             )
@@ -416,17 +440,23 @@ export class GitSyncRouter {
        * Requirements: Phase 3
        * ✅ 权限检查：需要 manage_members Project 权限
        */
-      syncProjectCollaborators: withAbility(this.trpc.protectedProcedure, this.rbacService, {
-        action: 'manage_members',
-        subject: 'Project',
-      })
+      syncProjectCollaborators: this.trpc.protectedProcedure
         .input(
           z.object({
             projectId: z.string(),
           }),
         )
-        .mutation(async ({ input }) => {
+        .mutation(async ({ ctx, input }) => {
           try {
+            // 在 resolver 内部检查权限
+            await checkPermission(
+              this.rbacService,
+              ctx.user.id,
+              'manage_members',
+              'Project',
+              input.projectId,
+            )
+
             // 使用现有的 batchSyncProject 方法
             await this.gitSync.batchSyncProject(input.projectId)
 

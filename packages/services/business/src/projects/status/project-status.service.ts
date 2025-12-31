@@ -72,24 +72,30 @@ export class ProjectStatusService {
       .where(eq(schema.gitopsResources.projectId, projectId))
 
     return {
-      project: project as any,
-      environments: environments as any,
-      repositories: repositories as any,
-      repository: repositories.length > 0 ? (repositories[0] as any) : null,
-      gitopsResources: gitopsResources as any,
-      initializationSteps: [], // 不再从数据库查询，前端应该从 WebSocket 获取实时进度
+      project: {
+        ...project,
+        config: project.config || {
+          defaultBranch: 'main',
+          enableCiCd: true,
+          enableAi: true,
+        },
+      },
+      environments,
+      repositories,
+      repository: repositories.length > 0 ? repositories[0] : null,
+      gitopsResources,
       stats: {
         totalDeployments: deployments.length,
         successfulDeployments: 0,
         failedDeployments: 0,
       },
       health: {
-        status: 'healthy' as const,
+        status: 'healthy',
         score: 100,
         factors: {
           deploymentSuccessRate: 100,
-          gitopsSyncStatus: 'healthy' as const,
-          podHealthStatus: 'healthy' as const,
+          gitopsSyncStatus: 'healthy',
+          podHealthStatus: 'healthy',
           lastDeploymentAge: 0,
         },
         issues: [],
@@ -190,7 +196,7 @@ export class ProjectStatusService {
       factors: {
         deploymentSuccessRate,
         gitopsSyncStatus: gitopsSyncStatus as 'healthy' | 'warning' | 'critical',
-        podHealthStatus: 'healthy' as const,
+        podHealthStatus: 'healthy',
         lastDeploymentAge,
       },
       issues,
@@ -209,7 +215,7 @@ export class ProjectStatusService {
       .update(schema.projects)
       .set({
         healthScore: health.score,
-        healthStatus: health.status,
+        healthStatus: health.status as 'healthy' | 'warning' | 'critical',
         lastHealthCheck: new Date(),
         updatedAt: new Date(),
       })
@@ -244,6 +250,22 @@ export class ProjectStatusService {
       successful,
       failed,
     }
+  }
+
+  /**
+   * 获取项目初始化步骤详情
+   *
+   * 从数据库查询持久化的步骤记录，支持页面刷新后恢复进度
+   */
+  @Trace('projectStatus.getInitializationSteps')
+  async getInitializationSteps(projectId: string) {
+    const steps = await this.db
+      .select()
+      .from(schema.projectInitializationSteps)
+      .where(eq(schema.projectInitializationSteps.projectId, projectId))
+      .orderBy(schema.projectInitializationSteps.sequence)
+
+    return steps
   }
 
   /**

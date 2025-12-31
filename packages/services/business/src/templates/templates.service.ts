@@ -81,6 +81,7 @@ export class TemplatesService {
       pythonVersion: validatedConfig.runtime === 'python' ? validatedConfig.version : undefined,
       testImage: this.getTestImage(validatedConfig.runtime, validatedConfig.version),
       REGISTRY: validatedConfig.registry || 'docker.io',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions 变量语法
       IMAGE_NAME: validatedConfig.imageName || '${{ github.repository }}',
     }
 

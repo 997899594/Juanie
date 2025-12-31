@@ -9,6 +9,7 @@
  * 本模块现在只提供：
  * - FluxMetricsService: Flux 指标收集
  * - YamlGeneratorService: YAML 生成工具
+ * - FluxResourcesService: GitOps 资源管理
  */
 
 import { FluxModule as CoreFluxModule } from '@juanie/core/flux' // ✅ 使用 Core 层
@@ -16,6 +17,7 @@ import { K8sModule } from '@juanie/core/k8s' // ✅ 使用 Core 层
 import { Global, Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { FluxMetricsService } from './flux-metrics.service'
+import { FluxResourcesService } from './flux-resources.service'
 import { YamlGeneratorService } from './yaml-generator.service'
 
 /**
@@ -36,10 +38,12 @@ import { YamlGeneratorService } from './yaml-generator.service'
   providers: [
     FluxMetricsService, // ✅ 保留：指标收集
     YamlGeneratorService, // ✅ 保留：YAML 生成工具
+    FluxResourcesService, // ✅ 新增：GitOps 资源管理
   ],
   exports: [
     FluxMetricsService,
     YamlGeneratorService,
+    FluxResourcesService, // ✅ 导出供其他模块使用
     CoreFluxModule, // ✅ 导出 Core 层模块，方便其他模块使用
     K8sModule, // ✅ 导出 Core 层模块
   ],

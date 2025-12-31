@@ -38,6 +38,8 @@ export type { CreateRepositoryOptions, RepositoryInfo } from './git-providers/gi
 export { GitProviderService } from './git-providers/git-provider.service'
 // Git Providers 服务（GitHub/GitLab API 封装）
 export { GitProvidersModule } from './git-providers/git-providers.module'
+export { GitHubClientService } from './git-providers/github-client.service'
+export { GitLabClientService } from './git-providers/gitlab-client.service'
 // Git 同步日志服务
 export { GitSyncLogsModule } from './git-sync-logs/git-sync-logs.module'
 export type {

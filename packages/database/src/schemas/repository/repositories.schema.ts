@@ -1,5 +1,14 @@
-import { jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { projects } from '../project/projects.schema'
+
+// ✅ 使用 Drizzle pgEnum 定义枚举类型
+export const gitProviderEnum = pgEnum('git_provider', ['github', 'gitlab'])
+export const repositoryStatusEnum = pgEnum('repository_status', [
+  'pending',
+  'syncing',
+  'success',
+  'failed',
+])
 
 export const repositories = pgTable(
   'repositories',
@@ -8,14 +17,14 @@ export const repositories = pgTable(
     projectId: uuid('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    provider: text('provider').notNull(), // 'github', 'gitlab'
+    provider: gitProviderEnum('provider').notNull(),
     fullName: text('full_name').notNull(), // 'owner/repo'
     cloneUrl: text('clone_url').notNull(),
     defaultBranch: text('default_branch').default('main'),
 
     // 同步状态
     lastSyncAt: timestamp('last_sync_at'),
-    status: text('status').default('pending'), // 'pending', 'syncing', 'success', 'failed'
+    status: repositoryStatusEnum('status').default('pending'),
 
     // GitOps 配置（JSONB）
     // 注意：Flux 运行时状态已移至 gitops_resources 表

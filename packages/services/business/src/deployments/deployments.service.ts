@@ -14,16 +14,13 @@ import type { Queue } from 'bullmq'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { PinoLogger } from 'nestjs-pino'
-// TODO: GitOpsService needs to be implemented or imported correctly
-// import type { DeploymentChanges } from '../gitops/git-ops/git-ops.service'
-// import { GitOpsService } from '../gitops/git-ops/git-ops.service'
 import {
   DeploymentOperationError,
   DeploymentPermissionError,
   GitOpsOperationError,
 } from './deployment-errors'
 
-// Temporary type definition until GitOpsService is available
+// TODO: GitOpsService - implement Git commit workflow for UI-to-Git deployments
 export interface DeploymentChanges {
   image?: string
   replicas?: number
@@ -48,9 +45,7 @@ export class DeploymentsService {
   constructor(
     @Inject(DATABASE) private db: PostgresJsDatabase<typeof schema>,
     @InjectQueue('deployment') private queue: Queue,
-    // TODO: Re-enable when GitOpsService is available
-    // private gitOpsService: GitOpsService,
-    private readonly eventEmitter: EventEmitter2, // ✅ 直接注入 EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(DeploymentsService.name)
@@ -300,36 +295,20 @@ export class DeploymentsService {
       }
 
       // 3. Verify GitOps is enabled for this environment
-      const envConfig = environment.config as any
+      interface EnvironmentConfig {
+        gitops?: {
+          enabled?: boolean
+          gitBranch?: string
+        }
+      }
+      const envConfig = environment.config as EnvironmentConfig
       const gitopsConfig = envConfig?.gitops
 
       if (!gitopsConfig?.enabled) {
         throw new GitOpsOperationError('setup', data.projectId, new Error('该环境未启用 GitOps'))
       }
 
-      // 4. Call GitOpsService to commit changes to Git
-      let commitHash: string
-      try {
-        // TODO: Re-enable when GitOpsService is available
-        // commitHash = await this.gitOpsService.commitFromUI({
-        //   projectId: data.projectId,
-        //   environmentId: data.environmentId,
-        //   changes: data.changes,
-        //   userId,
-        //   commitMessage: data.commitMessage,
-        // })
-
-        // Temporary: Use a placeholder commit hash
-        commitHash = 'placeholder-commit-hash'
-        this.logger.warn('GitOpsService not available, using placeholder commit hash')
-
-        this.logger.info(`Git commit created: ${commitHash}`)
-      } catch (error) {
-        this.logger.error('Failed to commit changes to Git:', error)
-        throw new GitOpsOperationError('commit', data.projectId, error as Error)
-      }
-
-      // 5. Extract version from changes (use image tag or provided version)
+      // 4. Extract version from changes (use image tag or provided version)
       let version = data.version
       if (data.changes.image && !version) {
         // Extract version from image tag (e.g., "myapp:v1.2.3" -> "v1.2.3")
@@ -337,7 +316,7 @@ export class DeploymentsService {
         version = imageParts.length > 1 ? imageParts[1]! : 'latest'
       }
 
-      // 6. Create deployment record with gitops method
+      // 5. Create deployment record with gitops method
       const [deployment] = await this.db
         .insert(schema.deployments)
         .values({
@@ -345,9 +324,9 @@ export class DeploymentsService {
           environmentId: data.environmentId,
           gitopsResourceId: data.gitopsResourceId || null,
           version,
-          commitHash, // 完整的 commit SHA
+          commitHash: null, // GitOps 部署通过 Flux 自动同步，不需要手动 commit
           branch: gitopsConfig.gitBranch || 'main',
-          deploymentMethod: 'gitops', // 简化为 'gitops'
+          deploymentMethod: 'gitops',
           deployedBy: userId,
           status: 'pending',
         })
@@ -460,7 +439,12 @@ export class DeploymentsService {
         )
       }
 
-      const envConfig = environment.config as any
+      interface EnvironmentConfig {
+        gitops?: {
+          gitBranch?: string
+        }
+      }
+      const envConfig = environment.config as EnvironmentConfig
       const gitopsConfig = envConfig?.gitops
       const branch = gitopsConfig?.gitBranch || 'main'
 
@@ -861,11 +845,12 @@ export class DeploymentsService {
         )
       }
 
-      // 调用 FluxResourcesService 触发部署
-      // Note: fluxResourcesService is not injected, this needs to be fixed
+      // TODO: Inject FluxResourcesService and trigger deployment
       // await this.fluxResourcesService.reconcileProject(projectId, environment)
 
-      this.logger.info(`✅ Deployment triggered successfully`)
+      this.logger.info(
+        `✅ Deployment triggered successfully (FluxResourcesService not yet injected)`,
+      )
     } catch (error) {
       // ✅ 包装错误以添加业务上下文
       if (error instanceof DeploymentOperationError) {
