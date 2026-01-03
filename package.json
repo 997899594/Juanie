@@ -7,6 +7,7 @@
     "packages/*",
     "packages/config/*",
     "packages/core",
+    "packages/core/errors",
     "packages/types",
     "packages/services/foundation",
     "packages/services/business",

@@ -249,4 +249,59 @@ export class GitHubClientService {
 
     this.logger.info(`✅ Pushed ${files.length} files to GitHub in a single commit`)
   }
+
+  // ==================== 组织成员管理 ====================
+
+  /**
+   * 添加成员到组织
+   */
+  async addOrgMember(
+    accessToken: string,
+    org: string,
+    username: string,
+    role: 'admin' | 'member' = 'member',
+  ) {
+    const octokit = this.createClient(accessToken)
+    await octokit.orgs.setMembershipForUser({
+      org,
+      username,
+      role,
+    })
+  }
+
+  /**
+   * 从组织移除成员
+   */
+  async removeOrgMember(accessToken: string, org: string, username: string) {
+    const octokit = this.createClient(accessToken)
+    await octokit.orgs.removeMembershipForUser({
+      org,
+      username,
+    })
+  }
+
+  // ==================== 用户仓库列表 ====================
+
+  /**
+   * 列出用户的仓库
+   */
+  async listUserRepositories(accessToken: string, username?: string) {
+    const octokit = this.createClient(accessToken)
+
+    if (username) {
+      // 列出指定用户的公开仓库
+      const { data } = await octokit.repos.listForUser({
+        username,
+        per_page: 100,
+      })
+      return data
+    } else {
+      // 列出当前认证用户的所有仓库（包括私有）
+      const { data } = await octokit.repos.listForAuthenticatedUser({
+        per_page: 100,
+        affiliation: 'owner,collaborator,organization_member',
+      })
+      return data
+    }
+  }
 }

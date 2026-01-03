@@ -201,6 +201,17 @@
         "typescript": "^5.9.3",
       },
     },
+    "packages/core/errors": {
+      "name": "@juanie/core-errors",
+      "version": "0.1.0",
+      "dependencies": {
+        "@trpc/server": "^11.0.0",
+      },
+      "devDependencies": {
+        "@juanie/config-typescript": "workspace:*",
+        "typescript": "^5.6.3",
+      },
+    },
     "packages/database": {
       "name": "@juanie/database",
       "version": "0.1.0",
@@ -626,6 +637,8 @@
     "@juanie/config-vitest": ["@juanie/config-vitest@workspace:packages/config/vitest"],
 
     "@juanie/core": ["@juanie/core@workspace:packages/core"],
+
+    "@juanie/core-errors": ["@juanie/core-errors@workspace:packages/core/errors"],
 
     "@juanie/database": ["@juanie/database@workspace:packages/database"],
 

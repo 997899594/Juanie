@@ -196,4 +196,33 @@ export class GitLabClientService {
     const gitlab = this.createClient(accessToken)
     await gitlab.GroupMembers.remove(groupId, userId)
   }
+
+  // ==================== 用户项目列表 ====================
+
+  /**
+   * 列出用户的项目
+   */
+  async listUserProjects(accessToken: string, username?: string) {
+    const gitlab = this.createClient(accessToken)
+
+    if (username) {
+      // 列出指定用户的公开项目
+      // ✅ 使用 Users.all() 搜索用户
+      const users = await gitlab.Users.all({ username })
+      if (!users || users.length === 0) {
+        throw new Error(`User ${username} not found`)
+      }
+      const user = users[0]
+      if (!user) {
+        throw new Error(`User ${username} not found`)
+      }
+      return await gitlab.Users.allProjects(user.id)
+    } else {
+      // 列出当前认证用户的所有项目
+      return await gitlab.Projects.all({
+        membership: true,
+        perPage: 100,
+      })
+    }
+  }
 }

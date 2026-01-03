@@ -10,24 +10,25 @@
  * - 使用 @nestjs/bullmq 管理队列和 Worker
  */
 
-import { FluxModule } from '@juanie/core/flux' // ✅ 使用 Core 层 FluxModule
-import { K8sModule } from '@juanie/core/k8s' // ✅ 使用 Core 层 K8sModule
+import { FluxModule } from '@juanie/core/flux'; // ✅ 使用 Core 层 FluxModule
+import { K8sModule } from '@juanie/core/k8s'; // ✅ 使用 Core 层 K8sModule
 import {
   GitConnectionsModule,
   GitProvidersModule,
   GitSyncLogsModule,
   OrganizationsModule,
-} from '@juanie/service-foundation'
-import { BullModule } from '@nestjs/bullmq'
-import { Module } from '@nestjs/common'
-import { ConfigModule } from '@nestjs/config'
-import { ProjectsModule } from '../../projects/core'
-import { ConflictResolutionService } from './conflict-resolution.service'
-import { GitSyncService } from './git-sync.service'
-import { GitSyncWorker } from './git-sync.worker'
-import { GitSyncEventHandler } from './git-sync-event-handler.service'
-import { OrganizationSyncService } from './organization-sync.service'
-import { ProjectCollaborationSyncService } from './project-collaboration-sync.service'
+} from '@juanie/service-foundation';
+import { BullModule } from '@nestjs/bullmq';
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { ProjectsModule } from '../../projects/core';
+import { ConflictResolutionService } from './conflict-resolution.service';
+import { GitSyncEventHandler } from './git-sync-event-handler.service';
+import { GitSyncService } from './git-sync.service';
+import { GitSyncWorker } from './git-sync.worker';
+import { OrganizationEventHandler } from './organization-event-handler.service';
+import { OrganizationSyncService } from './organization-sync.service';
+import { ProjectCollaborationSyncService } from './project-collaboration-sync.service';
 
 /**
  * Git 同步模块

@@ -2,23 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Client } from 'minio'
 import { PinoLogger } from 'nestjs-pino'
-import { BaseError } from '../errors'
-
-/**
- * 存储错误类
- */
-export class StorageError extends BaseError {
-  constructor(operation: string, reason: string, retryable = false) {
-    super(`Storage operation ${operation} failed: ${reason}`, 'STORAGE_ERROR', 500, retryable, {
-      operation,
-      reason,
-    })
-  }
-
-  getUserMessage(): string {
-    return `存储操作失败: ${this.context?.reason || '未知错误'}`
-  }
-}
+import { StorageError } from '@juanie/core-errors'
 
 /**
  * 存储服务 (Core 层基础设施)

@@ -459,4 +459,178 @@ export class GitProviderService {
 
     return permissionMap[permission.toLowerCase()] || AccessLevel.DEVELOPER
   }
+
+  // ==================== 组织成员管理 ====================
+
+  /**
+   * 添加成员到 GitHub 组织
+   */
+  async addGitHubOrgMember(
+    accessToken: string,
+    orgName: string,
+    username: string,
+    role: 'admin' | 'member' = 'member',
+  ): Promise<void> {
+    this.logger.info(`Adding ${username} to GitHub organization ${orgName} as ${role}`)
+
+    try {
+      await this.githubClient.addOrgMember(accessToken, orgName, username, role)
+      this.logger.info(`✅ Successfully added ${username} to ${orgName}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to add member to GitHub organization:`, error)
+      throw new Error(`添加 GitHub 组织成员失败: ${error.message || error}`)
+    }
+  }
+
+  /**
+   * 从 GitHub 组织移除成员
+   */
+  async removeGitHubOrgMember(
+    accessToken: string,
+    orgName: string,
+    username: string,
+  ): Promise<void> {
+    this.logger.info(`Removing ${username} from GitHub organization ${orgName}`)
+
+    try {
+      await this.githubClient.removeOrgMember(accessToken, orgName, username)
+      this.logger.info(`✅ Successfully removed ${username} from ${orgName}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to remove member from GitHub organization:`, error)
+      throw new Error(`移除 GitHub 组织成员失败: ${error.message || error}`)
+    }
+  }
+
+  /**
+   * 添加成员到 GitLab 组
+   */
+  async addGitLabGroupMember(
+    accessToken: string,
+    groupId: string,
+    userId: number,
+    accessLevel: 10 | 20 | 30 | 40 | 50 = 30,
+  ): Promise<void> {
+    this.logger.info(`Adding user ${userId} to GitLab group ${groupId} with access level ${accessLevel}`)
+
+    try {
+      await this.gitlabClient.addGroupMember(accessToken, groupId, userId, accessLevel)
+      this.logger.info(`✅ Successfully added user ${userId} to group ${groupId}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to add member to GitLab group:`, error)
+      throw new Error(`添加 GitLab 组成员失败: ${error.message || error}`)
+    }
+  }
+
+  /**
+   * 从 GitLab 组移除成员
+   */
+  async removeGitLabGroupMember(
+    accessToken: string,
+    groupId: string,
+    userId: number,
+  ): Promise<void> {
+    this.logger.info(`Removing user ${userId} from GitLab group ${groupId}`)
+
+    try {
+      await this.gitlabClient.removeGroupMember(accessToken, groupId, userId)
+      this.logger.info(`✅ Successfully removed user ${userId} from group ${groupId}`)
+    } catch (error: any) {
+      this.logger.error(`Failed to remove member from GitLab group:`, error)
+      throw new Error(`移除 GitLab 组成员失败: ${error.message || error}`)
+    }
+  }
+
+  // ==================== 协作者权限更新 ====================
+
+  /**
+   * 更新协作者权限
+   */
+  async updateCollaboratorPermission(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    repoIdentifier: string,
+    userIdentifier: string | number,
+    permission: string,
+  ): Promise<void> {
+    this.logger.info(
+      `Updating collaborator permission for ${userIdentifier} in ${repoIdentifier} to ${permission}`,
+    )
+
+    try {
+      if (provider === 'github') {
+        // GitHub: 先移除再添加（GitHub API 不支持直接更新权限）
+        const parts = repoIdentifier.split('/')
+        if (parts.length !== 2 || !parts[0] || !parts[1]) {
+          throw new Error('Invalid GitHub repository format. Expected: owner/repo')
+        }
+        const [owner, repo] = parts
+        await this.githubClient.removeCollaborator(accessToken, owner, repo, userIdentifier as string)
+        await this.githubClient.addCollaborator(
+          accessToken,
+          owner,
+          repo,
+          userIdentifier as string,
+          permission as 'pull' | 'push' | 'admin' | 'maintain' | 'triage',
+        )
+      } else {
+        // GitLab: 直接更新成员权限
+        const accessLevel = this.mapPermissionToGitLabAccessLevel(permission)
+        await this.gitlabClient.updateProjectMember(
+          accessToken,
+          repoIdentifier,
+          userIdentifier as number,
+          accessLevel,
+        )
+      }
+
+      this.logger.info(`✅ Successfully updated collaborator permission`)
+    } catch (error: any) {
+      this.logger.error(`Failed to update collaborator permission:`, error)
+      throw new Error(`更新协作者权限失败: ${error.message || error}`)
+    }
+  }
+
+  // ==================== 用户仓库列表 ====================
+
+  /**
+   * 列出用户的仓库
+   */
+  async listUserRepositories(
+    provider: 'github' | 'gitlab',
+    accessToken: string,
+    username?: string,
+  ): Promise<RepositoryInfo[]> {
+    this.logger.info(`Listing ${provider} repositories${username ? ` for user ${username}` : ''}`)
+
+    try {
+      if (provider === 'github') {
+        const repos = await this.githubClient.listUserRepositories(accessToken, username)
+        return repos.map((repo) => ({
+          id: repo.id,
+          name: repo.name,
+          fullName: repo.full_name,
+          cloneUrl: repo.clone_url || '',
+          sshUrl: repo.ssh_url || '',
+          defaultBranch: repo.default_branch || 'main',
+          visibility: repo.private ? 'private' : 'public',
+          htmlUrl: repo.html_url,
+        }))
+      } else {
+        const projects = await this.gitlabClient.listUserProjects(accessToken, username)
+        return projects.map((project) => ({
+          id: Number(project.id),
+          name: String(project.name || ''),
+          fullName: String(project.path_with_namespace || ''),
+          cloneUrl: String(project.http_url_to_repo || ''),
+          sshUrl: String(project.ssh_url_to_repo || ''),
+          defaultBranch: String(project.default_branch || 'main'),
+          visibility: (project.visibility as 'public' | 'private') || 'private',
+          htmlUrl: String(project.web_url || ''),
+        }))
+      }
+    } catch (error: any) {
+      this.logger.error(`Failed to list user repositories:`, error)
+      throw new Error(`获取用户仓库列表失败: ${error.message || error}`)
+    }
+  }
 }

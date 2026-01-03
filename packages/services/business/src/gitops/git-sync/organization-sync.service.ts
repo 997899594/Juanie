@@ -7,33 +7,35 @@
  * Requirements: 2.1, 2.2, 4.1
  */
 
-import { DomainEvents } from '@juanie/core/events'
+import { DomainEvents } from '@juanie/core/events';
 import {
   GitConnectionsService,
   GitHubClientService,
   GitLabClientService,
+  GitProviderService,
+  GitSyncLogsService,
   type OrganizationMemberAddedEvent,
   type OrganizationMemberRemovedEvent,
   type OrganizationMemberRoleUpdatedEvent,
   OrganizationsService,
-} from '@juanie/service-foundation'
-import { InjectQueue } from '@nestjs/bullmq'
-import { Injectable } from '@nestjs/common'
-import { OnEvent } from '@nestjs/event-emitter'
-import type { Queue } from 'bullmq'
-import { PinoLogger } from 'nestjs-pino'
+} from '@juanie/service-foundation';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Injectable } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+import type { Queue } from 'bullmq';
+import { PinoLogger } from 'nestjs-pino';
 
 export interface OrganizationSyncResult {
-  success: boolean
-  syncedMembers: number
+  success: boolean;
+  syncedMembers: number;
   errors: Array<{
-    userId: string
-    error: string
-  }>
+    userId: string;
+    error: string;
+  }>;
   skipped?: {
-    reason: string
-    count: number
-  }
+    reason: string;
+    count: number;
+  };
 }
 
 @Injectable()
@@ -44,9 +46,11 @@ export class OrganizationSyncService {
     private readonly gitConnectionsService: GitConnectionsService,
     private readonly githubClient: GitHubClientService,
     private readonly gitlabClient: GitLabClientService,
-    private readonly logger: PinoLogger,
+    private readonly gitProvider: GitProviderService,
+    private readonly syncLogs: GitSyncLogsService,
+    private readonly logger: PinoLogger
   ) {
-    this.logger.setContext(OrganizationSyncService.name)
+    this.logger.setContext(OrganizationSyncService.name);
   }
 
   /**
@@ -57,28 +61,41 @@ export class OrganizationSyncService {
   @OnEvent(DomainEvents.ORGANIZATION_MEMBER_ADDED)
   async handleMemberAdded(event: OrganizationMemberAddedEvent) {
     this.logger.info(
-      `Event received: Member added to organization ${event.organizationId}, user ${event.userId}`,
-    )
+      `Event received: Member added to organization ${event.organizationId}, user ${event.userId}`
+    );
 
     try {
       // 检查组织是否启用了 Git 同步
-      const organization = await this.organizationsService.get(event.organizationId, 'system')
+      const organization = await this.organizationsService.get(
+        event.organizationId,
+        'system'
+      );
 
       if (!organization) {
-        this.logger.warn(`Organization ${event.organizationId} not found, skipping sync`)
-        return
+        this.logger.warn(
+          `Organization ${event.organizationId} not found, skipping sync`
+        );
+        return;
       }
 
       // 个人工作空间不需要同步组织成员
       if (organization.type === 'personal') {
-        this.logger.info('Personal workspace does not sync organization members')
-        return
+        this.logger.info(
+          'Personal workspace does not sync organization members'
+        );
+        return;
       }
 
       // 检查是否启用了 Git 同步
-      if (!organization.gitSyncEnabled || !organization.gitProvider || !organization.gitOrgId) {
-        this.logger.info('Git sync not enabled for this organization, skipping')
-        return
+      if (
+        !organization.gitSyncEnabled ||
+        !organization.gitProvider ||
+        !organization.gitOrgId
+      ) {
+        this.logger.info(
+          'Git sync not enabled for this organization, skipping'
+        );
+        return;
       }
 
       // 添加到队列进行异步处理
@@ -96,12 +113,12 @@ export class OrganizationSyncService {
             type: 'exponential',
             delay: 2000,
           },
-        },
-      )
+        }
+      );
 
-      this.logger.info(`Queued member add sync for user ${event.userId}`)
+      this.logger.info(`Queued member add sync for user ${event.userId}`);
     } catch (error) {
-      this.logger.error(`Failed to queue member add sync:`, error)
+      this.logger.error(`Failed to queue member add sync:`, error);
       // 不抛出错误，避免影响主流程
     }
   }
@@ -114,28 +131,41 @@ export class OrganizationSyncService {
   @OnEvent(DomainEvents.ORGANIZATION_MEMBER_REMOVED)
   async handleMemberRemoved(event: OrganizationMemberRemovedEvent) {
     this.logger.info(
-      `Event received: Member removed from organization ${event.organizationId}, user ${event.userId}`,
-    )
+      `Event received: Member removed from organization ${event.organizationId}, user ${event.userId}`
+    );
 
     try {
       // 检查组织是否启用了 Git 同步
-      const organization = await this.organizationsService.get(event.organizationId, 'system')
+      const organization = await this.organizationsService.get(
+        event.organizationId,
+        'system'
+      );
 
       if (!organization) {
-        this.logger.warn(`Organization ${event.organizationId} not found, skipping sync`)
-        return
+        this.logger.warn(
+          `Organization ${event.organizationId} not found, skipping sync`
+        );
+        return;
       }
 
       // 个人工作空间不需要同步组织成员
       if (organization.type === 'personal') {
-        this.logger.info('Personal workspace does not sync organization members')
-        return
+        this.logger.info(
+          'Personal workspace does not sync organization members'
+        );
+        return;
       }
 
       // 检查是否启用了 Git 同步
-      if (!organization.gitSyncEnabled || !organization.gitProvider || !organization.gitOrgId) {
-        this.logger.info('Git sync not enabled for this organization, skipping')
-        return
+      if (
+        !organization.gitSyncEnabled ||
+        !organization.gitProvider ||
+        !organization.gitOrgId
+      ) {
+        this.logger.info(
+          'Git sync not enabled for this organization, skipping'
+        );
+        return;
       }
 
       // 添加到队列进行异步处理
@@ -152,12 +182,12 @@ export class OrganizationSyncService {
             type: 'exponential',
             delay: 2000,
           },
-        },
-      )
+        }
+      );
 
-      this.logger.info(`Queued member remove sync for user ${event.userId}`)
+      this.logger.info(`Queued member remove sync for user ${event.userId}`);
     } catch (error) {
-      this.logger.error(`Failed to queue member remove sync:`, error)
+      this.logger.error(`Failed to queue member remove sync:`, error);
       // 不抛出错误，避免影响主流程
     }
   }
@@ -170,28 +200,41 @@ export class OrganizationSyncService {
   @OnEvent(DomainEvents.ORGANIZATION_MEMBER_ROLE_UPDATED)
   async handleMemberRoleUpdated(event: OrganizationMemberRoleUpdatedEvent) {
     this.logger.info(
-      `Event received: Member role updated in organization ${event.organizationId}, user ${event.userId}`,
-    )
+      `Event received: Member role updated in organization ${event.organizationId}, user ${event.userId}`
+    );
 
     try {
       // 检查组织是否启用了 Git 同步
-      const organization = await this.organizationsService.get(event.organizationId, 'system')
+      const organization = await this.organizationsService.get(
+        event.organizationId,
+        'system'
+      );
 
       if (!organization) {
-        this.logger.warn(`Organization ${event.organizationId} not found, skipping sync`)
-        return
+        this.logger.warn(
+          `Organization ${event.organizationId} not found, skipping sync`
+        );
+        return;
       }
 
       // 个人工作空间不需要同步组织成员
       if (organization.type === 'personal') {
-        this.logger.info('Personal workspace does not sync organization members')
-        return
+        this.logger.info(
+          'Personal workspace does not sync organization members'
+        );
+        return;
       }
 
       // 检查是否启用了 Git 同步
-      if (!organization.gitSyncEnabled || !organization.gitProvider || !organization.gitOrgId) {
-        this.logger.info('Git sync not enabled for this organization, skipping')
-        return
+      if (
+        !organization.gitSyncEnabled ||
+        !organization.gitProvider ||
+        !organization.gitOrgId
+      ) {
+        this.logger.info(
+          'Git sync not enabled for this organization, skipping'
+        );
+        return;
       }
 
       // 添加到队列进行异步处理
@@ -210,12 +253,14 @@ export class OrganizationSyncService {
             type: 'exponential',
             delay: 2000,
           },
-        },
-      )
+        }
+      );
 
-      this.logger.info(`Queued member role update sync for user ${event.userId}`)
+      this.logger.info(
+        `Queued member role update sync for user ${event.userId}`
+      );
     } catch (error) {
-      this.logger.error(`Failed to queue member role update sync:`, error)
+      this.logger.error(`Failed to queue member role update sync:`, error);
       // 不抛出错误，避免影响主流程
     }
   }
@@ -225,25 +270,33 @@ export class OrganizationSyncService {
    * 根据工作空间类型采用不同的同步策略
    * Requirements: 2.1, 2.2, 4.1
    */
-  async syncOrganizationMembers(organizationId: string): Promise<OrganizationSyncResult> {
-    this.logger.info(`Starting organization sync for: ${organizationId}`)
+  async syncOrganizationMembers(
+    organizationId: string
+  ): Promise<OrganizationSyncResult> {
+    this.logger.info(`Starting organization sync for: ${organizationId}`);
 
     try {
       // ✅ 使用 Foundation 层服务获取组织信息
-      const organization = await this.organizationsService.get(organizationId, 'system')
+      const organization = await this.organizationsService.get(
+        organizationId,
+        'system'
+      );
 
       if (!organization) {
-        throw new Error(`Organization not found: ${organizationId}`)
+        throw new Error(`Organization not found: ${organizationId}`);
       }
 
       // 根据工作空间类型选择同步策略
       if (organization.type === 'personal') {
-        return await this.syncPersonalWorkspace(organization)
+        return await this.syncPersonalWorkspace(organization);
       }
 
-      return await this.syncTeamWorkspace(organization)
+      return await this.syncTeamWorkspace(organization);
     } catch (error) {
-      this.logger.error(`Organization sync failed for ${organizationId}:`, error)
+      this.logger.error(
+        `Organization sync failed for ${organizationId}:`,
+        error
+      );
 
       return {
         success: false,
@@ -254,7 +307,7 @@ export class OrganizationSyncService {
             error: error instanceof Error ? error.message : 'Unknown error',
           },
         ],
-      }
+      };
     }
   }
 
@@ -263,8 +316,12 @@ export class OrganizationSyncService {
    * 个人工作空间不需要同步组织成员，因为协作是项目级的
    * Requirements: Personal Workspace Design
    */
-  private async syncPersonalWorkspace(organization: any): Promise<OrganizationSyncResult> {
-    this.logger.info(`Skipping sync for personal workspace: ${organization.name}`)
+  private async syncPersonalWorkspace(
+    organization: any
+  ): Promise<OrganizationSyncResult> {
+    this.logger.info(
+      `Skipping sync for personal workspace: ${organization.name}`
+    );
 
     return {
       success: true,
@@ -275,7 +332,7 @@ export class OrganizationSyncService {
           'Personal workspace does not sync organization members. Use project-level collaboration instead.',
         count: 0,
       },
-    }
+    };
   }
 
   /**
@@ -283,11 +340,17 @@ export class OrganizationSyncService {
    * 团队工作空间需要同步所有成员到 Git 组织
    * Requirements: 2.1, 2.2, 4.1
    */
-  private async syncTeamWorkspace(organization: any): Promise<OrganizationSyncResult> {
-    this.logger.info(`Syncing team workspace: ${organization.name}`)
+  private async syncTeamWorkspace(
+    organization: any
+  ): Promise<OrganizationSyncResult> {
+    this.logger.info(`Syncing team workspace: ${organization.name}`);
 
     // 检查是否启用了 Git 同步
-    if (!organization.gitSyncEnabled || !organization.gitProvider || !organization.gitOrgId) {
+    if (
+      !organization.gitSyncEnabled ||
+      !organization.gitProvider ||
+      !organization.gitOrgId
+    ) {
       return {
         success: true,
         syncedMembers: 0,
@@ -296,14 +359,14 @@ export class OrganizationSyncService {
           reason: 'Git sync is not enabled for this organization',
           count: 0,
         },
-      }
+      };
     }
 
     // ✅ 使用 Foundation 层服务获取组织成员
     const members = await this.organizationsService.listMembers(
       organization.id,
-      'system', // 使用系统用户 ID
-    )
+      'system' // 使用系统用户 ID
+    );
 
     if (members.length === 0) {
       return {
@@ -314,39 +377,43 @@ export class OrganizationSyncService {
           reason: 'No members found in organization',
           count: 0,
         },
-      }
+      };
     }
 
     const results: OrganizationSyncResult = {
       success: true,
       syncedMembers: 0,
       errors: [],
-    }
+    };
 
     // 获取组织所有者
-    const owner = members.find((m) => m.role === 'owner')
+    const owner = members.find((m) => m.role === 'owner');
     if (!owner) {
-      throw new Error('Organization owner not found')
+      throw new Error('Organization owner not found');
     }
 
     // ✅ 使用 Foundation 层服务获取所有者的 Git 连接
-    const ownerGitConnection = await this.gitConnectionsService.getConnectionByProvider(
-      owner.user.id,
-      organization.gitProvider as 'github' | 'gitlab',
-    )
+    const ownerGitConnection =
+      await this.gitConnectionsService.getConnectionByProvider(
+        owner.user.id,
+        organization.gitProvider as 'github' | 'gitlab'
+      );
 
     if (!ownerGitConnection) {
-      throw new Error(`Owner does not have ${organization.gitProvider} account linked`)
+      throw new Error(
+        `Owner does not have ${organization.gitProvider} account linked`
+      );
     }
 
     // 解密 token
-    const ownerConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-      owner.user.id,
-      organization.gitProvider as 'github' | 'gitlab',
-    )
+    const ownerConnection =
+      await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+        owner.user.id,
+        organization.gitProvider as 'github' | 'gitlab'
+      );
 
     if (!ownerConnection) {
-      throw new Error(`Failed to decrypt owner's Git connection`)
+      throw new Error(`Failed to decrypt owner's Git connection`);
     }
 
     // 同步每个成员
@@ -354,70 +421,88 @@ export class OrganizationSyncService {
       try {
         // 跳过所有者 (已经是组织成员)
         if (member.role === 'owner') {
-          continue
+          continue;
         }
 
         // ✅ 使用 Foundation 层服务获取成员的 Git 连接
         const memberGitConnection =
           await this.gitConnectionsService.getConnectionWithDecryptedTokens(
             member.user.id,
-            organization.gitProvider as 'github' | 'gitlab',
-          )
+            organization.gitProvider as 'github' | 'gitlab'
+          );
 
         if (!memberGitConnection) {
           results.errors.push({
             userId: member.user.id,
             error: `User does not have ${organization.gitProvider} account linked`,
-          })
-          continue
+          });
+          continue;
         }
 
         // 映射角色到 Git 权限
-        const gitRole = this.mapOrgRoleToGitPermission(member.role, organization.gitProvider!)
+        const gitRole = this.mapOrgRoleToGitPermission(
+          member.role,
+          organization.gitProvider!
+        );
 
         // 添加成员到 Git 组织
         if (organization.gitProvider === 'github') {
-          const octokit = this.githubClient.createClient(ownerConnection.accessToken)
+          const octokit = this.githubClient.createClient(
+            ownerConnection.accessToken
+          );
           await octokit.orgs.setMembershipForUser({
             org: organization.gitOrgName!,
             username: memberGitConnection.username,
             role: gitRole as 'admin' | 'member',
-          })
+          });
         } else if (organization.gitProvider === 'gitlab') {
-          const gitlab = this.gitlabClient.createClient(ownerConnection.accessToken)
-          await gitlab.GroupMembers.add(organization.gitOrgId!, gitRole as 10 | 20 | 30 | 40 | 50, {
-            userId: Number.parseInt(memberGitConnection.providerAccountId!, 10),
-          })
+          const gitlab = this.gitlabClient.createClient(
+            ownerConnection.accessToken
+          );
+          await gitlab.GroupMembers.add(
+            organization.gitOrgId!,
+            gitRole as 10 | 20 | 30 | 40 | 50,
+            {
+              userId: Number.parseInt(
+                memberGitConnection.providerAccountId!,
+                10
+              ),
+            }
+          );
         }
 
-        results.syncedMembers++
+        results.syncedMembers++;
         this.logger.info(
-          `Synced member ${member.user.displayName || member.user.email} to ${organization.gitProvider} organization`,
-        )
+          `Synced member ${member.user.displayName || member.user.email} to ${
+            organization.gitProvider
+          } organization`
+        );
       } catch (error) {
         this.logger.error(
-          `Failed to sync member ${member.user.displayName || member.user.email}:`,
-          error,
-        )
+          `Failed to sync member ${
+            member.user.displayName || member.user.email
+          }:`,
+          error
+        );
 
         results.errors.push({
           userId: member.user.id,
           error: error instanceof Error ? error.message : 'Unknown error',
-        })
-        results.success = false
+        });
+        results.success = false;
       }
     }
 
     // ✅ 使用 Foundation 层服务更新最后同步时间
     await this.organizationsService.update(organization.id, 'system', {
       gitLastSyncAt: new Date(),
-    })
+    });
 
     this.logger.info(
-      `Organization sync completed. Synced: ${results.syncedMembers}, Errors: ${results.errors.length}`,
-    )
+      `Organization sync completed. Synced: ${results.syncedMembers}, Errors: ${results.errors.length}`
+    );
 
-    return results
+    return results;
   }
 
   /**
@@ -426,84 +511,108 @@ export class OrganizationSyncService {
    */
   async removeOrganizationMember(
     organizationId: string,
-    userId: string,
+    userId: string
   ): Promise<{ success: boolean; error?: string }> {
-    this.logger.info(`Removing member ${userId} from organization ${organizationId}`)
+    this.logger.info(
+      `Removing member ${userId} from organization ${organizationId}`
+    );
 
     try {
       // ✅ 使用 Foundation 层服务获取组织信息
-      const organization = await this.organizationsService.get(organizationId, 'system')
+      const organization = await this.organizationsService.get(
+        organizationId,
+        'system'
+      );
 
       if (!organization) {
-        throw new Error(`Organization not found: ${organizationId}`)
+        throw new Error(`Organization not found: ${organizationId}`);
       }
 
       // 个人工作空间不需要移除组织成员
       if (organization.type === 'personal') {
-        this.logger.info('Personal workspace does not sync organization members')
-        return { success: true }
+        this.logger.info(
+          'Personal workspace does not sync organization members'
+        );
+        return { success: true };
       }
 
       // 检查是否启用了 Git 同步
-      if (!organization.gitSyncEnabled || !organization.gitProvider || !organization.gitOrgId) {
-        this.logger.info('Git sync is not enabled, skipping Git removal')
-        return { success: true }
+      if (
+        !organization.gitSyncEnabled ||
+        !organization.gitProvider ||
+        !organization.gitOrgId
+      ) {
+        this.logger.info('Git sync is not enabled, skipping Git removal');
+        return { success: true };
       }
 
       // ✅ 使用 Foundation 层服务获取用户的 Git 连接
-      const userGitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-        userId,
-        organization.gitProvider as 'github' | 'gitlab',
-      )
+      const userGitConnection =
+        await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          userId,
+          organization.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!userGitConnection) {
-        this.logger.info(`User ${userId} does not have ${organization.gitProvider} account`)
-        return { success: true }
+        this.logger.info(
+          `User ${userId} does not have ${organization.gitProvider} account`
+        );
+        return { success: true };
       }
 
       // ✅ 使用 Foundation 层服务获取组织所有者
-      const members = await this.organizationsService.listMembers(organizationId, 'system')
-      const owner = members.find((m) => m.role === 'owner')
+      const members = await this.organizationsService.listMembers(
+        organizationId,
+        'system'
+      );
+      const owner = members.find((m) => m.role === 'owner');
 
       if (!owner) {
-        throw new Error('Organization owner not found')
+        throw new Error('Organization owner not found');
       }
 
       // ✅ 使用 Foundation 层服务获取所有者的 Git 连接
-      const ownerGitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-        owner.user.id,
-        organization.gitProvider as 'github' | 'gitlab',
-      )
+      const ownerGitConnection =
+        await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          owner.user.id,
+          organization.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!ownerGitConnection) {
-        throw new Error('Organization owner Git connection not found')
+        throw new Error('Organization owner Git connection not found');
       }
 
       // 从 Git 组织移除成员
       if (organization.gitProvider === 'github') {
-        const octokit = this.githubClient.createClient(ownerGitConnection.accessToken)
+        const octokit = this.githubClient.createClient(
+          ownerGitConnection.accessToken
+        );
         await octokit.orgs.removeMembershipForUser({
           org: organization.gitOrgName!,
           username: userGitConnection.username,
-        })
+        });
       } else if (organization.gitProvider === 'gitlab') {
-        const gitlab = this.gitlabClient.createClient(ownerGitConnection.accessToken)
+        const gitlab = this.gitlabClient.createClient(
+          ownerGitConnection.accessToken
+        );
         await gitlab.GroupMembers.remove(
           organization.gitOrgId!,
-          Number.parseInt(userGitConnection.providerAccountId!, 10),
-        )
+          Number.parseInt(userGitConnection.providerAccountId!, 10)
+        );
       }
 
-      this.logger.info(`Successfully removed user from ${organization.gitProvider} organization`)
+      this.logger.info(
+        `Successfully removed user from ${organization.gitProvider} organization`
+      );
 
-      return { success: true }
+      return { success: true };
     } catch (error) {
-      this.logger.error(`Failed to remove organization member:`, error)
+      this.logger.error(`Failed to remove organization member:`, error);
 
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-      }
+      };
     }
   }
 
@@ -511,19 +620,26 @@ export class OrganizationSyncService {
    * 创建组织时的初始同步
    * Requirements: 2.1, 2.2
    */
-  async syncNewOrganization(organizationId: string): Promise<OrganizationSyncResult> {
-    this.logger.info(`Initial sync for new organization: ${organizationId}`)
+  async syncNewOrganization(
+    organizationId: string
+  ): Promise<OrganizationSyncResult> {
+    this.logger.info(`Initial sync for new organization: ${organizationId}`);
 
     // ✅ 使用 Foundation 层服务获取组织信息
-    const organization = await this.organizationsService.get(organizationId, 'system')
+    const organization = await this.organizationsService.get(
+      organizationId,
+      'system'
+    );
 
     if (!organization) {
-      throw new Error(`Organization not found: ${organizationId}`)
+      throw new Error(`Organization not found: ${organizationId}`);
     }
 
     // 个人工作空间不需要初始同步
     if (organization.type === 'personal') {
-      this.logger.info('Personal workspace created, no Git organization sync needed')
+      this.logger.info(
+        'Personal workspace created, no Git organization sync needed'
+      );
       return {
         success: true,
         syncedMembers: 0,
@@ -532,11 +648,11 @@ export class OrganizationSyncService {
           reason: 'Personal workspace does not require Git organization sync',
           count: 0,
         },
-      }
+      };
     }
 
     // 团队工作空间需要同步
-    return await this.syncOrganizationMembers(organizationId)
+    return await this.syncOrganizationMembers(organizationId);
   }
 
   /**
@@ -544,23 +660,29 @@ export class OrganizationSyncService {
    * Requirements: 监控和状态查询
    */
   async getOrganizationSyncStatus(organizationId: string): Promise<{
-    enabled: boolean
-    lastSyncAt: Date | null
-    memberCount: number
-    syncedMemberCount: number
-    pendingErrors: number
-    workspaceType: 'personal' | 'team'
+    enabled: boolean;
+    lastSyncAt: Date | null;
+    memberCount: number;
+    syncedMemberCount: number;
+    pendingErrors: number;
+    workspaceType: 'personal' | 'team';
   }> {
     // ✅ 使用 Foundation 层服务获取组织信息
-    const organization = await this.organizationsService.get(organizationId, 'system')
+    const organization = await this.organizationsService.get(
+      organizationId,
+      'system'
+    );
 
     if (!organization) {
-      throw new Error(`Organization not found: ${organizationId}`)
+      throw new Error(`Organization not found: ${organizationId}`);
     }
 
     // ✅ 使用 Foundation 层服务获取成员列表
-    const members = await this.organizationsService.listMembers(organizationId, 'system')
-    const memberCount = members.length
+    const members = await this.organizationsService.listMembers(
+      organizationId,
+      'system'
+    );
+    const memberCount = members.length;
 
     // 个人工作空间的状态
     if (organization.type === 'personal') {
@@ -571,11 +693,11 @@ export class OrganizationSyncService {
         syncedMemberCount: 0,
         pendingErrors: 0,
         workspaceType: 'personal',
-      }
+      };
     }
 
     // 团队工作空间的状态
-    const pendingErrors = 0 // TODO: 实现错误统计（可以从日志系统查询）
+    const pendingErrors = 0; // TODO: 实现错误统计（可以从日志系统查询）
 
     return {
       enabled: organization.gitSyncEnabled || false,
@@ -584,7 +706,7 @@ export class OrganizationSyncService {
       syncedMemberCount: organization.gitSyncEnabled ? memberCount - 1 : 0, // 减去 owner
       pendingErrors,
       workspaceType: 'team',
-    }
+    };
   }
 
   /**
@@ -595,18 +717,18 @@ export class OrganizationSyncService {
     organizationId: string,
     gitProvider: string,
     gitOrgName: string,
-    triggeredBy: string,
+    triggeredBy: string
   ) {
     this.logger.info(
-      `Creating Git organization: ${gitOrgName} (provider: ${gitProvider}, triggered by: ${triggeredBy})`,
-    )
+      `Creating Git organization: ${gitOrgName} (provider: ${gitProvider}, triggered by: ${triggeredBy})`
+    );
 
     try {
       // ✅ 使用 Foundation 层服务获取组织信息
-      const org = await this.organizationsService.get(organizationId, 'system')
+      const org = await this.organizationsService.get(organizationId, 'system');
 
       if (!org) {
-        throw new Error('Organization not found')
+        throw new Error('Organization not found');
       }
 
       // TODO: 创建 Git 组织
@@ -614,20 +736,24 @@ export class OrganizationSyncService {
       // GitLab 可以通过 API 创建 Group
       // 暂时跳过自动创建,标记为需要手动配置
       this.logger.warn(
-        `Git organization creation not yet implemented for ${gitProvider}. User needs to manually create and link the organization.`,
-      )
+        `Git organization creation not yet implemented for ${gitProvider}. User needs to manually create and link the organization.`
+      );
 
       // ✅ 使用 Foundation 层服务更新组织的 Git 信息
       await this.organizationsService.update(organizationId, 'system', {
         gitOrgId: gitOrgName,
-        gitOrgUrl: `https://${gitProvider === 'github' ? 'github.com' : 'gitlab.com'}/${gitOrgName}`,
+        gitOrgUrl: `https://${
+          gitProvider === 'github' ? 'github.com' : 'gitlab.com'
+        }/${gitOrgName}`,
         gitLastSyncAt: new Date(),
-      })
+      });
 
-      this.logger.info(`Marked Git organization for manual setup: ${gitOrgName}`)
+      this.logger.info(
+        `Marked Git organization for manual setup: ${gitOrgName}`
+      );
     } catch (error) {
-      this.logger.error(`Failed to create Git organization:`, error)
-      throw error
+      this.logger.error(`Failed to create Git organization:`, error);
+      throw error;
     }
   }
 
@@ -639,70 +765,90 @@ export class OrganizationSyncService {
     organizationId: string,
     userId: string,
     role: 'owner' | 'admin' | 'member',
-    triggeredBy: string,
+    triggeredBy: string
   ) {
     this.logger.info(
-      `Adding member ${userId} to Git organization (role: ${role}, triggered by: ${triggeredBy})`,
-    )
+      `Adding member ${userId} to Git organization (role: ${role}, triggered by: ${triggeredBy})`
+    );
 
     // ✅ 使用 Foundation 层服务获取组织信息
-    const org = await this.organizationsService.get(organizationId, 'system')
+    const org = await this.organizationsService.get(organizationId, 'system');
 
     if (!org || !org.gitSyncEnabled || !org.gitProvider || !org.gitOrgId) {
-      throw new Error('Organization Git sync not configured')
+      throw new Error('Organization Git sync not configured');
     }
 
     try {
       // ✅ 使用 Foundation 层服务获取用户的 Git 连接
-      const gitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-        userId,
-        org.gitProvider as 'github' | 'gitlab',
-      )
+      const gitConnection =
+        await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          userId,
+          org.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!gitConnection) {
-        throw new Error(`User does not have ${org.gitProvider} account linked`)
+        throw new Error(`User does not have ${org.gitProvider} account linked`);
       }
 
       // ✅ 使用 Foundation 层服务获取组织所有者
-      const members = await this.organizationsService.listMembers(organizationId, 'system')
-      const owner = members.find((m) => m.role === 'owner')
+      const members = await this.organizationsService.listMembers(
+        organizationId,
+        'system'
+      );
+      const owner = members.find((m) => m.role === 'owner');
 
       if (!owner) {
-        throw new Error('Organization owner not found')
+        throw new Error('Organization owner not found');
       }
 
       // ✅ 使用 Foundation 层服务获取所有者的 Git 连接
-      const ownerGitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-        owner.user.id,
-        org.gitProvider as 'github' | 'gitlab',
-      )
+      const ownerGitConnection =
+        await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          owner.user.id,
+          org.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!ownerGitConnection) {
-        throw new Error(`Owner does not have ${org.gitProvider} account linked`)
+        throw new Error(
+          `Owner does not have ${org.gitProvider} account linked`
+        );
       }
 
       // 映射角色到 Git 权限
-      const gitRole = this.mapOrgRoleToGitPermission(role, org.gitProvider as 'github' | 'gitlab')
+      const gitRole = this.mapOrgRoleToGitPermission(
+        role,
+        org.gitProvider as 'github' | 'gitlab'
+      );
 
       // 添加成员到 Git 组织
       if (org.gitProvider === 'github') {
-        const octokit = this.githubClient.createClient(ownerGitConnection.accessToken)
+        const octokit = this.githubClient.createClient(
+          ownerGitConnection.accessToken
+        );
         await octokit.orgs.setMembershipForUser({
           org: org.gitOrgName!,
           username: gitConnection.username,
           role: gitRole as 'admin' | 'member',
-        })
+        });
       } else if (org.gitProvider === 'gitlab') {
-        const gitlab = this.gitlabClient.createClient(ownerGitConnection.accessToken)
-        await gitlab.GroupMembers.add(org.gitOrgId, gitRole as 10 | 20 | 30 | 40 | 50, {
-          userId: Number.parseInt(gitConnection.providerAccountId!, 10),
-        })
+        const gitlab = this.gitlabClient.createClient(
+          ownerGitConnection.accessToken
+        );
+        await gitlab.GroupMembers.add(
+          org.gitOrgId,
+          gitRole as 10 | 20 | 30 | 40 | 50,
+          {
+            userId: Number.parseInt(gitConnection.providerAccountId!, 10),
+          }
+        );
       }
 
-      this.logger.info(`Added member ${userId} to Git organization ${org.gitOrgName}`)
+      this.logger.info(
+        `Added member ${userId} to Git organization ${org.gitOrgName}`
+      );
     } catch (error) {
-      this.logger.error(`Failed to add member to Git organization:`, error)
-      throw error
+      this.logger.error(`Failed to add member to Git organization:`, error);
+      throw error;
     }
   }
 
@@ -713,79 +859,98 @@ export class OrganizationSyncService {
   async removeMemberFromGitOrganization(
     organizationId: string,
     userId: string,
-    triggeredBy: string,
+    triggeredBy: string
   ) {
     this.logger.info(
-      `Removing member ${userId} from Git organization (triggered by: ${triggeredBy})`,
-    )
+      `Removing member ${userId} from Git organization (triggered by: ${triggeredBy})`
+    );
 
     // ✅ 使用 Foundation 层服务获取组织信息
-    const org = await this.organizationsService.get(organizationId, 'system')
+    const org = await this.organizationsService.get(organizationId, 'system');
 
     if (!org || !org.gitSyncEnabled || !org.gitProvider || !org.gitOrgId) {
-      throw new Error('Organization Git sync not configured')
+      throw new Error('Organization Git sync not configured');
     }
 
     try {
       // ✅ 使用 Foundation 层服务获取用户的 Git 连接
-      const gitConnection = await this.gitConnectionsService.getConnectionByProvider(
-        userId,
-        org.gitProvider as 'github' | 'gitlab',
-      )
+      const gitConnection =
+        await this.gitConnectionsService.getConnectionByProvider(
+          userId,
+          org.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!gitConnection) {
         // 用户没有关联 Git 账号,无需移除
-        this.logger.info(`User ${userId} does not have ${org.gitProvider} account, skipping`)
-        return
+        this.logger.info(
+          `User ${userId} does not have ${org.gitProvider} account, skipping`
+        );
+        return;
       }
 
       // ✅ 使用 Foundation 层服务获取组织所有者
-      const members = await this.organizationsService.listMembers(organizationId, 'system')
-      const owner = members.find((m) => m.role === 'owner')
+      const members = await this.organizationsService.listMembers(
+        organizationId,
+        'system'
+      );
+      const owner = members.find((m) => m.role === 'owner');
 
       if (!owner) {
-        throw new Error('Organization owner not found')
+        throw new Error('Organization owner not found');
       }
 
       // ✅ 使用 Foundation 层服务获取所有者的 Git 连接
-      const ownerGitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-        owner.user.id,
-        org.gitProvider as 'github' | 'gitlab',
-      )
+      const ownerGitConnection =
+        await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          owner.user.id,
+          org.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!ownerGitConnection) {
-        throw new Error(`Owner does not have ${org.gitProvider} account linked`)
+        throw new Error(
+          `Owner does not have ${org.gitProvider} account linked`
+        );
       }
 
       // 解密用户的 Git 连接
-      const userGitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-        userId,
-        org.gitProvider as 'github' | 'gitlab',
-      )
+      const userGitConnection =
+        await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          userId,
+          org.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!userGitConnection) {
-        throw new Error('Failed to decrypt user Git connection')
+        throw new Error('Failed to decrypt user Git connection');
       }
 
       // 从 Git 组织移除成员
       if (org.gitProvider === 'github') {
-        const octokit = this.githubClient.createClient(ownerGitConnection.accessToken)
+        const octokit = this.githubClient.createClient(
+          ownerGitConnection.accessToken
+        );
         await octokit.orgs.removeMembershipForUser({
           org: org.gitOrgName!,
           username: userGitConnection.username,
-        })
+        });
       } else if (org.gitProvider === 'gitlab') {
-        const gitlab = this.gitlabClient.createClient(ownerGitConnection.accessToken)
+        const gitlab = this.gitlabClient.createClient(
+          ownerGitConnection.accessToken
+        );
         await gitlab.GroupMembers.remove(
           org.gitOrgId,
-          Number.parseInt(userGitConnection.providerAccountId!, 10),
-        )
+          Number.parseInt(userGitConnection.providerAccountId!, 10)
+        );
       }
 
-      this.logger.info(`Removed member ${userId} from Git organization ${org.gitOrgName}`)
+      this.logger.info(
+        `Removed member ${userId} from Git organization ${org.gitOrgName}`
+      );
     } catch (error) {
-      this.logger.error(`Failed to remove member from Git organization:`, error)
-      throw error
+      this.logger.error(
+        `Failed to remove member from Git organization:`,
+        error
+      );
+      throw error;
     }
   }
 
@@ -797,83 +962,103 @@ export class OrganizationSyncService {
     organizationId: string,
     userId: string,
     newRole: 'owner' | 'admin' | 'member',
-    triggeredBy: string,
+    triggeredBy: string
   ) {
     this.logger.info(
-      `Updating member ${userId} role to ${newRole} in Git organization (triggered by: ${triggeredBy})`,
-    )
+      `Updating member ${userId} role to ${newRole} in Git organization (triggered by: ${triggeredBy})`
+    );
 
     // ✅ 使用 Foundation 层服务获取组织信息
-    const org = await this.organizationsService.get(organizationId, 'system')
+    const org = await this.organizationsService.get(organizationId, 'system');
 
     if (!org || !org.gitSyncEnabled || !org.gitProvider || !org.gitOrgId) {
-      throw new Error('Organization Git sync not configured')
+      throw new Error('Organization Git sync not configured');
     }
 
     try {
       // ✅ 使用 Foundation 层服务获取用户的 Git 连接
-      const gitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-        userId,
-        org.gitProvider as 'github' | 'gitlab',
-      )
+      const gitConnection =
+        await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          userId,
+          org.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!gitConnection) {
-        throw new Error(`User does not have ${org.gitProvider} account linked`)
+        throw new Error(`User does not have ${org.gitProvider} account linked`);
       }
 
       // ✅ 使用 Foundation 层服务获取组织所有者
-      const members = await this.organizationsService.listMembers(organizationId, 'system')
-      const owner = members.find((m) => m.role === 'owner')
+      const members = await this.organizationsService.listMembers(
+        organizationId,
+        'system'
+      );
+      const owner = members.find((m) => m.role === 'owner');
 
       if (!owner) {
-        throw new Error('Organization owner not found')
+        throw new Error('Organization owner not found');
       }
 
       // ✅ 使用 Foundation 层服务获取所有者的 Git 连接
-      const ownerGitConnection = await this.gitConnectionsService.getConnectionWithDecryptedTokens(
-        owner.user.id,
-        org.gitProvider as 'github' | 'gitlab',
-      )
+      const ownerGitConnection =
+        await this.gitConnectionsService.getConnectionWithDecryptedTokens(
+          owner.user.id,
+          org.gitProvider as 'github' | 'gitlab'
+        );
 
       if (!ownerGitConnection) {
-        throw new Error(`Owner does not have ${org.gitProvider} account linked`)
+        throw new Error(
+          `Owner does not have ${org.gitProvider} account linked`
+        );
       }
 
       // 映射角色到 Git 权限
       const gitRole = this.mapOrgRoleToGitPermission(
         newRole,
-        org.gitProvider as 'github' | 'gitlab',
-      )
+        org.gitProvider as 'github' | 'gitlab'
+      );
 
       // 更新 Git 组织成员角色
       if (org.gitProvider === 'github') {
-        const octokit = this.githubClient.createClient(ownerGitConnection.accessToken)
+        const octokit = this.githubClient.createClient(
+          ownerGitConnection.accessToken
+        );
         // GitHub 需要先移除再添加来更新角色
         await octokit.orgs.removeMembershipForUser({
           org: org.gitOrgName!,
           username: gitConnection.username,
-        })
+        });
         await octokit.orgs.setMembershipForUser({
           org: org.gitOrgName!,
           username: gitConnection.username,
           role: gitRole as 'admin' | 'member',
-        })
+        });
       } else if (org.gitProvider === 'gitlab') {
-        const gitlab = this.gitlabClient.createClient(ownerGitConnection.accessToken)
+        const gitlab = this.gitlabClient.createClient(
+          ownerGitConnection.accessToken
+        );
         // GitLab 也需要先移除再添加来更新角色
         await gitlab.GroupMembers.remove(
           org.gitOrgId,
-          Number.parseInt(gitConnection.providerAccountId!, 10),
-        )
-        await gitlab.GroupMembers.add(org.gitOrgId, gitRole as 10 | 20 | 30 | 40 | 50, {
-          userId: Number.parseInt(gitConnection.providerAccountId!, 10),
-        })
+          Number.parseInt(gitConnection.providerAccountId!, 10)
+        );
+        await gitlab.GroupMembers.add(
+          org.gitOrgId,
+          gitRole as 10 | 20 | 30 | 40 | 50,
+          {
+            userId: Number.parseInt(gitConnection.providerAccountId!, 10),
+          }
+        );
       }
 
-      this.logger.info(`Updated member ${userId} role in Git organization ${org.gitOrgName}`)
+      this.logger.info(
+        `Updated member ${userId} role in Git organization ${org.gitOrgName}`
+      );
     } catch (error) {
-      this.logger.error(`Failed to update member role in Git organization:`, error)
-      throw error
+      this.logger.error(
+        `Failed to update member role in Git organization:`,
+        error
+      );
+      throw error;
     }
   }
 
@@ -883,7 +1068,7 @@ export class OrganizationSyncService {
    */
   private mapOrgRoleToGitPermission(
     role: string,
-    provider: 'github' | 'gitlab',
+    provider: 'github' | 'gitlab'
   ): 'admin' | 'member' | 10 | 20 | 30 | 40 | 50 {
     if (provider === 'github') {
       // GitHub 组织角色映射
@@ -894,8 +1079,8 @@ export class OrganizationSyncService {
         member: 'member',
         developer: 'member',
         viewer: 'member',
-      }
-      return githubRoleMap[role.toLowerCase()] || 'member'
+      };
+      return githubRoleMap[role.toLowerCase()] || 'member';
     }
 
     // GitLab 组织角色映射
@@ -906,7 +1091,7 @@ export class OrganizationSyncService {
       member: 30, // Developer
       developer: 30, // Developer
       viewer: 20, // Reporter
-    }
-    return gitlabRoleMap[role.toLowerCase()] || 30
+    };
+    return gitlabRoleMap[role.toLowerCase()] || 30;
   }
 }
