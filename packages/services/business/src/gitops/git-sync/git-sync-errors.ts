@@ -45,7 +45,7 @@ export class GitSyncOperationError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     const providerName = this.context?.provider === 'github' ? 'GitHub' : 'GitLab'
 
     // ✅ 根据 SDK 错误类型提供友好消息

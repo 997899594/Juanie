@@ -33,7 +33,7 @@ export class ProjectOperationError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     const operation = this.context?.operation || 'operation'
 
     // 根据操作类型提供友好消息
@@ -77,7 +77,7 @@ export class DatabaseOperationError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     return '数据库操作失败，请重试'
   }
 }

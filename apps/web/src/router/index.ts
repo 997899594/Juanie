@@ -102,48 +102,6 @@ const routes: RouteRecordRaw[] = [
         },
       },
 
-      // AI 智能化模块
-      {
-        path: 'ai/assistants',
-        name: 'ai-assistants',
-        component: () => import('@/views/ai/AIAssistants.vue'),
-        meta: {
-          title: 'AI 助手',
-          navigation: {
-            group: 'AI 智能化',
-            icon: 'Bot',
-            order: 1,
-            badge: 'Beta',
-          },
-        },
-      },
-      {
-        path: 'ai/recommendations',
-        name: 'ai-recommendations',
-        component: () => import('@/views/ai/AIRecommendations.vue'),
-        meta: {
-          title: '智能推荐',
-          navigation: {
-            group: 'AI 智能化',
-            icon: 'Brain',
-            order: 2,
-          },
-        },
-      },
-      {
-        path: 'ai/code-analysis',
-        name: 'ai-code-analysis',
-        component: () => import('@/views/ai/CodeAnalysis.vue'),
-        meta: {
-          title: '代码分析',
-          navigation: {
-            group: 'AI 智能化',
-            icon: 'Code',
-            order: 3,
-          },
-        },
-      },
-
       // 安全与合规模块
       {
         path: 'security/zero-trust',

@@ -33,7 +33,7 @@ export class DeploymentOperationError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     const operation = this.context?.operation || 'operation'
 
     // 根据操作类型提供友好消息
@@ -77,7 +77,7 @@ export class GitOpsOperationError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     const operation = this.context?.operation || 'operation'
 
     switch (operation) {
@@ -112,7 +112,7 @@ export class DeploymentPermissionError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     const operation = this.context?.operation || 'perform this operation'
     return `没有权限${operation}，请联系管理员`
   }

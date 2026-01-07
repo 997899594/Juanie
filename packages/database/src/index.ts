@@ -10,14 +10,12 @@
  * - deployment: 部署（环境、部署、流水线）
  * - repository: 仓库（代码仓库）
  * - gitops: GitOps（资源、同步）
- * - ai: AI（助手、对话、模板）
  * - monitoring: 监控（事件、成本、安全）
  * - system: 系统（通知、审计、事件）
  */
 
 // Export relations
 export * from './relations'
-export * from './schemas/ai'
 // Export all schemas by domain
 export * from './schemas/auth'
 export * from './schemas/deployment'

@@ -22,7 +22,7 @@ export class ProjectNotFoundError extends BaseError {
     super('Project not found', 'PROJECT_NOT_FOUND', 404, false, { projectId })
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     return '项目不存在或已被删除'
   }
 }
@@ -35,7 +35,7 @@ export class ProjectAlreadyExistsError extends BaseError {
     })
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     return `项目名称 "${this.context?.name}" 已存在`
   }
 }
@@ -56,7 +56,7 @@ export class ProjectInitializationError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     const stepMsg = this.step ? ` (步骤: ${this.step})` : ''
     return `项目初始化失败${stepMsg}，请重试或联系管理员`
   }
@@ -150,7 +150,7 @@ export class GitOpsSetupError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     return 'GitOps 配置失败，请检查 Git 仓库设置'
   }
 }
@@ -179,7 +179,7 @@ export class StorageError extends BaseError {
     })
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     return '文件操作失败，请稍后重试'
   }
 }
@@ -195,7 +195,7 @@ export class QuotaExceededError extends BaseError {
     })
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     return `${this.context?.resource} 配额已达上限 (${this.context?.current}/${this.context?.limit})`
   }
 }

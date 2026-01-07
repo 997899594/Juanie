@@ -1,7 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { AIRouter } from '../routers/ai.router'
-import { AiAssistantsRouter } from '../routers/ai-assistants.router'
-import { AICodeReviewRouter } from '../routers/ai-code-review.router'
+import { AgentRouter } from '../routers/agent.router'
 import { AuditLogsRouter } from '../routers/audit-logs.router'
 import { AuthRouter } from '../routers/auth.router'
 import { CostTrackingRouter } from '../routers/cost-tracking.router'
@@ -25,9 +23,7 @@ import { TrpcService } from './trpc.service'
 export class TrpcRouter {
   constructor(
     private readonly trpc: TrpcService,
-    private readonly aiRouter: AIRouter,
-    private readonly aiCodeReviewRouter: AICodeReviewRouter,
-    private readonly aiAssistantsRouter: AiAssistantsRouter,
+    private readonly agentRouter: AgentRouter,
     private readonly auditLogsRouter: AuditLogsRouter,
     private readonly authRouter: AuthRouter,
     private readonly costTrackingRouter: CostTrackingRouter,
@@ -53,9 +49,7 @@ export class TrpcRouter {
         return { status: 'ok', timestamp: new Date().toISOString() }
       }),
       // 服务路由
-      ai: this.aiRouter.router,
-      aiCodeReview: this.aiCodeReviewRouter.router,
-      aiAssistants: this.aiAssistantsRouter.router,
+      agent: this.agentRouter.router,
       auditLogs: this.auditLogsRouter.router,
       auth: this.authRouter.router,
       costTracking: this.costTrackingRouter.router,
@@ -73,7 +67,6 @@ export class TrpcRouter {
       gitops: this.gitOpsRouter.router,
       gitSync: this.gitSyncRouter.router,
       templates: this.templatesRouter.router,
-      // 其他服务路由将在这里添加
     })
   }
 }

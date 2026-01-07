@@ -1,6 +1,7 @@
 // Foundation Layer - 基础层服务
 // 提供认证、用户管理、组织管理、团队管理、审计日志、通知和存储功能
 
+export { StorageError } from '@juanie/core-errors'
 // 类型导出（从 @juanie/types 统一管理）
 export type * from '@juanie/types'
 // 审计日志
@@ -73,7 +74,7 @@ export { SessionService } from './sessions/session.service'
 export { SessionsModule } from './sessions/sessions.module'
 // 存储服务
 export { StorageModule } from './storage/storage.module'
-export { StorageError, StorageService } from './storage/storage.service'
+export { StorageService } from './storage/storage.service'
 // 团队服务
 export { TeamsModule } from './teams/teams.module'
 export { TeamsService } from './teams/teams.service'

@@ -43,7 +43,7 @@ export class InitializationOperationError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     const step = this.context?.step || 'unknown'
 
     // ✅ 根据 SDK 错误类型提供友好消息
@@ -110,7 +110,7 @@ export class TemplateRenderError extends BaseError {
     )
   }
 
-  getUserMessage(): string {
+  override getUserMessage(): string {
     return '模板渲染失败，请检查模板配置'
   }
 }

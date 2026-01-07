@@ -12,16 +12,19 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.0.5",
-    "@ai-sdk/openai": "^1.0.10",
-    "@anthropic-ai/sdk": "^0.32.1",
+    "ai": "^6.0.14",
+    "@ai-sdk/anthropic": "^3.0.7",
+    "@ai-sdk/openai": "^3.0.7",
+    "@ai-sdk/google": "^3.0.5",
+    "@ai-sdk/mistral": "^3.0.5",
     "@juanie/core": "workspace:*",
     "@juanie/service-business": "workspace:*",
     "@juanie/service-foundation": "workspace:*",
     "@juanie/types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "@qdrant/js-client-rest": "^1.16.2",
-    "ai": "^4.0.38",
-    "ollama": "^0.5.11"
+    "ollama": "^0.6.3",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@juanie/config-typescript": "workspace:*",

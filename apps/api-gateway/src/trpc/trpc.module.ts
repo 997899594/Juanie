@@ -2,9 +2,7 @@ import { BusinessModule } from '@juanie/service-business'
 import { ExtensionsModule } from '@juanie/service-extensions'
 import { FoundationModule } from '@juanie/service-foundation'
 import { Module } from '@nestjs/common'
-import { AIRouter } from '../routers/ai.router'
-import { AiAssistantsRouter } from '../routers/ai-assistants.router'
-import { AICodeReviewRouter } from '../routers/ai-code-review.router'
+import { AgentRouter } from '../routers/agent.router'
 import { AuditLogsRouter } from '../routers/audit-logs.router'
 import { AuthRouter } from '../routers/auth.router'
 import { CostTrackingRouter } from '../routers/cost-tracking.router'
@@ -35,9 +33,7 @@ import { TrpcService } from './trpc.service'
   providers: [
     TrpcService,
     TrpcRouter,
-    AIRouter,
-    AICodeReviewRouter,
-    AiAssistantsRouter,
+    AgentRouter,
     AuditLogsRouter,
     AuthRouter,
     CostTrackingRouter,

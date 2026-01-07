@@ -8,9 +8,14 @@
     "dev:host": "vite dev --host",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit --pretty"
+    "type-check": "vue-tsc --noEmit --pretty",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@ai-sdk/vue": "latest",
     "@casl/vue": "^2.2.2",
     "@grafana/faro-web-sdk": "^2.0.2",
     "@juanie/types": "workspace:*",
@@ -30,10 +35,14 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-vue": "^6.0.1",
+    "@vitest/ui": "^4.0.16",
     "@vue/tsconfig": "^0.8.1",
+    "happy-dom": "^20.0.11",
+    "jsdom": "^27.4.0",
     "tailwindcss": "^4.1.14",
     "typescript": "^5.9.3",
     "vite": "^7.1.9",
+    "vitest": "^4.0.16",
     "vue-tsc": "^3.1.1"
   }
 }
