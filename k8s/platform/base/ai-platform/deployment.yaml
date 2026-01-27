@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-platform
+  namespace: juanie-platform
+  labels:
+    app: ai-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-platform
+  template:
+    metadata:
+      labels:
+        app: ai-platform
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: ai-platform
+          image: ghcr.io/997899594/juanie-ai-platform:latest
+          ports:
+            - containerPort: 3002
+              name: http
+            - containerPort: 9466
+              name: metrics
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: juanie-config
+                  key: NODE_ENV
+            - name: REDIS_URL
+              value: "redis://$(REDIS_HOST):$(REDIS_PORT)"
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: juanie-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: juanie-config
+                  key: REDIS_PORT
+            - name: GOOGLE_GENERATIVE_AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: juanie-secrets
+                  key: GOOGLE_GENERATIVE_AI_API_KEY
+            - name: K3S_KUBECONFIG_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: juanie-config
+                  key: K3S_KUBECONFIG_PATH
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /etc/rancher/k3s
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: kubeconfig-secret
+            optional: true

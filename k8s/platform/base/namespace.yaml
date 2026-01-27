@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: juanie-platform
+  labels:
+    app.kubernetes.io/name: juanie
+    app.kubernetes.io/component: platform
