@@ -1,1 +1,0 @@
-ALTER TYPE "public"."gitops_resource_type" ADD VALUE 'git-repository';
