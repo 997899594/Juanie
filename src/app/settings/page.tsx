@@ -1,81 +1,81 @@
-'use client'
+'use client';
 
-import { useRouter } from 'next/navigation'
-import { signOut } from 'next-auth/react'
-import { useEffect, useState } from 'react'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface User {
-  id: string
-  name: string | null
-  email: string
-  image: string | null
-  createdAt: string
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+  createdAt: string;
 }
 
 export default function SettingsPage() {
-  const router = useRouter()
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-  })
+  });
 
   useEffect(() => {
-    fetchUser()
-  }, [])
+    fetchUser();
+  }, []);
 
   const fetchUser = async () => {
     try {
-      const res = await fetch('/api/user')
+      const res = await fetch('/api/user');
       if (res.ok) {
-        const data = await res.json()
-        setUser(data)
-        setFormData({ name: data.name || '' })
+        const data = await res.json();
+        setUser(data);
+        setFormData({ name: data.name || '' });
       }
     } catch (error) {
-      console.error('Failed to fetch user:', error)
+      console.error('Failed to fetch user:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
+    e.preventDefault();
+    setSaving(true);
 
     try {
       const res = await fetch('/api/user', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
-      })
+      });
 
       if (res.ok) {
-        alert('Profile updated successfully')
+        alert('Profile updated successfully');
       }
     } catch (error) {
-      console.error('Failed to update profile:', error)
+      console.error('Failed to update profile:', error);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleSignOut = async () => {
-    await signOut({ callbackUrl: '/login' })
-  }
+    await signOut({ callbackUrl: '/login' });
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
-    )
+    );
   }
 
   const getInitials = (name: string | null, email: string) => {
@@ -84,9 +84,9 @@ export default function SettingsPage() {
         .split(' ')
         .map((n) => n[0])
         .join('')
-        .toUpperCase()
-    return email[0].toUpperCase()
-  }
+        .toUpperCase();
+    return email[0].toUpperCase();
+  };
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -152,5 +152,5 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

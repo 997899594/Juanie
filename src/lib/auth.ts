@@ -1,12 +1,32 @@
-import { DrizzleAdapter } from '@auth/drizzle-adapter'
-import NextAuth from 'next-auth'
-import GitHub from 'next-auth/providers/github'
-import GitLab from 'next-auth/providers/gitlab'
-import { db } from '@/lib/db'
+import { DrizzleAdapter } from '@auth/drizzle-adapter';
+import NextAuth from 'next-auth';
+import GitHub from 'next-auth/providers/github';
+import GitLab from 'next-auth/providers/gitlab';
+import Credentials from 'next-auth/providers/credentials';
+import { db } from '@/lib/db';
+import { users } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const isDev = process.env.NODE_ENV === 'development';
+
+const nextAuth = NextAuth({
   adapter: DrizzleAdapter(db),
+  session: {
+    strategy: 'jwt',
+  },
   providers: [
+    ...(isDev
+      ? [
+          Credentials({
+            name: 'Dev User',
+            credentials: {},
+            async authorize() {
+              const devUser = await getOrCreateDevUser();
+              return devUser ? { id: devUser.id, email: devUser.email, name: devUser.name } : null;
+            },
+          }),
+        ]
+      : []),
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
@@ -17,14 +37,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
       }
-      return session
+      return token;
+    },
+    async session({ session, token }) {
+      if (token?.id) {
+        session.user.id = token.id as string;
+      }
+      return session;
     },
   },
   pages: {
     signIn: '/login',
   },
-})
+});
+
+export const { handlers, signIn, signOut } = nextAuth;
+export const auth = nextAuth.auth;
+
+async function getOrCreateDevUser() {
+  const devUserId = '00000000-0000-0000-0000-000000000001';
+
+  let devUser = await db.query.users.findFirst({
+    where: eq(users.id, devUserId),
+  });
+
+  if (!devUser) {
+    await db.insert(users).values({
+      id: devUserId,
+      name: 'Dev User',
+      email: 'dev@localhost',
+    });
+    devUser = await db.query.users.findFirst({
+      where: eq(users.id, devUserId),
+    });
+  }
+
+  return devUser;
+}
+
+export { getOrCreateDevUser };

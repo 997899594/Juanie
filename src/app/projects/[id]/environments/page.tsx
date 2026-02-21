@@ -1,48 +1,48 @@
-'use client'
+'use client';
 
-import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface Environment {
-  id: string
-  name: string
-  order: number
-  namespace: string | null
+  id: string;
+  name: string;
+  order: number;
+  namespace: string | null;
 }
 
 export default function EnvironmentsPage() {
-  const params = useParams()
-  const projectId = params.id as string
-  const [environments, setEnvironments] = useState<Environment[]>([])
-  const [loading, setLoading] = useState(true)
+  const params = useParams();
+  const projectId = params.id as string;
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchEnvironments()
-  }, [projectId])
+    fetchEnvironments();
+  }, [projectId]);
 
   const fetchEnvironments = async () => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/environments`)
+      const res = await fetch(`/api/projects/${projectId}/environments`);
       if (res.ok) {
-        const data = await res.json()
-        setEnvironments(data)
+        const data = await res.json();
+        setEnvironments(data);
       }
     } catch (error) {
-      console.error('Failed to fetch environments:', error)
+      console.error('Failed to fetch environments:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -78,5 +78,5 @@ export default function EnvironmentsPage() {
         ))}
       </div>
     </div>
-  )
+  );
 }

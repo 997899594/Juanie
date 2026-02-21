@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -13,15 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface Pipeline {
-  id: string
-  name: string
-  yaml: string
-  createdAt: string
+  id: string;
+  name: string;
+  yaml: string;
+  createdAt: string;
 }
 
 const defaultYaml = `name: Build and Deploy
@@ -36,100 +36,100 @@ jobs:
       - name: Build
         run: echo "Building..."
       - name: Deploy
-        run: echo "Deploying..."`
+        run: echo "Deploying..."`;
 
 export default function PipelinesPage() {
-  const params = useParams()
-  const projectId = params.id as string
-  const [pipelines, setPipelines] = useState<Pipeline[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isOpen, setIsOpen] = useState(false)
+  const params = useParams();
+  const projectId = params.id as string;
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     yaml: defaultYaml,
-  })
-  const [submitting, setSubmitting] = useState(false)
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchPipelines()
-  }, [projectId])
+    fetchPipelines();
+  }, [projectId]);
 
   const fetchPipelines = async () => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/pipelines`)
+      const res = await fetch(`/api/projects/${projectId}/pipelines`);
       if (res.ok) {
-        const data = await res.json()
-        setPipelines(data)
+        const data = await res.json();
+        setPipelines(data);
       }
     } catch (error) {
-      console.error('Failed to fetch pipelines:', error)
+      console.error('Failed to fetch pipelines:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
+    e.preventDefault();
+    setSubmitting(true);
 
     try {
       const res = await fetch(`/api/projects/${projectId}/pipelines`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
-      })
+      });
 
       if (res.ok) {
-        setIsOpen(false)
-        setFormData({ name: '', yaml: defaultYaml })
-        fetchPipelines()
+        setIsOpen(false);
+        setFormData({ name: '', yaml: defaultYaml });
+        fetchPipelines();
       } else {
-        const data = await res.json()
-        alert(data.error || 'Failed to create pipeline')
+        const data = await res.json();
+        alert(data.error || 'Failed to create pipeline');
       }
     } catch (error) {
-      console.error('Failed to create pipeline:', error)
+      console.error('Failed to create pipeline:', error);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const handleDelete = async (pipelineId: string) => {
-    if (!confirm('Are you sure you want to delete this pipeline?')) return
+    if (!confirm('Are you sure you want to delete this pipeline?')) return;
 
     try {
       const res = await fetch(`/api/projects/${projectId}/pipelines/${pipelineId}`, {
         method: 'DELETE',
-      })
+      });
 
       if (res.ok) {
-        fetchPipelines()
+        fetchPipelines();
       }
     } catch (error) {
-      console.error('Failed to delete pipeline:', error)
+      console.error('Failed to delete pipeline:', error);
     }
-  }
+  };
 
   const handleRun = async (pipelineId: string) => {
     try {
       const res = await fetch(`/api/projects/${projectId}/pipelines/${pipelineId}`, {
         method: 'POST',
-      })
+      });
 
       if (res.ok) {
-        alert('Pipeline run started!')
+        alert('Pipeline run started!');
       }
     } catch (error) {
-      console.error('Failed to run pipeline:', error)
+      console.error('Failed to run pipeline:', error);
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -225,5 +225,5 @@ export default function PipelinesPage() {
         )}
       </div>
     </div>
-  )
+  );
 }

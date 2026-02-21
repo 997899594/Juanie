@@ -1,21 +1,21 @@
-import { eq } from 'drizzle-orm'
-import { db } from '@/lib/db'
-import { environments, projectInitializationSteps, projects, teams } from '@/lib/db/schema'
-import { createGitRepository, createKustomization } from './flux'
-import { createGitHubRepo, pushTemplateToRepo } from './github'
-import { createNamespace } from './k8s'
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { environments, projectInitializationSteps, projects, teams } from '@/lib/db/schema';
+import { createGitRepository, createKustomization } from './flux';
+import { createGitHubRepo, pushTemplateToRepo } from './github';
+import { createNamespace } from './k8s';
 
 export type InitializationStep =
   | 'create_repository'
   | 'push_template'
   | 'create_environments'
   | 'setup_gitops'
-  | 'finalize'
+  | 'finalize';
 
 export interface StepResult {
-  success: boolean
-  error?: string
-  metadata?: Record<string, unknown>
+  success: boolean;
+  error?: string;
+  metadata?: Record<string, unknown>;
 }
 
 const STEP_WEIGHTS: Record<InitializationStep, number> = {
@@ -24,13 +24,13 @@ const STEP_WEIGHTS: Record<InitializationStep, number> = {
   create_environments: 10,
   setup_gitops: 35,
   finalize: 15,
-}
+};
 
 export class ProjectInitializationService {
-  private projectId: string
+  private projectId: string;
 
   constructor(projectId: string) {
-    this.projectId = projectId
+    this.projectId = projectId;
   }
 
   async initialize(): Promise<void> {
@@ -40,126 +40,126 @@ export class ProjectInitializationService {
       'create_environments',
       'setup_gitops',
       'finalize',
-    ]
+    ];
 
     for (const step of steps) {
-      await this.executeStep(step)
+      await this.executeStep(step);
 
-      const progress = this.calculateProgress(steps.indexOf(step) + 1, steps.length)
-      await this.updateStepProgress(step, progress)
+      const progress = this.calculateProgress(steps.indexOf(step) + 1, steps.length);
+      await this.updateStepProgress(step, progress);
     }
   }
 
   private calculateProgress(currentStep: number, totalSteps: number): number {
-    let total = 0
+    let total = 0;
     for (let i = 0; i < currentStep; i++) {
-      total += STEP_WEIGHTS[Object.keys(STEP_WEIGHTS)[i] as InitializationStep]
+      total += STEP_WEIGHTS[Object.keys(STEP_WEIGHTS)[i] as InitializationStep];
     }
-    return total
+    return total;
   }
 
   private async executeStep(step: InitializationStep): Promise<StepResult> {
-    await this.markStepRunning(step)
+    await this.markStepRunning(step);
 
     try {
       switch (step) {
         case 'create_repository':
-          return await this.createRepository()
+          return await this.createRepository();
         case 'push_template':
-          return await this.pushTemplate()
+          return await this.pushTemplate();
         case 'create_environments':
-          return await this.createEnvironments()
+          return await this.createEnvironments();
         case 'setup_gitops':
-          return await this.setupGitOps()
+          return await this.setupGitOps();
         case 'finalize':
-          return await this.finalize()
+          return await this.finalize();
         default:
-          return { success: false, error: 'Unknown step' }
+          return { success: false, error: 'Unknown step' };
       }
     } catch (error) {
-      await this.markStepFailed(step, error instanceof Error ? error.message : 'Unknown error')
-      throw error
+      await this.markStepFailed(step, error instanceof Error ? error.message : 'Unknown error');
+      throw error;
     }
   }
 
   private async createRepository(): Promise<StepResult> {
     const project = await db.query.projects.findFirst({
       where: eq(projects.id, this.projectId),
-    })
+    });
 
     if (!project) {
-      return { success: false, error: 'Project not found' }
+      return { success: false, error: 'Project not found' };
     }
 
     if (project.gitRepository) {
-      return { success: true, metadata: { repository: project.gitRepository } }
+      return { success: true, metadata: { repository: project.gitRepository } };
     }
 
     const team = await db.query.teams.findFirst({
       where: eq(teams.id, project.teamId),
-    })
+    });
 
     if (!team) {
-      return { success: false, error: 'Team not found' }
+      return { success: false, error: 'Team not found' };
     }
 
-    const { createGitHubRepo } = await import('./github')
+    const { createGitHubRepo } = await import('./github');
     const repo = await createGitHubRepo(team.id, {
       name: project.slug,
       description: project.description || `Project ${project.name}`,
       private: true,
-    })
+    });
 
     if (!repo) {
       return {
         success: false,
         error:
           'Failed to create GitHub repository. Please ensure GitHub is connected to your team.',
-      }
+      };
     }
 
     await db
       .update(projects)
       .set({ gitRepository: repo.html_url })
-      .where(eq(projects.id, this.projectId))
+      .where(eq(projects.id, this.projectId));
 
-    return { success: true, metadata: { repository: repo.html_url, repoFullName: repo.full_name } }
+    return { success: true, metadata: { repository: repo.html_url, repoFullName: repo.full_name } };
   }
 
   private async pushTemplate(): Promise<StepResult> {
     const project = await db.query.projects.findFirst({
       where: eq(projects.id, this.projectId),
-    })
+    });
 
     if (!project) {
-      return { success: false, error: 'Project not found' }
+      return { success: false, error: 'Project not found' };
     }
 
     if (!project.gitRepository) {
-      return { success: false, error: 'Repository not created' }
+      return { success: false, error: 'Repository not created' };
     }
 
     const team = await db.query.teams.findFirst({
       where: eq(teams.id, project.teamId),
-    })
+    });
 
     if (!team) {
-      return { success: false, error: 'Team not found' }
+      return { success: false, error: 'Team not found' };
     }
 
-    const [, ownerRepo] = project.gitRepository.split('github.com/')
-    const [owner, repo] = ownerRepo.split('/')
+    const [, ownerRepo] = project.gitRepository.split('github.com/');
+    const [owner, repo] = ownerRepo.split('/');
 
-    const { pushTemplateToRepo } = await import('./github')
-    const templateFiles = this.generateTemplateFiles(project.templateId || 'nextjs', project.slug)
+    const { pushTemplateToRepo } = await import('./github');
+    const templateFiles = this.generateTemplateFiles(project.templateId || 'nextjs', project.slug);
 
-    const success = await pushTemplateToRepo(team.id, owner, repo, templateFiles)
+    const success = await pushTemplateToRepo(team.id, owner, repo, templateFiles);
 
     if (!success) {
-      return { success: false, error: 'Failed to push template to repository' }
+      return { success: false, error: 'Failed to push template to repository' };
     }
 
-    return { success: true, metadata: { template: project.templateId } }
+    return { success: true, metadata: { template: project.templateId } };
   }
 
   private generateTemplateFiles(templateId: string, projectSlug: string): Record<string, string> {
@@ -216,77 +216,77 @@ jobs:
       - name: Deploy
         run: echo "Deploying..."
 `,
-    }
+    };
 
-    return baseFiles
+    return baseFiles;
   }
 
   private async createEnvironments(): Promise<StepResult> {
     const project = await db.query.projects.findFirst({
       where: eq(projects.id, this.projectId),
-    })
+    });
 
     if (!project) {
-      return { success: false, error: 'Project not found' }
+      return { success: false, error: 'Project not found' };
     }
 
     const envs = await db.query.environments.findMany({
       where: eq(environments.projectId, this.projectId),
-    })
+    });
 
-    const namespacePrefix = 'juanie'
-    const projectSlug = project.slug
+    const namespacePrefix = 'juanie';
+    const projectSlug = project.slug;
 
     const envNames: Record<string, number> = {
       development: 1,
       staging: 2,
       production: 3,
-    }
+    };
 
     for (const [envName, order] of Object.entries(envNames)) {
-      const namespace = `${namespacePrefix}-${projectSlug}-${envName}`
-      const env = envs.find((e) => e.name === envName)
+      const namespace = `${namespacePrefix}-${projectSlug}-${envName}`;
+      const env = envs.find((e) => e.name === envName);
 
       if (env) {
-        await db.update(environments).set({ namespace }).where(eq(environments.id, env.id))
+        await db.update(environments).set({ namespace }).where(eq(environments.id, env.id));
       }
     }
 
-    return { success: true }
+    return { success: true };
   }
 
   private async setupGitOps(): Promise<StepResult> {
     const project = await db.query.projects.findFirst({
       where: eq(projects.id, this.projectId),
-    })
+    });
 
     if (!project) {
-      return { success: false, error: 'Project not found' }
+      return { success: false, error: 'Project not found' };
     }
 
     if (!project.gitRepository) {
-      return { success: false, error: 'Repository not created' }
+      return { success: false, error: 'Repository not created' };
     }
 
-    const [, ownerRepo] = project.gitRepository.split('github.com/')
-    const [, repo] = ownerRepo.split('/')
-    const repoUrl = `https://github.com/${repo}`
+    const [, ownerRepo] = project.gitRepository.split('github.com/');
+    const [, repo] = ownerRepo.split('/');
+    const repoUrl = `https://github.com/${repo}`;
 
     const envs = await db.query.environments.findMany({
       where: eq(environments.projectId, this.projectId),
-    })
+    });
 
     for (const env of envs) {
-      if (!env.namespace) continue
+      if (!env.namespace) continue;
 
       try {
-        await createNamespace(env.namespace)
+        await createNamespace(env.namespace);
 
         await createGitRepository(`${project.slug}-${env.name}`, env.namespace, {
           url: repoUrl,
           ref: { branch: 'main' },
           interval: '1m',
-        })
+        });
 
         await createKustomization(`${project.slug}-${env.name}`, env.namespace, {
           sourceRef: {
@@ -297,19 +297,19 @@ jobs:
           prune: true,
           interval: '1m',
           targetNamespace: env.namespace,
-        })
+        });
       } catch (error) {
-        console.error(`Failed to setup GitOps for environment ${env.name}:`, error)
+        console.error(`Failed to setup GitOps for environment ${env.name}:`, error);
       }
     }
 
-    return { success: true }
+    return { success: true };
   }
 
   private async finalize(): Promise<StepResult> {
-    await db.update(projects).set({ status: 'active' }).where(eq(projects.id, this.projectId))
+    await db.update(projects).set({ status: 'active' }).where(eq(projects.id, this.projectId));
 
-    return { success: true }
+    return { success: true };
   }
 
   private async markStepRunning(step: InitializationStep): Promise<void> {
@@ -319,7 +319,7 @@ jobs:
         status: 'running',
         startedAt: new Date(),
       })
-      .where(eq(projectInitializationSteps.step, step))
+      .where(eq(projectInitializationSteps.step, step));
   }
 
   private async markStepFailed(step: InitializationStep, error: string): Promise<void> {
@@ -330,9 +330,9 @@ jobs:
         error,
         completedAt: new Date(),
       })
-      .where(eq(projectInitializationSteps.step, step))
+      .where(eq(projectInitializationSteps.step, step));
 
-    await db.update(projects).set({ status: 'failed' }).where(eq(projects.id, this.projectId))
+    await db.update(projects).set({ status: 'failed' }).where(eq(projects.id, this.projectId));
   }
 
   private async updateStepProgress(step: InitializationStep, progress: number): Promise<void> {
@@ -343,11 +343,11 @@ jobs:
         progress,
         completedAt: new Date(),
       })
-      .where(eq(projectInitializationSteps.step, step))
+      .where(eq(projectInitializationSteps.step, step));
   }
 }
 
 export async function initializeProject(projectId: string): Promise<void> {
-  const service = new ProjectInitializationService(projectId)
-  await service.initialize()
+  const service = new ProjectInitializationService(projectId);
+  await service.initialize();
 }

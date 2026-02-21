@@ -1,18 +1,18 @@
-import { desc, eq } from 'drizzle-orm'
-import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { auth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { deployments, environments, projects, teams } from '@/lib/db/schema'
+import { desc, eq } from 'drizzle-orm';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { deployments, environments, projects, teams } from '@/lib/db/schema';
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  const { id } = await params
+  const session = await auth();
+  const { id } = await params;
 
   if (!session?.user?.id) {
-    redirect('/login')
+    redirect('/login');
   }
 
   const project = await db.query.projects.findFirst({
@@ -20,21 +20,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     with: {
       environments: true,
     },
-  })
+  });
 
   if (!project) {
-    redirect('/projects')
+    redirect('/projects');
   }
 
   const team = await db.query.teams.findFirst({
     where: eq(teams.id, project.teamId),
-  })
+  });
 
   const recentDeployments = await db.query.deployments.findMany({
     where: eq(deployments.projectId, id),
     orderBy: [desc(deployments.createdAt)],
     limit: 5,
-  })
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -174,5 +174,5 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
       </main>
     </div>
-  )
+  );
 }

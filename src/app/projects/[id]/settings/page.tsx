@@ -1,125 +1,125 @@
-'use client'
+'use client';
 
-import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface ProjectSettings {
-  id: string
-  name: string
-  slug: string
-  description: string | null
-  gitRepository: string | null
-  gitBranch: string
-  status: string
-  teamName: string
-  teamSlug: string
-  yourRole: string
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  gitRepository: string | null;
+  gitBranch: string;
+  status: string;
+  teamName: string;
+  teamSlug: string;
+  yourRole: string;
 }
 
 export default function ProjectSettingsPage() {
-  const params = useParams()
-  const router = useRouter()
-  const projectId = params.id as string
-  const [project, setProject] = useState<ProjectSettings | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const params = useParams();
+  const router = useRouter();
+  const projectId = params.id as string;
+  const [project, setProject] = useState<ProjectSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     gitRepository: '',
     gitBranch: 'main',
-  })
+  });
 
   useEffect(() => {
-    fetchProject()
-  }, [projectId])
+    fetchProject();
+  }, [projectId]);
 
   const fetchProject = async () => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/settings`)
+      const res = await fetch(`/api/projects/${projectId}/settings`);
       if (res.ok) {
-        const data = await res.json()
-        setProject(data)
+        const data = await res.json();
+        setProject(data);
         setFormData({
           name: data.name || '',
           description: data.description || '',
           gitRepository: data.gitRepository || '',
           gitBranch: data.gitBranch || 'main',
-        })
+        });
       }
     } catch (error) {
-      console.error('Failed to fetch project:', error)
+      console.error('Failed to fetch project:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
+    e.preventDefault();
+    setSaving(true);
 
     try {
       const res = await fetch(`/api/projects/${projectId}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
-      })
+      });
 
       if (res.ok) {
-        const data = await res.json()
-        setProject(data)
-        alert('Project updated successfully')
+        const data = await res.json();
+        setProject(data);
+        alert('Project updated successfully');
       } else {
-        const data = await res.json()
-        alert(data.error || 'Failed to update project')
+        const data = await res.json();
+        alert(data.error || 'Failed to update project');
       }
     } catch (error) {
-      console.error('Failed to update project:', error)
+      console.error('Failed to update project:', error);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
-      return
+      return;
     }
 
     try {
       const res = await fetch(`/api/projects/${projectId}/settings`, {
         method: 'DELETE',
-      })
+      });
 
       if (res.ok) {
-        router.push('/projects')
+        router.push('/projects');
       } else {
-        const data = await res.json()
-        alert(data.error || 'Failed to delete project')
+        const data = await res.json();
+        alert(data.error || 'Failed to delete project');
       }
     } catch (error) {
-      console.error('Failed to delete project:', error)
+      console.error('Failed to delete project:', error);
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
-    )
+    );
   }
 
   if (!project) {
-    return <div>Project not found</div>
+    return <div>Project not found</div>;
   }
 
-  const canEdit = ['owner', 'admin'].includes(project.yourRole)
+  const canEdit = ['owner', 'admin'].includes(project.yourRole);
 
   return (
     <div className="space-y-6">
@@ -252,5 +252,5 @@ export default function ProjectSettingsPage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

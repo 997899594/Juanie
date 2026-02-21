@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -13,88 +13,88 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 
 interface Webhook {
-  id: string
-  url: string
-  events: string[]
-  secret: string
-  active: boolean
-  createdAt: string
+  id: string;
+  url: string;
+  events: string[];
+  secret: string;
+  active: boolean;
+  createdAt: string;
 }
 
 const eventOptions = [
   { value: 'deployment', label: 'Deployment' },
   { value: 'rollback', label: 'Rollback' },
   { value: 'health_check', label: 'Health Check' },
-]
+];
 
 export default function WebhooksPage() {
-  const params = useParams()
-  const projectId = params.id as string
-  const [webhooks, setWebhooks] = useState<Webhook[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isOpen, setIsOpen] = useState(false)
+  const params = useParams();
+  const projectId = params.id as string;
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     url: '',
     events: ['deployment'],
-  })
-  const [submitting, setSubmitting] = useState(false)
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchWebhooks()
-  }, [projectId])
+    fetchWebhooks();
+  }, [projectId]);
 
   const fetchWebhooks = async () => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/webhooks`)
+      const res = await fetch(`/api/projects/${projectId}/webhooks`);
       if (res.ok) {
-        const data = await res.json()
-        setWebhooks(data)
+        const data = await res.json();
+        setWebhooks(data);
       }
     } catch (error) {
-      console.error('Failed to fetch webhooks:', error)
+      console.error('Failed to fetch webhooks:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
+    e.preventDefault();
+    setSubmitting(true);
 
     try {
       const res = await fetch(`/api/projects/${projectId}/webhooks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
-      })
+      });
 
       if (res.ok) {
-        setIsOpen(false)
-        setFormData({ url: '', events: ['deployment'] })
-        fetchWebhooks()
+        setIsOpen(false);
+        setFormData({ url: '', events: ['deployment'] });
+        fetchWebhooks();
       } else {
-        const data = await res.json()
-        alert(data.error || 'Failed to create webhook')
+        const data = await res.json();
+        alert(data.error || 'Failed to create webhook');
       }
     } catch (error) {
-      console.error('Failed to create webhook:', error)
+      console.error('Failed to create webhook:', error);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const handleToggle = async (webhook: Webhook) => {
     try {
@@ -102,43 +102,43 @@ export default function WebhooksPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !webhook.active }),
-      })
+      });
 
       if (res.ok) {
-        fetchWebhooks()
+        fetchWebhooks();
       }
     } catch (error) {
-      console.error('Failed to toggle webhook:', error)
+      console.error('Failed to toggle webhook:', error);
     }
-  }
+  };
 
   const handleDelete = async (webhookId: string) => {
-    if (!confirm('Are you sure you want to delete this webhook?')) return
+    if (!confirm('Are you sure you want to delete this webhook?')) return;
 
     try {
       const res = await fetch(`/api/projects/${projectId}/webhooks/${webhookId}`, {
         method: 'DELETE',
-      })
+      });
 
       if (res.ok) {
-        fetchWebhooks()
+        fetchWebhooks();
       }
     } catch (error) {
-      console.error('Failed to delete webhook:', error)
+      console.error('Failed to delete webhook:', error);
     }
-  }
+  };
 
   const copySecret = (secret: string) => {
-    navigator.clipboard.writeText(secret)
-    alert('Secret copied to clipboard!')
-  }
+    navigator.clipboard.writeText(secret);
+    alert('Secret copied to clipboard!');
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -249,5 +249,5 @@ export default function WebhooksPage() {
         )}
       </div>
     </div>
-  )
+  );
 }

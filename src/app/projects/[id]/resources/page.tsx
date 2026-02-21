@@ -1,128 +1,128 @@
-'use client'
+'use client';
 
-import Link from 'next/link'
-import { useEffect, useState } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui/select';
 
 interface Pod {
   metadata: {
-    name: string
-    namespace: string
-    labels?: Record<string, string>
-  }
+    name: string;
+    namespace: string;
+    labels?: Record<string, string>;
+  };
   status: {
-    phase: string
+    phase: string;
     containerStatuses?: Array<{
-      name: string
-      ready: boolean
-      restartCount: number
-      state?: Record<string, { startedAt: string }>
-    }>
-  }
+      name: string;
+      ready: boolean;
+      restartCount: number;
+      state?: Record<string, { startedAt: string }>;
+    }>;
+  };
 }
 
 interface Service {
   metadata: {
-    name: string
-    namespace: string
-  }
+    name: string;
+    namespace: string;
+  };
   spec: {
-    type: string
-    ports?: Array<{ port: number; targetPort: number | string; protocol: string }>
-  }
+    type: string;
+    ports?: Array<{ port: number; targetPort: number | string; protocol: string }>;
+  };
 }
 
 interface Deployment {
   metadata: {
-    name: string
-    namespace: string
-  }
+    name: string;
+    namespace: string;
+  };
   status: {
-    replicas: number
-    readyReplicas: number
-    updatedReplicas: number
-  }
+    replicas: number;
+    readyReplicas: number;
+    updatedReplicas: number;
+  };
 }
 
 export default function ProjectResourcesPage({ params }: { params: Promise<{ id: string }> }) {
-  const [projectId, setProjectId] = useState('')
-  const [resourceType, setResourceType] = useState<'pods' | 'services' | 'deployments'>('pods')
-  const [environmentId, setEnvironmentId] = useState('')
+  const [projectId, setProjectId] = useState('');
+  const [resourceType, setResourceType] = useState<'pods' | 'services' | 'deployments'>('pods');
+  const [environmentId, setEnvironmentId] = useState('');
   const [environments, setEnvironments] = useState<
     Array<{ id: string; name: string; namespace: string }>
-  >([])
-  const [resources, setResources] = useState<Pod[] | Service[] | Deployment[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedPod, setSelectedPod] = useState('')
-  const [logs, setLogs] = useState('')
-  const [loadingLogs, setLoadingLogs] = useState(false)
+  >([]);
+  const [resources, setResources] = useState<Pod[] | Service[] | Deployment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPod, setSelectedPod] = useState('');
+  const [logs, setLogs] = useState('');
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
     params.then((p) => {
-      setProjectId(p.id)
-    })
-  }, [params])
+      setProjectId(p.id);
+    });
+  }, [params]);
 
   useEffect(() => {
-    if (!projectId) return
+    if (!projectId) return;
 
     fetch(`/api/projects/${projectId}/environments`)
       .then((res) => res.json())
       .then((data) => {
-        setEnvironments(data.environments || [])
+        setEnvironments(data.environments || []);
         if (data.environments?.[0]) {
-          setEnvironmentId(data.environments[0].id)
+          setEnvironmentId(data.environments[0].id);
         }
-      })
-  }, [projectId])
+      });
+  }, [projectId]);
 
   useEffect(() => {
-    if (!projectId || !environmentId) return
+    if (!projectId || !environmentId) return;
 
-    setLoading(true)
+    setLoading(true);
     fetch(`/api/projects/${projectId}/resources?type=${resourceType}&env=${environmentId}`)
       .then((res) => res.json())
       .then((data) => {
-        setResources(data)
+        setResources(data);
       })
-      .finally(() => setLoading(false))
-  }, [projectId, environmentId, resourceType])
+      .finally(() => setLoading(false));
+  }, [projectId, environmentId, resourceType]);
 
   useEffect(() => {
-    if (!projectId || !environmentId || !selectedPod) return
+    if (!projectId || !environmentId || !selectedPod) return;
 
-    setLoadingLogs(true)
+    setLoadingLogs(true);
     fetch(
-      `/api/projects/${projectId}/resources/logs?pod=${selectedPod}&env=${environmentId}&tail=100`,
+      `/api/projects/${projectId}/resources/logs?pod=${selectedPod}&env=${environmentId}&tail=100`
     )
       .then((res) => res.text())
       .then((data) => {
-        setLogs(data)
+        setLogs(data);
       })
-      .finally(() => setLoadingLogs(false))
-  }, [projectId, environmentId, selectedPod])
+      .finally(() => setLoadingLogs(false));
+  }, [projectId, environmentId, selectedPod]);
 
   const getPodPhaseColor = (phase: string) => {
     switch (phase) {
       case 'Running':
-        return 'bg-green-100 text-green-800'
+        return 'bg-green-100 text-green-800';
       case 'Pending':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-yellow-100 text-yellow-800';
       case 'Failed':
-        return 'bg-red-100 text-red-800'
+        return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-gray-100 text-gray-800';
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -291,5 +291,5 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
         </Card>
       </main>
     </div>
-  )
+  );
 }

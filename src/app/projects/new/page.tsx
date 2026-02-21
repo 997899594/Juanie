@@ -1,40 +1,40 @@
-'use client'
+'use client';
 
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface Team {
   team: {
-    id: string
-    name: string
-    slug: string
-  }
-  role: string
+    id: string;
+    name: string;
+    slug: string;
+  };
+  role: string;
 }
 
 export default function NewProjectPage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [teams, setTeams] = useState<Team[]>([])
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [selectedTeam, setSelectedTeam] = useState('')
-  const [template, setTemplate] = useState('nextjs')
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedTeam, setSelectedTeam] = useState('');
+  const [template, setTemplate] = useState('nextjs');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [error, setError] = useState('')
+  const [error, setError] = useState('');
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   // const { data: teams } = useTeams();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
     try {
       const response = await fetch('/api/projects', {
@@ -46,21 +46,21 @@ export default function NewProjectPage() {
           description,
           templateId: template,
         }),
-      })
+      });
 
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to create project')
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create project');
       }
 
-      const { project } = await response.json()
-      router.push(`/projects/${project.id}`)
+      const { project } = await response.json();
+      router.push(`/projects/${project.id}`);
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -148,5 +148,5 @@ export default function NewProjectPage() {
         </Card>
       </main>
     </div>
-  )
+  );
 }

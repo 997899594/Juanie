@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm'
-import { db } from '@/lib/db'
-import { auditLogs } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { auditLogs } from '@/lib/db/schema';
 
 export type AuditAction =
   | 'project.created'
@@ -16,7 +16,7 @@ export type AuditAction =
   | 'cluster.removed'
   | 'git_connected'
   | 'webhook.created'
-  | 'webhook.deleted'
+  | 'webhook.deleted';
 
 export type ResourceType =
   | 'project'
@@ -26,16 +26,16 @@ export type ResourceType =
   | 'member'
   | 'cluster'
   | 'git_connection'
-  | 'webhook'
+  | 'webhook';
 
 interface AuditLogParams {
-  teamId: string
-  userId?: string
-  action: AuditAction
-  resourceType: ResourceType
-  resourceId?: string
-  metadata?: Record<string, unknown>
-  ipAddress?: string
+  teamId: string;
+  userId?: string;
+  action: AuditAction;
+  resourceType: ResourceType;
+  resourceId?: string;
+  metadata?: Record<string, unknown>;
+  ipAddress?: string;
 }
 
 export async function createAuditLog(params: AuditLogParams) {
@@ -50,22 +50,22 @@ export async function createAuditLog(params: AuditLogParams) {
       metadata: params.metadata,
       ipAddress: params.ipAddress,
     })
-    .returning()
+    .returning();
 
-  return log
+  return log;
 }
 
 export async function getAuditLogs(
   teamId: string,
   options?: {
-    limit?: number
-    offset?: number
-    resourceType?: ResourceType
-    action?: AuditAction
-  },
+    limit?: number;
+    offset?: number;
+    resourceType?: ResourceType;
+    action?: AuditAction;
+  }
 ) {
-  const limit = options?.limit || 50
-  const offset = options?.offset || 0
+  const limit = options?.limit || 50;
+  const offset = options?.offset || 0;
 
   const logs = await db
     .select()
@@ -73,9 +73,9 @@ export async function getAuditLogs(
     .where(eq(auditLogs.teamId, teamId))
     .orderBy(auditLogs.createdAt)
     .limit(limit)
-    .offset(offset)
+    .offset(offset);
 
-  return logs
+  return logs;
 }
 
 export function formatAuditAction(action: AuditAction): string {
@@ -94,7 +94,7 @@ export function formatAuditAction(action: AuditAction): string {
     git_connected: 'connected git provider',
     'webhook.created': 'created webhook',
     'webhook.deleted': 'deleted webhook',
-  }
+  };
 
-  return actionLabels[action] || action
+  return actionLabels[action] || action;
 }

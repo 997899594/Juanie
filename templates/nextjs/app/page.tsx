@@ -4,5 +4,5 @@ export default function Home() {
       <h1>Welcome to {{ PROJECT_NAME }}</h1>
       <p>{{ DESCRIPTION }}</p>
     </main>
-  )
+  );
 }

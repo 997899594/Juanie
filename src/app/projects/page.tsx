@@ -1,14 +1,14 @@
-import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { auth } from '@/lib/auth'
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { auth } from '@/lib/auth';
 
 export default async function ProjectsPage() {
-  const session = await auth()
+  const session = await auth();
 
   if (!session) {
-    redirect('/login')
+    redirect('/login');
   }
 
   const response = await fetch(
@@ -17,10 +17,10 @@ export default async function ProjectsPage() {
       headers: {
         cookie: `next-auth.session-token=${session}`,
       },
-    },
-  )
+    }
+  );
 
-  const projects = response.ok ? await response.json() : []
+  const projects = response.ok ? await response.json() : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,5 +95,5 @@ export default async function ProjectsPage() {
         )}
       </main>
     </div>
-  )
+  );
 }

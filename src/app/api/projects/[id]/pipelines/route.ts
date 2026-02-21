@@ -1,34 +1,34 @@
-import { eq } from 'drizzle-orm'
-import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { pipelines } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm';
+import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { pipelines } from '@/lib/db/schema';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const session = await auth()
+  const { id } = await params;
+  const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const pipelinesList = await db.select().from(pipelines).where(eq(pipelines.projectId, id))
+  const pipelinesList = await db.select().from(pipelines).where(eq(pipelines.projectId, id));
 
-  return NextResponse.json(pipelinesList)
+  return NextResponse.json(pipelinesList);
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const session = await auth()
+  const { id } = await params;
+  const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { name, yaml } = await request.json()
+  const { name, yaml } = await request.json();
 
   if (!name || !yaml) {
-    return NextResponse.json({ error: 'Name and YAML are required' }, { status: 400 })
+    return NextResponse.json({ error: 'Name and YAML are required' }, { status: 400 });
   }
 
   const [pipeline] = await db
@@ -38,7 +38,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       name,
       yaml,
     })
-    .returning()
+    .returning();
 
-  return NextResponse.json(pipeline, { status: 201 })
+  return NextResponse.json(pipeline, { status: 201 });
 }

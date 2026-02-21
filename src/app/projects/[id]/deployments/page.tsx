@@ -1,9 +1,9 @@
-'use client'
+'use client';
 
-import { useParams, useSearchParams } from 'next/navigation'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useDeployments } from '@/hooks/useDeployments'
+import { useParams, useSearchParams } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useDeployments } from '@/hooks/useDeployments';
 
 const statusColors: Record<string, string> = {
   pending: 'warning',
@@ -12,21 +12,21 @@ const statusColors: Record<string, string> = {
   deployed: 'success',
   failed: 'destructive',
   rolled_back: 'destructive',
-}
+};
 
 export default function DeploymentsPage() {
-  const params = useParams()
-  const searchParams = useSearchParams()
-  const projectId = params.id as string
-  const envFilter = searchParams.get('env')
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const projectId = params.id as string;
+  const envFilter = searchParams.get('env');
 
   const { deployments, isConnected, error } = useDeployments({
     projectId,
-  })
+  });
 
   const filteredDeployments = envFilter
     ? deployments.filter((d) => d.environmentName === envFilter)
-    : deployments
+    : deployments;
 
   return (
     <div className="space-y-4">
@@ -78,5 +78,5 @@ export default function DeploymentsPage() {
         )}
       </div>
     </div>
-  )
+  );
 }

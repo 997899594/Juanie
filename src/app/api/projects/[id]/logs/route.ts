@@ -1,41 +1,38 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { projects, environments, clusters } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { getK8sClient } from "@/lib/k8s";
+import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { projects, environments, clusters } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { getK8sClient } from '@/lib/k8s';
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const url = new URL(request.url);
-  const podName = url.searchParams.get("pod");
-  const containerName = url.searchParams.get("container");
-  const environmentId = url.searchParams.get("env");
-  const tailLines = url.searchParams.get("tail") || "100";
+  const podName = url.searchParams.get('pod');
+  const containerName = url.searchParams.get('container');
+  const environmentId = url.searchParams.get('env');
+  const tailLines = url.searchParams.get('tail') || '100';
 
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, id),
   });
 
   if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
   const cluster = await db.query.clusters.findFirst({
-    where: eq(clusters.id, project.clusterId || ""),
+    where: eq(clusters.id, project.clusterId || ''),
   });
 
   if (!cluster) {
-    return NextResponse.json({ error: "No cluster configured" }, { status: 400 });
+    return NextResponse.json({ error: 'No cluster configured' }, { status: 400 });
   }
 
   let environment = null;
@@ -51,11 +48,11 @@ export async function GET(
   }
 
   if (!environment || !environment.namespace) {
-    return NextResponse.json({ error: "Environment not configured" }, { status: 400 });
+    return NextResponse.json({ error: 'Environment not configured' }, { status: 400 });
   }
 
   if (!podName) {
-    return NextResponse.json({ error: "Pod name is required" }, { status: 400 });
+    return NextResponse.json({ error: 'Pod name is required' }, { status: 400 });
   }
 
   try {
@@ -79,7 +76,7 @@ export async function GET(
       logs: logResult.body,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

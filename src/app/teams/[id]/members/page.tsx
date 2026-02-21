@@ -1,11 +1,11 @@
-'use client'
+'use client';
 
-import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -14,27 +14,27 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@/components/ui/select';
 
 interface TeamMember {
-  id: string
-  role: string
-  createdAt: string
+  id: string;
+  role: string;
+  createdAt: string;
   user: {
-    id: string
-    name: string | null
-    email: string
-    image: string | null
-  }
+    id: string;
+    name: string | null;
+    email: string;
+    image: string | null;
+  };
 }
 
 const roleColors: Record<string, string> = {
@@ -42,79 +42,79 @@ const roleColors: Record<string, string> = {
   admin: 'bg-blue-100 text-blue-800',
   member: 'bg-green-100 text-green-800',
   viewer: 'bg-gray-100 text-gray-800',
-}
+};
 
 export default function TeamMembersPage() {
-  const params = useParams()
-  const router = useRouter()
-  const teamId = params.id as string
-  const [members, setMembers] = useState<TeamMember[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isOpen, setIsOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('member')
-  const [submitting, setSubmitting] = useState(false)
+  const params = useParams();
+  const router = useRouter();
+  const teamId = params.id as string;
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('member');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchMembers()
-  }, [teamId])
+    fetchMembers();
+  }, [teamId]);
 
   const fetchMembers = async () => {
     try {
-      const res = await fetch(`/api/teams/${teamId}/members`)
+      const res = await fetch(`/api/teams/${teamId}/members`);
       if (res.ok) {
-        const data = await res.json()
-        setMembers(data)
+        const data = await res.json();
+        setMembers(data);
       }
     } catch (error) {
-      console.error('Failed to fetch members:', error)
+      console.error('Failed to fetch members:', error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
+    e.preventDefault();
+    setSubmitting(true);
 
     try {
       const res = await fetch(`/api/teams/${teamId}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-      })
+      });
 
       if (res.ok) {
-        setIsOpen(false)
-        setInviteEmail('')
-        setInviteRole('member')
-        fetchMembers()
+        setIsOpen(false);
+        setInviteEmail('');
+        setInviteRole('member');
+        fetchMembers();
       } else {
-        const data = await res.json()
-        alert(data.error || 'Failed to invite member')
+        const data = await res.json();
+        alert(data.error || 'Failed to invite member');
       }
     } catch (error) {
-      console.error('Failed to invite member:', error)
+      console.error('Failed to invite member:', error);
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
-  }
+  };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Are you sure you want to remove this member?')) return
+    if (!confirm('Are you sure you want to remove this member?')) return;
 
     try {
       const res = await fetch(`/api/teams/${teamId}/members/${memberId}`, {
         method: 'DELETE',
-      })
+      });
 
       if (res.ok) {
-        fetchMembers()
+        fetchMembers();
       }
     } catch (error) {
-      console.error('Failed to remove member:', error)
+      console.error('Failed to remove member:', error);
     }
-  }
+  };
 
   const handleChangeRole = async (memberId: string, newRole: string) => {
     try {
@@ -122,15 +122,15 @@ export default function TeamMembersPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole }),
-      })
+      });
 
       if (res.ok) {
-        fetchMembers()
+        fetchMembers();
       }
     } catch (error) {
-      console.error('Failed to change role:', error)
+      console.error('Failed to change role:', error);
     }
-  }
+  };
 
   const getInitials = (name: string | null, email: string) => {
     if (name)
@@ -138,16 +138,16 @@ export default function TeamMembersPage() {
         .split(' ')
         .map((n) => n[0])
         .join('')
-        .toUpperCase()
-    return email[0].toUpperCase()
-  }
+        .toUpperCase();
+    return email[0].toUpperCase();
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
       </div>
-    )
+    );
   }
 
   return (
@@ -275,5 +275,5 @@ export default function TeamMembersPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

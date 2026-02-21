@@ -1,13 +1,13 @@
-import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { auth } from '@/lib/auth'
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { auth } from '@/lib/auth';
 
 export default async function HomePage() {
-  const session = await auth()
+  const session = await auth();
 
   if (!session) {
-    redirect('/login')
+    redirect('/login');
   }
 
   return (
@@ -46,5 +46,5 @@ export default async function HomePage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

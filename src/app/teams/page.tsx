@@ -1,17 +1,17 @@
-import { eq } from 'drizzle-orm'
-import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { auth } from '@/lib/auth'
-import { db } from '@/lib/db'
-import { teamMembers, teams, users } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { teamMembers, teams, users } from '@/lib/db/schema';
 
 export default async function TeamsPage() {
-  const session = await auth()
+  const session = await auth();
 
   if (!session?.user?.id) {
-    redirect('/login')
+    redirect('/login');
   }
 
   const userTeams = await db
@@ -21,7 +21,7 @@ export default async function TeamsPage() {
     })
     .from(teamMembers)
     .innerJoin(teams, eq(teams.id, teamMembers.teamId))
-    .where(eq(teamMembers.userId, session.user.id))
+    .where(eq(teamMembers.userId, session.user.id));
 
   return (
     <div className="min-h-screen bg-background">
@@ -83,5 +83,5 @@ export default async function TeamsPage() {
         )}
       </main>
     </div>
-  )
+  );
 }

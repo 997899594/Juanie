@@ -1,8 +1,29 @@
-import { Github } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { signIn } from '@/lib/auth'
+import { Github } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { signIn, auth } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import { devSignIn } from './actions';
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const session = await auth();
+
+  if (session) {
+    redirect('/');
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <form action={devSignIn} className="space-y-4 text-center">
+          <p className="text-muted-foreground mb-4">Dev Mode: Auto-signing in...</p>
+          <Button type="submit" size="lg">
+            Sign in as Dev User
+          </Button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md p-8 space-y-8">
@@ -14,8 +35,8 @@ export default function LoginPage() {
         <div className="space-y-4">
           <form
             action={async () => {
-              'use server'
-              await signIn('github', { redirectTo: '/' })
+              'use server';
+              await signIn('github', { redirectTo: '/' });
             }}
           >
             <Button type="submit" className="w-full" size="lg">
@@ -26,8 +47,8 @@ export default function LoginPage() {
 
           <form
             action={async () => {
-              'use server'
-              await signIn('gitlab', { redirectTo: '/' })
+              'use server';
+              await signIn('gitlab', { redirectTo: '/' });
             }}
           >
             <Button type="submit" className="w-full" size="lg" variant="outline">
@@ -37,5 +58,5 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
