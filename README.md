@@ -1,122 +1,107 @@
-# AI DevOps Platform
+# Juanie - Modern DevOps Platform
 
-现代化的 AI 驱动 DevOps 平台，用于项目管理、GitOps、环境管理和成本追踪。
+A modern AI-driven DevOps platform built with Next.js 15, Drizzle ORM, and Kubernetes.
 
-## 📖 文档
+## Features
 
-所有文档在 [`docs/`](./docs/) 目录：
-- [快速开始](./docs/quick-start.md)
-- [开发指南](./docs/development.md)
-- [服务器部署](./docs/deployment.md)
-- [GitOps 指南](./docs/gitops.md)
-- [系统架构](./docs/architecture.md)
+- **Multi-team Support**: Create and manage teams with role-based access control
+- **Project Management**: Create projects from templates with automatic environment setup
+- **GitOps Integration**: Automatic deployment via Flux CD
+- **Kubernetes Integration**: Seamless K8s namespace and resource management
+- **Real-time Deployments**: Live deployment status via Server-Sent Events (SSE)
+- **CI/CD Pipeline**: GitHub Actions integration
+- **Pod Logs & Exec**: View logs and execute commands in pods
+- **Secrets & ConfigMaps**: Manage Kubernetes secrets and config maps
+- **Webhook Notifications**: Deploy event notifications
+- **Audit Logging**: Track all team activities
 
-## 快速开始
+## Tech Stack
 
-### 前置要求
-- Bun >= 1.0.0
-- Node.js >= 22.0.0
-- PostgreSQL 15
-- Redis 7
-- Docker (可选)
+- **Framework**: Next.js 15 (App Router)
+- **Database**: PostgreSQL + Drizzle ORM
+- **Auth**: NextAuth.js (GitHub/GitLab OAuth)
+- **K8s SDK**: @kubernetes/client-node
+- **UI**: Tailwind CSS + Radix UI
+- **GitOps**: Flux CD
 
-### 安装
+## Getting Started
+
+### Prerequisites
+
+- Node.js 22+
+- Bun
+- PostgreSQL database
+- Kubernetes cluster (optional, for deployments)
+
+### Installation
 
 ```bash
-# 克隆项目
-git clone <repo-url>
-cd juanie
-
-# 安装依赖
+# Install dependencies
 bun install
 
-# 配置环境变量
+# Copy environment variables
 cp .env.example .env
-# 编辑 .env 填入你的配置
 
-# 启动数据库服务
-bun run docker:up
+# Configure your .env file
+# DATABASE_URL=postgresql://...
+# NEXTAUTH_SECRET=...
+# GITHUB_CLIENT_ID=...
+# GITHUB_CLIENT_SECRET=...
 
-# 运行数据库迁移
+# Generate database schema
+bun run db:generate
 bun run db:push
 
-# 启动开发服务器
+# Start development server
 bun run dev
 ```
 
-访问：
-- Web 应用: http://localhost:5173
-- API 网关: http://localhost:1997
+### Environment Variables
 
-## 核心功能
+| Variable | Required | Description |
+|----------|----------|-------------|
+| DATABASE_URL | Yes | PostgreSQL connection string |
+| NEXTAUTH_URL | Yes | Your app URL |
+| NEXTAUTH_SECRET | Yes | Secret for NextAuth |
+| GITHUB_CLIENT_ID | Yes | GitHub OAuth app client ID |
+| GITHUB_CLIENT_SECRET | Yes | GitHub OAuth app client secret |
+| GITLAB_CLIENT_ID | No | GitLab OAuth app client ID |
+| GITLAB_CLIENT_SECRET | No | GitLab OAuth app client secret |
+| KUBECONFIG | No | Kubernetes config path |
 
-- **项目管理**: 多项目、多团队支持，内置模板系统
-- **GitOps**: 自动化部署，集成 Flux CD 和 K3s
-- **环境管理**: Development/Staging/Production 环境隔离
-- **成本追踪**: 实时成本监控和优化建议
-- **AI 助手**: 代码审查、DevOps 建议、安全分析
-
-## 技术栈
-
-- **后端**: NestJS 11 + Fastify + tRPC
-- **前端**: Vue 3 + Vite + Tailwind CSS
-- **数据库**: PostgreSQL + Drizzle ORM
-- **缓存/队列**: Redis + BullMQ
-- **容器编排**: K3s + Flux CD
-- **监控**: Prometheus + Grafana + OpenTelemetry
-
-## 文档
-
-- [贡献指南](./CONTRIBUTING.md)
-- [部署指南](./DEPLOYMENT.md)
-- [三层架构](./REFACTORING_THREE_TIER.md)
-- [快速开始指南](./QUICK_START_GUIDE.md)
-- [快速参考](./QUICK_REFERENCE.md)
-- [2025 路线图](./ROADMAP_2025.md)
-- [现代最佳实践](./MODERN_BEST_PRACTICES_2025.md)
-- [详细文档](./docs/)
-
-## 常用命令
-
-```bash
-# 开发
-bun run dev              # 启动所有服务
-bun run dev:web          # 只启动 Web
-bun run dev:api          # 只启动 API
-
-# 数据库
-bun run db:generate      # 生成迁移
-bun run db:push          # 应用迁移
-bun run db:studio        # Drizzle Studio
-
-# 测试
-bun test                 # 运行测试
-bun test --watch         # 监听模式
-
-# 构建
-bun run build            # 构建所有包
-
-# Docker
-bun run docker:up        # 启动服务
-bun run docker:down      # 停止服务
-```
-
-## 项目结构
+## Project Structure
 
 ```
-apps/
-  api-gateway/           # API 网关 (NestJS + tRPC)
-  web/                   # Web 前端 (Vue 3)
-
-packages/
-  core/                  # 核心包 (database, types, queue, utils)
-  services/
-    foundation/          # 基础层 (auth, users, organizations)
-    business/            # 业务层 (projects, deployments, gitops)
-    extensions/          # 扩展层 (ai, monitoring, notifications)
-  config/                # 共享配置
-  ui/                    # UI 组件库
+src/
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── auth/         # NextAuth
+│   │   ├── projects/    # Projects CRUD
+│   │   ├── teams/       # Teams CRUD
+│   │   ├── deployments/ # Deployments
+│   │   └── clusters/    # K8s clusters
+│   ├── projects/        # Project pages
+│   └── teams/           # Team pages
+├── components/            # React components
+│   └── ui/              # UI components (Radix)
+├── hooks/                 # Custom React hooks
+└── lib/                  # Core libraries
+    ├── db/               # Drizzle ORM schema
+    ├── k8s.ts           # K8s client
+    ├── flux.ts           # Flux CD integration
+    └── github.ts         # GitHub API
 ```
+
+## API Endpoints
+
+- `POST /api/projects` - Create project
+- `GET /api/projects` - List projects
+- `GET /api/projects/[id]` - Get project details
+- `POST /api/projects/[id]/deployments` - Trigger deployment
+- `GET /api/events/deployments` - SSE for deployment updates
+- `POST /api/projects/init` - Initialize project (K8s/Flux)
+- `GET /api/projects/[id]/resources` - Get K8s resources
+- `GET /api/projects/[id]/resources/logs` - Get pod logs
 
 ## License
 
