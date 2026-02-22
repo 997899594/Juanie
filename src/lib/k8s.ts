@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 let k8sCoreApi: k8s.CoreV1Api | null = null;
 let k8sAppsApi: k8s.AppsV1Api | null = null;
 let k8sCustomApi: k8s.CustomObjectsApi | null = null;
+let k8sNetworkingApi: k8s.NetworkingV1Api | null = null;
 let kubeConfig: k8s.KubeConfig | null = null;
 let initAttempted = false;
 
@@ -38,6 +39,7 @@ export function initK8sClient(): void {
     k8sCoreApi = kc.makeApiClient(k8s.CoreV1Api);
     k8sAppsApi = kc.makeApiClient(k8s.AppsV1Api);
     k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
+    k8sNetworkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
     console.log('✅ Kubernetes client initialized');
   } catch (error) {
     console.log(
@@ -51,11 +53,12 @@ export function getK8sClient(): {
   core: k8s.CoreV1Api;
   apps: k8s.AppsV1Api;
   custom: k8s.CustomObjectsApi;
+  networking: k8s.NetworkingV1Api;
   config: k8s.KubeConfig;
 } {
-  if (!k8sCoreApi || !k8sAppsApi || !k8sCustomApi || !kubeConfig) {
+  if (!k8sCoreApi || !k8sAppsApi || !k8sCustomApi || !k8sNetworkingApi || !kubeConfig) {
     initK8sClient();
-    if (!k8sCoreApi || !k8sAppsApi || !k8sCustomApi || !kubeConfig) {
+    if (!k8sCoreApi || !k8sAppsApi || !k8sCustomApi || !k8sNetworkingApi || !kubeConfig) {
       throw new Error('K8s client not initialized');
     }
   }
@@ -64,6 +67,7 @@ export function getK8sClient(): {
     core: k8sCoreApi,
     apps: k8sAppsApi,
     custom: k8sCustomApi,
+    networking: k8sNetworkingApi,
     config: kubeConfig,
   };
 }
@@ -329,4 +333,473 @@ export async function deleteSecret(namespace: string, name: string): Promise<voi
 
 export function getIsConnected(): boolean {
   return k8sCoreApi !== null && k8sAppsApi !== null;
+}
+
+// ============================================
+// Deployment Management
+// ============================================
+
+export async function createDeployment(
+  namespace: string,
+  name: string,
+  spec: {
+    image: string;
+    port: number;
+    replicas: number;
+    env?: Record<string, string>;
+    command?: string[];
+    args?: string[];
+    cpuRequest?: string;
+    cpuLimit?: string;
+    memoryRequest?: string;
+    memoryLimit?: string;
+  }
+): Promise<void> {
+  const { apps } = getK8sClient();
+
+  const envVars = spec.env
+    ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
+    : [];
+
+  await apps.createNamespacedDeployment({
+    namespace,
+    body: {
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name },
+      spec: {
+        replicas: spec.replicas,
+        selector: { matchLabels: { app: name } },
+        template: {
+          metadata: { labels: { app: name } },
+          spec: {
+            containers: [
+              {
+                name: 'app',
+                image: spec.image,
+                ports: [{ containerPort: spec.port }],
+                env: envVars,
+                command: spec.command,
+                args: spec.args,
+                resources: {
+                  requests: {
+                    cpu: spec.cpuRequest || '100m',
+                    memory: spec.memoryRequest || '128Mi',
+                  },
+                  limits: {
+                    cpu: spec.cpuLimit || '500m',
+                    memory: spec.memoryLimit || '256Mi',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+  });
+}
+
+export async function updateDeployment(
+  namespace: string,
+  name: string,
+  spec: {
+    image?: string;
+    replicas?: number;
+    env?: Record<string, string>;
+  }
+): Promise<void> {
+  const { apps } = getK8sClient();
+
+  const current = await apps.readNamespacedDeployment({ namespace, name });
+
+  const containers = current.spec?.template?.spec?.containers || [];
+  const updatedContainers = containers.map((container) => ({
+    ...container,
+    image: spec.image ?? container.image,
+    env: spec.env
+      ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
+      : container.env,
+  }));
+
+  const updated: k8s.V1Deployment = {
+    apiVersion: 'apps/v1',
+    kind: 'Deployment',
+    metadata: current.metadata,
+    spec: {
+      replicas: spec.replicas ?? current.spec?.replicas,
+      selector: current.spec?.selector || { matchLabels: { app: name } },
+      template: {
+        metadata: current.spec?.template?.metadata || { labels: { app: name } },
+        spec: {
+          ...current.spec?.template?.spec,
+          containers: updatedContainers,
+        },
+      },
+    },
+  };
+
+  await apps.replaceNamespacedDeployment({ namespace, name, body: updated });
+}
+
+export async function deleteDeployment(namespace: string, name: string): Promise<void> {
+  const { apps } = getK8sClient();
+
+  try {
+    await apps.deleteNamespacedDeployment({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode !== 404) {
+      throw e;
+    }
+  }
+}
+
+// ============================================
+// Service Management
+// ============================================
+
+export async function createService(
+  namespace: string,
+  name: string,
+  spec: {
+    port: number;
+    targetPort: number;
+    type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
+  }
+): Promise<void> {
+  const { core } = getK8sClient();
+
+  await core.createNamespacedService({
+    namespace,
+    body: {
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: { name },
+      spec: {
+        type: spec.type || 'ClusterIP',
+        selector: { app: name },
+        ports: [
+          {
+            port: spec.port,
+            targetPort: spec.targetPort,
+            protocol: 'TCP',
+          },
+        ],
+      },
+    },
+  });
+}
+
+export async function deleteService(namespace: string, name: string): Promise<void> {
+  const { core } = getK8sClient();
+
+  try {
+    await core.deleteNamespacedService({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode !== 404) {
+      throw e;
+    }
+  }
+}
+
+// ============================================
+// Cilium Gateway API Management
+// ============================================
+
+// 使用 Cilium Gateway API (Gateway + HTTPRoute) 替代传统 Ingress
+
+export interface CiliumGatewaySpec {
+  name: string;
+  namespace: string;
+  host?: string;
+}
+
+export interface CiliumHTTPRouteSpec {
+  name: string;
+  namespace: string;
+  gatewayName: string;
+  hostnames: string[];
+  serviceName: string;
+  servicePort: number;
+  path?: string;
+}
+
+export async function createCiliumGateway(
+  namespace: string,
+  name: string,
+  spec: {
+    host?: string;
+    annotations?: Record<string, string>;
+  }
+): Promise<void> {
+  const { custom } = getK8sClient();
+
+  const gateway = {
+    apiVersion: 'gateway.networking.k8s.io/v1beta1',
+    kind: 'Gateway',
+    metadata: {
+      name,
+      namespace,
+      annotations: {
+        'cilium.io/gateway-type': 'private',
+        ...spec.annotations,
+      },
+    },
+    spec: {
+      gatewayClassName: 'cilium',
+      listeners: [
+        {
+          name: 'http',
+          protocol: 'HTTP',
+          hostname: spec.host,
+          port: 80,
+          allowedRoutes: {
+            namespaces: {
+              from: 'Selector',
+              selector: {
+                matchLabels: {
+                  'kubernetes.io/metadata.name': namespace,
+                },
+              },
+            },
+          },
+        },
+        {
+          name: 'https',
+          protocol: 'HTTPS',
+          hostname: spec.host,
+          port: 443,
+          allowedRoutes: {
+            namespaces: {
+              from: 'Selector',
+              selector: {
+                matchLabels: {
+                  'kubernetes.io/metadata.name': namespace,
+                },
+              },
+            },
+          },
+          tls: {
+            mode: 'Terminate',
+            certificateRefs: [
+              {
+                kind: 'Secret',
+                name: `${name}-tls`,
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  await custom.createNamespacedCustomObject({
+    group: 'gateway.networking.k8s.io',
+    version: 'v1beta1',
+    namespace,
+    plural: 'gateways',
+    body: gateway,
+  });
+}
+
+export async function createCiliumHTTPRoute(spec: CiliumHTTPRouteSpec): Promise<void> {
+  const { custom } = getK8sClient();
+
+  const route = {
+    apiVersion: 'gateway.networking.k8s.io/v1beta1',
+    kind: 'HTTPRoute',
+    metadata: {
+      name: spec.name,
+      namespace: spec.namespace,
+    },
+    spec: {
+      parentRefs: [
+        {
+          name: spec.gatewayName,
+          namespace: spec.namespace,
+        },
+      ],
+      hostnames: spec.hostnames,
+      rules: [
+        {
+          backendRefs: [
+            {
+              kind: 'Service',
+              name: spec.serviceName,
+              port: spec.servicePort,
+            },
+          ],
+          matches: [
+            {
+              path: {
+                type: 'PathPrefix',
+                value: spec.path || '/',
+              },
+            },
+          ],
+        },
+      ],
+    },
+  };
+
+  await custom.createNamespacedCustomObject({
+    group: 'gateway.networking.k8s.io',
+    version: 'v1beta1',
+    namespace: spec.namespace,
+    plural: 'httproutes',
+    body: route,
+  });
+}
+
+export async function deleteCiliumGateway(namespace: string, name: string): Promise<void> {
+  const { custom } = getK8sClient();
+
+  try {
+    await custom.deleteNamespacedCustomObject({
+      group: 'gateway.networking.k8s.io',
+      version: 'v1beta1',
+      namespace,
+      plural: 'gateways',
+      name,
+    });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode !== 404) {
+      throw e;
+    }
+  }
+}
+
+export async function deleteCiliumHTTPRoute(namespace: string, name: string): Promise<void> {
+  const { custom } = getK8sClient();
+
+  try {
+    await custom.deleteNamespacedCustomObject({
+      group: 'gateway.networking.k8s.io',
+      version: 'v1beta1',
+      namespace,
+      plural: 'httproutes',
+      name,
+    });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode !== 404) {
+      throw e;
+    }
+  }
+}
+
+export async function getCiliumGateways(namespace: string): Promise<unknown[]> {
+  const { custom } = getK8sClient();
+
+  const response = (await custom.listNamespacedCustomObject({
+    group: 'gateway.networking.k8s.io',
+    version: 'v1beta1',
+    namespace,
+    plural: 'gateways',
+  })) as { items: unknown[] };
+
+  return response.items;
+}
+
+export async function getCiliumHTTPRoutes(namespace: string): Promise<unknown[]> {
+  const { custom } = getK8sClient();
+
+  const response = (await custom.listNamespacedCustomObject({
+    group: 'gateway.networking.k8s.io',
+    version: 'v1beta1',
+    namespace,
+    plural: 'httproutes',
+  })) as { items: unknown[] };
+
+  return response.items;
+}
+
+// ============================================
+// StatefulSet Management (for Databases)
+// ============================================
+
+export async function createStatefulSet(
+  namespace: string,
+  name: string,
+  spec: {
+    image: string;
+    serviceName: string;
+    port: number;
+    replicas: number;
+    env: Record<string, string>;
+    volumeName: string;
+    storageSize: string;
+    storageClass?: string;
+    command?: string[];
+    args?: string[];
+  }
+): Promise<void> {
+  const { apps } = getK8sClient();
+
+  const envVars = Object.entries(spec.env).map(([name, value]) => ({ name, value }));
+
+  await apps.createNamespacedStatefulSet({
+    namespace,
+    body: {
+      apiVersion: 'apps/v1',
+      kind: 'StatefulSet',
+      metadata: { name },
+      spec: {
+        serviceName: spec.serviceName,
+        replicas: spec.replicas,
+        selector: { matchLabels: { app: name } },
+        template: {
+          metadata: { labels: { app: name } },
+          spec: {
+            containers: [
+              {
+                name: 'app',
+                image: spec.image,
+                ports: [{ containerPort: spec.port }],
+                env: envVars,
+                command: spec.command,
+                args: spec.args,
+                volumeMounts: [
+                  {
+                    name: spec.volumeName,
+                    mountPath: `/${spec.volumeName}`,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        volumeClaimTemplates: [
+          {
+            metadata: { name: spec.volumeName },
+            spec: {
+              accessModes: ['ReadWriteOnce'],
+              storageClassName: spec.storageClass,
+              resources: {
+                requests: {
+                  storage: spec.storageSize,
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
+}
+
+export async function deleteStatefulSet(namespace: string, name: string): Promise<void> {
+  const { apps } = getK8sClient();
+
+  try {
+    await apps.deleteNamespacedStatefulSet({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode !== 404) {
+      throw e;
+    }
+  }
 }
