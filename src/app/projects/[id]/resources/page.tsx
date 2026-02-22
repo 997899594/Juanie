@@ -164,7 +164,10 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
             </SelectContent>
           </Select>
 
-          <Select value={resourceType} onValueChange={setResourceType}>
+          <Select
+            value={resourceType}
+            onValueChange={(v) => setResourceType(v as 'pods' | 'services' | 'deployments')}
+          >
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Resource type" />
             </SelectTrigger>

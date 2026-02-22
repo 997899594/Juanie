@@ -2,14 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-interface User {
+interface UserData {
   id: string;
   name: string | null;
   email: string;
@@ -18,19 +17,15 @@ interface User {
 }
 
 export default function SettingsPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const _router = useRouter();
+  const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
   });
 
-  useEffect(() => {
-    fetchUser();
-  }, []);
-
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const res = await fetch('/api/user');
       if (res.ok) {
@@ -43,7 +38,11 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +56,8 @@ export default function SettingsPage() {
       });
 
       if (res.ok) {
-        alert('Profile updated successfully');
+        const data = await res.json();
+        setUser(data);
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
@@ -70,87 +70,112 @@ export default function SettingsPage() {
     await signOut({ callbackUrl: '/login' });
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
-
   const getInitials = (name: string | null, email: string) => {
     if (name)
       return name
         .split(' ')
         .map((n) => n[0])
         .join('')
-        .toUpperCase();
+        .toUpperCase()
+        .slice(0, 2);
     return email[0].toUpperCase();
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="h-8 w-24 bg-muted rounded animate-pulse" />
+        <div className="rounded-lg border bg-card p-6 space-y-4">
+          <div className="h-16 w-16 rounded-full bg-muted animate-pulse" />
+          <div className="h-10 w-full bg-muted rounded animate-pulse" />
+          <div className="h-8 w-24 bg-muted rounded animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your account settings</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">Manage your account settings</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription>Update your profile information</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16">
-                <AvatarImage src={user?.image || undefined} />
-                <AvatarFallback className="text-lg">
-                  {user ? getInitials(user.name, user.email) : '?'}
-                </AvatarFallback>
-              </Avatar>
+      <div className="rounded-lg border bg-card">
+        <div className="p-4 border-b">
+          <h2 className="font-medium text-sm">Profile</h2>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-6">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-14 w-14">
+              <AvatarImage src={user?.image ?? undefined} />
+              <AvatarFallback className="bg-muted text-sm font-medium">
+                {user ? getInitials(user.name, user.email) : '?'}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-medium">{user?.name || 'User'}</p>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
             </div>
+          </div>
 
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name" className="text-sm">
+                Display Name
+              </Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Your name"
+                className="h-9"
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Email</Label>
+              <Label className="text-sm">Email Address</Label>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
             </div>
+          </div>
 
-            <Button type="submit" disabled={saving}>
+          <div className="flex justify-end">
+            <Button type="submit" size="sm" className="h-8" disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
+        </form>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Account</CardTitle>
-          <CardDescription>Manage your account access</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+      <div className="rounded-lg border bg-card">
+        <div className="p-4 border-b">
+          <h2 className="font-medium text-sm">Account</h2>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
             <div>
+              <p className="text-sm font-medium">Member Since</p>
               <p className="text-sm text-muted-foreground">
-                Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}
+                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
               </p>
             </div>
-            <Button variant="destructive" onClick={handleSignOut}>
+            <div className="text-right">
+              <p className="text-sm font-medium">Account ID</p>
+              <p className="text-sm text-muted-foreground font-mono">{user?.id.slice(0, 8)}...</p>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Sign Out</p>
+              <p className="text-sm text-muted-foreground">Sign out from all devices</p>
+            </div>
+            <Button variant="outline" size="sm" className="h-8" onClick={handleSignOut}>
               Sign Out
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

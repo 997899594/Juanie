@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { clusters, environments, projects } from '@/lib/db/schema';
+import { environments, projects } from '@/lib/db/schema';
 import {
   createConfigMap,
   createSecret,
@@ -12,6 +12,18 @@ import {
   getK8sClient,
   getSecrets,
 } from '@/lib/k8s';
+
+async function getEnvironment(projectId: string, environmentId: string | null) {
+  if (environmentId) {
+    return db.query.environments.findFirst({
+      where: eq(environments.id, environmentId),
+    });
+  }
+  const envs = await db.query.environments.findMany({
+    where: eq(environments.projectId, projectId),
+  });
+  return envs[0];
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,25 +45,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
-  const cluster = await db.query.clusters.findFirst({
-    where: eq(clusters.id, project.clusterId || ''),
-  });
-
-  if (!cluster) {
-    return NextResponse.json({ error: 'No cluster configured' }, { status: 400 });
-  }
-
-  let environment = null;
-  if (environmentId) {
-    environment = await db.query.environments.findFirst({
-      where: eq(environments.id, environmentId),
-    });
-  } else {
-    const envs = await db.query.environments.findMany({
-      where: eq(environments.projectId, id),
-    });
-    environment = envs[0];
-  }
+  const environment = await getEnvironment(id, environmentId);
 
   if (!environment || !environment.namespace) {
     return NextResponse.json({ error: 'Environment not configured' }, { status: 400 });
@@ -102,25 +96,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
-  const cluster = await db.query.clusters.findFirst({
-    where: eq(clusters.id, project.clusterId || ''),
-  });
-
-  if (!cluster) {
-    return NextResponse.json({ error: 'No cluster configured' }, { status: 400 });
-  }
-
-  let environment = null;
-  if (environmentId) {
-    environment = await db.query.environments.findFirst({
-      where: eq(environments.id, environmentId),
-    });
-  } else {
-    const envs = await db.query.environments.findMany({
-      where: eq(environments.projectId, id),
-    });
-    environment = envs[0];
-  }
+  const environment = await getEnvironment(id, environmentId);
 
   if (!environment || !environment.namespace) {
     return NextResponse.json({ error: 'Environment not configured' }, { status: 400 });
@@ -167,25 +143,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
-  const cluster = await db.query.clusters.findFirst({
-    where: eq(clusters.id, project.clusterId || ''),
-  });
-
-  if (!cluster) {
-    return NextResponse.json({ error: 'No cluster configured' }, { status: 400 });
-  }
-
-  let environment = null;
-  if (environmentId) {
-    environment = await db.query.environments.findFirst({
-      where: eq(environments.id, environmentId),
-    });
-  } else {
-    const envs = await db.query.environments.findMany({
-      where: eq(environments.projectId, id),
-    });
-    environment = envs[0];
-  }
+  const environment = await getEnvironment(id, environmentId);
 
   if (!environment || !environment.namespace) {
     return NextResponse.json({ error: 'Environment not configured' }, { status: 400 });

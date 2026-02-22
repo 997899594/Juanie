@@ -1,40 +1,70 @@
 import * as k8s from '@kubernetes/client-node';
+import { existsSync } from 'fs';
 
-let k8sApi: k8s.CoreV1Api | null = null;
-let appsApi: k8s.AppsV1Api | null = null;
-let customObjectsApi: k8s.CustomObjectsApi | null = null;
-let isConnected = false;
+let k8sCoreApi: k8s.CoreV1Api | null = null;
+let k8sAppsApi: k8s.AppsV1Api | null = null;
+let k8sCustomApi: k8s.CustomObjectsApi | null = null;
+let kubeConfig: k8s.KubeConfig | null = null;
+let initAttempted = false;
 
-export function initK8sClient(kubeconfigPath?: string): void {
+export function initK8sClient(): void {
+  if (initAttempted) return;
+  initAttempted = true;
+
   const kc = new k8s.KubeConfig();
 
-  if (kubeconfigPath) {
-    kc.loadFromFile(kubeconfigPath);
-  } else {
-    kc.loadFromDefault();
-  }
+  try {
+    const kubeconfigContent = process.env.KUBECONFIG_CONTENT;
+    if (kubeconfigContent) {
+      kc.loadFromString(kubeconfigContent);
+    } else {
+      const kubeconfigPath = process.env.KUBECONFIG || process.env.HOME + '/.kube/config';
+      if (existsSync(kubeconfigPath)) {
+        kc.loadFromFile(kubeconfigPath);
+      } else {
+        // Try loadFromDefault as last resort (may work in-cluster)
+        kc.loadFromDefault();
+      }
+    }
 
-  k8sApi = kc.makeApiClient(k8s.CoreV1Api);
-  appsApi = kc.makeApiClient(k8s.AppsV1Api);
-  customObjectsApi = kc.makeApiClient(k8s.CustomObjectsApi);
-  isConnected = true;
+    // Check if we have a valid cluster config
+    const currentCluster = kc.getCurrentCluster();
+    if (!currentCluster) {
+      console.log('⚠️  No Kubernetes cluster configured');
+      return;
+    }
+
+    kubeConfig = kc;
+    k8sCoreApi = kc.makeApiClient(k8s.CoreV1Api);
+    k8sAppsApi = kc.makeApiClient(k8s.AppsV1Api);
+    k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
+    console.log('✅ Kubernetes client initialized');
+  } catch (error) {
+    console.log(
+      '⚠️  Failed to initialize Kubernetes client:',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+  }
 }
 
 export function getK8sClient(): {
   core: k8s.CoreV1Api;
   apps: k8s.AppsV1Api;
   custom: k8s.CustomObjectsApi;
-  isConnected: boolean;
+  config: k8s.KubeConfig;
 } {
-  if (!k8sApi || !appsApi || !customObjectsApi) {
-    throw new Error('K8s client not initialized. Call initK8sClient first.');
+  if (!k8sCoreApi || !k8sAppsApi || !k8sCustomApi || !kubeConfig) {
+    initK8sClient();
+    if (!k8sCoreApi || !k8sAppsApi || !k8sCustomApi || !kubeConfig) {
+      throw new Error('K8s client not initialized');
+    }
   }
 
   return {
-    core: k8sApi,
-    apps: appsApi,
-    custom: customObjectsApi,
-    isConnected,
+    core: k8sCoreApi,
+    apps: k8sAppsApi,
+    custom: k8sCustomApi,
+    config: kubeConfig,
   };
 }
 
@@ -42,13 +72,16 @@ export async function createNamespace(name: string): Promise<void> {
   const { core } = getK8sClient();
 
   try {
-    await core.readNamespace(name);
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) {
+    await core.readNamespace({ name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode === 404) {
       await core.createNamespace({
-        apiVersion: 'v1',
-        kind: 'Namespace',
-        metadata: { name },
+        body: {
+          apiVersion: 'v1',
+          kind: 'Namespace',
+          metadata: { name },
+        },
       });
     } else {
       throw e;
@@ -60,9 +93,10 @@ export async function deleteNamespace(name: string): Promise<void> {
   const { core } = getK8sClient();
 
   try {
-    await core.deleteNamespace(name);
-  } catch (e: any) {
-    if (e.response?.statusCode !== 404) {
+    await core.deleteNamespace({ name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode !== 404) {
       throw e;
     }
   }
@@ -71,35 +105,43 @@ export async function deleteNamespace(name: string): Promise<void> {
 export async function getDeployments(namespace: string): Promise<k8s.V1Deployment[]> {
   const { apps } = getK8sClient();
 
-  const result = await apps.listNamespacedDeployment(namespace);
-  return result.items;
+  const response = await apps.listNamespacedDeployment({ namespace });
+  return response.items;
 }
 
 export async function getPods(namespace: string, labelSelector?: string): Promise<k8s.V1Pod[]> {
   const { core } = getK8sClient();
 
-  const result = await core.listNamespacedPod(
+  const response = await core.listNamespacedPod({
     namespace,
-    undefined,
-    undefined,
-    undefined,
-    labelSelector
-  );
-  return result.items;
+    labelSelector,
+  });
+  return response.items;
 }
 
 export async function getServices(namespace: string): Promise<k8s.V1Service[]> {
   const { core } = getK8sClient();
 
-  const result = await core.listNamespacedService(namespace);
-  return result.items;
+  const response = await core.listNamespacedService({ namespace });
+  return response.items;
 }
 
-export async function getEvents(namespace: string): Promise<k8s.V1Event[]> {
+interface K8sEvent {
+  metadata?: k8s.V1ObjectMeta;
+  reason?: string;
+  message?: string;
+  type?: string;
+  involvedObject?: k8s.V1ObjectReference;
+  firstTimestamp?: Date;
+  lastTimestamp?: Date;
+  count?: number;
+}
+
+export async function getEvents(namespace: string): Promise<K8sEvent[]> {
   const { core } = getK8sClient();
 
-  const result = await core.listNamespacedEvent(namespace);
-  return result.items;
+  const response = await core.listNamespacedEvent({ namespace });
+  return response.items;
 }
 
 export async function getPodLogs(
@@ -108,61 +150,24 @@ export async function getPodLogs(
   containerName?: string,
   tailLines: number = 100,
   follow: boolean = false
-): Promise<ReadableStream<Uint8Array> | string> {
+): Promise<string> {
   const { core } = getK8sClient();
 
-  const pod = await core.readNamespacedPod(podName, namespace);
-  const containers = pod.spec?.containers || [];
-
-  const container = containerName || containers[0]?.name;
-  if (!container) {
-    throw new Error('No container found');
-  }
-
-  const result = await core.readNamespacedPodLog(
+  const response = await core.readNamespacedPodLog({
     namespace,
-    podName,
-    container,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
+    name: podName,
+    container: containerName,
     tailLines,
-    undefined,
-    undefined,
-    follow
-  );
+    follow,
+  });
 
-  if (follow) {
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        if (typeof result === 'string') {
-          controller.enqueue(encoder.encode(result));
-        }
-        if (result && typeof result.on === 'function') {
-          result.on('data', (data: string) => {
-            controller.enqueue(encoder.encode(data));
-          });
-          result.on('end', () => {
-            controller.close();
-          });
-          result.on('error', (err: Error) => {
-            controller.error(err);
-          });
-        }
-      },
-    });
-    return stream;
-  }
-
-  return result as string;
+  return response as unknown as string;
 }
 
 export async function getPodContainers(namespace: string, podName: string): Promise<string[]> {
   const { core } = getK8sClient();
 
-  const pod = await core.readNamespacedPod(podName, namespace);
+  const pod = await core.readNamespacedPod({ namespace, name: podName });
   const containers = pod.spec?.containers || [];
   const initContainers = pod.spec?.initContainers || [];
 
@@ -172,49 +177,46 @@ export async function getPodContainers(namespace: string, podName: string): Prom
   ].filter(Boolean);
 }
 
-let clusterApi: k8s.Cluster | null = null;
-
-export function setClusterApi(api: k8s.Cluster): void {
-  clusterApi = api;
-}
-
 export async function execInPod(
   namespace: string,
   podName: string,
   containerName: string,
   command: string[]
 ): Promise<string> {
-  if (!clusterApi) {
-    throw new Error('Cluster API not initialized');
-  }
+  const { config } = getK8sClient();
 
-  const { core, apps } = getK8sClient();
-
-  const exec = new k8s.Exec(clusterApi, core, apps, namespace, podName, containerName);
+  const exec = new k8s.Exec(config);
 
   return new Promise((resolve, reject) => {
     let output = '';
     let errorOutput = '';
 
-    exec.exec(
-      command[0],
-      command.slice(1),
-      undefined,
-      (data) => {
-        output += data;
+    const stdout = new (require('stream').Writable)({
+      write(chunk: Buffer, _encoding: string, callback: () => void) {
+        output += chunk.toString();
+        callback();
       },
-      (data) => {
-        errorOutput += data;
+    });
+
+    const stderr = new (require('stream').Writable)({
+      write(chunk: Buffer, _encoding: string, callback: () => void) {
+        errorOutput += chunk.toString();
+        callback();
       },
-      (error) => {
-        if (error) {
-          reject(error);
-        } else {
+    });
+
+    exec
+      .exec(namespace, podName, containerName, command, stdout, stderr, null, false)
+      .then(() => {
+        resolve(output || errorOutput);
+      })
+      .catch((err: Error) => {
+        if (output || errorOutput) {
           resolve(output || errorOutput);
+        } else {
+          reject(err);
         }
-      },
-      false
-    );
+      });
 
     setTimeout(() => {
       if (!output && !errorOutput) {
@@ -222,10 +224,6 @@ export async function execInPod(
       }
     }, 30000);
   });
-}
-
-export function getIsConnected(): boolean {
-  return isConnected;
 }
 
 export async function createConfigMap(
@@ -236,14 +234,18 @@ export async function createConfigMap(
   const { core } = getK8sClient();
 
   try {
-    await core.readNamespacedConfigMap(name, namespace);
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) {
-      await core.createNamespacedConfigMap(namespace, {
-        apiVersion: 'v1',
-        kind: 'ConfigMap',
-        metadata: { name },
-        data,
+    await core.readNamespacedConfigMap({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode === 404) {
+      await core.createNamespacedConfigMap({
+        namespace,
+        body: {
+          apiVersion: 'v1',
+          kind: 'ConfigMap',
+          metadata: { name },
+          data,
+        },
       });
     } else {
       throw e;
@@ -251,20 +253,21 @@ export async function createConfigMap(
   }
 }
 
-export async function getConfigMaps(namespace: string): Promise<any[]> {
+export async function getConfigMaps(namespace: string): Promise<k8s.V1ConfigMap[]> {
   const { core } = getK8sClient();
 
-  const result = await core.listNamespacedConfigMap(namespace);
-  return result.items;
+  const response = await core.listNamespacedConfigMap({ namespace });
+  return response.items;
 }
 
 export async function deleteConfigMap(namespace: string, name: string): Promise<void> {
   const { core } = getK8sClient();
 
   try {
-    await core.deleteNamespacedConfigMap(name, namespace);
-  } catch (e: any) {
-    if (e.response?.statusCode !== 404) {
+    await core.deleteNamespacedConfigMap({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode !== 404) {
       throw e;
     }
   }
@@ -284,15 +287,19 @@ export async function createSecret(
   }
 
   try {
-    await core.readNamespacedSecret(name, namespace);
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) {
-      await core.createNamespacedSecret(namespace, {
-        apiVersion: 'v1',
-        kind: 'Secret',
-        metadata: { name },
-        type,
-        data: encodedData,
+    await core.readNamespacedSecret({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode === 404) {
+      await core.createNamespacedSecret({
+        namespace,
+        body: {
+          apiVersion: 'v1',
+          kind: 'Secret',
+          metadata: { name },
+          type,
+          data: encodedData,
+        },
       });
     } else {
       throw e;
@@ -300,21 +307,26 @@ export async function createSecret(
   }
 }
 
-export async function getSecrets(namespace: string): Promise<any[]> {
+export async function getSecrets(namespace: string): Promise<k8s.V1Secret[]> {
   const { core } = getK8sClient();
 
-  const result = await core.listNamespacedSecret(namespace);
-  return result.items;
+  const response = await core.listNamespacedSecret({ namespace });
+  return response.items;
 }
 
 export async function deleteSecret(namespace: string, name: string): Promise<void> {
   const { core } = getK8sClient();
 
   try {
-    await core.deleteNamespacedSecret(name, namespace);
-  } catch (e: any) {
-    if (e.response?.statusCode !== 404) {
+    await core.deleteNamespacedSecret({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode !== 404) {
       throw e;
     }
   }
+}
+
+export function getIsConnected(): boolean {
+  return k8sCoreApi !== null && k8sAppsApi !== null;
 }

@@ -1,152 +1,116 @@
-'use client';
+import { eq } from 'drizzle-orm';
+import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { CreateProjectForm } from '@/components/projects/create-project-form';
+import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
+import { gitProviders, teamMembers, teams } from '@/lib/db/schema';
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+export default async function NewProjectPage() {
+  const session = await auth();
 
-interface Team {
-  team: {
-    id: string;
-    name: string;
-    slug: string;
-  };
-  role: string;
-}
+  if (!session?.user?.id) {
+    redirect('/login');
+  }
 
-export default function NewProjectPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedTeam, setSelectedTeam] = useState('');
-  const [template, setTemplate] = useState('nextjs');
+  const [provider, userTeams] = await Promise.all([
+    db.query.gitProviders.findFirst({
+      where: eq(gitProviders.userId, session.user.id),
+    }),
+    db
+      .select({ id: teams.id, name: teams.name, slug: teams.slug })
+      .from(teamMembers)
+      .innerJoin(teams, eq(teams.id, teamMembers.teamId))
+      .where(eq(teamMembers.userId, session.user.id)),
+  ]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [error, setError] = useState('');
+  if (!provider) {
+    return (
+      <div className="max-w-xl mx-auto space-y-6">
+        <div>
+          <Link
+            href="/projects"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to projects
+          </Link>
+          <h1 className="text-2xl font-semibold tracking-tight">Create a project</h1>
+        </div>
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  // const { data: teams } = useTeams();
+        <div className="rounded-lg border bg-card p-8 text-center">
+          <h2 className="text-lg font-medium mb-2">No Git provider connected</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Connect a Git provider to create projects from your repositories
+          </p>
+          <Link href="/settings/git-providers">
+            <button
+              type="button"
+              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium"
+            >
+              Connect Git Provider
+            </button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  if (userTeams.length === 0) {
+    return (
+      <div className="max-w-xl mx-auto space-y-6">
+        <div>
+          <Link
+            href="/projects"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to projects
+          </Link>
+          <h1 className="text-2xl font-semibold tracking-tight">Create a project</h1>
+        </div>
 
-    try {
-      const response = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          teamId: selectedTeam,
-          name,
-          description,
-          templateId: template,
-        }),
-      });
+        <div className="rounded-lg border bg-card p-8 text-center">
+          <h2 className="text-lg font-medium mb-2">No teams available</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            You need to be part of a team to create a project
+          </p>
+          <Link href="/teams/new">
+            <button
+              type="button"
+              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium"
+            >
+              Create a team first
+            </button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create project');
-      }
-
-      const { project } = await response.json();
-      router.push(`/projects/${project.id}`);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const providerType =
+    provider.type === 'gitlab-self-hosted' ? 'gitlab-self-hosted' : provider.type;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Juanie</h1>
-        </div>
-      </header>
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div>
+        <Link
+          href="/projects"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to projects
+        </Link>
+        <h1 className="text-2xl font-semibold tracking-tight">Create a project</h1>
+        <p className="text-sm text-muted-foreground mt-1">Deploy your first project in minutes</p>
+      </div>
 
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Project</CardTitle>
-            <CardDescription>Deploy your first project in minutes</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">{error}</div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="team">Team</Label>
-                <select
-                  id="team"
-                  value={selectedTeam}
-                  onChange={(e) => setSelectedTeam(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  required
-                >
-                  <option value="">Select a team</option>
-                  {teams.map((t) => (
-                    <option key={t.team.id} value={t.team.id}>
-                      {t.team.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="name">Project Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="my-awesome-project"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
-                <Input
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="A brief description of your project"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="template">Template</Label>
-                <select
-                  id="template"
-                  value={template}
-                  onChange={(e) => setTemplate(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="nextjs">Next.js</option>
-                  <option value="express">Express.js</option>
-                  <option value="blank">Blank</option>
-                </select>
-              </div>
-
-              <div className="flex gap-4 pt-4">
-                <Button type="button" variant="outline" onClick={() => router.back()}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading ? 'Creating...' : 'Create Project'}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </main>
+      <CreateProjectForm
+        gitProviderType={providerType}
+        gitProviderId={provider.id}
+        teams={userTeams}
+      />
     </div>
   );
 }

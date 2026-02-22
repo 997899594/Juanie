@@ -2,8 +2,8 @@ import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { clusters, environments, projects } from '@/lib/db/schema';
-import { execInPod, getK8sClient } from '@/lib/k8s';
+import { environments, projects } from '@/lib/db/schema';
+import { execInPod } from '@/lib/k8s';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,14 +26,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (!project) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-  }
-
-  const cluster = await db.query.clusters.findFirst({
-    where: eq(clusters.id, project.clusterId || ''),
-  });
-
-  if (!cluster) {
-    return NextResponse.json({ error: 'No cluster configured' }, { status: 400 });
   }
 
   let environment = null;

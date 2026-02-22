@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
@@ -77,7 +77,7 @@ async function handlePushEvent(projectId: string, data: GitHubPushEvent) {
 
   const branch = data.ref.replace('refs/heads/', '');
 
-  if (branch !== project.gitBranch) {
+  if (branch !== project.productionBranch) {
     return;
   }
 
@@ -93,13 +93,13 @@ async function handlePushEvent(projectId: string, data: GitHubPushEvent) {
       environmentId: env.id,
       commitSha: latestCommit?.id,
       commitMessage: latestCommit?.message,
-      status: 'pending',
+      status: 'queued',
     });
   }
 }
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ projectId: string; webhookId: string }> }
 ) {
   const { webhookId } = await params;

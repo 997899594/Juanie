@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { clusters, environments, projects } from '@/lib/db/schema';
+import { environments, projects } from '@/lib/db/schema';
 import { getK8sClient, getPodLogs } from '@/lib/k8s';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +16,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const url = new URL(request.url);
   const podName = url.searchParams.get('pod');
   const containerName = url.searchParams.get('container');
-  const tailLines = parseInt(url.searchParams.get('tail') || '100');
+  const tailLines = parseInt(url.searchParams.get('tail') || '100', 10);
   const environmentId = url.searchParams.get('env');
 
   if (!podName) {
@@ -29,14 +29,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   if (!project) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-  }
-
-  const cluster = await db.query.clusters.findFirst({
-    where: eq(clusters.id, project.clusterId || ''),
-  });
-
-  if (!cluster) {
-    return NextResponse.json({ error: 'No cluster configured' }, { status: 400 });
   }
 
   let environment = null;

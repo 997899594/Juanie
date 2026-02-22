@@ -1,11 +1,19 @@
 import { desc, eq } from 'drizzle-orm';
+import { Box, ExternalLink, FolderKanban, Globe, Rocket, Settings, Webhook } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { deployments, environments, projects, teams } from '@/lib/db/schema';
+import { deployments, projects, teams } from '@/lib/db/schema';
+
+const navItems = [
+  { title: 'Deployments', href: 'deployments', icon: Rocket },
+  { title: 'Environments', href: 'environments', icon: Globe },
+  { title: 'Resources', href: 'resources', icon: Box },
+  { title: 'Webhooks', href: 'webhooks', icon: Webhook },
+  { title: 'Settings', href: 'settings', icon: Settings },
+];
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -18,7 +26,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, id),
     with: {
-      environments: true,
+      repository: true,
     },
   });
 
@@ -37,142 +45,150 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   });
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="text-2xl font-bold">
-              Juanie
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <Link href="/projects" className="text-muted-foreground hover:text-foreground">
-              Projects
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-lg">{project.name}</span>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
+            <FolderKanban className="h-6 w-6 text-muted-foreground" />
           </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Overview</CardTitle>
-                <CardDescription>Project details and status</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-2">
-                  <span className="text-sm font-medium">Status</span>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      project.status === 'active'
-                        ? 'bg-green-100 text-green-800'
-                        : project.status === 'initializing'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {project.status}
-                  </span>
-                </div>
-                {project.gitRepository && (
-                  <div className="grid gap-2">
-                    <span className="text-sm font-medium">Repository</span>
-                    <a
-                      href={project.gitRepository}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:underline"
-                    >
-                      {project.gitRepository}
-                    </a>
-                  </div>
-                )}
-                {project.description && (
-                  <div className="grid gap-2">
-                    <span className="text-sm font-medium">Description</span>
-                    <p className="text-sm text-muted-foreground">{project.description}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Environments</CardTitle>
-                <CardDescription>Deployment environments</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {project.environments.map((env) => (
-                    <div
-                      key={env.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div>
-                        <span className="font-medium capitalize">{env.name}</span>
-                        {env.namespace && (
-                          <span className="ml-2 text-sm text-muted-foreground">
-                            ({env.namespace})
-                          </span>
-                        )}
-                      </div>
-                      <Link href={`/projects/${id}/deployments?env=${env.name}`}>
-                        <Button variant="outline" size="sm">
-                          View
-                        </Button>
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Team</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm">{team?.name}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Deployments</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {recentDeployments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No deployments yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {recentDeployments.map((deploy) => (
-                      <div key={deploy.id} className="flex items-center justify-between text-sm">
-                        <span className="capitalize">{deploy.status}</span>
-                        <span className="text-muted-foreground">
-                          {deploy.createdAt ? new Date(deploy.createdAt).toLocaleDateString() : '-'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <div className="flex gap-2">
-              <Link href={`/projects/${id}/settings`} className="flex-1">
-                <Button variant="outline" className="w-full">
-                  Settings
-                </Button>
-              </Link>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+              <span>{team?.name}</span>
+              <span>·</span>
+              <div className="flex items-center gap-1.5">
+                <div
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    project.status === 'active'
+                      ? 'bg-success'
+                      : project.status === 'initializing'
+                        ? 'bg-warning'
+                        : project.status === 'failed'
+                          ? 'bg-destructive'
+                          : 'bg-muted-foreground'
+                  }`}
+                />
+                <span className="capitalize">{project.status}</span>
+              </div>
             </div>
           </div>
         </div>
-      </main>
+        <Link href={`/projects/${id}/settings`}>
+          <Button variant="outline" size="sm" className="h-8">
+            <Settings className="h-4 w-4 mr-1.5" />
+            Settings
+          </Button>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-5 gap-4">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={`/projects/${id}/${item.href}`}
+              className="p-4 rounded-lg border bg-card hover:border-foreground/20 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded bg-muted group-hover:bg-foreground group-hover:text-background transition-colors">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <span className="text-sm font-medium">{item.title}</span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        <div className="rounded-lg border bg-card">
+          <div className="p-4 border-b">
+            <h2 className="font-medium text-sm">Overview</h2>
+          </div>
+          <div className="p-4 space-y-4">
+            {project.repository && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Repository</p>
+                <a
+                  href={project.repository.webUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm hover:underline"
+                >
+                  {project.repository.fullName}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            )}
+            {project.productionBranch && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Production Branch</p>
+                <code className="text-sm bg-muted px-2 py-0.5 rounded">
+                  {project.productionBranch}
+                </code>
+              </div>
+            )}
+            {project.description && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Description</p>
+                <p className="text-sm">{project.description}</p>
+              </div>
+            )}
+            <div className="pt-2 border-t">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Created</span>
+                <span>
+                  {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : '—'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border bg-card">
+          <div className="p-4 border-b">
+            <h2 className="font-medium text-sm">Recent Deployments</h2>
+          </div>
+          <div className="p-2">
+            {recentDeployments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Rocket className="h-5 w-5 text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">No deployments yet</p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {recentDeployments.map((deploy) => (
+                  <div key={deploy.id} className="flex items-center justify-between p-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          deploy.status === 'running'
+                            ? 'bg-success'
+                            : deploy.status === 'failed'
+                              ? 'bg-destructive'
+                              : 'bg-muted-foreground'
+                        }`}
+                      />
+                      <span className="text-sm">v{deploy.version ?? '1.0.0'}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {deploy.createdAt ? new Date(deploy.createdAt).toLocaleDateString() : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="p-2 border-t">
+            <Link href={`/projects/${id}/deployments`}>
+              <Button variant="ghost" size="sm" className="w-full h-8 text-xs">
+                View all deployments
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

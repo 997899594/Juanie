@@ -1,8 +1,8 @@
-import { and, desc, eq, gt } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { auditLogs, teams } from '@/lib/db/schema';
+import { auditLogs } from '@/lib/db/schema';
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -13,8 +13,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const teamId = url.searchParams.get('teamId');
-  const limit = parseInt(url.searchParams.get('limit') || '50');
-  const offset = parseInt(url.searchParams.get('offset') || '0');
+  const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 
   if (!teamId) {
     return NextResponse.json({ error: 'Team ID required' }, { status: 400 });

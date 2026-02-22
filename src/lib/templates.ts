@@ -1,6 +1,6 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { nanoid } from 'nanoid';
-import { join, relative } from 'path';
 
 export interface TemplateVariables {
   projectName: string;
@@ -88,7 +88,7 @@ metadata:
 
   generateKustomizationYaml(env: 'development' | 'staging' | 'production'): string {
     const { projectSlug } = this.variables;
-    const envUpper = env.charAt(0).toUpperCase() + env.slice(1);
+    const _envUpper = env.charAt(0).toUpperCase() + env.slice(1);
 
     return `
 apiVersion: kustomize.toolkit.fluxcd.io/v1

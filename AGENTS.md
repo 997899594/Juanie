@@ -11,17 +11,26 @@ Juanie is a modern AI-driven DevOps platform built with:
 - **Auth**: NextAuth.js (GitHub/GitLab OAuth)
 - **UI**: Tailwind CSS + Radix UI components
 - **K8s SDK**: @kubernetes/client-node
-- **GitOps**: Flux CD
+- **Queue**: BullMQ + Redis
 - **Runtime**: Bun
 
 ## Build/Lint/Test Commands
 
 ```bash
-# Development
-bun run dev              # Start dev server on port 3001
+# Development (同时启动 Web + Worker)
+bun run dev              # 启动开发服务器 (web:3001) + 队列 worker
+
+# 单独启动
+bun run dev:web          # 只启动 Next.js 开发服务器
+bun run dev:worker       # 只启动队列 worker (热重载)
+bun run dev:redis        # 启动 Redis Docker 容器
 
 # Build
 bun run build            # Build for production
+
+# Production
+bun run start            # 启动 Next.js 生产服务器
+bun run start:worker     # 启动队列 worker (生产模式)
 
 # Linting & Formatting
 bun run lint             # Run Biome linter
@@ -30,9 +39,57 @@ bun run format           # Format code with Biome
 # Database
 bun run db:generate      # Generate Drizzle migrations
 bun run db:push          # Push schema changes to database
+bun run db:studio        # Open Drizzle Studio
 ```
 
 **Note**: No test framework is currently configured. When adding tests, prefer Vitest and update this document.
+
+## Architecture
+
+### 项目初始化流程
+
+```
+创建项目 API (POST /api/projects)
+    ↓
+插入 projectInitSteps (pending)
+    ↓
+添加 BullMQ Job
+    ↓
+Worker 处理 (project-init queue)
+    ↓
+SSE 推送进度
+```
+
+### 初始化步骤
+
+**Import 模式** (导入现有仓库):
+1. `validate_repository` - 验证仓库访问权限
+2. `setup_namespace` - 创建 K8s Namespace
+3. `deploy_services` - 部署所有服务
+4. `provision_databases` - 创建托管数据库
+5. `configure_dns` - 配置域名和 TLS
+
+**Create 模式** (从模板创建):
+1. `create_repository` - 在 Git Provider 创建仓库
+2. `push_template` - 推送模板代码
+3. `setup_namespace` - 创建 K8s Namespace
+4. `deploy_services` - 部署所有服务
+5. `provision_databases` - 创建托管数据库
+6. `configure_dns` - 配置域名和 TLS
+
+### 部署流程
+
+```
+创建部署 API (POST /api/projects/[id]/deployments)
+    ↓
+插入 deployment (status: queued)
+    ↓
+添加 BullMQ Job (deployment queue)
+    ↓
+Worker 处理
+    ↓
+更新 deployment status
+```
 
 ## Code Style Guidelines
 
@@ -92,32 +149,7 @@ import { Button } from '../../../components/ui/button'
 | Constants | camelCase or SCREAMING_SNAKE_CASE | `MAX_RETRIES`, `defaultTimeout` |
 | Database tables | camelCase (plural) | `users`, `teamMembers` |
 | Types/Interfaces | PascalCase | `User`, `DeploymentStatus` |
-| Enums | camelCase values | `'pending'`, `'deployed'` |
-
-### React Components
-
-- Use function components with arrow functions
-- Use `React.forwardRef` for UI components that need ref forwarding
-- Add `displayName` for forwardRef components
-- Use `cn()` utility for conditional class names
-
-```typescript
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
-    return (
-      <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
-    )
-  },
-)
-Button.displayName = 'Button'
-```
-
-- Use `'use client'` directive for client components (hooks, providers, interactive components)
-- Server components are the default (no directive needed)
+| Enums | camelCase values | `'pending'`, `'queued'` |
 
 ### API Routes (Next.js App Router)
 
@@ -141,30 +173,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 ```
 
-### Error Handling
-
-- Return JSON error responses with appropriate status codes
-- Use `try/catch` for async operations that may fail
-- Log errors but don't expose internal details to clients
-
-```typescript
-// API route error handling
-if (!resource) {
-  return NextResponse.json({ error: 'Resource not found' }, { status: 404 })
-}
-
-// Async operation error handling
-try {
-  await createNamespace(name)
-} catch (e: any) {
-  if (e.response?.statusCode === 404) {
-    // Handle 404 specifically
-  } else {
-    throw e
-  }
-}
-```
-
 ### Database (Drizzle ORM)
 
 - Schema is defined in `src/lib/db/schema.ts`
@@ -184,20 +192,47 @@ const result = await db
   .innerJoin(teams, eq(teams.id, projects.teamId))
 ```
 
-- Tables use singular table names in Drizzle but are exported as plural variables
-- Foreign keys should use `onDelete: 'cascade'` for dependent records
+### Queue (BullMQ)
 
-### Environment Variables
+- Queue definitions: `src/lib/queue/index.ts`
+- Project init processor: `src/lib/queue/project-init.ts`
+- Deployment processor: `src/lib/queue/deployment.ts`
+- Worker entry point: `src/lib/queue/worker.ts`
 
-- All env vars should be typed in `src/env.d.ts`
-- Access via `process.env.VARIABLE_NAME`
-- Never commit `.env` files; use `.env.example` as template
+```typescript
+// Add job to queue
+import { addProjectInitJob, addDeploymentJob } from '@/lib/queue'
 
-### Authentication
+await addProjectInitJob(projectId, 'import')
+await addDeploymentJob(deploymentId, projectId, environmentId)
+```
 
-- Use `auth()` from `@/lib/auth` to get session
-- Check `session?.user?.id` for authentication
-- Session includes `user.id`, `user.email`, `user.name`, `user.image`
+### Kubernetes Client
+
+```typescript
+// 自动初始化（从环境变量读取 kubeconfig）
+import { getK8sClient, createNamespace } from '@/lib/k8s'
+
+const { core, apps, custom } = getK8sClient()
+await createNamespace('my-namespace')
+```
+
+### Flux CD (Custom Resources)
+
+```typescript
+import { createGitRepository, createKustomization } from '@/lib/flux'
+
+await createGitRepository(name, namespace, { 
+  url, 
+  ref: { branch },
+  secretRef: { name: 'git-credentials' }
+})
+await createKustomization(name, namespace, { 
+  sourceRef: { kind: 'GitRepository', name },
+  path: './k8s',
+  prune: true
+})
+```
 
 ## Project Structure
 
@@ -205,63 +240,69 @@ const result = await db
 src/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
-│   ├── login/             # Login page
-│   ├── projects/          # Project pages
-│   ├── teams/             # Team pages
-│   ├── settings/          # Settings pages
+│   │   ├── projects/      # 项目 CRUD
+│   │   ├── git/           # Git Provider API
+│   │   ├── teams/         # 团队管理
+│   │   └── webhooks/      # Git Webhook 接收
+│   ├── projects/          # 项目页面
+│   │   ├── new/           # 创建项目
+│   │   └── [id]/
+│   │       ├── initializing/  # 初始化进度
+│   │       ├── deployments/   # 部署列表
+│   │       └── ...
+│   ├── teams/             # 团队页面
 │   ├── layout.tsx         # Root layout
-│   ├── page.tsx           # Home page
-│   ├── providers.tsx      # Client providers
-│   └── globals.css        # Global styles
+│   └── page.tsx           # Home page
 ├── components/
-│   └── ui/                # Radix UI + Tailwind components
-├── hooks/                 # Custom React hooks
+│   ├── ui/                # Radix UI + Tailwind components
+│   └── projects/          # 项目相关组件
 ├── lib/                   # Core libraries
 │   ├── db/                # Drizzle ORM setup & schema
+│   ├── git/               # Git Provider 抽象层
+│   ├── config/            # juanie.yaml 解析器
+│   ├── queue/             # BullMQ 队列
 │   ├── auth.ts            # NextAuth configuration
 │   ├── k8s.ts             # Kubernetes client
 │   ├── flux.ts            # Flux CD integration
-│   ├── github.ts          # GitHub API
-│   ├── utils.ts           # Utility functions (cn)
-│   └── ...                # Other modules
+│   └── utils.ts           # Utility functions (cn)
 └── types/                 # TypeScript type augmentations
 ```
 
-## Key Patterns
+## Environment Variables
 
-### Server-Sent Events (SSE)
+Required environment variables (see `.env.example`):
 
-For real-time updates (deployments), use EventSource in hooks:
+```bash
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/juanie
 
-```typescript
-const eventSource = new EventSource(`/api/events/deployments?projectId=${projectId}`)
-eventSource.onmessage = (event) => {
-  const data = JSON.parse(event.data)
-  // Handle data
-}
-```
+# Auth
+NEXTAUTH_SECRET=your-secret-key
+NEXTAUTH_URL=http://localhost:3001
 
-### Kubernetes Client
+# OAuth
+GITHUB_CLIENT_ID=xxx
+GITHUB_CLIENT_SECRET=xxx
 
-Initialize before use:
+# Redis (BullMQ)
+REDIS_HOST=localhost
+REDIS_PORT=6379
 
-```typescript
-initK8sClient(kubeconfigPath)  // Call once
-const { core, apps, custom } = getK8sClient()
-```
-
-### GitOps with Flux
-
-Create GitRepository and Kustomization resources:
-
-```typescript
-await createGitRepository(name, namespace, { url, ref: { branch }, secretRef })
-await createKustomization(name, namespace, { sourceRef, path, prune, interval })
+# Kubernetes
+KUBECONFIG=~/.kube/config
+# 或
+KUBECONFIG_CONTENT=<base64-encoded>
 ```
 
 ## Development Workflow
 
-1. **Before starting**: Run `bun install` to ensure dependencies are installed
-2. **Database changes**: Edit `src/lib/db/schema.ts`, then run `bun run db:generate && bun run db:push`
-3. **Before committing**: Run `bun run lint` to check for issues, `bun run format` to fix formatting
-4. **Testing locally**: Run `bun run dev` and test at http://localhost:3001
+1. **Before starting**: 
+   - Run `bun install` to ensure dependencies are installed
+   - Run `bun run dev:redis` to start Redis (首次需要)
+   - Run `bun run db:push` to sync database schema
+
+2. **Development**: Run `bun run dev` (启动 Web + Worker)
+
+3. **Database changes**: Edit `src/lib/db/schema.ts`, then run `bun run db:push`
+
+4. **Before committing**: Run `bun run lint` to check for issues

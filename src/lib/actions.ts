@@ -51,7 +51,6 @@ export async function createProject(formData: FormData) {
   const teamId = formData.get('teamId') as string;
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
-  const templateId = (formData.get('templateId') as string) || 'nextjs';
 
   if (!teamId || !name) {
     return { error: 'Team ID and name are required' };
@@ -74,7 +73,6 @@ export async function createProject(formData: FormData) {
       name,
       slug,
       description,
-      templateId,
       status: 'initializing',
     })
     .returning();

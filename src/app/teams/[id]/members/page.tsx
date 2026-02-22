@@ -1,11 +1,20 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Plus, Trash2, Users } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -37,29 +46,18 @@ interface TeamMember {
   };
 }
 
-const roleColors: Record<string, string> = {
-  owner: 'bg-purple-100 text-purple-800',
-  admin: 'bg-blue-100 text-blue-800',
-  member: 'bg-green-100 text-green-800',
-  viewer: 'bg-gray-100 text-gray-800',
-};
-
 export default function TeamMembersPage() {
   const params = useParams();
-  const router = useRouter();
   const teamId = params.id as string;
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchMembers();
-  }, [teamId]);
-
-  const fetchMembers = async () => {
+  const fetchMembers = useCallback(async () => {
     try {
       const res = await fetch(`/api/teams/${teamId}/members`);
       if (res.ok) {
@@ -71,7 +69,11 @@ export default function TeamMembersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [teamId]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, [fetchMembers]);
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,9 +91,6 @@ export default function TeamMembersPage() {
         setInviteEmail('');
         setInviteRole('member');
         fetchMembers();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to invite member');
       }
     } catch (error) {
       console.error('Failed to invite member:', error);
@@ -100,11 +99,11 @@ export default function TeamMembersPage() {
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('Are you sure you want to remove this member?')) return;
+  const handleRemoveMember = async () => {
+    if (!deleteId) return;
 
     try {
-      const res = await fetch(`/api/teams/${teamId}/members/${memberId}`, {
+      const res = await fetch(`/api/teams/${teamId}/members/${deleteId}`, {
         method: 'DELETE',
       });
 
@@ -113,6 +112,8 @@ export default function TeamMembersPage() {
       }
     } catch (error) {
       console.error('Failed to remove member:', error);
+    } finally {
+      setDeleteId(null);
     }
   };
 
@@ -138,69 +139,86 @@ export default function TeamMembersPage() {
         .split(' ')
         .map((n) => n[0])
         .join('')
-        .toUpperCase();
+        .toUpperCase()
+        .slice(0, 2);
     return email[0].toUpperCase();
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="h-8 w-40 bg-muted rounded animate-pulse" />
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Team Members</h1>
-          <p className="text-muted-foreground">Manage your team members and roles</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Members</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {members.length} member{members.length !== 1 ? 's' : ''}
+          </p>
         </div>
 
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button>Invite Member</Button>
+            <Button size="sm" className="h-8">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Invite
+            </Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleInvite}>
               <DialogHeader>
                 <DialogTitle>Invite Team Member</DialogTitle>
-                <DialogDescription>
-                  Enter the email address of the person you want to invite.
-                </DialogDescription>
+                <DialogDescription>Enter the email address to send an invitation</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email" className="text-sm">
+                    Email
+                  </Label>
                   <Input
                     id="email"
                     type="email"
                     placeholder="colleague@example.com"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
+                    className="h-9"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
+                  <Label className="text-sm">Role</Label>
                   <Select value={inviteRole} onValueChange={setInviteRole}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="viewer">Viewer</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => setIsOpen(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={submitting}>
+                <Button type="submit" size="sm" className="h-8" disabled={submitting}>
                   {submitting ? 'Inviting...' : 'Invite'}
                 </Button>
               </DialogFooter>
@@ -209,71 +227,88 @@ export default function TeamMembersPage() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Members ({members.length})</CardTitle>
-          <CardDescription>People who have access to this team</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {members.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center justify-between p-4 border rounded-lg"
-              >
-                <div className="flex items-center gap-4">
-                  <Avatar>
-                    <AvatarImage src={member.user.image || undefined} />
-                    <AvatarFallback>
-                      {getInitials(member.user.name, member.user.email)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{member.user.name || member.user.email}</p>
-                    <p className="text-sm text-muted-foreground">{member.user.email}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={member.role}
-                    onValueChange={(value) => handleChangeRole(member.id, value)}
-                    disabled={member.role === 'owner'}
-                  >
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="owner" disabled>
-                        Owner
-                      </SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="member">Member</SelectItem>
-                      <SelectItem value="viewer">Viewer</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {member.role !== 'owner' && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleRemoveMember(member.id)}
-                    >
-                      Remove
-                    </Button>
-                  )}
+      {members.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="p-4 rounded-full bg-muted mb-4">
+            <Users className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h2 className="text-lg font-medium mb-2">No members yet</h2>
+          <p className="text-sm text-muted-foreground mb-6">Invite team members to collaborate</p>
+          <Button size="sm" className="h-8" onClick={() => setIsOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Invite Member
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-lg border bg-card divide-y">
+          {members.map((member) => (
+            <div key={member.id} className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={member.user.image ?? undefined} />
+                  <AvatarFallback className="text-xs">
+                    {getInitials(member.user.name, member.user.email)}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-sm font-medium">{member.user.name || member.user.email}</p>
+                  <p className="text-xs text-muted-foreground">{member.user.email}</p>
                 </div>
               </div>
-            ))}
 
-            {members.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">
-                No members yet. Invite someone to get started.
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={member.role}
+                  onValueChange={(value) => handleChangeRole(member.id, value)}
+                  disabled={member.role === 'owner'}
+                >
+                  <SelectTrigger className="h-8 w-24 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="owner" disabled>
+                      Owner
+                    </SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="member">Member</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {member.role !== 'owner' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleteId(member.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Member</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this member from the team?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveMember}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

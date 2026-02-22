@@ -28,5 +28,3 @@ declare global {
     interface ProcessEnv extends Env {}
   }
 }
-
-export {};

@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { teamMembers, teams } from '@/lib/db/schema';
+import { teamMembers } from '@/lib/db/schema';
 
 export async function PATCH(
   request: Request,
@@ -51,7 +51,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string; memberId: string }> }
 ) {
   const { id, memberId } = await params;

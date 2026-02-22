@@ -1,17 +1,26 @@
 'use client';
 
+import { Clock, Filter, GitCommit, Rocket } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useDeployments } from '@/hooks/useDeployments';
 
-const statusColors: Record<string, string> = {
-  pending: 'warning',
-  deploying: 'default',
-  syncing: 'default',
-  deployed: 'success',
-  failed: 'destructive',
-  rolled_back: 'destructive',
+const statusConfig: Record<
+  string,
+  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean }
+> = {
+  pending: { color: 'neutral', pulse: false },
+  deploying: { color: 'info', pulse: true },
+  syncing: { color: 'info', pulse: true },
+  deployed: { color: 'success', pulse: false },
+  failed: { color: 'error', pulse: false },
+  rolled_back: { color: 'warning', pulse: false },
 };
 
 export default function DeploymentsPage() {
@@ -19,64 +28,127 @@ export default function DeploymentsPage() {
   const searchParams = useSearchParams();
   const projectId = params.id as string;
   const envFilter = searchParams.get('env');
+  const [filter, setFilter] = useState<string>(envFilter || 'all');
 
   const { deployments, isConnected, error } = useDeployments({
     projectId,
   });
 
-  const filteredDeployments = envFilter
-    ? deployments.filter((d) => d.environmentName === envFilter)
-    : deployments;
+  const environments = ['all', ...new Set(deployments.map((d) => d.environmentName))];
+
+  const filteredDeployments =
+    filter === 'all' ? deployments : deployments.filter((d) => d.environmentName === filter);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Deployments</h2>
-          <p className="text-sm text-muted-foreground">Real-time deployment status</p>
+    <div className="space-y-6">
+      <PageHeader
+        title="Deployments"
+        description="Real-time deployment status and history"
+        actions={
+          <div className="flex items-center gap-2">
+            <StatusIndicator
+              status={isConnected ? 'success' : 'error'}
+              label={isConnected ? 'Live' : 'Offline'}
+              pulse={isConnected}
+            />
+          </div>
+        }
+      />
+
+      {error && (
+        <div className="p-4 text-sm bg-warning/10 text-warning-foreground rounded-lg border border-warning/20">
+          {error}
         </div>
-        <Badge variant={isConnected ? 'success' : 'destructive'}>
-          {isConnected ? 'Live' : 'Offline'}
-        </Badge>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        {environments.map((env) => (
+          <Button
+            key={env}
+            variant={filter === env ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFilter(env)}
+            className="capitalize"
+          >
+            {env}
+          </Button>
+        ))}
       </div>
 
-      {error && <div className="p-3 text-sm bg-yellow-100 text-yellow-800 rounded-md">{error}</div>}
-
-      <div className="space-y-2">
-        {filteredDeployments.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              No deployments yet. Push to your repository to trigger a deployment.
-            </CardContent>
-          </Card>
-        ) : (
-          filteredDeployments.map((deployment) => (
-            <Card key={deployment.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-base">{deployment.environmentName}</CardTitle>
-                    <Badge variant={statusColors[deployment.status] as any}>
-                      {deployment.status}
-                    </Badge>
+      {filteredDeployments.length === 0 ? (
+        <EmptyState
+          icon={<Rocket className="h-12 w-12" />}
+          title="No deployments yet"
+          description="Push to your repository to trigger a deployment"
+        />
+      ) : (
+        <div className="space-y-3">
+          {filteredDeployments.map((deployment) => {
+            const config = statusConfig[deployment.status] || statusConfig.pending;
+            return (
+              <Card key={deployment.id} className="overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="flex items-center">
+                    <div
+                      className={`w-1 self-stretch ${
+                        config.color === 'success'
+                          ? 'bg-success'
+                          : config.color === 'error'
+                            ? 'bg-destructive'
+                            : config.color === 'warning'
+                              ? 'bg-warning'
+                              : config.color === 'info'
+                                ? 'bg-info'
+                                : 'bg-muted-foreground'
+                      }`}
+                    />
+                    <div className="flex-1 p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <StatusIndicator
+                              status={config.color}
+                              pulse={config.pulse}
+                              label={deployment.status}
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">v{deployment.version}</span>
+                              <Badge variant="secondary" className="capitalize">
+                                {deployment.environmentName}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          {deployment.commitSha && (
+                            <div className="flex items-center gap-1">
+                              <GitCommit className="h-4 w-4" />
+                              <code className="text-xs bg-muted px-2 py-0.5 rounded">
+                                {deployment.commitSha.slice(0, 7)}
+                              </code>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            <span>
+                              {deployment.createdAt
+                                ? new Date(deployment.createdAt).toLocaleString()
+                                : 'Pending'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-sm text-muted-foreground">v{deployment.version}</span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {deployment.commitSha && (
-                  <code className="text-xs bg-muted px-2 py-1 rounded">
-                    {deployment.commitSha.slice(0, 7)}
-                  </code>
-                )}
-                <p className="text-sm text-muted-foreground mt-2">
-                  {deployment.createdAt ? new Date(deployment.createdAt).toLocaleString() : '-'}
-                </p>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
