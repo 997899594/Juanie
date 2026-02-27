@@ -437,13 +437,19 @@ export const environmentVariables = pgTable(
     serviceId: uuid('serviceId').references(() => services.id, { onDelete: 'cascade' }),
 
     key: varchar('key', { length: 255 }).notNull(),
-    value: text('value'),
+    value: text('value'), // 普通变量明文存储；isSecret=true 时为 null
     isSecret: boolean('isSecret').default(false),
+
+    // AES-256-GCM 加密字段（isSecret=true 时使用）
+    encryptedValue: text('encryptedValue'), // 加密后的值（hex）
+    iv: varchar('iv', { length: 64 }), // 初始化向量（hex，12字节→24字符）
+    authTag: varchar('authTag', { length: 64 }), // GCM 认证标签（hex，16字节→32字符）
 
     referenceType: varchar('referenceType', { length: 50 }),
     referenceId: uuid('referenceId'),
 
     createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
   },
   (table) => ({
     projectIdIdx: index('environmentVariable_projectId_idx').on(table.projectId),

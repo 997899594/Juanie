@@ -1,5 +1,5 @@
 import { Job, Worker } from 'bullmq';
-import { eq, and } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db } from '@/lib/db';
 import {
@@ -16,16 +16,16 @@ import {
 } from '@/lib/db/schema';
 import { createGitProvider } from '@/lib/git';
 import {
-  createNamespace,
-  getIsConnected,
-  initK8sClient,
-  getK8sClient,
-  createDeployment,
-  createService,
   createCiliumGateway,
   createCiliumHTTPRoute,
+  createDeployment,
+  createNamespace,
   createSecret,
+  createService,
   createStatefulSet,
+  getIsConnected,
+  getK8sClient,
+  initK8sClient,
 } from '@/lib/k8s';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
@@ -39,6 +39,65 @@ const isDev = process.env.NODE_ENV === 'development';
 interface GitProviderWithClient {
   provider: typeof gitProviders.$inferSelect;
   client: ReturnType<typeof createGitProvider>;
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Parse a shell command string into an array of arguments.
+ * Handles quoted strings (single and double quotes) and escaped spaces.
+ * @example parseCommandString('node server.js --config "my file.json"')
+ *   returns ['node', 'server.js', '--config', 'my file.json']
+ */
+function parseCommandString(commandStr: string): string[] {
+  const args: string[] = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escapeNext = false;
+
+  for (let i = 0; i < commandStr.length; i++) {
+    const char = commandStr[i];
+
+    if (escapeNext) {
+      current += char;
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+
+    if (char === ' ' && !inSingleQuote && !inDoubleQuote) {
+      if (current || args.length > 0) {
+        args.push(current);
+        current = '';
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current || args.length > 0) {
+    args.push(current);
+  }
+
+  return args;
 }
 
 // Check if K8s is available
@@ -114,7 +173,7 @@ async function getTeamGitProvider(teamId: string): Promise<GitProviderWithClient
 
 async function updateStepStatus(
   projectId: string,
-  step: StepName,
+  _step: StepName,
   status: 'running' | 'completed' | 'failed' | 'skipped',
   data?: { message?: string; progress?: number; error?: string }
 ) {
@@ -156,9 +215,18 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
         case 'validate_repository':
           await validateRepository(project);
           break;
-        case 'create_repository':
+        case 'create_repository': {
           await createRepository(project);
+          // Refetch project to get updated repository relation
+          const updatedProject = await db.query.projects.findFirst({
+            where: eq(projects.id, projectId),
+            with: { repository: true },
+          });
+          if (updatedProject) {
+            Object.assign(project, updatedProject);
+          }
           break;
+        }
         case 'push_template':
           await pushTemplate(project);
           break;
@@ -275,10 +343,7 @@ async function createRepository(project: typeof projects.$inferSelect) {
     .returning();
 
   // Update project with repository ID
-  await db
-    .update(projects)
-    .set({ repositoryId: dbRepo.id })
-    .where(eq(projects.id, project.id));
+  await db.update(projects).set({ repositoryId: dbRepo.id }).where(eq(projects.id, project.id));
 
   console.log(`✅ Created repository: ${repo.fullName}`);
 }
@@ -301,7 +366,7 @@ async function pushTemplate(
 
   // Get team name for template
   const team = await db.query.teams.findFirst({
-    where: eq(teams, project.teamId),
+    where: eq(teams.id, project.teamId),
   });
 
   // Render template files
@@ -371,7 +436,7 @@ async function deployServices(project: typeof projects.$inferSelect, hasK8s: boo
         cpuLimit: service.cpuLimit || undefined,
         memoryRequest: service.memoryRequest || undefined,
         memoryLimit: service.memoryLimit || undefined,
-        command: service.startCommand ? service.startCommand.split(' ') : undefined,
+        command: service.startCommand ? parseCommandString(service.startCommand) : undefined,
       });
 
       // Create Service for web services
@@ -411,20 +476,21 @@ async function provisionDatabases(project: typeof projects.$inferSelect, hasK8s:
       });
 
       // Create database based on type
+      const secretName = `${resourceName}-creds`;
       if (database.type === 'postgresql') {
-        await createPostgreSQLStatefulSet(namespace, resourceName, database.name, dbPassword);
+        await createPostgreSQLStatefulSet(namespace, resourceName, database.name, secretName);
         await createService(namespace, resourceName, {
           port: 5432,
           targetPort: 5432,
         });
       } else if (database.type === 'redis') {
-        await createRedisDeployment(namespace, resourceName, dbPassword);
+        await createRedisDeployment(namespace, resourceName, secretName);
         await createService(namespace, resourceName, {
           port: 6379,
           targetPort: 6379,
         });
       } else if (database.type === 'mysql') {
-        await createMySQLStatefulSet(namespace, resourceName, database.name, dbPassword);
+        await createMySQLStatefulSet(namespace, resourceName, database.name, secretName);
         await createService(namespace, resourceName, {
           port: 3306,
           targetPort: 3306,
@@ -464,7 +530,7 @@ async function createPostgreSQLStatefulSet(
   namespace: string,
   name: string,
   dbName: string,
-  password: string
+  secretName: string
 ): Promise<void> {
   await createStatefulSet(namespace, name, {
     image: 'postgres:16-alpine',
@@ -473,16 +539,23 @@ async function createPostgreSQLStatefulSet(
     replicas: 1,
     env: {
       POSTGRES_DB: dbName,
-      POSTGRES_PASSWORD: password,
       PGDATA: '/var/lib/postgresql/data/pgdata',
+    },
+    envFrom: {
+      secretName,
     },
     volumeName: 'data',
     storageSize: '10Gi',
+    mountPath: '/var/lib/postgresql/data',
   });
 }
 
 // Helper function to create Redis Deployment
-async function createRedisDeployment(namespace: string, name: string, password: string): Promise<void> {
+async function createRedisDeployment(
+  namespace: string,
+  name: string,
+  secretName: string
+): Promise<void> {
   const { apps } = getK8sClient();
 
   await apps.createNamespacedDeployment({
@@ -502,7 +575,19 @@ async function createRedisDeployment(namespace: string, name: string, password: 
                 name: 'redis',
                 image: 'redis:7-alpine',
                 ports: [{ containerPort: 6379 }],
-                args: ['--requirepass', password],
+                env: [
+                  {
+                    name: 'REDIS_PASSWORD',
+                    valueFrom: {
+                      secretKeyRef: {
+                        name: secretName,
+                        key: 'password',
+                      },
+                    },
+                  },
+                ],
+                command: ['sh', '-c'],
+                args: ['redis-server --requirepass "$REDIS_PASSWORD"'],
               },
             ],
           },
@@ -517,7 +602,7 @@ async function createMySQLStatefulSet(
   namespace: string,
   name: string,
   dbName: string,
-  password: string
+  secretName: string
 ): Promise<void> {
   await createStatefulSet(namespace, name, {
     image: 'mysql:8',
@@ -526,10 +611,13 @@ async function createMySQLStatefulSet(
     replicas: 1,
     env: {
       MYSQL_DATABASE: dbName,
-      MYSQL_ROOT_PASSWORD: password,
+    },
+    envFrom: {
+      secretName,
     },
     volumeName: 'data',
     storageSize: '10Gi',
+    mountPath: '/var/lib/mysql',
   });
 }
 
@@ -542,15 +630,17 @@ function getConnectionString(
   dbName: string
 ): string {
   const fullHost = `${host}.${namespace}.svc.cluster.local`;
+  // URL-encode password to handle special characters (@, :, /, #, ?, etc.)
+  const encodedPassword = encodeURIComponent(password);
   switch (type) {
     case 'postgresql':
-      return `postgresql://postgres:${password}@${fullHost}:5432/${dbName}`;
+      return `postgresql://postgres:${encodedPassword}@${fullHost}:5432/${dbName}`;
     case 'mysql':
-      return `mysql://root:${password}@${fullHost}:3306/${dbName}`;
+      return `mysql://root:${encodedPassword}@${fullHost}:3306/${dbName}`;
     case 'redis':
-      return `redis://:${password}@${fullHost}:6379`;
+      return `redis://:${encodedPassword}@${fullHost}:6379`;
     case 'mongodb':
-      return `mongodb://root:${password}@${fullHost}:27017/${dbName}`;
+      return `mongodb://root:${encodedPassword}@${fullHost}:27017/${dbName}`;
     default:
       return '';
   }
@@ -594,12 +684,18 @@ async function configureDns(project: typeof projects.$inferSelect, hasK8s: boole
         path: '/',
       });
 
-      // Mark domain as verified (assuming DNS is correctly configured)
+      // Mark domain as gateway configured
+      // NOTE: This sets isVerified=true after creating the Gateway/HTTPRoute,
+      // but does NOT perform actual DNS verification. The field name is misleading
+      // - it actually indicates "gateway is configured", not "DNS is verified".
+      // TODO: Implement actual DNS verification (check TXT/CNAME records) or
+      // rename the column to gatewayConfigured for clarity.
       await db.update(domains).set({ isVerified: true }).where(eq(domains.id, domain.id));
 
       console.log(`✅ Configured DNS for ${domain.hostname}`);
     } else {
       console.log(`[Mock] Would configure DNS for: ${domain.hostname}`);
+      // See note above about isVerified semantics
       await db.update(domains).set({ isVerified: true }).where(eq(domains.id, domain.id));
     }
   }

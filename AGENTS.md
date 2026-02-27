@@ -40,6 +40,7 @@ bun run format           # Format code with Biome
 bun run db:generate      # Generate Drizzle migrations
 bun run db:push          # Push schema changes to database
 bun run db:studio        # Open Drizzle Studio
+bun run db:seed          # Run seed script
 ```
 
 **Note**: No test framework is currently configured. When adding tests, prefer Vitest and update this document.
@@ -234,38 +235,131 @@ await createKustomization(name, namespace, {
 })
 ```
 
+### API 中间件与错误处理
+
+`src/lib/api/` 提供生产级 API 工具：
+
+- `errors.ts` — 标准化错误格式与错误码枚举，含请求 ID 追踪
+- `middleware.ts` — 可组合的认证/授权/限流中间件，类型安全的 handler 创建
+- `rate-limit.ts` / `rate-limit-redis.ts` — Redis 支持的限流（含内存降级），预设规则：strict / medium / loose / api
+- `validation.ts` — 基于 Zod 的请求体校验工具
+
+```typescript
+import { createApiHandler } from '@/lib/api/middleware'
+import { ApiError, ErrorCode } from '@/lib/api/errors'
+
+// 构建带认证 + 限流的 handler
+export const GET = createApiHandler({ auth: true, rateLimit: 'api' }, async (req, ctx) => {
+  // ctx.session 已注入
+})
+```
+
+### 日志与可观测性
+
+`src/lib/logger/` 提供多级日志系统：
+
+- `index.ts` — 基础 logger，支持 DEBUG/INFO/WARN/ERROR 及 `logger.measure()` 性能计时
+- `logger-http.ts` — HTTP 请求/响应日志
+- `logger-sentry.ts` — Sentry 错误追踪与性能监控集成
+- `logger-loki.ts` — Loki 日志聚合（批量发送）
+- `logger-kv.ts` — 审计日志专用 logger
+
+```typescript
+import { logger } from '@/lib/logger'
+
+const childLogger = logger.child({ projectId })
+await logger.measure('deploy', async () => { /* ... */ })
+```
+
+### 数据库事务
+
+```typescript
+import { useTransaction, useTransactionWithRetry } from '@/lib/db/transaction'
+
+// 带重试逻辑的事务（可配置退避）
+await useTransactionWithRetry(async (tx) => {
+  await tx.insert(deployments).values(...)
+})
+```
+
+### 实时 SSE 端点
+
+- `GET /api/projects/[id]/init/stream` — 项目初始化进度推送
+- `GET /api/events/deployments` — 部署状态实时更新
+
 ## Project Structure
 
 ```
 src/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
-│   │   ├── projects/      # 项目 CRUD
+│   │   ├── projects/      # 项目 CRUD 及生命周期
 │   │   ├── git/           # Git Provider API
 │   │   ├── teams/         # 团队管理
-│   │   └── webhooks/      # Git Webhook 接收
+│   │   ├── webhooks/      # Git Webhook 接收
+│   │   ├── events/        # SSE 事件流（部署更新）
+│   │   ├── audit-logs/    # 审计日志
+│   │   └── health/        # 健康检查（live/ready/startup/full）
 │   ├── projects/          # 项目页面
 │   │   ├── new/           # 创建项目
 │   │   └── [id]/
 │   │       ├── initializing/  # 初始化进度
 │   │       ├── deployments/   # 部署列表
-│   │       └── ...
+│   │       ├── environments/  # 环境管理
+│   │       ├── resources/     # K8s 资源浏览器
+│   │       ├── pipelines/     # CI/CD 流水线
+│   │       ├── webhooks/      # Webhook 管理
+│   │       └── settings/      # 项目设置
 │   ├── teams/             # 团队页面
+│   ├── settings/          # 用户设置
+│   ├── login/             # 登录页面
 │   ├── layout.tsx         # Root layout
 │   └── page.tsx           # Home page
 ├── components/
 │   ├── ui/                # Radix UI + Tailwind components
-│   └── projects/          # 项目相关组件
+│   ├── projects/          # 项目相关组件
+│   └── layout/            # 布局组件
+├── hooks/                 # 自定义 React hooks（如 useDeployments）
 ├── lib/                   # Core libraries
 │   ├── db/                # Drizzle ORM setup & schema
+│   │   ├── schema.ts      # 完整数据库 schema（20+ 表）
+│   │   ├── index.ts       # DB 客户端
+│   │   ├── transaction.ts # 事务封装（含重试逻辑）
+│   │   └── transaction-helpers.ts # 批量操作工具
+│   ├── api/               # 生产级 API 工具
+│   │   ├── errors.ts      # 标准化错误处理
+│   │   ├── middleware.ts  # 可组合中间件
+│   │   ├── rate-limit.ts  # 限流（内存）
+│   │   ├── rate-limit-redis.ts # 限流（Redis）
+│   │   └── validation.ts  # 请求校验工具
+│   ├── logger/            # 可观测性日志系统
+│   │   ├── index.ts       # 基础 logger
+│   │   ├── logger-http.ts # HTTP 日志
+│   │   ├── logger-sentry.ts # Sentry 集成
+│   │   ├── logger-loki.ts # Loki 聚合
+│   │   └── logger-kv.ts   # 审计日志
 │   ├── git/               # Git Provider 抽象层
-│   ├── config/            # juanie.yaml 解析器
+│   │   ├── index.ts       # 统一接口
+│   │   ├── github.ts      # GitHub 实现
+│   │   └── gitlab.ts      # GitLab 实现（含自托管）
+│   ├── config/
+│   │   └── parser.ts      # juanie.yaml 解析器（Zod 校验）
 │   ├── queue/             # BullMQ 队列
 │   ├── auth.ts            # NextAuth configuration
 │   ├── k8s.ts             # Kubernetes client
 │   ├── flux.ts            # Flux CD integration
+│   ├── audit.ts           # 审计追踪
+│   ├── notifications.ts   # 通知系统
+│   ├── templates.ts       # 模板渲染引擎
 │   └── utils.ts           # Utility functions (cn)
-└── types/                 # TypeScript type augmentations
+├── types/                 # TypeScript type augmentations
+└── env.d.ts               # 环境变量类型声明
+k8s/                       # Kubernetes 部署清单
+├── base/                  # 基础资源（Namespace, Deployment, RBAC, HPA, PDB）
+└── overlays/production/   # 生产环境 Kustomize 覆盖层
+templates/                 # 项目模板（用于 Create 模式）
+drizzle/                   # 数据库迁移文件
+docker-compose.yml         # 本地开发环境（PG, Redis, MinIO, Loki, Grafana）
 ```
 
 ## Environment Variables
@@ -280,9 +374,14 @@ DATABASE_URL=postgresql://user:password@localhost:5432/juanie
 NEXTAUTH_SECRET=your-secret-key
 NEXTAUTH_URL=http://localhost:3001
 
-# OAuth
+# GitHub OAuth
 GITHUB_CLIENT_ID=xxx
 GITHUB_CLIENT_SECRET=xxx
+
+# GitLab OAuth（可选）
+GITLAB_CLIENT_ID=xxx
+GITLAB_CLIENT_SECRET=xxx
+GITLAB_URL=https://gitlab.com  # 自托管时填写自定义地址
 
 # Redis (BullMQ)
 REDIS_HOST=localhost
@@ -292,6 +391,17 @@ REDIS_PORT=6379
 KUBECONFIG=~/.kube/config
 # 或
 KUBECONFIG_CONTENT=<base64-encoded>
+
+# 可观测性（可选）
+SENTRY_DSN=xxx
+LOKI_URL=http://localhost:3100
+
+# 通知（可选）
+SLACK_WEBHOOK_URL=xxx
+SMTP_HOST=xxx
+SMTP_PORT=587
+SMTP_USER=xxx
+SMTP_PASS=xxx
 ```
 
 ## Development Workflow
@@ -306,3 +416,54 @@ KUBECONFIG_CONTENT=<base64-encoded>
 3. **Database changes**: Edit `src/lib/db/schema.ts`, then run `bun run db:push`
 
 4. **Before committing**: Run `bun run lint` to check for issues
+
+## juanie.yaml 项目配置格式
+
+项目根目录的 `juanie.yaml` 由 `src/lib/config/parser.ts` 解析（Zod 校验）：
+
+```yaml
+services:
+  - name: api
+    type: web | worker | cron    # 服务类型
+    build:
+      command: npm run build
+      dockerfile: Dockerfile
+      context: .
+    run:
+      command: npm start
+      port: 3000
+    healthcheck:
+      path: /health
+      interval: 30
+    scaling:
+      min: 1
+      max: 5
+      cpu: 80
+    resources:
+      cpuRequest: "100m"
+      cpuLimit: "500m"
+      memoryRequest: "128Mi"
+      memoryLimit: "512Mi"
+
+databases:
+  - name: postgres
+    type: postgresql | mysql | redis | mongodb
+    plan: starter | standard | premium
+
+environments:
+  production:
+    branch: main
+    variables:
+      NODE_ENV: production
+```
+
+## 健康检查端点
+
+符合 Kubernetes 探针标准，已内置实现：
+
+| 端点 | 用途 |
+|------|------|
+| `GET /api/health` | 完整检查（DB、Redis、K8s） |
+| `GET /api/health/ready` | 就绪探针（可接受流量） |
+| `GET /api/health/live` | 存活探针（进程存活） |
+| `GET /api/health/startup` | 启动探针（初始启动） |

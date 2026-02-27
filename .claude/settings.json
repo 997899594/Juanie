@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "semgrep@claude-plugins-official": true
+  }
+}
