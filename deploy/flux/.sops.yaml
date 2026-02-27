@@ -1,11 +1,11 @@
 # SOPS 配置文件
 # 用于加密 Kubernetes Secrets
 keys:
-  - &flux age:REPLACE_WITH_YOUR_AGE_PUBLIC_KEY
+  - &flux age1sqhf9c7wygyaw0ftmwdk3fdlw4jg3xnk2dx8uqs4sus9nu8p0p0suypr8q
 
 creation_rules:
   - path_regex: .*/templates/secret.*\.yaml$
     encrypted_regex: ^(data|stringData)$
     key_groups:
       - age:
-          - REPLACE_WITH_YOUR_AGE_PUBLIC_KEY
+          - age1sqhf9c7wygyaw0ftmwdk3fdlw4jg3xnk2dx8uqs4sus9nu8p0p0suypr8q
