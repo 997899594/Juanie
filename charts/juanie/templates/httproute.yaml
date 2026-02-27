@@ -1,0 +1,39 @@
+# HTTPS 路由
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Chart.Name }}-route
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+    - name: {{ .Chart.Name }}-gateway
+      sectionName: https
+  hostnames:
+    - {{ .Values.hostname }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ .Chart.Name }}-web
+          port: 80
+---
+# HTTP 到 HTTPS 重定向
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Chart.Name }}-redirect
+  namespace: {{ .Values.namespace }}
+spec:
+  parentRefs:
+    - name: {{ .Chart.Name }}-gateway
+      sectionName: http
+  hostnames:
+    - {{ .Values.hostname }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
