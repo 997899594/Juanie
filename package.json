@@ -10,7 +10,7 @@
     "dev:redis": "docker start juanie-redis 2>/dev/null || docker run --name juanie-redis -p 6379:6379 -d redis:7-alpine",
     "build": "bunx next build",
     "start": "bunx next start",
-    "start:worker": "tsx src/lib/queue/worker.ts",
+    "start:worker": "bun src/lib/queue/worker.ts",
     "lint": "bunx biome check",
     "format": "bunx biome format . --write",
     "db:generate": "bunx drizzle-kit generate",
