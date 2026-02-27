@@ -1,0 +1,14 @@
+# ============================================
+# PodDisruptionBudget
+# ============================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: juanie-web-pdb
+  namespace: juanie
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: juanie
+      component: web

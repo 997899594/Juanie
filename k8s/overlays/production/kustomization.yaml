@@ -1,0 +1,36 @@
+# ============================================
+# Production Overlay
+# ============================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: juanie
+
+# 基础配置
+resources:
+  - ../../base
+
+# 镜像覆盖
+images:
+  - name: juanie/juanie
+    newName: ghcr.io/997899594/juanie
+    newTag: latest
+
+# 生产环境覆盖 - 调整为测试服务器规格
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: juanie-web
+
+# ConfigMap 覆盖
+configMapGenerator:
+  - name: juanie-config
+    behavior: merge
+    literals:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - ENABLE_METRICS=true

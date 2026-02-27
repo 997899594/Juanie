@@ -1,5 +1,5 @@
+import { existsSync } from 'node:fs';
 import * as k8s from '@kubernetes/client-node';
-import { existsSync } from 'fs';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
 let k8sAppsApi: k8s.AppsV1Api | null = null;
@@ -19,7 +19,7 @@ export function initK8sClient(): void {
     if (kubeconfigContent) {
       kc.loadFromString(kubeconfigContent);
     } else {
-      const kubeconfigPath = process.env.KUBECONFIG || process.env.HOME + '/.kube/config';
+      const kubeconfigPath = process.env.KUBECONFIG || `${process.env.HOME}/.kube/config`;
       if (existsSync(kubeconfigPath)) {
         kc.loadFromFile(kubeconfigPath);
       } else {
@@ -195,14 +195,14 @@ export async function execInPod(
     let output = '';
     let errorOutput = '';
 
-    const stdout = new (require('stream').Writable)({
+    const stdout = new (require('node:stream').Writable)({
       write(chunk: Buffer, _encoding: string, callback: () => void) {
         output += chunk.toString();
         callback();
       },
     });
 
-    const stderr = new (require('stream').Writable)({
+    const stderr = new (require('node:stream').Writable)({
       write(chunk: Buffer, _encoding: string, callback: () => void) {
         errorOutput += chunk.toString();
         callback();
@@ -331,8 +331,79 @@ export async function deleteSecret(namespace: string, name: string): Promise<voi
   }
 }
 
+/**
+ * 创建或更新 K8s Secret（upsert 语义）
+ * 存在则替换所有 data，不存在则创建
+ */
+export async function upsertSecret(
+  namespace: string,
+  name: string,
+  data: Record<string, string>,
+  type: string = 'Opaque'
+): Promise<void> {
+  const { core } = getK8sClient();
+
+  const encodedData: Record<string, string> = {};
+  for (const [key, value] of Object.entries(data)) {
+    encodedData[key] = Buffer.from(value).toString('base64');
+  }
+
+  const body = {
+    apiVersion: 'v1',
+    kind: 'Secret',
+    metadata: { name, namespace },
+    type,
+    data: encodedData,
+  };
+
+  try {
+    await core.readNamespacedSecret({ namespace, name });
+    // 已存在：替换
+    await core.replaceNamespacedSecret({ namespace, name, body });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode === 404) {
+      await core.createNamespacedSecret({ namespace, body });
+    } else {
+      throw e;
+    }
+  }
+}
+
+/**
+ * 创建或更新 K8s ConfigMap（upsert 语义）
+ */
+export async function upsertConfigMap(
+  namespace: string,
+  name: string,
+  data: Record<string, string>
+): Promise<void> {
+  const { core } = getK8sClient();
+
+  const body = {
+    apiVersion: 'v1',
+    kind: 'ConfigMap',
+    metadata: { name, namespace },
+    data,
+  };
+
+  try {
+    await core.readNamespacedConfigMap({ namespace, name });
+    await core.replaceNamespacedConfigMap({ namespace, name, body });
+  } catch (e: unknown) {
+    const error = e as { statusCode?: number };
+    if (error.statusCode === 404) {
+      await core.createNamespacedConfigMap({ namespace, body });
+    } else {
+      throw e;
+    }
+  }
+}
+
 export function getIsConnected(): boolean {
-  return k8sCoreApi !== null && k8sAppsApi !== null;
+  return (
+    k8sCoreApi !== null && k8sAppsApi !== null && k8sCustomApi !== null && k8sNetworkingApi !== null
+  );
 }
 
 // ============================================
@@ -347,6 +418,7 @@ export async function createDeployment(
     port: number;
     replicas: number;
     env?: Record<string, string>;
+    envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
     command?: string[];
     args?: string[];
     cpuRequest?: string;
@@ -379,6 +451,7 @@ export async function createDeployment(
                 image: spec.image,
                 ports: [{ containerPort: spec.port }],
                 env: envVars,
+                envFrom: spec.envFrom,
                 command: spec.command,
                 args: spec.args,
                 resources: {
@@ -532,9 +605,73 @@ export async function createCiliumGateway(
   spec: {
     host?: string;
     annotations?: Record<string, string>;
+    tlsSecretName?: string;
+    createTLSSecret?: boolean;
   }
 ): Promise<void> {
   const { custom } = getK8sClient();
+
+  // Optionally create a placeholder TLS Secret
+  if (spec.createTLSSecret && spec.tlsSecretName) {
+    await createSecret(
+      namespace,
+      spec.tlsSecretName,
+      {
+        'tls.crt': 'PLACEHOLDER_CERTIFICATE',
+        'tls.key': 'PLACEHOLDER_KEY',
+      },
+      'kubernetes.io/tls'
+    );
+  }
+
+  // Build listeners array
+  const listeners: any[] = [
+    {
+      name: 'http',
+      protocol: 'HTTP',
+      hostname: spec.host,
+      port: 80,
+      allowedRoutes: {
+        namespaces: {
+          from: 'Selector',
+          selector: {
+            matchLabels: {
+              'kubernetes.io/metadata.name': namespace,
+            },
+          },
+        },
+      },
+    },
+  ];
+
+  // Only add HTTPS listener if TLS secret is available
+  if (spec.tlsSecretName) {
+    listeners.push({
+      name: 'https',
+      protocol: 'HTTPS',
+      hostname: spec.host,
+      port: 443,
+      allowedRoutes: {
+        namespaces: {
+          from: 'Selector',
+          selector: {
+            matchLabels: {
+              'kubernetes.io/metadata.name': namespace,
+            },
+          },
+        },
+      },
+      tls: {
+        mode: 'Terminate',
+        certificateRefs: [
+          {
+            kind: 'Secret',
+            name: spec.tlsSecretName,
+          },
+        ],
+      },
+    });
+  }
 
   const gateway = {
     apiVersion: 'gateway.networking.k8s.io/v1beta1',
@@ -549,49 +686,7 @@ export async function createCiliumGateway(
     },
     spec: {
       gatewayClassName: 'cilium',
-      listeners: [
-        {
-          name: 'http',
-          protocol: 'HTTP',
-          hostname: spec.host,
-          port: 80,
-          allowedRoutes: {
-            namespaces: {
-              from: 'Selector',
-              selector: {
-                matchLabels: {
-                  'kubernetes.io/metadata.name': namespace,
-                },
-              },
-            },
-          },
-        },
-        {
-          name: 'https',
-          protocol: 'HTTPS',
-          hostname: spec.host,
-          port: 443,
-          allowedRoutes: {
-            namespaces: {
-              from: 'Selector',
-              selector: {
-                matchLabels: {
-                  'kubernetes.io/metadata.name': namespace,
-                },
-              },
-            },
-          },
-          tls: {
-            mode: 'Terminate',
-            certificateRefs: [
-              {
-                kind: 'Secret',
-                name: `${name}-tls`,
-              },
-            ],
-          },
-        },
-      ],
+      listeners,
     },
   };
 
@@ -721,6 +816,22 @@ export async function getCiliumHTTPRoutes(namespace: string): Promise<unknown[]>
 // StatefulSet Management (for Databases)
 // ============================================
 
+export interface StatefulSetEnvFromSecret {
+  type: 'secret';
+  name: string;
+}
+
+export interface StatefulSetEnvVar {
+  name: string;
+  value?: string;
+  valueFrom?: {
+    secretKeyRef: {
+      name: string;
+      key: string;
+    };
+  };
+}
+
 export async function createStatefulSet(
   namespace: string,
   name: string,
@@ -729,17 +840,37 @@ export async function createStatefulSet(
     serviceName: string;
     port: number;
     replicas: number;
-    env: Record<string, string>;
+    env?: Record<string, string>;
+    envFrom?: {
+      secretName: string;
+    };
     volumeName: string;
     storageSize: string;
     storageClass?: string;
+    mountPath?: string;
     command?: string[];
     args?: string[];
+    cpuRequest?: string;
+    cpuLimit?: string;
+    memoryRequest?: string;
+    memoryLimit?: string;
   }
 ): Promise<void> {
   const { apps } = getK8sClient();
 
-  const envVars = Object.entries(spec.env).map(([name, value]) => ({ name, value }));
+  const envVars: StatefulSetEnvVar[] = spec.env
+    ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
+    : [];
+
+  const envFrom = spec.envFrom
+    ? [
+        {
+          secretRef: {
+            name: spec.envFrom.secretName,
+          },
+        },
+      ]
+    : undefined;
 
   await apps.createNamespacedStatefulSet({
     namespace,
@@ -760,14 +891,25 @@ export async function createStatefulSet(
                 image: spec.image,
                 ports: [{ containerPort: spec.port }],
                 env: envVars,
+                envFrom,
                 command: spec.command,
                 args: spec.args,
                 volumeMounts: [
                   {
                     name: spec.volumeName,
-                    mountPath: `/${spec.volumeName}`,
+                    mountPath: spec.mountPath || `/data/${spec.volumeName}`,
                   },
                 ],
+                resources: {
+                  requests: {
+                    cpu: spec.cpuRequest || '100m',
+                    memory: spec.memoryRequest || '256Mi',
+                  },
+                  limits: {
+                    cpu: spec.cpuLimit || '1',
+                    memory: spec.memoryLimit || '1Gi',
+                  },
+                },
               },
             ],
           },

@@ -1,0 +1,57 @@
+# ============================================
+# Staging Environment Overlay
+# ============================================
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: juanie-staging
+
+# 基础配置
+bases:
+  - ../../base
+
+# 镜像覆盖
+images:
+  - name: juanie/juanie
+    newTag: staging
+
+# 生产环境覆盖
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 100m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 256Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 500m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 512Mi
+    target:
+      kind: Deployment
+      name: juanie-web
+
+# ConfigMap 覆盖
+configMapGenerator:
+  - name: juanie-config
+    behavior: merge
+    literals:
+      - NODE_ENV=staging
+      - LOG_LEVEL=debug
+      - ENABLE_METRICS=true
+      - ENABLE_TRACING=true
+
+# Namespace 覆盖
+namespace: juanie-staging
+
+# 通用标签
+commonLabels:
+  environment: staging
+  managed-by: kustomize
