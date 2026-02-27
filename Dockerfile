@@ -6,7 +6,7 @@ WORKDIR /app
 
 # 安装依赖
 COPY package.json bun.lockb* ./
-RUN bun install --frozen-lockfile --production=false
+RUN bun install --frozen-lockfile
 
 # ============================================
 # Stage 2: Builder
