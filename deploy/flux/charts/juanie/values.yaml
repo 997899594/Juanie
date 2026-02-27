@@ -51,20 +51,10 @@ redis:
 
 # 敏感配置
 secret:
+  existingSecret: ""
   databasePassword: "postgres"
   nextauthSecret: "juanie-nextauth-secret-2024"
   githubClientId: ""
   githubClientSecret: ""
   gitlabClientId: ""
-  gitlabClientSecret: ""
-
-# 敏感配置（生产环境使用 SOPS 加密或 existingSecret）
-secret:
-  existingSecret: ""  # 设置为已存在的 secret 名称则跳过创建
-  databaseUrl: ""
-  databasePassword: ""
-  nextauthSecret: ""
-  githubClientId: ""
-  githubClientSecret: ""
-  gitlabClientId: ""
-  gitlabClientSecret: ""
+  gitlabClientSecret: "" ""
