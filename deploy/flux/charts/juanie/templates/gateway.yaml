@@ -5,11 +5,9 @@ metadata:
   namespace: {{ .Values.namespace }}
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    io.cilium/lb-ipam-ips: {{ .Values.loadBalancerIP | quote }}
 spec:
   gatewayClassName: cilium
-  addresses:
-    - type: IPAddress
-      value: {{ .Values.loadBalancerIP }}
   listeners:
     - name: http
       protocol: HTTP
