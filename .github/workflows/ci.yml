@@ -29,51 +29,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 构建镜像 (优化大小)
-        run: |
-          sudo apt-get update && sudo apt-get install -y zstd
-          docker build \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            -t ${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            .
-
-      - name: 保存镜像 (使用 zstd 更快更小)
-        run: |
-          docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} | \
-            zstd -19 -T0 -o juanie.tar.zst
-          echo "=== 文件大小 ==="
-          ls -lh juanie.tar.zst
-          du -h juanie.tar.zst
-
-      - name: 推送镜像到服务器
-        uses: appleboy/scp-action@v0.1.7
+      - name: 同步代码到服务器
+        uses: burnett01/rsync-deployments@6.0.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: juanie.tar.zst
-          target: /tmp
-          timeout: 30m
-          command_timeout: 30m
-          debug: true
+          switches: -avzr --delete
+          path: ./
+          remote_path: /opt/juanie
+          remote_host: ${{ secrets.SERVER_HOST }}
+          remote_user: ${{ secrets.SERVER_USER }}
+          remote_key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: 部署
+      - name: 构建并部署
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 15m
           script: |
-            # 解压并导入镜像到 containerd
-            zstd -d /tmp/juanie.tar.zst | ctr -n k8s.io images import -
+            set -e
+            cd /opt/juanie
 
-            # 更新部署
-            kubectl set image deployment/juanie-web juanie=juanie:${{ github.sha }} -n juanie
-            kubectl set image deployment/juanie-worker worker=juanie:${{ github.sha }} -n juanie
+            echo "=== 构建镜像 ==="
+            docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
 
-            # 等待完成
+            echo "=== 导入到 containerd ==="
+            docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} | ctr -n k8s.io images import -
+
+            echo "=== 更新部署 ==="
+            kubectl set image deployment/juanie-web juanie=${{ env.IMAGE_NAME }}:${{ github.sha }} -n juanie
+            kubectl set image deployment/juanie-worker worker=${{ env.IMAGE_NAME }}:${{ github.sha }} -n juanie
+
+            echo "=== 等待滚动更新 ==="
             kubectl rollout status deployment/juanie-web -n juanie --timeout=3m
             kubectl rollout status deployment/juanie-worker -n juanie --timeout=3m
 
-            rm /tmp/juanie.tar.zst
+            echo "=== 清理 ==="
+            docker image prune -f
+
             echo "✅ 部署完成!"
