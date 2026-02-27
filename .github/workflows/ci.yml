@@ -41,7 +41,9 @@ jobs:
         run: |
           docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} | \
             zstd -19 -T0 -o juanie.tar.zst
+          echo "=== 文件大小 ==="
           ls -lh juanie.tar.zst
+          du -h juanie.tar.zst
 
       - name: 推送镜像到服务器
         uses: appleboy/scp-action@v0.1.7
@@ -51,6 +53,9 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: juanie.tar.zst
           target: /tmp
+          timeout: 30m
+          command_timeout: 30m
+          debug: true
 
       - name: 部署
         uses: appleboy/ssh-action@v1
