@@ -354,7 +354,7 @@ spec:
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: juanie
-          image: ghcr.io/997899594/juanie:latest
+          image: juanie:latest
           imagePullPolicy: Always
           ports:
             - name: http
@@ -451,7 +451,7 @@ spec:
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: worker
-          image: ghcr.io/997899594/juanie:latest
+          image: juanie:latest
           imagePullPolicy: Always
           command: ["bun", "run", "start:worker"]
           envFrom:
