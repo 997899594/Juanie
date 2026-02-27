@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { createDeploymentWorker } from './deployment';
 import { createProjectInitWorker } from './project-init';
 
