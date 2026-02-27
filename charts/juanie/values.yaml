@@ -1,0 +1,50 @@
+# 默认配置（开发环境）
+image:
+  repository: ghcr.io/997899594/juanie
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+namespace: juanie
+
+# 副本数
+replicaCount:
+  web: 1
+  worker: 1
+
+# 资源配置
+resources:
+  web:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  worker:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# 环境变量（非敏感）
+env:
+  NODE_ENV: "production"
+  PORT: 3001
+  REDIS_HOST: "redis"
+  REDIS_PORT: 6379
+  DATABASE_HOST: "postgres"
+  DATABASE_PORT: 5432
+  DATABASE_NAME: "juanie"
+
+# Gateway 配置
+hostname: "juanie.art"
+loadBalancerIP: "10.2.0.16"
+
+# 数据库配置
+postgres:
+  storage: "10Gi"
+
+redis:
+  storage: "1Gi"

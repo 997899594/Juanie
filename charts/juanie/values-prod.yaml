@@ -1,0 +1,13 @@
+# 生产环境覆盖配置
+replicaCount:
+  web: 2
+  worker: 1
+
+resources:
+  web:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
