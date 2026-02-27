@@ -8,7 +8,7 @@
     "dev:web": "bunx next dev --port 3001",
     "dev:worker": "tsx watch src/lib/queue/worker.ts",
     "dev:redis": "docker start juanie-redis 2>/dev/null || docker run --name juanie-redis -p 6379:6379 -d redis:7-alpine",
-    "build": "bunx next build --no-turbo",
+    "build": "NEXT_TURBOPACK_DISABLED=1 bunx next build",
     "start": "bunx next start",
     "start:worker": "bun src/lib/queue/worker.ts",
     "lint": "bunx biome check",
