@@ -11,9 +11,11 @@ echo "=========================================="
 # 检查并安装 Flux（使用代理）
 if ! command -v flux &> /dev/null; then
     echo "Flux 未安装，正在安装（使用代理）..."
-    curl -sL https://gh-proxy.com/https://github.com/fluxcd/flux2/releases/download/v2.8.1/flux_2.8.1_linux_amd64.tar.gz | tar xz -C /tmp
+    curl -L -o /tmp/flux.tar.gz "https://gh-proxy.com/https://github.com/fluxcd/flux2/releases/download/v2.8.1/flux_2.8.1_linux_amd64.tar.gz"
+    tar xzf /tmp/flux.tar.gz -C /tmp
     sudo mv /tmp/flux /usr/local/bin/flux
     sudo chmod +x /usr/local/bin/flux
+    rm /tmp/flux.tar.gz
     echo "Flux 安装完成: $(flux --version)"
 fi
 
