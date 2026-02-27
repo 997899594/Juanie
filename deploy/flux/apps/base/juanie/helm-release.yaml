@@ -7,13 +7,12 @@ spec:
   interval: 10m0s
   chart:
     spec:
-      chart: ./charts/juanie
+      chart: ./deploy/flux/charts/juanie
       sourceRef:
         kind: GitRepository
         name: flux-system
       valuesFiles:
-        - ./charts/juanie/values.yaml
-        - ./charts/juanie/values-prod.yaml
+        - ./deploy/flux/charts/juanie/values.yaml
   install:
     remediation:
       retries: 3
