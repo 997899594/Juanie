@@ -51,10 +51,7 @@ jobs:
             cd /opt/juanie
 
             echo "=== 构建镜像 ==="
-            docker build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
-
-            echo "=== 导入到 containerd ==="
-            docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} | ctr -n k8s.io images import -
+            nerdctl build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
 
             echo "=== 更新部署 ==="
             kubectl set image deployment/juanie-web juanie=${{ env.IMAGE_NAME }}:${{ github.sha }} -n juanie
@@ -65,6 +62,6 @@ jobs:
             kubectl rollout status deployment/juanie-worker -n juanie --timeout=3m
 
             echo "=== 清理 ==="
-            docker image prune -f
+            nerdctl image prune -f
 
             echo "✅ 部署完成!"
