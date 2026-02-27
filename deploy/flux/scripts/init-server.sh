@@ -8,11 +8,12 @@ echo "=========================================="
 echo "Juanie 服务器初始化脚本"
 echo "=========================================="
 
-# 检查是否已安装 flux
+# 检查并安装 Flux
 if ! command -v flux &> /dev/null; then
-    echo "Flux 未安装，请先安装 Flux CLI"
-    echo "   curl -s https://fluxcd.io/install.sh | sudo bash"
-    exit 1
+    echo "Flux 未安装，正在安装..."
+    curl -s https://fluxcd.io/install.sh | sudo bash
+    source <(flux completion bash)
+    echo "Flux 安装完成: $(flux --version)"
 fi
 
 # 检查 kubectl context
@@ -33,7 +34,7 @@ echo "请在浏览器中完成 GitHub 授权..."
 flux bootstrap github \
   --owner=997899594 \
   --repository=Juanie \
-  --path=clusters/production \
+  --path=deploy/flux/clusters/production \
   --personal
 
 # 2. 等待 Flux 组件就绪
