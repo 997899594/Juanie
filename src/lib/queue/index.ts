@@ -1,14 +1,30 @@
 import { type ConnectionOptions, Queue } from 'bullmq';
 
-const connection: ConnectionOptions = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  password: process.env.REDIS_PASSWORD,
-  maxRetriesPerRequest: null,
-};
+function getConnection(): ConnectionOptions {
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD,
+    maxRetriesPerRequest: null,
+  };
+}
 
-export const projectInitQueue = new Queue('project-init', { connection });
-export const deploymentQueue = new Queue('deployment', { connection });
+let _projectInitQueue: Queue | null = null;
+let _deploymentQueue: Queue | null = null;
+
+export function getProjectInitQueue(): Queue {
+  if (!_projectInitQueue) {
+    _projectInitQueue = new Queue('project-init', { connection: getConnection() });
+  }
+  return _projectInitQueue;
+}
+
+export function getDeploymentQueue(): Queue {
+  if (!_deploymentQueue) {
+    _deploymentQueue = new Queue('deployment', { connection: getConnection() });
+  }
+  return _deploymentQueue;
+}
 
 export type ProjectInitJobData = {
   projectId: string;
@@ -22,7 +38,7 @@ export type DeploymentJobData = {
 };
 
 export async function addProjectInitJob(projectId: string, mode: 'import' | 'create') {
-  return projectInitQueue.add('init', { projectId, mode });
+  return getProjectInitQueue().add('init', { projectId, mode });
 }
 
 export async function addDeploymentJob(
@@ -30,7 +46,7 @@ export async function addDeploymentJob(
   projectId: string,
   environmentId: string
 ) {
-  return deploymentQueue.add(
+  return getDeploymentQueue().add(
     'deploy',
     { deploymentId, projectId, environmentId },
     {
@@ -44,5 +60,8 @@ export async function addDeploymentJob(
 }
 
 export async function closeQueues() {
-  return Promise.all([projectInitQueue.close(), deploymentQueue.close()]);
+  const promises: Promise<void>[] = [];
+  if (_projectInitQueue) promises.push(_projectInitQueue.close());
+  if (_deploymentQueue) promises.push(_deploymentQueue.close());
+  return Promise.all(promises);
 }
