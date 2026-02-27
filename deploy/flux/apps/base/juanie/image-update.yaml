@@ -9,8 +9,8 @@ spec:
     kind: GitRepository
     name: flux-system
   update:
-    strategy: settlers
-    path: ./charts/juanie
+    strategy: Setters
+    path: ./deploy/flux/charts/juanie
   git:
     commit:
       author:
