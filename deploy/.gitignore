@@ -1,0 +1,11 @@
+deploy.env
+
+# Deploy secrets and binaries
+deploy.env
+nexusnote.pub
+secrets-operator.tgz
+argocd-install.yaml
+
+# SSH keys (if any)
+/nexusnote
+/nexusnote.pub
