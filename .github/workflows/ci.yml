@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 env:
-  IMAGE_NAME: juanie
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   quality:
@@ -25,43 +26,39 @@ jobs:
     needs: quality
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: 同步代码到服务器
-        uses: burnett01/rsync-deployments@6.0.0
+      - name: 登录 GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          switches: -avzr --delete
-          path: ./
-          remote_path: /opt/juanie
-          remote_host: ${{ secrets.SERVER_HOST }}
-          remote_user: ${{ secrets.SERVER_USER }}
-          remote_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 构建并部署
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: 触发服务器部署
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 15m
           script: |
-            set -e
-            cd /opt/juanie
-
-            echo "=== 构建镜像 ==="
-            nerdctl build -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
-
-            echo "=== 更新部署 ==="
-            kubectl set image deployment/juanie-web juanie=${{ env.IMAGE_NAME }}:${{ github.sha }} -n juanie
-            kubectl set image deployment/juanie-worker worker=${{ env.IMAGE_NAME }}:${{ github.sha }} -n juanie
-
-            echo "=== 等待滚动更新 ==="
-            kubectl rollout status deployment/juanie-web -n juanie --timeout=3m
-            kubectl rollout status deployment/juanie-worker -n juanie --timeout=3m
-
-            echo "=== 清理 ==="
-            nerdctl image prune -f
-
+            # 触发重新拉取镜像并滚动更新
+            kubectl rollout restart deployment/juanie-web -n juanie
+            kubectl rollout restart deployment/juanie-worker -n juanie
+            kubectl rollout status deployment/juanie-web -n juanie --timeout=5m
+            kubectl rollout status deployment/juanie-worker -n juanie --timeout=5m
             echo "✅ 部署完成!"
