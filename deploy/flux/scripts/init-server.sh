@@ -1,6 +1,6 @@
 #!/bin/bash
 # 新服务器初始化脚本
-# 使用方法: ./scripts/init-server.sh
+# 使用方法: ./deploy/flux/scripts/init-server.sh
 
 set -e
 
@@ -8,11 +8,12 @@ echo "=========================================="
 echo "Juanie 服务器初始化脚本"
 echo "=========================================="
 
-# 检查并安装 Flux
+# 检查并安装 Flux（使用代理）
 if ! command -v flux &> /dev/null; then
-    echo "Flux 未安装，正在安装..."
-    curl -s https://fluxcd.io/install.sh | sudo bash
-    source <(flux completion bash)
+    echo "Flux 未安装，正在安装（使用代理）..."
+    curl -sL https://gh-proxy.com/https://github.com/fluxcd/flux2/releases/download/v2.8.1/flux_2.8.1_linux_amd64.tar.gz | tar xz -C /tmp
+    sudo mv /tmp/flux /usr/local/bin/flux
+    sudo chmod +x /usr/local/bin/flux
     echo "Flux 安装完成: $(flux --version)"
 fi
 
@@ -27,9 +28,16 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
-# 1. Bootstrap Flux
+# 1. 配置 Git 代理
 echo ""
-echo "=== 1. Bootstrap Flux ==="
+echo "=== 1. 配置 Git 代理 ==="
+git config --global http.https://github.com.proxy https://gh-proxy.com
+git config --global http.https://gh-proxy.com.proxy ""
+echo "Git 代理配置完成"
+
+# 2. Bootstrap Flux
+echo ""
+echo "=== 2. Bootstrap Flux ==="
 echo "请在浏览器中完成 GitHub 授权..."
 flux bootstrap github \
   --owner=997899594 \
@@ -37,14 +45,14 @@ flux bootstrap github \
   --path=deploy/flux/clusters/production \
   --personal
 
-# 2. 等待 Flux 组件就绪
+# 3. 等待 Flux 组件就绪
 echo ""
-echo "=== 2. 等待 Flux 组件就绪 ==="
+echo "=== 3. 等待 Flux 组件就绪 ==="
 flux check
 
-# 3. SOPS 密钥提示
+# 4. SOPS 密钥提示
 echo ""
-echo "=== 3. SOPS 密钥配置 ==="
+echo "=== 4. SOPS 密钥配置 ==="
 echo "请手动执行以下命令来配置 SOPS 密钥:"
 echo ""
 echo "  # 1. 生成 age 密钥 (如果没有)"
@@ -57,9 +65,9 @@ echo "  # 3. 安全存储 age.key (不要提交到 Git!)"
 echo "  mv age.key ~/.config/sops/age/keys.txt"
 echo ""
 
-# 4. 验证部署
+# 5. 验证部署
 echo ""
-echo "=== 4. 验证部署 ==="
+echo "=== 5. 验证部署 ==="
 echo "等待 30 秒让 Flux 开始同步..."
 sleep 30
 
@@ -79,10 +87,3 @@ echo ""
 echo "=========================================="
 echo "初始化完成!"
 echo "=========================================="
-echo ""
-echo "后续步骤:"
-echo "  1. 配置 SOPS 密钥 (见上方说明)"
-echo "  2. 更新 secrets/charts/juanie/templates/secret.yaml 中的敏感值"
-echo "  3. 运行: sops --encrypt --in-place charts/juanie/templates/secret.yaml"
-echo "  4. 提交并推送: git add . && git commit -m 'chore: 更新加密密钥' && git push"
-echo ""
