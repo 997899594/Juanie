@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Builder
 # ============================================
-FROM oven/bun:1.2 AS builder
+FROM oven/bun:1.2-alpine AS builder
 WORKDIR /app
 
 COPY package.json bun.lock ./
@@ -13,31 +13,27 @@ ARG NEXT_PUBLIC_API_URL
 ARG DATABASE_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV DATABASE_URL=${DATABASE_URL}
-ENV REDIS_HOST=dummy
 
 RUN bun run build
 
 # ============================================
-# Stage 2: Runner (~150MB)
+# Stage 2: Runner (~55MB)
 # ============================================
-FROM oven/bun:1.2 AS runner
+FROM oven/bun:1.2-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup -g 1001 nodejs && adduser -D -u 1001 -G nodejs nextjs
 
-# Next.js standalone (已包含运行时依赖)
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+# 只复制运行必需的文件
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/server.js ./server.js
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/src ./src
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Worker 源码 (共享 standalone 的 node_modules)
-COPY --from=builder --chown=nextjs:nodejs /app/src ./src
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
-COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 
 USER nextjs
 
