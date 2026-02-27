@@ -1,0 +1,11 @@
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: juanie
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: juanie
+  policy:
+    semver:
+      range: ">=1.0.0-0"

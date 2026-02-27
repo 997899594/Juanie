@@ -1,0 +1,9 @@
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: juanie
+  namespace: flux-system
+spec:
+  image: ghcr.io/997899594/juanie
+  interval: 5m0s
+  provider: generic
