@@ -29,7 +29,7 @@ RUN addgroup -g 1001 nodejs && adduser -D -u 1001 -G nodejs nextjs
 
 # 只复制运行必需的文件
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/server.js ./server.js
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/src ./src
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/package.json ./package.json
