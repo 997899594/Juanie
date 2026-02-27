@@ -98,20 +98,42 @@ spec:
   timeout: 10m0s
 EOF
 
-# 6. SOPS 密钥提示
+# 6. SOPS 密钥配置
 echo ""
 echo "=== 6. SOPS 密钥配置 ==="
-echo "请手动执行以下命令来配置 SOPS 密钥:"
-echo ""
-echo "  # 1. 生成 age 密钥 (如果没有)"
-echo "  age-keygen -o age.key"
-echo ""
-echo "  # 2. 创建 Kubernetes Secret"
-echo "  kubectl create secret generic sops-age -n flux-system --from-file=age.agekey=./age.key"
-echo ""
-echo "  # 3. 安全存储 age.key (不要提交到 Git!)"
-echo "  mv age.key ~/.config/sops/age/keys.txt"
-echo ""
+
+# 安装 age 工具
+if ! command -v age-keygen &> /dev/null; then
+    echo "安装 age 工具..."
+    sudo apt update && sudo apt install -y age
+fi
+
+# 生成 age 密钥（如果不存在）
+if [ ! -f ~/.config/sops/age/keys.txt ]; then
+    echo "生成 age 密钥..."
+    mkdir -p ~/.config/sops/age
+    cd /tmp
+    age-keygen -o age.key 2>/dev/null
+
+    # 显示公钥（需要添加到 .sops.yaml）
+    echo ""
+    echo "生成的 age 公钥 (请保存到 .sops.yaml):"
+    grep "public key:" age.key | awk '{print $4}'
+    echo ""
+
+    # 创建 Kubernetes Secret
+    kubectl create secret generic sops-age -n flux-system --from-file=age.agekey=./age.key 2>/dev/null || \
+        kubectl patch secret sops-age -n flux-system --patch '{"data":{"age.agekey":"'$(base64 -w0 age.key)'"}}' 2>/dev/null || \
+        echo "Secret 已存在或创建失败，请手动检查"
+
+    # 安全存储密钥
+    mv age.key ~/.config/sops/age/keys.txt
+    chmod 600 ~/.config/sops/age/keys.txt
+    cd -
+    echo "SOPS 密钥配置完成"
+else
+    echo "age 密钥已存在于 ~/.config/sops/age/keys.txt"
+fi
 
 # 7. 验证部署
 echo ""
