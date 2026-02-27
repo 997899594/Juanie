@@ -30,31 +30,77 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
-# 1. 配置 Git 代理
+# 1. 安装 Flux 组件
 echo ""
-echo "=== 1. 配置 Git 代理 ==="
-git config --global http.https://github.com.proxy https://gh-proxy.com
-git config --global http.https://gh-proxy.com.proxy ""
-echo "Git 代理配置完成"
+echo "=== 1. 安装 Flux 组件 ==="
+flux install
 
-# 2. Bootstrap Flux
+# 2. 等待 Flux 组件就绪
 echo ""
-echo "=== 2. Bootstrap Flux ==="
-echo "请在浏览器中完成 GitHub 授权..."
-flux bootstrap github \
-  --owner=997899594 \
-  --repository=Juanie \
-  --path=deploy/flux/clusters/production \
-  --personal
-
-# 3. 等待 Flux 组件就绪
-echo ""
-echo "=== 3. 等待 Flux 组件就绪 ==="
+echo "=== 2. 等待 Flux 组件就绪 ==="
 flux check
 
-# 4. SOPS 密钥提示
+# 3. 创建 GitRepository（使用代理 URL）
 echo ""
-echo "=== 4. SOPS 密钥配置 ==="
+echo "=== 3. 创建 GitRepository ==="
+kubectl apply -f - <<EOF
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  url: https://gh-proxy.com/https://github.com/997899594/Juanie.git
+  ref:
+    branch: main
+EOF
+
+# 4. 创建 infrastructure Kustomization
+echo ""
+echo "=== 4. 创建 Infrastructure Kustomization ==="
+kubectl apply -f - <<EOF
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: infrastructure
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./deploy/flux/infrastructure
+  prune: true
+  wait: true
+  timeout: 5m0s
+EOF
+
+# 5. 创建 apps Kustomization
+echo ""
+echo "=== 5. 创建 Apps Kustomization ==="
+kubectl apply -f - <<EOF
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  dependsOn:
+    - name: infrastructure
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./deploy/flux/apps/base
+  prune: true
+  wait: true
+  timeout: 10m0s
+EOF
+
+# 6. SOPS 密钥提示
+echo ""
+echo "=== 6. SOPS 密钥配置 ==="
 echo "请手动执行以下命令来配置 SOPS 密钥:"
 echo ""
 echo "  # 1. 生成 age 密钥 (如果没有)"
@@ -67,11 +113,15 @@ echo "  # 3. 安全存储 age.key (不要提交到 Git!)"
 echo "  mv age.key ~/.config/sops/age/keys.txt"
 echo ""
 
-# 5. 验证部署
+# 7. 验证部署
 echo ""
-echo "=== 5. 验证部署 ==="
+echo "=== 7. 验证部署 ==="
 echo "等待 30 秒让 Flux 开始同步..."
 sleep 30
+
+echo ""
+echo "GitRepositories:"
+flux get sources git
 
 echo ""
 echo "Kustomizations:"
@@ -83,7 +133,7 @@ flux get helmreleases -A
 
 echo ""
 echo "Pods:"
-kubectl get pods -n juanie
+kubectl get pods -A | grep -E "juanie|flux|NAME"
 
 echo ""
 echo "=========================================="
