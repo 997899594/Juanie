@@ -37,6 +37,7 @@ env:
   DATABASE_HOST: "postgres"
   DATABASE_PORT: 5432
   DATABASE_NAME: "juanie"
+  AUTH_TRUST_HOST: "true"
 
 # Gateway 配置
 hostname: "juanie.art"
