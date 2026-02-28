@@ -40,7 +40,6 @@ env:
 
 # Gateway 配置
 hostname: "juanie.art"
-loadBalancerIP: "10.2.0.15"
 
 # 数据库配置
 postgres:

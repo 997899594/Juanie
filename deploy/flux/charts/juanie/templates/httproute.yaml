@@ -6,7 +6,8 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   parentRefs:
-    - name: {{ .Chart.Name }}-gateway
+    - name: shared-gateway
+      namespace: juanie
       sectionName: https
   hostnames:
     - {{ .Values.hostname }}
@@ -27,7 +28,8 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   parentRefs:
-    - name: {{ .Chart.Name }}-gateway
+    - name: shared-gateway
+      namespace: juanie
       sectionName: http
   hostnames:
     - {{ .Values.hostname }}
