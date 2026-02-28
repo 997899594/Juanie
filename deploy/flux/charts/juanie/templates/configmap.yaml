@@ -11,3 +11,4 @@ data:
   DATABASE_HOST: {{ .Values.env.DATABASE_HOST | quote }}
   DATABASE_PORT: {{ .Values.env.DATABASE_PORT | quote }}
   DATABASE_NAME: {{ .Values.env.DATABASE_NAME | quote }}
+  AUTH_TRUST_HOST: {{ .Values.env.AUTH_TRUST_HOST | default "true" | quote }}

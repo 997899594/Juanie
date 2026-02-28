@@ -10,3 +10,4 @@ spec:
     kind: ClusterIssuer
   dnsNames:
     - "*.juanie.art"
+    - "juanie.art"

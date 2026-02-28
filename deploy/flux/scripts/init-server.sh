@@ -203,9 +203,29 @@ else
     echo "age 密钥已存在于 ~/.config/sops/age/keys.txt"
 fi
 
-# 10. 验证部署
+# 10. 清理旧资源（避免冲突）
 echo ""
-echo "=== 10. 验证部署 ==="
+echo "=== 10. 清理旧资源 ==="
+# 删除可能存在的旧 Gateway（避免端口冲突）
+kubectl delete gateway juanie-gateway -n juanie --ignore-not-found=true
+echo "清理完成"
+
+# 11. 等待证书签发
+echo ""
+echo "=== 11. 等待证书签发 ==="
+echo "等待证书签发（最多 5 分钟）..."
+for i in {1..30}; do
+    if kubectl get certificate juanie-wildcard-tls -n juanie -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null | grep -q "True"; then
+        echo "证书已就绪"
+        break
+    fi
+    echo "等待证书签发... ($i/30)"
+    sleep 10
+done
+
+# 12. 验证部署
+echo ""
+echo "=== 12. 验证部署 ==="
 echo "等待 30 秒让 Flux 开始同步..."
 sleep 30
 
