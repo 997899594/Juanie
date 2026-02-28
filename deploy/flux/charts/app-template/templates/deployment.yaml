@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app.name }}-web
+  namespace: {{ .Values.app.namespace }}
+  labels:
+    app: {{ .Values.app.name }}-web
+    app.kubernetes.io/name: {{ .Values.app.name }}
+    app.kubernetes.io/managed-by: juanie
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.app.name }}-web
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app.name }}-web
+    spec:
+      containers:
+        - name: web
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.app.name }}-config
+            - secretRef:
+                name: {{ .Values.app.name }}-secret
+                optional: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

@@ -1,0 +1,47 @@
+# HTTPS 路由
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Values.app.name }}-route
+  namespace: {{ .Values.app.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.app.name }}
+    app.kubernetes.io/managed-by: juanie
+spec:
+  parentRefs:
+    - name: shared-gateway
+      namespace: juanie
+      sectionName: https
+  hostnames:
+    - {{ .Values.app.hostname }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ .Values.app.name }}-web
+          port: 80
+---
+# HTTP 重定向
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Values.app.name }}-redirect
+  namespace: {{ .Values.app.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.app.name }}
+    app.kubernetes.io/managed-by: juanie
+spec:
+  parentRefs:
+    - name: shared-gateway
+      namespace: juanie
+      sectionName: http
+  hostnames:
+    - {{ .Values.app.hostname }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
