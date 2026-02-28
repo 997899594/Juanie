@@ -12,7 +12,7 @@ spec:
       - http01:
           gatewayHTTPRoute:
             parentRefs:
-              - name: juanie-gateway
+              - name: shared-gateway
                 namespace: juanie
                 kind: Gateway
                 sectionName: http
