@@ -8,7 +8,7 @@ spec:
   parentRefs:
     - name: shared-gateway
       namespace: juanie
-      sectionName: https
+      sectionName: https-apex
   hostnames:
     - {{ .Values.hostname }}
   rules:
@@ -30,7 +30,7 @@ spec:
   parentRefs:
     - name: shared-gateway
       namespace: juanie
-      sectionName: http
+      sectionName: http-apex
   hostnames:
     - {{ .Values.hostname }}
   rules:
