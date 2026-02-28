@@ -98,9 +98,77 @@ spec:
   timeout: 10m0s
 EOF
 
-# 6. SOPS 密钥配置
+# 6. 安装 cert-manager
 echo ""
-echo "=== 6. SOPS 密钥配置 ==="
+echo "=== 6. 安装 cert-manager ==="
+if ! kubectl get namespace cert-manager &> /dev/null; then
+    kubectl create namespace cert-manager
+fi
+
+# 检查 cert-manager 是否已安装
+if ! kubectl get deployment cert-manager -n cert-manager &> /dev/null; then
+    echo "安装 cert-manager..."
+    helm repo add jetstack https://charts.jetstack.io
+    helm repo update
+    helm upgrade --install cert-manager jetstack/cert-manager \
+        --namespace cert-manager \
+        --set installCRDs=true \
+        --set prometheus.enabled=false \
+        --wait --timeout 5m
+    echo "cert-manager 安装完成"
+else
+    echo "cert-manager 已安装"
+fi
+
+# 7. 安装 cert-manager-webhook-dnspod
+echo ""
+echo "=== 7. 安装 cert-manager-webhook-dnspod ==="
+if ! kubectl get deployment cert-manager-webhook-dnspod -n cert-manager &> /dev/null; then
+    echo "安装 cert-manager-webhook-dnspod..."
+    helm repo add cert-manager-webhook-dnspod https://imroc.github.io/cert-manager-webhook-dnspod || true
+    helm repo update
+
+    # 尝试 Helm 安装，如果失败则使用 kubectl
+    if ! helm upgrade --install --namespace cert-manager \
+        cert-manager-webhook-dnspod cert-manager-webhook-dnspod/cert-manager-webhook-dnspod \
+        --wait --timeout 3m 2>/dev/null; then
+        echo "Helm 安装失败，使用 kubectl..."
+        curl -sL "https://gh-proxy.com/https://raw.githubusercontent.com/imroc/cert-manager-webhook-dnspod/master/bundle.yaml" | kubectl apply -f -
+    fi
+    echo "cert-manager-webhook-dnspod 安装完成"
+else
+    echo "cert-manager-webhook-dnspod 已安装"
+fi
+
+# 8. 配置腾讯云 DNS Secret
+echo ""
+echo "=== 8. 配置腾讯云 DNS Secret ==="
+echo "请输入腾讯云 API 凭证（用于 DNS-01 验证）:"
+read -p "SecretId: " TENCENT_SECRET_ID
+read -p "SecretKey: " TENCENT_SECRET_KEY
+
+if [ -n "$TENCENT_SECRET_ID" ] && [ -n "$TENCENT_SECRET_KEY" ]; then
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dnspod-secret
+  namespace: cert-manager
+type: Opaque
+stringData:
+  secretId: ${TENCENT_SECRET_ID}
+  secretKey: ${TENCENT_SECRET_KEY}
+EOF
+    echo "dnspod-secret 创建完成"
+else
+    echo "跳过 dnspod-secret 创建（请稍后手动配置）"
+    echo "手动配置命令:"
+    echo "  kubectl create secret generic dnspod-secret -n cert-manager --from-literal=secretId=YOUR_ID --from-literal=secretKey=YOUR_KEY"
+fi
+
+# 9. SOPS 密钥配置
+echo ""
+echo "=== 9. SOPS 密钥配置 ==="
 
 # 安装 age 工具
 if ! command -v age-keygen &> /dev/null; then
@@ -135,9 +203,9 @@ else
     echo "age 密钥已存在于 ~/.config/sops/age/keys.txt"
 fi
 
-# 7. 验证部署
+# 10. 验证部署
 echo ""
-echo "=== 7. 验证部署 ==="
+echo "=== 10. 验证部署 ==="
 echo "等待 30 秒让 Flux 开始同步..."
 sleep 30
 
@@ -155,9 +223,15 @@ flux get helmreleases -A
 
 echo ""
 echo "Pods:"
-kubectl get pods -A | grep -E "juanie|flux|NAME"
+kubectl get pods -A | grep -E "juanie|flux|cert-manager|NAME"
 
 echo ""
+echo "Gateway:"
+kubectl get gateway -A
+
+echo ""
+echo "Certificates:"
+kubectl get certificate -A
 echo "=========================================="
 echo "初始化完成!"
 echo "=========================================="
