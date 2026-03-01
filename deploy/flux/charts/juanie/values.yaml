@@ -1,7 +1,7 @@
 # 默认配置（开发环境）
 image:
   repository: ghcr.io/997899594/juanie
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   tag: "latest"
 
 namespace: juanie
