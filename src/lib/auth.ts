@@ -5,7 +5,7 @@ import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
 import GitLab from 'next-auth/providers/gitlab';
 import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
+import { gitProviders, users } from '@/lib/db/schema';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -30,16 +30,31 @@ const nextAuth = NextAuth({
     GitHub({
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope: 'read:user user:email repo',
+        },
+      },
     }),
     GitLab({
       clientId: process.env.GITLAB_CLIENT_ID!,
       clientSecret: process.env.GITLAB_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope: 'read_user read_repository api',
+        },
+      },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
+      }
+      // 保存 access token 到 JWT
+      if (account) {
+        token.accessToken = account.access_token;
+        token.provider = account.provider;
       }
       return token;
     },
@@ -47,7 +62,49 @@ const nextAuth = NextAuth({
       if (token?.id) {
         session.user.id = token.id as string;
       }
+      // 传递 access token 到 session
+      if (token?.accessToken) {
+        session.accessToken = token.accessToken as string;
+        session.provider = token.provider as string;
+      }
       return session;
+    },
+    async signIn({ user, account }) {
+      // 登录成功后自动创建/更新 gitProvider
+      if (account && user.id) {
+        const providerType = account.provider as 'github' | 'gitlab';
+
+        // 检查是否已存在
+        const existing = await db.query.gitProviders.findFirst({
+          where: eq(gitProviders.userId, user.id),
+        });
+
+        if (!existing && account.access_token) {
+          // 创建新的 git provider 记录
+          await db.insert(gitProviders).values({
+            userId: user.id,
+            type: providerType,
+            name: providerType === 'github' ? 'GitHub' : 'GitLab',
+            accessToken: account.access_token,
+            refreshToken: account.refresh_token,
+            tokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
+            username: user.name,
+            avatarUrl: user.image,
+          });
+        } else if (existing && account.access_token) {
+          // 更新现有记录的 token
+          await db
+            .update(gitProviders)
+            .set({
+              accessToken: account.access_token,
+              refreshToken: account.refresh_token,
+              tokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
+              updatedAt: new Date(),
+            })
+            .where(eq(gitProviders.userId, user.id));
+        }
+      }
+      return true;
     },
   },
   pages: {
