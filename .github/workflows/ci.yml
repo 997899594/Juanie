@@ -22,16 +22,22 @@ jobs:
       - run: bun run lint
       - run: bun run build
 
-  deploy:
+  # 构建并推送镜像，更新 Git 仓库中的 tag
+  build:
     needs: quality
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
-      contents: read
+      contents: write
       packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 登录 GitHub Container Registry
         uses: docker/login-action@v3
@@ -47,7 +53,28 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: 更新 Helm values 中的镜像 tag
+        run: |
+          # 更新 values.yaml 中的 tag
+          sed -i "s|tag: .*|tag: \"${{ github.sha }}\"|" deploy/flux/charts/juanie/values.yaml
+
+          # 配置 git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 提交并推送
+          git add deploy/flux/charts/juanie/values.yaml
+          git commit -m "chore: 更新镜像 tag 到 ${{ github.sha }} [skip ci]"
+          git push
+
+  # 运行数据库迁移（可选，通过 SSH）
+  migrate:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
 
       - name: 复制迁移文件到服务器
         uses: appleboy/scp-action@v0.1.7
@@ -59,14 +86,13 @@ jobs:
           target: "/tmp/juanie-migrations"
           strip_components: 0
 
-      - name: 触发服务器部署
+      - name: 运行数据库迁移
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            # 运行数据库迁移
             echo "🔄 运行数据库迁移..."
 
             # 确保迁移记录表存在
@@ -78,11 +104,10 @@ jobs:
               );
             "
 
-            # 迁移文件列表（按顺序执行）
+            # 迁移文件列表
             MIGRATIONS="000_migration_tracker.sql 001_init.sql"
 
             for migration in $MIGRATIONS; do
-              # 检查是否已执行
               EXISTS=$(kubectl exec -n juanie postgres-0 -- psql -U postgres -d juanie -tAc \
                 "SELECT COUNT(*) FROM \"_migrations\" WHERE \"name\" = '$migration'")
 
@@ -90,8 +115,6 @@ jobs:
                 echo "📌 执行迁移: $migration"
                 kubectl cp /tmp/juanie-migrations/migrations/$migration juanie/postgres-0:/tmp/$migration
                 kubectl exec -n juanie postgres-0 -- psql -U postgres -d juanie -v ON_ERROR_STOP=1 -f /tmp/$migration
-
-                # 记录迁移
                 kubectl exec -n juanie postgres-0 -- psql -U postgres -d juanie -c \
                   "INSERT INTO \"_migrations\" (\"name\") VALUES ('$migration')"
                 echo "✅ 迁移完成: $migration"
@@ -101,13 +124,4 @@ jobs:
             done
 
             echo "✅ 数据库迁移完成!"
-
-            # 清理临时文件
             rm -rf /tmp/juanie-migrations
-
-            # 触发重新拉取镜像并滚动更新
-            kubectl rollout restart deployment/juanie-web -n juanie
-            kubectl rollout restart deployment/juanie-worker -n juanie
-            kubectl rollout status deployment/juanie-web -n juanie --timeout=5m
-            kubectl rollout status deployment/juanie-worker -n juanie --timeout=5m
-            echo "✅ 部署完成!"

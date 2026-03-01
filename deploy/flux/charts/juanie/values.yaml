@@ -1,8 +1,8 @@
 # 默认配置（开发环境）
 image:
   repository: ghcr.io/997899594/juanie
-  pullPolicy: Always
-  tag: "latest"
+  pullPolicy: IfNotPresent
+  tag: "main"  # CI 会自动更新为 commit SHA
 
 namespace: juanie
 

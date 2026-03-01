@@ -4,7 +4,7 @@ metadata:
   name: juanie
   namespace: flux-system
 spec:
-  interval: 10m0s
+  interval: 5m0s
   chart:
     spec:
       chart: ./deploy/flux/charts/juanie
@@ -15,8 +15,12 @@ spec:
         - ./deploy/flux/charts/juanie/values.yaml
   install:
     remediation:
-      retries: 3
+      retries: 5
+    createNamespace: true
   upgrade:
     remediation:
-      retries: 3
+      retries: 5
+      remediateLastFailure: true
+  test:
+    enable: false
   values: {}
