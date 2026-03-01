@@ -2,7 +2,7 @@
 image:
   repository: ghcr.io/997899594/juanie
   pullPolicy: IfNotPresent
-  tag: "a241bf08c3ca10abaa3dc4a39dfadd8e9725ade4"
+  tag: "b5c489c3e7d26cbe31d1ad037f36f2bef38e5a67"
 
 namespace: juanie
 
