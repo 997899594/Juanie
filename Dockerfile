@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Builder
 # ============================================
-FROM oven/bun:1.2-alpine AS builder
+FROM oven/bun:1.2.4-alpine AS builder
 WORKDIR /app
 
 COPY package.json bun.lock ./
@@ -19,7 +19,7 @@ RUN bun run build
 # ============================================
 # Stage 2: Runner (~55MB)
 # ============================================
-FROM oven/bun:1.2-alpine AS runner
+FROM oven/bun:1.2.4-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
