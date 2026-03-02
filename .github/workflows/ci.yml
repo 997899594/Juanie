@@ -126,10 +126,10 @@ jobs:
             echo "   镜像: $IMAGE"
 
             # 部署 web
-            kubectl set image deployment/juanie-web juanie=$IMAGE
+            kubectl set image deployment/juanie-web -n juanie juanie=$IMAGE
 
             # 部署 worker
-            kubectl set image deployment/juanie-worker worker=$IMAGE
+            kubectl set image deployment/juanie-worker -n juanie worker=$IMAGE
 
             # 等待滚动更新完成
             kubectl rollout status deployment/juanie-web -n juanie --timeout=120s
