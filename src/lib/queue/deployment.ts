@@ -141,7 +141,7 @@ function buildImageName(
   project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
   commitSha: string | null | undefined
 ): string | null {
-  if (!project.repository || !commitSha) {
+  if (!project.repository || !commitSha || !project.repository.webUrl) {
     return null;
   }
 
