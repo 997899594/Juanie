@@ -22,7 +22,6 @@ jobs:
       - run: bun run lint
       - run: bun run build
 
-  # 构建并推送镜像 - Flux 会自动检测并部署
   build:
     needs: quality
     runs-on: ubuntu-latest
@@ -47,8 +46,8 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-  # 运行数据库迁移（可选，通过 SSH）
   migrate:
     needs: build
     runs-on: ubuntu-latest
@@ -105,3 +104,37 @@ jobs:
 
             echo "✅ 数据库迁移完成!"
             rm -rf /tmp/juanie-migrations
+
+  deploy:
+    needs: migrate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 部署到 Kubernetes
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+            echo "🚀 部署 Juanie..."
+            echo "   镜像: $IMAGE"
+
+            # 部署 web
+            kubectl set image deployment/juanie-web -n juanie \
+              web=$IMAGE --record
+
+            # 部署 worker
+            kubectl set image deployment/juanie-worker -n juanie \
+              worker=$IMAGE --record
+
+            # 等待滚动更新完成
+            kubectl rollout status deployment/juanie-web -n juanie --timeout=120s
+            kubectl rollout status deployment/juanie-worker -n juanie --timeout=120s
+
+            echo "✅ 部署完成!"
