@@ -13,6 +13,7 @@ import {
   services,
   teamMembers,
   teams,
+  webhooks,
 } from '@/lib/db/schema';
 import { createGitProvider } from '@/lib/git';
 import {
@@ -119,6 +120,7 @@ function isK8sAvailable(): boolean {
 
 const IMPORT_STEPS = [
   'validate_repository',
+  'setup_webhook',
   'setup_namespace',
   'deploy_services',
   'provision_databases',
@@ -128,6 +130,7 @@ const IMPORT_STEPS = [
 const CREATE_STEPS = [
   'create_repository',
   'push_template',
+  'setup_webhook',
   'setup_namespace',
   'deploy_services',
   'provision_databases',
@@ -229,6 +232,9 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
         }
         case 'push_template':
           await pushTemplate(project);
+          break;
+        case 'setup_webhook':
+          await setupWebhook(project);
           break;
         case 'setup_namespace':
           await setupNamespace(project, hasK8s);
@@ -388,6 +394,61 @@ async function pushTemplate(
   });
 
   console.log(`✅ Pushed ${files.size} files to repository`);
+}
+
+async function setupWebhook(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+) {
+  console.log(`Setting up webhook for project ${project.name}`);
+
+  if (!project.repository) {
+    console.log('⚠️  No repository linked, skipping webhook setup');
+    return;
+  }
+
+  const { provider, client } = await getTeamGitProvider(project.teamId);
+
+  // 检查是否已存在 webhook
+  const existingWebhook = await db.query.webhooks.findFirst({
+    where: eq(webhooks.projectId, project.id),
+  });
+
+  if (existingWebhook) {
+    console.log(`✅ Webhook already exists for project ${project.name}`);
+    return;
+  }
+
+  // 生成 webhook secret
+  const webhookSecret = nanoid(32);
+
+  // 构建 webhook URL
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3001';
+  const webhookUrl = `${baseUrl}/api/webhooks/git`;
+
+  // 在 Git 平台创建 webhook
+  const { id: externalId } = await client.createWebhook(provider.accessToken!, {
+    repoFullName: project.repository.fullName,
+    webhookUrl,
+    secret: webhookSecret,
+    events: ['push'],
+  });
+
+  // 保存到数据库
+  await db.insert(webhooks).values({
+    projectId: project.id,
+    externalId,
+    type: 'git-push',
+    url: webhookUrl,
+    events: ['push'],
+    secret: webhookSecret,
+    active: true,
+  });
+
+  console.log(`✅ Created webhook for ${project.repository.fullName}`);
 }
 
 async function setupNamespace(project: typeof projects.$inferSelect, hasK8s: boolean) {
