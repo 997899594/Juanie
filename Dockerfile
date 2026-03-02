@@ -1,11 +1,12 @@
 # ============================================
-# Stage 1: Builder
+# Stage 1: Builder (使用 Node.js 构建)
 # ============================================
-FROM oven/bun:1.2.4-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+# 安装依赖
+COPY package.json package-lock.json* ./
+RUN npm ci
 
 COPY . .
 
@@ -14,12 +15,12 @@ ARG DATABASE_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV DATABASE_URL=${DATABASE_URL}
 
-RUN bun run build
+RUN npm run build
 
 # ============================================
-# Stage 2: Runner (~55MB)
+# Stage 2: Runner
 # ============================================
-FROM oven/bun:1.2.4-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -27,7 +28,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup -g 1001 nodejs && adduser -D -u 1001 -G nodejs nextjs
 
-# 只复制运行必需的文件
+# 复制运行必需的文件
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/server.js ./server.js
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/.next ./.next
