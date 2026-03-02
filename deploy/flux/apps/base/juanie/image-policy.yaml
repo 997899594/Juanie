@@ -7,5 +7,5 @@ spec:
   imageRepositoryRef:
     name: juanie
   policy:
-    semver:
-      range: ">=1.0.0-0"
+    alphabetical:
+      order: desc
