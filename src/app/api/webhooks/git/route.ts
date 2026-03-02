@@ -1,7 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { deployments, environments, projects, repositories, webhooks } from '@/lib/db/schema';
+import { deployments, repositories, webhooks } from '@/lib/db/schema';
 import { addDeploymentJob } from '@/lib/queue';
 
 /**
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     let branch: string | undefined;
     let commitSha: string | undefined;
     let commitMessage: string | undefined;
-    let pusher: string | undefined;
+    let _pusher: string | undefined;
     let isGitHub = false;
     let isGitLab = false;
 
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       commitSha = headCommit?.id as string | undefined;
       commitMessage = headCommit?.message as string | undefined;
       const pusherInfo = payload.pusher as Record<string, unknown> | undefined;
-      pusher = pusherInfo?.name as string | undefined;
+      _pusher = pusherInfo?.name as string | undefined;
 
       // 只处理 push 事件
       if (githubEvent !== 'push') {
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       commitSha = lastCommit?.id as string | undefined;
       commitMessage = lastCommit?.message as string | undefined;
       const userEmail = lastCommit?.author as Record<string, unknown> | undefined;
-      pusher = userEmail?.email as string | undefined;
+      _pusher = userEmail?.email as string | undefined;
 
       // 只处理 push 事件
       if (gitlabEvent && gitlabEvent !== 'Push Hook') {
@@ -123,7 +123,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 更新 webhook 最后触发时间
-    await db.update(webhooks).set({ lastTriggeredAt: new Date() }).where(eq(webhooks.id, webhook.id));
+    await db
+      .update(webhooks)
+      .set({ lastTriggeredAt: new Date() })
+      .where(eq(webhooks.id, webhook.id));
 
     // 检查分支是否匹配生产分支
     if (branch && project.productionBranch && branch !== project.productionBranch) {

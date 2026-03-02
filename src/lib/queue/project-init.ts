@@ -424,9 +424,10 @@ async function setupWebhook(
   const webhookSecret = nanoid(32);
 
   // 构建 webhook URL
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3001';
+  const baseUrl =
+    process.env.NEXTAUTH_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3001';
   const webhookUrl = `${baseUrl}/api/webhooks/git`;
 
   // 在 Git 平台创建 webhook

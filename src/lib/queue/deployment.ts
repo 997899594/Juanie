@@ -71,7 +71,10 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
     // 更新部署记录的镜像 URL
     if (imageName) {
-      await db.update(deployments).set({ imageUrl: imageName }).where(eq(deployments.id, deploymentId));
+      await db
+        .update(deployments)
+        .set({ imageUrl: imageName })
+        .where(eq(deployments.id, deploymentId));
     }
 
     for (const service of serviceList) {
@@ -87,7 +90,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
             image: serviceImage,
           });
           console.log(`✅ Updated deployment ${service.name} with image ${serviceImage}`);
-        } catch (updateError) {
+        } catch (_updateError) {
           // 如果更新失败（可能不存在），尝试创建
           console.log(`Deployment ${service.name} not found, creating new one...`);
           try {
