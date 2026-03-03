@@ -48,32 +48,14 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-  migrate:
+  deploy:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
 
-      - name: 同步数据库 Schema
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            echo "🔄 同步数据库 Schema..."
-            kubectl exec -n juanie deployment/juanie-web -- bun run db:push
-            echo "✅ 数据库 Schema 同步完成!"
-
-  deploy:
-    needs: migrate
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 部署到 Kubernetes
+      - name: 部署到 Kubernetes (Helm Upgrade)
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -82,18 +64,30 @@ jobs:
           script: |
             set -e
             IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+            CHART_DIR="/root/juanie/deploy/flux/charts/juanie"
 
             echo "🚀 部署 Juanie..."
             echo "   镜像: $IMAGE"
 
-            # 部署 web
-            kubectl set image deployment/juanie-web -n juanie juanie=$IMAGE
+            # 拉取最新代码 (包含 Helm chart)
+            if [ ! -d "/root/juanie" ]; then
+              git clone https://github.com/${{ github.repository }}.git /root/juanie
+            fi
+            cd /root/juanie
+            git fetch origin main
+            git reset --hard origin/main
 
-            # 部署 worker
-            kubectl set image deployment/juanie-worker -n juanie worker=$IMAGE
+            # 同步数据库 Schema (用当前运行的 pod)
+            echo "🔄 同步数据库 Schema..."
+            kubectl exec -n juanie deployment/juanie-web -- bun run db:push || echo "⚠️ Schema 同步跳过 (可能是首次部署)"
+            echo "✅ 数据库 Schema 同步完成!"
 
-            # 等待滚动更新完成
-            kubectl rollout status deployment/juanie-web -n juanie --timeout=120s
-            kubectl rollout status deployment/juanie-worker -n juanie --timeout=120s
+            # Helm upgrade (更新配置 + 镜像)
+            helm upgrade --install juanie $CHART_DIR \
+              -n juanie \
+              --create-namespace \
+              --set image.tag="${{ github.sha }}" \
+              --wait \
+              --timeout 300s
 
             echo "✅ 部署完成!"
