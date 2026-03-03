@@ -55,55 +55,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 复制迁移文件到服务器
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "migrations/*.sql"
-          target: "/tmp/juanie-migrations"
-          strip_components: 0
-
-      - name: 运行数据库迁移
+      - name: 同步数据库 Schema
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            echo "🔄 运行数据库迁移..."
-
-            # 确保迁移记录表存在
-            kubectl exec -n juanie postgres-0 -- psql -U postgres -d juanie -c "
-              CREATE TABLE IF NOT EXISTS \"_migrations\" (
-                \"id\" serial PRIMARY KEY,
-                \"name\" varchar(255) NOT NULL UNIQUE,
-                \"executed_at\" timestamp NOT NULL DEFAULT NOW()
-              );
-            "
-
-            # 迁移文件列表
-            MIGRATIONS="000_migration_tracker.sql 001_init.sql"
-
-            for migration in $MIGRATIONS; do
-              EXISTS=$(kubectl exec -n juanie postgres-0 -- psql -U postgres -d juanie -tAc \
-                "SELECT COUNT(*) FROM \"_migrations\" WHERE \"name\" = '$migration'")
-
-              if [ "$EXISTS" = "0" ]; then
-                echo "📌 执行迁移: $migration"
-                kubectl cp /tmp/juanie-migrations/migrations/$migration juanie/postgres-0:/tmp/$migration
-                kubectl exec -n juanie postgres-0 -- psql -U postgres -d juanie -v ON_ERROR_STOP=1 -f /tmp/$migration
-                kubectl exec -n juanie postgres-0 -- psql -U postgres -d juanie -c \
-                  "INSERT INTO \"_migrations\" (\"name\") VALUES ('$migration')"
-                echo "✅ 迁移完成: $migration"
-              else
-                echo "⏭️  跳过已执行的迁移: $migration"
-              fi
-            done
-
-            echo "✅ 数据库迁移完成!"
-            rm -rf /tmp/juanie-migrations
+            echo "🔄 同步数据库 Schema..."
+            kubectl exec -n juanie deployment/juanie-web -- bun run db:push
+            echo "✅ 数据库 Schema 同步完成!"
 
   deploy:
     needs: migrate
