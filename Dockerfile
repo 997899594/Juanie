@@ -53,6 +53,8 @@ COPY --from=builder /app/.next/static ./.next/static
 # 复制 drizzle (db:push 需要)
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+RUN mkdir -p ./src/lib/db
+COPY --from=builder /app/src/lib/db/schema.ts ./src/lib/db/schema.ts
 
 # 安装 drizzle-kit (db:push 需要)
 RUN bun add drizzle-kit
