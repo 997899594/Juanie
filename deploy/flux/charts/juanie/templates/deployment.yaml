@@ -101,7 +101,7 @@ spec:
         - name: worker
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["bun", "run", "start:worker"]
+          command: ["./worker"]
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
@@ -111,7 +111,7 @@ spec:
             {{- toYaml .Values.resources.worker | nindent 12 }}
           livenessProbe:
             exec:
-              command: ["sh", "-c", "ps aux | grep 'bun.*worker' | grep -v grep"]
+              command: ["sh", "-c", "pgrep -f worker"]
             initialDelaySeconds: 30
             periodSeconds: 30
           securityContext:
