@@ -54,6 +54,9 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 
+# 安装 drizzle-kit (db:push 需要)
+RUN bun add drizzle-kit
+
 # 复制编译好的 worker 可执行文件
 COPY --from=worker-builder /app/worker ./worker
 RUN chmod +x ./worker
