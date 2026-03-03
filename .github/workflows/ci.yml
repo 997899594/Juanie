@@ -53,9 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v4
-
-      - name: 部署到 Kubernetes (Helm Upgrade)
+      - name: 部署到 Kubernetes
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -64,30 +62,20 @@ jobs:
           script: |
             set -e
             IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-            CHART_DIR="/root/juanie/deploy/flux/charts/juanie"
 
             echo "🚀 部署 Juanie..."
             echo "   镜像: $IMAGE"
 
-            # 拉取最新代码 (包含 Helm chart)
-            if [ ! -d "/root/juanie" ]; then
-              git clone https://github.com/${{ github.repository }}.git /root/juanie
-            fi
-            cd /root/juanie
-            git fetch origin main
-            git reset --hard origin/main
-
-            # 同步数据库 Schema (用当前运行的 pod)
+            # 同步数据库 Schema
             echo "🔄 同步数据库 Schema..."
-            kubectl exec -n juanie deployment/juanie-web -- bun run db:push || echo "⚠️ Schema 同步跳过 (可能是首次部署)"
-            echo "✅ 数据库 Schema 同步完成!"
+            kubectl exec -n juanie deployment/juanie-web -- bun run db:push || echo "⚠️ Schema 同步跳过"
 
-            # Helm upgrade (更新配置 + 镜像)
-            helm upgrade --install juanie $CHART_DIR \
-              -n juanie \
-              --create-namespace \
-              --set image.tag="${{ github.sha }}" \
-              --wait \
-              --timeout 300s
+            # 更新镜像
+            kubectl set image deployment/juanie-web -n juanie juanie=$IMAGE
+            kubectl set image deployment/juanie-worker -n juanie worker=$IMAGE
+
+            # 等待滚动更新
+            kubectl rollout status deployment/juanie-web -n juanie --timeout=180s
+            kubectl rollout status deployment/juanie-worker -n juanie --timeout=180s
 
             echo "✅ 部署完成!"
