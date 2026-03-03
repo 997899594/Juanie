@@ -29,6 +29,7 @@ RUN bun install --frozen-lockfile
 COPY src ./src
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./drizzle.config.ts
+COPY tsconfig.json ./tsconfig.json
 
 # 编译 worker 为独立可执行文件 (约62MB, 包含所有依赖)
 RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
