@@ -66,16 +66,16 @@ jobs:
             echo "🚀 部署 Juanie..."
             echo "   镜像: $IMAGE"
 
-            # 同步数据库 Schema
-            echo "🔄 同步数据库 Schema..."
-            kubectl exec -n juanie deployment/juanie-web -- bun run db:push || echo "⚠️ Schema 同步跳过"
-
-            # 更新镜像
+            # 1. 更新镜像
             kubectl set image deployment/juanie-web -n juanie juanie=$IMAGE
             kubectl set image deployment/juanie-worker -n juanie worker=$IMAGE
 
-            # 等待滚动更新
+            # 2. 等待滚动更新（新 pod 就绪）
             kubectl rollout status deployment/juanie-web -n juanie --timeout=180s
             kubectl rollout status deployment/juanie-worker -n juanie --timeout=180s
+
+            # 3. 在新 pod 上同步数据库 Schema
+            echo "🔄 同步数据库 Schema..."
+            kubectl exec -n juanie deployment/juanie-web -- bun run db:push || echo "⚠️ Schema 同步跳过"
 
             echo "✅ 部署完成!"
