@@ -1,0 +1,27 @@
+stages:
+  - build
+
+variables:
+  REGISTRY: $CI_REGISTRY
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:sha-$CI_COMMIT_SHA
+
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - |
+      if [ -f Dockerfile ]; then
+        docker build -t $IMAGE_TAG .
+        docker push $IMAGE_TAG
+      else
+        docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v $PWD:/workspace \
+          -w /workspace \
+          paketobuildpacks/builder-jammy-full \
+          pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
+      fi
