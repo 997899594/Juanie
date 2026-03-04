@@ -31,8 +31,8 @@ import {
   getK8sClient,
   initK8sClient,
 } from '@/lib/k8s';
-import { detectMonorepoType } from '@/lib/monorepo';
 import type { MonorepoType } from '@/lib/monorepo';
+import { detectMonorepoType } from '@/lib/monorepo';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
 
@@ -549,17 +549,17 @@ jobs:
 
           if [ -f Dockerfile ]; then
             docker buildx build --push \\
-              --tag \$IMAGE_TAG \\
+              --tag $IMAGE_TAG \\
               --cache-from type=gha \\
               --cache-to type=gha,mode=max \\
               .
           else
             docker run --rm \\
               -v /var/run/docker.sock:/var/run/docker.sock \\
-              -v \$PWD:/workspace \\
+              -v $PWD:/workspace \\
               -w /workspace \\
               buildpacksio/pack \\
-              pack build \$IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
+              pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
           fi
 `;
 }
@@ -584,8 +584,8 @@ function renderGitLabCI(
   - build
 
 variables:
-  REGISTRY: \$CI_REGISTRY
-  IMAGE_TAG: \$CI_REGISTRY_IMAGE:sha-\$CI_COMMIT_SHA
+  REGISTRY: $CI_REGISTRY
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:sha-$CI_COMMIT_SHA
   DOCKER_TLS_CERTDIR: "/certs"
 
 build:
@@ -594,19 +594,19 @@ build:
   services:
     - docker:24-dind
   before_script:
-    - docker login -u \$CI_REGISTRY_USER -p \$CI_REGISTRY_PASSWORD \$CI_REGISTRY
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
       if [ -f Dockerfile ]; then
-        docker build -t \$IMAGE_TAG .
-        docker push \$IMAGE_TAG
+        docker build -t $IMAGE_TAG .
+        docker push $IMAGE_TAG
       else
         docker run --rm \\
           -v /var/run/docker.sock:/var/run/docker.sock \\
-          -v \$PWD:/workspace \\
+          -v $PWD:/workspace \\
           -w /workspace \\
           buildpacksio/pack \\
-          pack build \$IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
+          pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
       fi
 `;
 }
@@ -707,14 +707,14 @@ function renderGitLabCIMonorepo(
   - build
 
 variables:
-  REGISTRY: \$CI_REGISTRY
+  REGISTRY: $CI_REGISTRY
 
 detect:
   stage: detect
   image: oven/bun:1
   script:
     - bun add -g turbo
-    - AFFECTED=$(turbo ls --filter="...[\$CI_COMMIT_BEFORE_SHA]" --json 2>/dev/null || echo '[]')
+    - AFFECTED=$(turbo ls --filter="...[$CI_COMMIT_BEFORE_SHA]" --json 2>/dev/null || echo '[]')
     - echo "SERVICES=$AFFECTED" >> build.env
   artifacts:
     reports:
@@ -727,16 +727,16 @@ build:
     - docker:24-dind
   before_script:
     - apk add --no-cache jq
-    - docker login -u \$CI_REGISTRY_USER -p \$CI_REGISTRY_PASSWORD \$CI_REGISTRY
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
-      for SERVICE in \$(echo \$SERVICES | jq -r '.[]'); do
-        IMAGE_TAG=\$CI_REGISTRY_IMAGE/\$SERVICE:sha-\$CI_COMMIT_SHA
-        docker build -t \$IMAGE_TAG -f apps/\$SERVICE/Dockerfile .
-        docker push \$IMAGE_TAG
+      for SERVICE in $(echo $SERVICES | jq -r '.[]'); do
+        IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE:sha-$CI_COMMIT_SHA
+        docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
+        docker push $IMAGE_TAG
       done
   rules:
-    - if: \$SERVICES != '[]'
+    - if: $SERVICES != '[]'
 `;
 }
 

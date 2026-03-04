@@ -276,10 +276,9 @@ export class GitHubProvider implements GitProvider {
     const [owner, repo] = repoFullName.split('/');
     const ref = branch ? `&ref=${branch}` : '';
 
-    const res = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contents/?${ref}`,
-      { headers: this.getHeaders(accessToken) }
-    );
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/?${ref}`, {
+      headers: this.getHeaders(accessToken),
+    });
 
     if (!res.ok) {
       return [];

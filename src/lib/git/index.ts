@@ -101,11 +101,7 @@ export interface GitProvider {
    * List files in the root directory of a repository.
    * Used for monorepo type detection.
    */
-  listRootFiles(
-    accessToken: string,
-    repoFullName: string,
-    branch?: string
-  ): Promise<string[]>;
+  listRootFiles(accessToken: string, repoFullName: string, branch?: string): Promise<string[]>;
 
   /**
    * Check if a file exists in the repository.

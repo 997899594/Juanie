@@ -2,13 +2,8 @@ import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { deployments, repositories, services, webhooks } from '@/lib/db/schema';
+import { getAffectedServiceNames, isMonorepo, type ServiceWithMonorepo } from '@/lib/monorepo';
 import { addDeploymentJob } from '@/lib/queue';
-import {
-  buildImageName,
-  getAffectedServiceNames,
-  isMonorepo,
-  type ServiceWithMonorepo,
-} from '@/lib/monorepo';
 
 /**
  * Git Webhook 接收端点
