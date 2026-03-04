@@ -50,5 +50,14 @@ jobs:
       - name: Build and push ${{ matrix.service }}
         run: |
           IMAGE_TAG=${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:sha-${{ github.sha }}
-          docker build -t $IMAGE_TAG -f apps/${{ matrix.service }}/Dockerfile .
-          docker push $IMAGE_TAG
+
+          if [ -f docker-bake.hcl ]; then
+            # 使用 docker-bake.hcl，Juanie 覆盖 tag
+            docker buildx bake ${{ matrix.service }} \
+              --set ${{ matrix.service }}.tags=${IMAGE_TAG} \
+              --push
+          else
+            # 回退到标准 Dockerfile
+            docker build -t $IMAGE_TAG -f apps/${{ matrix.service }}/Dockerfile .
+            docker push $IMAGE_TAG
+          fi

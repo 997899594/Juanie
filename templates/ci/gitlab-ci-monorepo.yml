@@ -28,8 +28,15 @@ build:
     - |
       for SERVICE in $(echo $SERVICES | jq -r '.[]'); do
         IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE:sha-$CI_COMMIT_SHA
-        docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
-        docker push $IMAGE_TAG
+
+        if [ -f docker-bake.hcl ]; then
+          # 使用 docker-bake.hcl，Juanie 覆盖 tag
+          docker buildx bake $SERVICE --set ${SERVICE}.tags=${IMAGE_TAG} --push
+        else
+          # 回退到标准 Dockerfile
+          docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
+          docker push $IMAGE_TAG
+        fi
       done
   rules:
     - if: $SERVICES != '[]'
