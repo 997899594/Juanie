@@ -9,6 +9,14 @@
 export type MonorepoType = 'turborepo' | 'nx' | 'pnpm' | 'none';
 
 /**
+ * Monorepo configuration from project config
+ */
+export interface MonorepoConfig {
+  enabled?: boolean;
+  type?: MonorepoType;
+}
+
+/**
  * Detects the monorepo type based on the list of files in a repository
  *
  * Detection priority:
@@ -85,10 +93,21 @@ export function getMonorepoInstallCommand(monorepoType: MonorepoType): string {
 
 /**
  * Checks if the repository is a monorepo
+ * Can be called with either a files array or a config object
  *
- * @param files - Array of file paths in the repository root
- * @returns true if the repository is detected as a monorepo
+ * @param filesOrConfig - Array of file paths in the repository root, or a config object
+ * @returns true if the repository is detected as a monorepo or enabled in config
  */
-export function isMonorepo(files: string[]): boolean {
-  return detectMonorepoType(files) !== 'none';
+export function isMonorepo(filesOrConfig: string[] | MonorepoConfig | null | undefined): boolean {
+  // If config object is passed
+  if (filesOrConfig && !Array.isArray(filesOrConfig)) {
+    return filesOrConfig.enabled === true;
+  }
+
+  // If files array is passed
+  if (Array.isArray(filesOrConfig)) {
+    return detectMonorepoType(filesOrConfig) !== 'none';
+  }
+
+  return false;
 }

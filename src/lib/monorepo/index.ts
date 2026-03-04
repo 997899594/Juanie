@@ -20,5 +20,6 @@ export {
   getMonorepoBuildCommand,
   getMonorepoInstallCommand,
   isMonorepo,
+  type MonorepoConfig,
   type MonorepoType,
 } from './detect';

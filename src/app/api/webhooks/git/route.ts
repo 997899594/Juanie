@@ -1,8 +1,14 @@
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { deployments, repositories, webhooks } from '@/lib/db/schema';
+import { deployments, repositories, services, webhooks } from '@/lib/db/schema';
 import { addDeploymentJob } from '@/lib/queue';
+import {
+  buildImageName,
+  getAffectedServiceNames,
+  isMonorepo,
+  type ServiceWithMonorepo,
+} from '@/lib/monorepo';
 
 /**
  * Git Webhook 接收端点
@@ -141,6 +147,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Production environment not found' }, { status: 400 });
     }
 
+    // 检查是否为 monorepo 项目
+    const projectConfig = project.configJson as {
+      monorepo?: { enabled?: boolean };
+    } | null;
+    const monorepoConfig = projectConfig?.monorepo;
+
+    if (isMonorepo(monorepoConfig)) {
+      // Monorepo 流程：为每个受影响的服务创建部署
+      return handleMonorepoPush(payload, project, productionEnv, commitSha, commitMessage, branch);
+    }
+
+    // 单服务流程
     // 创建部署记录
     const [deployment] = await db
       .insert(deployments)
@@ -173,6 +191,139 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Handle monorepo push event - creates deployment for each affected service
+ */
+async function handleMonorepoPush(
+  payload: Record<string, unknown>,
+  project: {
+    id: string;
+    name: string;
+    repositoryId?: string | null;
+    configJson?: unknown;
+  },
+  productionEnv: { id: string },
+  commitSha?: string,
+  commitMessage?: string,
+  branch?: string
+): Promise<NextResponse> {
+  // 1. 获取项目所有服务
+  const projectServices = await db.query.services.findMany({
+    where: eq(services.projectId, project.id),
+  });
+
+  if (projectServices.length === 0) {
+    return NextResponse.json({ message: 'No services found for this monorepo project' });
+  }
+
+  // 2. 获取变更文件列表
+  const changedFiles = extractChangedFiles(payload);
+
+  if (changedFiles.length === 0) {
+    return NextResponse.json({ message: 'No file changes detected in push event' });
+  }
+
+  // 3. 将服务转换为 monorepo 格式
+  const servicesWithMonorepo: ServiceWithMonorepo[] = projectServices.map((service) => {
+    // 从 project.configJson.services 获取服务级别的 monorepo 配置
+    const projectConfig = project.configJson as {
+      services?: Record<string, { monorepo?: { appDir?: string } }>;
+    } | null;
+    const serviceConfig = projectConfig?.services?.[service.name];
+
+    return {
+      id: service.id,
+      name: service.name,
+      projectId: service.projectId,
+      type: service.type,
+      monorepoConfig: serviceConfig?.monorepo,
+    };
+  });
+
+  // 4. 计算受影响的服务
+  const affectedServiceNames = getAffectedServiceNames(changedFiles, servicesWithMonorepo);
+
+  if (affectedServiceNames.length === 0) {
+    return NextResponse.json({
+      message: 'No services affected by the changes',
+      changedFiles: changedFiles.length,
+    });
+  }
+
+  // 5. 为每个受影响服务创建部署任务
+  const deploymentResults: Array<{ serviceName: string; deploymentId: string }> = [];
+
+  for (const serviceName of affectedServiceNames) {
+    const service = projectServices.find((s) => s.name === serviceName);
+    if (!service) continue;
+
+    // 创建部署记录
+    const [deployment] = await db
+      .insert(deployments)
+      .values({
+        projectId: project.id,
+        serviceId: service.id,
+        environmentId: productionEnv.id,
+        status: 'queued',
+        commitSha: commitSha || undefined,
+        commitMessage: commitMessage || undefined,
+        branch: branch || undefined,
+      })
+      .returning();
+
+    // 添加到部署队列
+    await addDeploymentJob(deployment.id, project.id, productionEnv.id);
+
+    deploymentResults.push({
+      serviceName: service.name,
+      deploymentId: deployment.id,
+    });
+
+    console.log(
+      `✅ Triggered monorepo deployment for ${project.name}/${service.name} (commit: ${commitSha?.slice(0, 7)})`
+    );
+  }
+
+  return NextResponse.json({
+    message: 'Monorepo deployments triggered',
+    project: project.name,
+    commit: commitSha?.slice(0, 7),
+    branch,
+    affectedServices: affectedServiceNames,
+    deployments: deploymentResults,
+    changedFilesCount: changedFiles.length,
+  });
+}
+
+/**
+ * Extract changed files from push payload (supports GitHub and GitLab)
+ */
+function extractChangedFiles(payload: Record<string, unknown>): string[] {
+  const files = new Set<string>();
+
+  // Handle commits array (both GitHub and GitLab have this)
+  const commits = payload.commits as Array<Record<string, unknown>> | undefined;
+
+  if (commits) {
+    for (const commit of commits) {
+      // Added files
+      for (const file of (commit.added as string[]) || []) {
+        files.add(file);
+      }
+      // Modified files
+      for (const file of (commit.modified as string[]) || []) {
+        files.add(file);
+      }
+      // Removed files
+      for (const file of (commit.removed as string[]) || []) {
+        files.add(file);
+      }
+    }
+  }
+
+  return Array.from(files);
 }
 
 /**
