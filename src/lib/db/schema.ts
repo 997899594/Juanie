@@ -48,6 +48,9 @@ export type InitStepStatus = (typeof initStepStatuses)[number];
 export const teamRoles = ['owner', 'admin', 'member'] as const;
 export type TeamRole = (typeof teamRoles)[number];
 
+export const webhookTypes = ['git-push', 'registry'] as const;
+export type WebhookType = (typeof webhookTypes)[number];
+
 export const gitProviderTypeEnum = pgEnum('gitProviderType', gitProviderTypes);
 export const serviceTypeEnum = pgEnum('serviceType', serviceTypes);
 export const databaseTypeEnum = pgEnum('databaseType', databaseTypes);
@@ -56,6 +59,7 @@ export const projectStatusEnum = pgEnum('projectStatus', projectStatuses);
 export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuses);
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);
+export const webhookTypeEnum = pgEnum('webhookType', webhookTypes);
 
 // ============================================
 // Auth Tables (NextAuth)
@@ -506,7 +510,7 @@ export const webhooks = pgTable('webhook', {
   // Git 平台返回的 webhook ID，用于删除
   externalId: varchar('externalId', { length: 255 }),
   // Webhook 类型：git-push, registry
-  type: text('type').default('git-push').notNull(),
+  type: webhookTypeEnum('type').notNull().default('git-push'),
   // 镜像仓库 webhook ID，用于更新/删除
   externalRegistryHookId: text('externalRegistryHookId'),
 
