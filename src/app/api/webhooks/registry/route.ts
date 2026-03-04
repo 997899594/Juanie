@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { deployments, projects, webhooks } from '@/lib/db/schema';
+import { deployments, projects, services, webhooks } from '@/lib/db/schema';
 import { addDeploymentJob } from '@/lib/queue';
 
 /**
@@ -84,11 +84,16 @@ export async function POST(request: NextRequest) {
 
     const { imageName, tag } = imageInfo;
 
+    // 3.5 解析多服务镜像名
+    const parsedImage = parseMultiServiceImageName(`${imageName}:${tag}`);
+    console.log(`Parsed image: ${JSON.stringify(parsedImage)}`);
+
     // 4. 获取项目信息并验证镜像名匹配
     const project = await db.query.projects.findFirst({
       where: eq(projects.id, projectId),
       with: {
         environments: true,
+        services: true,
       },
     });
 
@@ -99,6 +104,26 @@ export async function POST(request: NextRequest) {
     // 验证镜像名是否匹配项目配置
     if (!imageMatchesProject(imageName, project)) {
       return NextResponse.json({ error: 'Image mismatch' }, { status: 403 });
+    }
+
+    // 4.5 根据服务名匹配具体服务（多服务模式）
+    let targetService: typeof services.$inferSelect | null = null;
+    if (parsedImage.service) {
+      // 多服务模式：通过服务名匹配
+      targetService =
+        project.services.find((s) => s.name.toLowerCase() === parsedImage.service?.toLowerCase()) ||
+        null;
+
+      if (!targetService) {
+        console.warn(
+          `Service "${parsedImage.service}" not found in project ${project.name}. Available services: ${project.services.map((s) => s.name).join(', ')}`
+        );
+        return NextResponse.json(
+          { error: `Service "${parsedImage.service}" not found` },
+          { status: 404 }
+        );
+      }
+      console.log(`Matched service: ${targetService.name} (type: ${targetService.type})`);
     }
 
     // 5. 更新 webhook 最后触发时间
@@ -119,6 +144,7 @@ export async function POST(request: NextRequest) {
       .values({
         projectId: project.id,
         environmentId: productionEnv.id,
+        serviceId: targetService?.id || null,
         status: 'queued',
         imageUrl: imageName,
         // 从 tag 中提取 commit sha (格式: sha-abc1234 或直接使用 tag)
@@ -129,12 +155,16 @@ export async function POST(request: NextRequest) {
     // 8. 触发部署任务
     await addDeploymentJob(deployment.id, project.id, productionEnv.id);
 
-    console.log(`Webhook triggered deployment for ${project.name} (image: ${imageName})`);
+    const logMessage = targetService
+      ? `Webhook triggered deployment for ${project.name}/${targetService.name} (image: ${imageName})`
+      : `Webhook triggered deployment for ${project.name} (image: ${imageName})`;
+    console.log(logMessage);
 
     return NextResponse.json({
       success: true,
       deploymentId: deployment.id,
       project: project.name,
+      service: targetService?.name || null,
       image: imageName,
     });
   } catch (error) {
@@ -268,6 +298,54 @@ function extractCommitShaFromTag(tag: string): string | undefined {
 
   // 其他情况不返回 commit sha
   return undefined;
+}
+
+/**
+ * 解析多服务镜像名
+ *
+ * 支持两种格式:
+ * 1. 多服务格式: {registry}/{owner}/{repo}/{service}:sha-{commit}
+ *    例如: ghcr.io/owner/repo/web:sha-abc1234
+ * 2. 单服务格式: {registry}/{owner}/{repo}:sha-{commit}
+ *    例如: ghcr.io/owner/repo:sha-abc1234
+ *
+ * 返回值:
+ * - name: 完整镜像名（不含 tag）
+ * - tag: 镜像 tag
+ * - service: 服务名（多服务格式）或 null（单服务格式）
+ * - projectName: 项目镜像名前缀（不含服务名）
+ */
+function parseMultiServiceImageName(fullName: string): {
+  name: string;
+  tag: string;
+  service: string | null;
+  projectName: string;
+} {
+  const [name, tag] = fullName.split(':');
+
+  const parts = name.split('/');
+
+  // 标准格式: {registry}/{owner}/{repo}/{service}:sha-{commit}
+  // 4+ 部分表示多服务镜像
+  if (parts.length >= 4) {
+    const service = parts[parts.length - 1];
+    const projectName = parts.slice(0, -1).join('/');
+
+    return {
+      name: fullName,
+      tag: tag || 'latest',
+      service,
+      projectName,
+    };
+  }
+
+  // 单服务格式: {registry}/{owner}/{repo}:sha-{commit}
+  return {
+    name: fullName,
+    tag: tag || 'latest',
+    service: null,
+    projectName: name,
+  };
 }
 
 /**
