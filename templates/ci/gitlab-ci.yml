@@ -4,6 +4,7 @@ stages:
 variables:
   REGISTRY: $CI_REGISTRY
   IMAGE_TAG: $CI_REGISTRY_IMAGE:sha-$CI_COMMIT_SHA
+  DOCKER_TLS_CERTDIR: "/certs"
 
 build:
   stage: build
@@ -22,6 +23,6 @@ build:
           -v /var/run/docker.sock:/var/run/docker.sock \
           -v $PWD:/workspace \
           -w /workspace \
-          paketobuildpacks/builder-jammy-full \
+          buildpacksio/pack \
           pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
       fi
