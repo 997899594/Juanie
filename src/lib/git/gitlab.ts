@@ -5,6 +5,7 @@ import type {
   GitRepository,
   GitUser,
   PushOptions,
+  RegistryWebhookOptions,
   WebhookOptions,
 } from './index';
 
@@ -210,6 +211,38 @@ export class GitLabProvider implements GitProvider {
       method: 'DELETE',
       headers: this.getHeaders(accessToken),
     });
+  }
+
+  async setupRegistryWebhook(
+    accessToken: string,
+    options: RegistryWebhookOptions
+  ): Promise<{ id: string }> {
+    const webhookUrl = `https://juanie.art/api/webhooks/registry?project_id=${options.juanieProjectId}`;
+    const encodedPath = encodeURIComponent(options.ownerOrProjectPath);
+
+    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/hooks`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        url: webhookUrl,
+        token: options.webhookSecret,
+        push_events: false,
+        tag_push_events: false,
+        pipeline_events: false,
+        job_events: false,
+        deployment_events: false,
+        releases_events: false,
+        container_registry_events: true, // Image push events
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.message || 'Failed to create GitLab registry webhook');
+    }
+
+    const data = await res.json();
+    return { id: String(data.id) };
   }
 
   private getHeaders(accessToken: string): HeadersInit {

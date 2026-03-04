@@ -5,6 +5,7 @@ import type {
   GitRepository,
   GitUser,
   PushOptions,
+  RegistryWebhookOptions,
   WebhookOptions,
 } from './index';
 
@@ -227,6 +228,36 @@ export class GitHubProvider implements GitProvider {
       method: 'DELETE',
       headers: this.getHeaders(accessToken),
     });
+  }
+
+  async setupRegistryWebhook(
+    accessToken: string,
+    options: RegistryWebhookOptions
+  ): Promise<{ id: string }> {
+    const webhookUrl = `https://juanie.art/api/webhooks/registry?project_id=${options.juanieProjectId}`;
+
+    const res = await fetch(`https://api.github.com/orgs/${options.ownerOrProjectPath}/hooks`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        name: 'web',
+        active: true,
+        events: ['package'],
+        config: {
+          url: webhookUrl,
+          content_type: 'json',
+          secret: options.webhookSecret,
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.message || 'Failed to create GitHub package webhook');
+    }
+
+    const data = await res.json();
+    return { id: String(data.id) };
   }
 
   private getHeaders(accessToken: string): HeadersInit {
