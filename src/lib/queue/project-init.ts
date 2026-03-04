@@ -1,7 +1,10 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Job, Worker } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db } from '@/lib/db';
+import type { GitProviderType } from '@/lib/db/schema';
 import {
   databases,
   domains,
@@ -120,7 +123,9 @@ function isK8sAvailable(): boolean {
 
 const IMPORT_STEPS = [
   'validate_repository',
+  'push_cicd_config',
   'setup_webhook',
+  'setup_registry_webhook',
   'setup_namespace',
   'deploy_services',
   'provision_databases',
@@ -131,6 +136,7 @@ const CREATE_STEPS = [
   'create_repository',
   'push_template',
   'setup_webhook',
+  'setup_registry_webhook',
   'setup_namespace',
   'deploy_services',
   'provision_databases',
@@ -230,11 +236,17 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
           }
           break;
         }
+        case 'push_cicd_config':
+          await pushCicdConfig(project);
+          break;
         case 'push_template':
           await pushTemplate(project);
           break;
         case 'setup_webhook':
           await setupWebhook(project);
+          break;
+        case 'setup_registry_webhook':
+          await setupRegistryWebhook(project);
           break;
         case 'setup_namespace':
           await setupNamespace(project, hasK8s);
@@ -394,6 +406,316 @@ async function pushTemplate(
   });
 
   console.log(`✅ Pushed ${files.size} files to repository`);
+}
+
+// ============================================
+// CI/CD Config Functions
+// ============================================
+
+const TEMPLATES_DIR = join(process.cwd(), 'templates');
+
+/**
+ * Push CI/CD configuration files to the repository.
+ * This step is called during project import flow.
+ */
+async function pushCicdConfig(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+) {
+  console.log(`Pushing CI/CD config for project ${project.name}`);
+
+  if (!project.repository) {
+    console.log('No repository linked, skipping CI/CD config');
+    return;
+  }
+
+  const { provider, client } = await getTeamGitProvider(project.teamId);
+
+  const files: Record<string, string> = {};
+
+  // 1. Push CI workflow configuration based on provider type
+  if (provider.type === 'github') {
+    const ciTemplate = renderGitHubCI(project);
+    files['.github/workflows/juanie-ci.yml'] = ciTemplate;
+  } else if (provider.type === 'gitlab' || provider.type === 'gitlab-self-hosted') {
+    const ciTemplate = renderGitLabCI(project);
+    files['.gitlab-ci.yml'] = ciTemplate;
+  }
+
+  // 2. Push environment variables template
+  const envTemplate = renderEnvTemplate(project);
+  files['.env.juanie.example'] = envTemplate;
+
+  if (Object.keys(files).length > 0) {
+    await client.pushFiles(provider.accessToken!, {
+      repoFullName: project.repository.fullName,
+      branch: project.productionBranch || 'main',
+      files,
+      message: 'Configure Juanie CI/CD [skip ci]',
+    });
+  }
+
+  console.log(`✅ Pushed CI/CD config`);
+}
+
+function renderGitHubCI(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions.yml');
+
+  if (existsSync(templatePath)) {
+    let content = readFileSync(templatePath, 'utf-8');
+    // Replace template variables
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
+    return content;
+  }
+
+  // Fallback to inline template
+  return `name: Juanie CI
+
+on:
+  push:
+    branches: [main, master]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: \${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: \${{ github.actor }}
+          password: \${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push
+        run: |
+          IMAGE_TAG=\${{ env.REGISTRY }}/\${{ env.IMAGE_NAME }}:sha-\${{ github.sha }}
+
+          if [ -f Dockerfile ]; then
+            docker buildx build --push \\
+              --tag \$IMAGE_TAG \\
+              --cache-from type=gha \\
+              --cache-to type=gha,mode=max \\
+              .
+          else
+            docker run --rm \\
+              -v /var/run/docker.sock:/var/run/docker.sock \\
+              -v \$PWD:/workspace \\
+              -w /workspace \\
+              buildpacksio/pack \\
+              pack build \$IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
+          fi
+`;
+}
+
+function renderGitLabCI(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci.yml');
+
+  if (existsSync(templatePath)) {
+    let content = readFileSync(templatePath, 'utf-8');
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
+    return content;
+  }
+
+  // Fallback to inline template
+  return `stages:
+  - build
+
+variables:
+  REGISTRY: \$CI_REGISTRY
+  IMAGE_TAG: \$CI_REGISTRY_IMAGE:sha-\$CI_COMMIT_SHA
+  DOCKER_TLS_CERTDIR: "/certs"
+
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - docker login -u \$CI_REGISTRY_USER -p \$CI_REGISTRY_PASSWORD \$CI_REGISTRY
+  script:
+    - |
+      if [ -f Dockerfile ]; then
+        docker build -t \$IMAGE_TAG .
+        docker push \$IMAGE_TAG
+      else
+        docker run --rm \\
+          -v /var/run/docker.sock:/var/run/docker.sock \\
+          -v \$PWD:/workspace \\
+          -w /workspace \\
+          buildpacksio/pack \\
+          pack build \$IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
+      fi
+`;
+}
+
+function renderEnvTemplate(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+): string {
+  const templatePath = join(TEMPLATES_DIR, 'env', '.env.juanie.example');
+
+  if (existsSync(templatePath)) {
+    let content = readFileSync(templatePath, 'utf-8');
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
+    return content;
+  }
+
+  // Fallback to inline template
+  return `# ===========================================
+# Juanie 环境变量模板
+# ===========================================
+# 复制此文件为 .env 并填入实际值
+# 真实值可在 Juanie 控制台 → 项目 → 环境变量 中查看
+
+# 项目信息
+PROJECT_NAME=${project.name}
+PROJECT_SLUG=${project.slug}
+
+# -------------------------------------------
+# PostgreSQL（如果项目配置了 PostgreSQL）
+# -------------------------------------------
+DATABASE_URL=postgresql://postgres:<密码>@${project.slug}-postgres.juanie-${project.slug}.svc.cluster.local:5432/main
+POSTGRES_HOST=${project.slug}-postgres.juanie-${project.slug}.svc.cluster.local
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<在 Juanie 控制台查看>
+POSTGRES_DB=main
+
+# -------------------------------------------
+# Redis（如果项目配置了 Redis）
+# -------------------------------------------
+REDIS_URL=redis://:<密码>@${project.slug}-redis.juanie-${project.slug}.svc.cluster.local:6379
+REDIS_HOST=${project.slug}-redis.juanie-${project.slug}.svc.cluster.local
+REDIS_PORT=6379
+REDIS_PASSWORD=<在 Juanie 控制台查看>
+`;
+}
+
+/**
+ * Setup registry webhook for container image push events.
+ * This enables automatic deployments when new images are pushed.
+ */
+async function setupRegistryWebhook(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+) {
+  console.log(`Setting up registry webhook for project ${project.name}`);
+
+  if (!project.repository) {
+    console.log('No repository linked, skipping registry webhook');
+    return;
+  }
+
+  const { provider, client } = await getTeamGitProvider(project.teamId);
+
+  // Check if registry webhook already exists
+  const existingWebhook = await db.query.webhooks.findFirst({
+    where: and(eq(webhooks.projectId, project.id), eq(webhooks.type, 'registry')),
+  });
+
+  if (existingWebhook) {
+    console.log(`✅ Registry webhook already exists for project ${project.name}`);
+    return;
+  }
+
+  // Generate webhook secret
+  const webhookSecret = nanoid(32);
+
+  // Build the ownerOrProjectPath parameter
+  // For GitHub: organization owner name
+  // For GitLab: project full path (namespace/project)
+  const ownerOrProjectPath = project.repository.fullName;
+
+  // Call git provider to setup registry webhook
+  const result = await client.setupRegistryWebhook(provider.accessToken!, {
+    ownerOrProjectPath,
+    juanieProjectId: project.id,
+    webhookSecret,
+  });
+
+  // Build webhook URL for database record
+  const baseUrl =
+    process.env.NEXTAUTH_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3001';
+  const webhookUrl = `${baseUrl}/api/webhooks/registry?project_id=${project.id}`;
+
+  // Save to database
+  await db.insert(webhooks).values({
+    projectId: project.id,
+    externalId: result.id,
+    type: 'registry',
+    url: webhookUrl,
+    events: ['package'],
+    secret: webhookSecret,
+    active: true,
+  });
+
+  // Update project config with image name
+  const config = (project.configJson as Record<string, unknown>) || {};
+  const imageName = buildImageName(provider.type, project.repository);
+
+  await db
+    .update(projects)
+    .set({
+      configJson: {
+        ...config,
+        imageName,
+        registryWebhookConfigured: true,
+      },
+    })
+    .where(eq(projects.id, project.id));
+
+  console.log(`✅ Created registry webhook for ${project.repository.fullName}`);
+}
+
+/**
+ * Build the container image name based on git provider type.
+ */
+function buildImageName(
+  providerType: GitProviderType,
+  repo: typeof repositories.$inferSelect
+): string {
+  switch (providerType) {
+    case 'github':
+      return `ghcr.io/${repo.owner}/${repo.name}`;
+    case 'gitlab':
+    case 'gitlab-self-hosted':
+      return `registry.gitlab.com/${repo.fullName}`;
+    default:
+      return '';
+  }
 }
 
 async function setupWebhook(
