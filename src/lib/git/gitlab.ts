@@ -252,6 +252,53 @@ export class GitLabProvider implements GitProvider {
     };
   }
 
+  async listRootFiles(
+    accessToken: string,
+    repoFullName: string,
+    branch?: string
+  ): Promise<string[]> {
+    const encodedPath = encodeURIComponent(repoFullName);
+    const ref = branch ? `&ref=${branch}` : '';
+
+    // Get root directory tree (path=empty means root, per_page=100 to get more files)
+    const res = await fetch(
+      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/tree?per_page=100${ref}`,
+      { headers: this.getHeaders(accessToken) }
+    );
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+      return [];
+    }
+
+    // Get file names from root level only (type === 'blob')
+    return data
+      .filter((item: { type: string }) => item.type === 'blob')
+      .map((item: { name: string; path: string }) => item.path);
+  }
+
+  async fileExists(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<boolean> {
+    const encodedPath = encodeURIComponent(repoFullName);
+    const ref = branch ? `?ref=${branch}` : '';
+
+    const res = await fetch(
+      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/files/${encodeURIComponent(path)}${ref}`,
+      { headers: this.getHeaders(accessToken) }
+    );
+
+    return res.ok;
+  }
+
   private mapRepository(data: Record<string, unknown>): GitRepository {
     const httpUrl = data.http_url_to_repo as string;
     const sshUrl = data.ssh_url_to_repo as string;

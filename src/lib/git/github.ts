@@ -268,6 +268,51 @@ export class GitHubProvider implements GitProvider {
     };
   }
 
+  async listRootFiles(
+    accessToken: string,
+    repoFullName: string,
+    branch?: string
+  ): Promise<string[]> {
+    const [owner, repo] = repoFullName.split('/');
+    const ref = branch ? `&ref=${branch}` : '';
+
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/?${ref}`,
+      { headers: this.getHeaders(accessToken) }
+    );
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+      return [];
+    }
+
+    return data
+      .filter((item: { type: string }) => item.type === 'file')
+      .map((item: { name: string; path: string }) => item.path);
+  }
+
+  async fileExists(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<boolean> {
+    const [owner, repo] = repoFullName.split('/');
+    const ref = branch ? `?ref=${branch}` : '';
+
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/${path}${ref}`,
+      { headers: this.getHeaders(accessToken) }
+    );
+
+    return res.ok;
+  }
+
   private mapRepository(data: Record<string, unknown>): GitRepository {
     return {
       id: String(data.id),

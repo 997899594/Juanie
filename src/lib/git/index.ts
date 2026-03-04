@@ -96,6 +96,26 @@ export interface GitProvider {
     accessToken: string,
     options: RegistryWebhookOptions
   ): Promise<{ id: string }>;
+
+  /**
+   * List files in the root directory of a repository.
+   * Used for monorepo type detection.
+   */
+  listRootFiles(
+    accessToken: string,
+    repoFullName: string,
+    branch?: string
+  ): Promise<string[]>;
+
+  /**
+   * Check if a file exists in the repository.
+   */
+  fileExists(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<boolean>;
 }
 
 export function createGitProvider(config: GitProviderConfig): GitProvider {

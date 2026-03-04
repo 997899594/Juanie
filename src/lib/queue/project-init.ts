@@ -31,6 +31,8 @@ import {
   getK8sClient,
   initK8sClient,
 } from '@/lib/k8s';
+import { detectMonorepoType } from '@/lib/monorepo';
+import type { MonorepoType } from '@/lib/monorepo';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
 
@@ -432,14 +434,33 @@ async function pushCicdConfig(
 
   const { provider, client } = await getTeamGitProvider(project.teamId);
 
+  // Detect monorepo type from repository root files
+  let monorepoType: MonorepoType = 'none';
+  try {
+    const rootFiles = await client.listRootFiles(
+      provider.accessToken!,
+      project.repository.fullName,
+      project.productionBranch || 'main'
+    );
+    monorepoType = detectMonorepoType(rootFiles);
+    console.log(`Detected monorepo type: ${monorepoType}`);
+  } catch (error) {
+    console.warn('Failed to detect monorepo type, defaulting to none:', error);
+  }
+
   const files: Record<string, string> = {};
 
-  // 1. Push CI workflow configuration based on provider type
+  // 1. Push CI workflow configuration based on provider type and monorepo type
+  const isMonorepo = monorepoType !== 'none';
   if (provider.type === 'github') {
-    const ciTemplate = renderGitHubCI(project);
+    const ciTemplate = isMonorepo
+      ? renderGitHubCIMonorepo(project, monorepoType)
+      : renderGitHubCI(project);
     files['.github/workflows/juanie-ci.yml'] = ciTemplate;
   } else if (provider.type === 'gitlab' || provider.type === 'gitlab-self-hosted') {
-    const ciTemplate = renderGitLabCI(project);
+    const ciTemplate = isMonorepo
+      ? renderGitLabCIMonorepo(project, monorepoType)
+      : renderGitLabCI(project);
     files['.gitlab-ci.yml'] = ciTemplate;
   }
 
@@ -456,7 +477,22 @@ async function pushCicdConfig(
     });
   }
 
-  console.log(`✅ Pushed CI/CD config`);
+  // Update project configJson with monorepo info
+  const existingConfig = (project.configJson as Record<string, unknown>) || {};
+  await db
+    .update(projects)
+    .set({
+      configJson: {
+        ...existingConfig,
+        monorepo: {
+          enabled: isMonorepo,
+          type: monorepoType,
+        },
+      },
+    })
+    .where(eq(projects.id, project.id));
+
+  console.log(`✅ Pushed CI/CD config (monorepo: ${isMonorepo ? monorepoType : 'none'})`);
 }
 
 function renderGitHubCI(
@@ -572,6 +608,135 @@ build:
           buildpacksio/pack \\
           pack build \$IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
       fi
+`;
+}
+
+function renderGitHubCIMonorepo(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  },
+  _monorepoType: MonorepoType
+): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions-monorepo.yml');
+
+  if (existsSync(templatePath)) {
+    let content = readFileSync(templatePath, 'utf-8');
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
+    return content;
+  }
+
+  // Fallback to inline template
+  return `name: Juanie CI (Monorepo)
+
+on:
+  push:
+    branches: [main, master]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      services: \${{ steps.detect.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v1
+
+      - name: Setup Turborepo
+        run: bun add -g turbo
+
+      - name: Detect affected services
+        id: detect
+        run: |
+          AFFECTED=$(turbo ls --filter="...[origin/main^1]" --json 2>/dev/null || echo '[]')
+          echo "services=$AFFECTED" >> $GITHUB_OUTPUT
+
+  build:
+    needs: detect
+    if: \${{ needs.detect.outputs.services != '[]' }}
+    strategy:
+      matrix:
+        service: \${{ fromJson(needs.detect.outputs.services) }}
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: \${{ github.actor }}
+          password: \${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push \${{ matrix.service }}
+        run: |
+          IMAGE_TAG=\${{ env.REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
+          docker build -t $IMAGE_TAG -f apps/\${{ matrix.service }}/Dockerfile .
+          docker push $IMAGE_TAG
+`;
+}
+
+function renderGitLabCIMonorepo(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  },
+  _monorepoType: MonorepoType
+): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci-monorepo.yml');
+
+  if (existsSync(templatePath)) {
+    let content = readFileSync(templatePath, 'utf-8');
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
+    return content;
+  }
+
+  // Fallback to inline template
+  return `stages:
+  - detect
+  - build
+
+variables:
+  REGISTRY: \$CI_REGISTRY
+
+detect:
+  stage: detect
+  image: oven/bun:1
+  script:
+    - bun add -g turbo
+    - AFFECTED=$(turbo ls --filter="...[\$CI_COMMIT_BEFORE_SHA]" --json 2>/dev/null || echo '[]')
+    - echo "SERVICES=$AFFECTED" >> build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - apk add --no-cache jq
+    - docker login -u \$CI_REGISTRY_USER -p \$CI_REGISTRY_PASSWORD \$CI_REGISTRY
+  script:
+    - |
+      for SERVICE in \$(echo \$SERVICES | jq -r '.[]'); do
+        IMAGE_TAG=\$CI_REGISTRY_IMAGE/\$SERVICE:sha-\$CI_COMMIT_SHA
+        docker build -t \$IMAGE_TAG -f apps/\$SERVICE/Dockerfile .
+        docker push \$IMAGE_TAG
+      done
+  rules:
+    - if: \$SERVICES != '[]'
 `;
 }
 
