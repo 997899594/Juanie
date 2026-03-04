@@ -505,8 +505,10 @@ export const webhooks = pgTable('webhook', {
 
   // Git 平台返回的 webhook ID，用于删除
   externalId: varchar('externalId', { length: 255 }),
-  // Webhook 类型：git-push, manual 等
-  type: varchar('type', { length: 50 }).default('git-push'),
+  // Webhook 类型：git-push, registry
+  type: text('type').default('git-push').notNull(),
+  // 镜像仓库 webhook ID，用于更新/删除
+  externalRegistryHookId: text('externalRegistryHookId'),
 
   url: varchar('url', { length: 500 }).notNull(),
   events: text('events').array().notNull(),
