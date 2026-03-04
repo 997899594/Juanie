@@ -444,6 +444,9 @@ export const environmentVariables = pgTable(
     value: text('value'), // 普通变量明文存储；isSecret=true 时为 null
     isSecret: boolean('isSecret').default(false),
 
+    // 注入类型：build-time（构建时注入）或 runtime（运行时注入）
+    injectionType: varchar('injectionType', { length: 20 }).default('runtime'),
+
     // AES-256-GCM 加密字段（isSecret=true 时使用）
     encryptedValue: text('encryptedValue'), // 加密后的值（hex）
     iv: varchar('iv', { length: 64 }), // 初始化向量（hex，12字节→24字符）

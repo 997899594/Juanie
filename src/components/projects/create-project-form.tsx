@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, GitBranch, Plus, Search, Trash2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, GitBranch, Loader2, Search } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -17,15 +17,25 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import type { DatabaseConfig, ServiceConfig } from '@/lib/config/parser';
 import { cn } from '@/lib/utils';
 
-interface ServiceWithId extends ServiceConfig {
+interface DetectedService {
+  name: string;
+  type: 'web' | 'worker' | 'cron';
+  appDir: string;
+  startCommand: string;
+  port: number;
+}
+
+interface ServiceWithId extends DetectedService {
   _id: string;
 }
 
-interface DatabaseWithId extends DatabaseConfig {
+interface DatabaseWithId {
   _id: string;
+  name: string;
+  type: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
+  plan: 'starter' | 'standard' | 'premium';
 }
 
 interface CreateProjectFormProps {
@@ -35,7 +45,7 @@ interface CreateProjectFormProps {
 }
 
 type CreateMode = 'import' | 'create';
-type Step = 'mode' | 'repository' | 'services' | 'databases' | 'config' | 'review';
+type Step = 'mode' | 'repository' | 'config' | 'review';
 
 interface FormData {
   mode: CreateMode;
@@ -44,7 +54,6 @@ interface FormData {
   repositoryFullName: string;
   isPrivate: boolean;
   template: string;
-  projectId: string;
   name: string;
   slug: string;
   description: string;
@@ -55,13 +64,15 @@ interface FormData {
   useCustomDomain: boolean;
   productionBranch: string;
   autoDeploy: boolean;
+  // 检测结果
+  monorepoType: string;
+  hasDockerBake: boolean;
+  bakeTargets: string[];
 }
 
 const STEPS: { id: Step; title: string }[] = [
   { id: 'mode', title: 'Create Mode' },
   { id: 'repository', title: 'Repository' },
-  { id: 'services', title: 'Services' },
-  { id: 'databases', title: 'Databases' },
   { id: 'config', title: 'Configuration' },
   { id: 'review', title: 'Review' },
 ];
@@ -87,6 +98,8 @@ export function CreateProjectForm({
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<Step>('mode');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingAnalyze, setIsLoadingAnalyze] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     mode: 'import',
@@ -95,19 +108,19 @@ export function CreateProjectForm({
     repositoryFullName: '',
     isPrivate: false,
     template: 'nextjs',
-    projectId: '',
     name: '',
     slug: '',
     description: '',
     teamId: teams[0]?.id || '',
-    services: [
-      { _id: nanoid(), name: 'web', type: 'web', run: { command: 'npm start', port: 3000 } },
-    ],
+    services: [],
     databases: [],
     domain: '',
     useCustomDomain: false,
     productionBranch: 'main',
     autoDeploy: true,
+    monorepoType: 'none',
+    hasDockerBake: false,
+    bakeTargets: [],
   });
 
   const [repositories, setRepositories] = useState<
@@ -119,7 +132,6 @@ export function CreateProjectForm({
     }>
   >([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoadingRepos, setIsLoadingRepos] = useState(false);
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
   const isFirstStep = currentStepIndex === 0;
@@ -127,25 +139,83 @@ export function CreateProjectForm({
 
   const fetchRepositories = useCallback(
     async (search?: string) => {
-      setIsLoadingRepos(true);
-      try {
-        const url = new URL('/api/git/repositories', window.location.origin);
-        url.searchParams.set('providerId', gitProviderId);
-        if (search) url.searchParams.set('search', search);
+      const url = new URL('/api/git/repositories', window.location.origin);
+      url.searchParams.set('providerId', gitProviderId);
+      if (search) url.searchParams.set('search', search);
 
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          setRepositories(data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch repositories:', error);
-      } finally {
-        setIsLoadingRepos(false);
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setRepositories(data);
       }
     },
     [gitProviderId]
   );
+
+  const analyzeRepository = useCallback(async (repoFullName: string, branch: string) => {
+    setIsLoadingAnalyze(true);
+    setAnalyzeError(null);
+
+    try {
+      const url = new URL('/api/git/repositories/analyze', window.location.origin);
+      url.searchParams.set('repositoryFullName', repoFullName);
+      url.searchParams.set('branch', branch);
+
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+
+        // Convert detected services to form services
+        const services: ServiceWithId[] = data.services.map((s: DetectedService) => ({
+          _id: nanoid(),
+          ...s,
+        }));
+
+        setFormData((prev) => ({
+          ...prev,
+          services,
+          monorepoType: data.monorepoType,
+          hasDockerBake: data.hasDockerBake,
+          bakeTargets: data.bakeTargets,
+        }));
+      } else {
+        const error = await res.json();
+        setAnalyzeError(error.error || 'Failed to analyze repository');
+        // Set default service
+        setFormData((prev) => ({
+          ...prev,
+          services: [
+            {
+              _id: nanoid(),
+              name: 'web',
+              type: 'web' as const,
+              appDir: '.',
+              startCommand: 'npm start',
+              port: 3000,
+            },
+          ],
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to analyze repository:', error);
+      setAnalyzeError('Failed to analyze repository');
+      setFormData((prev) => ({
+        ...prev,
+        services: [
+          {
+            _id: nanoid(),
+            name: 'web',
+            type: 'web' as const,
+            appDir: '.',
+            startCommand: 'npm start',
+            port: 3000,
+          },
+        ],
+      }));
+    } finally {
+      setIsLoadingAnalyze(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (currentStep === 'repository' && formData.mode === 'import') {
@@ -172,7 +242,7 @@ export function CreateProjectForm({
     }
   };
 
-  const selectRepository = (repo: (typeof repositories)[0]) => {
+  const selectRepository = async (repo: (typeof repositories)[0]) => {
     setFormData((prev) => ({
       ...prev,
       repositoryId: repo.id,
@@ -185,68 +255,51 @@ export function CreateProjectForm({
         .replace(/^-|-$/g, ''),
       productionBranch: repo.defaultBranch || 'main',
     }));
+
+    // 分析仓库
+    await analyzeRepository(repo.fullName, repo.defaultBranch || 'main');
     handleNext();
   };
 
-  const addService = () => {
-    setFormData((prev) => ({
-      ...prev,
-      services: [
-        ...prev.services,
-        {
-          _id: nanoid(),
-          name: `service-${prev.services.length + 1}`,
-          type: 'web',
-          run: { command: '', port: 3000 },
-        },
-      ],
-    }));
-  };
-
-  const removeService = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      services: prev.services.filter((_, i) => i !== index),
-    }));
-  };
-
-  const updateService = (index: number, updates: Partial<ServiceConfig>) => {
+  const updateService = (index: number, updates: Partial<DetectedService>) => {
     setFormData((prev) => ({
       ...prev,
       services: prev.services.map((s, i) => (i === index ? { ...s, ...updates } : s)),
     }));
   };
 
-  const addDatabase = () => {
-    setFormData((prev) => ({
-      ...prev,
-      databases: [...prev.databases, { _id: nanoid(), name: 'database', type: 'postgresql' }],
-    }));
-  };
-
-  const removeDatabase = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      databases: prev.databases.filter((_, i) => i !== index),
-    }));
-  };
-
-  const updateDatabase = (index: number, updates: Partial<DatabaseConfig>) => {
-    setFormData((prev) => ({
-      ...prev,
-      databases: prev.databases.map((d, i) => (i === index ? { ...d, ...updates } : d)),
-    }));
+  const toggleService = (index: number) => {
+    const service = formData.services[index];
+    if ((service as ServiceWithId & { disabled?: boolean }).disabled) {
+      // Re-enable: keep the service
+      setFormData((prev) => ({
+        ...prev,
+        services: prev.services.map((s, i) => (i === index ? { ...s, disabled: false } : s)),
+      }));
+    } else {
+      // Disable: remove from active services but keep in list
+      setFormData((prev) => ({
+        ...prev,
+        services: prev.services.map((s, i) => (i === index ? { ...s, disabled: true } : s)),
+      }));
+    }
   };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
 
     try {
+      // Filter out disabled services
+      const activeServices = formData.services.filter(
+        (s) => !(s as ServiceWithId & { disabled?: boolean }).disabled
+      );
+
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          services: activeServices,
           gitProviderId,
         }),
       });
@@ -275,16 +328,12 @@ export function CreateProjectForm({
           return !!formData.repositoryId;
         }
         return !!formData.repositoryName;
-      case 'services':
-        return (
-          formData.services.length > 0 && formData.services.every((s) => s.name && s.run?.command)
-        );
-      case 'databases':
-        return true;
       case 'config':
         return !!formData.name && !!formData.teamId;
       case 'review':
-        return true;
+        return formData.services.some(
+          (s) => !(s as ServiceWithId & { disabled?: boolean }).disabled
+        );
       default:
         return false;
     }
@@ -401,11 +450,7 @@ export function CreateProjectForm({
                   </div>
 
                   <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
-                    {isLoadingRepos ? (
-                      <div className="p-8 text-center text-muted-foreground">
-                        Loading repositories...
-                      </div>
-                    ) : repositories.length === 0 ? (
+                    {repositories.length === 0 ? (
                       <div className="p-8 text-center text-muted-foreground">
                         No repositories found
                       </div>
@@ -519,221 +564,20 @@ export function CreateProjectForm({
             </div>
           )}
 
-          {currentStep === 'services' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold mb-1">Configure Services</h2>
-                <p className="text-sm text-muted-foreground">
-                  Define the services that make up your application
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {formData.services.map((service, index) => (
-                  <div key={service._id} className="border rounded-lg p-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Service {index + 1}</span>
-                      {formData.services.length > 1 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeService(index)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Name</Label>
-                        <Input
-                          value={service.name}
-                          onChange={(e) => updateService(index, { name: e.target.value })}
-                          placeholder="web"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Type</Label>
-                        <Select
-                          value={service.type}
-                          onValueChange={(value) =>
-                            updateService(index, { type: value as ServiceConfig['type'] })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="web">Web Service</SelectItem>
-                            <SelectItem value="worker">Background Worker</SelectItem>
-                            <SelectItem value="cron">Scheduled Job</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Build Command</Label>
-                        <Input
-                          value={service.build?.command || ''}
-                          onChange={(e) =>
-                            updateService(index, {
-                              build: { ...service.build, command: e.target.value },
-                            })
-                          }
-                          placeholder="npm run build"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Start Command</Label>
-                        <Input
-                          value={service.run?.command || ''}
-                          onChange={(e) =>
-                            updateService(index, {
-                              run: { ...service.run, command: e.target.value },
-                            })
-                          }
-                          placeholder="npm start"
-                        />
-                      </div>
-                    </div>
-
-                    {service.type === 'web' && (
-                      <div className="space-y-2">
-                        <Label>Port</Label>
-                        <Input
-                          type="number"
-                          value={service.run?.port || ''}
-                          onChange={(e) =>
-                            updateService(index, {
-                              run: { ...service.run, port: parseInt(e.target.value, 10) },
-                            })
-                          }
-                          placeholder="3000"
-                          className="w-32"
-                        />
-                      </div>
-                    )}
-
-                    {service.type === 'cron' && (
-                      <div className="space-y-2">
-                        <Label>Schedule (Cron)</Label>
-                        <Input
-                          value={service.schedule || ''}
-                          onChange={(e) => updateService(index, { schedule: e.target.value })}
-                          placeholder="0 */6 * * *"
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                <Button variant="outline" onClick={addService} className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Service
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {currentStep === 'databases' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold mb-1">Add Databases (Optional)</h2>
-                <p className="text-sm text-muted-foreground">
-                  Add managed databases for your application
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {formData.databases.map((database, index) => (
-                  <div key={database._id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="font-medium">Database {index + 1}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeDatabase(index)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label>Name</Label>
-                        <Input
-                          value={database.name}
-                          onChange={(e) => updateDatabase(index, { name: e.target.value })}
-                          placeholder="postgres"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Type</Label>
-                        <Select
-                          value={database.type}
-                          onValueChange={(value) =>
-                            updateDatabase(index, { type: value as DatabaseConfig['type'] })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                            <SelectItem value="mysql">MySQL</SelectItem>
-                            <SelectItem value="redis">Redis</SelectItem>
-                            <SelectItem value="mongodb">MongoDB</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Plan</Label>
-                        <Select
-                          value={database.plan || 'starter'}
-                          onValueChange={(value) =>
-                            updateDatabase(index, { plan: value as DatabaseConfig['plan'] })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="starter">Starter</SelectItem>
-                            <SelectItem value="standard">Standard</SelectItem>
-                            <SelectItem value="premium">Premium</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {formData.databases.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground border rounded-lg">
-                    <p>No databases added</p>
-                    <p className="text-sm mt-1">You can add databases later in project settings</p>
-                  </div>
-                )}
-
-                <Button variant="outline" onClick={addDatabase} className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Database
-                </Button>
-              </div>
-            </div>
-          )}
-
           {currentStep === 'config' && (
             <div className="space-y-6">
+              {isLoadingAnalyze ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                  <p className="text-sm text-muted-foreground">Analyzing repository...</p>
+                </div>
+              ) : analyzeError ? (
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+                  <p className="text-sm text-yellow-800">{analyzeError}</p>
+                  <p className="text-xs text-yellow-600 mt-1">Using default configuration</p>
+                </div>
+              ) : null}
+
               <div>
                 <h2 className="text-lg font-semibold mb-1">Project Configuration</h2>
                 <p className="text-sm text-muted-foreground">Configure your project settings</p>
@@ -833,47 +677,6 @@ export function CreateProjectForm({
                     />
                   </div>
                 </div>
-
-                <div className="space-y-4 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Custom Domain</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Use a custom domain instead of the default
-                      </p>
-                    </div>
-                    <Switch
-                      checked={formData.useCustomDomain}
-                      onCheckedChange={(checked) =>
-                        setFormData((prev) => ({ ...prev, useCustomDomain: checked }))
-                      }
-                    />
-                  </div>
-
-                  {formData.useCustomDomain && (
-                    <div className="space-y-2">
-                      <Label>Domain</Label>
-                      <Input
-                        value={formData.domain}
-                        onChange={(e) =>
-                          setFormData((prev) => ({ ...prev, domain: e.target.value }))
-                        }
-                        placeholder="myapp.com"
-                      />
-                    </div>
-                  )}
-
-                  {!formData.useCustomDomain && (
-                    <div className="p-3 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground">
-                        Default domain:{' '}
-                        <span className="font-mono">
-                          {formData.slug || 'my-project'}.juanie.dev
-                        </span>
-                      </p>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           )}
@@ -894,13 +697,6 @@ export function CreateProjectForm({
                     <p className="font-medium">{formData.name || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Slug</p>
-                    <p className="font-medium font-mono">{formData.slug || '-'}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
                     <p className="text-sm text-muted-foreground">Repository</p>
                     <p className="font-medium">
                       {formData.mode === 'import'
@@ -908,50 +704,78 @@ export function CreateProjectForm({
                         : `${formData.repositoryName} (new)`}
                     </p>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Team</p>
                     <p className="font-medium">
                       {teams.find((t) => t.id === formData.teamId)?.name || '-'}
                     </p>
                   </div>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Services</p>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.services.map((service) => (
-                      <Badge key={service.name} variant="secondary">
-                        {service.name} ({service.type})
-                      </Badge>
-                    ))}
+                  <div>
+                    <p className="text-sm text-muted-foreground">Branch</p>
+                    <p className="font-medium">{formData.productionBranch}</p>
                   </div>
                 </div>
 
-                {formData.databases.length > 0 && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Databases</p>
-                    <div className="flex flex-wrap gap-2">
-                      {formData.databases.map((db) => (
-                        <Badge key={db.name} variant="secondary">
-                          {db.name} ({db.type})
-                        </Badge>
-                      ))}
-                    </div>
+                {formData.monorepoType !== 'none' && (
+                  <div className="rounded-lg bg-muted p-3 flex items-center gap-2">
+                    <Badge variant="secondary">Monorepo: {formData.monorepoType}</Badge>
+                    {formData.hasDockerBake && <Badge variant="secondary">docker-bake.hcl</Badge>}
                   </div>
                 )}
 
                 <div>
-                  <p className="text-sm text-muted-foreground">Domain</p>
-                  <p className="font-medium font-mono">
-                    {formData.useCustomDomain ? formData.domain : `${formData.slug}.juanie.dev`}
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Services (
+                    {
+                      formData.services.filter(
+                        (s) => !(s as ServiceWithId & { disabled?: boolean }).disabled
+                      ).length
+                    }{' '}
+                    active)
                   </p>
+                  <div className="border rounded-lg divide-y">
+                    {formData.services.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground">
+                        No services detected
+                      </div>
+                    ) : (
+                      formData.services.map((service, index) => (
+                        <div
+                          key={(service as ServiceWithId)._id}
+                          className={cn(
+                            'p-3 flex items-center justify-between',
+                            (service as ServiceWithId & { disabled?: boolean }).disabled &&
+                              'opacity-50'
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Switch
+                              checked={
+                                !(service as ServiceWithId & { disabled?: boolean }).disabled
+                              }
+                              onCheckedChange={() => toggleService(index)}
+                            />
+                            <div>
+                              <p className="font-medium">{service.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {service.appDir} • {service.type} • port {service.port}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="outline">{service.type}</Badge>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 pt-4">
                   <Badge variant={formData.autoDeploy ? 'default' : 'secondary'}>
                     Auto Deploy: {formData.autoDeploy ? 'On' : 'Off'}
                   </Badge>
-                  <Badge variant="secondary">Branch: {formData.productionBranch}</Badge>
                 </div>
               </div>
             </div>

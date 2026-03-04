@@ -299,6 +299,64 @@ export class GitLabProvider implements GitProvider {
     return res.ok;
   }
 
+  async getFileContent(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<string | null> {
+    const encodedPath = encodeURIComponent(repoFullName);
+    const ref = branch ? `?ref=${branch}` : '';
+
+    const res = await fetch(
+      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/files/${encodeURIComponent(path)}${ref}`,
+      { headers: this.getHeaders(accessToken) }
+    );
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = await res.json();
+    if (!data.content) {
+      return null;
+    }
+
+    // GitLab returns base64 encoded content
+    return Buffer.from(data.content, 'base64').toString('utf-8');
+  }
+
+  async listDirectory(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
+    const encodedPath = encodeURIComponent(repoFullName);
+    const ref = branch ? `&ref=${branch}` : '';
+
+    const res = await fetch(
+      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/tree?path=${encodeURIComponent(path)}&per_page=100${ref}`,
+      { headers: this.getHeaders(accessToken) }
+    );
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+      return [];
+    }
+
+    return data.map((item: { name: string; path: string; type: string }) => ({
+      name: item.name,
+      path: item.path,
+      type: item.type === 'tree' ? 'dir' : 'file',
+    }));
+  }
+
   private mapRepository(data: Record<string, unknown>): GitRepository {
     const httpUrl = data.http_url_to_repo as string;
     const sshUrl = data.ssh_url_to_repo as string;

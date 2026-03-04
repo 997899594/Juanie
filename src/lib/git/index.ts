@@ -112,6 +112,26 @@ export interface GitProvider {
     path: string,
     branch?: string
   ): Promise<boolean>;
+
+  /**
+   * Get content of a file in the repository.
+   */
+  getFileContent(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<string | null>;
+
+  /**
+   * List contents of a directory in the repository.
+   */
+  listDirectory(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>>;
 }
 
 export function createGitProvider(config: GitProviderConfig): GitProvider {

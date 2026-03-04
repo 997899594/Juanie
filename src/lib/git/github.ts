@@ -312,6 +312,64 @@ export class GitHubProvider implements GitProvider {
     return res.ok;
   }
 
+  async getFileContent(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<string | null> {
+    const [owner, repo] = repoFullName.split('/');
+    const ref = branch ? `?ref=${branch}` : '';
+
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/${path}${ref}`,
+      { headers: this.getHeaders(accessToken) }
+    );
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = await res.json();
+    if (data.type !== 'file' || !data.content) {
+      return null;
+    }
+
+    // GitHub returns base64 encoded content
+    return Buffer.from(data.content, 'base64').toString('utf-8');
+  }
+
+  async listDirectory(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
+    const [owner, repo] = repoFullName.split('/');
+    const ref = branch ? `&ref=${branch}` : '';
+
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/${path}?${ref}`,
+      { headers: this.getHeaders(accessToken) }
+    );
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+      return [];
+    }
+
+    return data.map((item: { name: string; path: string; type: string }) => ({
+      name: item.name,
+      path: item.path,
+      type: item.type === 'dir' ? 'dir' : 'file',
+    }));
+  }
+
   private mapRepository(data: Record<string, unknown>): GitRepository {
     return {
       id: String(data.id),
