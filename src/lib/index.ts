@@ -3,12 +3,6 @@ export { createAuditLog, formatAuditAction, getAuditLogs } from './audit';
 export { auth, handlers } from './auth';
 export { db } from './db';
 export {
-  createGitRepository,
-  createKustomization,
-  getKustomizationStatus,
-  reconcileKustomization,
-} from './flux';
-export {
   createNamespace,
   createSecret,
   getDeployments,

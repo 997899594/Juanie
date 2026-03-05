@@ -64,65 +64,6 @@ export class TemplateService {
       .replace(/\{\{NODE_VERSION\}\}/g, this.variables.nodeVersion || '20')
       .replace(/\{\{NANOID\}\}/g, nanoid(8));
   }
-
-  generateK8sManifests(): string {
-    const { projectSlug } = this.variables;
-
-    return `
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ${projectSlug}-development
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ${projectSlug}-staging
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ${projectSlug}-production
-`;
-  }
-
-  generateKustomizationYaml(env: 'development' | 'staging' | 'production'): string {
-    const { projectSlug } = this.variables;
-    const _envUpper = env.charAt(0).toUpperCase() + env.slice(1);
-
-    return `
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: ${projectSlug}-${env}
-  namespace: flux-system
-spec:
-  interval: 1m
-  sourceRef:
-    kind: GitRepository
-    name: ${projectSlug}
-  path: ./k8s/overlays/${env}
-  prune: true
-  targetNamespace: ${projectSlug}-${env}
-`;
-  }
-
-  generateGitRepositoryYaml(gitUrl: string, branch: string = 'main'): string {
-    const { projectSlug } = this.variables;
-
-    return `
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: GitRepository
-metadata:
-  name: ${projectSlug}
-  namespace: flux-system
-spec:
-  url: ${gitUrl}
-  ref:
-    branch: ${branch}
-  interval: 1m
-`;
-  }
 }
 
 export async function loadTemplate(templateId: string) {
