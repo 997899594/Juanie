@@ -317,7 +317,10 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
 async function validateRepository(
   project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null }
 ) {
+  console.log(`[validateRepository] Starting for project ${project.name}`);
+
   if (!project.repository) {
+    console.log('[validateRepository] No repository linked');
     // In dev mode without a real repo, just pass
     if (isDev) {
       console.log('⚠️  Skipping repository validation (dev mode)');
@@ -326,9 +329,12 @@ async function validateRepository(
     throw new Error('No repository linked to project');
   }
 
+  console.log(`[validateRepository] Repository: ${project.repository.fullName}`);
+
   // 使用 team owner 的 git provider（有 token 的那个）
   const gitProviderResult = await getTeamGitProvider(project.teamId);
   if (!gitProviderResult) {
+    console.log('[validateRepository] No git provider result');
     if (isDev) {
       console.log('⚠️  Skipping repository validation (no git provider in dev mode)');
       return;
@@ -337,11 +343,15 @@ async function validateRepository(
   }
   const { provider, client } = gitProviderResult;
 
+  console.log(`[validateRepository] Calling GitHub API for ${project.repository.fullName}`);
   const repo = await client.getRepository(provider.accessToken!, project.repository.fullName);
+  console.log(`[validateRepository] GitHub API result: ${repo ? 'found' : 'not found'}`);
 
   if (!repo) {
     throw new Error('No access to repository');
   }
+
+  console.log('[validateRepository] Validation passed');
 }
 
 async function createRepository(project: typeof projects.$inferSelect) {
