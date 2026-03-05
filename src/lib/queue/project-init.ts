@@ -152,6 +152,8 @@ type StepName = (typeof IMPORT_STEPS)[number] | (typeof CREATE_STEPS)[number];
 // ============================================
 
 async function getTeamGitProvider(teamId: string): Promise<GitProviderWithClient | undefined> {
+  console.log(`[getTeamGitProvider] Looking for team owner in team ${teamId}`);
+
   const teamMember = await db.query.teamMembers.findFirst({
     where: and(eq(teamMembers.teamId, teamId), eq(teamMembers.role, 'owner')),
     with: {
@@ -160,21 +162,35 @@ async function getTeamGitProvider(teamId: string): Promise<GitProviderWithClient
   });
 
   if (!teamMember) {
+    console.log(`[getTeamGitProvider] No owner found for team ${teamId}`);
     throw new Error('No owner found for team');
   }
+
+  console.log(`[getTeamGitProvider] Found team owner: ${teamMember.userId}`);
 
   const gitProvider = await db.query.gitProviders.findFirst({
     where: eq(gitProviders.userId, teamMember.userId),
   });
 
-  if (!gitProvider || !gitProvider.accessToken) {
+  if (!gitProvider) {
+    console.log(`[getTeamGitProvider] No gitProvider found for user ${teamMember.userId}`);
     if (isDev) {
-      console.log('⚠️  Skipping repository validation (no provider or dev mode)');
+      console.log('⚠️  Skipping (no provider, dev mode)');
       return;
     }
-    console.log('❌ Git provider not configured for team owner');
     throw new Error('No Git provider configured for team owner');
   }
+
+  if (!gitProvider.accessToken) {
+    console.log(`[getTeamGitProvider] gitProvider ${gitProvider.id} has no accessToken`);
+    if (isDev) {
+      console.log('⚠️  Skipping (no token, dev mode)');
+      return;
+    }
+    throw new Error('Git provider has no access token');
+  }
+
+  console.log(`[getTeamGitProvider] Found gitProvider ${gitProvider.id} with token`);
 
   const client = createGitProvider({
     type: gitProvider.type,
