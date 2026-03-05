@@ -152,13 +152,13 @@ export function CreateProjectForm({
     [gitProviderId]
   );
 
-  const analyzeRepository = useCallback(async (repoFullName: string, branch: string) => {
+  const analyzeRepository = useCallback(async (repositoryId: string, branch: string) => {
     setIsLoadingAnalyze(true);
     setAnalyzeError(null);
 
     try {
       const url = new URL('/api/git/repositories/analyze', window.location.origin);
-      url.searchParams.set('repositoryFullName', repoFullName);
+      url.searchParams.set('repositoryId', repositoryId);
       url.searchParams.set('branch', branch);
 
       const res = await fetch(url);
@@ -257,7 +257,7 @@ export function CreateProjectForm({
     }));
 
     // 分析仓库
-    await analyzeRepository(repo.fullName, repo.defaultBranch || 'main');
+    await analyzeRepository(repo.id, repo.defaultBranch || 'main');
     handleNext();
   };
 
