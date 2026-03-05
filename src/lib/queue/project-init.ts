@@ -205,7 +205,7 @@ async function getTeamGitProvider(teamId: string): Promise<GitProviderWithClient
 
 async function updateStepStatus(
   projectId: string,
-  _step: StepName,
+  step: StepName,
   status: 'running' | 'completed' | 'failed' | 'skipped',
   data?: { message?: string; progress?: number; error?: string }
 ) {
@@ -219,7 +219,7 @@ async function updateStepStatus(
       startedAt: status === 'running' ? new Date() : undefined,
       completedAt: status === 'completed' || status === 'skipped' ? new Date() : undefined,
     })
-    .where(eq(projectInitSteps.projectId, projectId));
+    .where(and(eq(projectInitSteps.projectId, projectId), eq(projectInitSteps.step, step)));
 }
 
 export async function processProjectInit(job: Job<ProjectInitJobData>) {
