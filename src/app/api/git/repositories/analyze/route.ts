@@ -47,7 +47,7 @@ function parseDockerBakeTargets(content: string): string[] {
  */
 function parseStartCommand(
   content: string,
-  serviceName: string
+  _serviceName: string
 ): { startCommand: string; port: number } {
   try {
     const pkg = JSON.parse(content);

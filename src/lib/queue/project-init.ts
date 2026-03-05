@@ -151,9 +151,7 @@ type StepName = (typeof IMPORT_STEPS)[number] | (typeof CREATE_STEPS)[number];
 // Helper Functions
 // ============================================
 
-async function getTeamGitProvider(
-  teamId: string
-): Promise<GitProviderWithClient | undefined> {
+async function getTeamGitProvider(teamId: string): Promise<GitProviderWithClient | undefined> {
   const teamMember = await db.query.teamMembers.findFirst({
     where: and(eq(teamMembers.teamId, teamId), eq(teamMembers.role, 'owner')),
     with: {

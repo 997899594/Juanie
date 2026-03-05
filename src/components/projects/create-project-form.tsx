@@ -261,7 +261,7 @@ export function CreateProjectForm({
     handleNext();
   };
 
-  const updateService = (index: number, updates: Partial<DetectedService>) => {
+  const _updateService = (index: number, updates: Partial<DetectedService>) => {
     setFormData((prev) => ({
       ...prev,
       services: prev.services.map((s, i) => (i === index ? { ...s, ...updates } : s)),

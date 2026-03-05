@@ -583,7 +583,7 @@ export const auditLogs = pgTable(
 // Relations
 // ============================================
 
-export const usersRelations = relations(users, ({ many, one }) => ({
+export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
   sessions: many(sessions),
   gitProviders: many(gitProviders),
