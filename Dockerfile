@@ -40,6 +40,9 @@ RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
 FROM oven/bun:1 AS runner
 WORKDIR /app
 
+# 安装 procps (pgrep for liveness probe)
+RUN apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
