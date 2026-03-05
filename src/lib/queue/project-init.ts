@@ -310,28 +310,18 @@ async function validateRepository(
     throw new Error('No repository linked to project');
   }
 
-  const provider = await db.query.gitProviders.findFirst({
-    where: eq(gitProviders.id, project.repository.providerId),
-  });
-
-  if (!provider || !provider.accessToken) {
-    // In dev mode, skip validation
+  // 使用 team owner 的 git provider（有 token 的那个）
+  const gitProviderResult = await getTeamGitProvider(project.teamId);
+  if (!gitProviderResult) {
     if (isDev) {
-      console.log('⚠️  Skipping repository validation (no provider, dev mode)');
+      console.log('⚠️  Skipping repository validation (no git provider in dev mode)');
       return;
     }
-    throw new Error('Git provider not configured');
+    throw new Error('Git provider not configured for team owner');
   }
+  const { provider, client } = gitProviderResult;
 
-  const gitProvider = createGitProvider({
-    type: provider.type,
-    serverUrl: provider.serverUrl || undefined,
-    clientId: provider.clientId || '',
-    clientSecret: provider.clientSecret || '',
-    redirectUri: '',
-  });
-
-  const repo = await gitProvider.getRepository(provider.accessToken, project.repository.fullName);
+  const repo = await client.getRepository(provider.accessToken!, project.repository.fullName);
 
   if (!repo) {
     throw new Error('No access to repository');
