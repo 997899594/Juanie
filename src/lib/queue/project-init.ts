@@ -151,7 +151,9 @@ type StepName = (typeof IMPORT_STEPS)[number] | (typeof CREATE_STEPS)[number];
 // Helper Functions
 // ============================================
 
-async function getTeamGitProvider(teamId: string): Promise<GitProviderWithClient> {
+async function getTeamGitProvider(
+  teamId: string
+): Promise<GitProviderWithClient | undefined> {
   const teamMember = await db.query.teamMembers.findFirst({
     where: and(eq(teamMembers.teamId, teamId), eq(teamMembers.role, 'owner')),
     with: {
@@ -168,6 +170,11 @@ async function getTeamGitProvider(teamId: string): Promise<GitProviderWithClient
   });
 
   if (!gitProvider || !gitProvider.accessToken) {
+    if (isDev) {
+      console.log('⚠️  Skipping repository validation (no provider or dev mode)');
+      return;
+    }
+    console.log('❌ Git provider not configured for team owner');
     throw new Error('No Git provider configured for team owner');
   }
 
@@ -336,7 +343,12 @@ async function validateRepository(
 async function createRepository(project: typeof projects.$inferSelect) {
   console.log(`Creating repository for project ${project.name}`);
 
-  const { provider, client } = await getTeamGitProvider(project.teamId);
+  const gitProviderResult = await getTeamGitProvider(project.teamId);
+  if (!gitProviderResult) {
+    console.log('⚠️ Skipping repository creation (no git provider in dev mode)');
+    return { repository: null };
+  }
+  const { provider, client } = gitProviderResult;
 
   const repo = await client.createRepository(provider.accessToken!, {
     name: project.slug,
@@ -379,7 +391,12 @@ async function pushTemplate(
     throw new Error('Project has no repository');
   }
 
-  const { provider, client } = await getTeamGitProvider(project.teamId);
+  const gitProviderResult = await getTeamGitProvider(project.teamId);
+  if (!gitProviderResult) {
+    console.log('⚠️ Skipping push files (no git provider in dev mode)');
+    return;
+  }
+  const { provider, client } = gitProviderResult;
 
   // Get template ID from project config or default to 'nextjs'
   const templateId = (project.configJson as any)?.['template'] || 'nextjs';
@@ -432,7 +449,12 @@ async function pushCicdConfig(
     return;
   }
 
-  const { provider, client } = await getTeamGitProvider(project.teamId);
+  const gitProviderResult = await getTeamGitProvider(project.teamId);
+  if (!gitProviderResult) {
+    console.log('⚠️ Skipping CI/CD config push (no git provider in dev mode)');
+    return;
+  }
+  const { provider, client } = gitProviderResult;
 
   // Detect monorepo type from repository root files
   let monorepoType: MonorepoType = 'none';
@@ -802,7 +824,12 @@ async function setupRegistryWebhook(
     return;
   }
 
-  const { provider, client } = await getTeamGitProvider(project.teamId);
+  const gitProviderResult = await getTeamGitProvider(project.teamId);
+  if (!gitProviderResult) {
+    console.log('⚠️ Skipping registry webhook (no git provider in dev mode)');
+    return;
+  }
+  const { provider, client } = gitProviderResult;
 
   // Check if registry webhook already exists
   const existingWebhook = await db.query.webhooks.findFirst({
@@ -895,7 +922,12 @@ async function setupWebhook(
     return;
   }
 
-  const { provider, client } = await getTeamGitProvider(project.teamId);
+  const gitProviderResult = await getTeamGitProvider(project.teamId);
+  if (!gitProviderResult) {
+    console.log('⚠️ Skipping webhook setup (no git provider in dev mode)');
+    return;
+  }
+  const { provider, client } = gitProviderResult;
 
   // 检查是否已存在 webhook
   const existingWebhook = await db.query.webhooks.findFirst({

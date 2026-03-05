@@ -103,6 +103,22 @@ const nextAuth = NextAuth({
       return session;
     },
   },
+  events: {
+    async signOut(message) {
+      // 退出登录时清理 gitProvider token (JWT 模式)
+      if ('token' in message && message.token?.id) {
+        await db
+          .update(gitProviders)
+          .set({
+            accessToken: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(gitProviders.userId, message.token.id as string));
+      }
+    },
+  },
   pages: {
     signIn: '/login',
   },
