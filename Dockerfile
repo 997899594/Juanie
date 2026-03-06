@@ -1,11 +1,8 @@
 # ============================================
 # Stage 1: Builder (Next.js)
 # ============================================
-FROM oven/bun:1.2.2 AS builder
+FROM oven/bun:1 AS builder
 WORKDIR /app
-
-# Reduce memory pressure during install
-ENV BUN_INSTALL_SKIP_DEVIONLY=1
 
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
@@ -17,15 +14,12 @@ ARG DATABASE_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV DATABASE_URL=${DATABASE_URL}
 
-ENV NODE_OPTIONS="--max-old-space-size=4096"
-
-# Use node instead of bun for build to avoid Bun crash
-RUN bunx next build
+RUN bun run build
 
 # ============================================
 # Stage 2: Worker Builder (编译独立可执行文件)
 # ============================================
-FROM oven/bun:1.2.2 AS worker-builder
+FROM oven/bun:1 AS worker-builder
 WORKDIR /app
 
 COPY package.json bun.lock ./
