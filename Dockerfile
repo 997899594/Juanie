@@ -4,6 +4,9 @@
 FROM oven/bun:1 AS builder
 WORKDIR /app
 
+# Reduce memory pressure during install
+ENV BUN_INSTALL_SKIP_DEVIONLY=1
+
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
@@ -13,6 +16,8 @@ ARG NEXT_PUBLIC_API_URL
 ARG DATABASE_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV DATABASE_URL=${DATABASE_URL}
+
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 RUN bun run build
 
