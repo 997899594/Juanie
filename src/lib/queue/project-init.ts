@@ -19,6 +19,7 @@ import {
   webhooks,
 } from '@/lib/db/schema';
 import { createGitProvider } from '@/lib/git';
+import { AppDeployer, type AppSpec } from '@/lib/k8s/index';
 import {
   createCiliumGateway,
   createCiliumHTTPRoute,
@@ -1015,37 +1016,42 @@ async function deployServices(project: typeof projects.$inferSelect, hasK8s: boo
 
   const namespace = `juanie-${project.slug}`;
 
+  if (!hasK8s) {
+    console.log('⚠️  Skipping service deployment (no K8s cluster)');
+    return;
+  }
+
   for (const service of serviceList) {
-    if (hasK8s) {
-      console.log(`Deploying service ${service.name} for project ${project.name}`);
+    // Build image name (in production, this would be built by CI/CD)
+    const imageName = `juanie/${project.slug}-${service.name}:latest`;
 
-      // Build image name (in production, this would be built by CI/CD)
-      const imageName = `juanie/${project.slug}-${service.name}:latest`;
+    const spec: AppSpec = {
+      projectId: project.id,
+      name: service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      namespace,
+      image: {
+        repository: `juanie/${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
+        tag: 'latest',
+        pullPolicy: 'Always',
+      },
+      replicas: service.replicas || 1,
+      port: service.port || 3000,
+      hostname: undefined, // Will be set in configure_dns step
+      resources: {
+        cpu: {
+          request: service.cpuRequest || '100m',
+          limit: service.cpuLimit || '500m',
+        },
+        memory: {
+          request: service.memoryRequest || '128Mi',
+          limit: service.memoryLimit || '512Mi',
+        },
+      },
+    };
 
-      // Create Deployment
-      await createDeployment(namespace, `${project.slug}-${service.name}`, {
-        image: imageName,
-        port: service.port || 3000,
-        replicas: service.replicas || 1,
-        cpuRequest: service.cpuRequest || undefined,
-        cpuLimit: service.cpuLimit || undefined,
-        memoryRequest: service.memoryRequest || undefined,
-        memoryLimit: service.memoryLimit || undefined,
-        command: service.startCommand ? parseCommandString(service.startCommand) : undefined,
-      });
-
-      // Create Service for web services
-      if (service.type === 'web' && service.port) {
-        await createService(namespace, `${project.slug}-${service.name}`, {
-          port: 80,
-          targetPort: service.port,
-        });
-      }
-
-      console.log(`✅ Deployed service ${service.name}`);
-    } else {
-      console.log(`[Mock] Would deploy service: ${service.name}`);
-    }
+    console.log(`[deployServices] Deploying ${service.name}...`);
+    await AppDeployer.deploy(spec);
+    console.log(`✅ Deployed service ${service.name}`);
 
     await db.update(services).set({ status: 'running' }).where(eq(services.id, service.id));
   }
