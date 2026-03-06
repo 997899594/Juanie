@@ -33,6 +33,7 @@ const nextAuth = NextAuth({
       authorization: {
         params: {
           scope: 'read:user user:email repo',
+          prompt: 'consent',
         },
       },
     }),

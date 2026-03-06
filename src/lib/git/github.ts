@@ -27,6 +27,7 @@ export class GitHubProvider implements GitProvider {
       redirect_uri: this.redirectUri,
       scope: 'repo user:email',
       state,
+      prompt: 'consent',
     });
     return `https://github.com/login/oauth/authorize?${params}`;
   }
