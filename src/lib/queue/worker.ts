@@ -1,5 +1,6 @@
 import { createDeploymentWorker } from './deployment';
 import { createProjectInitWorker } from './project-init';
+import { startDriftDetector } from './drift-detector';
 
 console.log('Starting Juanie workers...');
 
@@ -37,3 +38,8 @@ process.on('SIGINT', async () => {
 console.log('Workers started successfully');
 console.log('  - Project init worker: listening to "project-init" queue');
 console.log('  - Deployment worker: listening to "deployment" queue');
+
+// 启动漂移检测
+if (process.env.ENABLE_DRIFT_DETECTOR !== 'false') {
+  startDriftDetector();
+}
