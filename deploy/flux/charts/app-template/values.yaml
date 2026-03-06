@@ -1,0 +1,30 @@
+# 应用配置
+app:
+  name: ""
+  namespace: ""
+  hostname: ""
+  port: 3000
+
+# 镜像配置
+image:
+  repository: ""
+  pullPolicy: Always
+  tag: "latest"
+
+# 副本数
+replicaCount: 1
+
+# 资源配置
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# 环境变量（非敏感）
+env: {}
+
+# 敏感配置
+secret: {}

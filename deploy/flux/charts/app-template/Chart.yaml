@@ -1,0 +1,6 @@
+apiVersion: v2
+name: app-template
+description: 通用子应用 Helm Chart 模板
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
