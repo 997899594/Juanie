@@ -51,8 +51,8 @@ export const AppSpecSchema = z.object({
   resources: ResourcesSpecSchema.optional(),
 
   // 环境变量
-  env: z.record(z.string()).optional(),
-  secretEnv: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  secretEnv: z.record(z.string(), z.string()).optional(),
 
   // 健康检查
   healthcheck: HealthCheckSchema.optional(),
