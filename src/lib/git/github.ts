@@ -270,7 +270,7 @@ export class GitHubProvider implements GitProvider {
 
   private getHeaders(accessToken: string): HeadersInit {
     return {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `token ${accessToken}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
     };
