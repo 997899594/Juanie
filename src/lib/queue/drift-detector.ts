@@ -1,7 +1,7 @@
 import { Cron } from 'croner';
-import { db } from '@/lib/db';
-import { projects, services } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { projects } from '@/lib/db/schema';
 import { getK8sClient } from '@/lib/k8s';
 import { AppBuilder } from '@/lib/k8s/app-builder';
 import { AppDeployer } from '@/lib/k8s/app-deployer';

@@ -1,6 +1,6 @@
-import type { AppSpec, AppResources } from './types';
+import { createHash } from 'node:crypto';
+import type { AppResources, AppSpec } from './types';
 import { getJuanieLabels } from './types';
-import { createHash } from 'crypto';
 
 /**
  * AppBuilder - 纯函数资源生成器
@@ -14,11 +14,11 @@ export class AppBuilder {
     const labels = getJuanieLabels(spec);
 
     return {
-      deployment: this.buildDeployment(spec, labels),
-      service: this.buildService(spec, labels),
-      configMap: this.buildConfigMap(spec, labels),
-      secret: this.buildSecret(spec, labels),
-      httpRoute: spec.hostname ? this.buildHTTPRoute(spec, labels) : undefined,
+      deployment: AppBuilder.buildDeployment(spec, labels),
+      service: AppBuilder.buildService(spec, labels),
+      configMap: AppBuilder.buildConfigMap(spec, labels),
+      secret: AppBuilder.buildSecret(spec, labels),
+      httpRoute: spec.hostname ? AppBuilder.buildHTTPRoute(spec, labels) : undefined,
     };
   }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { AppBuilder } from '../app-builder';
 import type { AppSpec } from '../types';
 
@@ -90,7 +90,9 @@ describe('AppBuilder', () => {
 
     expect(resources.deployment.spec.template.spec.containers[0].livenessProbe).toBeDefined();
     expect(resources.deployment.spec.template.spec.containers[0].readinessProbe).toBeDefined();
-    expect(resources.deployment.spec.template.spec.containers[0].livenessProbe.httpGet.path).toBe('/health');
+    expect(resources.deployment.spec.template.spec.containers[0].livenessProbe.httpGet.path).toBe(
+      '/health'
+    );
   });
 
   it('should generate consistent hash for same spec', () => {

@@ -31,11 +31,11 @@ export class AppDestroyer {
           version: 'v1',
           namespace,
           plural: 'httproutes',
-          name: route.metadata!.name!,
+          name: route.metadata?.name!,
         });
         console.log(`[AppDestroyer] Deleted HTTPRoute: ${route.metadata?.name}`);
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore
     }
 
@@ -43,10 +43,10 @@ export class AppDestroyer {
     try {
       const services = await core.listNamespacedService({ namespace, labelSelector });
       for (const svc of services.items) {
-        await core.deleteNamespacedService({ namespace, name: svc.metadata!.name! });
+        await core.deleteNamespacedService({ namespace, name: svc.metadata?.name! });
         console.log(`[AppDestroyer] Deleted Service: ${svc.metadata?.name}`);
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore
     }
 
@@ -54,10 +54,10 @@ export class AppDestroyer {
     try {
       const deployments = await apps.listNamespacedDeployment({ namespace, labelSelector });
       for (const dep of deployments.items) {
-        await apps.deleteNamespacedDeployment({ namespace, name: dep.metadata!.name! });
+        await apps.deleteNamespacedDeployment({ namespace, name: dep.metadata?.name! });
         console.log(`[AppDestroyer] Deleted Deployment: ${dep.metadata?.name}`);
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore
     }
 
@@ -65,10 +65,10 @@ export class AppDestroyer {
     try {
       const configMaps = await core.listNamespacedConfigMap({ namespace, labelSelector });
       for (const cm of configMaps.items) {
-        await core.deleteNamespacedConfigMap({ namespace, name: cm.metadata!.name! });
+        await core.deleteNamespacedConfigMap({ namespace, name: cm.metadata?.name! });
         console.log(`[AppDestroyer] Deleted ConfigMap: ${cm.metadata?.name}`);
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore
     }
 
@@ -76,10 +76,10 @@ export class AppDestroyer {
     try {
       const secrets = await core.listNamespacedSecret({ namespace, labelSelector });
       for (const s of secrets.items) {
-        await core.deleteNamespacedSecret({ namespace, name: s.metadata!.name! });
+        await core.deleteNamespacedSecret({ namespace, name: s.metadata?.name! });
         console.log(`[AppDestroyer] Deleted Secret: ${s.metadata?.name}`);
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore
     }
 

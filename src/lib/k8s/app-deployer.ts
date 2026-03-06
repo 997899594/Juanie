@@ -1,6 +1,6 @@
 import { getK8sClient } from '@/lib/k8s';
-import type { AppSpec, AppResources } from './types';
 import { AppBuilder } from './app-builder';
+import type { AppResources, AppSpec } from './types';
 import { JUANIE_LABELS } from './types';
 
 /**
@@ -17,23 +17,23 @@ export class AppDeployer {
     const resources = AppBuilder.build(spec);
 
     // 1. 确保 Namespace 存在
-    await this.ensureNamespace(spec.namespace);
+    await AppDeployer.ensureNamespace(spec.namespace);
 
     // 2. Apply 所有资源
-    await this.applyResource(resources.deployment);
-    await this.applyResource(resources.service);
+    await AppDeployer.applyResource(resources.deployment);
+    await AppDeployer.applyResource(resources.service);
     if (resources.configMap) {
-      await this.applyResource(resources.configMap);
+      await AppDeployer.applyResource(resources.configMap);
     }
     if (resources.secret) {
-      await this.applyResource(resources.secret);
+      await AppDeployer.applyResource(resources.secret);
     }
     if (resources.httpRoute) {
-      await this.applyResource(resources.httpRoute);
+      await AppDeployer.applyResource(resources.httpRoute);
     }
 
     // 3. Prune 孤儿资源
-    await this.pruneOrphans(spec.namespace, spec.name, resources);
+    await AppDeployer.pruneOrphans(spec.namespace, spec.name, resources);
 
     return { success: true, resources };
   }
@@ -47,24 +47,25 @@ export class AppDeployer {
 
     // 添加 last-applied-configuration 注解
     resource.metadata.annotations = resource.metadata.annotations || {};
-    resource.metadata.annotations['juanie.dev/last-applied-configuration'] = JSON.stringify(resource);
+    resource.metadata.annotations['juanie.dev/last-applied-configuration'] =
+      JSON.stringify(resource);
 
     try {
       if (kind === 'Deployment') {
-        await this.applyDeployment(resource);
+        await AppDeployer.applyDeployment(resource);
       } else if (kind === 'Service') {
-        await this.applyService(resource);
+        await AppDeployer.applyService(resource);
       } else if (kind === 'ConfigMap') {
-        await this.applyConfigMap(resource);
+        await AppDeployer.applyConfigMap(resource);
       } else if (kind === 'Secret') {
-        await this.applySecret(resource);
+        await AppDeployer.applySecret(resource);
       } else if (kind === 'HTTPRoute') {
-        await this.applyHTTPRoute(resource);
+        await AppDeployer.applyHTTPRoute(resource);
       }
     } catch (error) {
-        console.error(`[AppDeployer] Failed to apply ${kind}/${name}:`, error);
-        throw error;
-      }
+      console.error(`[AppDeployer] Failed to apply ${kind}/${name}:`, error);
+      throw error;
+    }
   }
 
   private static async applyDeployment(resource: any): Promise<void> {
@@ -197,10 +198,10 @@ export class AppDeployer {
       for (const cm of configMaps.items) {
         if (cm.metadata?.name !== currentNames.configMap) {
           console.log(`[AppDeployer] Pruning orphan ConfigMap: ${cm.metadata?.name}`);
-          await core.deleteNamespacedConfigMap({ namespace, name: cm.metadata!.name! });
+          await core.deleteNamespacedConfigMap({ namespace, name: cm.metadata?.name! });
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore errors in prune
     }
 
@@ -210,10 +211,10 @@ export class AppDeployer {
       for (const s of secrets.items) {
         if (s.metadata?.name !== currentNames.secret) {
           console.log(`[AppDeployer] Pruning orphan Secret: ${s.metadata?.name}`);
-          await core.deleteNamespacedSecret({ namespace, name: s.metadata!.name! });
+          await core.deleteNamespacedSecret({ namespace, name: s.metadata?.name! });
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore errors in prune
     }
 
@@ -234,11 +235,11 @@ export class AppDeployer {
             version: 'v1',
             namespace,
             plural: 'httproutes',
-            name: route.metadata!.name!,
+            name: route.metadata?.name!,
           });
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore errors in prune
     }
   }

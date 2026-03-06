@@ -19,11 +19,9 @@ import {
   webhooks,
 } from '@/lib/db/schema';
 import { createGitProvider } from '@/lib/git';
-import { AppDeployer, type AppSpec } from '@/lib/k8s/index';
 import {
   createCiliumGateway,
   createCiliumHTTPRoute,
-  createDeployment,
   createNamespace,
   createSecret,
   createService,
@@ -32,6 +30,7 @@ import {
   getK8sClient,
   initK8sClient,
 } from '@/lib/k8s';
+import { AppDeployer, type AppSpec } from '@/lib/k8s/index';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
 import { TemplateService } from '@/lib/templates';
@@ -58,7 +57,7 @@ interface GitProviderWithClient {
  * @example parseCommandString('node server.js --config "my file.json"')
  *   returns ['node', 'server.js', '--config', 'my file.json']
  */
-function parseCommandString(commandStr: string): string[] {
+function _parseCommandString(commandStr: string): string[] {
   const args: string[] = [];
   let current = '';
   let inSingleQuote = false;
@@ -1023,7 +1022,7 @@ async function deployServices(project: typeof projects.$inferSelect, hasK8s: boo
 
   for (const service of serviceList) {
     // Build image name (in production, this would be built by CI/CD)
-    const imageName = `juanie/${project.slug}-${service.name}:latest`;
+    const _imageName = `juanie/${project.slug}-${service.name}:latest`;
 
     const spec: AppSpec = {
       projectId: project.id,

@@ -1,6 +1,6 @@
 import { createDeploymentWorker } from './deployment';
-import { createProjectInitWorker } from './project-init';
 import { startDriftDetector } from './drift-detector';
+import { createProjectInitWorker } from './project-init';
 
 console.log('Starting Juanie workers...');
 
