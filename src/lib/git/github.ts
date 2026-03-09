@@ -25,7 +25,7 @@ export class GitHubProvider implements GitProvider {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
-      scope: 'repo user:email',
+      scope: 'repo workflow admin:repo_hook admin:org_hook user:email',
       state,
       prompt: 'consent',
     });
