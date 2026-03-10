@@ -159,7 +159,7 @@ export const repositories = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     providerId: uuid('providerId')
       .notNull()
-      .references(() => gitProviders.id, { onDelete: 'cascade' }),
+      .references(() => integrationIdentities.id, { onDelete: 'cascade' }),
 
     externalId: varchar('externalId', { length: 255 }).notNull(),
     fullName: varchar('fullName', { length: 255 }).notNull(),

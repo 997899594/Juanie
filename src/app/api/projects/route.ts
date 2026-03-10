@@ -34,7 +34,6 @@ interface CreateProjectRequest {
   useCustomDomain?: boolean;
   productionBranch: string;
   autoDeploy: boolean;
-  gitProviderId: string;
 }
 
 export async function GET() {
