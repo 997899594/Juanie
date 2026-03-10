@@ -7,7 +7,6 @@ import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
 import { getTeamIntegrationSession, gateway } from '@/lib/integrations/service/integration-control-plane';
 import type { Capability } from '@/lib/integrations/domain/models';
-import { createGitProvider } from '@/lib/git';
 import {
   createCiliumGateway,
   createCiliumHTTPRoute,

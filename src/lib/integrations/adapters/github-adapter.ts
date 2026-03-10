@@ -1,4 +1,5 @@
-import { createGitProvider, type GitRepository, type PushOptions, type RegistryWebhookOptions, type WebhookOptions } from '@/lib/git';
+import { createGitProvider } from '@/lib/git';
+import type { GitRepository, PushOptions, RegistryWebhookOptions, WebhookOptions, CreateRepoOptions } from '@/lib/git';
 import type { IntegrationSession } from '@/lib/integrations/service/session-service';
 
 const createProvider = (provider: 'github') =>
