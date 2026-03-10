@@ -5,7 +5,7 @@ import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
 import GitLab from 'next-auth/providers/gitlab';
 import { db } from '@/lib/db';
-import { users, type GitProviderType } from '@/lib/db/schema';
+import { type GitProviderType, users } from '@/lib/db/schema';
 import { revokeActiveGrants, upsertGrantFromOAuth } from '@/lib/integrations/service/grant-service';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -88,7 +88,11 @@ const nextAuth = NextAuth({
         token.provider = account.provider;
       }
 
-      if (user && account?.access_token && (account.provider === 'github' || account.provider === 'gitlab')) {
+      if (
+        user &&
+        account?.access_token &&
+        (account.provider === 'github' || account.provider === 'gitlab')
+      ) {
         await onOAuthGrantPersist({
           userId: user.id!,
           provider: account.provider,

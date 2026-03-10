@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import {
   gateway,
+  getTeamIntegrationSession,
   mapProviderError,
   normalizeApiError,
-  getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 
 type NormalizableError = {

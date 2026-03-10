@@ -157,7 +157,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (result.monorepoType !== 'none') {
-      const appsDir = await gateway.listDirectory(integrationSession, repository.fullName, 'apps', branch);
+      const appsDir = await gateway.listDirectory(
+        integrationSession,
+        repository.fullName,
+        'apps',
+        branch
+      );
 
       for (const app of appsDir) {
         if (app.type === 'dir') {

@@ -1,4 +1,10 @@
-import { createGitProvider, type GitRepository, type PushOptions, type RegistryWebhookOptions, type WebhookOptions } from '@/lib/git';
+import {
+  createGitProvider,
+  type GitRepository,
+  type PushOptions,
+  type RegistryWebhookOptions,
+  type WebhookOptions,
+} from '@/lib/git';
 import type { IntegrationSession } from '@/lib/integrations/service/session-service';
 
 const createProvider = (provider: 'gitlab' | 'gitlab-self-hosted') =>
@@ -18,7 +24,10 @@ export const gitlabAdapter = {
     return provider.getRepositories(session.accessToken, options);
   },
 
-  async getRepository(session: IntegrationSession, fullName: string): Promise<GitRepository | null> {
+  async getRepository(
+    session: IntegrationSession,
+    fullName: string
+  ): Promise<GitRepository | null> {
     const provider = createProvider('gitlab');
     return provider.getRepository(session.accessToken, fullName);
   },
@@ -28,7 +37,10 @@ export const gitlabAdapter = {
     await provider.pushFiles(session.accessToken, options);
   },
 
-  async createWebhook(session: IntegrationSession, options: WebhookOptions): Promise<{ id: string }> {
+  async createWebhook(
+    session: IntegrationSession,
+    options: WebhookOptions
+  ): Promise<{ id: string }> {
     const provider = createProvider('gitlab');
     return provider.createWebhook(session.accessToken, options);
   },
@@ -41,7 +53,11 @@ export const gitlabAdapter = {
     return provider.setupRegistryWebhook(session.accessToken, options);
   },
 
-  async listRootFiles(session: IntegrationSession, repoFullName: string, branch?: string): Promise<string[]> {
+  async listRootFiles(
+    session: IntegrationSession,
+    repoFullName: string,
+    branch?: string
+  ): Promise<string[]> {
     const provider = createProvider('gitlab');
     return provider.listRootFiles(session.accessToken, repoFullName, branch);
   },

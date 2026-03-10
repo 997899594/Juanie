@@ -1,12 +1,15 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
+  type GitProviderType,
   integrationCapabilitySnapshots,
   integrationGrants,
   integrationIdentities,
-  type GitProviderType,
 } from '@/lib/db/schema';
-import { resolveGitHubCapabilities, resolveGitLabCapabilities } from '@/lib/integrations/domain/capability';
+import {
+  resolveGitHubCapabilities,
+  resolveGitLabCapabilities,
+} from '@/lib/integrations/domain/capability';
 import type { Capability } from '@/lib/integrations/domain/models';
 
 type UpsertGrantFromOAuthInput = {
@@ -46,7 +49,10 @@ export const upsertGrantFromOAuth = async ({
   scopeRaw,
 }: UpsertGrantFromOAuthInput) => {
   let identity = await db.query.integrationIdentities.findFirst({
-    where: and(eq(integrationIdentities.userId, userId), eq(integrationIdentities.provider, provider)),
+    where: and(
+      eq(integrationIdentities.userId, userId),
+      eq(integrationIdentities.provider, provider)
+    ),
   });
 
   if (!identity) {

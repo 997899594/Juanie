@@ -70,7 +70,6 @@ export const teamRoleEnum = pgEnum('teamRole', teamRoles);
 export const webhookTypeEnum = pgEnum('webhookType', webhookTypes);
 export const integrationCapabilityEnum = pgEnum('integrationCapability', integrationCapabilities);
 
-
 // ============================================
 // Auth Tables (NextAuth)
 // ============================================
@@ -246,7 +245,6 @@ export const integrationCapabilitySnapshots = pgTable(
     ),
   })
 );
-
 
 // ============================================
 // Team Tables
