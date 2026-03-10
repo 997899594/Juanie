@@ -61,13 +61,13 @@ export async function GET(request: Request) {
   const teamId = searchParams.get('teamId');
   const search = searchParams.get('search');
 
-  if (!integrationId || !teamId) {
-    return NextResponse.json({ error: 'integrationId and teamId are required' }, { status: 400 });
+  if (!teamId) {
+    return NextResponse.json({ error: 'teamId is required' }, { status: 400 });
   }
 
   try {
     const integrationSession = await getTeamIntegrationSession({
-      integrationId,
+      integrationId: integrationId || undefined,
       teamId,
       requiredCapabilities: ['read_repo'],
     });

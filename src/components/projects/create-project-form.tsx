@@ -39,8 +39,6 @@ interface DatabaseWithId {
 }
 
 interface CreateProjectFormProps {
-  gitProviderType: 'github' | 'gitlab' | 'gitlab-self-hosted';
-  gitProviderId: string;
   teams: Array<{ id: string; name: string; slug: string }>;
 }
 
@@ -90,11 +88,7 @@ const TEMPLATES = [
   { id: 'blank', name: 'Blank', description: 'Start from scratch', language: 'Docker' },
 ];
 
-export function CreateProjectForm({
-  gitProviderType,
-  gitProviderId,
-  teams,
-}: CreateProjectFormProps) {
+export function CreateProjectForm({ teams }: CreateProjectFormProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<Step>('mode');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -140,7 +134,6 @@ export function CreateProjectForm({
   const fetchRepositories = useCallback(
     async (search?: string) => {
       const url = new URL('/api/git/repositories', window.location.origin);
-      url.searchParams.set('integrationId', gitProviderId);
       url.searchParams.set('teamId', formData.teamId);
       if (search) url.searchParams.set('search', search);
 
@@ -150,7 +143,7 @@ export function CreateProjectForm({
         setRepositories(data);
       }
     },
-    [gitProviderId, formData.teamId]
+    [formData.teamId]
   );
 
   const analyzeRepository = useCallback(
@@ -161,7 +154,6 @@ export function CreateProjectForm({
       try {
         const url = new URL('/api/git/repositories/analyze', window.location.origin);
         url.searchParams.set('repositoryId', repositoryId);
-        url.searchParams.set('integrationId', gitProviderId);
         url.searchParams.set('teamId', formData.teamId);
         url.searchParams.set('branch', branch);
 
@@ -220,7 +212,7 @@ export function CreateProjectForm({
         setIsLoadingAnalyze(false);
       }
     },
-    [gitProviderId, formData.teamId]
+    [formData.teamId]
   );
 
   useEffect(() => {
@@ -306,7 +298,6 @@ export function CreateProjectForm({
         body: JSON.stringify({
           ...formData,
           services: activeServices,
-          gitProviderId,
         }),
       });
 
@@ -440,8 +431,7 @@ export function CreateProjectForm({
                   <div>
                     <h2 className="text-lg font-semibold mb-1">Select Repository</h2>
                     <p className="text-sm text-muted-foreground">
-                      Choose a repository from your{' '}
-                      {gitProviderType === 'github' ? 'GitHub' : 'GitLab'} account
+                      Choose a repository from your Git provider account
                     </p>
                   </div>
 

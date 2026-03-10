@@ -119,8 +119,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Repository ID is required' }, { status: 400 });
   }
 
-  if (!integrationId || !teamId) {
-    return NextResponse.json({ error: 'integrationId and teamId are required' }, { status: 400 });
+  if (!teamId) {
+    return NextResponse.json({ error: 'teamId is required' }, { status: 400 });
   }
 
   const repository = await db.query.repositories.findFirst({
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const integrationSession = await getTeamIntegrationSession({
-      integrationId,
+      integrationId: integrationId || undefined,
       teamId,
       requiredCapabilities: ['read_repo'],
     });
