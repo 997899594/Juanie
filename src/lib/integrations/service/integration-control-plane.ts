@@ -1,7 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { integrationIdentities, teamMembers } from '@/lib/db/schema';
-import type { GitRepository } from '@/lib/git';
+import type {
+  CreateRepoOptions,
+  GitRepository,
+  PushOptions,
+  RegistryWebhookOptions,
+  WebhookOptions,
+} from '@/lib/git';
 import { githubAdapter } from '@/lib/integrations/adapters/github-adapter';
 import { gitlabAdapter } from '@/lib/integrations/adapters/gitlab-adapter';
 import {
@@ -22,7 +28,7 @@ type ProviderErrorInput = {
 
 const isGitHubProvider = (provider: string) => provider === 'github';
 
-const resolveAdapter = (provider: 'github' | 'gitlab') =>
+const resolveAdapter = (provider: 'github' | 'gitlab' | 'gitlab-self-hosted') =>
   isGitHubProvider(provider) ? githubAdapter : gitlabAdapter;
 
 export const mapProviderError = (error: ProviderErrorInput): IntegrationError => {
@@ -163,5 +169,10 @@ export const gateway = {
   ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
     const adapter = resolveAdapter(session.provider);
     return adapter.listDirectory(session, repoFullName, path, branch);
+  },
+
+  async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {
+    const adapter = resolveAdapter(session.provider);
+    return adapter.pushFiles(session, options);
   },
 };

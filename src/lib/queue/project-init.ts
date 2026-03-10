@@ -5,6 +5,20 @@ import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
+import {
+  databases,
+  domains,
+  environments,
+  gitProviders,
+  projectInitSteps,
+  projects,
+  repositories,
+  services,
+  teamMembers,
+  teams,
+  webhooks,
+} from '@/lib/db/schema';
+import { createGitProvider } from '@/lib/git';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
   gateway,
@@ -227,7 +241,7 @@ async function updateStepStatus(
 }
 
 export async function processProjectInit(job: Job<ProjectInitJobData>) {
-  const { projectId, mode } = job.data;
+  const { projectId, mode, template } = job.data;
 
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
@@ -267,7 +281,7 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
           await pushCicdConfig(project);
           break;
         case 'push_template':
-          await pushTemplate(project);
+          await pushTemplate(project, template);
           break;
         case 'setup_webhook':
           await setupWebhook(project);
@@ -362,7 +376,7 @@ async function validateRepository(
 }
 
 // Helper to build an IntegrationSession from legacy git provider result (temporary bridge)
-const buildSessionFromGitProviderResult = (
+const _buildSessionFromGitProviderResult = (
   result: { provider: any; client: any },
   teamId: string
 ) => {
@@ -426,7 +440,8 @@ async function createRepository(project: typeof projects.$inferSelect) {
 async function pushTemplate(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
-  }
+  },
+  template?: string
 ) {
   console.log(`Pushing template to project ${project.name}`);
 
@@ -446,6 +461,7 @@ async function pushTemplate(
   });
 
   // Use gateway to push files instead of direct client
+  const templateId = template || 'default';
   const files = await new TemplateService(templateId, {
     projectName: project.name,
     projectSlug: project.slug,

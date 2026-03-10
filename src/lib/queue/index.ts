@@ -29,6 +29,7 @@ export function getDeploymentQueue(): Queue {
 export type ProjectInitJobData = {
   projectId: string;
   mode: 'import' | 'create';
+  template?: string;
 };
 
 export type DeploymentJobData = {
@@ -37,8 +38,12 @@ export type DeploymentJobData = {
   environmentId: string;
 };
 
-export async function addProjectInitJob(projectId: string, mode: 'import' | 'create') {
-  return getProjectInitQueue().add('init', { projectId, mode });
+export async function addProjectInitJob(
+  projectId: string,
+  mode: 'import' | 'create',
+  template?: string
+) {
+  return getProjectInitQueue().add('init', { projectId, mode, template });
 }
 
 export async function addDeploymentJob(

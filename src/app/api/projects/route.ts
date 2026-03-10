@@ -80,6 +80,7 @@ export async function POST(request: Request) {
     useCustomDomain,
     productionBranch,
     autoDeploy,
+    template,
   } = body;
 
   if (!teamId || !name || !slug) {
@@ -195,7 +196,7 @@ export async function POST(request: Request) {
   );
 
   try {
-    await addProjectInitJob(project.id, mode);
+    await addProjectInitJob(project.id, mode, template);
   } catch (error) {
     console.error('Failed to queue project initialization:', error);
   }

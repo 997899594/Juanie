@@ -1,6 +1,7 @@
 import type {
   CreateRepoOptions,
   GitRepository,
+  PushOptions,
   RegistryWebhookOptions,
   WebhookOptions,
 } from '@/lib/git';
@@ -38,6 +39,11 @@ export const githubAdapter = {
   ): Promise<GitRepository> {
     const provider = createProvider('github');
     return provider.createRepository(session.accessToken, options);
+  },
+
+  async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {
+    const provider = createProvider('github');
+    return provider.pushFiles(session.accessToken, options);
   },
 
   async createWebhook(

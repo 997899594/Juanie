@@ -1,4 +1,5 @@
 import {
+  type CreateRepoOptions,
   createGitProvider,
   type GitRepository,
   type PushOptions,
@@ -30,6 +31,14 @@ export const gitlabAdapter = {
   ): Promise<GitRepository | null> {
     const provider = createProvider('gitlab');
     return provider.getRepository(session.accessToken, fullName);
+  },
+
+  async createRepository(
+    session: IntegrationSession,
+    options: CreateRepoOptions
+  ): Promise<GitRepository> {
+    const provider = createProvider('gitlab');
+    return provider.createRepository(session.accessToken, options);
   },
 
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {

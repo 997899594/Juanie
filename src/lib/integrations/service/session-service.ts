@@ -10,7 +10,7 @@ import type { Capability } from '@/lib/integrations/domain/models';
 
 export type IntegrationSession = {
   integrationId: string;
-  provider: 'github' | 'gitlab';
+  provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
   teamId: string;
   grantId: string;
   accessToken: string;
