@@ -9,16 +9,13 @@ import {
   databases,
   domains,
   environments,
-  gitProviders,
   projectInitSteps,
   projects,
   repositories,
   services,
-  teamMembers,
   teams,
   webhooks,
 } from '@/lib/db/schema';
-import { createGitProvider } from '@/lib/git';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
   gateway,
@@ -59,11 +56,6 @@ export const requiredCapabilitiesForStep = (step: StepName): Capability[] => {
       return [];
   }
 };
-
-interface GitProviderWithClient {
-  provider: typeof gitProviders.$inferSelect;
-  client: ReturnType<typeof createGitProvider>;
-}
 
 // ============================================
 // Helper Functions
@@ -168,58 +160,6 @@ type StepName = (typeof IMPORT_STEPS)[number] | (typeof CREATE_STEPS)[number];
 // ============================================
 // Helper Functions
 // ============================================
-
-async function getTeamGitProvider(teamId: string): Promise<GitProviderWithClient | undefined> {
-  console.log(`[getTeamGitProvider] Looking for team owner in team ${teamId}`);
-
-  const teamMember = await db.query.teamMembers.findFirst({
-    where: and(eq(teamMembers.teamId, teamId), eq(teamMembers.role, 'owner')),
-    with: {
-      user: true,
-    },
-  });
-
-  if (!teamMember) {
-    console.log(`[getTeamGitProvider] No owner found for team ${teamId}`);
-    throw new Error('No owner found for team');
-  }
-
-  console.log(`[getTeamGitProvider] Found team owner: ${teamMember.userId}`);
-
-  const gitProvider = await db.query.gitProviders.findFirst({
-    where: eq(gitProviders.userId, teamMember.userId),
-  });
-
-  if (!gitProvider) {
-    console.log(`[getTeamGitProvider] No gitProvider found for user ${teamMember.userId}`);
-    if (isDev) {
-      console.log('⚠️  Skipping (no provider, dev mode)');
-      return;
-    }
-    throw new Error('No Git provider configured for team owner');
-  }
-
-  if (!gitProvider.accessToken) {
-    console.log(`[getTeamGitProvider] gitProvider ${gitProvider.id} has no accessToken`);
-    if (isDev) {
-      console.log('⚠️  Skipping (no token, dev mode)');
-      return;
-    }
-    throw new Error('Git provider has no access token');
-  }
-
-  console.log(`[getTeamGitProvider] Found gitProvider ${gitProvider.id} with token`);
-
-  const client = createGitProvider({
-    type: gitProvider.type,
-    serverUrl: gitProvider.serverUrl || undefined,
-    clientId: gitProvider.clientId || '',
-    clientSecret: gitProvider.clientSecret || '',
-    redirectUri: '',
-  });
-
-  return { provider: gitProvider, client };
-}
 
 async function updateStepStatus(
   projectId: string,
@@ -349,18 +289,7 @@ async function validateRepository(
   console.log(`[validateRepository] Repository: ${project.repository.fullName}`);
 
   // Obtain integration session with required capability
-  const gitProviderResult = await getTeamGitProvider(project.teamId);
-  if (!gitProviderResult) {
-    console.log('[validateRepository] No git provider result');
-    if (isDev) {
-      console.log('⚠️  Skipping repository validation (no git provider in dev mode)');
-      return;
-    }
-    throw new Error('Git provider not configured for team owner');
-  }
-  const { provider } = gitProviderResult;
   const session = await getTeamIntegrationSession({
-    integrationId: provider.id,
     teamId: project.teamId,
     requiredCapabilities: requiredCapabilitiesForStep('validate_repository'),
   });
@@ -393,16 +322,8 @@ const _buildSessionFromGitProviderResult = (
 async function createRepository(project: typeof projects.$inferSelect) {
   console.log(`Creating repository for project ${project.name}`);
 
-  const gitProviderResult = await getTeamGitProvider(project.teamId);
-  if (!gitProviderResult) {
-    console.log('⚠️ Skipping repository creation (no git provider in dev mode)');
-    return { repository: null };
-  }
-  const { provider } = gitProviderResult;
-
   // Obtain integration session with required capability
   const session = await getTeamIntegrationSession({
-    integrationId: provider.id,
     teamId: project.teamId,
     requiredCapabilities: requiredCapabilitiesForStep('create_repository'),
   });
@@ -418,7 +339,7 @@ async function createRepository(project: typeof projects.$inferSelect) {
   const [dbRepo] = await db
     .insert(repositories)
     .values({
-      providerId: provider.id,
+      providerId: session.integrationId,
       externalId: repo.id,
       fullName: repo.fullName,
       name: repo.name,
@@ -449,13 +370,7 @@ async function pushTemplate(
     throw new Error('Project has no repository');
   }
 
-  const gitProviderResult = await getTeamGitProvider(project.teamId);
-  if (!gitProviderResult) {
-    console.log('⚠️ Skipping push files (no git provider in dev mode)');
-    return;
-  }
   const session = await getTeamIntegrationSession({
-    integrationId: gitProviderResult.provider.id,
     teamId: project.teamId,
     requiredCapabilities: requiredCapabilitiesForStep('push_template'),
   });
@@ -503,14 +418,7 @@ async function pushCicdConfig(
   }
 
   // Obtain integration session with required capabilities
-  const gitProviderResult = await getTeamGitProvider(project.teamId);
-  if (!gitProviderResult) {
-    console.log('⚠️ Skipping CI/CD config push (no git provider in dev mode)');
-    return;
-  }
-  const { provider } = gitProviderResult;
   const session = await getTeamIntegrationSession({
-    integrationId: provider.id,
     teamId: project.teamId,
     requiredCapabilities: requiredCapabilitiesForStep('push_cicd_config'),
   });
@@ -533,12 +441,12 @@ async function pushCicdConfig(
 
   // 1. Push CI workflow configuration based on provider type and monorepo type
   const isMonorepo = monorepoType !== 'none';
-  if (provider.type === 'github') {
+  if (session.provider === 'github') {
     const ciTemplate = isMonorepo
       ? renderGitHubCIMonorepo(project, monorepoType)
       : renderGitHubCI(project);
     files['.github/workflows/juanie-ci.yml'] = ciTemplate;
-  } else if (provider.type === 'gitlab' || provider.type === 'gitlab-self-hosted') {
+  } else if (session.provider === 'gitlab' || session.provider === 'gitlab-self-hosted') {
     const ciTemplate = isMonorepo
       ? renderGitLabCIMonorepo(project, monorepoType)
       : renderGitLabCI(project);
@@ -884,14 +792,7 @@ async function setupRegistryWebhook(
   }
 
   // Obtain integration session with required capabilities
-  const gitProviderResult = await getTeamGitProvider(project.teamId);
-  if (!gitProviderResult) {
-    console.log('⚠️ Skipping registry webhook (no git provider in dev mode)');
-    return;
-  }
-  const { provider } = gitProviderResult;
   const session = await getTeamIntegrationSession({
-    integrationId: provider.id,
     teamId: project.teamId,
     requiredCapabilities: requiredCapabilitiesForStep('setup_registry_webhook'),
   });
@@ -939,7 +840,7 @@ async function setupRegistryWebhook(
 
   // Update project config with image name
   const config = (project.configJson as Record<string, unknown>) || {};
-  const imageName = buildImageName(provider.type, project.repository);
+  const imageName = buildImageName(session.provider, project.repository);
 
   await db
     .update(projects)
@@ -986,14 +887,7 @@ async function setupWebhook(
   }
 
   // Obtain integration session with required capabilities
-  const gitProviderResult = await getTeamGitProvider(project.teamId);
-  if (!gitProviderResult) {
-    console.log('⚠️ Skipping webhook setup (no git provider in dev mode)');
-    return;
-  }
-  const { provider } = gitProviderResult;
   const session = await getTeamIntegrationSession({
-    integrationId: provider.id,
     teamId: project.teamId,
     requiredCapabilities: requiredCapabilitiesForStep('setup_webhook'),
   });

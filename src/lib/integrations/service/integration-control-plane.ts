@@ -71,7 +71,7 @@ export const getTeamIntegrationSession = async ({
   teamId,
   requiredCapabilities,
 }: {
-  integrationId: string;
+  integrationId?: string;
   teamId: string;
   requiredCapabilities: Capability[];
 }): Promise<IntegrationSession> => {
@@ -83,12 +83,21 @@ export const getTeamIntegrationSession = async ({
     throw new Error(integrationErrors.notBound().message);
   }
 
-  const identity = await db.query.integrationIdentities.findFirst({
-    where: and(
-      eq(integrationIdentities.id, integrationId),
-      eq(integrationIdentities.userId, owner.userId)
-    ),
-  });
+  let identity: typeof integrationIdentities.$inferSelect | undefined;
+
+  if (integrationId) {
+    identity = await db.query.integrationIdentities.findFirst({
+      where: and(
+        eq(integrationIdentities.id, integrationId),
+        eq(integrationIdentities.userId, owner.userId)
+      ),
+    });
+  } else {
+    // If no integrationId provided, find the first integration for the team owner
+    identity = await db.query.integrationIdentities.findFirst({
+      where: eq(integrationIdentities.userId, owner.userId),
+    });
+  }
 
   if (!identity) {
     throw new Error(integrationErrors.notBound().message);

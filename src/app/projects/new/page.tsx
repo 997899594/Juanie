@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { CreateProjectForm } from '@/components/projects/create-project-form';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { gitProviders, teamMembers, teams } from '@/lib/db/schema';
+import { integrationIdentities, teamMembers, teams } from '@/lib/db/schema';
 
 export default async function NewProjectPage() {
   const session = await auth();
@@ -14,9 +14,9 @@ export default async function NewProjectPage() {
     redirect('/login');
   }
 
-  const [provider, userTeams] = await Promise.all([
-    db.query.gitProviders.findFirst({
-      where: eq(gitProviders.userId, session.user.id),
+  const [integration, userTeams] = await Promise.all([
+    db.query.integrationIdentities.findFirst({
+      where: eq(integrationIdentities.userId, session.user.id),
     }),
     db
       .select({ id: teams.id, name: teams.name, slug: teams.slug })
@@ -25,7 +25,7 @@ export default async function NewProjectPage() {
       .where(eq(teamMembers.userId, session.user.id)),
   ]);
 
-  if (!provider) {
+  if (!integration) {
     return (
       <div className="max-w-xl mx-auto space-y-6">
         <div>
@@ -89,9 +89,6 @@ export default async function NewProjectPage() {
     );
   }
 
-  const providerType =
-    provider.type === 'gitlab-self-hosted' ? 'gitlab-self-hosted' : provider.type;
-
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
@@ -107,8 +104,8 @@ export default async function NewProjectPage() {
       </div>
 
       <CreateProjectForm
-        gitProviderType={providerType}
-        gitProviderId={provider.id}
+        gitProviderType={integration.provider}
+        gitProviderId={integration.id}
         teams={userTeams}
       />
     </div>
