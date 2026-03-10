@@ -1,9 +1,49 @@
-import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { gitProviders, repositories } from '@/lib/db/schema';
-import { createGitProvider } from '@/lib/git';
+import {
+  gateway,
+  mapProviderError,
+  normalizeApiError,
+  getTeamIntegrationSession,
+} from '@/lib/integrations/service/integration-control-plane';
+
+type NormalizableError = {
+  code?: string;
+  message?: string;
+  capability?: string;
+  status?: number;
+};
+
+const statusByCode = (code?: string) => {
+  if (!code) return 500;
+  if (code.startsWith('MISSING_CAPABILITY')) return 403;
+
+  switch (code) {
+    case 'INTEGRATION_NOT_BOUND':
+      return 404;
+    case 'GRANT_EXPIRED':
+    case 'GRANT_REVOKED':
+    case 'PROVIDER_ACCESS_DENIED':
+      return 403;
+    case 'PROVIDER_RESOURCE_NOT_FOUND':
+      return 404;
+    default:
+      return 500;
+  }
+};
+
+const toApiError = (error: unknown) => {
+  const typed = (error ?? {}) as NormalizableError;
+  const normalized =
+    typeof typed.status === 'number'
+      ? normalizeApiError(mapProviderError({ status: typed.status, message: typed.message }))
+      : normalizeApiError(typed);
+
+  return {
+    status: statusByCode(normalized.error.code),
+    payload: normalized,
+  };
+};
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -13,97 +53,28 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const providerId = searchParams.get('providerId');
+  const integrationId = searchParams.get('integrationId');
+  const teamId = searchParams.get('teamId');
   const search = searchParams.get('search');
 
-  if (!providerId) {
-    return NextResponse.json({ error: 'Provider ID is required' }, { status: 400 });
-  }
-
-  const provider = await db.query.gitProviders.findFirst({
-    where: eq(gitProviders.id, providerId),
-  });
-
-  if (!provider || !provider.accessToken) {
-    return NextResponse.json(
-      { error: 'Git provider not found or not authorized' },
-      { status: 404 }
-    );
-  }
-
-  if (provider.userId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!integrationId || !teamId) {
+    return NextResponse.json({ error: 'integrationId and teamId are required' }, { status: 400 });
   }
 
   try {
-    const gitProvider = createGitProvider({
-      type: provider.type,
-      serverUrl: provider.serverUrl || undefined,
-      clientId: provider.clientId || '',
-      clientSecret: provider.clientSecret || '',
-      redirectUri: '',
+    const integrationSession = await getTeamIntegrationSession({
+      integrationId,
+      teamId,
+      requiredCapabilities: ['read_repo'],
     });
 
-    const gitRepos = await gitProvider.getRepositories(provider.accessToken, {
+    const repositories = await gateway.listRepositories(integrationSession, {
       search: search || undefined,
       perPage: 100,
     });
 
-    const result = [];
-
-    for (const repo of gitRepos) {
-      const existing = await db.query.repositories.findFirst({
-        where: eq(repositories.externalId, repo.id),
-      });
-
-      if (existing) {
-        await db
-          .update(repositories)
-          .set({
-            fullName: repo.fullName,
-            name: repo.name,
-            owner: repo.owner,
-            cloneUrl: repo.cloneUrl,
-            sshUrl: repo.sshUrl,
-            webUrl: repo.webUrl,
-            defaultBranch: repo.defaultBranch,
-            isPrivate: repo.isPrivate,
-            lastSyncAt: new Date(),
-          })
-          .where(eq(repositories.id, existing.id));
-        result.push(existing);
-      } else {
-        const [created] = await db
-          .insert(repositories)
-          .values({
-            providerId: provider.id,
-            externalId: repo.id,
-            fullName: repo.fullName,
-            name: repo.name,
-            owner: repo.owner,
-            cloneUrl: repo.cloneUrl,
-            sshUrl: repo.sshUrl,
-            webUrl: repo.webUrl,
-            defaultBranch: repo.defaultBranch,
-            isPrivate: repo.isPrivate,
-          })
-          .returning();
-        result.push(created);
-      }
-    }
-
-    let filteredRepos = result;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredRepos = result.filter(
-        (repo) =>
-          repo.fullName.toLowerCase().includes(searchLower) ||
-          repo.name.toLowerCase().includes(searchLower)
-      );
-    }
-
     return NextResponse.json(
-      filteredRepos.map((repo) => ({
+      repositories.map((repo) => ({
         id: repo.id,
         fullName: repo.fullName,
         name: repo.name,
@@ -111,7 +82,7 @@ export async function GET(request: Request) {
       }))
     );
   } catch (error) {
-    console.error('Failed to fetch repositories:', error);
-    return NextResponse.json({ error: 'Failed to fetch repositories' }, { status: 500 });
+    const apiError = toApiError(error);
+    return NextResponse.json(apiError.payload, { status: apiError.status });
   }
 }

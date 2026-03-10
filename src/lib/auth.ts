@@ -5,9 +5,39 @@ import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
 import GitLab from 'next-auth/providers/gitlab';
 import { db } from '@/lib/db';
-import { gitProviders, users } from '@/lib/db/schema';
+import { users, type GitProviderType } from '@/lib/db/schema';
+import { revokeActiveGrants, upsertGrantFromOAuth } from '@/lib/integrations/service/grant-service';
 
 const isDev = process.env.NODE_ENV === 'development';
+
+export const onOAuthGrantPersist = async ({
+  userId,
+  provider,
+  accessToken,
+  refreshToken,
+  expiresAt,
+  scope,
+}: {
+  userId: string;
+  provider: GitProviderType;
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresAt?: number | null;
+  scope?: string | null;
+}) => {
+  return upsertGrantFromOAuth({
+    userId,
+    provider,
+    accessToken,
+    refreshToken,
+    expiresAt: expiresAt ? new Date(expiresAt * 1000) : null,
+    scopeRaw: scope,
+  });
+};
+
+export const onAuthSignOut = async (userId: string) => {
+  return revokeActiveGrants(userId);
+};
 
 const nextAuth = NextAuth({
   adapter: DrizzleAdapter(db),
@@ -32,7 +62,7 @@ const nextAuth = NextAuth({
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: 'read:user user:email repo',
+          scope: 'read:user user:email repo workflow',
           prompt: 'consent',
         },
       },
@@ -52,42 +82,21 @@ const nextAuth = NextAuth({
       if (user) {
         token.id = user.id;
       }
-      // 保存 access token 到 JWT
+
       if (account) {
         token.accessToken = account.access_token;
         token.provider = account.provider;
       }
 
-      // 首次登录时创建/更新 gitProvider (此时 user 已入库)
-      if (user && account?.access_token) {
-        const providerType = account.provider as 'github' | 'gitlab';
-
-        const existing = await db.query.gitProviders.findFirst({
-          where: eq(gitProviders.userId, user.id!),
+      if (user && account?.access_token && (account.provider === 'github' || account.provider === 'gitlab')) {
+        await onOAuthGrantPersist({
+          userId: user.id!,
+          provider: account.provider,
+          accessToken: account.access_token,
+          refreshToken: account.refresh_token,
+          expiresAt: account.expires_at,
+          scope: account.scope,
         });
-
-        if (!existing) {
-          await db.insert(gitProviders).values({
-            userId: user.id!,
-            type: providerType,
-            name: providerType === 'github' ? 'GitHub' : 'GitLab',
-            accessToken: account.access_token,
-            refreshToken: account.refresh_token,
-            tokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
-            username: user.name,
-            avatarUrl: user.image,
-          });
-        } else {
-          await db
-            .update(gitProviders)
-            .set({
-              accessToken: account.access_token,
-              refreshToken: account.refresh_token,
-              tokenExpiresAt: account.expires_at ? new Date(account.expires_at * 1000) : null,
-              updatedAt: new Date(),
-            })
-            .where(eq(gitProviders.id, existing.id));
-        }
       }
 
       return token;
@@ -96,27 +105,19 @@ const nextAuth = NextAuth({
       if (token?.id) {
         session.user.id = token.id as string;
       }
-      // 传递 access token 到 session
+
       if (token?.accessToken) {
         session.accessToken = token.accessToken as string;
         session.provider = token.provider as string;
       }
+
       return session;
     },
   },
   events: {
     async signOut(message) {
-      // 退出登录时清理 gitProvider token (JWT 模式)
       if ('token' in message && message.token?.id) {
-        await db
-          .update(gitProviders)
-          .set({
-            accessToken: null,
-            refreshToken: null,
-            tokenExpiresAt: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(gitProviders.userId, message.token.id as string));
+        await onAuthSignOut(message.token.id as string);
       }
     },
   },

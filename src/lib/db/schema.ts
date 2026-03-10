@@ -51,6 +51,14 @@ export type TeamRole = (typeof teamRoles)[number];
 export const webhookTypes = ['git-push', 'registry'] as const;
 export type WebhookType = (typeof webhookTypes)[number];
 
+export const integrationCapabilities = [
+  'read_repo',
+  'write_repo',
+  'write_workflow',
+  'manage_webhook',
+] as const;
+export type IntegrationCapability = (typeof integrationCapabilities)[number];
+
 export const gitProviderTypeEnum = pgEnum('gitProviderType', gitProviderTypes);
 export const serviceTypeEnum = pgEnum('serviceType', serviceTypes);
 export const databaseTypeEnum = pgEnum('databaseType', databaseTypes);
@@ -60,6 +68,8 @@ export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuse
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);
 export const webhookTypeEnum = pgEnum('webhookType', webhookTypes);
+export const integrationCapabilityEnum = pgEnum('integrationCapability', integrationCapabilities);
+
 
 // ============================================
 // Auth Tables (NextAuth)
@@ -176,6 +186,67 @@ export const repositories = pgTable(
     ),
   })
 );
+
+export const integrationIdentities = pgTable(
+  'integration_identity',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: gitProviderTypeEnum('provider').notNull(),
+    externalUserId: varchar('externalUserId', { length: 255 }),
+    username: varchar('username', { length: 255 }),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index('integration_identity_userId_idx').on(table.userId),
+    providerIdx: index('integration_identity_provider_idx').on(table.provider),
+  })
+);
+
+export const integrationGrants = pgTable(
+  'integration_grant',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    integrationIdentityId: uuid('integrationIdentityId')
+      .notNull()
+      .references(() => integrationIdentities.id, { onDelete: 'cascade' }),
+    accessToken: text('accessToken').notNull(),
+    refreshToken: text('refreshToken'),
+    scopeRaw: text('scopeRaw'),
+    expiresAt: timestamp('expiresAt'),
+    revokedAt: timestamp('revokedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    identityIdIdx: index('integration_grant_identity_id_idx').on(table.integrationIdentityId),
+    revokedAtIdx: index('integration_grant_revoked_at_idx').on(table.revokedAt),
+  })
+);
+
+export const integrationCapabilitySnapshots = pgTable(
+  'integration_capability_snapshot',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    integrationGrantId: uuid('integrationGrantId')
+      .notNull()
+      .references(() => integrationGrants.id, { onDelete: 'cascade' }),
+    capability: integrationCapabilityEnum('capability').notNull(),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    grantIdIdx: index('integration_capability_snapshot_grant_id_idx').on(table.integrationGrantId),
+    capabilityIdx: index('integration_capability_snapshot_capability_idx').on(table.capability),
+    grantCapabilityUnique: unique('integration_capability_snapshot_grant_capability_unique').on(
+      table.integrationGrantId,
+      table.capability
+    ),
+  })
+);
+
 
 // ============================================
 // Team Tables

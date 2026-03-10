@@ -5,19 +5,8 @@ import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
-import {
-  databases,
-  domains,
-  environments,
-  gitProviders,
-  projectInitSteps,
-  projects,
-  repositories,
-  services,
-  teamMembers,
-  teams,
-  webhooks,
-} from '@/lib/db/schema';
+import { getTeamIntegrationSession, gateway } from '@/lib/integrations/service/integration-control-plane';
+import type { Capability } from '@/lib/integrations/domain/models';
 import { createGitProvider } from '@/lib/git';
 import {
   createCiliumGateway,
@@ -38,9 +27,23 @@ import type { ProjectInitJobData } from './index';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// ============================================
-// Types
-// ============================================
+export const requiredCapabilitiesForStep = (step: StepName): Capability[] => {
+  switch (step) {
+    case 'validate_repository':
+      return ['read_repo'];
+    case 'push_cicd_config':
+    case 'push_template':
+      return ['write_repo', 'write_workflow'];
+    case 'setup_webhook':
+    case 'setup_registry_webhook':
+      return ['manage_webhook'];
+    case 'create_repository':
+      return ['write_repo'];
+    default:
+      return [];
+  }
+};
+
 
 interface GitProviderWithClient {
   provider: typeof gitProviders.$inferSelect;
@@ -314,14 +317,11 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
   await db.update(projects).set({ status: 'active' }).where(eq(projects.id, projectId));
 }
 
-async function validateRepository(
-  project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null }
-) {
+async function validateRepository(project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null }) {
   console.log(`[validateRepository] Starting for project ${project.name}`);
 
   if (!project.repository) {
     console.log('[validateRepository] No repository linked');
-    // In dev mode without a real repo, just pass
     if (isDev) {
       console.log('⚠️  Skipping repository validation (dev mode)');
       return;
@@ -331,7 +331,7 @@ async function validateRepository(
 
   console.log(`[validateRepository] Repository: ${project.repository.fullName}`);
 
-  // 使用 team owner 的 git provider（有 token 的那个）
+  // Obtain integration session with required capability
   const gitProviderResult = await getTeamGitProvider(project.teamId);
   if (!gitProviderResult) {
     console.log('[validateRepository] No git provider result');
@@ -341,11 +341,15 @@ async function validateRepository(
     }
     throw new Error('Git provider not configured for team owner');
   }
-  const { provider, client } = gitProviderResult;
+  const { provider } = gitProviderResult;
+  const session = await getTeamIntegrationSession({
+    integrationId: provider.id,
+    teamId: project.teamId,
+    requiredCapabilities: requiredCapabilitiesForStep('validate_repository'),
+  });
 
-  console.log(`[validateRepository] Calling GitHub API for ${project.repository.fullName}`);
-  const repo = await client.getRepository(provider.accessToken!, project.repository.fullName);
-  console.log(`[validateRepository] GitHub API result: ${repo ? 'found' : 'not found'}`);
+  const repo = await gateway.getRepository(session, project.repository.fullName);
+  console.log(`[validateRepository] Repository access ${repo ? 'granted' : 'denied'}`);
 
   if (!repo) {
     throw new Error('No access to repository');
@@ -353,6 +357,18 @@ async function validateRepository(
 
   console.log('[validateRepository] Validation passed');
 }
+
+// Helper to build an IntegrationSession from legacy git provider result (temporary bridge)
+const buildSessionFromGitProviderResult = (result: { provider: any; client: any }, teamId: string) => {
+  return {
+    integrationId: result.provider.id,
+    provider: result.provider.type,
+    teamId,
+    grantId: '',
+    accessToken: result.provider.accessToken!,
+    capabilities: [], // capabilities not needed for current internal calls
+  } as const;
+};
 
 async function createRepository(project: typeof projects.$inferSelect) {
   console.log(`Creating repository for project ${project.name}`);
@@ -362,9 +378,16 @@ async function createRepository(project: typeof projects.$inferSelect) {
     console.log('⚠️ Skipping repository creation (no git provider in dev mode)');
     return { repository: null };
   }
-  const { provider, client } = gitProviderResult;
+  const { provider } = gitProviderResult;
 
-  const repo = await client.createRepository(provider.accessToken!, {
+  // Obtain integration session with required capability
+  const session = await getTeamIntegrationSession({
+    integrationId: provider.id,
+    teamId: project.teamId,
+    requiredCapabilities: requiredCapabilitiesForStep('create_repository'),
+  });
+
+  const repo = await gateway.createRepository(session, {
     name: project.slug,
     description: project.description || undefined,
     isPrivate: true,
@@ -410,28 +433,21 @@ async function pushTemplate(
     console.log('⚠️ Skipping push files (no git provider in dev mode)');
     return;
   }
-  const { provider, client } = gitProviderResult;
-
-  // Get template ID from project config or default to 'nextjs'
-  const templateId = (project.configJson as any)?.['template'] || 'nextjs';
-
-  // Get team name for template
-  const team = await db.query.teams.findFirst({
-    where: eq(teams.id, project.teamId),
+  const session = await getTeamIntegrationSession({
+    integrationId: gitProviderResult.provider.id,
+    teamId: project.teamId,
+    requiredCapabilities: requiredCapabilitiesForStep('push_template'),
   });
 
-  // Render template files
-  const templateService = new TemplateService(templateId, {
+  // Use gateway to push files instead of direct client
+  const files = await new TemplateService(templateId, {
     projectName: project.name,
     projectSlug: project.slug,
-    teamName: team?.name || 'Team',
+    teamName: (await db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }))?.name || 'Team',
     description: project.description || '',
-  });
+  }).renderToMemory();
 
-  const files = await templateService.renderToMemory();
-
-  // Push files to repository
-  await client.pushFiles(provider.accessToken!, {
+  await gateway.pushFiles(session, {
     repoFullName: project.repository.fullName,
     branch: project.productionBranch || 'main',
     files: Object.fromEntries(files),
@@ -463,18 +479,24 @@ async function pushCicdConfig(
     return;
   }
 
+  // Obtain integration session with required capabilities
   const gitProviderResult = await getTeamGitProvider(project.teamId);
   if (!gitProviderResult) {
     console.log('⚠️ Skipping CI/CD config push (no git provider in dev mode)');
     return;
   }
-  const { provider, client } = gitProviderResult;
+  const { provider } = gitProviderResult;
+  const session = await getTeamIntegrationSession({
+    integrationId: provider.id,
+    teamId: project.teamId,
+    requiredCapabilities: requiredCapabilitiesForStep('push_cicd_config'),
+  });
 
-  // Detect monorepo type from repository root files
+  // Detect monorepo type from repository root files using gateway
   let monorepoType: MonorepoType = 'none';
   try {
-    const rootFiles = await client.listRootFiles(
-      provider.accessToken!,
+    const rootFiles = await gateway.listRootFiles(
+      session,
       project.repository.fullName,
       project.productionBranch || 'main'
     );
@@ -505,7 +527,7 @@ async function pushCicdConfig(
   files['.env.juanie.example'] = envTemplate;
 
   if (Object.keys(files).length > 0) {
-    await client.pushFiles(provider.accessToken!, {
+    await gateway.pushFiles(session, {
       repoFullName: project.repository.fullName,
       branch: project.productionBranch || 'main',
       files,
@@ -838,12 +860,18 @@ async function setupRegistryWebhook(
     return;
   }
 
+  // Obtain integration session with required capabilities
   const gitProviderResult = await getTeamGitProvider(project.teamId);
   if (!gitProviderResult) {
     console.log('⚠️ Skipping registry webhook (no git provider in dev mode)');
     return;
   }
-  const { provider, client } = gitProviderResult;
+  const { provider } = gitProviderResult;
+  const session = await getTeamIntegrationSession({
+    integrationId: provider.id,
+    teamId: project.teamId,
+    requiredCapabilities: requiredCapabilitiesForStep('setup_registry_webhook'),
+  });
 
   // Check if registry webhook already exists
   const existingWebhook = await db.query.webhooks.findFirst({
@@ -859,12 +887,10 @@ async function setupRegistryWebhook(
   const webhookSecret = nanoid(32);
 
   // Build the ownerOrProjectPath parameter
-  // For GitHub: organization owner name
-  // For GitLab: project full path (namespace/project)
   const ownerOrProjectPath = project.repository.fullName;
 
-  // Call git provider to setup registry webhook
-  const result = await client.setupRegistryWebhook(provider.accessToken!, {
+  // Create registry webhook via gateway
+  const result = await gateway.setupRegistryWebhook(session, {
     ownerOrProjectPath,
     juanieProjectId: project.id,
     webhookSecret,
@@ -936,14 +962,20 @@ async function setupWebhook(
     return;
   }
 
+  // Obtain integration session with required capabilities
   const gitProviderResult = await getTeamGitProvider(project.teamId);
   if (!gitProviderResult) {
     console.log('⚠️ Skipping webhook setup (no git provider in dev mode)');
     return;
   }
-  const { provider, client } = gitProviderResult;
+  const { provider } = gitProviderResult;
+  const session = await getTeamIntegrationSession({
+    integrationId: provider.id,
+    teamId: project.teamId,
+    requiredCapabilities: requiredCapabilitiesForStep('setup_webhook'),
+  });
 
-  // 检查是否已存在 webhook
+  // Check if webhook already exists
   const existingWebhook = await db.query.webhooks.findFirst({
     where: eq(webhooks.projectId, project.id),
   });
@@ -953,25 +985,25 @@ async function setupWebhook(
     return;
   }
 
-  // 生成 webhook secret
+  // Generate webhook secret
   const webhookSecret = nanoid(32);
 
-  // 构建 webhook URL
+  // Build webhook URL
   const baseUrl =
     process.env.NEXTAUTH_URL || process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : 'http://localhost:3001';
   const webhookUrl = `${baseUrl}/api/webhooks/git`;
 
-  // 在 Git 平台创建 webhook
-  const { id: externalId } = await client.createWebhook(provider.accessToken!, {
+  // Create webhook via gateway
+  const { id: externalId } = await gateway.createWebhook(session, {
     repoFullName: project.repository.fullName,
     webhookUrl,
     secret: webhookSecret,
     events: ['push'],
   });
 
-  // 保存到数据库
+  // Save to database
   await db.insert(webhooks).values({
     projectId: project.id,
     externalId,

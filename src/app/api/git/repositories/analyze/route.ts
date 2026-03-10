@@ -2,8 +2,13 @@ import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { gitProviders, repositories } from '@/lib/db/schema';
-import { createGitProvider } from '@/lib/git';
+import { repositories } from '@/lib/db/schema';
+import {
+  gateway,
+  getTeamIntegrationSession,
+  mapProviderError,
+  normalizeApiError,
+} from '@/lib/integrations/service/integration-control-plane';
 import { detectMonorepoType, type MonorepoType } from '@/lib/monorepo';
 
 interface DetectedService {
@@ -21,41 +26,69 @@ interface AnalyzeResult {
   services: DetectedService[];
 }
 
-/**
- * 解析 docker-bake.hcl 文件，提取 target 列表
- */
+type NormalizableError = {
+  code?: string;
+  message?: string;
+  capability?: string;
+  status?: number;
+};
+
+const statusByCode = (code?: string) => {
+  if (!code) return 500;
+  if (code.startsWith('MISSING_CAPABILITY')) return 403;
+
+  switch (code) {
+    case 'INTEGRATION_NOT_BOUND':
+      return 404;
+    case 'GRANT_EXPIRED':
+    case 'GRANT_REVOKED':
+    case 'PROVIDER_ACCESS_DENIED':
+      return 403;
+    case 'PROVIDER_RESOURCE_NOT_FOUND':
+      return 404;
+    default:
+      return 500;
+  }
+};
+
+const toApiError = (error: unknown) => {
+  const typed = (error ?? {}) as NormalizableError;
+  const normalized =
+    typeof typed.status === 'number'
+      ? normalizeApiError(mapProviderError({ status: typed.status, message: typed.message }))
+      : normalizeApiError(typed);
+
+  return {
+    status: statusByCode(normalized.error.code),
+    payload: normalized,
+  };
+};
+
 function parseDockerBakeTargets(content: string): string[] {
   const targets: string[] = [];
-  // 匹配 target "name" { ... } 格式
   const targetRegex = /target\s+["']?(\w+)["']?\s*\{/g;
   let match: RegExpExecArray | null = targetRegex.exec(content);
 
   while (match !== null) {
     const targetName = match[1];
-    // 排除 default 和 multi 这些特殊 target
     if (targetName && !['default', 'multi'].includes(targetName)) {
       targets.push(targetName);
     }
     match = targetRegex.exec(content);
   }
 
-  return [...new Set(targets)]; // 去重
+  return [...new Set(targets)];
 }
 
-/**
- * 从 package.json 解析启动命令
- */
 function parseStartCommand(
   content: string,
   _serviceName: string
 ): { startCommand: string; port: number } {
   try {
     const pkg = JSON.parse(content);
-    // 优先使用 start 脚本
     if (pkg.scripts?.start) {
       return { startCommand: pkg.scripts.start, port: 3000 };
     }
-    // 其次使用 dev（生产环境可能需要调整）
     if (pkg.scripts?.dev) {
       return { startCommand: pkg.scripts.dev, port: 3000 };
     }
@@ -74,13 +107,18 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const repositoryId = searchParams.get('repositoryId');
+  const integrationId = searchParams.get('integrationId');
+  const teamId = searchParams.get('teamId');
   const branch = searchParams.get('branch') || 'main';
 
   if (!repositoryId) {
     return NextResponse.json({ error: 'Repository ID is required' }, { status: 400 });
   }
 
-  // 获取仓库信息
+  if (!integrationId || !teamId) {
+    return NextResponse.json({ error: 'integrationId and teamId are required' }, { status: 400 });
+  }
+
   const repository = await db.query.repositories.findFirst({
     where: eq(repositories.id, repositoryId),
   });
@@ -89,26 +127,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Repository not found' }, { status: 404 });
   }
 
-  // 获取 Git Provider
-  const provider = await db.query.gitProviders.findFirst({
-    where: eq(gitProviders.id, repository.providerId),
-  });
-
-  if (!provider || !provider.accessToken) {
-    return NextResponse.json({ error: 'Git provider not found' }, { status: 404 });
-  }
-
-  if (provider.userId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
   try {
-    const gitProvider = createGitProvider({
-      type: provider.type,
-      serverUrl: provider.serverUrl || undefined,
-      clientId: provider.clientId || '',
-      clientSecret: provider.clientSecret || '',
-      redirectUri: '',
+    const integrationSession = await getTeamIntegrationSession({
+      integrationId,
+      teamId,
+      requiredCapabilities: ['read_repo'],
     });
 
     const result: AnalyzeResult = {
@@ -118,17 +141,11 @@ export async function GET(request: NextRequest) {
       services: [],
     };
 
-    // 1. 检测 monorepo 类型
-    const rootFiles = await gitProvider.listRootFiles(
-      provider.accessToken,
-      repository.fullName,
-      branch
-    );
+    const rootFiles = await gateway.listRootFiles(integrationSession, repository.fullName, branch);
     result.monorepoType = detectMonorepoType(rootFiles);
 
-    // 2. 检测 docker-bake.hcl
-    const dockerBakeContent = await gitProvider.getFileContent(
-      provider.accessToken,
+    const dockerBakeContent = await gateway.getFileContent(
+      integrationSession,
       repository.fullName,
       'docker-bake.hcl',
       branch
@@ -139,21 +156,13 @@ export async function GET(request: NextRequest) {
       result.bakeTargets = parseDockerBakeTargets(dockerBakeContent);
     }
 
-    // 3. 自动发现服务
     if (result.monorepoType !== 'none') {
-      // Monorepo: 扫描 apps/ 目录
-      const appsDir = await gitProvider.listDirectory(
-        provider.accessToken,
-        repository.fullName,
-        'apps',
-        branch
-      );
+      const appsDir = await gateway.listDirectory(integrationSession, repository.fullName, 'apps', branch);
 
       for (const app of appsDir) {
         if (app.type === 'dir') {
-          // 读取 package.json 获取启动命令
-          const pkgContent = await gitProvider.getFileContent(
-            provider.accessToken,
+          const pkgContent = await gateway.getFileContent(
+            integrationSession,
             repository.fullName,
             `${app.path}/package.json`,
             branch
@@ -173,7 +182,6 @@ export async function GET(request: NextRequest) {
         }
       }
     } else if (result.hasDockerBake && result.bakeTargets.length > 0) {
-      // 非 monorepo 但有 docker-bake.hcl: 使用 targets 作为服务
       for (const target of result.bakeTargets) {
         result.services.push({
           name: target,
@@ -184,9 +192,8 @@ export async function GET(request: NextRequest) {
         });
       }
     } else {
-      // 单服务项目
-      const pkgContent = await gitProvider.getFileContent(
-        provider.accessToken,
+      const pkgContent = await gateway.getFileContent(
+        integrationSession,
         repository.fullName,
         'package.json',
         branch
@@ -207,7 +214,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Failed to analyze repository:', error);
-    return NextResponse.json({ error: 'Failed to analyze repository' }, { status: 500 });
+    const apiError = toApiError(error);
+    return NextResponse.json(apiError.payload, { status: apiError.status });
   }
 }
