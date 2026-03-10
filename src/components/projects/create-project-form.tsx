@@ -147,13 +147,13 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
   );
 
   const analyzeRepository = useCallback(
-    async (repositoryId: string, branch: string) => {
+    async (repositoryFullName: string, branch: string) => {
       setIsLoadingAnalyze(true);
       setAnalyzeError(null);
 
       try {
         const url = new URL('/api/git/repositories/analyze', window.location.origin);
-        url.searchParams.set('repositoryId', repositoryId);
+        url.searchParams.set('repositoryFullName', repositoryFullName);
         url.searchParams.set('teamId', formData.teamId);
         url.searchParams.set('branch', branch);
 
@@ -255,7 +255,7 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
     }));
 
     // 分析仓库
-    await analyzeRepository(repo.id, repo.defaultBranch || 'main');
+    await analyzeRepository(repo.fullName, repo.defaultBranch || 'main');
     handleNext();
   };
 

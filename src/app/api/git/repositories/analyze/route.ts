@@ -1,8 +1,5 @@
-import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { repositories } from '@/lib/db/schema';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -110,30 +107,20 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const repositoryId = searchParams.get('repositoryId');
-  const integrationId = searchParams.get('integrationId');
+  const repositoryFullName = searchParams.get('repositoryFullName');
   const teamId = searchParams.get('teamId');
   const branch = searchParams.get('branch') || 'main';
 
-  if (!repositoryId) {
-    return NextResponse.json({ error: 'Repository ID is required' }, { status: 400 });
+  if (!repositoryFullName) {
+    return NextResponse.json({ error: 'repositoryFullName is required' }, { status: 400 });
   }
 
   if (!teamId) {
     return NextResponse.json({ error: 'teamId is required' }, { status: 400 });
   }
 
-  const repository = await db.query.repositories.findFirst({
-    where: eq(repositories.id, repositoryId),
-  });
-
-  if (!repository) {
-    return NextResponse.json({ error: 'Repository not found' }, { status: 404 });
-  }
-
   try {
     const integrationSession = await getTeamIntegrationSession({
-      integrationId: integrationId || undefined,
       teamId,
       requiredCapabilities: ['read_repo'],
     });
@@ -145,12 +132,12 @@ export async function GET(request: NextRequest) {
       services: [],
     };
 
-    const rootFiles = await gateway.listRootFiles(integrationSession, repository.fullName, branch);
+    const rootFiles = await gateway.listRootFiles(integrationSession, repositoryFullName, branch);
     result.monorepoType = detectMonorepoType(rootFiles);
 
     const dockerBakeContent = await gateway.getFileContent(
       integrationSession,
-      repository.fullName,
+      repositoryFullName,
       'docker-bake.hcl',
       branch
     );
@@ -163,7 +150,7 @@ export async function GET(request: NextRequest) {
     if (result.monorepoType !== 'none') {
       const appsDir = await gateway.listDirectory(
         integrationSession,
-        repository.fullName,
+        repositoryFullName,
         'apps',
         branch
       );
@@ -172,7 +159,7 @@ export async function GET(request: NextRequest) {
         if (app.type === 'dir') {
           const pkgContent = await gateway.getFileContent(
             integrationSession,
-            repository.fullName,
+            repositoryFullName,
             `${app.path}/package.json`,
             branch
           );
@@ -203,7 +190,7 @@ export async function GET(request: NextRequest) {
     } else {
       const pkgContent = await gateway.getFileContent(
         integrationSession,
-        repository.fullName,
+        repositoryFullName,
         'package.json',
         branch
       );
