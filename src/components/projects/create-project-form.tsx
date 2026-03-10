@@ -140,7 +140,8 @@ export function CreateProjectForm({
   const fetchRepositories = useCallback(
     async (search?: string) => {
       const url = new URL('/api/git/repositories', window.location.origin);
-      url.searchParams.set('providerId', gitProviderId);
+      url.searchParams.set('integrationId', gitProviderId);
+      url.searchParams.set('teamId', formData.teamId);
       if (search) url.searchParams.set('search', search);
 
       const res = await fetch(url);
@@ -149,39 +150,59 @@ export function CreateProjectForm({
         setRepositories(data);
       }
     },
-    [gitProviderId]
+    [gitProviderId, formData.teamId]
   );
 
-  const analyzeRepository = useCallback(async (repositoryId: string, branch: string) => {
-    setIsLoadingAnalyze(true);
-    setAnalyzeError(null);
+  const analyzeRepository = useCallback(
+    async (repositoryId: string, branch: string) => {
+      setIsLoadingAnalyze(true);
+      setAnalyzeError(null);
 
-    try {
-      const url = new URL('/api/git/repositories/analyze', window.location.origin);
-      url.searchParams.set('repositoryId', repositoryId);
-      url.searchParams.set('branch', branch);
+      try {
+        const url = new URL('/api/git/repositories/analyze', window.location.origin);
+        url.searchParams.set('repositoryId', repositoryId);
+        url.searchParams.set('integrationId', gitProviderId);
+        url.searchParams.set('teamId', formData.teamId);
+        url.searchParams.set('branch', branch);
 
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
 
-        // Convert detected services to form services
-        const services: ServiceWithId[] = data.services.map((s: DetectedService) => ({
-          _id: nanoid(),
-          ...s,
-        }));
+          // Convert detected services to form services
+          const services: ServiceWithId[] = data.services.map((s: DetectedService) => ({
+            _id: nanoid(),
+            ...s,
+          }));
 
-        setFormData((prev) => ({
-          ...prev,
-          services,
-          monorepoType: data.monorepoType,
-          hasDockerBake: data.hasDockerBake,
-          bakeTargets: data.bakeTargets,
-        }));
-      } else {
-        const error = await res.json();
-        setAnalyzeError(error.error || 'Failed to analyze repository');
-        // Set default service
+          setFormData((prev) => ({
+            ...prev,
+            services,
+            monorepoType: data.monorepoType,
+            hasDockerBake: data.hasDockerBake,
+            bakeTargets: data.bakeTargets,
+          }));
+        } else {
+          const error = await res.json();
+          setAnalyzeError(error.error || 'Failed to analyze repository');
+          // Set default service
+          setFormData((prev) => ({
+            ...prev,
+            services: [
+              {
+                _id: nanoid(),
+                name: 'web',
+                type: 'web' as const,
+                appDir: '.',
+                startCommand: 'npm start',
+                port: 3000,
+              },
+            ],
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to analyze repository:', error);
+        setAnalyzeError('Failed to analyze repository');
         setFormData((prev) => ({
           ...prev,
           services: [
@@ -195,27 +216,12 @@ export function CreateProjectForm({
             },
           ],
         }));
+      } finally {
+        setIsLoadingAnalyze(false);
       }
-    } catch (error) {
-      console.error('Failed to analyze repository:', error);
-      setAnalyzeError('Failed to analyze repository');
-      setFormData((prev) => ({
-        ...prev,
-        services: [
-          {
-            _id: nanoid(),
-            name: 'web',
-            type: 'web' as const,
-            appDir: '.',
-            startCommand: 'npm start',
-            port: 3000,
-          },
-        ],
-      }));
-    } finally {
-      setIsLoadingAnalyze(false);
-    }
-  }, []);
+    },
+    [gitProviderId, formData.teamId]
+  );
 
   useEffect(() => {
     if (currentStep === 'repository' && formData.mode === 'import') {
