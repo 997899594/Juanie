@@ -1,21 +1,19 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { integrationIdentities, teamMembers } from '@/lib/db/schema';
-import type {
-  GitRepository,
-  PushOptions,
-  RegistryWebhookOptions,
-  WebhookOptions,
-} from '@/lib/git';
-import { gitlabAdapter } from '@/lib/integrations/adapters/gitlab-adapter';
+import type { GitRepository } from '@/lib/git';
 import { githubAdapter } from '@/lib/integrations/adapters/github-adapter';
+import { gitlabAdapter } from '@/lib/integrations/adapters/gitlab-adapter';
 import {
-  integrationErrors,
   type IntegrationError,
   type IntegrationErrorCode,
+  integrationErrors,
 } from '@/lib/integrations/domain/errors';
 import type { Capability } from '@/lib/integrations/domain/models';
-import { createIntegrationSession, type IntegrationSession } from '@/lib/integrations/service/session-service';
+import {
+  createIntegrationSession,
+  type IntegrationSession,
+} from '@/lib/integrations/service/session-service';
 
 type ProviderErrorInput = {
   status?: number;
@@ -106,17 +104,26 @@ export const gateway = {
     return adapter.listRepositories(session, options);
   },
 
-  async getRepository(session: IntegrationSession, fullName: string): Promise<GitRepository | null> {
+  async getRepository(
+    session: IntegrationSession,
+    fullName: string
+  ): Promise<GitRepository | null> {
     const adapter = resolveAdapter(session.provider);
     return adapter.getRepository(session, fullName);
   },
 
-  async createRepository(session: IntegrationSession, options: CreateRepoOptions): Promise<GitRepository> {
+  async createRepository(
+    session: IntegrationSession,
+    options: CreateRepoOptions
+  ): Promise<GitRepository> {
     const adapter = resolveAdapter(session.provider);
     return adapter.createRepository(session, options);
   },
 
-  async createWebhook(session: IntegrationSession, options: WebhookOptions): Promise<{ id: string }> {
+  async createWebhook(
+    session: IntegrationSession,
+    options: WebhookOptions
+  ): Promise<{ id: string }> {
     const adapter = resolveAdapter(session.provider);
     return adapter.createWebhook(session, options);
   },
@@ -129,7 +136,11 @@ export const gateway = {
     return adapter.setupRegistryWebhook(session, options);
   },
 
-  async listRootFiles(session: IntegrationSession, repoFullName: string, branch?: string): Promise<string[]> {
+  async listRootFiles(
+    session: IntegrationSession,
+    repoFullName: string,
+    branch?: string
+  ): Promise<string[]> {
     const adapter = resolveAdapter(session.provider);
     return adapter.listRootFiles(session, repoFullName, branch);
   },

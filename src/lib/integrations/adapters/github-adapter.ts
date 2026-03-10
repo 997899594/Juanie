@@ -1,5 +1,10 @@
+import type {
+  CreateRepoOptions,
+  GitRepository,
+  RegistryWebhookOptions,
+  WebhookOptions,
+} from '@/lib/git';
 import { createGitProvider } from '@/lib/git';
-import type { GitRepository, PushOptions, RegistryWebhookOptions, WebhookOptions, CreateRepoOptions } from '@/lib/git';
 import type { IntegrationSession } from '@/lib/integrations/service/session-service';
 
 const createProvider = (provider: 'github') =>
@@ -19,17 +24,26 @@ export const githubAdapter = {
     return provider.getRepositories(session.accessToken, options);
   },
 
-  async getRepository(session: IntegrationSession, fullName: string): Promise<GitRepository | null> {
+  async getRepository(
+    session: IntegrationSession,
+    fullName: string
+  ): Promise<GitRepository | null> {
     const provider = createProvider('github');
     return provider.getRepository(session.accessToken, fullName);
   },
 
-  async createRepository(session: IntegrationSession, options: CreateRepoOptions): Promise<GitRepository> {
+  async createRepository(
+    session: IntegrationSession,
+    options: CreateRepoOptions
+  ): Promise<GitRepository> {
     const provider = createProvider('github');
     return provider.createRepository(session.accessToken, options);
   },
 
-  async createWebhook(session: IntegrationSession, options: WebhookOptions): Promise<{ id: string }> {
+  async createWebhook(
+    session: IntegrationSession,
+    options: WebhookOptions
+  ): Promise<{ id: string }> {
     const provider = createProvider('github');
     return provider.createWebhook(session.accessToken, options);
   },
@@ -42,7 +56,11 @@ export const githubAdapter = {
     return provider.setupRegistryWebhook(session.accessToken, options);
   },
 
-  async listRootFiles(session: IntegrationSession, repoFullName: string, branch?: string): Promise<string[]> {
+  async listRootFiles(
+    session: IntegrationSession,
+    repoFullName: string,
+    branch?: string
+  ): Promise<string[]> {
     const provider = createProvider('github');
     return provider.listRootFiles(session.accessToken, repoFullName, branch);
   },

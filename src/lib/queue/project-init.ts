@@ -5,8 +5,11 @@ import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
-import { getTeamIntegrationSession, gateway } from '@/lib/integrations/service/integration-control-plane';
 import type { Capability } from '@/lib/integrations/domain/models';
+import {
+  gateway,
+  getTeamIntegrationSession,
+} from '@/lib/integrations/service/integration-control-plane';
 import {
   createCiliumGateway,
   createCiliumHTTPRoute,
@@ -42,7 +45,6 @@ export const requiredCapabilitiesForStep = (step: StepName): Capability[] => {
       return [];
   }
 };
-
 
 interface GitProviderWithClient {
   provider: typeof gitProviders.$inferSelect;
@@ -316,7 +318,9 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
   await db.update(projects).set({ status: 'active' }).where(eq(projects.id, projectId));
 }
 
-async function validateRepository(project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null }) {
+async function validateRepository(
+  project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null }
+) {
   console.log(`[validateRepository] Starting for project ${project.name}`);
 
   if (!project.repository) {
@@ -358,7 +362,10 @@ async function validateRepository(project: typeof projects.$inferSelect & { repo
 }
 
 // Helper to build an IntegrationSession from legacy git provider result (temporary bridge)
-const buildSessionFromGitProviderResult = (result: { provider: any; client: any }, teamId: string) => {
+const buildSessionFromGitProviderResult = (
+  result: { provider: any; client: any },
+  teamId: string
+) => {
   return {
     integrationId: result.provider.id,
     provider: result.provider.type,
@@ -442,7 +449,8 @@ async function pushTemplate(
   const files = await new TemplateService(templateId, {
     projectName: project.name,
     projectSlug: project.slug,
-    teamName: (await db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }))?.name || 'Team',
+    teamName:
+      (await db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }))?.name || 'Team',
     description: project.description || '',
   }).renderToMemory();
 
