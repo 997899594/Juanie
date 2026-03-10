@@ -37,7 +37,11 @@ const toApiError = (error: unknown) => {
   const normalized =
     typeof typed.status === 'number'
       ? normalizeApiError(mapProviderError({ status: typed.status, message: typed.message }))
-      : normalizeApiError(typed);
+      : normalizeApiError({
+          code: typed.code as any,
+          message: typed.message,
+          capability: typed.capability,
+        });
 
   return {
     status: statusByCode(normalized.error.code),
