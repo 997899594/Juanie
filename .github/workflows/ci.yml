@@ -19,6 +19,7 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      - run: bunx biome check --write
       - run: bun run lint
       - run: bun run build
 
