@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs';
-import https from 'node:https';
 import * as k8s from '@kubernetes/client-node';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
@@ -16,16 +15,25 @@ export function initK8sClient(): void {
   const kc = new k8s.KubeConfig();
 
   try {
-    const kubeconfigContent = process.env.KUBECONFIG_CONTENT;
-    if (kubeconfigContent) {
-      kc.loadFromString(kubeconfigContent);
+    // In production (K8s environment), prefer in-cluster config
+    // In development, use external kubeconfig
+    if (process.env.KUBERNETES_SERVICE_HOST) {
+      // Running in K8s cluster, use in-cluster config (ServiceAccount)
+      kc.loadFromCluster();
+      console.log('Using in-cluster Kubernetes configuration');
+    } else if (process.env.KUBECONFIG_CONTENT) {
+      // External kubeconfig provided as string
+      kc.loadFromString(process.env.KUBECONFIG_CONTENT);
+      console.log('Using KUBECONFIG_CONTENT');
     } else {
+      // Try to load from file or default
       const kubeconfigPath = process.env.KUBECONFIG || `${process.env.HOME}/.kube/config`;
       if (existsSync(kubeconfigPath)) {
         kc.loadFromFile(kubeconfigPath);
+        console.log(`Using kubeconfig from ${kubeconfigPath}`);
       } else {
-        // Try loadFromDefault as last resort (may work in-cluster)
         kc.loadFromDefault();
+        console.log('Using default kubeconfig');
       }
     }
 
@@ -37,25 +45,10 @@ export function initK8sClient(): void {
     }
 
     kubeConfig = kc;
-
-    // Create HTTPS agent that skips TLS verification for self-signed certs
-    const httpsAgent =
-      process.env.K8S_SKIP_TLS_VERIFY !== 'false'
-        ? new https.Agent({ rejectUnauthorized: false })
-        : undefined;
-
     k8sCoreApi = kc.makeApiClient(k8s.CoreV1Api);
     k8sAppsApi = kc.makeApiClient(k8s.AppsV1Api);
     k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
     k8sNetworkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
-
-    // Apply HTTPS agent to all clients
-    if (httpsAgent) {
-      (k8sCoreApi as any).requestOptions = { httpsAgent };
-      (k8sAppsApi as any).requestOptions = { httpsAgent };
-      (k8sCustomApi as any).requestOptions = { httpsAgent };
-      (k8sNetworkingApi as any).requestOptions = { httpsAgent };
-    }
     console.log('✅ Kubernetes client initialized');
   } catch (error) {
     console.log(
