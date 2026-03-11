@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import https from 'node:https';
 import * as k8s from '@kubernetes/client-node';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
@@ -36,10 +37,25 @@ export function initK8sClient(): void {
     }
 
     kubeConfig = kc;
+
+    // Create HTTPS agent that skips TLS verification for self-signed certs
+    const httpsAgent =
+      process.env.K8S_SKIP_TLS_VERIFY !== 'false'
+        ? new https.Agent({ rejectUnauthorized: false })
+        : undefined;
+
     k8sCoreApi = kc.makeApiClient(k8s.CoreV1Api);
     k8sAppsApi = kc.makeApiClient(k8s.AppsV1Api);
     k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
     k8sNetworkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
+
+    // Apply HTTPS agent to all clients
+    if (httpsAgent) {
+      (k8sCoreApi as any).requestOptions = { httpsAgent };
+      (k8sAppsApi as any).requestOptions = { httpsAgent };
+      (k8sCustomApi as any).requestOptions = { httpsAgent };
+      (k8sNetworkingApi as any).requestOptions = { httpsAgent };
+    }
     console.log('✅ Kubernetes client initialized');
   } catch (error) {
     console.log(
