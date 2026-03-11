@@ -7,16 +7,21 @@ export const resolveGitHubCapabilities = (scopes: string[]): Capability[] => {
   const normalized = new Set(scopes.map((scope) => scope.trim()).filter(Boolean));
   const capabilities: Capability[] = [];
 
+  // repo scope includes read, write, and webhook management
   if (normalized.has('repo') || normalized.has('public_repo')) {
-    capabilities.push('read_repo', 'write_repo');
+    capabilities.push('read_repo', 'write_repo', 'manage_webhook');
   }
 
+  // workflow scope for GitHub Actions
   if (normalized.has('workflow')) {
     capabilities.push('write_workflow');
   }
 
+  // Explicit webhook scopes (redundant if repo is present, but kept for clarity)
   if (normalized.has('admin:repo_hook') || normalized.has('admin:org_hook')) {
-    capabilities.push('manage_webhook');
+    if (!normalized.has('repo') && !normalized.has('public_repo')) {
+      capabilities.push('manage_webhook');
+    }
   }
 
   return sortCapabilities(capabilities);
