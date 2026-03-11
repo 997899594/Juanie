@@ -48,9 +48,8 @@ export const requiredCapabilitiesForStep = (step: StepName): Capability[] => {
     case 'push_cicd_config':
     case 'push_template':
       return ['write_repo', 'write_workflow'];
-    case 'setup_webhook':
     case 'setup_registry_webhook':
-      return ['manage_webhook'];
+      return ['read_repo'];
     case 'create_repository':
       return ['write_repo'];
     default:
@@ -137,7 +136,6 @@ function isK8sAvailable(): boolean {
 const IMPORT_STEPS = [
   'validate_repository',
   'push_cicd_config',
-  'setup_webhook',
   'setup_registry_webhook',
   'setup_namespace',
   'deploy_services',
@@ -148,7 +146,6 @@ const IMPORT_STEPS = [
 const CREATE_STEPS = [
   'create_repository',
   'push_template',
-  'setup_webhook',
   'setup_registry_webhook',
   'setup_namespace',
   'deploy_services',
@@ -223,9 +220,6 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
           break;
         case 'push_template':
           await pushTemplate(project, template);
-          break;
-        case 'setup_webhook':
-          await setupWebhook(project);
           break;
         case 'setup_registry_webhook':
           await setupRegistryWebhook(project);
@@ -820,66 +814,6 @@ function buildImageName(
     default:
       return '';
   }
-}
-
-async function setupWebhook(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  }
-) {
-  console.log(`Setting up webhook for project ${project.name}`);
-
-  if (!project.repository) {
-    console.log('⚠️  No repository linked, skipping webhook setup');
-    return;
-  }
-
-  // Obtain integration session with required capabilities
-  const session = await getTeamIntegrationSession({
-    teamId: project.teamId,
-    requiredCapabilities: requiredCapabilitiesForStep('setup_webhook'),
-  });
-
-  // Check if webhook already exists
-  const existingWebhook = await db.query.webhooks.findFirst({
-    where: eq(webhooks.projectId, project.id),
-  });
-
-  if (existingWebhook) {
-    console.log(`✅ Webhook already exists for project ${project.name}`);
-    return;
-  }
-
-  // Generate webhook secret
-  const webhookSecret = nanoid(32);
-
-  // Build webhook URL
-  const baseUrl =
-    process.env.NEXTAUTH_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3001';
-  const webhookUrl = `${baseUrl}/api/webhooks/git`;
-
-  // Create webhook via gateway
-  const { id: externalId } = await gateway.createWebhook(session, {
-    repoFullName: project.repository.fullName,
-    webhookUrl,
-    secret: webhookSecret,
-    events: ['push'],
-  });
-
-  // Save to database
-  await db.insert(webhooks).values({
-    projectId: project.id,
-    externalId,
-    type: 'git-push',
-    url: webhookUrl,
-    events: ['push'],
-    secret: webhookSecret,
-    active: true,
-  });
-
-  console.log(`✅ Created webhook for ${project.repository.fullName}`);
 }
 
 async function setupNamespace(project: typeof projects.$inferSelect, hasK8s: boolean) {
