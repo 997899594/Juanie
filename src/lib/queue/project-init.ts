@@ -764,7 +764,8 @@ REDIS_PASSWORD=<在 Juanie 控制台查看>
 
 /**
  * Setup registry webhook for container image push events.
- * This enables automatic deployments when new images are pushed.
+ * For GitHub, this is handled via GitHub Actions calling our API.
+ * We just record the configuration in the database.
  */
 async function setupRegistryWebhook(
   project: typeof projects.$inferSelect & {
@@ -778,10 +779,10 @@ async function setupRegistryWebhook(
     return;
   }
 
-  // Obtain integration session with required capabilities
+  // Obtain integration session to get provider info
   const session = await getTeamIntegrationSession({
     teamId: project.teamId,
-    requiredCapabilities: requiredCapabilitiesForStep('setup_registry_webhook'),
+    requiredCapabilities: ['read_repo'],
   });
 
   // Check if registry webhook already exists
@@ -797,16 +798,6 @@ async function setupRegistryWebhook(
   // Generate webhook secret
   const webhookSecret = nanoid(32);
 
-  // Build the ownerOrProjectPath parameter
-  const ownerOrProjectPath = project.repository.fullName;
-
-  // Create registry webhook via gateway
-  const result = await gateway.setupRegistryWebhook(session, {
-    ownerOrProjectPath,
-    juanieProjectId: project.id,
-    webhookSecret,
-  });
-
   // Build webhook URL for database record
   const baseUrl =
     process.env.NEXTAUTH_URL || process.env.VERCEL_URL
@@ -814,10 +805,11 @@ async function setupRegistryWebhook(
       : 'http://localhost:3001';
   const webhookUrl = `${baseUrl}/api/webhooks/registry?project_id=${project.id}`;
 
-  // Save to database
+  // For GitHub, registry webhooks are handled via GitHub Actions
+  // We don't create an actual webhook, just record the configuration
   await db.insert(webhooks).values({
     projectId: project.id,
-    externalId: result.id,
+    externalId: `github-actions-${project.id}`, // Placeholder ID
     type: 'registry',
     url: webhookUrl,
     events: ['package'],
@@ -825,7 +817,7 @@ async function setupRegistryWebhook(
     active: true,
   });
 
-  // Update project config with image name
+  // Update project config with image name and webhook secret
   const config = (project.configJson as Record<string, unknown>) || {};
   const imageName = buildImageName(session.provider, project.repository);
 
@@ -835,12 +827,14 @@ async function setupRegistryWebhook(
       configJson: {
         ...config,
         imageName,
+        registryWebhookSecret: webhookSecret,
         registryWebhookConfigured: true,
       },
     })
     .where(eq(projects.id, project.id));
 
-  console.log(`✅ Created registry webhook for ${project.repository.fullName}`);
+  console.log(`✅ Configured registry webhook for ${project.repository.fullName}`);
+  console.log(`   Webhook secret will be used in GitHub Actions`);
 }
 
 /**

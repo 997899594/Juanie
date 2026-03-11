@@ -48,3 +48,28 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Notify Juanie deployment
+        if: success()
+        run: |
+          curl -X POST "https://juanie.art/api/webhooks/registry" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: package" \
+            -H "X-Hub-Signature-256: sha256=${{ secrets.JUANIE_WEBHOOK_SECRET }}" \
+            -d '{
+              "action": "published",
+              "package": {
+                "name": "${{ env.IMAGE_NAME }}",
+                "package_type": "container",
+                "package_version": {
+                  "container_metadata": {
+                    "tag": {
+                      "name": "sha-${{ github.sha }}"
+                    }
+                  }
+                }
+              },
+              "repository": {
+                "full_name": "${{ github.repository }}"
+              }
+            }'
