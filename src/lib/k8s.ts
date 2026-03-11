@@ -87,8 +87,8 @@ export async function createNamespace(name: string): Promise<void> {
   try {
     await core.readNamespace({ name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode === 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
       await core.createNamespace({
         body: {
           apiVersion: 'v1',
@@ -108,8 +108,8 @@ export async function deleteNamespace(name: string): Promise<void> {
   try {
     await core.deleteNamespace({ name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode !== 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
       throw e;
     }
   }
@@ -249,8 +249,8 @@ export async function createConfigMap(
   try {
     await core.readNamespacedConfigMap({ namespace, name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode === 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
       await core.createNamespacedConfigMap({
         namespace,
         body: {
@@ -279,8 +279,8 @@ export async function deleteConfigMap(namespace: string, name: string): Promise<
   try {
     await core.deleteNamespacedConfigMap({ namespace, name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode !== 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
       throw e;
     }
   }
@@ -302,8 +302,8 @@ export async function createSecret(
   try {
     await core.readNamespacedSecret({ namespace, name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode === 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
       await core.createNamespacedSecret({
         namespace,
         body: {
@@ -333,8 +333,8 @@ export async function deleteSecret(namespace: string, name: string): Promise<voi
   try {
     await core.deleteNamespacedSecret({ namespace, name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode !== 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
       throw e;
     }
   }
@@ -370,8 +370,8 @@ export async function upsertSecret(
     // 已存在：替换
     await core.replaceNamespacedSecret({ namespace, name, body });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode === 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
       await core.createNamespacedSecret({ namespace, body });
     } else {
       throw e;
@@ -400,8 +400,8 @@ export async function upsertConfigMap(
     await core.readNamespacedConfigMap({ namespace, name });
     await core.replaceNamespacedConfigMap({ namespace, name, body });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode === 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
       await core.createNamespacedConfigMap({ namespace, body });
     } else {
       throw e;
@@ -530,8 +530,8 @@ export async function deleteDeployment(namespace: string, name: string): Promise
   try {
     await apps.deleteNamespacedDeployment({ namespace, name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode !== 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
       throw e;
     }
   }
@@ -579,8 +579,8 @@ export async function deleteService(namespace: string, name: string): Promise<vo
   try {
     await core.deleteNamespacedService({ namespace, name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode !== 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
       throw e;
     }
   }
@@ -769,8 +769,8 @@ export async function deleteCiliumGateway(namespace: string, name: string): Prom
       name,
     });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode !== 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
       throw e;
     }
   }
@@ -788,8 +788,8 @@ export async function deleteCiliumHTTPRoute(namespace: string, name: string): Pr
       name,
     });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode !== 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
       throw e;
     }
   }
@@ -948,8 +948,8 @@ export async function deleteStatefulSet(namespace: string, name: string): Promis
   try {
     await apps.deleteNamespacedStatefulSet({ namespace, name });
   } catch (e: unknown) {
-    const error = e as { statusCode?: number };
-    if (error.statusCode !== 404) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
       throw e;
     }
   }
