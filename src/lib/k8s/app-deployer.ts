@@ -77,7 +77,7 @@ export class AppDeployer {
       await apps.readNamespacedDeployment({ namespace, name });
       await apps.replaceNamespacedDeployment({ namespace, name, body: resource });
     } catch (e: any) {
-      if (e.statusCode === 404) {
+      if ((e.code ?? e.statusCode) === 404) {
         await apps.createNamespacedDeployment({ namespace, body: resource });
       } else {
         throw e;
@@ -94,7 +94,7 @@ export class AppDeployer {
       await core.readNamespacedService({ namespace, name });
       await core.replaceNamespacedService({ namespace, name, body: resource });
     } catch (e: any) {
-      if (e.statusCode === 404) {
+      if ((e.code ?? e.statusCode) === 404) {
         await core.createNamespacedService({ namespace, body: resource });
       } else {
         throw e;
@@ -111,7 +111,7 @@ export class AppDeployer {
       await core.readNamespacedConfigMap({ namespace, name });
       await core.replaceNamespacedConfigMap({ namespace, name, body: resource });
     } catch (e: any) {
-      if (e.statusCode === 404) {
+      if ((e.code ?? e.statusCode) === 404) {
         await core.createNamespacedConfigMap({ namespace, body: resource });
       } else {
         throw e;
@@ -128,7 +128,7 @@ export class AppDeployer {
       await core.readNamespacedSecret({ namespace, name });
       await core.replaceNamespacedSecret({ namespace, name, body: resource });
     } catch (e: any) {
-      if (e.statusCode === 404) {
+      if ((e.code ?? e.statusCode) === 404) {
         await core.createNamespacedSecret({ namespace, body: resource });
       } else {
         throw e;
@@ -158,7 +158,7 @@ export class AppDeployer {
         body: resource,
       });
     } catch (e: any) {
-      if (e.statusCode === 404) {
+      if ((e.code ?? e.statusCode) === 404) {
         await custom.createNamespacedCustomObject({
           group: 'gateway.networking.k8s.io',
           version: 'v1',
@@ -253,7 +253,7 @@ export class AppDeployer {
     try {
       await core.readNamespace({ name });
     } catch (e: any) {
-      if (e.statusCode === 404) {
+      if ((e.code ?? e.statusCode) === 404) {
         await core.createNamespace({
           body: {
             apiVersion: 'v1',

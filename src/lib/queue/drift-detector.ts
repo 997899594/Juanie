@@ -108,7 +108,7 @@ async function getActualResources(namespace: string, appName: string): Promise<a
     });
     return { deployment };
   } catch (e: any) {
-    if (e.statusCode === 404) {
+    if ((e.code ?? e.statusCode) === 404) {
       return {};
     }
     throw e;

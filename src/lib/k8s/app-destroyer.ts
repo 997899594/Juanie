@@ -96,7 +96,7 @@ export class AppDestroyer {
       await core.deleteNamespace({ name });
       console.log(`[AppDestroyer] Deleted Namespace: ${name}`);
     } catch (e: any) {
-      if (e.statusCode !== 404) {
+      if ((e.code ?? e.statusCode) !== 404) {
         throw e;
       }
     }
