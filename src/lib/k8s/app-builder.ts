@@ -39,9 +39,9 @@ export class AppBuilder {
       apiVersion: 'apps/v1',
       kind: 'Deployment',
       metadata: {
-        name: `${spec.name}-web`,
+        name: spec.name,
         namespace: spec.namespace,
-        labels: { ...labels, app: `${spec.name}-web` },
+        labels: { ...labels, app: spec.name },
         annotations: {
           'juanie.dev/last-applied-spec': JSON.stringify(spec),
         },
@@ -49,11 +49,11 @@ export class AppBuilder {
       spec: {
         replicas: spec.replicas,
         selector: {
-          matchLabels: { app: `${spec.name}-web` },
+          matchLabels: { app: spec.name },
         },
         template: {
           metadata: {
-            labels: { app: `${spec.name}-web`, ...labels },
+            labels: { app: spec.name, ...labels },
           },
           spec: {
             containers: [
@@ -105,13 +105,13 @@ export class AppBuilder {
       apiVersion: 'v1',
       kind: 'Service',
       metadata: {
-        name: `${spec.name}-web`,
+        name: spec.name,
         namespace: spec.namespace,
         labels,
       },
       spec: {
         type: 'ClusterIP',
-        selector: { app: `${spec.name}-web` },
+        selector: { app: spec.name },
         ports: [
           {
             name: 'http',
@@ -209,7 +209,7 @@ export class AppBuilder {
             ],
             backendRefs: [
               {
-                name: `${spec.name}-web`,
+                name: spec.name,
                 port: 80,
               },
             ],

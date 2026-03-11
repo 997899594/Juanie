@@ -104,7 +104,7 @@ async function getActualResources(namespace: string, appName: string): Promise<a
   try {
     const deployment = await apps.readNamespacedDeployment({
       namespace,
-      name: `${appName}-web`,
+      name: appName,
     });
     return { deployment };
   } catch (e: any) {
@@ -125,7 +125,7 @@ async function buildAppSpec(project: any, service: any): Promise<AppSpec | null>
 
   return {
     projectId: project.id,
-    name: service.slug || service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+    name: `${project.slug}-${(service.slug || service.name).toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
     namespace,
     image: {
       repository: service.imageRepository,

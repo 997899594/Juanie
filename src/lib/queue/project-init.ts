@@ -857,7 +857,7 @@ async function deployServices(project: typeof projects.$inferSelect, hasK8s: boo
 
     const spec: AppSpec = {
       projectId: project.id,
-      name: service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      name: `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
       namespace,
       image: {
         repository: `juanie/${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,

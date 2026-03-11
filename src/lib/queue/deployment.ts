@@ -84,17 +84,18 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       if (getIsConnected() && environment.namespace) {
         const serviceImage = imageName || `${project.slug}-${service.name}:latest`;
 
+        const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
         try {
           // 尝试更新已存在的 Deployment，如果不存在则创建
-          await updateDeployment(environment.namespace, service.name, {
+          await updateDeployment(environment.namespace, deploymentName, {
             image: serviceImage,
           });
-          console.log(`✅ Updated deployment ${service.name} with image ${serviceImage}`);
+          console.log(`✅ Updated deployment ${deploymentName} with image ${serviceImage}`);
         } catch (_updateError) {
           // 如果更新失败（可能不存在），尝试创建
-          console.log(`Deployment ${service.name} not found, creating new one...`);
+          console.log(`Deployment ${deploymentName} not found, creating new one...`);
           try {
-            await createDeployment(environment.namespace, service.name, {
+            await createDeployment(environment.namespace, deploymentName, {
               image: serviceImage,
               port: service.port ?? 3000,
               replicas: service.replicas ?? 1,
@@ -104,9 +105,9 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
               memoryRequest: service.memoryRequest ?? undefined,
               memoryLimit: service.memoryLimit ?? undefined,
             });
-            console.log(`✅ Created deployment ${service.name} with image ${serviceImage}`);
+            console.log(`✅ Created deployment ${deploymentName} with image ${serviceImage}`);
           } catch (createError) {
-            console.error(`Failed to create deployment for service ${service.name}:`, createError);
+            console.error(`Failed to create deployment for service ${deploymentName}:`, createError);
             throw createError;
           }
         }
