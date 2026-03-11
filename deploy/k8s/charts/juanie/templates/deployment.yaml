@@ -102,6 +102,9 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["./worker"]
+          env:
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
           envFrom:
             - configMapRef:
                 name: {{ .Chart.Name }}-config
