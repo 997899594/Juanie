@@ -50,27 +50,15 @@ jobs:
               pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
           fi
 
-      - name: Notify Juanie
+      - name: Trigger Juanie Deployment
         if: success()
         run: |
-          curl -X POST "https://juanie.art/api/webhooks/registry" \
+          curl -X POST "https://juanie.art/api/deployments/trigger" \
             -H "Content-Type: application/json" \
-            -H "X-GitHub-Event: package" \
-            -H "X-Hub-Signature-256: sha256=${{ secrets.JUANIE_WEBHOOK_SECRET }}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -d "{
-              \"action\": \"published\",
-              \"package\": {
-                \"name\": \"${{ env.IMAGE_NAME }}\",
-                \"package_type\": \"container\",
-                \"package_version\": {
-                  \"container_metadata\": {
-                    \"tag\": {
-                      \"name\": \"sha-${{ github.sha }}\"
-                    }
-                  }
-                }
-              },
-              \"repository\": {
-                \"full_name\": \"${{ github.repository }}\"
-              }
+              \"repository\": \"${{ github.repository }}\",
+              \"sha\": \"${{ github.sha }}\",
+              \"ref\": \"${{ github.ref }}\",
+              \"image\": \"${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}\"
             }"
