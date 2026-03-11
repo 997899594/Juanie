@@ -23,7 +23,6 @@ import {
 } from '@/lib/integrations/service/integration-control-plane';
 import { insertRepositoryRecord } from '@/lib/integrations/service/repository-service';
 import {
-  createCiliumGateway,
   createCiliumHTTPRoute,
   createNamespace,
   createSecret,
@@ -1097,18 +1096,15 @@ async function configureDns(project: typeof projects.$inferSelect, hasK8s: boole
         : `${project.slug}-web`;
 
       const servicePort = domain.service?.port || 80;
-      const gatewayName = `${project.slug}-${domain.id}`;
+      const routeName = `${project.slug}-route`;
 
-      // Create Cilium Gateway
-      await createCiliumGateway(namespace, gatewayName, {
-        host: domain.hostname,
-      });
-
-      // Create Cilium HTTPRoute
+      // Create HTTPRoute pointing to shared-gateway (https-wildcard handles *.juanie.art)
       await createCiliumHTTPRoute({
-        name: `${gatewayName}-route`,
+        name: routeName,
         namespace,
-        gatewayName,
+        gatewayName: 'shared-gateway',
+        gatewayNamespace: 'juanie',
+        sectionName: 'https-wildcard',
         hostnames: [domain.hostname],
         serviceName,
         servicePort,

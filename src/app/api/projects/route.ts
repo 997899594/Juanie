@@ -177,7 +177,7 @@ export async function POST(request: Request) {
       await db.insert(domains).values({
         projectId: project.id,
         environmentId: prodEnv.id,
-        hostname: `${uniqueSlug}.juanie.dev`,
+        hostname: `${slug}.juanie.art`,
         isCustom: false,
         isVerified: true,
       });

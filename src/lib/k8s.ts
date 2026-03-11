@@ -602,6 +602,8 @@ export interface CiliumHTTPRouteSpec {
   name: string;
   namespace: string;
   gatewayName: string;
+  gatewayNamespace?: string;
+  sectionName?: string;
   hostnames: string[];
   serviceName: string;
   servicePort: number;
@@ -722,7 +724,8 @@ export async function createCiliumHTTPRoute(spec: CiliumHTTPRouteSpec): Promise<
       parentRefs: [
         {
           name: spec.gatewayName,
-          namespace: spec.namespace,
+          namespace: spec.gatewayNamespace ?? spec.namespace,
+          ...(spec.sectionName ? { sectionName: spec.sectionName } : {}),
         },
       ],
       hostnames: spec.hostnames,
