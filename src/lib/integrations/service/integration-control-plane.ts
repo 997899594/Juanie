@@ -21,6 +21,8 @@ import {
   type IntegrationSession,
 } from '@/lib/integrations/service/session-service';
 
+export type { IntegrationSession };
+
 type ProviderErrorInput = {
   status?: number;
   message?: string;

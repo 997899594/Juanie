@@ -16,10 +16,8 @@ import {
   teamMembers,
   teams,
 } from '@/lib/db/schema';
-import {
-  gateway,
-  getTeamIntegrationSession,
-} from '@/lib/integrations/service/integration-control-plane';
+import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { ensureRepository } from '@/lib/integrations/service/repository-service';
 import { addProjectInitJob } from '@/lib/queue';
 
 interface CreateProjectRequest {
@@ -105,44 +103,19 @@ export async function POST(request: Request) {
 
     const uniqueSlug = `${slug}-${nanoid(6)}`;
 
-    // For import mode, find or create repository record
+    // For import mode, ensure repository record exists
     let dbRepositoryId: string | null = null;
     if (mode === 'import' && repositoryId && repositoryFullName) {
-      const existingRepo = await db.query.repositories.findFirst({
-        where: eq(repositories.externalId, repositoryId),
+      const integrationSession = await getTeamIntegrationSession({
+        teamId,
+        requiredCapabilities: ['read_repo'],
       });
 
-      if (existingRepo) {
-        dbRepositoryId = existingRepo.id;
-      } else {
-        // Get integration session to fetch repository details
-        const session = await getTeamIntegrationSession({
-          teamId,
-          requiredCapabilities: ['read_repo'],
-        });
-
-        const repoDetails = await gateway.getRepository(session, repositoryFullName);
-
-        if (repoDetails) {
-          const [newRepo] = await db
-            .insert(repositories)
-            .values({
-              providerId: session.integrationId,
-              externalId: repoDetails.id,
-              fullName: repoDetails.fullName,
-              name: repoDetails.name,
-              owner: repoDetails.owner,
-              cloneUrl: repoDetails.cloneUrl,
-              sshUrl: repoDetails.sshUrl || null,
-              webUrl: repoDetails.webUrl,
-              defaultBranch: repoDetails.defaultBranch,
-              isPrivate: repoDetails.isPrivate,
-            })
-            .returning();
-
-          dbRepositoryId = newRepo.id;
-        }
-      }
+      dbRepositoryId = await ensureRepository(
+        repositoryId,
+        repositoryFullName,
+        integrationSession
+      );
     }
 
     const [project] = await db
