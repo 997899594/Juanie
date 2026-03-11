@@ -10,7 +10,13 @@ import {
   syncEnvVarsToK8s,
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
-import { createDeployment, getIsConnected, updateDeployment } from '@/lib/k8s';
+import {
+  GHCR_PULL_SECRET_NAME,
+  createDeployment,
+  ensureGhcrPullSecret,
+  getIsConnected,
+  updateDeployment,
+} from '@/lib/k8s';
 import type { DeploymentJobData } from './index';
 
 export async function processDeployment(job: Job<DeploymentJobData>) {
@@ -65,21 +71,21 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
     // 同步环境级变量（项目级 + 环境级，所有服务共享）
     await syncEnvVarsToK8s(projectId, environmentId);
 
-    // 构建镜像名称
-    // 格式: ghcr.io/{owner}/{repo}:sha-{commit}
-    const imageName = buildImageName(project, deployment.commitSha);
+    // 优先使用 trigger 传入的精确镜像 URL（已含完整 SHA tag）
+    // 回退到从 repo URL + commit SHA 重建（兼容非 CI 触发的部署）
+    const imageName =
+      deployment.imageUrl || buildImageName(project, deployment.commitSha);
 
     if (!imageName) {
       throw new Error(
-        `Cannot resolve image name for project ${project.slug}: repository URL not configured or unrecognized format`
+        `Cannot resolve image name for project ${project.slug}: no imageUrl in deployment record and repository URL not configured`
       );
     }
 
-    // 更新部署记录的镜像 URL
-    await db
-      .update(deployments)
-      .set({ imageUrl: imageName })
-      .where(eq(deployments.id, deploymentId));
+    // 确保 GHCR 拉取凭证存在（私有镜像需要）
+    if (getIsConnected() && environment.namespace) {
+      await ensureGhcrPullSecret(environment.namespace);
+    }
 
     for (const service of serviceList) {
       console.log(`Deploying service ${service.name} for deployment ${deploymentId}`);
@@ -113,6 +119,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
             port: service.port ?? 3000,
             replicas: service.replicas ?? 1,
             envFrom,
+            imagePullSecrets: process.env.GHCR_TOKEN ? [GHCR_PULL_SECRET_NAME] : undefined,
             cpuRequest: service.cpuRequest ?? undefined,
             cpuLimit: service.cpuLimit ?? undefined,
             memoryRequest: service.memoryRequest ?? undefined,

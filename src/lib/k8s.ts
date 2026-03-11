@@ -416,6 +416,54 @@ export function getIsConnected(): boolean {
 }
 
 // ============================================
+// Image Pull Secret Management
+// ============================================
+
+export const GHCR_PULL_SECRET_NAME = 'ghcr-pull-secret';
+
+/**
+ * 在指定 namespace 创建或更新 GHCR 镜像拉取 Secret。
+ * 使用 docker-registry 类型，凭证来自环境变量 GHCR_USERNAME / GHCR_TOKEN。
+ * 若未配置则静默跳过（开发环境或公开镜像无需此 secret）。
+ */
+export async function ensureGhcrPullSecret(namespace: string): Promise<void> {
+  const username = process.env.GHCR_USERNAME;
+  const token = process.env.GHCR_TOKEN;
+
+  if (!username || !token) return;
+
+  const { core } = getK8sClient();
+  const auth = Buffer.from(`${username}:${token}`).toString('base64');
+  const dockerConfigJson = Buffer.from(
+    JSON.stringify({
+      auths: {
+        'ghcr.io': { username, password: token, auth },
+      },
+    })
+  ).toString('base64');
+
+  const body = {
+    apiVersion: 'v1',
+    kind: 'Secret',
+    metadata: { name: GHCR_PULL_SECRET_NAME, namespace },
+    type: 'kubernetes.io/dockerconfigjson',
+    data: { '.dockerconfigjson': dockerConfigJson },
+  };
+
+  try {
+    await core.readNamespacedSecret({ namespace, name: GHCR_PULL_SECRET_NAME });
+    await core.replaceNamespacedSecret({ namespace, name: GHCR_PULL_SECRET_NAME, body });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      await core.createNamespacedSecret({ namespace, body });
+    } else {
+      throw e;
+    }
+  }
+}
+
+// ============================================
 // Deployment Management
 // ============================================
 
@@ -428,6 +476,7 @@ export async function createDeployment(
     replicas: number;
     env?: Record<string, string>;
     envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
+    imagePullSecrets?: string[];
     command?: string[];
     args?: string[];
     cpuRequest?: string;
@@ -454,6 +503,7 @@ export async function createDeployment(
         template: {
           metadata: { labels: { app: name } },
           spec: {
+            imagePullSecrets: spec.imagePullSecrets?.map((s) => ({ name: s })),
             containers: [
               {
                 name: 'app',
