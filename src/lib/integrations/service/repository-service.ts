@@ -1,8 +1,39 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { repositories } from '@/lib/db/schema';
+import type { GitRepository } from '@/lib/git';
 import type { IntegrationSession } from './integration-control-plane';
 import { gateway } from './integration-control-plane';
+
+/**
+ * Inserts a repository record into the database.
+ *
+ * @param repoDetails - Repository details from the Git provider
+ * @param integrationId - The integration identity ID
+ * @returns The database repository ID (UUID)
+ */
+export async function insertRepositoryRecord(
+  repoDetails: GitRepository,
+  integrationId: string
+): Promise<string> {
+  const [newRepo] = await db
+    .insert(repositories)
+    .values({
+      providerId: integrationId,
+      externalId: repoDetails.id,
+      fullName: repoDetails.fullName,
+      name: repoDetails.name,
+      owner: repoDetails.owner,
+      cloneUrl: repoDetails.cloneUrl,
+      sshUrl: repoDetails.sshUrl || null,
+      webUrl: repoDetails.webUrl,
+      defaultBranch: repoDetails.defaultBranch,
+      isPrivate: repoDetails.isPrivate,
+    })
+    .returning();
+
+  return newRepo.id;
+}
 
 /**
  * Ensures a repository record exists in the database.
@@ -35,21 +66,5 @@ export async function ensureRepository(
   }
 
   // Create new repository record
-  const [newRepo] = await db
-    .insert(repositories)
-    .values({
-      providerId: session.integrationId,
-      externalId: repoDetails.id,
-      fullName: repoDetails.fullName,
-      name: repoDetails.name,
-      owner: repoDetails.owner,
-      cloneUrl: repoDetails.cloneUrl,
-      sshUrl: repoDetails.sshUrl || null,
-      webUrl: repoDetails.webUrl,
-      defaultBranch: repoDetails.defaultBranch,
-      isPrivate: repoDetails.isPrivate,
-    })
-    .returning();
-
-  return newRepo.id;
+  return insertRepositoryRecord(repoDetails, session.integrationId);
 }

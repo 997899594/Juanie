@@ -21,6 +21,7 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import { insertRepositoryRecord } from '@/lib/integrations/service/repository-service';
 import {
   createCiliumGateway,
   createCiliumHTTPRoute,
@@ -336,24 +337,10 @@ async function createRepository(project: typeof projects.$inferSelect) {
   });
 
   // Create repository record in database
-  const [dbRepo] = await db
-    .insert(repositories)
-    .values({
-      providerId: session.integrationId,
-      externalId: repo.id,
-      fullName: repo.fullName,
-      name: repo.name,
-      owner: repo.owner,
-      cloneUrl: repo.cloneUrl,
-      sshUrl: repo.sshUrl || null,
-      webUrl: repo.webUrl,
-      defaultBranch: repo.defaultBranch,
-      isPrivate: repo.isPrivate,
-    })
-    .returning();
+  const dbRepoId = await insertRepositoryRecord(repo, session.integrationId);
 
   // Update project with repository ID
-  await db.update(projects).set({ repositoryId: dbRepo.id }).where(eq(projects.id, project.id));
+  await db.update(projects).set({ repositoryId: dbRepoId }).where(eq(projects.id, project.id));
 
   console.log(`✅ Created repository: ${repo.fullName}`);
 }
