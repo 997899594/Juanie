@@ -2,7 +2,14 @@ import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, repositories, services } from '@/lib/db/schema';
-import { getK8sConfigMapName, getK8sSecretName, syncEnvVarsToK8s } from '@/lib/env-sync';
+import {
+  getK8sConfigMapName,
+  getK8sSecretName,
+  getK8sSvcConfigMapName,
+  getK8sSvcSecretName,
+  syncEnvVarsToK8s,
+  syncServiceEnvVarsToK8s,
+} from '@/lib/env-sync';
 import { createDeployment, getIsConnected, updateDeployment } from '@/lib/k8s';
 import type { DeploymentJobData } from './index';
 
@@ -55,66 +62,66 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       where: eq(services.projectId, projectId),
     });
 
-    // 同步环境变量到 K8s（确保部署前 Secret/ConfigMap 是最新的）
+    // 同步环境级变量（项目级 + 环境级，所有服务共享）
     await syncEnvVarsToK8s(projectId, environmentId);
 
-    // 构建 envFrom 引用（让每个 Pod 自动挂载环境变量）
-    const envFrom: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }> = [];
-    if (getIsConnected() && environment.namespace) {
-      envFrom.push({ secretRef: { name: getK8sSecretName(environmentId) } });
-      envFrom.push({ configMapRef: { name: getK8sConfigMapName(environmentId) } });
-    }
-
     // 构建镜像名称
-    // 格式: ghcr.io/{owner}/{repo}:sha-{commit} 或 {registry}/{project}:latest
+    // 格式: ghcr.io/{owner}/{repo}:sha-{commit}
     const imageName = buildImageName(project, deployment.commitSha);
 
-    // 更新部署记录的镜像 URL
-    if (imageName) {
-      await db
-        .update(deployments)
-        .set({ imageUrl: imageName })
-        .where(eq(deployments.id, deploymentId));
+    if (!imageName) {
+      throw new Error(
+        `Cannot resolve image name for project ${project.slug}: repository URL not configured or unrecognized format`
+      );
     }
+
+    // 更新部署记录的镜像 URL
+    await db
+      .update(deployments)
+      .set({ imageUrl: imageName })
+      .where(eq(deployments.id, deploymentId));
 
     for (const service of serviceList) {
       console.log(`Deploying service ${service.name} for deployment ${deploymentId}`);
 
-      // 如果 K8s 已连接且服务有镜像配置，执行真实部署
-      if (getIsConnected() && environment.namespace) {
-        if (!imageName) {
-          throw new Error(
-            `Cannot resolve image name for project ${project.slug}: repository URL not configured or unrecognized format`
-          );
-        }
-        const serviceImage = imageName;
+      if (!getIsConnected() || !environment.namespace) continue;
 
-        const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+      // 同步服务级变量（仅该服务独有，覆盖同名的环境级变量）
+      const svcEnv = await syncServiceEnvVarsToK8s(service.id, environment.namespace);
+
+      // 构建 envFrom：环境级在前（低优先级），服务级在后（高优先级，同 key 覆盖）
+      const envFrom: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }> = [
+        { configMapRef: { name: getK8sConfigMapName(environmentId) } },
+        { secretRef: { name: getK8sSecretName(environmentId) } },
+        ...(svcEnv.hasConfigs
+          ? [{ configMapRef: { name: getK8sSvcConfigMapName(service.id) } }]
+          : []),
+        ...(svcEnv.hasSecrets
+          ? [{ secretRef: { name: getK8sSvcSecretName(service.id) } }]
+          : []),
+      ];
+
+      const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+      try {
+        await updateDeployment(environment.namespace, deploymentName, { image: imageName });
+        console.log(`✅ Updated deployment ${deploymentName} with image ${imageName}`);
+      } catch (_updateError) {
+        console.log(`Deployment ${deploymentName} not found, creating...`);
         try {
-          // 尝试更新已存在的 Deployment，如果不存在则创建
-          await updateDeployment(environment.namespace, deploymentName, {
-            image: serviceImage,
+          await createDeployment(environment.namespace, deploymentName, {
+            image: imageName,
+            port: service.port ?? 3000,
+            replicas: service.replicas ?? 1,
+            envFrom,
+            cpuRequest: service.cpuRequest ?? undefined,
+            cpuLimit: service.cpuLimit ?? undefined,
+            memoryRequest: service.memoryRequest ?? undefined,
+            memoryLimit: service.memoryLimit ?? undefined,
           });
-          console.log(`✅ Updated deployment ${deploymentName} with image ${serviceImage}`);
-        } catch (_updateError) {
-          // 如果更新失败（可能不存在），尝试创建
-          console.log(`Deployment ${deploymentName} not found, creating new one...`);
-          try {
-            await createDeployment(environment.namespace, deploymentName, {
-              image: serviceImage,
-              port: service.port ?? 3000,
-              replicas: service.replicas ?? 1,
-              envFrom,
-              cpuRequest: service.cpuRequest ?? undefined,
-              cpuLimit: service.cpuLimit ?? undefined,
-              memoryRequest: service.memoryRequest ?? undefined,
-              memoryLimit: service.memoryLimit ?? undefined,
-            });
-            console.log(`✅ Created deployment ${deploymentName} with image ${serviceImage}`);
-          } catch (createError) {
-            console.error(`Failed to create deployment for service ${deploymentName}:`, createError);
-            throw createError;
-          }
+          console.log(`✅ Created deployment ${deploymentName} with image ${imageName}`);
+        } catch (createError) {
+          console.error(`Failed to deploy service ${deploymentName}:`, createError);
+          throw createError;
         }
       }
     }

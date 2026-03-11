@@ -15,7 +15,7 @@
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { decrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
-import { environments, environmentVariables } from '@/lib/db/schema';
+import { environmentVariables, environments } from '@/lib/db/schema';
 import { getIsConnected, upsertConfigMap, upsertSecret } from '@/lib/k8s';
 
 // Simple console logger fallback
@@ -36,6 +36,14 @@ export function getK8sSecretName(environmentId: string): string {
 
 export function getK8sConfigMapName(environmentId: string): string {
   return `config-${environmentId.slice(0, 8)}`;
+}
+
+export function getK8sSvcSecretName(serviceId: string): string {
+  return `svc-secret-${serviceId.slice(0, 8)}`;
+}
+
+export function getK8sSvcConfigMapName(serviceId: string): string {
+  return `svc-config-${serviceId.slice(0, 8)}`;
 }
 
 /**
@@ -126,4 +134,81 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
       count: Object.keys(configs).length,
     });
   }
+}
+
+/**
+ * 将指定服务的服务级变量同步到 K8s Secret / ConfigMap
+ *
+ * 服务级变量优先级高于环境级，挂载在 envFrom 末尾实现覆盖。
+ * 仅在该服务确实有服务级变量时才创建资源，避免 Pod 引用不存在的 ConfigMap。
+ *
+ * @returns hasSecrets  是否有服务级 Secret（调用方据此决定是否加入 envFrom）
+ * @returns hasConfigs  是否有服务级 ConfigMap
+ */
+export async function syncServiceEnvVarsToK8s(
+  serviceId: string,
+  namespace: string
+): Promise<{ hasSecrets: boolean; hasConfigs: boolean }> {
+  if (!getIsConnected()) {
+    return { hasSecrets: false, hasConfigs: false };
+  }
+
+  const vars = await db.query.environmentVariables.findMany({
+    where: and(
+      eq(environmentVariables.serviceId, serviceId),
+      isNull(environmentVariables.environmentId)
+    ),
+  });
+
+  const secrets: Record<string, string> = {};
+  const configs: Record<string, string> = {};
+
+  for (const v of vars) {
+    if (!v.key) continue;
+
+    if (v.isSecret) {
+      if (!v.encryptedValue || !v.iv || !v.authTag) {
+        logger.warn('Service-level secret variable missing encryption fields, skipping', {
+          varId: v.id,
+          key: v.key,
+        });
+        continue;
+      }
+      try {
+        secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
+      } catch (e) {
+        logger.error(
+          'Failed to decrypt service env var',
+          e instanceof Error ? e : new Error(String(e)),
+          { varId: v.id, key: v.key }
+        );
+        throw new Error(`Failed to decrypt service variable "${v.key}": ${(e as Error).message}`);
+      }
+    } else {
+      configs[v.key] = v.value ?? '';
+    }
+  }
+
+  if (Object.keys(secrets).length > 0) {
+    await upsertSecret(namespace, getK8sSvcSecretName(serviceId), secrets);
+    logger.info('Synced service secrets to K8s', {
+      namespace,
+      secretName: getK8sSvcSecretName(serviceId),
+      count: Object.keys(secrets).length,
+    });
+  }
+
+  if (Object.keys(configs).length > 0) {
+    await upsertConfigMap(namespace, getK8sSvcConfigMapName(serviceId), configs);
+    logger.info('Synced service configs to K8s', {
+      namespace,
+      configMapName: getK8sSvcConfigMapName(serviceId),
+      count: Object.keys(configs).length,
+    });
+  }
+
+  return {
+    hasSecrets: Object.keys(secrets).length > 0,
+    hasConfigs: Object.keys(configs).length > 0,
+  };
 }
