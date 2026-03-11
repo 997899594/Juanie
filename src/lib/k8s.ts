@@ -463,6 +463,18 @@ export async function createDeployment(
                 envFrom: spec.envFrom,
                 command: spec.command,
                 args: spec.args,
+                readinessProbe: {
+                  tcpSocket: { port: spec.port },
+                  initialDelaySeconds: 5,
+                  periodSeconds: 10,
+                  failureThreshold: 3,
+                },
+                livenessProbe: {
+                  tcpSocket: { port: spec.port },
+                  initialDelaySeconds: 15,
+                  periodSeconds: 20,
+                  failureThreshold: 3,
+                },
                 resources: {
                   requests: {
                     cpu: spec.cpuRequest || '100m',
@@ -685,7 +697,7 @@ export async function createCiliumGateway(
   }
 
   const gateway = {
-    apiVersion: 'gateway.networking.k8s.io/v1beta1',
+    apiVersion: 'gateway.networking.k8s.io/v1',
     kind: 'Gateway',
     metadata: {
       name,
@@ -703,7 +715,7 @@ export async function createCiliumGateway(
 
   await custom.createNamespacedCustomObject({
     group: 'gateway.networking.k8s.io',
-    version: 'v1beta1',
+    version: 'v1',
     namespace,
     plural: 'gateways',
     body: gateway,
@@ -714,7 +726,7 @@ export async function createCiliumHTTPRoute(spec: CiliumHTTPRouteSpec): Promise<
   const { custom } = getK8sClient();
 
   const route = {
-    apiVersion: 'gateway.networking.k8s.io/v1beta1',
+    apiVersion: 'gateway.networking.k8s.io/v1',
     kind: 'HTTPRoute',
     metadata: {
       name: spec.name,
@@ -753,7 +765,7 @@ export async function createCiliumHTTPRoute(spec: CiliumHTTPRouteSpec): Promise<
 
   await custom.createNamespacedCustomObject({
     group: 'gateway.networking.k8s.io',
-    version: 'v1beta1',
+    version: 'v1',
     namespace: spec.namespace,
     plural: 'httproutes',
     body: route,
@@ -766,7 +778,7 @@ export async function deleteCiliumGateway(namespace: string, name: string): Prom
   try {
     await custom.deleteNamespacedCustomObject({
       group: 'gateway.networking.k8s.io',
-      version: 'v1beta1',
+      version: 'v1',
       namespace,
       plural: 'gateways',
       name,
@@ -785,7 +797,7 @@ export async function deleteCiliumHTTPRoute(namespace: string, name: string): Pr
   try {
     await custom.deleteNamespacedCustomObject({
       group: 'gateway.networking.k8s.io',
-      version: 'v1beta1',
+      version: 'v1',
       namespace,
       plural: 'httproutes',
       name,
@@ -803,7 +815,7 @@ export async function getCiliumGateways(namespace: string): Promise<unknown[]> {
 
   const response = (await custom.listNamespacedCustomObject({
     group: 'gateway.networking.k8s.io',
-    version: 'v1beta1',
+    version: 'v1',
     namespace,
     plural: 'gateways',
   })) as { items: unknown[] };
@@ -816,7 +828,7 @@ export async function getCiliumHTTPRoutes(namespace: string): Promise<unknown[]>
 
   const response = (await custom.listNamespacedCustomObject({
     group: 'gateway.networking.k8s.io',
-    version: 'v1beta1',
+    version: 'v1',
     namespace,
     plural: 'httproutes',
   })) as { items: unknown[] };

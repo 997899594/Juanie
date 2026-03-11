@@ -82,7 +82,12 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
       // 如果 K8s 已连接且服务有镜像配置，执行真实部署
       if (getIsConnected() && environment.namespace) {
-        const serviceImage = imageName || `${project.slug}-${service.name}:latest`;
+        if (!imageName) {
+          throw new Error(
+            `Cannot resolve image name for project ${project.slug}: repository URL not configured or unrecognized format`
+          );
+        }
+        const serviceImage = imageName;
 
         const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
         try {
