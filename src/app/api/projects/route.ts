@@ -101,7 +101,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const uniqueSlug = `${slug}-${nanoid(6)}`;
+    const uniqueSlug = `${slug}-${nanoid(6).toLowerCase()}`;
 
     // For import mode, ensure repository record exists
     let dbRepositoryId: string | null = null;
