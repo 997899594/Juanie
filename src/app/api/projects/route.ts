@@ -186,7 +186,6 @@ export async function POST(request: Request) {
     const importSteps: { step: string; status: InitStepStatus; progress: number }[] = [
       { step: 'validate_repository', status: 'pending', progress: 0 },
       { step: 'push_cicd_config', status: 'pending', progress: 0 },
-      { step: 'setup_webhook', status: 'pending', progress: 0 },
       { step: 'setup_registry_webhook', status: 'pending', progress: 0 },
       { step: 'setup_namespace', status: 'pending', progress: 0 },
       { step: 'deploy_services', status: 'pending', progress: 0 },
@@ -197,7 +196,6 @@ export async function POST(request: Request) {
     const createSteps: { step: string; status: InitStepStatus; progress: number }[] = [
       { step: 'create_repository', status: 'pending', progress: 0 },
       { step: 'push_template', status: 'pending', progress: 0 },
-      { step: 'setup_webhook', status: 'pending', progress: 0 },
       { step: 'setup_registry_webhook', status: 'pending', progress: 0 },
       { step: 'setup_namespace', status: 'pending', progress: 0 },
       { step: 'deploy_services', status: 'pending', progress: 0 },
