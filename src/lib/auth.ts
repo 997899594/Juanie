@@ -62,7 +62,7 @@ const nextAuth = NextAuth({
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: 'read:user user:email repo workflow',
+          scope: 'read:user user:email repo workflow read:packages',
           prompt: 'consent',
         },
       },

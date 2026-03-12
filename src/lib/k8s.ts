@@ -423,14 +423,37 @@ export const GHCR_PULL_SECRET_NAME = 'ghcr-pull-secret';
 
 /**
  * 在指定 namespace 创建或更新 GHCR 镜像拉取 Secret。
- * 使用 docker-registry 类型，凭证来自环境变量 GHCR_USERNAME / GHCR_TOKEN。
- * 若未配置则静默跳过（开发环境或公开镜像无需此 secret）。
+ * 优先使用传入的 OAuth token（来自用户登录授权），回退到环境变量。
+ * 若两者均未配置则静默跳过（开发环境或公开镜像无需此 secret）。
  */
-export async function ensureGhcrPullSecret(namespace: string): Promise<void> {
-  const username = process.env.GHCR_USERNAME;
-  const token = process.env.GHCR_TOKEN;
+export async function ensureGhcrPullSecret(
+  namespace: string,
+  options?: { token?: string }
+): Promise<void> {
+  const token = options?.token || process.env.GHCR_TOKEN;
 
-  if (!username || !token) return;
+  if (!token) return;
+
+  // 从 GitHub API 获取用户名（OAuth token 或 PAT 均可）
+  let username = process.env.GHCR_USERNAME;
+  if (!username) {
+    try {
+      const userRes = await fetch('https://api.github.com/user', {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+      });
+      if (!userRes.ok) {
+        console.warn('[ensureGhcrPullSecret] Failed to fetch GitHub user, skipping pull secret');
+        return;
+      }
+      const userData = (await userRes.json()) as { login: string };
+      username = userData.login;
+    } catch (e) {
+      console.warn('[ensureGhcrPullSecret] GitHub API error, skipping pull secret:', e);
+      return;
+    }
+  }
+
+  if (!username) return;
 
   const { core } = getK8sClient();
   const auth = Buffer.from(`${username}:${token}`).toString('base64');

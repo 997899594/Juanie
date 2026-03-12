@@ -10,10 +10,11 @@ import {
   syncEnvVarsToK8s,
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
+import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import {
-  GHCR_PULL_SECRET_NAME,
   createDeployment,
   ensureGhcrPullSecret,
+  GHCR_PULL_SECRET_NAME,
   getIsConnected,
   updateDeployment,
 } from '@/lib/k8s';
@@ -73,8 +74,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
     // 优先使用 trigger 传入的精确镜像 URL（已含完整 SHA tag）
     // 回退到从 repo URL + commit SHA 重建（兼容非 CI 触发的部署）
-    const imageName =
-      deployment.imageUrl || buildImageName(project, deployment.commitSha);
+    const imageName = deployment.imageUrl || buildImageName(project, deployment.commitSha);
 
     if (!imageName) {
       throw new Error(
@@ -82,9 +82,23 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       );
     }
 
-    // 确保 GHCR 拉取凭证存在（私有镜像需要）
+    // 用团队 OAuth token 确保 GHCR 拉取凭证存在（GitHub 私有镜像需要）
+    let useGhcrPullSecret = false;
     if (getIsConnected() && environment.namespace) {
-      await ensureGhcrPullSecret(environment.namespace);
+      try {
+        const teamSession = await getTeamIntegrationSession({
+          teamId: project.teamId,
+          requiredCapabilities: [],
+        });
+        if (teamSession.provider === 'github') {
+          await ensureGhcrPullSecret(environment.namespace, { token: teamSession.accessToken });
+          useGhcrPullSecret = true;
+        }
+      } catch (e) {
+        console.warn('Could not ensure GHCR pull secret, will try env var fallback:', e);
+        await ensureGhcrPullSecret(environment.namespace);
+        useGhcrPullSecret = !!process.env.GHCR_TOKEN;
+      }
     }
 
     for (const service of serviceList) {
@@ -102,9 +116,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
         ...(svcEnv.hasConfigs
           ? [{ configMapRef: { name: getK8sSvcConfigMapName(service.id) } }]
           : []),
-        ...(svcEnv.hasSecrets
-          ? [{ secretRef: { name: getK8sSvcSecretName(service.id) } }]
-          : []),
+        ...(svcEnv.hasSecrets ? [{ secretRef: { name: getK8sSvcSecretName(service.id) } }] : []),
       ];
 
       const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
@@ -119,7 +131,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
             port: service.port ?? 3000,
             replicas: service.replicas ?? 1,
             envFrom,
-            imagePullSecrets: process.env.GHCR_TOKEN ? [GHCR_PULL_SECRET_NAME] : undefined,
+            imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
             cpuRequest: service.cpuRequest ?? undefined,
             cpuLimit: service.cpuLimit ?? undefined,
             memoryRequest: service.memoryRequest ?? undefined,

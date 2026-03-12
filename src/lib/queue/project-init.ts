@@ -14,7 +14,6 @@ import {
   repositories,
   services,
   teams,
-  webhooks,
 } from '@/lib/db/schema';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
@@ -28,6 +27,7 @@ import {
   createSecret,
   createService,
   createStatefulSet,
+  ensureGhcrPullSecret,
   getIsConnected,
   getK8sClient,
   initK8sClient,
@@ -480,57 +480,10 @@ function renderGitHubCI(
     return content;
   }
 
-  // Fallback to inline template
-  return `name: Juanie CI
-
-on:
-  push:
-    branches: [main, master]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: \${{ github.repository }}
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: \${{ github.actor }}
-          password: \${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push
-        run: |
-          IMAGE_TAG=\${{ env.REGISTRY }}/\${{ env.IMAGE_NAME }}:sha-\${{ github.sha }}
-
-          if [ -f Dockerfile ]; then
-            docker buildx build --push \\
-              --tag $IMAGE_TAG \\
-              --cache-from type=gha \\
-              --cache-to type=gha,mode=max \\
-              .
-          else
-            docker run --rm \\
-              -v /var/run/docker.sock:/var/run/docker.sock \\
-              -v $PWD:/workspace \\
-              -w /workspace \\
-              buildpacksio/pack \\
-              pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
-          fi
-`;
+  // Fallback: should not normally be reached in production (template file is bundled in Docker image)
+  throw new Error(
+    `CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
 }
 
 function renderGitLabCI(
@@ -548,36 +501,10 @@ function renderGitLabCI(
     return content;
   }
 
-  // Fallback to inline template
-  return `stages:
-  - build
-
-variables:
-  REGISTRY: $CI_REGISTRY
-  IMAGE_TAG: $CI_REGISTRY_IMAGE:sha-$CI_COMMIT_SHA
-  DOCKER_TLS_CERTDIR: "/certs"
-
-build:
-  stage: build
-  image: docker:24
-  services:
-    - docker:24-dind
-  before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-  script:
-    - |
-      if [ -f Dockerfile ]; then
-        docker build -t $IMAGE_TAG .
-        docker push $IMAGE_TAG
-      else
-        docker run --rm \\
-          -v /var/run/docker.sock:/var/run/docker.sock \\
-          -v $PWD:/workspace \\
-          -w /workspace \\
-          buildpacksio/pack \\
-          pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
-      fi
-`;
+  // Fallback: should not normally be reached in production (template file is bundled in Docker image)
+  throw new Error(
+    `CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
 }
 
 function renderGitHubCIMonorepo(
@@ -824,6 +751,20 @@ async function setupNamespace(project: typeof projects.$inferSelect, hasK8s: boo
     } catch (error) {
       console.error('Failed to create namespace:', error);
       throw error;
+    }
+
+    // 用团队 OAuth token 为该 namespace 创建 GHCR 镜像拉取凭证（GitHub 项目）
+    try {
+      const session = await getTeamIntegrationSession({
+        teamId: project.teamId,
+        requiredCapabilities: [],
+      });
+      if (session.provider === 'github') {
+        await ensureGhcrPullSecret(namespace, { token: session.accessToken });
+        console.log(`✅ Created GHCR pull secret in namespace ${namespace}`);
+      }
+    } catch (e) {
+      console.warn('Could not create GHCR pull secret during namespace setup:', e);
     }
   } else {
     console.log(`[Mock] Would create namespace: ${namespace}`);

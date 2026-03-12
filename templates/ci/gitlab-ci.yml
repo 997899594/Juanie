@@ -15,7 +15,9 @@ build:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
-      if [ -f Dockerfile ]; then
+      if [ -f docker-bake.hcl ] || [ -f docker-bake.json ]; then
+        docker buildx bake --set "*.tags=$IMAGE_TAG" --push
+      elif [ -f Dockerfile ]; then
         docker build -t $IMAGE_TAG .
         docker push $IMAGE_TAG
       else
@@ -24,5 +26,17 @@ build:
           -v $PWD:/workspace \
           -w /workspace \
           buildpacksio/pack \
-          pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full
+          pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full --publish
       fi
+    - |
+      curl -fsSX POST "https://juanie.art/api/deployments/trigger" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $CI_JOB_TOKEN" \
+        -d "{
+          \"repository\": \"$CI_PROJECT_PATH\",
+          \"sha\": \"$CI_COMMIT_SHA\",
+          \"ref\": \"$CI_COMMIT_REF_NAME\",
+          \"image\": \"$IMAGE_TAG\"
+        }"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "master"

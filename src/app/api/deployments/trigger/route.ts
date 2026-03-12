@@ -17,19 +17,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify GitHub token (optional, for additional security)
+    // Verify GitHub token only when it looks like a GitHub token (ghp_, ghs_, github_pat_).
+    // GitLab CI_JOB_TOKEN and other providers are accepted without extra verification;
+    // the repository lookup below is the primary security gate.
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      // Verify token with GitHub API
-      const userRes = await fetch('https://api.github.com/user', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/vnd.github+json',
-        },
-      });
+      const isGitHubToken =
+        token.startsWith('ghp_') ||
+        token.startsWith('ghs_') ||
+        token.startsWith('github_pat_') ||
+        token.startsWith('v1.');
 
-      if (!userRes.ok) {
-        return NextResponse.json({ error: 'Invalid GitHub token' }, { status: 401 });
+      if (isGitHubToken) {
+        const userRes = await fetch('https://api.github.com/user', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+          },
+        });
+
+        if (!userRes.ok) {
+          return NextResponse.json({ error: 'Invalid GitHub token' }, { status: 401 });
+        }
       }
     }
 
