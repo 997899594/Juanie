@@ -1,6 +1,10 @@
+import { initK8sClient } from '@/lib/k8s';
 import { createDeploymentWorker } from './deployment';
 import { startDriftDetector } from './drift-detector';
 import { createProjectInitWorker } from './project-init';
+
+// 启动时初始化 K8s 客户端（in-cluster ServiceAccount 或 KUBECONFIG）
+initK8sClient();
 
 console.log('Starting Juanie workers...');
 
