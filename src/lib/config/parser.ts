@@ -53,6 +53,8 @@ export const databaseSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['postgresql', 'mysql', 'redis', 'mongodb']),
   plan: z.enum(['starter', 'standard', 'premium']).optional(),
+  provisionType: z.enum(['shared', 'standalone', 'external']).optional().default('standalone'),
+  externalUrl: z.string().optional(),
 });
 
 export const environmentSchema = z.object({

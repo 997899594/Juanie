@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Job, Worker } from 'bullmq';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import postgres from 'postgres';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
 import {
@@ -832,68 +833,191 @@ async function provisionDatabases(project: typeof projects.$inferSelect, hasK8s:
     where: eq(databases.projectId, project.id),
   });
 
-  const namespace = `juanie-${project.slug}`;
-
   for (const database of databaseList) {
-    if (hasK8s) {
-      console.log(`Provisioning database ${database.name} for project ${project.name}`);
+    await provisionDatabase(database, project, hasK8s);
+  }
+}
 
-      const dbPassword = nanoid(32);
-      const resourceName = `${project.slug}-${database.name}`;
+/**
+ * Provision a single database based on its provisionType.
+ * - shared: reuse Juanie's own PG/Redis infrastructure (independent DB/user per project)
+ * - standalone: create isolated K8s StatefulSet/Deployment
+ * - external: connection string already provided, just mark running
+ */
+export async function provisionDatabase(
+  database: typeof databases.$inferSelect,
+  project: typeof projects.$inferSelect,
+  hasK8s: boolean
+): Promise<void> {
+  const provisionType = database.provisionType || 'standalone';
 
-      // Create password Secret
-      await createSecret(namespace, `${resourceName}-creds`, {
-        password: dbPassword,
+  if (provisionType === 'external') {
+    // connectionString was set at insert time; just mark running
+    await db.update(databases).set({ status: 'running' }).where(eq(databases.id, database.id));
+    console.log(`✅ Database ${database.name} marked running (external)`);
+    return;
+  }
+
+  if (provisionType === 'shared') {
+    if (database.type === 'postgresql') {
+      await provisionSharedPostgreSQL(database, project);
+      return;
+    }
+    if (database.type === 'redis') {
+      await provisionSharedRedis(database);
+      return;
+    }
+    // MySQL / MongoDB: shared not supported — fall through to standalone
+    console.log(`[shared] ${database.type} not supported as shared, falling through to standalone`);
+  }
+
+  // standalone (or shared fallback for unsupported types)
+  if (!hasK8s) {
+    console.log(`[Mock] Would provision database: ${database.name}`);
+    await db.update(databases).set({ status: 'running' }).where(eq(databases.id, database.id));
+    return;
+  }
+
+  const namespace = `juanie-${project.slug}`;
+  const dbPassword = nanoid(32);
+  const resourceName = `${project.slug}-${database.name}`;
+  const secretName = `${resourceName}-creds`;
+
+  console.log(`Provisioning standalone database ${database.name} for project ${project.name}`);
+
+  await createSecret(namespace, secretName, { password: dbPassword });
+
+  if (database.type === 'postgresql') {
+    await createPostgreSQLStatefulSet(namespace, resourceName, database.name, secretName);
+    await createService(namespace, resourceName, { port: 5432, targetPort: 5432 });
+  } else if (database.type === 'redis') {
+    await createRedisDeployment(namespace, resourceName, secretName);
+    await createService(namespace, resourceName, { port: 6379, targetPort: 6379 });
+  } else if (database.type === 'mysql') {
+    await createMySQLStatefulSet(namespace, resourceName, database.name, secretName);
+    await createService(namespace, resourceName, { port: 3306, targetPort: 3306 });
+  }
+
+  const connectionString = getConnectionString(
+    database.type,
+    resourceName,
+    namespace,
+    dbPassword,
+    database.name
+  );
+
+  await db
+    .update(databases)
+    .set({
+      status: 'running',
+      connectionString,
+      host: `${resourceName}.${namespace}.svc.cluster.local`,
+      serviceName: resourceName,
+      namespace,
+    })
+    .where(eq(databases.id, database.id));
+
+  console.log(`✅ Provisioned standalone database ${database.name}`);
+}
+
+/** Sanitize a string to a valid PostgreSQL identifier segment (a-z0-9_ only, max 30 chars). */
+function sanitizePgName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '_')
+    .slice(0, 30);
+}
+
+async function provisionSharedPostgreSQL(
+  database: typeof databases.$inferSelect,
+  project: typeof projects.$inferSelect
+): Promise<void> {
+  const adminUrl = process.env.DATABASE_URL;
+  if (!adminUrl) throw new Error('DATABASE_URL not set; cannot provision shared PostgreSQL');
+
+  const dbIdentifier =
+    `juanie_${sanitizePgName(project.slug)}_${sanitizePgName(database.name)}`.slice(0, 63);
+  const dbPassword = nanoid(32); // URL-safe chars: A-Za-z0-9_- — safe in SQL string literals
+
+  const adminConn = postgres(adminUrl, { max: 1 });
+  try {
+    // Create database (idempotent)
+    await adminConn
+      .unsafe(`CREATE DATABASE "${dbIdentifier}" ENCODING 'UTF8'`)
+      .catch((e: Error) => {
+        if (!e.message?.includes('already exists')) throw e;
       });
 
-      // Create database based on type
-      const secretName = `${resourceName}-creds`;
-      if (database.type === 'postgresql') {
-        await createPostgreSQLStatefulSet(namespace, resourceName, database.name, secretName);
-        await createService(namespace, resourceName, {
-          port: 5432,
-          targetPort: 5432,
-        });
-      } else if (database.type === 'redis') {
-        await createRedisDeployment(namespace, resourceName, secretName);
-        await createService(namespace, resourceName, {
-          port: 6379,
-          targetPort: 6379,
-        });
-      } else if (database.type === 'mysql') {
-        await createMySQLStatefulSet(namespace, resourceName, database.name, secretName);
-        await createService(namespace, resourceName, {
-          port: 3306,
-          targetPort: 3306,
-        });
-      }
+    // Create user with password (idempotent)
+    await adminConn
+      .unsafe(`CREATE USER "${dbIdentifier}" WITH PASSWORD '${dbPassword}'`)
+      .catch((e: Error) => {
+        if (!e.message?.includes('already exists')) throw e;
+      });
 
-      // Generate connection string
-      const connectionString = getConnectionString(
-        database.type,
-        resourceName,
-        namespace,
-        dbPassword,
-        database.name
-      );
+    // Grant all privileges
+    await adminConn.unsafe(
+      `GRANT ALL PRIVILEGES ON DATABASE "${dbIdentifier}" TO "${dbIdentifier}"`
+    );
 
-      await db
-        .update(databases)
-        .set({
-          status: 'running',
-          connectionString,
-          host: `${resourceName}.${namespace}.svc.cluster.local`,
-          serviceName: resourceName,
-          namespace,
-        })
-        .where(eq(databases.id, database.id));
+    const parsedUrl = new URL(adminUrl);
+    const host = parsedUrl.hostname;
+    const port = parseInt(parsedUrl.port || '5432', 10);
+    const connStr = `postgresql://${dbIdentifier}:${encodeURIComponent(dbPassword)}@${host}:${port}/${dbIdentifier}`;
 
-      console.log(`✅ Provisioned database ${database.name}`);
-    } else {
-      console.log(`[Mock] Would provision database: ${database.name}`);
-      await db.update(databases).set({ status: 'running' }).where(eq(databases.id, database.id));
-    }
+    await db
+      .update(databases)
+      .set({
+        status: 'running',
+        connectionString: connStr,
+        host,
+        port,
+        databaseName: dbIdentifier,
+        username: dbIdentifier,
+        password: dbPassword,
+      })
+      .where(eq(databases.id, database.id));
+
+    console.log(`✅ Provisioned shared PostgreSQL database ${dbIdentifier}`);
+  } finally {
+    await adminConn.end();
   }
+}
+
+async function provisionSharedRedis(database: typeof databases.$inferSelect): Promise<void> {
+  // Count existing shared-redis databases (excluding this one) to assign the next db index.
+  // Redis db 0 is reserved for Juanie's BullMQ queues.
+  const sharedRedis = await db
+    .select({ id: databases.id })
+    .from(databases)
+    .where(
+      and(
+        eq(databases.type, 'redis'),
+        eq(databases.provisionType, 'shared'),
+        ne(databases.id, database.id)
+      )
+    );
+  const dbIndex = sharedRedis.length + 1; // 1-based; 0 reserved for BullMQ
+
+  const redisHost = process.env.REDIS_HOST || 'localhost';
+  const redisPort = process.env.REDIS_PORT || '6379';
+  const redisPassword = process.env.REDIS_PASSWORD;
+
+  const connStr = redisPassword
+    ? `redis://:${encodeURIComponent(redisPassword)}@${redisHost}:${redisPort}/${dbIndex}`
+    : `redis://${redisHost}:${redisPort}/${dbIndex}`;
+
+  await db
+    .update(databases)
+    .set({
+      status: 'running',
+      connectionString: connStr,
+      host: redisHost,
+      port: dbIndex, // store redis db index in port field
+    })
+    .where(eq(databases.id, database.id));
+
+  console.log(`✅ Provisioned shared Redis at db index ${dbIndex}`);
 }
 
 // Helper function to create PostgreSQL StatefulSet

@@ -46,6 +46,8 @@ interface DatabaseWithId {
   name: string;
   type: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
   plan: 'starter' | 'standard' | 'premium';
+  provisionType: 'shared' | 'standalone' | 'external';
+  externalUrl?: string;
 }
 
 interface CreateProjectFormProps {
@@ -337,10 +339,15 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
         return !!formData.repositoryName;
       case 'config':
         return !!formData.name && !!formData.teamId;
-      case 'review':
-        return formData.services.some(
+      case 'review': {
+        const hasActiveService = formData.services.some(
           (s) => !(s as ServiceWithId & { disabled?: boolean }).disabled
         );
+        const externalDbsValid = formData.databases
+          .filter((db) => db.provisionType === 'external')
+          .every((db) => !!db.externalUrl?.trim());
+        return hasActiveService && externalDbsValid;
+      }
       default:
         return false;
     }
@@ -800,6 +807,7 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
                                   name: type,
                                   type,
                                   plan: 'starter',
+                                  provisionType: 'shared',
                                 },
                               ],
                             }))
@@ -822,43 +830,87 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
                         <span className="text-sm">No databases — add one above if needed</span>
                       </div>
                     ) : (
-                      formData.databases.map((db) => (
-                        <div key={db._id} className="p-3 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Database className="h-4 w-4 text-muted-foreground" />
-                            <div>
-                              <Input
-                                value={db.name}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    databases: prev.databases.map((d) =>
-                                      d._id === db._id ? { ...d, name: e.target.value } : d
-                                    ),
-                                  }))
-                                }
-                                className="h-7 w-36 text-sm"
-                              />
+                      formData.databases.map((db) => {
+                        const updateDb = (updates: Partial<DatabaseWithId>) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            databases: prev.databases.map((d) =>
+                              d._id === db._id ? { ...d, ...updates } : d
+                            ),
+                          }));
+                        const sharedDisabled = db.type === 'mysql' || db.type === 'mongodb';
+                        return (
+                          <div key={db._id} className="p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <Database className="h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  value={db.name}
+                                  onChange={(e) => updateDb({ name: e.target.value })}
+                                  className="h-7 w-36 text-sm"
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline">{db.type}</Badge>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      databases: prev.databases.filter((d) => d._id !== db._id),
+                                    }))
+                                  }
+                                >
+                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              </div>
                             </div>
+                            <div className="ml-7 flex items-center gap-1">
+                              {(
+                                [
+                                  { value: 'shared', label: 'Shared Juanie' },
+                                  { value: 'standalone', label: 'Standalone Pod' },
+                                  { value: 'external', label: 'External' },
+                                ] as const
+                              ).map((opt) => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  disabled={opt.value === 'shared' && sharedDisabled}
+                                  onClick={() => updateDb({ provisionType: opt.value })}
+                                  className={cn(
+                                    'px-2 py-1 text-xs rounded border transition-colors',
+                                    db.provisionType === opt.value
+                                      ? 'bg-primary text-primary-foreground border-primary'
+                                      : 'border-border hover:bg-muted',
+                                    opt.value === 'shared' &&
+                                      sharedDisabled &&
+                                      'opacity-40 cursor-not-allowed'
+                                  )}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                            {db.provisionType === 'external' && (
+                              <div className="ml-7">
+                                <Input
+                                  value={db.externalUrl || ''}
+                                  onChange={(e) => updateDb({ externalUrl: e.target.value })}
+                                  placeholder={
+                                    db.type === 'redis'
+                                      ? 'redis://:password@host:6379'
+                                      : 'postgresql://user:pass@host:5432/db'
+                                  }
+                                  className="h-7 text-sm"
+                                />
+                              </div>
+                            )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">{db.type}</Badge>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  databases: prev.databases.filter((d) => d._id !== db._id),
-                                }))
-                              }
-                            >
-                              <Trash2 className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

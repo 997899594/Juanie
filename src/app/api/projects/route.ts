@@ -153,11 +153,14 @@ export async function POST(request: Request) {
     }
 
     for (const dbConfig of databaseConfigs) {
+      const provisionType = dbConfig.provisionType || 'standalone';
       await db.insert(databases).values({
         projectId: project.id,
         name: dbConfig.name,
         type: dbConfig.type,
         plan: dbConfig.plan || 'starter',
+        provisionType,
+        connectionString: provisionType === 'external' ? (dbConfig.externalUrl ?? null) : null,
         status: 'pending',
       });
     }

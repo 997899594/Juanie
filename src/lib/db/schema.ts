@@ -440,6 +440,7 @@ export const databases = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     type: databaseTypeEnum('type').notNull(),
     plan: databasePlanEnum('plan').notNull().default('starter'),
+    provisionType: varchar('provisionType', { length: 20 }).notNull().default('shared'),
 
     connectionString: text('connectionString'),
     host: varchar('host', { length: 255 }),
