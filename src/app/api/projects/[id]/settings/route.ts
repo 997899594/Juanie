@@ -2,7 +2,8 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { projects, teamMembers, teams } from '@/lib/db/schema';
+import { environments, projects, teamMembers, teams } from '@/lib/db/schema';
+import { deleteNamespace, getIsConnected, initK8sClient } from '@/lib/k8s';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -110,6 +111,17 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   if (!teamMember || teamMember.role !== 'owner') {
     return NextResponse.json({ error: 'Only owner can delete project' }, { status: 403 });
+  }
+
+  // 删除 K8s namespace（级联删除所有 pod、service、httproute 等资源）
+  const envList = await db.query.environments.findMany({
+    where: eq(environments.projectId, id),
+  });
+
+  initK8sClient();
+  if (getIsConnected()) {
+    const namespaces = [...new Set(envList.map((e) => e.namespace).filter(Boolean) as string[])];
+    await Promise.allSettled(namespaces.map((ns) => deleteNamespace(ns)));
   }
 
   await db.delete(projects).where(eq(projects.id, id));
