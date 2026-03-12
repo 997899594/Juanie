@@ -1,6 +1,16 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, GitBranch, Loader2, Search } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Database,
+  GitBranch,
+  Loader2,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -762,6 +772,91 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
                             </div>
                           </div>
                           <Badge variant="outline">{service.type}</Badge>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-muted-foreground">
+                      Databases ({formData.databases.length})
+                    </p>
+                    <div className="flex gap-2">
+                      {(['postgresql', 'redis', 'mysql'] as const).map((type) => (
+                        <Button
+                          key={type}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              databases: [
+                                ...prev.databases,
+                                {
+                                  _id: nanoid(),
+                                  name: type,
+                                  type,
+                                  plan: 'starter',
+                                },
+                              ],
+                            }))
+                          }
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          {type === 'postgresql'
+                            ? 'PostgreSQL'
+                            : type === 'redis'
+                              ? 'Redis'
+                              : 'MySQL'}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="border rounded-lg divide-y">
+                    {formData.databases.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground flex flex-col items-center gap-2">
+                        <Database className="h-5 w-5 opacity-40" />
+                        <span className="text-sm">No databases — add one above if needed</span>
+                      </div>
+                    ) : (
+                      formData.databases.map((db) => (
+                        <div key={db._id} className="p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Database className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <Input
+                                value={db.name}
+                                onChange={(e) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    databases: prev.databases.map((d) =>
+                                      d._id === db._id ? { ...d, name: e.target.value } : d
+                                    ),
+                                  }))
+                                }
+                                className="h-7 w-36 text-sm"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{db.type}</Badge>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  databases: prev.databases.filter((d) => d._id !== db._id),
+                                }))
+                              }
+                            >
+                              <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </div>
                         </div>
                       ))
                     )}
