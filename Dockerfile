@@ -66,6 +66,9 @@ RUN bun add drizzle-kit
 COPY --from=worker-builder /app/worker ./worker
 RUN chmod +x ./worker
 
+# 复制 CI/CD 模板（worker 运行时从 process.cwd()/templates/ 读取）
+COPY --from=builder /app/templates ./templates
+
 EXPOSE 3001
 
 ENV PORT=3001
