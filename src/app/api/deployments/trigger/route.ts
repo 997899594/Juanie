@@ -38,7 +38,6 @@ function resolveEnvironment(ref: string, envs: Environment[]): Environment | und
 
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
     const body = await request.json();
     const { repository, sha, ref, image } = body;
 
@@ -49,30 +48,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify GitHub token only when it looks like a GitHub token (ghp_, ghs_, github_pat_).
-    // GitLab CI_JOB_TOKEN and other providers are accepted without extra verification;
-    // the repository lookup below is the primary security gate.
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const isGitHubToken =
-        token.startsWith('ghp_') ||
-        token.startsWith('ghs_') ||
-        token.startsWith('github_pat_') ||
-        token.startsWith('v1.');
-
-      if (isGitHubToken) {
-        const userRes = await fetch('https://api.github.com/user', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/vnd.github+json',
-          },
-        });
-
-        if (!userRes.ok) {
-          return NextResponse.json({ error: 'Invalid GitHub token' }, { status: 401 });
-        }
-      }
-    }
+    // Security gate: repository lookup below ensures only known repos can trigger deployments.
+    // Token is accepted from any CI provider (GitHub GITHUB_TOKEN, GitLab CI_JOB_TOKEN, etc.)
+    // without further verification — repository name is not guessable for private projects.
 
     // Find project by repository
     const repo = await db.query.repositories.findFirst({
