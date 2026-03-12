@@ -38,6 +38,7 @@ function resolveEnvironment(ref: string, envs: Environment[]): Environment | und
 
 export async function POST(request: Request) {
   try {
+    const authHeader = request.headers.get('authorization');
     const body = await request.json();
     const { repository, sha, ref, image } = body;
 
@@ -48,9 +49,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Security gate: repository lookup below ensures only known repos can trigger deployments.
-    // Token is accepted from any CI provider (GitHub GITHUB_TOKEN, GitLab CI_JOB_TOKEN, etc.)
-    // without further verification — repository name is not guessable for private projects.
+    // Verify the caller has access to the specific repository being triggered.
+    // GitHub GITHUB_TOKEN is scoped to its own repo — calling /repos/{owner}/{repo}
+    // with a token from another repo returns 404 for private repos, preventing
+    // cross-project triggering. Public repos are readable by anyone, so they
+    // rely on the repository-in-Juanie lookup below as a secondary gate.
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const repoRes = await fetch(`https://api.github.com/repos/${repository}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+      });
+      if (!repoRes.ok) {
+        return NextResponse.json(
+          { error: 'Token does not have access to this repository' },
+          { status: 401 }
+        );
+      }
+    }
 
     // Find project by repository
     const repo = await db.query.repositories.findFirst({
