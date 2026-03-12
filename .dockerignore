@@ -41,8 +41,6 @@ tests
 *.md
 docs
 
-# Templates (not needed in production)
-templates
 
 # Interview prep (not needed)
 interview-prep
