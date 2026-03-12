@@ -1,8 +1,40 @@
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import type { environments } from '@/lib/db/schema';
 import { deployments, projects, repositories } from '@/lib/db/schema';
 import { addDeploymentJob } from '@/lib/queue';
+
+type Environment = typeof environments.$inferSelect;
+
+/**
+ * glob 匹配：仅支持 * 通配符（足够处理 v* / release-* 等常见 tag 模式）
+ */
+function matchesGlob(pattern: string, value: string): boolean {
+  const regex = new RegExp(
+    `^${pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`
+  );
+  return regex.test(value);
+}
+
+/**
+ * 根据 ref 解析目标 environment：
+ * - refs/tags/v1.0  → 按 tagPattern glob 匹配，无匹配则回退到 production branch
+ * - refs/heads/main → 按 branch 精确匹配
+ */
+function resolveEnvironment(ref: string, envs: Environment[]): Environment | undefined {
+  if (ref.startsWith('refs/tags/')) {
+    const tag = ref.slice('refs/tags/'.length);
+    // 1. 精确的 tagPattern 匹配
+    const byTag = envs.find((e) => e.tagPattern && matchesGlob(e.tagPattern, tag));
+    if (byTag) return byTag;
+    // 2. 回退：找 production branch（main / master）
+    return envs.find((e) => e.branch === 'main' || e.branch === 'master');
+  }
+
+  const branch = ref.replace('refs/heads/', '');
+  return envs.find((e) => e.branch === branch);
+}
 
 export async function POST(request: Request) {
   try {
@@ -69,12 +101,13 @@ export async function POST(request: Request) {
     }
 
     // Determine environment based on ref
-    const branch = ref.replace('refs/heads/', '');
-    const environment = project.environments.find((env) => env.branch === branch);
+    // Tags (refs/tags/v1.0): match by tagPattern glob, fall back to production branch
+    // Branches (refs/heads/main): match by branch name
+    const environment = resolveEnvironment(ref, project.environments);
 
     if (!environment) {
       return NextResponse.json(
-        { error: `No environment configured for branch ${branch}` },
+        { error: `No environment configured for ref ${ref}` },
         { status: 404 }
       );
     }

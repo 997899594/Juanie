@@ -111,11 +111,7 @@ export async function POST(request: Request) {
         requiredCapabilities: ['read_repo'],
       });
 
-      dbRepositoryId = await ensureRepository(
-        repositoryId,
-        repositoryFullName,
-        integrationSession
-      );
+      dbRepositoryId = await ensureRepository(repositoryId, repositoryFullName, integrationSession);
     }
 
     const [project] = await db
@@ -138,6 +134,7 @@ export async function POST(request: Request) {
         projectId: project.id,
         name: 'production',
         branch: productionBranch,
+        tagPattern: 'v*',
       })
       .returning();
 

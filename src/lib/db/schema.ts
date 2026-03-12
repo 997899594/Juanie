@@ -411,6 +411,7 @@ export const environments = pgTable(
 
     name: varchar('name', { length: 100 }).notNull(),
     branch: varchar('branch', { length: 100 }),
+    tagPattern: varchar('tagPattern', { length: 100 }),
     isPreview: boolean('isPreview').default(false),
     previewPrNumber: integer('previewPrNumber'),
 
