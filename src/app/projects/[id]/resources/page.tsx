@@ -61,6 +61,7 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
     Array<{ id: string; name: string; namespace: string }>
   >([]);
   const [resources, setResources] = useState<Pod[] | Service[] | Deployment[]>([]);
+  const [resourceError, setResourceError] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedPod, setSelectedPod] = useState('');
   const [logs, setLogs] = useState('');
@@ -78,9 +79,10 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
     fetch(`/api/projects/${projectId}/environments`)
       .then((res) => res.json())
       .then((data) => {
-        setEnvironments(data.environments || []);
-        if (data.environments?.[0]) {
-          setEnvironmentId(data.environments[0].id);
+        const envList = Array.isArray(data) ? data : (data.environments ?? []);
+        setEnvironments(envList);
+        if (envList[0]) {
+          setEnvironmentId(envList[0].id);
         }
       });
   }, [projectId]);
@@ -89,10 +91,16 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
     if (!projectId || !environmentId) return;
 
     setLoading(true);
+    setResourceError('');
     fetch(`/api/projects/${projectId}/resources?type=${resourceType}&env=${environmentId}`)
       .then((res) => res.json())
       .then((data) => {
-        setResources(data);
+        if (data?.error) {
+          setResourceError(data.error);
+          setResources([]);
+        } else {
+          setResources(Array.isArray(data) ? data : []);
+        }
       })
       .finally(() => setLoading(false));
   }, [projectId, environmentId, resourceType]);
@@ -219,7 +227,9 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
             <CardTitle className="capitalize">{resourceType}</CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {resourceError ? (
+              <p className="text-sm text-destructive">{resourceError}</p>
+            ) : loading ? (
               <p>Loading...</p>
             ) : resourceType === 'pods' ? (
               <div className="space-y-2">
