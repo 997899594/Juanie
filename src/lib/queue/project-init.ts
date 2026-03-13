@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Job, Worker } from 'bullmq';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import postgres from 'postgres';
 import { db } from '@/lib/db';
@@ -10,6 +10,7 @@ import {
   databases,
   domains,
   environments,
+  environmentVariables,
   projectInitSteps,
   projects,
   repositories,
@@ -835,6 +836,13 @@ async function provisionDatabases(project: typeof projects.$inferSelect, hasK8s:
 
   for (const database of databaseList) {
     await provisionDatabase(database, project, hasK8s);
+    // Re-fetch updated record (connectionString now set) and inject env vars
+    const updated = await db.query.databases.findFirst({
+      where: eq(databases.id, database.id),
+    });
+    if (updated?.connectionString) {
+      await injectDatabaseEnvVars(updated, project);
+    }
   }
 }
 
@@ -1191,6 +1199,94 @@ async function configureDns(project: typeof projects.$inferSelect, hasK8s: boole
       await db.update(domains).set({ isVerified: true }).where(eq(domains.id, domain.id));
     }
   }
+}
+
+// ============================================
+// Database Env Var Injection
+// ============================================
+
+/** Parse a database connection string into individual component key-value pairs. */
+function parseConnectionString(type: string, connStr: string): Record<string, string> {
+  const vars: Record<string, string> = {};
+  try {
+    const url = new URL(connStr);
+    if (url.hostname) vars['HOST'] = url.hostname;
+    if (url.port) vars['PORT'] = url.port;
+    switch (type) {
+      case 'postgresql':
+      case 'mysql':
+        if (url.username) vars['USER'] = decodeURIComponent(url.username);
+        if (url.password) vars['PASSWORD'] = decodeURIComponent(url.password);
+        if (url.pathname?.length > 1) vars['DATABASE'] = url.pathname.slice(1);
+        break;
+      case 'redis':
+        if (url.password) vars['PASSWORD'] = decodeURIComponent(url.password);
+        // pathname is the db index (e.g. /1)
+        if (url.pathname?.length > 1) vars['DB'] = url.pathname.slice(1);
+        break;
+    }
+  } catch {
+    // Unparseable connection string — only URL will be injected
+  }
+  return vars;
+}
+
+/** Upsert a project-scoped environment variable (no specific env or service). */
+async function upsertEnvVar(projectId: string, key: string, value: string): Promise<void> {
+  const existing = await db.query.environmentVariables.findFirst({
+    where: and(
+      eq(environmentVariables.projectId, projectId),
+      eq(environmentVariables.key, key),
+      isNull(environmentVariables.environmentId),
+      isNull(environmentVariables.serviceId)
+    ),
+  });
+  if (existing) {
+    await db
+      .update(environmentVariables)
+      .set({ value, updatedAt: new Date() })
+      .where(eq(environmentVariables.id, existing.id));
+  } else {
+    await db.insert(environmentVariables).values({
+      projectId,
+      key,
+      value,
+      injectionType: 'runtime',
+    });
+  }
+}
+
+/**
+ * Inject database connection info as project-scoped environment variables.
+ *
+ * Variable naming: `{DB_NAME_UPPER}_{COMPONENT}`
+ * e.g. database name "main", type "postgresql" → MAIN_URL, MAIN_HOST, MAIN_PORT,
+ *                                                  MAIN_USER, MAIN_PASSWORD, MAIN_DATABASE
+ */
+export async function injectDatabaseEnvVars(
+  database: typeof databases.$inferSelect,
+  project: typeof projects.$inferSelect
+): Promise<void> {
+  if (!database.connectionString) return;
+
+  const prefix = database.name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+
+  const vars: Record<string, string> = {
+    [`${prefix}_URL`]: database.connectionString,
+    ...Object.fromEntries(
+      Object.entries(parseConnectionString(database.type, database.connectionString)).map(
+        ([k, v]) => [`${prefix}_${k}`, v]
+      )
+    ),
+  };
+
+  for (const [key, value] of Object.entries(vars)) {
+    await upsertEnvVar(project.id, key, value);
+  }
+
+  console.log(
+    `✅ Injected ${Object.keys(vars).length} env vars for database ${database.name} (${Object.keys(vars).join(', ')})`
+  );
 }
 
 export function createProjectInitWorker() {

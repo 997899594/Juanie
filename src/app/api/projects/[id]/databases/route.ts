@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { databases, projects, teamMembers } from '@/lib/db/schema';
 import { getIsConnected, initK8sClient } from '@/lib/k8s';
-import { provisionDatabase } from '@/lib/queue/project-init';
+import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/queue/project-init';
 
 function getHasK8s(): boolean {
   try {
@@ -118,6 +118,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const updated = await db.query.databases.findFirst({
       where: eq(databases.id, dbRecord.id),
     });
+
+    if (updated?.connectionString) {
+      await injectDatabaseEnvVars(updated, project);
+    }
 
     return NextResponse.json(updated, { status: 201 });
   } catch (error) {
