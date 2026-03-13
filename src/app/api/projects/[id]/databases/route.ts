@@ -1,8 +1,8 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { databases, projects, teamMembers } from '@/lib/db/schema';
+import { databases, environments, projects, teamMembers } from '@/lib/db/schema';
 import { getIsConnected, initK8sClient } from '@/lib/k8s';
 import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/queue/project-init';
 
@@ -15,7 +15,7 @@ function getHasK8s(): boolean {
   }
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
 
@@ -39,8 +39,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  // Optional ?environmentId= filter; omit to get all databases for the project
+  const url = new URL(request.url);
+  const environmentId = url.searchParams.get('environmentId');
+
   const dbList = await db.query.databases.findMany({
-    where: eq(databases.projectId, id),
+    where: environmentId
+      ? and(eq(databases.projectId, id), eq(databases.environmentId, environmentId))
+      : eq(databases.projectId, id),
   });
 
   return NextResponse.json(dbList);
@@ -71,7 +77,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const body = await request.json();
-  const { name, type, provisionType = 'shared', externalUrl, plan = 'starter' } = body;
+  const {
+    name,
+    type,
+    provisionType = 'shared',
+    externalUrl,
+    plan = 'starter',
+    environmentId,
+  } = body;
 
   if (!name || !type) {
     return NextResponse.json({ error: 'name and type are required' }, { status: 400 });
@@ -98,11 +111,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
+  // Validate environmentId belongs to this project (if provided)
+  let resolvedEnvId: string | null = environmentId ?? null;
+  if (resolvedEnvId) {
+    const env = await db.query.environments.findFirst({
+      where: and(eq(environments.id, resolvedEnvId), eq(environments.projectId, id)),
+    });
+    if (!env) {
+      return NextResponse.json({ error: 'Environment not found in this project' }, { status: 404 });
+    }
+  } else {
+    // Default to the project's production environment if no environmentId provided
+    const prodEnv = await db.query.environments.findFirst({
+      where: and(
+        eq(environments.projectId, id),
+        eq(environments.name, 'production'),
+        isNull(environments.isPreview)
+      ),
+    });
+    resolvedEnvId = prodEnv?.id ?? null;
+  }
+
   try {
     const [dbRecord] = await db
       .insert(databases)
       .values({
         projectId: id,
+        environmentId: resolvedEnvId,
         name,
         type,
         plan,
@@ -120,7 +155,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
 
     if (updated?.connectionString) {
-      await injectDatabaseEnvVars(updated, project);
+      await injectDatabaseEnvVars(updated, project, updated.environmentId ?? null);
     }
 
     return NextResponse.json(updated, { status: 201 });

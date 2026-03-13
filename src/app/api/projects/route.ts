@@ -156,6 +156,7 @@ export async function POST(request: Request) {
       const provisionType = dbConfig.provisionType || 'standalone';
       await db.insert(databases).values({
         projectId: project.id,
+        environmentId: prodEnv.id,
         name: dbConfig.name,
         type: dbConfig.type,
         plan: dbConfig.plan || 'starter',

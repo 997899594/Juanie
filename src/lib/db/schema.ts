@@ -436,6 +436,9 @@ export const databases = pgTable(
     projectId: uuid('projectId')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId').references(() => environments.id, {
+      onDelete: 'set null',
+    }),
 
     name: varchar('name', { length: 255 }).notNull(),
     type: databaseTypeEnum('type').notNull(),
@@ -760,12 +763,17 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
   domains: many(domains),
   deployments: many(deployments),
   environmentVariables: many(environmentVariables),
+  databases: many(databases),
 }));
 
 export const databasesRelations = relations(databases, ({ one }) => ({
   project: one(projects, {
     fields: [databases.projectId],
     references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [databases.environmentId],
+    references: [environments.id],
   }),
 }));
 

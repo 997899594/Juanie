@@ -726,7 +726,7 @@ async function renderEnvTemplate(
     }
   }
 
-  return lines.join('\n') + '\n';
+  return `${lines.join('\n')}\n`;
 }
 
 /**
@@ -886,7 +886,8 @@ async function provisionDatabases(project: typeof projects.$inferSelect, hasK8s:
       where: eq(databases.id, database.id),
     });
     if (updated?.connectionString) {
-      await injectDatabaseEnvVars(updated, project);
+      // Scope env vars to the database's environment (null = project-scoped)
+      await injectDatabaseEnvVars(updated, project, updated.environmentId ?? null);
     }
   }
 }
