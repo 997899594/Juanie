@@ -189,8 +189,8 @@ export async function POST(request: Request) {
       { step: 'push_cicd_config', status: 'pending', progress: 0 },
       { step: 'setup_registry_webhook', status: 'pending', progress: 0 },
       { step: 'setup_namespace', status: 'pending', progress: 0 },
-      { step: 'deploy_services', status: 'pending', progress: 0 },
       { step: 'provision_databases', status: 'pending', progress: 0 },
+      { step: 'deploy_services', status: 'pending', progress: 0 },
       { step: 'configure_dns', status: 'pending', progress: 0 },
     ];
 
@@ -199,8 +199,8 @@ export async function POST(request: Request) {
       { step: 'push_template', status: 'pending', progress: 0 },
       { step: 'setup_registry_webhook', status: 'pending', progress: 0 },
       { step: 'setup_namespace', status: 'pending', progress: 0 },
-      { step: 'deploy_services', status: 'pending', progress: 0 },
       { step: 'provision_databases', status: 'pending', progress: 0 },
+      { step: 'deploy_services', status: 'pending', progress: 0 },
       { step: 'configure_dns', status: 'pending', progress: 0 },
     ];
 

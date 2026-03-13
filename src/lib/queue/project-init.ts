@@ -140,8 +140,8 @@ const IMPORT_STEPS = [
   'push_cicd_config',
   'setup_registry_webhook',
   'setup_namespace',
-  'deploy_services',
   'provision_databases',
+  'deploy_services',
   'configure_dns',
 ] as const;
 
@@ -150,8 +150,8 @@ const CREATE_STEPS = [
   'push_template',
   'setup_registry_webhook',
   'setup_namespace',
-  'deploy_services',
   'provision_databases',
+  'deploy_services',
   'configure_dns',
 ] as const;
 
@@ -227,16 +227,24 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
           await setupRegistryWebhook(project);
           break;
         case 'setup_namespace':
-          await setupNamespace(project, hasK8s);
+          await setupNamespace(project, hasK8s, (p) =>
+            updateStepStatus(projectId, step, 'running', { progress: p })
+          );
           break;
         case 'deploy_services':
-          await deployServices(project, hasK8s);
+          await deployServices(project, hasK8s, (p) =>
+            updateStepStatus(projectId, step, 'running', { progress: p })
+          );
           break;
         case 'provision_databases':
-          await provisionDatabases(project, hasK8s);
+          await provisionDatabases(project, hasK8s, (p) =>
+            updateStepStatus(projectId, step, 'running', { progress: p })
+          );
           break;
         case 'configure_dns':
-          await configureDns(project, hasK8s);
+          await configureDns(project, hasK8s, (p) =>
+            updateStepStatus(projectId, step, 'running', { progress: p })
+          );
           break;
       }
 
@@ -790,12 +798,17 @@ function buildImageName(
   }
 }
 
-async function setupNamespace(project: typeof projects.$inferSelect, hasK8s: boolean) {
+async function setupNamespace(
+  project: typeof projects.$inferSelect,
+  hasK8s: boolean,
+  onProgress?: (p: number) => Promise<void>
+) {
   const namespace = `juanie-${project.slug}`;
 
   if (hasK8s) {
     try {
       await createNamespace(namespace);
+      await onProgress?.(40);
     } catch (error) {
       console.error('Failed to create namespace:', error);
       throw error;
@@ -814,6 +827,7 @@ async function setupNamespace(project: typeof projects.$inferSelect, hasK8s: boo
     } catch (e) {
       console.warn('Could not create GHCR pull secret during namespace setup:', e);
     }
+    await onProgress?.(85);
   } else {
     console.log(`[Mock] Would create namespace: ${namespace}`);
   }
@@ -827,7 +841,11 @@ async function setupNamespace(project: typeof projects.$inferSelect, hasK8s: boo
   }
 }
 
-async function deployServices(project: typeof projects.$inferSelect, hasK8s: boolean) {
+async function deployServices(
+  project: typeof projects.$inferSelect,
+  hasK8s: boolean,
+  onProgress?: (p: number) => Promise<void>
+) {
   const serviceList = await db.query.services.findMany({
     where: eq(services.projectId, project.id),
   });
@@ -839,7 +857,8 @@ async function deployServices(project: typeof projects.$inferSelect, hasK8s: boo
     return;
   }
 
-  for (const service of serviceList) {
+  for (let i = 0; i < serviceList.length; i++) {
+    const service = serviceList[i];
     // Build image name (in production, this would be built by CI/CD)
     const _imageName = `juanie/${project.slug}-${service.name}:latest`;
 
@@ -872,15 +891,21 @@ async function deployServices(project: typeof projects.$inferSelect, hasK8s: boo
     console.log(`✅ Deployed service ${service.name}`);
 
     await db.update(services).set({ status: 'running' }).where(eq(services.id, service.id));
+    await onProgress?.(Math.round(((i + 1) / serviceList.length) * 100));
   }
 }
 
-async function provisionDatabases(project: typeof projects.$inferSelect, hasK8s: boolean) {
+async function provisionDatabases(
+  project: typeof projects.$inferSelect,
+  hasK8s: boolean,
+  onProgress?: (p: number) => Promise<void>
+) {
   const databaseList = await db.query.databases.findMany({
     where: eq(databases.projectId, project.id),
   });
 
-  for (const database of databaseList) {
+  for (let i = 0; i < databaseList.length; i++) {
+    const database = databaseList[i];
     await provisionDatabase(database, project, hasK8s);
     // Re-fetch updated record (connectionString now set) and inject env vars
     const updated = await db.query.databases.findFirst({
@@ -890,6 +915,8 @@ async function provisionDatabases(project: typeof projects.$inferSelect, hasK8s:
       // Scope env vars to the database's environment (null = project-scoped)
       await injectDatabaseEnvVars(updated, project, updated.environmentId ?? null);
     }
+    // Reserve last 10% for K8s sync
+    await onProgress?.(Math.round(((i + 1) / databaseList.length) * 90));
   }
 
   // Sync all injected env vars to K8s ConfigMap/Secret for each affected environment
@@ -1208,7 +1235,11 @@ function getConnectionString(
   }
 }
 
-async function configureDns(project: typeof projects.$inferSelect, hasK8s: boolean) {
+async function configureDns(
+  project: typeof projects.$inferSelect,
+  hasK8s: boolean,
+  onProgress?: (p: number) => Promise<void>
+) {
   const domainList = await db.query.domains.findMany({
     where: eq(domains.projectId, project.id),
     with: {
@@ -1218,7 +1249,8 @@ async function configureDns(project: typeof projects.$inferSelect, hasK8s: boole
 
   const namespace = `juanie-${project.slug}`;
 
-  for (const domain of domainList) {
+  for (let i = 0; i < domainList.length; i++) {
+    const domain = domainList[i];
     if (hasK8s) {
       console.log(`Configuring DNS for ${domain.hostname}`);
 
@@ -1257,6 +1289,7 @@ async function configureDns(project: typeof projects.$inferSelect, hasK8s: boole
       // See note above about isVerified semantics
       await db.update(domains).set({ isVerified: true }).where(eq(domains.id, domain.id));
     }
+    await onProgress?.(Math.round(((i + 1) / domainList.length) * 100));
   }
 }
 
