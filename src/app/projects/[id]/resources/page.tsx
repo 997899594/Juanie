@@ -112,9 +112,13 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
     fetch(
       `/api/projects/${projectId}/resources/logs?pod=${selectedPod}&env=${environmentId}&tail=100`
     )
-      .then((res) => res.text())
-      .then((data) => {
-        setLogs(data);
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          setLogs(`[Error] ${err.error ?? 'Failed to fetch logs'}`);
+        } else {
+          setLogs(await res.text());
+        }
       })
       .finally(() => setLoadingLogs(false));
   }, [projectId, environmentId, selectedPod]);

@@ -64,6 +64,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // K8s returns 400 when the container hasn't started yet (e.g. ImagePullBackOff / Pending)
+    if (errorMessage.includes('HTTP-Code: 400') || errorMessage.includes('is not running')) {
+      return NextResponse.json(
+        { error: 'Container has not started yet — check pod status for details' },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
