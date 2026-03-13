@@ -436,7 +436,7 @@ async function pushCicdConfig(
   }
 
   // 2. Push environment variables template
-  const envTemplate = renderEnvTemplate(project);
+  const envTemplate = await renderEnvTemplate(project);
   files['.env.juanie.example'] = envTemplate;
 
   if (Object.keys(files).length > 0) {
@@ -638,11 +638,11 @@ build:
 `;
 }
 
-function renderEnvTemplate(
+async function renderEnvTemplate(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   }
-): string {
+): Promise<string> {
   const templatePath = join(TEMPLATES_DIR, 'env', '.env.juanie.example');
 
   if (existsSync(templatePath)) {
@@ -653,35 +653,80 @@ function renderEnvTemplate(
     return content;
   }
 
-  // Fallback to inline template
-  return `# ===========================================
-# Juanie 环境变量模板
-# ===========================================
-# 复制此文件为 .env 并填入实际值
-# 真实值可在 Juanie 控制台 → 项目 → 环境变量 中查看
+  // Dynamically build template based on project's configured databases
+  const dbList = await db.query.databases.findMany({
+    where: eq(databases.projectId, project.id),
+  });
 
-# 项目信息
-PROJECT_NAME=${project.name}
-PROJECT_SLUG=${project.slug}
+  const ns = `juanie-${project.slug}`;
+  const lines: string[] = [
+    `# ===========================================`,
+    `# Juanie 环境变量模板`,
+    `# ===========================================`,
+    `# 复制此文件为 .env 并填入实际值`,
+    `# 真实值可在 Juanie 控制台 → 项目 → 环境变量 中查看`,
+    ``,
+    `PROJECT_NAME=${project.name}`,
+    `PROJECT_SLUG=${project.slug}`,
+  ];
 
-# -------------------------------------------
-# PostgreSQL（如果项目配置了 PostgreSQL）
-# -------------------------------------------
-DATABASE_URL=postgresql://postgres:<密码>@${project.slug}-postgres.juanie-${project.slug}.svc.cluster.local:5432/main
-POSTGRES_HOST=${project.slug}-postgres.juanie-${project.slug}.svc.cluster.local
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=<在 Juanie 控制台查看>
-POSTGRES_DB=main
+  for (const db_ of dbList) {
+    const host =
+      db_.provisionType === 'standalone'
+        ? `${project.slug}-${db_.name}.${ns}.svc.cluster.local`
+        : `<host>`;
 
-# -------------------------------------------
-# Redis（如果项目配置了 Redis）
-# -------------------------------------------
-REDIS_URL=redis://:<密码>@${project.slug}-redis.juanie-${project.slug}.svc.cluster.local:6379
-REDIS_HOST=${project.slug}-redis.juanie-${project.slug}.svc.cluster.local
-REDIS_PORT=6379
-REDIS_PASSWORD=<在 Juanie 控制台查看>
-`;
+    switch (db_.type) {
+      case 'postgresql':
+        lines.push(
+          ``,
+          `# --- PostgreSQL (${db_.name}) ---`,
+          `DATABASE_URL=postgresql://postgres:<password>@${host}:5432/${db_.name}`,
+          `POSTGRES_HOST=${host}`,
+          `POSTGRES_PORT=5432`,
+          `POSTGRES_USER=postgres`,
+          `POSTGRES_PASSWORD=<在 Juanie 控制台查看>`,
+          `POSTGRES_DB=${db_.name}`
+        );
+        break;
+      case 'redis':
+        lines.push(
+          ``,
+          `# --- Redis (${db_.name}) ---`,
+          `REDIS_URL=redis://:<password>@${host}:6379`,
+          `REDIS_HOST=${host}`,
+          `REDIS_PORT=6379`,
+          `REDIS_PASSWORD=<在 Juanie 控制台查看>`
+        );
+        break;
+      case 'mysql':
+        lines.push(
+          ``,
+          `# --- MySQL (${db_.name}) ---`,
+          `MYSQL_URL=mysql://root:<password>@${host}:3306/${db_.name}`,
+          `MYSQL_HOST=${host}`,
+          `MYSQL_PORT=3306`,
+          `MYSQL_USER=root`,
+          `MYSQL_PASSWORD=<在 Juanie 控制台查看>`,
+          `MYSQL_DATABASE=${db_.name}`
+        );
+        break;
+      case 'mongodb':
+        lines.push(
+          ``,
+          `# --- MongoDB (${db_.name}) ---`,
+          `MONGODB_URL=mongodb://root:<password>@${host}:27017/${db_.name}`,
+          `MONGODB_HOST=${host}`,
+          `MONGODB_PORT=27017`,
+          `MONGODB_USER=root`,
+          `MONGODB_PASSWORD=<在 Juanie 控制台查看>`,
+          `MONGODB_DATABASE=${db_.name}`
+        );
+        break;
+    }
+  }
+
+  return lines.join('\n') + '\n';
 }
 
 /**
@@ -1205,39 +1250,49 @@ async function configureDns(project: typeof projects.$inferSelect, hasK8s: boole
 // Database Env Var Injection
 // ============================================
 
-/** Parse a database connection string into individual component key-value pairs. */
-function parseConnectionString(type: string, connStr: string): Record<string, string> {
-  const vars: Record<string, string> = {};
+/** Parse a postgres/mysql/redis/mongodb connection string into its components. */
+function parseConnUrl(connStr: string): {
+  host: string;
+  port: string;
+  user: string;
+  password: string;
+  database: string;
+} {
   try {
     const url = new URL(connStr);
-    if (url.hostname) vars['HOST'] = url.hostname;
-    if (url.port) vars['PORT'] = url.port;
-    switch (type) {
-      case 'postgresql':
-      case 'mysql':
-        if (url.username) vars['USER'] = decodeURIComponent(url.username);
-        if (url.password) vars['PASSWORD'] = decodeURIComponent(url.password);
-        if (url.pathname?.length > 1) vars['DATABASE'] = url.pathname.slice(1);
-        break;
-      case 'redis':
-        if (url.password) vars['PASSWORD'] = decodeURIComponent(url.password);
-        // pathname is the db index (e.g. /1)
-        if (url.pathname?.length > 1) vars['DB'] = url.pathname.slice(1);
-        break;
-    }
+    return {
+      host: url.hostname,
+      port: url.port,
+      user: url.username ? decodeURIComponent(url.username) : '',
+      password: url.password ? decodeURIComponent(url.password) : '',
+      database: url.pathname?.length > 1 ? url.pathname.slice(1) : '',
+    };
   } catch {
-    // Unparseable connection string — only URL will be injected
+    return { host: '', port: '', user: '', password: '', database: '' };
   }
-  return vars;
 }
 
-/** Upsert a project-scoped environment variable (no specific env or service). */
-async function upsertEnvVar(projectId: string, key: string, value: string): Promise<void> {
+/**
+ * Upsert an environment variable.
+ *
+ * @param environmentId  null → project-scoped (applies to all environments via env-sync merge)
+ *                       string → scoped to a specific environment only
+ */
+async function upsertEnvVar(
+  projectId: string,
+  environmentId: string | null,
+  key: string,
+  value: string
+): Promise<void> {
+  const envIdClause = environmentId
+    ? eq(environmentVariables.environmentId, environmentId)
+    : isNull(environmentVariables.environmentId);
+
   const existing = await db.query.environmentVariables.findFirst({
     where: and(
       eq(environmentVariables.projectId, projectId),
       eq(environmentVariables.key, key),
-      isNull(environmentVariables.environmentId),
+      envIdClause,
       isNull(environmentVariables.serviceId)
     ),
   });
@@ -1249,6 +1304,7 @@ async function upsertEnvVar(projectId: string, key: string, value: string): Prom
   } else {
     await db.insert(environmentVariables).values({
       projectId,
+      environmentId,
       key,
       value,
       injectionType: 'runtime',
@@ -1257,35 +1313,70 @@ async function upsertEnvVar(projectId: string, key: string, value: string): Prom
 }
 
 /**
- * Inject database connection info as project-scoped environment variables.
+ * Inject database connection info as environment variables.
  *
- * Variable naming: `{DB_NAME_UPPER}_{COMPONENT}`
- * e.g. database name "main", type "postgresql" → MAIN_URL, MAIN_HOST, MAIN_PORT,
- *                                                  MAIN_USER, MAIN_PASSWORD, MAIN_DATABASE
+ * Naming convention matches renderEnvTemplate and common framework expectations:
+ *   postgresql → DATABASE_URL, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER,
+ *                POSTGRES_PASSWORD, POSTGRES_DB
+ *   redis      → REDIS_URL, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD[, REDIS_DB]
+ *   mysql      → MYSQL_URL, MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE
+ *   mongodb    → MONGODB_URL, MONGODB_HOST, MONGODB_PORT, MONGODB_USER, MONGODB_PASSWORD, MONGODB_DATABASE
+ *
+ * @param environmentId  null = project-scoped (env-sync merges into every environment)
+ *                       pass a specific env ID for per-environment isolation
  */
 export async function injectDatabaseEnvVars(
   database: typeof databases.$inferSelect,
-  project: typeof projects.$inferSelect
+  project: typeof projects.$inferSelect,
+  environmentId: string | null = null
 ): Promise<void> {
   if (!database.connectionString) return;
 
-  const prefix = database.name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  const c = parseConnUrl(database.connectionString);
+  const vars: Record<string, string> = {};
 
-  const vars: Record<string, string> = {
-    [`${prefix}_URL`]: database.connectionString,
-    ...Object.fromEntries(
-      Object.entries(parseConnectionString(database.type, database.connectionString)).map(
-        ([k, v]) => [`${prefix}_${k}`, v]
-      )
-    ),
-  };
-
-  for (const [key, value] of Object.entries(vars)) {
-    await upsertEnvVar(project.id, key, value);
+  switch (database.type) {
+    case 'postgresql':
+      vars['DATABASE_URL'] = database.connectionString;
+      if (c.host) vars['POSTGRES_HOST'] = c.host;
+      if (c.port) vars['POSTGRES_PORT'] = c.port;
+      if (c.user) vars['POSTGRES_USER'] = c.user;
+      if (c.password) vars['POSTGRES_PASSWORD'] = c.password;
+      if (c.database) vars['POSTGRES_DB'] = c.database;
+      break;
+    case 'redis':
+      vars['REDIS_URL'] = database.connectionString;
+      if (c.host) vars['REDIS_HOST'] = c.host;
+      if (c.port) vars['REDIS_PORT'] = c.port;
+      if (c.password) vars['REDIS_PASSWORD'] = c.password;
+      // db index only relevant for shared Redis (stored in pathname e.g. /1)
+      if (c.database && c.database !== '0') vars['REDIS_DB'] = c.database;
+      break;
+    case 'mysql':
+      vars['MYSQL_URL'] = database.connectionString;
+      if (c.host) vars['MYSQL_HOST'] = c.host;
+      if (c.port) vars['MYSQL_PORT'] = c.port;
+      if (c.user) vars['MYSQL_USER'] = c.user;
+      if (c.password) vars['MYSQL_PASSWORD'] = c.password;
+      if (c.database) vars['MYSQL_DATABASE'] = c.database;
+      break;
+    case 'mongodb':
+      vars['MONGODB_URL'] = database.connectionString;
+      if (c.host) vars['MONGODB_HOST'] = c.host;
+      if (c.port) vars['MONGODB_PORT'] = c.port;
+      if (c.user) vars['MONGODB_USER'] = c.user;
+      if (c.password) vars['MONGODB_PASSWORD'] = c.password;
+      if (c.database) vars['MONGODB_DATABASE'] = c.database;
+      break;
   }
 
+  for (const [key, value] of Object.entries(vars)) {
+    await upsertEnvVar(project.id, environmentId, key, value);
+  }
+
+  const scope = environmentId ? `env:${environmentId.slice(0, 8)}` : 'project-scoped';
   console.log(
-    `✅ Injected ${Object.keys(vars).length} env vars for database ${database.name} (${Object.keys(vars).join(', ')})`
+    `✅ Injected ${Object.keys(vars).length} env vars for database ${database.name} [${scope}]: ${Object.keys(vars).join(', ')}`
   );
 }
 
