@@ -17,6 +17,7 @@ import {
   services,
   teams,
 } from '@/lib/db/schema';
+import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
   gateway,
@@ -888,6 +889,18 @@ async function provisionDatabases(project: typeof projects.$inferSelect, hasK8s:
     if (updated?.connectionString) {
       // Scope env vars to the database's environment (null = project-scoped)
       await injectDatabaseEnvVars(updated, project, updated.environmentId ?? null);
+    }
+  }
+
+  // Sync all injected env vars to K8s ConfigMap/Secret for each affected environment
+  if (hasK8s) {
+    const affectedEnvIds = [
+      ...new Set(databaseList.map((d) => d.environmentId).filter(Boolean) as string[]),
+    ];
+    for (const envId of affectedEnvIds) {
+      await syncEnvVarsToK8s(project.id, envId).catch((e) =>
+        console.warn(`[provisionDatabases] syncEnvVarsToK8s failed for env ${envId}:`, e)
+      );
     }
   }
 }

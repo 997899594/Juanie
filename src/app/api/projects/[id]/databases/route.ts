@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { databases, environments, projects, teamMembers } from '@/lib/db/schema';
+import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { getIsConnected, initK8sClient } from '@/lib/k8s';
 import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/queue/project-init';
 
@@ -156,6 +157,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (updated?.connectionString) {
       await injectDatabaseEnvVars(updated, project, updated.environmentId ?? null);
+      // Immediately sync to K8s so the env var is available without waiting for next deploy
+      if (updated.environmentId) {
+        await syncEnvVarsToK8s(id, updated.environmentId).catch((e) =>
+          console.warn('[databases POST] syncEnvVarsToK8s failed:', e)
+        );
+      }
     }
 
     return NextResponse.json(updated, { status: 201 });
