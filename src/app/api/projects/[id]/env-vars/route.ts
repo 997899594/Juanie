@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
-import { environmentVariables, environments, projects, teamMembers } from '@/lib/db/schema';
+import { environments, environmentVariables, projects, teamMembers } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { getIsConnected, rolloutRestartDeployments } from '@/lib/k8s';
 
@@ -182,7 +182,9 @@ export async function POST(request: Request, { params }: RouteParams) {
         {
           error: 'Encryption unavailable',
           details:
-            e instanceof Error ? e.message : 'Master key not configured. Check K8s Secret juanie/juanie-master-key or ENCRYPTION_MASTER_KEY env var.',
+            e instanceof Error
+              ? e.message
+              : 'Master key not configured. Check K8s Secret juanie/juanie-master-key or ENCRYPTION_MASTER_KEY env var.',
         },
         { status: 500 }
       );

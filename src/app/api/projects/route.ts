@@ -11,7 +11,6 @@ import {
   environments,
   projectInitSteps,
   projects,
-  repositories,
   services,
   teamMembers,
   teams,
@@ -23,9 +22,7 @@ import { addProjectInitJob } from '@/lib/queue';
 interface CreateProjectRequest {
   mode: 'import' | 'create';
   repositoryId?: string;
-  repositoryName?: string;
   repositoryFullName?: string;
-  isPrivate?: boolean;
   template?: string;
   name: string;
   slug: string;
@@ -73,9 +70,7 @@ export async function POST(request: Request) {
     const {
       mode,
       repositoryId,
-      repositoryName,
       repositoryFullName,
-      isPrivate,
       name,
       slug,
       description,

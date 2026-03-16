@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { environments, projects } from '@/lib/db/schema';
+import { environments, projects, teamMembers } from '@/lib/db/schema';
 import {
   createConfigMap,
   createSecret,
@@ -12,6 +12,15 @@ import {
   getK8sClient,
   getSecrets,
 } from '@/lib/k8s';
+
+async function authorizeAndGetProject(projectId: string, userId: string) {
+  const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+  if (!project) return { project: null, forbidden: false };
+  const member = await db.query.teamMembers.findFirst({
+    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
+  });
+  return { project, forbidden: !member };
+}
 
 async function getEnvironment(projectId: string, environmentId: string | null) {
   if (environmentId) {
@@ -37,12 +46,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const resourceType = url.searchParams.get('type') || 'configmaps';
   const environmentId = url.searchParams.get('env');
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, id),
-  });
+  const { project, forbidden } = await authorizeAndGetProject(id, session.user.id);
 
   if (!project) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  }
+  if (forbidden) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const environment = await getEnvironment(id, environmentId);
@@ -88,12 +98,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, id),
-  });
+  const { project, forbidden } = await authorizeAndGetProject(id, session.user.id);
 
   if (!project) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  }
+  if (forbidden) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const environment = await getEnvironment(id, environmentId);
@@ -135,12 +146,13 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     return NextResponse.json({ error: 'Name required' }, { status: 400 });
   }
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, id),
-  });
+  const { project, forbidden } = await authorizeAndGetProject(id, session.user.id);
 
   if (!project) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  }
+  if (forbidden) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const environment = await getEnvironment(id, environmentId);
