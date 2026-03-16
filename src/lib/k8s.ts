@@ -592,6 +592,9 @@ export async function updateDeployment(
     ...(spec.envFrom !== undefined ? { envFrom: spec.envFrom } : {}),
   }));
 
+  // Always bump restartedAt so the pod rolls even when the image tag is unchanged.
+  // This ensures pods pick up the latest ConfigMap/Secret values from envFrom.
+  const existingAnnotations = current.spec?.template?.metadata?.annotations || {};
   const updated: k8s.V1Deployment = {
     apiVersion: 'apps/v1',
     kind: 'Deployment',
@@ -600,7 +603,13 @@ export async function updateDeployment(
       replicas: spec.replicas ?? current.spec?.replicas,
       selector: current.spec?.selector || { matchLabels: { app: name } },
       template: {
-        metadata: current.spec?.template?.metadata || { labels: { app: name } },
+        metadata: {
+          ...(current.spec?.template?.metadata || { labels: { app: name } }),
+          annotations: {
+            ...existingAnnotations,
+            'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
+          },
+        },
         spec: {
           ...current.spec?.template?.spec,
           containers: updatedContainers,
