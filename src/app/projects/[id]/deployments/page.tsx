@@ -13,12 +13,13 @@ import { useDeployments } from '@/hooks/useDeployments';
 
 const statusConfig: Record<
   string,
-  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean }
+  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean; label?: string }
 > = {
   queued: { color: 'neutral', pulse: false },
   building: { color: 'info', pulse: true },
   deploying: { color: 'info', pulse: true },
-  running: { color: 'success', pulse: false },
+  running: { color: 'success', pulse: false, label: 'Active' },
+  running_old: { color: 'neutral', pulse: false, label: 'Deployed' },
   failed: { color: 'error', pulse: false },
   rolled_back: { color: 'warning', pulse: false },
 };
@@ -105,6 +106,14 @@ export default function DeploymentsPage() {
     }
   };
 
+  // Track which is the latest running deployment per environment
+  const latestRunningId = new Map<string, string>();
+  for (const d of history) {
+    if (d.status === 'running' && !latestRunningId.has(d.environmentName)) {
+      latestRunningId.set(d.environmentName, d.id);
+    }
+  }
+
   const envNames = ['all', ...new Set(history.map((d) => d.environmentName))];
   const filtered = filter === 'all' ? history : history.filter((d) => d.environmentName === filter);
 
@@ -160,7 +169,11 @@ export default function DeploymentsPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((deployment) => {
-            const config = statusConfig[deployment.status] || statusConfig.queued;
+            const isOldRunning =
+              deployment.status === 'running' &&
+              latestRunningId.get(deployment.environmentName) !== deployment.id;
+            const configKey = isOldRunning ? 'running_old' : deployment.status;
+            const config = statusConfig[configKey] || statusConfig.queued;
             return (
               <Card key={deployment.id} className="overflow-hidden">
                 <CardContent className="p-0">
@@ -185,7 +198,7 @@ export default function DeploymentsPage() {
                             <StatusIndicator
                               status={config.color}
                               pulse={config.pulse}
-                              label={deployment.status}
+                              label={config.label ?? deployment.status}
                             />
                           </div>
                           <div className="space-y-1">

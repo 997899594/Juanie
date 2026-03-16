@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React from 'react';
+import { useProjectContext } from '@/lib/project-context';
 import { UserMenu } from './user-menu';
 
 interface BreadcrumbItem {
@@ -13,7 +14,8 @@ interface BreadcrumbItem {
 
 export function Header() {
   const pathname = usePathname();
-  const breadcrumbs = generateBreadcrumbs(pathname);
+  const project = useProjectContext();
+  const breadcrumbs = generateBreadcrumbs(pathname, project ?? undefined);
 
   return (
     <header className="sticky top-0 z-30 h-14 flex items-center justify-between px-6 bg-background border-b">
@@ -40,7 +42,10 @@ export function Header() {
   );
 }
 
-function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
+function generateBreadcrumbs(
+  pathname: string,
+  project?: { projectId: string; projectName: string }
+): BreadcrumbItem[] {
   const segments = pathname.split('/').filter(Boolean);
 
   if (segments.length === 0) {
@@ -65,7 +70,9 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
   let currentPath = '';
   segments.forEach((segment, index) => {
     currentPath += `/${segment}`;
-    const title = pathMap[segment] || segment;
+    // Replace project UUID with the actual project name
+    const isProjectId = project && segment === project.projectId;
+    const title = isProjectId ? project.projectName : (pathMap[segment] ?? segment);
 
     if (index === segments.length - 1) {
       breadcrumbs.push({ title });

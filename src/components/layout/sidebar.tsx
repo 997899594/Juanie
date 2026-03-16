@@ -18,6 +18,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -87,14 +88,12 @@ const projectNav: NavItem[] = [
   },
 ];
 
-interface SidebarProps {
-  projectName?: string;
-  projectId?: string;
-}
-
-export function Sidebar({ projectName, projectId }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const project = useProjectContext();
+  const projectId = project?.projectId;
+  const projectName = project?.projectName;
 
   const isInProject = pathname.includes('/projects/') && projectId;
 
