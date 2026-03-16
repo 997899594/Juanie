@@ -1003,6 +1003,19 @@ function sanitizePgName(s: string): string {
     .slice(0, 30);
 }
 
+/**
+ * Qualify a bare K8s service name with the Juanie namespace FQDN so it can be
+ * resolved from pods running in other namespaces.
+ * localhost / IP addresses / already-qualified names are returned as-is.
+ */
+function toFqdn(host: string): string {
+  const juanieNamespace = process.env.JUANIE_NAMESPACE || 'juanie';
+  if (!host || host === 'localhost' || /^\d+\.\d+/.test(host) || host.includes('.')) {
+    return host;
+  }
+  return `${host}.${juanieNamespace}.svc.cluster.local`;
+}
+
 async function provisionSharedPostgreSQL(
   database: typeof databases.$inferSelect,
   project: typeof projects.$inferSelect
@@ -1036,7 +1049,7 @@ async function provisionSharedPostgreSQL(
     );
 
     const parsedUrl = new URL(adminUrl);
-    const host = parsedUrl.hostname;
+    const host = toFqdn(parsedUrl.hostname);
     const port = parseInt(parsedUrl.port || '5432', 10);
     const connStr = `postgresql://${dbIdentifier}:${encodeURIComponent(dbPassword)}@${host}:${port}/${dbIdentifier}`;
 
@@ -1074,7 +1087,7 @@ async function provisionSharedRedis(database: typeof databases.$inferSelect): Pr
     );
   const dbIndex = sharedRedis.length + 1; // 1-based; 0 reserved for BullMQ
 
-  const redisHost = process.env.REDIS_HOST || 'localhost';
+  const redisHost = toFqdn(process.env.REDIS_HOST || 'localhost');
   const redisPort = process.env.REDIS_PORT || '6379';
   const redisPassword = process.env.REDIS_PASSWORD;
 
