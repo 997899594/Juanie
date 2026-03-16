@@ -574,6 +574,7 @@ export async function updateDeployment(
     image?: string;
     replicas?: number;
     env?: Record<string, string>;
+    envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
   }
 ): Promise<void> {
   const { apps } = getK8sClient();
@@ -587,6 +588,8 @@ export async function updateDeployment(
     env: spec.env
       ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
       : container.env,
+    // If envFrom is provided, always apply it so stale/missing envFrom refs get fixed.
+    ...(spec.envFrom !== undefined ? { envFrom: spec.envFrom } : {}),
   }));
 
   const updated: k8s.V1Deployment = {
@@ -607,6 +610,66 @@ export async function updateDeployment(
   };
 
   await apps.replaceNamespacedDeployment({ namespace, name, body: updated });
+}
+
+/**
+ * Trigger a rolling restart for all Deployments in a namespace by bumping the
+ * `kubectl.kubernetes.io/restartedAt` annotation. Pods will be recreated one by
+ * one (respecting their RollingUpdate strategy) and will re-read the latest
+ * ConfigMap / Secret values from envFrom.
+ */
+export async function rolloutRestartDeployments(namespace: string): Promise<void> {
+  const { apps } = getK8sClient();
+
+  let deploymentNames: string[] = [];
+  try {
+    const list = await apps.listNamespacedDeployment({ namespace });
+    deploymentNames = (list.items || [])
+      .map((d) => d.metadata?.name)
+      .filter((n): n is string => Boolean(n));
+  } catch (e) {
+    console.warn(`[rolloutRestart] could not list deployments in ${namespace}:`, e);
+    return;
+  }
+
+  if (deploymentNames.length === 0) return;
+
+  const restartedAt = new Date().toISOString();
+  await Promise.all(
+    deploymentNames.map(async (deploymentName) => {
+      try {
+        const current = await apps.readNamespacedDeployment({ namespace, name: deploymentName });
+        if (!current.spec?.selector) return;
+        const existingAnnotations = current.spec?.template?.metadata?.annotations || {};
+        const updated: k8s.V1Deployment = {
+          apiVersion: 'apps/v1',
+          kind: 'Deployment',
+          metadata: current.metadata,
+          spec: {
+            ...current.spec,
+            selector: current.spec.selector,
+            template: {
+              ...current.spec?.template,
+              metadata: {
+                ...current.spec?.template?.metadata,
+                annotations: {
+                  ...existingAnnotations,
+                  'kubectl.kubernetes.io/restartedAt': restartedAt,
+                },
+              },
+            },
+          },
+        };
+        await apps.replaceNamespacedDeployment({ namespace, name: deploymentName, body: updated });
+      } catch (e) {
+        console.warn(`[rolloutRestart] failed for ${namespace}/${deploymentName}:`, e);
+      }
+    })
+  );
+
+  console.log(
+    `✅ Rolling restart triggered for ${deploymentNames.length} deployment(s) in ${namespace}: ${deploymentNames.join(', ')}`
+  );
 }
 
 export async function deleteDeployment(namespace: string, name: string): Promise<void> {

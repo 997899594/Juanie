@@ -121,7 +121,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
       const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
       try {
-        await updateDeployment(environment.namespace, deploymentName, { image: imageName });
+        await updateDeployment(environment.namespace, deploymentName, { image: imageName, envFrom });
         console.log(`✅ Updated deployment ${deploymentName} with image ${imageName}`);
       } catch (_updateError) {
         console.log(`Deployment ${deploymentName} not found, creating...`);

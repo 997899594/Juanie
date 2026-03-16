@@ -11,8 +11,9 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
-import { environmentVariables, projects, teamMembers } from '@/lib/db/schema';
+import { environmentVariables, environments, projects, teamMembers } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
+import { getIsConnected, rolloutRestartDeployments } from '@/lib/k8s';
 
 type RouteParams = { params: Promise<{ id: string; varId: string }> };
 
@@ -125,11 +126,22 @@ export async function PUT(request: Request, { params }: RouteParams) {
 
   await db.update(environmentVariables).set(updateData).where(eq(environmentVariables.id, varId));
 
-  // 同步到 K8s
+  // 同步到 K8s，并触发滚动重启使 Pod 读取新值
   if (envVar.environmentId) {
     await syncEnvVarsToK8s(projectId, envVar.environmentId).catch((e) => {
       console.error('Failed to sync env vars to K8s after update', e);
     });
+
+    if (getIsConnected()) {
+      const env = await db.query.environments.findFirst({
+        where: eq(environments.id, envVar.environmentId),
+      });
+      if (env?.namespace) {
+        await rolloutRestartDeployments(env.namespace).catch((e) => {
+          console.warn('Failed to trigger rolling restart after env var update', e);
+        });
+      }
+    }
   }
 
   return NextResponse.json({ success: true });
@@ -159,11 +171,22 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
   await db.delete(environmentVariables).where(eq(environmentVariables.id, varId));
 
-  // 同步到 K8s
+  // 同步到 K8s，并触发滚动重启使 Pod 读取新值
   if (envVar.environmentId) {
     await syncEnvVarsToK8s(projectId, envVar.environmentId).catch((e) => {
       console.error('Failed to sync env vars to K8s after delete', e);
     });
+
+    if (getIsConnected()) {
+      const env = await db.query.environments.findFirst({
+        where: eq(environments.id, envVar.environmentId),
+      });
+      if (env?.namespace) {
+        await rolloutRestartDeployments(env.namespace).catch((e) => {
+          console.warn('Failed to trigger rolling restart after env var delete', e);
+        });
+      }
+    }
   }
 
   return NextResponse.json({ success: true });

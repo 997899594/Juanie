@@ -11,8 +11,9 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
-import { environmentVariables, projects, teamMembers } from '@/lib/db/schema';
+import { environmentVariables, environments, projects, teamMembers } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
+import { getIsConnected, rolloutRestartDeployments } from '@/lib/k8s';
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -205,12 +206,22 @@ export async function POST(request: Request, { params }: RouteParams) {
     createdAt: environmentVariables.createdAt,
   });
 
-  // 立即同步到 K8s（environmentId 存在时）
+  // 立即同步到 K8s（environmentId 存在时），然后触发滚动重启使 Pod 读取新值
   if (environmentId) {
     await syncEnvVarsToK8s(projectId, environmentId).catch((e) => {
-      // 同步失败不影响 API 响应，记录日志即可
       console.error('Failed to sync env vars to K8s after create', e);
     });
+
+    if (getIsConnected()) {
+      const env = await db.query.environments.findFirst({
+        where: eq(environments.id, environmentId),
+      });
+      if (env?.namespace) {
+        await rolloutRestartDeployments(env.namespace).catch((e) => {
+          console.warn('Failed to trigger rolling restart after env var create', e);
+        });
+      }
+    }
   }
 
   return NextResponse.json(created, { status: 201 });

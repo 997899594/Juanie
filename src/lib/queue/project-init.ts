@@ -17,6 +17,7 @@ import {
   services,
   teams,
 } from '@/lib/db/schema';
+import { encrypt } from '@/lib/crypto';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
@@ -35,7 +36,6 @@ import {
   getK8sClient,
   initK8sClient,
 } from '@/lib/k8s';
-import { AppDeployer, type AppSpec } from '@/lib/k8s/index';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
 import { TemplateService } from '@/lib/templates';
@@ -857,40 +857,21 @@ async function deployServices(
     return;
   }
 
+  // Only create K8s Services (ClusterIP) for internal networking.
+  // The Deployment (Pod) is intentionally NOT created here — it will be created
+  // by the deployment worker on the first CI/CD push with the correct image,
+  // envFrom (ConfigMap/Secret refs), and imagePullSecrets.
   for (let i = 0; i < serviceList.length; i++) {
     const service = serviceList[i];
-    // Build image name (in production, this would be built by CI/CD)
-    const _imageName = `juanie/${project.slug}-${service.name}:latest`;
+    const resourceName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+    const port = service.port || 3000;
 
-    const spec: AppSpec = {
-      projectId: project.id,
-      name: `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
-      namespace,
-      image: {
-        repository: `juanie/${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
-        tag: 'latest',
-        pullPolicy: 'Always',
-      },
-      replicas: service.replicas || 1,
-      port: service.port || 3000,
-      hostname: undefined, // Will be set in configure_dns step
-      resources: {
-        cpu: {
-          request: service.cpuRequest || '100m',
-          limit: service.cpuLimit || '500m',
-        },
-        memory: {
-          request: service.memoryRequest || '128Mi',
-          limit: service.memoryLimit || '512Mi',
-        },
-      },
-    };
+    console.log(`[deployServices] Creating K8s Service for ${service.name}...`);
+    await createService(namespace, resourceName, { port, targetPort: port });
+    console.log(`✅ Created K8s Service ${resourceName}`);
 
-    console.log(`[deployServices] Deploying ${service.name}...`);
-    await AppDeployer.deploy(spec);
-    console.log(`✅ Deployed service ${service.name}`);
-
-    await db.update(services).set({ status: 'running' }).where(eq(services.id, service.id));
+    // Mark as pending — the Deployment (and pod) will be created by the first CI/CD deploy
+    await db.update(services).set({ status: 'pending' }).where(eq(services.id, service.id));
     await onProgress?.(Math.round(((i + 1) / serviceList.length) * 100));
   }
 }
@@ -1320,17 +1301,34 @@ function parseConnUrl(connStr: string): {
 }
 
 /**
+ * Keys whose values must be stored encrypted and synced to K8s Secret (not ConfigMap).
+ */
+const SENSITIVE_ENV_KEYS = new Set([
+  'DATABASE_URL',
+  'POSTGRES_PASSWORD',
+  'REDIS_URL',
+  'REDIS_PASSWORD',
+  'MYSQL_URL',
+  'MYSQL_PASSWORD',
+  'MONGODB_URL',
+  'MONGODB_PASSWORD',
+]);
+
+/**
  * Upsert an environment variable.
  *
  * @param environmentId  null → project-scoped (applies to all environments via env-sync merge)
  *                       string → scoped to a specific environment only
+ * @param isSecret       override sensitivity; defaults to SENSITIVE_ENV_KEYS lookup
  */
 async function upsertEnvVar(
   projectId: string,
   environmentId: string | null,
   key: string,
-  value: string
+  value: string,
+  isSecret?: boolean
 ): Promise<void> {
+  const sensitive = isSecret ?? SENSITIVE_ENV_KEYS.has(key);
   const envIdClause = environmentId
     ? eq(environmentVariables.environmentId, environmentId)
     : isNull(environmentVariables.environmentId);
@@ -1343,19 +1341,43 @@ async function upsertEnvVar(
       isNull(environmentVariables.serviceId)
     ),
   });
-  if (existing) {
-    await db
-      .update(environmentVariables)
-      .set({ value, updatedAt: new Date() })
-      .where(eq(environmentVariables.id, existing.id));
+
+  if (sensitive) {
+    const { encryptedValue, iv, authTag } = await encrypt(value);
+    if (existing) {
+      await db
+        .update(environmentVariables)
+        .set({ value: null, isSecret: true, encryptedValue, iv, authTag, updatedAt: new Date() })
+        .where(eq(environmentVariables.id, existing.id));
+    } else {
+      await db.insert(environmentVariables).values({
+        projectId,
+        environmentId,
+        key,
+        value: null,
+        isSecret: true,
+        encryptedValue,
+        iv,
+        authTag,
+        injectionType: 'runtime',
+      });
+    }
   } else {
-    await db.insert(environmentVariables).values({
-      projectId,
-      environmentId,
-      key,
-      value,
-      injectionType: 'runtime',
-    });
+    if (existing) {
+      await db
+        .update(environmentVariables)
+        .set({ value, updatedAt: new Date() })
+        .where(eq(environmentVariables.id, existing.id));
+    } else {
+      await db.insert(environmentVariables).values({
+        projectId,
+        environmentId,
+        key,
+        value,
+        isSecret: false,
+        injectionType: 'runtime',
+      });
+    }
   }
 }
 
