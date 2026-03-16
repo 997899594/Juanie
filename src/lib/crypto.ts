@@ -17,8 +17,14 @@ let cachedMasterKey: Buffer | null = null;
 
 /**
  * 获取 Master Key（32 字节 Buffer）
- * 1. 尝试从 K8s Secret 读取
- * 2. fallback 到 ENCRYPTION_MASTER_KEY 环境变量（hex 字符串）
+ *
+ * 优先级：
+ * 1. 进程内缓存
+ * 2. K8s Secret juanie/juanie-master-key
+ * 3. 环境变量 ENCRYPTION_MASTER_KEY（开发 fallback）
+ * 4. 自动生成并写入 K8s Secret（首次运行 bootstrap）
+ *
+ * 完全零配置：K8s 可用时会自动创建并持久化密钥，无需手动操作。
  */
 export async function getMasterKey(): Promise<Buffer> {
   if (cachedMasterKey) {
@@ -30,32 +36,54 @@ export async function getMasterKey(): Promise<Buffer> {
     const { getK8sClient, getIsConnected } = await import('@/lib/k8s');
     if (getIsConnected()) {
       const { core } = getK8sClient();
-      const secret = await core.readNamespacedSecret({
-        namespace: K8S_SECRET_NAMESPACE,
-        name: K8S_SECRET_NAME,
-      });
-      const keyBase64 = secret.data?.[K8S_SECRET_KEY];
-      if (keyBase64) {
-        const keyHex = Buffer.from(keyBase64, 'base64').toString('utf-8').trim();
-        cachedMasterKey = Buffer.from(keyHex, 'hex');
-        if (cachedMasterKey.length !== 32) {
-          throw new Error(`Master key must be 32 bytes, got ${cachedMasterKey.length}`);
+
+      try {
+        const secret = await core.readNamespacedSecret({
+          namespace: K8S_SECRET_NAMESPACE,
+          name: K8S_SECRET_NAME,
+        });
+        const keyBase64 = secret.data?.[K8S_SECRET_KEY];
+        if (keyBase64) {
+          const keyHex = Buffer.from(keyBase64, 'base64').toString('utf-8').trim();
+          cachedMasterKey = Buffer.from(keyHex, 'hex');
+          if (cachedMasterKey.length !== 32) {
+            throw new Error(`Master key must be 32 bytes, got ${cachedMasterKey.length}`);
+          }
+          console.log('[crypto] Master key loaded from K8s Secret');
+          return cachedMasterKey;
         }
-        return cachedMasterKey;
+      } catch (readErr: unknown) {
+        // 404 = Secret 还不存在，自动 bootstrap；其他错误继续抛出
+        const status = (readErr as { statusCode?: number; code?: number })?.statusCode
+          ?? (readErr as { statusCode?: number; code?: number })?.code;
+        if (status !== 404) throw readErr;
       }
+
+      // Secret 不存在 → 自动生成并持久化
+      const newKeyHex = generateMasterKey();
+      const newKeyBase64 = Buffer.from(newKeyHex).toString('base64');
+      await core.createNamespacedSecret({
+        namespace: K8S_SECRET_NAMESPACE,
+        body: {
+          apiVersion: 'v1',
+          kind: 'Secret',
+          metadata: { name: K8S_SECRET_NAME, namespace: K8S_SECRET_NAMESPACE },
+          data: { [K8S_SECRET_KEY]: newKeyBase64 },
+        },
+      });
+      cachedMasterKey = Buffer.from(newKeyHex, 'hex');
+      console.log('[crypto] Master key auto-generated and saved to K8s Secret juanie/juanie-master-key');
+      return cachedMasterKey;
     }
   } catch (e) {
-    // K8s 不可用时静默 fallback
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(`Failed to load master key from K8s Secret: ${(e as Error).message}`);
-    }
+    console.warn('[crypto] K8s unavailable, falling back to env var:', (e as Error).message);
   }
 
-  // 2. Fallback：从环境变量读取（开发环境）
+  // 2. Fallback：从环境变量读取（本地开发）
   const envKey = process.env.ENCRYPTION_MASTER_KEY;
   if (!envKey) {
     throw new Error(
-      'No encryption master key available. Set ENCRYPTION_MASTER_KEY env var or configure K8s Secret.'
+      'No encryption master key available. Connect to Kubernetes (auto-bootstrap) or set ENCRYPTION_MASTER_KEY env var for local development.'
     );
   }
 

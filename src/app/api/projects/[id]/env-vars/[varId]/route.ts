@@ -89,10 +89,25 @@ export async function PUT(request: Request, { params }: RouteParams) {
   // 判断最终的 isSecret 状态
   const finalIsSecret = isSecret !== undefined ? isSecret : envVar.isSecret;
 
+  const encryptOrFail = async (plaintext: string) => {
+    try {
+      return await encrypt(plaintext);
+    } catch (e) {
+      console.error('Failed to encrypt secret value:', e);
+      return null;
+    }
+  };
+
   if (value !== undefined) {
     if (finalIsSecret) {
       // 重新加密新值
-      const encrypted = await encrypt(value);
+      const encrypted = await encryptOrFail(value);
+      if (!encrypted) {
+        return NextResponse.json(
+          { error: 'Encryption unavailable', details: 'Check K8s Secret juanie/juanie-master-key or ENCRYPTION_MASTER_KEY env var.' },
+          { status: 500 }
+        );
+      }
       updateData.value = null;
       updateData.encryptedValue = encrypted.encryptedValue;
       updateData.iv = encrypted.iv;
@@ -109,7 +124,13 @@ export async function PUT(request: Request, { params }: RouteParams) {
     // isSecret 状态变化但未提供新 value，需要处理数据迁移
     if (isSecret && envVar.value !== null) {
       // 明文 → 加密
-      const encrypted = await encrypt(envVar.value);
+      const encrypted = await encryptOrFail(envVar.value);
+      if (!encrypted) {
+        return NextResponse.json(
+          { error: 'Encryption unavailable', details: 'Check K8s Secret juanie/juanie-master-key or ENCRYPTION_MASTER_KEY env var.' },
+          { status: 500 }
+        );
+      }
       updateData.value = null;
       updateData.encryptedValue = encrypted.encryptedValue;
       updateData.iv = encrypted.iv;

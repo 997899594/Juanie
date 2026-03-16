@@ -171,7 +171,22 @@ export async function POST(request: Request, { params }: RouteParams) {
       };
 
   if (isSecret) {
-    const { encryptedValue, iv, authTag } = await encrypt(value);
+    let encryptedValue: string;
+    let iv: string;
+    let authTag: string;
+    try {
+      ({ encryptedValue, iv, authTag } = await encrypt(value));
+    } catch (e) {
+      console.error('Failed to encrypt secret value:', e);
+      return NextResponse.json(
+        {
+          error: 'Encryption unavailable',
+          details:
+            e instanceof Error ? e.message : 'Master key not configured. Check K8s Secret juanie/juanie-master-key or ENCRYPTION_MASTER_KEY env var.',
+        },
+        { status: 500 }
+      );
+    }
     insertData = {
       projectId,
       key,
