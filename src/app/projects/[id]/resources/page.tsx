@@ -1,10 +1,9 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
 import {
   Select,
   SelectContent,
@@ -12,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { StatusIndicator } from '@/components/ui/status-indicator';
 
 interface Pod {
   metadata: {
@@ -25,32 +25,34 @@ interface Pod {
       name: string;
       ready: boolean;
       restartCount: number;
-      state?: Record<string, { startedAt: string }>;
     }>;
   };
 }
 
 interface Service {
-  metadata: {
-    name: string;
-    namespace: string;
-  };
+  metadata: { name: string; namespace: string };
   spec: {
     type: string;
     ports?: Array<{ port: number; targetPort: number | string; protocol: string }>;
   };
 }
 
-interface Deployment {
-  metadata: {
-    name: string;
-    namespace: string;
-  };
-  status: {
-    replicas: number;
-    readyReplicas: number;
-    updatedReplicas: number;
-  };
+interface K8sDeployment {
+  metadata: { name: string; namespace: string };
+  status: { replicas: number; readyReplicas: number; updatedReplicas: number };
+}
+
+function podPhaseStatus(phase: string): 'success' | 'warning' | 'error' | 'neutral' {
+  switch (phase) {
+    case 'Running':
+      return 'success';
+    case 'Pending':
+      return 'warning';
+    case 'Failed':
+      return 'error';
+    default:
+      return 'neutral';
+  }
 }
 
 export default function ProjectResourcesPage({ params }: { params: Promise<{ id: string }> }) {
@@ -60,7 +62,7 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
   const [environments, setEnvironments] = useState<
     Array<{ id: string; name: string; namespace: string }>
   >([]);
-  const [resources, setResources] = useState<Pod[] | Service[] | Deployment[]>([]);
+  const [resources, setResources] = useState<Pod[] | Service[] | K8sDeployment[]>([]);
   const [resourceError, setResourceError] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedPod, setSelectedPod] = useState('');
@@ -68,30 +70,25 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
   const [loadingLogs, setLoadingLogs] = useState(false);
 
   useEffect(() => {
-    params.then((p) => {
-      setProjectId(p.id);
-    });
+    params.then((p) => setProjectId(p.id));
   }, [params]);
 
   useEffect(() => {
     if (!projectId) return;
-
     fetch(`/api/projects/${projectId}/environments`)
       .then((res) => res.json())
       .then((data) => {
         const envList = Array.isArray(data) ? data : (data.environments ?? []);
         setEnvironments(envList);
-        if (envList[0]) {
-          setEnvironmentId(envList[0].id);
-        }
+        if (envList[0]) setEnvironmentId(envList[0].id);
       });
   }, [projectId]);
 
   useEffect(() => {
     if (!projectId || !environmentId) return;
-
     setLoading(true);
     setResourceError('');
+    setSelectedPod('');
     fetch(`/api/projects/${projectId}/resources?type=${resourceType}&env=${environmentId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -107,10 +104,9 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
 
   useEffect(() => {
     if (!projectId || !environmentId || !selectedPod) return;
-
     setLoadingLogs(true);
     fetch(
-      `/api/projects/${projectId}/resources/logs?pod=${selectedPod}&env=${environmentId}&tail=100`
+      `/api/projects/${projectId}/resources/logs?pod=${selectedPod}&env=${environmentId}&tail=200`
     )
       .then(async (res) => {
         if (!res.ok) {
@@ -123,190 +119,154 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
       .finally(() => setLoadingLogs(false));
   }, [projectId, environmentId, selectedPod]);
 
-  const getPodPhaseColor = (phase: string) => {
-    switch (phase) {
-      case 'Running':
-        return 'bg-green-100 text-green-800';
-      case 'Pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="text-2xl font-bold">
-              Juanie
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <Link href="/projects" className="text-muted-foreground hover:text-foreground">
-              Projects
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <Link
-              href={`/projects/${projectId}`}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Project
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-lg">Resources</span>
-          </div>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <PageHeader title="Resources" description="Kubernetes workloads running in this project" />
 
-      <main className="container mx-auto px-4 py-8 space-y-6">
-        <div className="flex gap-4">
-          <Select value={environmentId} onValueChange={setEnvironmentId}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select environment" />
-            </SelectTrigger>
-            <SelectContent>
-              {environments.map((env) => (
-                <SelectItem key={env.id} value={env.id}>
-                  {env.name}
-                </SelectItem>
+      <div className="flex gap-3">
+        <Select value={environmentId} onValueChange={setEnvironmentId}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Environment" />
+          </SelectTrigger>
+          <SelectContent>
+            {environments.map((env) => (
+              <SelectItem key={env.id} value={env.id}>
+                {env.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={resourceType}
+          onValueChange={(v) => setResourceType(v as 'pods' | 'services' | 'deployments')}
+        >
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Resource type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pods">Pods</SelectItem>
+            <SelectItem value="services">Services</SelectItem>
+            <SelectItem value="deployments">Deployments</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Card>
+        <CardHeader className="py-3 px-4 border-b">
+          <CardTitle className="text-sm font-medium capitalize">{resourceType}</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {resourceError ? (
+            <p className="text-sm text-destructive p-4">{resourceError}</p>
+          ) : loading ? (
+            <div className="space-y-2 p-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-10 bg-muted rounded animate-pulse" />
               ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={resourceType}
-            onValueChange={(v) => setResourceType(v as 'pods' | 'services' | 'deployments')}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Resource type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pods">Pods</SelectItem>
-              <SelectItem value="services">Services</SelectItem>
-              <SelectItem value="deployments">Deployments</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {resourceType === 'pods' && resources.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>View Logs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select value={selectedPod} onValueChange={setSelectedPod}>
-                <SelectTrigger className="w-[300px]">
-                  <SelectValue placeholder="Select a pod" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(resources as Pod[]).map((pod) => (
-                    <SelectItem key={pod.metadata.name} value={pod.metadata.name}>
-                      {pod.metadata.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-        )}
-
-        {selectedPod && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Logs: {selectedPod}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="bg-slate-950 text-slate-50 p-4 rounded-lg overflow-x-auto text-xs font-mono max-h-[400px] overflow-y-auto">
-                {loadingLogs ? 'Loading...' : logs || 'No logs available'}
-              </pre>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="capitalize">{resourceType}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {resourceError ? (
-              <p className="text-sm text-destructive">{resourceError}</p>
-            ) : loading ? (
-              <p>Loading...</p>
-            ) : resourceType === 'pods' ? (
-              <div className="space-y-2">
-                {(resources as Pod[]).map((pod) => (
-                  <div
-                    key={pod.metadata.name}
-                    className="flex items-center justify-between p-3 border rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm">{pod.metadata.name}</span>
-                      <Badge className={getPodPhaseColor(pod.status.phase)}>
-                        {pod.status.phase}
-                      </Badge>
-                      {pod.status.containerStatuses?.map((cs) => (
-                        <span
-                          key={cs.name}
-                          className={`w-2 h-2 rounded-full ${cs.ready ? 'bg-green-500' : 'bg-red-500'}`}
-                          title={`Container: ${cs.name}, Ready: ${cs.ready}`}
-                        />
-                      ))}
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedPod(pod.metadata.name)}
-                    >
-                      View Logs
-                    </Button>
+            </div>
+          ) : resources.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-4">No {resourceType} found</p>
+          ) : resourceType === 'pods' ? (
+            <div className="divide-y">
+              {(resources as Pod[]).map((pod) => (
+                <div
+                  key={pod.metadata.name}
+                  className="flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <StatusIndicator status={podPhaseStatus(pod.status.phase)} />
+                    <span className="font-mono text-sm">{pod.metadata.name}</span>
+                    <span className="text-xs text-muted-foreground">{pod.status.phase}</span>
+                    {pod.status.containerStatuses?.some((cs) => cs.restartCount > 0) && (
+                      <span className="text-xs text-warning">
+                        {pod.status.containerStatuses.reduce((sum, cs) => sum + cs.restartCount, 0)}{' '}
+                        restart
+                        {pod.status.containerStatuses.reduce(
+                          (sum, cs) => sum + cs.restartCount,
+                          0
+                        ) !== 1
+                          ? 's'
+                          : ''}
+                      </span>
+                    )}
                   </div>
-                ))}
-                {resources.length === 0 && <p className="text-muted-foreground">No pods found</p>}
-              </div>
-            ) : resourceType === 'services' ? (
-              <div className="space-y-2">
-                {(resources as Service[]).map((svc) => (
-                  <div
-                    key={svc.metadata.name}
-                    className="flex items-center justify-between p-3 border rounded-lg"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setSelectedPod(pod.metadata.name)}
                   >
-                    <div>
-                      <span className="font-mono text-sm">{svc.metadata.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{svc.spec.type}</span>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {svc.spec.ports?.map((p) => `${p.port}:${p.targetPort}`).join(', ')}
-                    </div>
-                  </div>
-                ))}
-                {resources.length === 0 && (
-                  <p className="text-muted-foreground">No services found</p>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {(resources as Deployment[]).map((deploy) => (
-                  <div
-                    key={deploy.metadata.name}
-                    className="flex items-center justify-between p-3 border rounded-lg"
-                  >
-                    <span className="font-mono text-sm">{deploy.metadata.name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {deploy.status.readyReplicas}/{deploy.status.replicas} ready
+                    Logs
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : resourceType === 'services' ? (
+            <div className="divide-y">
+              {(resources as Service[]).map((svc) => (
+                <div
+                  key={svc.metadata.name}
+                  className="flex items-center justify-between px-4 py-3"
+                >
+                  <span className="font-mono text-sm">{svc.metadata.name}</span>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{svc.spec.type}</span>
+                    <span>
+                      {svc.spec.ports?.map((p) => `${p.port}→${p.targetPort}`).join(', ')}
                     </span>
                   </div>
-                ))}
-                {resources.length === 0 && (
-                  <p className="text-muted-foreground">No deployments found</p>
-                )}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="divide-y">
+              {(resources as K8sDeployment[]).map((deploy) => (
+                <div
+                  key={deploy.metadata.name}
+                  className="flex items-center justify-between px-4 py-3"
+                >
+                  <span className="font-mono text-sm">{deploy.metadata.name}</span>
+                  <div className="flex items-center gap-2">
+                    <StatusIndicator
+                      status={
+                        deploy.status.readyReplicas > 0 &&
+                        deploy.status.readyReplicas === deploy.status.replicas
+                          ? 'success'
+                          : 'warning'
+                      }
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {deploy.status.readyReplicas ?? 0}/{deploy.status.replicas ?? 0} ready
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {selectedPod && (
+        <Card>
+          <CardHeader className="py-3 px-4 border-b flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Logs: {selectedPod}</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setSelectedPod('')}
+            >
+              Close
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <pre className="bg-zinc-950 text-zinc-100 p-4 rounded-b-lg overflow-x-auto text-xs font-mono max-h-[480px] overflow-y-auto whitespace-pre-wrap">
+              {loadingLogs ? 'Loading...' : logs || 'No logs available'}
+            </pre>
           </CardContent>
         </Card>
-      </main>
+      )}
     </div>
   );
 }

@@ -1,11 +1,31 @@
 import { desc, eq } from 'drizzle-orm';
-import { Box, ExternalLink, FolderKanban, Globe, Rocket, Settings, Webhook } from 'lucide-react';
+import {
+  Box,
+  Database,
+  ExternalLink,
+  FolderKanban,
+  GitCommit,
+  Globe,
+  Link2,
+  Rocket,
+  Settings,
+  Webhook,
+} from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { deployments, projects, teams } from '@/lib/db/schema';
+import {
+  databases,
+  deployments,
+  domains,
+  environments,
+  projects,
+  services,
+  teams,
+} from '@/lib/db/schema';
 
 const navItems = [
   { title: 'Deployments', href: 'deployments', icon: Rocket },
@@ -14,6 +34,22 @@ const navItems = [
   { title: 'Webhooks', href: 'webhooks', icon: Webhook },
   { title: 'Settings', href: 'settings', icon: Settings },
 ];
+
+const statusColors: Record<string, string> = {
+  active: 'bg-success',
+  running: 'bg-success',
+  initializing: 'bg-warning',
+  pending: 'bg-warning',
+  failed: 'bg-destructive',
+  archived: 'bg-muted-foreground',
+};
+
+const dbTypeColors: Record<string, string> = {
+  postgresql: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  mysql: 'bg-orange-500/15 text-orange-700 dark:text-orange-400',
+  redis: 'bg-red-500/15 text-red-700 dark:text-red-400',
+  mongodb: 'bg-green-500/15 text-green-700 dark:text-green-400',
+};
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -25,27 +61,37 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, id),
-    with: {
-      repository: true,
-    },
+    with: { repository: true },
   });
 
-  if (!project) {
-    redirect('/projects');
-  }
+  if (!project) redirect('/projects');
 
-  const team = await db.query.teams.findFirst({
-    where: eq(teams.id, project.teamId),
-  });
-
-  const recentDeployments = await db.query.deployments.findMany({
-    where: eq(deployments.projectId, id),
-    orderBy: [desc(deployments.createdAt)],
-    limit: 5,
-  });
+  const [team, projectServices, projectDatabases, projectDomains, recentDeployments] =
+    await Promise.all([
+      db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }),
+      db.query.services.findMany({ where: eq(services.projectId, id) }),
+      db.query.databases.findMany({ where: eq(databases.projectId, id) }),
+      db.query.domains.findMany({ where: eq(domains.projectId, id) }),
+      db
+        .select({
+          id: deployments.id,
+          status: deployments.status,
+          version: deployments.version,
+          commitSha: deployments.commitSha,
+          commitMessage: deployments.commitMessage,
+          createdAt: deployments.createdAt,
+          environmentName: environments.name,
+        })
+        .from(deployments)
+        .innerJoin(environments, eq(environments.id, deployments.environmentId))
+        .where(eq(deployments.projectId, id))
+        .orderBy(desc(deployments.createdAt))
+        .limit(5),
+    ]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
           <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
@@ -58,15 +104,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <span>·</span>
               <div className="flex items-center gap-1.5">
                 <div
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    project.status === 'active'
-                      ? 'bg-success'
-                      : project.status === 'initializing'
-                        ? 'bg-warning'
-                        : project.status === 'failed'
-                          ? 'bg-destructive'
-                          : 'bg-muted-foreground'
-                  }`}
+                  className={`h-1.5 w-1.5 rounded-full ${statusColors[project.status] ?? 'bg-muted-foreground'}`}
                 />
                 <span className="capitalize">{project.status}</span>
               </div>
@@ -81,6 +119,26 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </Link>
       </div>
 
+      {/* Domains / URLs */}
+      {projectDomains.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {projectDomains.map((domain) => (
+            <a
+              key={domain.id}
+              href={`https://${domain.hostname}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm hover:border-foreground/30 transition-colors"
+            >
+              <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+              {domain.hostname}
+              <ExternalLink className="h-3 w-3 text-muted-foreground" />
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Nav cards */}
       <div className="grid grid-cols-5 gap-4">
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -102,50 +160,112 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <div className="grid grid-cols-2 gap-6">
-        <div className="rounded-lg border bg-card">
-          <div className="p-4 border-b">
-            <h2 className="font-medium text-sm">Overview</h2>
-          </div>
-          <div className="p-4 space-y-4">
-            {project.repository && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Repository</p>
-                <a
-                  href={project.repository.webUrl || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm hover:underline"
-                >
-                  {project.repository.fullName}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            )}
-            {project.productionBranch && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Production Branch</p>
-                <code className="text-sm bg-muted px-2 py-0.5 rounded">
-                  {project.productionBranch}
-                </code>
-              </div>
-            )}
-            {project.description && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Description</p>
-                <p className="text-sm">{project.description}</p>
-              </div>
-            )}
-            <div className="pt-2 border-t">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Created</span>
-                <span>
-                  {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : '—'}
-                </span>
+        {/* Left column */}
+        <div className="space-y-4">
+          {/* Overview */}
+          <div className="rounded-lg border bg-card">
+            <div className="p-4 border-b">
+              <h2 className="font-medium text-sm">Overview</h2>
+            </div>
+            <div className="p-4 space-y-4">
+              {project.repository && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Repository</p>
+                  <a
+                    href={project.repository.webUrl || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm hover:underline"
+                  >
+                    {project.repository.fullName}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
+              {project.productionBranch && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Production Branch</p>
+                  <code className="text-sm bg-muted px-2 py-0.5 rounded">
+                    {project.productionBranch}
+                  </code>
+                </div>
+              )}
+              {project.description && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Description</p>
+                  <p className="text-sm">{project.description}</p>
+                </div>
+              )}
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Created</span>
+                  <span>
+                    {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : '—'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Services */}
+          {projectServices.length > 0 && (
+            <div className="rounded-lg border bg-card">
+              <div className="p-4 border-b">
+                <h2 className="font-medium text-sm">Services</h2>
+              </div>
+              <div className="divide-y">
+                {projectServices.map((svc) => (
+                  <div key={svc.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${statusColors[svc.status ?? ''] ?? 'bg-muted-foreground'}`}
+                      />
+                      <span className="text-sm font-medium">{svc.name}</span>
+                      <Badge variant="secondary" className="text-xs capitalize">
+                        {svc.type}
+                      </Badge>
+                    </div>
+                    {svc.port && <span className="text-xs text-muted-foreground">:{svc.port}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Databases */}
+          {projectDatabases.length > 0 && (
+            <div className="rounded-lg border bg-card">
+              <div className="p-4 border-b">
+                <h2 className="font-medium text-sm">Databases</h2>
+              </div>
+              <div className="divide-y">
+                {projectDatabases.map((dbItem) => (
+                  <div key={dbItem.id} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm font-medium">{dbItem.name}</span>
+                      <span
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium ${dbTypeColors[dbItem.type] ?? ''}`}
+                      >
+                        {dbItem.type}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${statusColors[dbItem.status ?? ''] ?? 'bg-muted-foreground'}`}
+                      />
+                      <span className="text-xs text-muted-foreground capitalize">
+                        {dbItem.status ?? 'pending'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* Right column: Recent Deployments */}
         <div className="rounded-lg border bg-card">
           <div className="p-4 border-b">
             <h2 className="font-medium text-sm">Recent Deployments</h2>
@@ -159,22 +279,40 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             ) : (
               <div className="divide-y">
                 {recentDeployments.map((deploy) => (
-                  <div key={deploy.id} className="flex items-center justify-between p-3">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          deploy.status === 'running'
-                            ? 'bg-success'
-                            : deploy.status === 'failed'
-                              ? 'bg-destructive'
-                              : 'bg-muted-foreground'
-                        }`}
-                      />
-                      <span className="text-sm">v{deploy.version ?? '1.0.0'}</span>
+                  <div key={deploy.id} className="p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`h-1.5 w-1.5 rounded-full ${statusColors[deploy.status] ?? 'bg-muted-foreground'}`}
+                        />
+                        <span className="text-sm font-medium">
+                          {deploy.version ? `v${deploy.version}` : '—'}
+                        </span>
+                        <Badge variant="secondary" className="text-xs capitalize">
+                          {deploy.environmentName}
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {deploy.createdAt ? new Date(deploy.createdAt).toLocaleDateString() : '—'}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {deploy.createdAt ? new Date(deploy.createdAt).toLocaleDateString() : '—'}
-                    </span>
+                    {(deploy.commitMessage || deploy.commitSha) && (
+                      <div className="flex items-center gap-1.5 pl-3.5">
+                        {deploy.commitSha && (
+                          <GitCommit className="h-3 w-3 text-muted-foreground shrink-0" />
+                        )}
+                        {deploy.commitSha && (
+                          <code className="text-xs text-muted-foreground">
+                            {deploy.commitSha.slice(0, 7)}
+                          </code>
+                        )}
+                        {deploy.commitMessage && (
+                          <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                            {deploy.commitMessage}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
