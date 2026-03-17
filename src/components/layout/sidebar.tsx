@@ -8,6 +8,7 @@ import {
   Globe,
   Home,
   Rocket,
+  ScrollText,
   Settings,
   Users,
   Webhook,
@@ -60,6 +61,11 @@ const projectNav: NavItem[] = [
     title: 'Deployments',
     href: '/deployments',
     icon: <Rocket className="h-4 w-4" />,
+  },
+  {
+    title: 'Logs',
+    href: '/logs',
+    icon: <ScrollText className="h-4 w-4" />,
   },
   {
     title: 'Environments',
