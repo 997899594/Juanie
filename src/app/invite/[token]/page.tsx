@@ -90,8 +90,6 @@ export default async function InvitePage({ params }: Props) {
     });
   }
 
-  // Remove the used invitation
-  await db.delete(teamInvitations).where(eq(teamInvitations.id, invitation.id));
-
+  // Keep invitation alive so others can use the same link
   redirect(`/teams/${invitation.teamId}`);
 }

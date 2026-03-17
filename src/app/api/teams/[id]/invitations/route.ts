@@ -69,7 +69,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .insert(teamInvitations)
     .values({
       teamId: id,
-      email: '', // placeholder; link-based invites don't require email
       role,
       token,
       expires,

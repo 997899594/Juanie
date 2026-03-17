@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
-import { redirect } from 'next/navigation';
+import { and, eq } from 'drizzle-orm';
+import { notFound, redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { projects } from '@/lib/db/schema';
+import { projects, teamMembers } from '@/lib/db/schema';
 import { ProjectProvider } from '@/lib/project-context';
 
 export default async function ProjectLayout({
@@ -17,12 +17,13 @@ export default async function ProjectLayout({
 
   const { id } = await params;
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, id),
-    columns: { id: true, name: true },
-  });
+  const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
+  if (!project) notFound();
 
-  if (!project) redirect('/projects');
+  const member = await db.query.teamMembers.findFirst({
+    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, session.user.id)),
+  });
+  if (!member) notFound();
 
   return (
     <ProjectProvider projectId={project.id} projectName={project.name}>

@@ -283,7 +283,7 @@ export const teamInvitations = pgTable('teamInvitation', {
   teamId: uuid('teamId')
     .notNull()
     .references(() => teams.id, { onDelete: 'cascade' }),
-  email: varchar('email', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }),
   role: teamRoleEnum('role').notNull().default('member'),
   token: varchar('token', { length: 255 }).notNull().unique(),
   expires: timestamp('expires').notNull(),
