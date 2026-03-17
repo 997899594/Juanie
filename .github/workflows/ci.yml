@@ -29,6 +29,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       packages: write
+      actions: write
 
     steps:
       - uses: actions/checkout@v4
@@ -40,15 +41,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: 构建并推送镜像
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          no-cache: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     needs: build
@@ -76,8 +81,8 @@ jobs:
             kubectl set env deployment/juanie-worker -n juanie NODE_TLS_REJECT_UNAUTHORIZED=0
 
             # 2. 等待滚动更新（新 pod 就绪）
-            kubectl rollout status deployment/juanie-web -n juanie --timeout=300s
-            kubectl rollout status deployment/juanie-worker -n juanie --timeout=300s
+            kubectl rollout status deployment/juanie-web -n juanie --timeout=600s
+            kubectl rollout status deployment/juanie-worker -n juanie --timeout=600s
 
             # 3. 在新 pod 上同步数据库 Schema
             echo "🔄 同步数据库 Schema..."
