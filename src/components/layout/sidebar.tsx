@@ -16,10 +16,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -97,11 +96,22 @@ const projectNav: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const project = useProjectContext();
-  const projectId = project?.projectId;
-  const projectName = project?.projectName;
+  const [projectName, setProjectName] = useState('');
 
-  const isInProject = pathname.includes('/projects/') && projectId;
+  const projectIdMatch = pathname.match(/\/projects\/([^/]+)/);
+  const projectId = projectIdMatch?.[1];
+  const isInProject = !!projectId;
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectName('');
+      return;
+    }
+    fetch(`/api/projects/${projectId}`)
+      .then((r) => r.json())
+      .then((data) => setProjectName(data?.name ?? ''))
+      .catch(() => {});
+  }, [projectId]);
 
   return (
     <TooltipProvider delayDuration={0}>
