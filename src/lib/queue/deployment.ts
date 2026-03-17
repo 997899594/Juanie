@@ -1,7 +1,14 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { deployments, environments, projects, repositories, services } from '@/lib/db/schema';
+import {
+  deploymentLogs,
+  deployments,
+  environments,
+  projects,
+  repositories,
+  services,
+} from '@/lib/db/schema';
 import {
   getK8sConfigMapName,
   getK8sSecretName,
@@ -19,6 +26,20 @@ import {
   updateDeployment,
 } from '@/lib/k8s';
 import type { DeploymentJobData } from './index';
+
+async function log(
+  deploymentId: string,
+  message: string,
+  level: 'info' | 'warn' | 'error' = 'info'
+) {
+  console.log(`[${level.toUpperCase()}] ${message}`);
+  await db
+    .insert(deploymentLogs)
+    .values({ deploymentId, message, level })
+    .catch(() => {
+      // Swallow DB errors so log failures never break the deployment
+    });
+}
 
 export async function processDeployment(job: Job<DeploymentJobData>) {
   const { deploymentId, projectId, environmentId } = job.data;
@@ -51,11 +72,13 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
   }
 
   try {
+    await log(deploymentId, 'Starting deployment process');
     await db
       .update(deployments)
       .set({ status: 'building' })
       .where(eq(deployments.id, deploymentId));
 
+    await log(deploymentId, 'Build phase started — resolving image');
     await job.updateProgress(20);
 
     await db
@@ -63,6 +86,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       .set({ status: 'deploying' })
       .where(eq(deployments.id, deploymentId));
 
+    await log(deploymentId, 'Deploying to Kubernetes');
     await job.updateProgress(50);
 
     const serviceList = await db.query.services.findMany({
@@ -102,7 +126,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
     }
 
     for (const service of serviceList) {
-      console.log(`Deploying service ${service.name} for deployment ${deploymentId}`);
+      await log(deploymentId, `Deploying service ${service.name}`);
 
       if (!getIsConnected() || !environment.namespace) continue;
 
@@ -121,10 +145,13 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
       const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
       try {
-        await updateDeployment(environment.namespace, deploymentName, { image: imageName, envFrom });
-        console.log(`✅ Updated deployment ${deploymentName} with image ${imageName}`);
+        await updateDeployment(environment.namespace, deploymentName, {
+          image: imageName,
+          envFrom,
+        });
+        await log(deploymentId, `Updated ${deploymentName} → ${imageName}`);
       } catch (_updateError) {
-        console.log(`Deployment ${deploymentName} not found, creating...`);
+        await log(deploymentId, `${deploymentName} not found, creating new deployment`);
         try {
           await createDeployment(environment.namespace, deploymentName, {
             image: imageName,
@@ -137,9 +164,9 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
             memoryRequest: service.memoryRequest ?? undefined,
             memoryLimit: service.memoryLimit ?? undefined,
           });
-          console.log(`✅ Created deployment ${deploymentName} with image ${imageName}`);
+          await log(deploymentId, `Created ${deploymentName} → ${imageName}`);
         } catch (createError) {
-          console.error(`Failed to deploy service ${deploymentName}:`, createError);
+          await log(deploymentId, `Failed to deploy ${deploymentName}: ${createError}`, 'error');
           throw createError;
         }
       }
@@ -155,10 +182,16 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       })
       .where(eq(deployments.id, deploymentId));
 
+    await log(deploymentId, 'Deployment completed successfully');
     await job.updateProgress(100);
 
     return { success: true };
   } catch (error) {
+    await log(
+      deploymentId,
+      `Deployment failed: ${error instanceof Error ? error.message : String(error)}`,
+      'error'
+    );
     await db.update(deployments).set({ status: 'failed' }).where(eq(deployments.id, deploymentId));
 
     throw error;

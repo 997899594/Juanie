@@ -578,6 +578,26 @@ export const deployments = pgTable(
 );
 
 // ============================================
+// Deployment Log Tables
+// ============================================
+
+export const deploymentLogs = pgTable(
+  'deploymentLog',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    deploymentId: uuid('deploymentId')
+      .notNull()
+      .references(() => deployments.id, { onDelete: 'cascade' }),
+    level: varchar('level', { length: 10 }).notNull().default('info'),
+    message: text('message').notNull(),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    deploymentIdIdx: index('deploymentLog_deploymentId_idx').on(table.deploymentId),
+  })
+);
+
+// ============================================
 // Webhook Tables
 // ============================================
 
@@ -810,7 +830,7 @@ export const environmentVariablesRelations = relations(environmentVariables, ({ 
   }),
 }));
 
-export const deploymentsRelations = relations(deployments, ({ one }) => ({
+export const deploymentsRelations = relations(deployments, ({ one, many }) => ({
   project: one(projects, {
     fields: [deployments.projectId],
     references: [projects.id],
@@ -826,6 +846,14 @@ export const deploymentsRelations = relations(deployments, ({ one }) => ({
   deployedBy: one(users, {
     fields: [deployments.deployedById],
     references: [users.id],
+  }),
+  logs: many(deploymentLogs),
+}));
+
+export const deploymentLogsRelations = relations(deploymentLogs, ({ one }) => ({
+  deployment: one(deployments, {
+    fields: [deploymentLogs.deploymentId],
+    references: [deployments.id],
   }),
 }));
 

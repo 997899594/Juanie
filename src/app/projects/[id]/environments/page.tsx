@@ -4,6 +4,8 @@ import { ChevronDown, ChevronUp, Globe } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { EnvVarManager } from '@/components/projects/EnvVarManager';
+import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
 import { cn } from '@/lib/utils';
 
 interface Environment {
@@ -11,6 +13,8 @@ interface Environment {
   name: string;
   order: number;
   namespace: string | null;
+  isProduction: boolean;
+  autoDeploy: boolean;
 }
 
 export default function EnvironmentsPage() {
@@ -60,12 +64,10 @@ export default function EnvironmentsPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Environments</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage environment variables and secrets for each deployment environment.
-        </p>
-      </div>
+      <PageHeader
+        title="Environments"
+        description="Manage environment variables and secrets for each deployment environment."
+      />
 
       {environments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -104,6 +106,16 @@ export default function EnvironmentsPage() {
                     )}
                     {!env.namespace && (
                       <span className="text-xs text-muted-foreground">Not yet deployed</span>
+                    )}
+                    {env.isProduction && (
+                      <Badge variant="default" className="text-xs">
+                        Production
+                      </Badge>
+                    )}
+                    {env.autoDeploy && !env.isProduction && (
+                      <Badge variant="secondary" className="text-xs">
+                        Auto Deploy
+                      </Badge>
                     )}
                   </div>
                   {isExpanded ? (
