@@ -4,6 +4,7 @@ import { Job, Worker } from 'bullmq';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import postgres from 'postgres';
+import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
 import {
@@ -17,7 +18,6 @@ import {
   services,
   teams,
 } from '@/lib/db/schema';
-import { encrypt } from '@/lib/crypto';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
@@ -803,42 +803,58 @@ async function setupNamespace(
   hasK8s: boolean,
   onProgress?: (p: number) => Promise<void>
 ) {
-  const namespace = `juanie-${project.slug}`;
-
-  if (hasK8s) {
-    try {
-      await createNamespace(namespace);
-      await onProgress?.(40);
-    } catch (error) {
-      console.error('Failed to create namespace:', error);
-      throw error;
-    }
-
-    // 用团队 OAuth token 为该 namespace 创建 GHCR 镜像拉取凭证（GitHub 项目）
-    try {
-      const session = await getTeamIntegrationSession({
-        teamId: project.teamId,
-        requiredCapabilities: [],
-      });
-      if (session.provider === 'github') {
-        await ensureGhcrPullSecret(namespace, { token: session.accessToken });
-        console.log(`✅ Created GHCR pull secret in namespace ${namespace}`);
-      }
-    } catch (e) {
-      console.warn('Could not create GHCR pull secret during namespace setup:', e);
-    }
-    await onProgress?.(85);
-  } else {
-    console.log(`[Mock] Would create namespace: ${namespace}`);
-  }
+  // staging → juanie-{slug}, production → juanie-{slug}-prod
+  const stagingNamespace = `juanie-${project.slug}`;
+  const productionNamespace = `juanie-${project.slug}-prod`;
 
   const envList = await db.query.environments.findMany({
     where: eq(environments.projectId, project.id),
   });
 
+  // Assign namespaces by role
   for (const env of envList) {
-    await db.update(environments).set({ namespace }).where(eq(environments.id, env.id));
+    const ns = env.isProduction ? productionNamespace : stagingNamespace;
+    await db.update(environments).set({ namespace: ns }).where(eq(environments.id, env.id));
   }
+
+  const namespacesToCreate = envList.some((e) => e.isProduction)
+    ? [stagingNamespace, productionNamespace]
+    : [stagingNamespace];
+
+  if (hasK8s) {
+    let teamSession: Awaited<ReturnType<typeof getTeamIntegrationSession>> | null = null;
+    try {
+      teamSession = await getTeamIntegrationSession({
+        teamId: project.teamId,
+        requiredCapabilities: [],
+      });
+    } catch (e) {
+      console.warn('Could not get team session for GHCR pull secret:', e);
+    }
+
+    for (const ns of namespacesToCreate) {
+      try {
+        await createNamespace(ns);
+      } catch (error) {
+        console.error(`Failed to create namespace ${ns}:`, error);
+        throw error;
+      }
+      if (teamSession?.provider === 'github') {
+        try {
+          await ensureGhcrPullSecret(ns, { token: teamSession.accessToken });
+          console.log(`✅ Created GHCR pull secret in namespace ${ns}`);
+        } catch (e) {
+          console.warn(`Could not create GHCR pull secret in ${ns}:`, e);
+        }
+      }
+    }
+    await onProgress?.(85);
+  } else {
+    for (const ns of namespacesToCreate) {
+      console.log(`[Mock] Would create namespace: ${ns}`);
+    }
+  }
+  await onProgress?.(40);
 }
 
 async function deployServices(

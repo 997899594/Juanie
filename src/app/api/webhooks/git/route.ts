@@ -136,10 +136,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 找到生产环境
-    const productionEnv = project.environments.find((e) => e.name === 'production');
+    // 找到自动部署环境（autoDeploy=true，兼容旧项目只有一个 production 环境的情况）
+    const productionEnv =
+      project.environments.find((e) => e.autoDeploy) ??
+      project.environments.find((e) => e.name === 'production');
     if (!productionEnv) {
-      return NextResponse.json({ error: 'Production environment not found' }, { status: 400 });
+      return NextResponse.json({ error: 'No auto-deploy environment found' }, { status: 400 });
     }
 
     // 检查是否为 monorepo 项目

@@ -415,6 +415,9 @@ export const environments = pgTable(
     isPreview: boolean('isPreview').default(false),
     previewPrNumber: integer('previewPrNumber'),
 
+    autoDeploy: boolean('autoDeploy').default(true).notNull(),
+    isProduction: boolean('isProduction').default(false).notNull(),
+
     namespace: varchar('namespace', { length: 100 }),
 
     createdAt: timestamp('createdAt').defaultNow().notNull(),

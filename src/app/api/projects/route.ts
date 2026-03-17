@@ -123,15 +123,24 @@ export async function POST(request: Request) {
       })
       .returning();
 
-    const [prodEnv] = await db
+    // Create staging (auto-deploy on push) + production (manual promote only)
+    const [stagingEnv] = await db
       .insert(environments)
       .values({
         projectId: project.id,
-        name: 'production',
+        name: 'staging',
         branch: productionBranch,
-        tagPattern: 'v*',
+        autoDeploy: true,
+        isProduction: false,
       })
       .returning();
+
+    await db.insert(environments).values({
+      projectId: project.id,
+      name: 'production',
+      autoDeploy: false,
+      isProduction: true,
+    });
 
     for (const serviceConfig of serviceConfigs) {
       await db.insert(services).values({
@@ -151,7 +160,7 @@ export async function POST(request: Request) {
       const provisionType = dbConfig.provisionType || 'standalone';
       await db.insert(databases).values({
         projectId: project.id,
-        environmentId: prodEnv.id,
+        environmentId: stagingEnv.id,
         name: dbConfig.name,
         type: dbConfig.type,
         plan: dbConfig.plan || 'starter',
@@ -164,7 +173,7 @@ export async function POST(request: Request) {
     if (useCustomDomain && domain) {
       await db.insert(domains).values({
         projectId: project.id,
-        environmentId: prodEnv.id,
+        environmentId: stagingEnv.id,
         hostname: domain,
         isCustom: true,
         isVerified: false,
@@ -172,7 +181,7 @@ export async function POST(request: Request) {
     } else {
       await db.insert(domains).values({
         projectId: project.id,
-        environmentId: prodEnv.id,
+        environmentId: stagingEnv.id,
         hostname: `${slug}.juanie.art`,
         isCustom: false,
         isVerified: true,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, Filter, GitCommit, Rocket } from 'lucide-react';
+import { ArrowUpCircle, Clock, Filter, GitCommit, Rocket } from 'lucide-react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -32,12 +32,15 @@ interface DeploymentRecord {
   commitMessage: string | null;
   environmentName: string;
   environmentId?: string;
+  imageUrl?: string | null;
   createdAt: string;
 }
 
 interface Environment {
   id: string;
   name: string;
+  autoDeploy: boolean;
+  isProduction: boolean;
 }
 
 export default function DeploymentsPage() {
@@ -48,10 +51,9 @@ export default function DeploymentsPage() {
   const [filter, setFilter] = useState<string>(envFilter || 'all');
   const [history, setHistory] = useState<DeploymentRecord[]>([]);
   const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [deploying, setDeploying] = useState(false);
-  const [selectedEnvId, setSelectedEnvId] = useState('');
+  const [promoting, setPromoting] = useState(false);
+  const [promoteResult, setPromoteResult] = useState<string | null>(null);
 
-  // Load initial history from REST
   const loadHistory = useCallback(async () => {
     if (!projectId) return;
     const res = await fetch(`/api/projects/${projectId}/deployments`);
@@ -70,43 +72,38 @@ export default function DeploymentsPage() {
     loadHistory();
   }, [loadHistory]);
 
-  // Load environments for redeploy
   useEffect(() => {
     if (!projectId) return;
     fetch(`/api/projects/${projectId}/environments`)
       .then((r) => r.json())
-      .then((data) => {
-        const list = Array.isArray(data) ? data : [];
-        setEnvironments(list);
-        if (list[0]) setSelectedEnvId(list[0].id);
-      });
+      .then((data) => setEnvironments(Array.isArray(data) ? data : []));
   }, [projectId]);
 
-  // SSE for live updates
   const { isConnected, error } = useDeployments({
     projectId,
-    onDeployment: () => {
-      // Refresh history when a new deployment event arrives
-      loadHistory();
-    },
+    onDeployment: () => loadHistory(),
   });
 
-  const handleRedeploy = async () => {
-    if (!selectedEnvId || deploying) return;
-    setDeploying(true);
+  const handlePromote = async () => {
+    if (promoting) return;
+    setPromoting(true);
+    setPromoteResult(null);
     try {
-      await fetch(`/api/projects/${projectId}/deployments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ environmentId: selectedEnvId }),
-      });
-      await loadHistory();
+      const res = await fetch(`/api/projects/${projectId}/promote`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setPromoteResult(data.tagName ? `Promoted → ${data.tagName}` : 'Promoted to production');
+        await loadHistory();
+      } else {
+        setPromoteResult(`Error: ${data.error}`);
+      }
     } finally {
-      setDeploying(false);
+      setPromoting(false);
+      setTimeout(() => setPromoteResult(null), 5000);
     }
   };
 
-  // Track which is the latest running deployment per environment
+  const hasStagingProdSplit = environments.some((e) => e.isProduction);
   const latestRunningId = new Map<string, string>();
   for (const d of history) {
     if (d.status === 'running' && !latestRunningId.has(d.environmentName)) {
@@ -116,6 +113,13 @@ export default function DeploymentsPage() {
 
   const envNames = ['all', ...new Set(history.map((d) => d.environmentName))];
   const filtered = filter === 'all' ? history : history.filter((d) => d.environmentName === filter);
+
+  // Find latest successful staging deployment to determine if promote is possible
+  const stagingEnv = environments.find((e) => e.autoDeploy && !e.isProduction);
+  const latestStagingRunning = stagingEnv
+    ? history.find((d) => d.environmentName === stagingEnv.name && d.status === 'running')
+    : null;
+  const canPromote = hasStagingProdSplit && !!latestStagingRunning?.imageUrl;
 
   return (
     <div className="space-y-6">
@@ -129,10 +133,15 @@ export default function DeploymentsPage() {
               label={isConnected ? 'Live' : 'Offline'}
               pulse={isConnected}
             />
-            {environments.length > 0 && (
-              <Button size="sm" className="h-8" onClick={handleRedeploy} disabled={deploying}>
-                <Rocket className="h-3.5 w-3.5 mr-1.5" />
-                {deploying ? 'Deploying...' : 'Redeploy'}
+            {hasStagingProdSplit && (
+              <Button
+                size="sm"
+                className="h-8"
+                onClick={handlePromote}
+                disabled={promoting || !canPromote}
+              >
+                <ArrowUpCircle className="h-3.5 w-3.5 mr-1.5" />
+                {promoting ? 'Promoting...' : 'Promote to Production'}
               </Button>
             )}
           </div>
@@ -140,8 +149,20 @@ export default function DeploymentsPage() {
       />
 
       {error && (
-        <div className="p-4 text-sm bg-warning/10 text-warning-foreground rounded-lg border border-warning/20">
+        <div className="p-3 text-sm bg-warning/10 text-warning-foreground rounded-lg border border-warning/20">
           {error}
+        </div>
+      )}
+
+      {promoteResult && (
+        <div
+          className={`p-3 text-sm rounded-lg border ${
+            promoteResult.startsWith('Error')
+              ? 'bg-destructive/10 text-destructive border-destructive/20'
+              : 'bg-success/10 text-success-foreground border-success/20'
+          }`}
+        >
+          {promoteResult}
         </div>
       )}
 
@@ -174,6 +195,7 @@ export default function DeploymentsPage() {
               latestRunningId.get(deployment.environmentName) !== deployment.id;
             const configKey = isOldRunning ? 'running_old' : deployment.status;
             const config = statusConfig[configKey] || statusConfig.queued;
+
             return (
               <Card key={deployment.id} className="overflow-hidden">
                 <CardContent className="p-0">
@@ -188,7 +210,7 @@ export default function DeploymentsPage() {
                               ? 'bg-warning'
                               : config.color === 'info'
                                 ? 'bg-info'
-                                : 'bg-muted-foreground'
+                                : 'bg-muted-foreground/30'
                       }`}
                     />
                     <div className="flex-1 p-4">
@@ -206,7 +228,16 @@ export default function DeploymentsPage() {
                               <span className="font-medium">
                                 {deployment.version ? `v${deployment.version}` : '—'}
                               </span>
-                              <Badge variant="secondary" className="capitalize">
+                              <Badge
+                                variant={
+                                  environments.find(
+                                    (e) => e.name === deployment.environmentName && e.isProduction
+                                  )
+                                    ? 'default'
+                                    : 'secondary'
+                                }
+                                className="capitalize"
+                              >
                                 {deployment.environmentName}
                               </Badge>
                             </div>

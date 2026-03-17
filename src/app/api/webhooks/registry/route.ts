@@ -133,9 +133,11 @@ export async function POST(request: NextRequest) {
       .where(eq(webhooks.id, webhook.id));
 
     // 6. 找到生产环境
-    const productionEnv = project.environments.find((e) => e.name === 'production');
+    const productionEnv =
+      project.environments.find((e) => e.autoDeploy) ??
+      project.environments.find((e) => e.name === 'production');
     if (!productionEnv) {
-      return NextResponse.json({ error: 'Production environment not found' }, { status: 400 });
+      return NextResponse.json({ error: 'No auto-deploy environment found' }, { status: 400 });
     }
 
     // 7. 创建部署记录
