@@ -537,14 +537,14 @@ export async function createDeployment(
                 command: spec.command,
                 args: spec.args,
                 readinessProbe: {
-                  tcpSocket: { port: spec.port },
-                  initialDelaySeconds: 5,
+                  httpGet: { path: '/api/health/ready', port: spec.port },
+                  initialDelaySeconds: 15,
                   periodSeconds: 10,
-                  failureThreshold: 3,
+                  failureThreshold: 6,   // 15 + 6*10 = 75s before giving up
                 },
                 livenessProbe: {
-                  tcpSocket: { port: spec.port },
-                  initialDelaySeconds: 15,
+                  httpGet: { path: '/api/health/live', port: spec.port },
+                  initialDelaySeconds: 30,
                   periodSeconds: 20,
                   failureThreshold: 3,
                 },

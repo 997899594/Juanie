@@ -76,8 +76,8 @@ jobs:
             kubectl set env deployment/juanie-worker -n juanie NODE_TLS_REJECT_UNAUTHORIZED=0
 
             # 2. 等待滚动更新（新 pod 就绪）
-            kubectl rollout status deployment/juanie-web -n juanie --timeout=180s
-            kubectl rollout status deployment/juanie-worker -n juanie --timeout=180s
+            kubectl rollout status deployment/juanie-web -n juanie --timeout=300s
+            kubectl rollout status deployment/juanie-worker -n juanie --timeout=300s
 
             # 3. 在新 pod 上同步数据库 Schema
             echo "🔄 同步数据库 Schema..."
