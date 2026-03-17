@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Deployment {
   id: string;
@@ -20,6 +20,12 @@ export function useDeployments({ projectId, onDeployment }: UseDeploymentsOption
   const [deployments, setDeployments] = useState<Deployment[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Keep a stable ref so the effect never needs to re-run when the callback changes
+  const onDeploymentRef = useRef(onDeployment);
+  useEffect(() => {
+    onDeploymentRef.current = onDeployment;
+  });
 
   useEffect(() => {
     if (!projectId) return;
@@ -43,7 +49,7 @@ export function useDeployments({ projectId, onDeployment }: UseDeploymentsOption
             if (exists) return prev;
             return [data.data, ...prev];
           });
-          onDeployment?.(data.data);
+          onDeploymentRef.current?.(data.data);
         }
       } catch (e) {
         console.error('Failed to parse SSE message:', e);
@@ -54,17 +60,13 @@ export function useDeployments({ projectId, onDeployment }: UseDeploymentsOption
       setIsConnected(false);
       setError('Connection lost. Reconnecting...');
       eventSource.close();
-      setTimeout(() => {
-        if (!eventSource.readyState) {
-        }
-      }, 3000);
     };
 
     return () => {
       eventSource.close();
       setIsConnected(false);
     };
-  }, [projectId, onDeployment]);
+  }, [projectId]);
 
   const addDeployment = useCallback((deployment: Deployment) => {
     setDeployments((prev) => [deployment, ...prev]);
