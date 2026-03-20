@@ -8,6 +8,7 @@ interface Deployment {
   version: string;
   commitSha: string;
   environmentName: string;
+  serviceName?: string | null;
   createdAt: string;
 }
 
@@ -45,9 +46,13 @@ export function useDeployments({ projectId, onDeployment }: UseDeploymentsOption
           console.log('SSE connected');
         } else if (data.type === 'deployment') {
           setDeployments((prev) => {
-            const exists = prev.find((d) => d.id === data.data.id);
-            if (exists) return prev;
-            return [data.data, ...prev];
+            const exists = prev.some((deployment) => deployment.id === data.data.id);
+            if (!exists) {
+              return [data.data, ...prev];
+            }
+            return prev.map((deployment) =>
+              deployment.id === data.data.id ? { ...deployment, ...data.data } : deployment
+            );
           });
           onDeploymentRef.current?.(data.data);
         }
@@ -59,7 +64,6 @@ export function useDeployments({ projectId, onDeployment }: UseDeploymentsOption
     eventSource.onerror = () => {
       setIsConnected(false);
       setError('Connection lost. Reconnecting...');
-      eventSource.close();
     };
 
     return () => {

@@ -11,6 +11,7 @@ function getConnection(): ConnectionOptions {
 
 let _projectInitQueue: Queue | null = null;
 let _deploymentQueue: Queue | null = null;
+let _migrationQueue: Queue | null = null;
 
 export function getProjectInitQueue(): Queue {
   if (!_projectInitQueue) {
@@ -26,6 +27,13 @@ export function getDeploymentQueue(): Queue {
   return _deploymentQueue;
 }
 
+export function getMigrationQueue(): Queue {
+  if (!_migrationQueue) {
+    _migrationQueue = new Queue('migration', { connection: getConnection() });
+  }
+  return _migrationQueue;
+}
+
 export type ProjectInitJobData = {
   projectId: string;
   mode: 'import' | 'create';
@@ -36,6 +44,12 @@ export type DeploymentJobData = {
   deploymentId: string;
   projectId: string;
   environmentId: string;
+};
+
+export type MigrationJobData = {
+  runId: string;
+  imageUrl?: string | null;
+  allowApprovalBypass?: boolean;
 };
 
 export async function addProjectInitJob(
@@ -64,9 +78,27 @@ export async function addDeploymentJob(
   );
 }
 
+export async function addMigrationJob(
+  runId: string,
+  options?: { imageUrl?: string | null; allowApprovalBypass?: boolean }
+) {
+  return getMigrationQueue().add(
+    'migrate',
+    {
+      runId,
+      imageUrl: options?.imageUrl ?? null,
+      allowApprovalBypass: options?.allowApprovalBypass ?? false,
+    },
+    {
+      attempts: 1,
+    }
+  );
+}
+
 export async function closeQueues() {
   const promises: Promise<void>[] = [];
   if (_projectInitQueue) promises.push(_projectInitQueue.close());
   if (_deploymentQueue) promises.push(_deploymentQueue.close());
+  if (_migrationQueue) promises.push(_migrationQueue.close());
   return Promise.all(promises);
 }

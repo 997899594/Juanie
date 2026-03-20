@@ -5,6 +5,7 @@ import {
   deploymentLogs,
   deployments,
   environments,
+  migrationRuns,
   projects,
   repositories,
   services,
@@ -25,7 +26,9 @@ import {
   getIsConnected,
   updateDeployment,
 } from '@/lib/k8s';
+import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
 import type { DeploymentJobData } from './index';
+import { addMigrationJob } from './index';
 
 async function log(
   deploymentId: string,
@@ -39,6 +42,34 @@ async function log(
     .catch(() => {
       // Swallow DB errors so log failures never break the deployment
     });
+}
+
+async function waitForMigrationRun(
+  runId: string
+): Promise<'success' | 'failed' | 'awaiting_approval' | 'canceled' | 'skipped'> {
+  for (let attempts = 0; attempts < 300; attempts++) {
+    const run = await db.query.migrationRuns.findFirst({
+      where: eq(migrationRuns.id, runId),
+    });
+
+    if (!run) {
+      throw new Error(`Migration run ${runId} not found`);
+    }
+
+    if (
+      run.status === 'success' ||
+      run.status === 'failed' ||
+      run.status === 'awaiting_approval' ||
+      run.status === 'canceled' ||
+      run.status === 'skipped'
+    ) {
+      return run.status;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  throw new Error(`Timed out waiting for migration run ${runId}`);
 }
 
 export async function processDeployment(job: Job<DeploymentJobData>) {
@@ -106,6 +137,66 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       );
     }
 
+    await db
+      .update(deployments)
+      .set({ status: 'migration_pending' })
+      .where(eq(deployments.id, deploymentId));
+    await log(deploymentId, 'Resolving pre-deploy migration specifications');
+
+    const targetServices = deployment.serviceId
+      ? serviceList.filter((service) => service.id === deployment.serviceId)
+      : serviceList;
+
+    if (deployment.serviceId && targetServices.length === 0) {
+      throw new Error(
+        `Deployment service ${deployment.serviceId} not found in project ${projectId}`
+      );
+    }
+
+    const targetServiceIds = targetServices.map((svc) => svc.id);
+    const createdMigrationRuns = await resolveAndCreateMigrationRuns(
+      projectId,
+      environmentId,
+      'preDeploy',
+      {
+        deploymentId,
+        triggeredBy: 'deploy',
+        triggeredByUserId: deployment.deployedById ?? null,
+        sourceCommitSha: deployment.commitSha,
+        sourceCommitMessage: deployment.commitMessage,
+        serviceIds: targetServiceIds,
+        options: {
+          imageUrl: imageName,
+          allowApprovalBypass: false,
+        },
+      }
+    );
+    if (createdMigrationRuns.length > 0) {
+      await db
+        .update(deployments)
+        .set({ status: 'migration_running' })
+        .where(eq(deployments.id, deploymentId));
+      await log(deploymentId, `Queued ${createdMigrationRuns.length} pre-deploy migration run(s)`);
+      for (const run of createdMigrationRuns) {
+        await log(deploymentId, `Starting migration run ${run.id}`);
+        await addMigrationJob(run.id, {
+          imageUrl: imageName,
+          allowApprovalBypass: false,
+        });
+        const result = await waitForMigrationRun(run.id);
+        await log(deploymentId, `Migration run ${run.id} finished with status ${result}`);
+        if (result !== 'success') {
+          throw new Error(`Migration run ${run.id} ended with status ${result}`);
+        }
+      }
+      await log(
+        deploymentId,
+        `Completed ${createdMigrationRuns.length} pre-deploy migration run(s)`
+      );
+    } else {
+      await log(deploymentId, 'No pre-deploy migrations configured for this deployment');
+    }
+
     // 用团队 OAuth token 确保 GHCR 拉取凭证存在（GitHub 私有镜像需要）
     let useGhcrPullSecret = false;
     if (getIsConnected() && environment.namespace) {
@@ -125,7 +216,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       }
     }
 
-    for (const service of serviceList) {
+    for (const service of targetServices) {
       await log(deploymentId, `Deploying service ${service.name}`);
 
       if (!getIsConnected() || !environment.namespace) continue;
@@ -187,12 +278,20 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
     return { success: true };
   } catch (error) {
-    await log(
-      deploymentId,
-      `Deployment failed: ${error instanceof Error ? error.message : String(error)}`,
-      'error'
-    );
-    await db.update(deployments).set({ status: 'failed' }).where(eq(deployments.id, deploymentId));
+    const message = error instanceof Error ? error.message : String(error);
+    let finalStatus: 'failed' | 'migration_failed' = 'failed';
+    if (
+      message.includes('approval required') ||
+      message.includes('Migration run') ||
+      message.includes('MIGRATION_')
+    ) {
+      finalStatus = 'migration_failed';
+    }
+    await log(deploymentId, `Deployment failed: ${message}`, 'error');
+    await db
+      .update(deployments)
+      .set({ status: finalStatus })
+      .where(eq(deployments.id, deploymentId));
 
     throw error;
   }

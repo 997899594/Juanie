@@ -142,18 +142,23 @@ export async function POST(request: Request) {
       isProduction: true,
     });
 
+    const createdServices = new Map<string, string>();
     for (const serviceConfig of serviceConfigs) {
-      await db.insert(services).values({
-        projectId: project.id,
-        name: serviceConfig.name,
-        type: serviceConfig.type,
-        buildCommand: serviceConfig.build?.command,
-        startCommand: serviceConfig.run?.command,
-        port: serviceConfig.run?.port,
-        cronSchedule: serviceConfig.type === 'cron' ? serviceConfig.schedule : null,
-        replicas: 1,
-        status: 'pending',
-      });
+      const [service] = await db
+        .insert(services)
+        .values({
+          projectId: project.id,
+          name: serviceConfig.name,
+          type: serviceConfig.type,
+          buildCommand: serviceConfig.build?.command,
+          startCommand: serviceConfig.run?.command,
+          port: serviceConfig.run?.port,
+          cronSchedule: serviceConfig.type === 'cron' ? serviceConfig.schedule : null,
+          replicas: 1,
+          status: 'pending',
+        })
+        .returning();
+      createdServices.set(serviceConfig.name, service.id);
     }
 
     for (const dbConfig of databaseConfigs) {
@@ -161,10 +166,13 @@ export async function POST(request: Request) {
       await db.insert(databases).values({
         projectId: project.id,
         environmentId: stagingEnv.id,
+        serviceId: dbConfig.service ? (createdServices.get(dbConfig.service) ?? null) : null,
         name: dbConfig.name,
         type: dbConfig.type,
         plan: dbConfig.plan || 'starter',
         provisionType,
+        scope: dbConfig.scope || (dbConfig.service ? 'service' : 'project'),
+        role: dbConfig.role || 'primary',
         connectionString: provisionType === 'external' ? (dbConfig.externalUrl ?? null) : null,
         status: 'pending',
       });

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { DatabaseMigrationDialog } from '@/components/projects/DatabaseMigrationDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { auth } from '@/lib/auth';
@@ -22,6 +23,7 @@ import {
   deployments,
   domains,
   environments,
+  migrationRuns,
   projects,
   services,
   teams,
@@ -66,28 +68,62 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   if (!project) redirect('/projects');
 
-  const [team, projectServices, projectDatabases, projectDomains, recentDeployments] =
-    await Promise.all([
-      db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }),
-      db.query.services.findMany({ where: eq(services.projectId, id) }),
-      db.query.databases.findMany({ where: eq(databases.projectId, id) }),
-      db.query.domains.findMany({ where: eq(domains.projectId, id) }),
-      db
-        .select({
-          id: deployments.id,
-          status: deployments.status,
-          version: deployments.version,
-          commitSha: deployments.commitSha,
-          commitMessage: deployments.commitMessage,
-          createdAt: deployments.createdAt,
-          environmentName: environments.name,
-        })
-        .from(deployments)
-        .innerJoin(environments, eq(environments.id, deployments.environmentId))
-        .where(eq(deployments.projectId, id))
-        .orderBy(desc(deployments.createdAt))
-        .limit(5),
-    ]);
+  const [
+    team,
+    projectServices,
+    projectDatabases,
+    projectDomains,
+    recentDeployments,
+    recentMigrationRuns,
+    deploymentImageCandidates,
+  ] = await Promise.all([
+    db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }),
+    db.query.services.findMany({ where: eq(services.projectId, id) }),
+    db.query.databases.findMany({ where: eq(databases.projectId, id) }),
+    db.query.domains.findMany({ where: eq(domains.projectId, id) }),
+    db
+      .select({
+        id: deployments.id,
+        status: deployments.status,
+        version: deployments.version,
+        commitSha: deployments.commitSha,
+        commitMessage: deployments.commitMessage,
+        createdAt: deployments.createdAt,
+        environmentName: environments.name,
+      })
+      .from(deployments)
+      .innerJoin(environments, eq(environments.id, deployments.environmentId))
+      .where(eq(deployments.projectId, id))
+      .orderBy(desc(deployments.createdAt))
+      .limit(5),
+    db.query.migrationRuns.findMany({
+      where: eq(migrationRuns.projectId, id),
+      orderBy: (run, { desc }) => [desc(run.createdAt)],
+      with: {
+        database: true,
+      },
+    }),
+    db.query.deployments.findMany({
+      where: eq(deployments.projectId, id),
+      orderBy: (deployment, { desc }) => [desc(deployment.createdAt)],
+    }),
+  ]);
+
+  const latestMigrationByDatabase = new Map<string, (typeof recentMigrationRuns)[number]>();
+  for (const run of recentMigrationRuns) {
+    if (!latestMigrationByDatabase.has(run.databaseId)) {
+      latestMigrationByDatabase.set(run.databaseId, run);
+    }
+  }
+
+  const latestImageByScope = new Map<string, string>();
+  for (const deployment of deploymentImageCandidates) {
+    if (!deployment.imageUrl) continue;
+    const serviceKey = `${deployment.environmentId}:${deployment.serviceId ?? 'project'}`;
+    if (!latestImageByScope.has(serviceKey)) {
+      latestImageByScope.set(serviceKey, deployment.imageUrl);
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -249,14 +285,38 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                       >
                         {dbItem.type}
                       </span>
+                      {dbItem.scope === 'service' && dbItem.serviceId && (
+                        <Badge variant="outline" className="text-xs">
+                          {projectServices.find((service) => service.id === dbItem.serviceId)
+                            ?.name ?? 'service'}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className={`h-1.5 w-1.5 rounded-full ${statusColors[dbItem.status ?? ''] ?? 'bg-muted-foreground'}`}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground capitalize">
+                          {dbItem.status ?? 'pending'}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {latestMigrationByDatabase.get(dbItem.id)
+                            ? `migration ${latestMigrationByDatabase.get(dbItem.id)?.status}`
+                            : 'no migration runs'}
+                        </div>
+                      </div>
+                      <DatabaseMigrationDialog
+                        projectId={id}
+                        databaseId={dbItem.id}
+                        databaseName={dbItem.name}
+                        databaseType={dbItem.type}
+                        latestStatus={dbItem.status ?? null}
+                        latestImageUrl={
+                          latestImageByScope.get(
+                            `${dbItem.environmentId}:${dbItem.serviceId ?? 'project'}`
+                          ) ??
+                          latestImageByScope.get(`${dbItem.environmentId}:project`) ??
+                          null
+                        }
                       />
-                      <span className="text-xs text-muted-foreground capitalize">
-                        {dbItem.status ?? 'pending'}
-                      </span>
                     </div>
                   </div>
                 ))}

@@ -1,7 +1,7 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { deployments, environments, projects } from '@/lib/db/schema';
+import { deployments, environments, projects, services, teamMembers } from '@/lib/db/schema';
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -25,6 +25,14 @@ export async function GET(request: Request) {
     return new Response('Project not found', { status: 404 });
   }
 
+  const member = await db.query.teamMembers.findFirst({
+    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, session.user.id)),
+  });
+
+  if (!member) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -34,7 +42,7 @@ export async function GET(request: Request) {
 
       sendEvent({ type: 'connected', timestamp: Date.now() });
 
-      let lastDeploymentId: string | null = null;
+      let lastDeploymentState: string | null = null;
       let isActive = true;
 
       const checkDeployments = async () => {
@@ -47,7 +55,9 @@ export async function GET(request: Request) {
             version: deployments.version,
             commitSha: deployments.commitSha,
             environmentId: deployments.environmentId,
+            serviceId: deployments.serviceId,
             createdAt: deployments.createdAt,
+            deployedAt: deployments.deployedAt,
           })
           .from(deployments)
           .where(eq(deployments.projectId, projectId))
@@ -56,19 +66,31 @@ export async function GET(request: Request) {
 
         if (recentDeployments.length > 0) {
           const latest = recentDeployments[0];
+          const nextState = [
+            latest.id,
+            latest.status,
+            latest.commitSha,
+            latest.deployedAt?.toISOString() ?? '',
+          ].join(':');
 
-          if (lastDeploymentId !== latest.id) {
-            lastDeploymentId = latest.id;
+          if (lastDeploymentState !== nextState) {
+            lastDeploymentState = nextState;
 
             const env = await db.query.environments.findFirst({
               where: eq(environments.id, latest.environmentId),
             });
+            const service = latest.serviceId
+              ? await db.query.services.findFirst({
+                  where: eq(services.id, latest.serviceId),
+                })
+              : null;
 
             sendEvent({
               type: 'deployment',
               data: {
                 ...latest,
                 environmentName: env?.name,
+                serviceName: service?.name ?? null,
               },
             });
           }

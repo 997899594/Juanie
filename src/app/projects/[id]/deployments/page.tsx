@@ -26,6 +26,9 @@ const statusConfig: Record<
   { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean; label?: string }
 > = {
   queued: { color: 'neutral', pulse: false },
+  migration_pending: { color: 'warning', pulse: true, label: 'Migration Pending' },
+  migration_running: { color: 'info', pulse: true, label: 'Migrating' },
+  migration_failed: { color: 'error', pulse: false, label: 'Migration Failed' },
   building: { color: 'info', pulse: true },
   deploying: { color: 'info', pulse: true },
   running: { color: 'success', pulse: false, label: 'Active' },
@@ -41,9 +44,15 @@ interface DeploymentRecord {
   commitSha: string | null;
   commitMessage: string | null;
   environmentName: string;
+  serviceName?: string | null;
   environmentId?: string;
   imageUrl?: string | null;
   createdAt: string;
+  migrationSummary?: {
+    count: number;
+    latestStatus: string;
+    latestRunId: string;
+  } | null;
 }
 
 interface Environment {
@@ -73,9 +82,10 @@ function DeploymentLogs({
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const isLive = status === 'building' || status === 'deploying' || status === 'queued';
+  const isMigrationLive = status === 'migration_pending' || status === 'migration_running';
 
   useEffect(() => {
-    if (!isLive) {
+    if (!isLive && !isMigrationLive) {
       fetch(`/api/projects/${projectId}/deployments/${deploymentId}/logs`)
         .then((r) => r.json())
         .then((data) => {
@@ -110,7 +120,7 @@ function DeploymentLogs({
 
     setLoading(false);
     return () => es.close();
-  }, [projectId, deploymentId, isLive]);
+  }, [projectId, deploymentId, isLive, isMigrationLive]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: bottomRef is a stable ref
   useEffect(() => {
@@ -168,9 +178,16 @@ export default function DeploymentsPage() {
     if (!res.ok) return;
     const data = await res.json();
     const mapped: DeploymentRecord[] = data.map(
-      (row: { deployment: DeploymentRecord; environmentName: string }) => ({
+      (row: {
+        deployment: DeploymentRecord;
+        environmentName: string;
+        serviceName?: string | null;
+        migrationSummary?: DeploymentRecord['migrationSummary'];
+      }) => ({
         ...row.deployment,
         environmentName: row.environmentName,
+        serviceName: row.serviceName ?? null,
+        migrationSummary: row.migrationSummary ?? null,
       })
     );
     setHistory(mapped);
@@ -384,6 +401,9 @@ export default function DeploymentsPage() {
                               <span className="font-medium">
                                 {deployment.version ? `v${deployment.version}` : '—'}
                               </span>
+                              {deployment.serviceName && (
+                                <Badge variant="outline">{deployment.serviceName}</Badge>
+                              )}
                               <Badge
                                 variant={
                                   environments.find(
@@ -412,6 +432,14 @@ export default function DeploymentsPage() {
                                     {deployment.commitMessage}
                                   </span>
                                 )}
+                              </div>
+                            )}
+                            {deployment.migrationSummary && (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Badge variant="outline" className="text-[10px]">
+                                  migrations {deployment.migrationSummary.count}
+                                </Badge>
+                                <span>latest {deployment.migrationSummary.latestStatus}</span>
                               </div>
                             )}
                           </div>

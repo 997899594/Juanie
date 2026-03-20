@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { projectInitSteps, projects } from '@/lib/db/schema';
+import { projectInitSteps, projects, teamMembers } from '@/lib/db/schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,6 +22,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   if (!project) {
     return new Response('Project not found', { status: 404 });
+  }
+
+  const member = await db.query.teamMembers.findFirst({
+    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, session.user.id)),
+  });
+
+  if (!member) {
+    return new Response('Forbidden', { status: 403 });
   }
 
   const stream = new ReadableStream({

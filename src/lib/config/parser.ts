@@ -1,8 +1,34 @@
 import { z } from 'zod';
 
+const migrationConfigSchema = z.object({
+  tool: z.enum(['drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom']),
+  workingDirectory: z.string().min(1),
+  path: z.string().min(1).optional(),
+  command: z.string().min(1),
+  phase: z.enum(['preDeploy', 'postDeploy', 'manual']).optional().default('preDeploy'),
+  autoRun: z.boolean().optional().default(true),
+  lockStrategy: z.enum(['platform', 'db_advisory']).optional().default('platform'),
+  compatibility: z
+    .enum(['backward_compatible', 'breaking'])
+    .optional()
+    .default('backward_compatible'),
+  approvalPolicy: z.enum(['auto', 'manual_in_production']).optional().default('auto'),
+});
+
+const serviceDatabaseBindingSchema = z.object({
+  binding: z.string().min(1).max(100),
+  migrate: migrationConfigSchema,
+});
+
 export const serviceSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['web', 'worker', 'cron']),
+
+  monorepo: z
+    .object({
+      appDir: z.string().min(1).optional(),
+    })
+    .optional(),
 
   build: z
     .object({
@@ -38,6 +64,7 @@ export const serviceSchema = z.object({
 
   domain: z.string().optional(),
   isPublic: z.boolean().optional(),
+  databases: z.array(serviceDatabaseBindingSchema).max(10).optional(),
 
   resources: z
     .object({
@@ -52,9 +79,16 @@ export const serviceSchema = z.object({
 export const databaseSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['postgresql', 'mysql', 'redis', 'mongodb']),
+  scope: z.enum(['project', 'service']).optional().default('project'),
+  service: z.string().min(1).max(100).optional(),
+  role: z
+    .enum(['primary', 'readonly', 'cache', 'queue', 'analytics'])
+    .optional()
+    .default('primary'),
   plan: z.enum(['starter', 'standard', 'premium']).optional(),
   provisionType: z.enum(['shared', 'standalone', 'external']).optional().default('standalone'),
   externalUrl: z.string().optional(),
+  environments: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 });
 
 export const environmentSchema = z.object({
@@ -125,6 +159,23 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
 
   if (config.services.some((s) => s.type === 'web' && !s.run.port)) {
     warnings.push('Web services should have a port defined');
+  }
+
+  for (const database of config.databases ?? []) {
+    if (database.scope === 'service' && !database.service) {
+      warnings.push(`Database "${database.name}" is service-scoped but missing service binding`);
+    }
+  }
+
+  for (const service of config.services) {
+    for (const binding of service.databases ?? []) {
+      const database = config.databases?.find((db) => db.name === binding.binding);
+      if (!database) {
+        warnings.push(
+          `Service "${service.name}" references unknown database binding "${binding.binding}"`
+        );
+      }
+    }
   }
 
   return {

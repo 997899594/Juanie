@@ -5,6 +5,7 @@ let k8sCoreApi: k8s.CoreV1Api | null = null;
 let k8sAppsApi: k8s.AppsV1Api | null = null;
 let k8sCustomApi: k8s.CustomObjectsApi | null = null;
 let k8sNetworkingApi: k8s.NetworkingV1Api | null = null;
+let k8sBatchApi: k8s.BatchV1Api | null = null;
 let kubeConfig: k8s.KubeConfig | null = null;
 let initAttempted = false;
 
@@ -49,6 +50,7 @@ export function initK8sClient(): void {
     k8sAppsApi = kc.makeApiClient(k8s.AppsV1Api);
     k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
     k8sNetworkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
+    k8sBatchApi = kc.makeApiClient(k8s.BatchV1Api);
     console.log('✅ Kubernetes client initialized');
   } catch (error) {
     console.log(
@@ -63,11 +65,26 @@ export function getK8sClient(): {
   apps: k8s.AppsV1Api;
   custom: k8s.CustomObjectsApi;
   networking: k8s.NetworkingV1Api;
+  batch: k8s.BatchV1Api;
   config: k8s.KubeConfig;
 } {
-  if (!k8sCoreApi || !k8sAppsApi || !k8sCustomApi || !k8sNetworkingApi || !kubeConfig) {
+  if (
+    !k8sCoreApi ||
+    !k8sAppsApi ||
+    !k8sCustomApi ||
+    !k8sNetworkingApi ||
+    !k8sBatchApi ||
+    !kubeConfig
+  ) {
     initK8sClient();
-    if (!k8sCoreApi || !k8sAppsApi || !k8sCustomApi || !k8sNetworkingApi || !kubeConfig) {
+    if (
+      !k8sCoreApi ||
+      !k8sAppsApi ||
+      !k8sCustomApi ||
+      !k8sNetworkingApi ||
+      !k8sBatchApi ||
+      !kubeConfig
+    ) {
       throw new Error('K8s client not initialized');
     }
   }
@@ -77,6 +94,7 @@ export function getK8sClient(): {
     apps: k8sAppsApi,
     custom: k8sCustomApi,
     networking: k8sNetworkingApi,
+    batch: k8sBatchApi,
     config: kubeConfig,
   };
 }
@@ -175,6 +193,34 @@ export async function getPodLogs(
   });
 
   return response as unknown as string;
+}
+
+export async function createJob(namespace: string, body: k8s.V1Job): Promise<void> {
+  const { batch } = getK8sClient();
+  await batch.createNamespacedJob({ namespace, body });
+}
+
+export async function getJob(namespace: string, name: string): Promise<k8s.V1Job> {
+  const { batch } = getK8sClient();
+  return batch.readNamespacedJob({ namespace, name });
+}
+
+export async function deleteJob(namespace: string, name: string): Promise<void> {
+  const { batch } = getK8sClient();
+  try {
+    await batch.deleteNamespacedJob({
+      namespace,
+      name,
+      body: {
+        propagationPolicy: 'Background',
+      },
+    });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
+      throw e;
+    }
+  }
 }
 
 export async function getPodContainers(namespace: string, podName: string): Promise<string[]> {
@@ -411,7 +457,11 @@ export async function upsertConfigMap(
 
 export function getIsConnected(): boolean {
   return (
-    k8sCoreApi !== null && k8sAppsApi !== null && k8sCustomApi !== null && k8sNetworkingApi !== null
+    k8sCoreApi !== null &&
+    k8sAppsApi !== null &&
+    k8sCustomApi !== null &&
+    k8sNetworkingApi !== null &&
+    k8sBatchApi !== null
   );
 }
 
@@ -540,7 +590,7 @@ export async function createDeployment(
                   httpGet: { path: '/api/health/ready', port: spec.port },
                   initialDelaySeconds: 15,
                   periodSeconds: 10,
-                  failureThreshold: 6,   // 15 + 6*10 = 75s before giving up
+                  failureThreshold: 6, // 15 + 6*10 = 75s before giving up
                 },
                 livenessProbe: {
                   httpGet: { path: '/api/health/live', port: spec.port },

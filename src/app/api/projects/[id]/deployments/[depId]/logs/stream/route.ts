@@ -72,7 +72,12 @@ export async function GET(
               where: eq(deployments.id, depId),
             });
 
-            if (current?.status === 'running' || current?.status === 'failed') {
+            if (
+              current?.status === 'running' ||
+              current?.status === 'failed' ||
+              current?.status === 'migration_failed' ||
+              current?.status === 'rolled_back'
+            ) {
               sendEvent({ type: 'complete', status: current.status });
               done = true;
               controller.close();

@@ -29,11 +29,20 @@ export type DatabaseType = (typeof databaseTypes)[number];
 export const databasePlans = ['starter', 'standard', 'premium'] as const;
 export type DatabasePlan = (typeof databasePlans)[number];
 
+export const databaseScopes = ['project', 'service'] as const;
+export type DatabaseScope = (typeof databaseScopes)[number];
+
+export const databaseRoles = ['primary', 'readonly', 'cache', 'queue', 'analytics'] as const;
+export type DatabaseRole = (typeof databaseRoles)[number];
+
 export const projectStatuses = ['initializing', 'active', 'failed', 'archived'] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
 export const deploymentStatuses = [
   'queued',
+  'migration_pending',
+  'migration_running',
+  'migration_failed',
   'building',
   'deploying',
   'running',
@@ -41,6 +50,36 @@ export const deploymentStatuses = [
   'rolled_back',
 ] as const;
 export type DeploymentStatus = (typeof deploymentStatuses)[number];
+
+export const migrationTools = ['drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom'] as const;
+export type MigrationTool = (typeof migrationTools)[number];
+
+export const migrationPhases = ['preDeploy', 'postDeploy', 'manual'] as const;
+export type MigrationPhase = (typeof migrationPhases)[number];
+
+export const migrationRunStatuses = [
+  'queued',
+  'awaiting_approval',
+  'planning',
+  'running',
+  'success',
+  'failed',
+  'canceled',
+  'skipped',
+] as const;
+export type MigrationRunStatus = (typeof migrationRunStatuses)[number];
+
+export const migrationRunnerTypes = ['k8s_job', 'ci_job', 'worker'] as const;
+export type MigrationRunnerType = (typeof migrationRunnerTypes)[number];
+
+export const migrationLockStrategies = ['platform', 'db_advisory'] as const;
+export type MigrationLockStrategy = (typeof migrationLockStrategies)[number];
+
+export const migrationCompatibilities = ['backward_compatible', 'breaking'] as const;
+export type MigrationCompatibility = (typeof migrationCompatibilities)[number];
+
+export const migrationApprovalPolicies = ['auto', 'manual_in_production'] as const;
+export type MigrationApprovalPolicy = (typeof migrationApprovalPolicies)[number];
 
 export const initStepStatuses = ['pending', 'running', 'completed', 'failed', 'skipped'] as const;
 export type InitStepStatus = (typeof initStepStatuses)[number];
@@ -63,12 +102,27 @@ export const gitProviderTypeEnum = pgEnum('gitProviderType', gitProviderTypes);
 export const serviceTypeEnum = pgEnum('serviceType', serviceTypes);
 export const databaseTypeEnum = pgEnum('databaseType', databaseTypes);
 export const databasePlanEnum = pgEnum('databasePlan', databasePlans);
+export const databaseScopeEnum = pgEnum('databaseScope', databaseScopes);
+export const databaseRoleEnum = pgEnum('databaseRole', databaseRoles);
 export const projectStatusEnum = pgEnum('projectStatus', projectStatuses);
 export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuses);
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);
 export const webhookTypeEnum = pgEnum('webhookType', webhookTypes);
 export const integrationCapabilityEnum = pgEnum('integrationCapability', integrationCapabilities);
+export const migrationToolEnum = pgEnum('migrationTool', migrationTools);
+export const migrationPhaseEnum = pgEnum('migrationPhase', migrationPhases);
+export const migrationRunStatusEnum = pgEnum('migrationRunStatus', migrationRunStatuses);
+export const migrationRunnerTypeEnum = pgEnum('migrationRunnerType', migrationRunnerTypes);
+export const migrationLockStrategyEnum = pgEnum('migrationLockStrategy', migrationLockStrategies);
+export const migrationCompatibilityEnum = pgEnum(
+  'migrationCompatibility',
+  migrationCompatibilities
+);
+export const migrationApprovalPolicyEnum = pgEnum(
+  'migrationApprovalPolicy',
+  migrationApprovalPolicies
+);
 
 // ============================================
 // Auth Tables (NextAuth)
@@ -442,11 +496,14 @@ export const databases = pgTable(
     environmentId: uuid('environmentId').references(() => environments.id, {
       onDelete: 'set null',
     }),
+    serviceId: uuid('serviceId').references(() => services.id, { onDelete: 'set null' }),
 
     name: varchar('name', { length: 255 }).notNull(),
     type: databaseTypeEnum('type').notNull(),
     plan: databasePlanEnum('plan').notNull().default('starter'),
     provisionType: varchar('provisionType', { length: 20 }).notNull().default('shared'),
+    scope: databaseScopeEnum('scope').notNull().default('project'),
+    role: databaseRoleEnum('role').notNull().default('primary'),
 
     connectionString: text('connectionString'),
     host: varchar('host', { length: 255 }),
@@ -465,6 +522,156 @@ export const databases = pgTable(
   },
   (table) => ({
     projectIdIdx: index('database_projectId_idx').on(table.projectId),
+  })
+);
+
+export const migrationSpecifications = pgTable(
+  'migrationSpecification',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    serviceId: uuid('serviceId')
+      .notNull()
+      .references(() => services.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    databaseId: uuid('databaseId')
+      .notNull()
+      .references(() => databases.id, { onDelete: 'cascade' }),
+
+    tool: migrationToolEnum('tool').notNull(),
+    phase: migrationPhaseEnum('phase').notNull().default('preDeploy'),
+    autoRun: boolean('autoRun').notNull().default(true),
+
+    workingDirectory: varchar('workingDirectory', { length: 500 }).notNull(),
+    migrationPath: varchar('migrationPath', { length: 500 }),
+    command: text('command').notNull(),
+    lockStrategy: migrationLockStrategyEnum('lockStrategy').notNull().default('platform'),
+    compatibility: migrationCompatibilityEnum('compatibility')
+      .notNull()
+      .default('backward_compatible'),
+    approvalPolicy: migrationApprovalPolicyEnum('approvalPolicy').notNull().default('auto'),
+
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('migrationSpecification_projectId_idx').on(table.projectId),
+    serviceIdIdx: index('migrationSpecification_serviceId_idx').on(table.serviceId),
+    environmentIdIdx: index('migrationSpecification_environmentId_idx').on(table.environmentId),
+    databaseIdIdx: index('migrationSpecification_databaseId_idx').on(table.databaseId),
+    uniqueBinding: unique('migrationSpecification_service_env_db_unique').on(
+      table.serviceId,
+      table.environmentId,
+      table.databaseId
+    ),
+  })
+);
+
+export const migrationRuns = pgTable(
+  'migrationRun',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    serviceId: uuid('serviceId')
+      .notNull()
+      .references(() => services.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    databaseId: uuid('databaseId')
+      .notNull()
+      .references(() => databases.id, { onDelete: 'cascade' }),
+    specificationId: uuid('specificationId')
+      .notNull()
+      .references(() => migrationSpecifications.id, { onDelete: 'cascade' }),
+    deploymentId: uuid('deploymentId').references(() => deployments.id, { onDelete: 'set null' }),
+
+    triggeredBy: varchar('triggeredBy', { length: 20 }).notNull(),
+    triggeredByUserId: uuid('triggeredByUserId').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    sourceCommitSha: varchar('sourceCommitSha', { length: 100 }),
+    sourceCommitMessage: text('sourceCommitMessage'),
+
+    status: migrationRunStatusEnum('status').notNull().default('queued'),
+    runnerType: migrationRunnerTypeEnum('runnerType').notNull().default('worker'),
+    lockKey: varchar('lockKey', { length: 255 }).notNull(),
+
+    startedAt: timestamp('startedAt'),
+    finishedAt: timestamp('finishedAt'),
+    durationMs: integer('durationMs'),
+
+    appliedCount: integer('appliedCount'),
+    logExcerpt: text('logExcerpt'),
+    logsUrl: text('logsUrl'),
+
+    errorCode: varchar('errorCode', { length: 100 }),
+    errorMessage: text('errorMessage'),
+
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('migrationRun_projectId_idx').on(table.projectId),
+    serviceIdIdx: index('migrationRun_serviceId_idx').on(table.serviceId),
+    environmentIdIdx: index('migrationRun_environmentId_idx').on(table.environmentId),
+    databaseIdIdx: index('migrationRun_databaseId_idx').on(table.databaseId),
+    deploymentIdIdx: index('migrationRun_deploymentId_idx').on(table.deploymentId),
+    statusIdx: index('migrationRun_status_idx').on(table.status),
+  })
+);
+
+export const migrationRunItems = pgTable(
+  'migrationRunItem',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    migrationRunId: uuid('migrationRunId')
+      .notNull()
+      .references(() => migrationRuns.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 255 }).notNull(),
+    checksum: varchar('checksum', { length: 64 }),
+    status: migrationRunStatusEnum('status').notNull().default('queued'),
+    startedAt: timestamp('startedAt'),
+    finishedAt: timestamp('finishedAt'),
+    output: text('output'),
+    error: text('error'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    migrationRunIdIdx: index('migrationRunItem_run_id_idx').on(table.migrationRunId),
+  })
+);
+
+export const databaseMigrations = pgTable(
+  'databaseMigration',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    databaseId: uuid('databaseId')
+      .notNull()
+      .references(() => databases.id, { onDelete: 'cascade' }),
+
+    filename: varchar('filename', { length: 255 }).notNull(),
+    checksum: varchar('checksum', { length: 64 }).notNull(),
+
+    status: varchar('status', { length: 20 }).notNull().default('pending'),
+    output: text('output'),
+    error: text('error'),
+
+    executedAt: timestamp('executedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    databaseIdIdx: index('databaseMigration_databaseId_idx').on(table.databaseId),
+    uniqueFilename: unique('databaseMigration_databaseId_filename_unique').on(
+      table.databaseId,
+      table.filename
+    ),
   })
 );
 
@@ -776,6 +983,9 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
   domains: many(domains),
   deployments: many(deployments),
   environmentVariables: many(environmentVariables),
+  databases: many(databases),
+  migrationSpecifications: many(migrationSpecifications),
+  migrationRuns: many(migrationRuns),
 }));
 
 export const environmentsRelations = relations(environments, ({ one, many }) => ({
@@ -789,7 +999,7 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
   databases: many(databases),
 }));
 
-export const databasesRelations = relations(databases, ({ one }) => ({
+export const databasesRelations = relations(databases, ({ one, many }) => ({
   project: one(projects, {
     fields: [databases.projectId],
     references: [projects.id],
@@ -797,6 +1007,82 @@ export const databasesRelations = relations(databases, ({ one }) => ({
   environment: one(environments, {
     fields: [databases.environmentId],
     references: [environments.id],
+  }),
+  service: one(services, {
+    fields: [databases.serviceId],
+    references: [services.id],
+  }),
+  migrations: many(databaseMigrations),
+  migrationSpecifications: many(migrationSpecifications),
+  migrationRuns: many(migrationRuns),
+}));
+
+export const migrationSpecificationsRelations = relations(
+  migrationSpecifications,
+  ({ one, many }) => ({
+    project: one(projects, {
+      fields: [migrationSpecifications.projectId],
+      references: [projects.id],
+    }),
+    service: one(services, {
+      fields: [migrationSpecifications.serviceId],
+      references: [services.id],
+    }),
+    environment: one(environments, {
+      fields: [migrationSpecifications.environmentId],
+      references: [environments.id],
+    }),
+    database: one(databases, {
+      fields: [migrationSpecifications.databaseId],
+      references: [databases.id],
+    }),
+    runs: many(migrationRuns),
+  })
+);
+
+export const migrationRunsRelations = relations(migrationRuns, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [migrationRuns.projectId],
+    references: [projects.id],
+  }),
+  service: one(services, {
+    fields: [migrationRuns.serviceId],
+    references: [services.id],
+  }),
+  environment: one(environments, {
+    fields: [migrationRuns.environmentId],
+    references: [environments.id],
+  }),
+  database: one(databases, {
+    fields: [migrationRuns.databaseId],
+    references: [databases.id],
+  }),
+  specification: one(migrationSpecifications, {
+    fields: [migrationRuns.specificationId],
+    references: [migrationSpecifications.id],
+  }),
+  deployment: one(deployments, {
+    fields: [migrationRuns.deploymentId],
+    references: [deployments.id],
+  }),
+  triggeredByUser: one(users, {
+    fields: [migrationRuns.triggeredByUserId],
+    references: [users.id],
+  }),
+  items: many(migrationRunItems),
+}));
+
+export const migrationRunItemsRelations = relations(migrationRunItems, ({ one }) => ({
+  migrationRun: one(migrationRuns, {
+    fields: [migrationRunItems.migrationRunId],
+    references: [migrationRuns.id],
+  }),
+}));
+
+export const databaseMigrationsRelations = relations(databaseMigrations, ({ one }) => ({
+  database: one(databases, {
+    fields: [databaseMigrations.databaseId],
+    references: [databases.id],
   }),
 }));
 

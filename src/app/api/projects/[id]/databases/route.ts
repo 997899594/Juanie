@@ -2,7 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { databases, environments, projects, teamMembers } from '@/lib/db/schema';
+import { databases, environments, projects, services, teamMembers } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { getIsConnected, initK8sClient } from '@/lib/k8s';
 import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/queue/project-init';
@@ -40,14 +40,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // Optional ?environmentId= filter; omit to get all databases for the project
+  // Optional ?environmentId= and ?serviceId= filters; omit to get all databases for the project
   const url = new URL(request.url);
   const environmentId = url.searchParams.get('environmentId');
+  const serviceId = url.searchParams.get('serviceId');
+
+  const conditions = [eq(databases.projectId, id)];
+  if (environmentId) {
+    conditions.push(eq(databases.environmentId, environmentId));
+  }
+  if (serviceId) {
+    conditions.push(eq(databases.serviceId, serviceId));
+  }
 
   const dbList = await db.query.databases.findMany({
-    where: environmentId
-      ? and(eq(databases.projectId, id), eq(databases.environmentId, environmentId))
-      : eq(databases.projectId, id),
+    where: and(...conditions),
   });
 
   return NextResponse.json(dbList);
@@ -85,6 +92,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     externalUrl,
     plan = 'starter',
     environmentId,
+    serviceId,
+    scope = serviceId ? 'service' : 'project',
+    role = 'primary',
   } = body;
 
   if (!name || !type) {
@@ -93,6 +103,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const validTypes = ['postgresql', 'mysql', 'redis', 'mongodb'];
   const validProvisionTypes = ['shared', 'standalone', 'external'];
+  const validScopes = ['project', 'service'];
+  const validRoles = ['primary', 'readonly', 'cache', 'queue', 'analytics'];
   if (!validTypes.includes(type)) {
     return NextResponse.json(
       { error: `Invalid type. Must be one of: ${validTypes.join(', ')}` },
@@ -102,6 +114,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!validProvisionTypes.includes(provisionType)) {
     return NextResponse.json(
       { error: `Invalid provisionType. Must be one of: ${validProvisionTypes.join(', ')}` },
+      { status: 400 }
+    );
+  }
+  if (!validScopes.includes(scope)) {
+    return NextResponse.json(
+      { error: `Invalid scope. Must be one of: ${validScopes.join(', ')}` },
+      { status: 400 }
+    );
+  }
+  if (!validRoles.includes(role)) {
+    return NextResponse.json(
+      { error: `Invalid role. Must be one of: ${validRoles.join(', ')}` },
       { status: 400 }
     );
   }
@@ -133,16 +157,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     resolvedEnvId = prodEnv?.id ?? null;
   }
 
+  if (serviceId) {
+    const service = await db.query.services.findFirst({
+      where: and(eq(services.id, serviceId), eq(services.projectId, id)),
+    });
+    if (!service) {
+      return NextResponse.json({ error: 'Service not found in this project' }, { status: 404 });
+    }
+  }
+
   try {
     const [dbRecord] = await db
       .insert(databases)
       .values({
         projectId: id,
         environmentId: resolvedEnvId,
+        serviceId: serviceId ?? null,
         name,
         type,
         plan,
         provisionType,
+        scope,
+        role,
         connectionString: provisionType === 'external' ? externalUrl : null,
         status: 'pending',
       })
