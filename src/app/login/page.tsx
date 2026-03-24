@@ -12,82 +12,95 @@ export default async function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <div className="w-full max-w-sm space-y-8">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-black text-white text-lg font-bold">
-              J
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto grid min-h-screen max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="console-panel flex items-center justify-center px-8 py-10">
+          <div className="w-full max-w-sm space-y-8">
+            <div className="space-y-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-foreground text-lg font-semibold text-background">
+                J
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-2xl font-semibold tracking-tight">登录</h1>
+                <p className="text-sm text-muted-foreground">
+                  在一个控制台里管理发布、迁移和运行状态。
+                </p>
+              </div>
             </div>
-            <h1 className="text-xl font-semibold">Sign in to Juanie</h1>
-          </div>
 
-          <div className="space-y-3">
-            {process.env.NODE_ENV === 'development' ? (
-              <form action={devSignIn}>
-                <Button type="submit" className="w-full h-10">
-                  Sign in as Dev User
-                </Button>
-                <p className="text-xs text-center text-muted-foreground mt-3">Dev mode enabled</p>
-              </form>
-            ) : (
-              <>
-                <form
-                  action={async () => {
-                    'use server';
-                    await signIn('github', { redirectTo: '/' });
-                  }}
-                >
-                  <Button type="submit" variant="outline" className="w-full h-10">
-                    <Github className="mr-2 h-4 w-4" />
-                    Continue with GitHub
+            <div className="space-y-3">
+              {process.env.NODE_ENV === 'development' ? (
+                <form action={devSignIn}>
+                  <Button type="submit" className="h-11 w-full rounded-xl">
+                    以开发用户登录
                   </Button>
+                  <p className="mt-3 text-center text-xs text-muted-foreground">当前为开发模式</p>
                 </form>
+              ) : (
+                <>
+                  <form
+                    action={async () => {
+                      'use server';
+                      await signIn('github', { redirectTo: '/' });
+                    }}
+                  >
+                    <Button type="submit" variant="outline" className="h-11 w-full rounded-xl">
+                      <Github className="h-4 w-4" />
+                      使用 GitHub 登录
+                    </Button>
+                  </form>
 
-                <form
-                  action={async () => {
-                    'use server';
-                    await signIn('gitlab', { redirectTo: '/' });
-                  }}
-                >
-                  <Button type="submit" variant="outline" className="w-full h-10">
-                    Continue with GitLab
-                  </Button>
-                </form>
-              </>
-            )}
+                  <form
+                    action={async () => {
+                      'use server';
+                      await signIn('gitlab', { redirectTo: '/' });
+                    }}
+                  >
+                    <Button type="submit" variant="outline" className="h-11 w-full rounded-xl">
+                      使用 GitLab 登录
+                    </Button>
+                  </form>
+                </>
+              )}
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              继续即表示你同意服务条款与隐私政策。
+            </div>
           </div>
-
-          <p className="text-xs text-center text-muted-foreground">
-            By continuing, you agree to our{' '}
-            <span className="underline hover:text-foreground cursor-pointer">Terms of Service</span>{' '}
-            and{' '}
-            <span className="underline hover:text-foreground cursor-pointer">Privacy Policy</span>
-          </p>
         </div>
-      </div>
 
-      <div className="hidden lg:flex flex-1 bg-zinc-950 items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-800 via-zinc-950 to-black" />
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMyMjIiIGZpbGwtb3BhY2l0eT0iMC4wNCI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
-        <div className="relative z-10 max-w-md text-center px-8">
-          <h2 className="text-3xl font-semibold text-white mb-4">Deploy with confidence</h2>
-          <p className="text-zinc-400 text-sm leading-relaxed">
-            Juanie provides automated CI/CD, Kubernetes management, and GitOps workflows in one
-            unified platform.
-          </p>
-          <div className="grid grid-cols-3 gap-6 mt-12">
-            <div>
-              <div className="text-2xl font-semibold text-white">99.9%</div>
-              <div className="text-xs text-zinc-500 mt-1">Uptime SLA</div>
+        <div className="hidden console-panel overflow-hidden lg:flex lg:flex-col lg:justify-between">
+          <div className="border-b border-border/70 px-8 py-8">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              Juanie
             </div>
-            <div>
-              <div className="text-2xl font-semibold text-white">50+</div>
-              <div className="text-xs text-zinc-500 mt-1">Templates</div>
+            <div className="mt-4 text-4xl font-semibold leading-tight tracking-tight">
+              面向现代应用团队的发布控制台。
             </div>
-            <div>
-              <div className="text-2xl font-semibold text-white">5min</div>
-              <div className="text-xs text-zinc-500 mt-1">Deploy</div>
+          </div>
+
+          <div className="grid gap-3 px-8 py-8">
+            <div className="rounded-[18px] border border-border/70 bg-secondary/40 px-5 py-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                发布
+              </div>
+              <div className="mt-3 text-3xl font-semibold tracking-tight">1 条主链</div>
+              <div className="mt-1 text-sm text-muted-foreground">迁移、部署、审批</div>
+            </div>
+            <div className="rounded-[18px] border border-border/70 bg-secondary/40 px-5 py-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                可观测
+              </div>
+              <div className="mt-3 text-3xl font-semibold tracking-tight">实时</div>
+              <div className="mt-1 text-sm text-muted-foreground">日志、状态、待处理项</div>
+            </div>
+            <div className="rounded-[18px] border border-border/70 bg-secondary/40 px-5 py-4">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                团队
+              </div>
+              <div className="mt-3 text-3xl font-semibold tracking-tight">共享</div>
+              <div className="mt-1 text-sm text-muted-foreground">项目、成员、环境</div>
             </div>
           </div>
         </div>

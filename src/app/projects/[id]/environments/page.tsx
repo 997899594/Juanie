@@ -22,7 +22,6 @@ export default function EnvironmentsPage() {
   const projectId = params.id as string;
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [loading, setLoading] = useState(true);
-  // 展开状态：key = environmentId
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const fetchEnvironments = useCallback(async () => {
@@ -31,7 +30,6 @@ export default function EnvironmentsPage() {
       if (res.ok) {
         const data: Environment[] = await res.json();
         setEnvironments(data);
-        // 默认展开第一个环境
         if (data.length > 0) {
           setExpanded({ [data[0].id]: true });
         }
@@ -53,69 +51,56 @@ export default function EnvironmentsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto space-y-4">
-        <div className="h-8 w-32 bg-muted rounded animate-pulse" />
+      <div className="mx-auto max-w-6xl space-y-4">
+        <div className="h-20 animate-pulse rounded-[20px] bg-muted" />
         {[1, 2].map((i) => (
-          <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
+          <div key={i} className="h-32 animate-pulse rounded-[20px] bg-muted" />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <PageHeader
-        title="Environments"
-        description="Manage environment variables and secrets for each deployment environment."
-      />
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader title="环境" description="环境变量与部署目标" />
 
       {environments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="p-4 rounded-full bg-muted mb-4">
+        <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
+          <div className="mb-4 rounded-2xl bg-muted p-4">
             <Globe className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="text-lg font-medium mb-2">No environments</h2>
-          <p className="text-sm text-muted-foreground">
-            Environments will be created when you deploy
-          </p>
+          <h2 className="text-lg font-medium">还没有环境</h2>
+          <p className="mt-2 text-sm text-muted-foreground">部署后会自动创建环境。</p>
         </div>
       ) : (
         <div className="space-y-3">
           {environments.map((env) => {
             const isExpanded = !!expanded[env.id];
             return (
-              <div key={env.id} className="rounded-lg border bg-card overflow-hidden">
-                {/* Environment header（可点击折叠/展开） */}
+              <div key={env.id} className="console-panel overflow-hidden">
                 <button
                   type="button"
                   onClick={() => toggleExpanded(env.id)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
+                  className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-secondary/20"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div
                       className={cn(
                         'h-2 w-2 rounded-full',
-                        env.namespace ? 'bg-green-500' : 'bg-yellow-500'
+                        env.namespace ? 'bg-success' : 'bg-warning'
                       )}
                     />
-                    <span className="font-medium capitalize">{env.name}</span>
-                    {env.namespace && (
-                      <code className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">
+                    <span className="text-sm font-semibold capitalize">{env.name}</span>
+                    {env.namespace ? (
+                      <code className="rounded-xl bg-secondary px-2.5 py-1 text-xs font-mono text-muted-foreground">
                         {env.namespace}
                       </code>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">尚未部署</span>
                     )}
-                    {!env.namespace && (
-                      <span className="text-xs text-muted-foreground">Not yet deployed</span>
-                    )}
-                    {env.isProduction && (
-                      <Badge variant="default" className="text-xs">
-                        Production
-                      </Badge>
-                    )}
+                    {env.isProduction && <Badge>生产</Badge>}
                     {env.autoDeploy && !env.isProduction && (
-                      <Badge variant="secondary" className="text-xs">
-                        Auto Deploy
-                      </Badge>
+                      <Badge variant="secondary">自动部署</Badge>
                     )}
                   </div>
                   {isExpanded ? (
@@ -125,9 +110,8 @@ export default function EnvironmentsPage() {
                   )}
                 </button>
 
-                {/* 展开的变量管理区域 */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 pt-1 border-t">
+                  <div className="border-t border-border/70 px-5 py-4">
                     <EnvVarManager
                       projectId={projectId}
                       environmentId={env.id}

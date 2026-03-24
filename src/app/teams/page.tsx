@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { teamMembers, teams } from '@/lib/db/schema';
@@ -25,40 +26,36 @@ export default async function TeamsPage() {
     .where(eq(teamMembers.userId, session.user.id));
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Teams</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {userTeams.length} team{userTeams.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <Link href="/teams/new">
-          <Button size="sm" className="h-8">
-            <Plus className="h-4 w-4 mr-1.5" />
-            New Team
+    <div className="mx-auto max-w-7xl space-y-6">
+      <PageHeader
+        title="团队"
+        description={`${userTeams.length} 个团队`}
+        actions={
+          <Button asChild className="h-9 rounded-xl px-4">
+            <Link href="/teams/new">
+              <Plus className="h-4 w-4" />
+              新建团队
+            </Link>
           </Button>
-        </Link>
-      </div>
+        }
+      />
 
       {userTeams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="p-4 rounded-full bg-muted mb-4">
+        <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
+          <div className="mb-4 rounded-2xl bg-muted p-4">
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="text-lg font-medium mb-2">No teams yet</h2>
-          <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-            Create your first team to collaborate with others on projects
-          </p>
-          <Link href="/teams/new">
-            <Button>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Create Team
-            </Button>
-          </Link>
+          <h2 className="text-lg font-medium">还没有团队</h2>
+          <p className="mt-2 max-w-sm text-sm text-muted-foreground">新建一个团队后再开始协作。</p>
+          <Button asChild className="mt-5 rounded-xl">
+            <Link href="/teams/new">
+              <Plus className="h-4 w-4" />
+              新建团队
+            </Link>
+          </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {userTeams.map((item) => {
             const initials = item.team.name
               .split(' ')
@@ -71,21 +68,23 @@ export default async function TeamsPage() {
               <Link
                 key={item.team.id}
                 href={`/teams/${item.team.id}`}
-                className="p-4 rounded-lg border bg-card hover:border-foreground/20 transition-colors"
+                className="console-panel px-5 py-4 transition-colors hover:bg-secondary/30"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback className="bg-muted text-xs font-medium">
+                    <Avatar className="h-10 w-10 rounded-xl">
+                      <AvatarFallback className="rounded-xl bg-secondary text-xs font-semibold">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="font-medium">{item.team.name}</p>
-                      <p className="text-xs text-muted-foreground">@{item.team.slug}</p>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold">{item.team.name}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">@{item.team.slug}</div>
                     </div>
                   </div>
-                  <span className="text-xs bg-muted px-2 py-1 rounded capitalize">{item.role}</span>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium capitalize text-muted-foreground">
+                    {item.role}
+                  </span>
                 </div>
               </Link>
             );
@@ -93,15 +92,13 @@ export default async function TeamsPage() {
 
           <Link
             href="/teams/new"
-            className="p-4 rounded-lg border border-dashed hover:border-foreground/20 transition-colors"
+            className="flex min-h-40 flex-col items-center justify-center rounded-[20px] border border-dashed border-border bg-background px-5 py-4 text-center transition-colors hover:bg-secondary/30"
           >
-            <div className="flex flex-col items-center justify-center py-4 text-center">
-              <div className="p-2 rounded-full bg-muted mb-2">
-                <Plus className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <p className="text-sm font-medium">Create a team</p>
-              <p className="text-xs text-muted-foreground">Start collaborating</p>
+            <div className="mb-3 rounded-2xl bg-muted p-3">
+              <Plus className="h-4 w-4 text-muted-foreground" />
             </div>
+            <div className="text-sm font-semibold">新建团队</div>
+            <div className="mt-1 text-xs text-muted-foreground">开始协作</div>
           </Link>
         </div>
       )}

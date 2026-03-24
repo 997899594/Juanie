@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PageHeader } from '@/components/ui/page-header';
 import { Textarea } from '@/components/ui/textarea';
 
 interface Pipeline {
@@ -130,127 +131,110 @@ export default function PipelinesPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-8 w-32 bg-muted rounded animate-pulse" />
-        <div className="space-y-4">
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="流水线"
+        description={`${pipelines.length} 条流水线`}
+        actions={
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-9 rounded-xl px-4">
+                <Plus className="h-4 w-4" />
+                新建流水线
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <form onSubmit={handleCreate}>
+                <DialogHeader>
+                  <DialogTitle>新建流水线</DialogTitle>
+                  <DialogDescription>新增一条 CI/CD 流水线</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">名称</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="构建与部署"
+                      className="h-11 rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="yaml">YAML 配置</Label>
+                    <Textarea
+                      id="yaml"
+                      value={formData.yaml}
+                      onChange={(e) => setFormData({ ...formData, yaml: e.target.value })}
+                      className="min-h-[220px] rounded-xl font-mono text-xs"
+                      required
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    取消
+                  </Button>
+                  <Button type="submit" className="rounded-xl" disabled={submitting}>
+                    {submitting ? '创建中...' : '创建'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      {loading ? (
+        <div className="space-y-3">
           {[1, 2].map((i) => (
-            <div key={i} className="h-32 bg-muted rounded-lg animate-pulse" />
+            <div key={i} className="h-40 animate-pulse rounded-[20px] bg-muted" />
           ))}
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pipelines</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {pipelines.length} pipeline{pipelines.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="h-8">
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add Pipeline
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <form onSubmit={handleCreate}>
-              <DialogHeader>
-                <DialogTitle>Add Pipeline</DialogTitle>
-                <DialogDescription>Create a new CI/CD pipeline</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-sm">
-                    Name
-                  </Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Build and Deploy"
-                    className="h-9"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="yaml" className="text-sm">
-                    YAML Configuration
-                  </Label>
-                  <Textarea
-                    id="yaml"
-                    value={formData.yaml}
-                    onChange={(e) => setFormData({ ...formData, yaml: e.target.value })}
-                    className="min-h-[200px] font-mono text-xs"
-                    required
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm" className="h-8" disabled={submitting}>
-                  {submitting ? 'Creating...' : 'Create'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {pipelines.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="p-4 rounded-full bg-muted mb-4">
+      ) : pipelines.length === 0 ? (
+        <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
+          <div className="mb-4 rounded-2xl bg-muted p-4">
             <Workflow className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="text-lg font-medium mb-2">No pipelines yet</h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            Add a CI/CD pipeline to automate your deployments
-          </p>
-          <Button size="sm" className="h-8" onClick={() => setIsOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Pipeline
+          <h2 className="text-lg font-medium">还没有流水线</h2>
+          <p className="mt-2 text-sm text-muted-foreground">添加一条流水线来自动化部署。</p>
+          <Button className="mt-5 rounded-xl" onClick={() => setIsOpen(true)}>
+            <Plus className="h-4 w-4" />
+            新建流水线
           </Button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {pipelines.map((pipeline) => (
-            <div key={pipeline.id} className="rounded-lg border bg-card">
-              <div className="flex items-center justify-between p-4 border-b">
+            <div key={pipeline.id} className="console-panel overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border px-5 py-4">
                 <div>
-                  <p className="font-medium">{pipeline.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Created {new Date(pipeline.createdAt).toLocaleDateString()}
-                  </p>
+                  <div className="text-sm font-semibold">{pipeline.name}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    创建于 {new Date(pipeline.createdAt).toLocaleDateString()}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs"
+                    className="rounded-xl"
                     onClick={() => handleRun(pipeline.id)}
                   >
-                    <Play className="h-3 w-3 mr-1" />
-                    Run
+                    <Play className="h-3.5 w-3.5" />
+                    运行
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                    size="icon"
+                    className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive"
                     onClick={() => setDeleteId(pipeline.id)}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -258,7 +242,7 @@ export default function PipelinesPage() {
                 </div>
               </div>
               <div className="p-4">
-                <pre className="bg-muted p-3 rounded text-xs font-mono overflow-x-auto">
+                <pre className="overflow-x-auto rounded-2xl bg-muted p-4 font-mono text-xs">
                   {pipeline.yaml}
                 </pre>
               </div>
@@ -270,18 +254,16 @@ export default function PipelinesPage() {
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Pipeline</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this pipeline? This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>删除流水线</AlertDialogTitle>
+            <AlertDialogDescription>确认删除这条流水线？该操作无法撤销。</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              删除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

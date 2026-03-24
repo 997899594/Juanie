@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PageHeader } from '@/components/ui/page-header';
 import {
   Select,
   SelectContent,
@@ -213,189 +214,205 @@ export default function TeamMembersPage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="h-8 w-40 bg-muted rounded animate-pulse" />
-        <div className="space-y-4">
+      <div className="space-y-6">
+        <div className="grid gap-3 md:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
+            <div key={i} className="h-24 animate-pulse rounded-[20px] bg-muted" />
+          ))}
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-20 animate-pulse rounded-[20px] bg-muted" />
           ))}
         </div>
       </div>
     );
   }
 
+  const stats = [
+    { label: '成员', value: members.length.toString() },
+    { label: '待处理邀请', value: invitations.length.toString() },
+    { label: '角色', value: '拥有者 / 管理员 / 成员' },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {members.length} member{members.length !== 1 ? 's' : ''}
-        </p>
-
-        <div className="flex items-center gap-2">
-          {/* Invite link dialog */}
-          <Dialog
-            open={isLinkDialogOpen}
-            onOpenChange={(open) => {
-              setIsLinkDialogOpen(open);
-              if (!open) {
-                setGeneratedLink(null);
-                setLinkRole('member');
-              }
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8">
-                <Link className="h-4 w-4 mr-1.5" />
-                Invite Link
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Generate Invite Link</DialogTitle>
-                <DialogDescription>
-                  Create a shareable link that anyone can use to join this team. Links expire in 7
-                  days.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label className="text-sm">Role for new members</Label>
-                  <Select value={linkRole} onValueChange={setLinkRole}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="member">Member</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {generatedLink && (
-                  <div className="space-y-2">
-                    <Label className="text-sm">Invite link</Label>
-                    <div className="flex gap-2">
-                      <Input value={generatedLink} readOnly className="h-9 text-xs" />
-                      <Button size="sm" className="h-9 shrink-0" onClick={handleCopyLink}>
-                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => setIsLinkDialogOpen(false)}
-                >
-                  Close
+      <PageHeader
+        title="成员"
+        description={`${members.length} 名成员${invitations.length > 0 ? ` · ${invitations.length} 个待处理邀请` : ''}`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Dialog
+              open={isLinkDialogOpen}
+              onOpenChange={(open) => {
+                setIsLinkDialogOpen(open);
+                if (!open) {
+                  setGeneratedLink(null);
+                  setLinkRole('member');
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline" className="h-9 rounded-xl px-4">
+                  <Link className="h-4 w-4" />
+                  邀请链接
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8"
-                  onClick={handleGenerateLink}
-                  disabled={generatingLink}
-                >
-                  {generatingLink ? 'Generating...' : generatedLink ? 'Generate New' : 'Generate'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Direct invite dialog (existing users) */}
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-8">
-                <Plus className="h-4 w-4 mr-1.5" />
-                Invite
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleInvite}>
+              </DialogTrigger>
+              <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Invite Team Member</DialogTitle>
-                  <DialogDescription>
-                    Enter the email address to send an invitation
-                  </DialogDescription>
+                  <DialogTitle>生成邀请链接</DialogTitle>
+                  <DialogDescription>生成一个可分享的入组链接。</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-sm">
-                      Email
-                    </Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="colleague@example.com"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      className="h-9"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Role</Label>
-                    <Select value={inviteRole} onValueChange={setInviteRole}>
-                      <SelectTrigger className="h-9">
+                    <Label className="text-sm">新成员角色</Label>
+                    <Select value={linkRole} onValueChange={setLinkRole}>
+                      <SelectTrigger className="h-11 rounded-xl">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="member">Member</SelectItem>
+                        <SelectItem value="admin">管理员</SelectItem>
+                        <SelectItem value="member">成员</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {generatedLink && (
+                    <div className="space-y-2">
+                      <Label className="text-sm">邀请链接</Label>
+                      <div className="flex gap-2">
+                        <Input value={generatedLink} readOnly className="h-11 rounded-xl text-xs" />
+                        <Button className="h-11 shrink-0 rounded-xl px-4" onClick={handleCopyLink}>
+                          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => setIsOpen(false)}
+                    className="rounded-xl"
+                    onClick={() => setIsLinkDialogOpen(false)}
                   >
-                    Cancel
+                    关闭
                   </Button>
-                  <Button type="submit" size="sm" className="h-8" disabled={submitting}>
-                    {submitting ? 'Inviting...' : 'Invite'}
+                  <Button
+                    type="button"
+                    className="rounded-xl"
+                    onClick={handleGenerateLink}
+                    disabled={generatingLink}
+                  >
+                    {generatingLink ? '生成中...' : generatedLink ? '重新生成' : '生成'}
                   </Button>
                 </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+              <DialogTrigger asChild>
+                <Button className="h-9 rounded-xl px-4">
+                  <Plus className="h-4 w-4" />
+                  邀请成员
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleInvite}>
+                  <DialogHeader>
+                    <DialogTitle>邀请成员</DialogTitle>
+                    <DialogDescription>输入邮箱地址后发送邀请。</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email" className="text-sm">
+                        邮箱
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="colleague@example.com"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        className="h-11 rounded-xl"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm">角色</Label>
+                      <Select value={inviteRole} onValueChange={setInviteRole}>
+                        <SelectTrigger className="h-11 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">管理员</SelectItem>
+                          <SelectItem value="member">成员</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      取消
+                    </Button>
+                    <Button type="submit" className="rounded-xl" disabled={submitting}>
+                      {submitting ? '邀请中...' : '发送邀请'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        }
+      />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className="console-panel px-5 py-4">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              {stat.label}
+            </div>
+            <div className="mt-3 text-lg font-semibold tracking-tight">{stat.value}</div>
+          </div>
+        ))}
       </div>
 
       {members.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="p-4 rounded-full bg-muted mb-4">
+        <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
+          <div className="mb-4 rounded-2xl bg-muted p-4">
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="text-lg font-medium mb-2">No members yet</h2>
-          <p className="text-sm text-muted-foreground mb-6">Invite team members to collaborate</p>
-          <Button size="sm" className="h-8" onClick={() => setIsOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Invite Member
+          <h2 className="text-lg font-medium">还没有成员</h2>
+          <p className="mt-2 text-sm text-muted-foreground">邀请成员后开始协作</p>
+          <Button className="mt-5 rounded-xl" onClick={() => setIsOpen(true)}>
+            <Plus className="h-4 w-4" />
+            邀请成员
           </Button>
         </div>
       ) : (
-        <div className="rounded-lg border bg-card divide-y">
+        <div className="console-panel overflow-hidden px-0 py-0">
           {members.map((member) => (
-            <div key={member.id} className="flex items-center justify-between p-4">
+            <div
+              key={member.id}
+              className="flex flex-col gap-4 border-b border-border/70 px-5 py-4 last:border-b-0 md:flex-row md:items-center md:justify-between"
+            >
               <div className="flex items-center gap-3">
-                <Avatar className="h-9 w-9">
+                <Avatar className="h-10 w-10 rounded-xl">
                   <AvatarImage src={member.user.image ?? undefined} />
-                  <AvatarFallback className="text-xs">
+                  <AvatarFallback className="rounded-xl bg-secondary text-xs font-semibold">
                     {getInitials(member.user.name, member.user.email)}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <p className="text-sm font-medium">{member.user.name || member.user.email}</p>
-                  <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">
+                    {member.user.name || member.user.email}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{member.user.email}</p>
                 </div>
               </div>
 
@@ -405,15 +422,15 @@ export default function TeamMembersPage() {
                   onValueChange={(value) => handleChangeRole(member.id, value)}
                   disabled={member.role === 'owner'}
                 >
-                  <SelectTrigger className="h-8 w-24 text-xs">
+                  <SelectTrigger className="h-9 w-28 rounded-xl text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="owner" disabled>
-                      Owner
+                      拥有者
                     </SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="member">Member</SelectItem>
+                    <SelectItem value="admin">管理员</SelectItem>
+                    <SelectItem value="member">成员</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -421,7 +438,7 @@ export default function TeamMembersPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    className="h-9 w-9 rounded-xl p-0 text-muted-foreground hover:text-destructive"
                     onClick={() => setDeleteId(member.id)}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -436,22 +453,25 @@ export default function TeamMembersPage() {
       {/* Pending invite links */}
       {invitations.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">Pending Invite Links</h2>
-          <div className="rounded-lg border bg-card divide-y">
+          <div className="text-sm font-medium text-muted-foreground">待处理邀请链接</div>
+          <div className="console-panel overflow-hidden px-0 py-0">
             {invitations.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between px-4 py-3">
+              <div
+                key={inv.id}
+                className="flex items-center justify-between gap-4 border-b border-border/70 px-5 py-4 last:border-b-0"
+              >
                 <div className="space-y-0.5">
-                  <p className="text-sm font-medium capitalize">{inv.role}</p>
+                  <p className="text-sm font-semibold capitalize">{inv.role}</p>
                   <p className="text-xs text-muted-foreground">
-                    Expires {new Date(inv.expires).toLocaleDateString()}
+                    到期于 {new Date(inv.expires).toLocaleDateString()}
                   </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                  className="h-9 w-9 rounded-xl p-0 text-muted-foreground hover:text-destructive"
                   onClick={() => handleRevokeInvitation(inv.id)}
-                  title="Revoke invitation"
+                  title="撤销邀请"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -464,18 +484,16 @@ export default function TeamMembersPage() {
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Member</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove this member from the team?
-            </AlertDialogDescription>
+            <AlertDialogTitle>移除成员</AlertDialogTitle>
+            <AlertDialogDescription>确认将该成员移出团队？</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRemoveMember}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Remove
+              移除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

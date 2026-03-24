@@ -10,6 +10,7 @@ function getConnection(): ConnectionOptions {
 }
 
 let _projectInitQueue: Queue | null = null;
+let _releaseQueue: Queue | null = null;
 let _deploymentQueue: Queue | null = null;
 let _migrationQueue: Queue | null = null;
 
@@ -25,6 +26,13 @@ export function getDeploymentQueue(): Queue {
     _deploymentQueue = new Queue('deployment', { connection: getConnection() });
   }
   return _deploymentQueue;
+}
+
+export function getReleaseQueue(): Queue {
+  if (!_releaseQueue) {
+    _releaseQueue = new Queue('release', { connection: getConnection() });
+  }
+  return _releaseQueue;
 }
 
 export function getMigrationQueue(): Queue {
@@ -44,6 +52,10 @@ export type DeploymentJobData = {
   deploymentId: string;
   projectId: string;
   environmentId: string;
+};
+
+export type ReleaseJobData = {
+  releaseId: string;
 };
 
 export type MigrationJobData = {
@@ -78,6 +90,16 @@ export async function addDeploymentJob(
   );
 }
 
+export async function addReleaseJob(releaseId: string) {
+  return getReleaseQueue().add(
+    'release',
+    { releaseId },
+    {
+      attempts: 1,
+    }
+  );
+}
+
 export async function addMigrationJob(
   runId: string,
   options?: { imageUrl?: string | null; allowApprovalBypass?: boolean }
@@ -98,6 +120,7 @@ export async function addMigrationJob(
 export async function closeQueues() {
   const promises: Promise<void>[] = [];
   if (_projectInitQueue) promises.push(_projectInitQueue.close());
+  if (_releaseQueue) promises.push(_releaseQueue.close());
   if (_deploymentQueue) promises.push(_deploymentQueue.close());
   if (_migrationQueue) promises.push(_migrationQueue.close());
   return Promise.all(promises);

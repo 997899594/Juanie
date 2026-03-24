@@ -14,6 +14,7 @@ export { resolveMigrationSpecifications } from './resolver';
 export async function createMigrationRun(
   spec: ResolvedMigrationSpec,
   input: {
+    releaseId?: string | null;
     deploymentId?: string | null;
     triggeredBy: 'deploy' | 'manual' | 'api' | 'webhook';
     triggeredByUserId?: string | null;
@@ -32,6 +33,7 @@ export async function createMigrationRun(
       environmentId: spec.environment.id,
       databaseId: spec.database.id,
       specificationId: spec.specification.id,
+      releaseId: input.releaseId ?? null,
       deploymentId: input.deploymentId ?? null,
       triggeredBy: input.triggeredBy,
       triggeredByUserId: input.triggeredByUserId ?? null,
@@ -51,9 +53,11 @@ export async function resolveAndRunMigrations(
   environmentId: string,
   phase: 'preDeploy' | 'postDeploy' | 'manual',
   input: {
+    releaseId?: string | null;
     deploymentId?: string | null;
     triggeredBy: 'deploy' | 'manual' | 'api' | 'webhook';
     triggeredByUserId?: string | null;
+    sourceRef?: string | null;
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     serviceIds?: string[];
@@ -69,27 +73,29 @@ export async function resolveAndCreateMigrationRuns(
   environmentId: string,
   phase: 'preDeploy' | 'postDeploy' | 'manual',
   input: {
+    releaseId?: string | null;
     deploymentId?: string | null;
     triggeredBy: 'deploy' | 'manual' | 'api' | 'webhook';
     triggeredByUserId?: string | null;
+    sourceRef?: string | null;
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     serviceIds?: string[];
     options?: ExecuteMigrationRunOptions;
   }
 ) {
-  const specs = await resolveMigrationSpecifications(
-    projectId,
-    environmentId,
-    phase,
-    input.serviceIds
-  );
+  const specs = await resolveMigrationSpecifications(projectId, environmentId, phase, {
+    serviceIds: input.serviceIds,
+    sourceRef: input.sourceRef,
+    sourceCommitSha: input.sourceCommitSha,
+  });
   const runs = [];
 
   for (const spec of specs.filter(
     (candidate) => candidate.specification.autoRun || phase === 'manual'
   )) {
     const run = await createMigrationRun(spec, {
+      releaseId: input.releaseId,
       deploymentId: input.deploymentId,
       triggeredBy: input.triggeredBy,
       triggeredByUserId: input.triggeredByUserId,

@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { deployments, projects, services, webhooks } from '@/lib/db/schema';
-import { addDeploymentJob } from '@/lib/queue';
+import { projects, services, webhooks } from '@/lib/db/schema';
+import { createRepositoryRelease } from '@/lib/releases';
 
 /**
  * Registry Webhook 接收端点
@@ -93,12 +93,16 @@ export async function POST(request: NextRequest) {
       where: eq(projects.id, projectId),
       with: {
         environments: true,
+        repository: true,
         services: true,
       },
     });
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+    if (!project.repository?.fullName) {
+      return NextResponse.json({ error: 'Project repository is not configured' }, { status: 400 });
     }
 
     // 验证镜像名是否匹配项目配置
@@ -140,22 +144,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No auto-deploy environment found' }, { status: 400 });
     }
 
-    // 7. 创建部署记录
-    const [deployment] = await db
-      .insert(deployments)
-      .values({
-        projectId: project.id,
-        environmentId: productionEnv.id,
-        serviceId: targetService?.id || null,
-        status: 'queued',
-        imageUrl: imageName,
-        // 从 tag 中提取 commit sha (格式: sha-abc1234 或直接使用 tag)
-        commitSha: extractCommitShaFromTag(tag),
-      })
-      .returning();
-
-    // 8. 触发部署任务
-    await addDeploymentJob(deployment.id, project.id, productionEnv.id);
+    const release = await createRepositoryRelease({
+      repository: project.repository.fullName,
+      ref: `refs/heads/${productionEnv.branch ?? 'main'}`,
+      sha: extractCommitShaFromTag(tag),
+      services: [
+        {
+          id: targetService?.id,
+          name: targetService?.name,
+          image: imageName,
+        },
+      ],
+      triggeredBy: 'webhook',
+      summary: `Registry release ${extractCommitShaFromTag(tag) ?? tag}`,
+    });
 
     const logMessage = targetService
       ? `Webhook triggered deployment for ${project.name}/${targetService.name} (image: ${imageName})`
@@ -164,7 +166,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      deploymentId: deployment.id,
+      releaseId: release?.id,
       project: project.name,
       service: targetService?.name || null,
       image: imageName,

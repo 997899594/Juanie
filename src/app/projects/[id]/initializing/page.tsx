@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { InitStepStatus } from '@/lib/db/schema';
 
 interface InitStep {
@@ -18,13 +19,13 @@ interface InitStep {
 }
 
 const STEP_LABELS: Record<string, string> = {
-  validate_repository: 'Validating Repository',
-  create_repository: 'Creating Repository',
-  push_template: 'Pushing Template Files',
-  setup_namespace: 'Setting Up Namespace',
-  deploy_services: 'Deploying Services',
-  provision_databases: 'Provisioning Databases',
-  configure_dns: 'Configuring DNS',
+  validate_repository: '验证仓库',
+  create_repository: '创建仓库',
+  push_template: '推送模板文件',
+  setup_namespace: '创建命名空间',
+  deploy_services: '部署服务',
+  provision_databases: '创建数据库',
+  configure_dns: '配置域名',
 };
 
 function StepIcon({ status }: { status: InitStepStatus }) {
@@ -32,7 +33,7 @@ function StepIcon({ status }: { status: InitStepStatus }) {
     case 'completed':
       return <Check className="h-5 w-5 text-green-500" />;
     case 'running':
-      return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
+      return <Loader2 className="h-5 w-5 animate-spin text-foreground" />;
     case 'failed':
       return <X className="h-5 w-5 text-destructive" />;
     case 'skipped':
@@ -106,81 +107,103 @@ export default function InitializingPage() {
     };
   }, [projectId, router]);
 
+  const statusLabel = status === 'active' ? '已就绪' : status === 'failed' ? '失败' : '初始化中';
+
+  const statusTone = status === 'active' ? 'success' : status === 'failed' ? 'error' : 'info';
+  const completedSteps = steps.filter((step) => step.status === 'completed').length;
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {status === 'active'
-            ? 'Project Ready!'
-            : status === 'failed'
-              ? 'Initialization Failed'
-              : 'Initializing Project'}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {status === 'active'
-            ? 'Your project is ready to use'
-            : status === 'failed'
-              ? error || 'Something went wrong'
-              : 'Setting up your project...'}
-        </p>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        title={
+          status === 'active' ? '项目已就绪' : status === 'failed' ? '初始化失败' : '项目初始化中'
+        }
+        description={status === 'failed' ? error || '初始化过程中出现问题' : undefined}
+        actions={
+          <StatusIndicator
+            status={statusTone}
+            pulse={status === 'initializing'}
+            label={statusLabel}
+          />
+        }
+      />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="console-panel px-5 py-4">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">进度</div>
+          <div className="mt-3 text-3xl font-semibold tracking-tight">{overallProgress}%</div>
+        </div>
+        <div className="console-panel px-5 py-4">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">步骤</div>
+          <div className="mt-3 text-3xl font-semibold tracking-tight">
+            {completedSteps}/{steps.length || 0}
+          </div>
+        </div>
+        <div className="console-panel px-5 py-4">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            后续动作
+          </div>
+          <div className="mt-3 text-sm font-semibold">
+            {status === 'active' ? '正在打开项目…' : status === 'failed' ? '等待处理' : '等待中'}
+          </div>
+        </div>
       </div>
 
-      <Card>
-        <CardContent className="p-6">
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Overall Progress</span>
-              <span className="text-sm text-muted-foreground">{overallProgress}%</span>
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-500"
-                style={{ width: `${overallProgress}%` }}
-              />
-            </div>
-          </div>
+      <div className="console-panel px-5 py-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="text-sm font-semibold">进度</div>
+          <div className="text-xs text-muted-foreground">{overallProgress}%</div>
+        </div>
+        <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-foreground transition-all duration-500"
+            style={{ width: `${overallProgress}%` }}
+          />
+        </div>
+      </div>
 
-          <div className="space-y-4">
-            {steps.map((step) => (
-              <div key={step.id} className="flex items-start gap-3">
-                <StepIcon status={step.status} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-sm font-medium ${
-                        step.status === 'running' ? 'text-foreground' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {STEP_LABELS[step.step] || step.step}
-                    </span>
-                    {step.status === 'running' && step.progress > 0 && (
-                      <span className="text-xs text-muted-foreground">{step.progress}%</span>
-                    )}
-                  </div>
-                  {step.message && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{step.message}</p>
-                  )}
-                  {step.error && <p className="text-xs text-destructive mt-0.5">{step.error}</p>}
-                </div>
+      <div className="console-panel overflow-hidden px-0 py-0">
+        {steps.map((step) => (
+          <div
+            key={step.id}
+            className="flex gap-4 border-b border-border/70 px-5 py-4 last:border-b-0"
+          >
+            <div className="mt-0.5 shrink-0">
+              <StepIcon status={step.status} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span
+                  className={`text-sm font-semibold ${
+                    step.status === 'running' ? 'text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  {STEP_LABELS[step.step] || step.step}
+                </span>
+                {step.status === 'running' && step.progress > 0 && (
+                  <span className="text-xs text-muted-foreground">{step.progress}%</span>
+                )}
               </div>
-            ))}
+              {step.message && <p className="mt-1 text-xs text-muted-foreground">{step.message}</p>}
+              {step.error && <p className="mt-1 text-xs text-destructive">{step.error}</p>}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        ))}
+      </div>
 
-      <div className="flex justify-center gap-4">
+      <div className="flex flex-wrap justify-center gap-3">
         {status === 'active' && (
           <Link href={`/projects/${projectId}`}>
-            <Button>Go to Project</Button>
+            <Button className="rounded-xl px-4">进入项目</Button>
           </Link>
         )}
         {status === 'failed' && (
           <Link href="/projects/new">
-            <Button>Try Again</Button>
+            <Button className="rounded-xl px-4">重新开始</Button>
           </Link>
         )}
         {status === 'initializing' && (
-          <p className="text-sm text-muted-foreground">This may take a few minutes...</p>
+          <div className="text-sm text-muted-foreground">通常需要几分钟，请稍候。</div>
         )}
       </div>
     </div>

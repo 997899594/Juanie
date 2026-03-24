@@ -38,6 +38,21 @@ export type DatabaseRole = (typeof databaseRoles)[number];
 export const projectStatuses = ['initializing', 'active', 'failed', 'archived'] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
+export const releaseStatuses = [
+  'queued',
+  'planning',
+  'migration_pre_running',
+  'migration_pre_failed',
+  'deploying',
+  'verifying',
+  'migration_post_running',
+  'degraded',
+  'succeeded',
+  'failed',
+  'canceled',
+] as const;
+export type ReleaseStatus = (typeof releaseStatuses)[number];
+
 export const deploymentStatuses = [
   'queued',
   'migration_pending',
@@ -105,6 +120,7 @@ export const databasePlanEnum = pgEnum('databasePlan', databasePlans);
 export const databaseScopeEnum = pgEnum('databaseScope', databaseScopes);
 export const databaseRoleEnum = pgEnum('databaseRole', databaseRoles);
 export const projectStatusEnum = pgEnum('projectStatus', projectStatuses);
+export const releaseStatusEnum = pgEnum('releaseStatus', releaseStatuses);
 export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuses);
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);
@@ -590,6 +606,7 @@ export const migrationRuns = pgTable(
     specificationId: uuid('specificationId')
       .notNull()
       .references(() => migrationSpecifications.id, { onDelete: 'cascade' }),
+    releaseId: uuid('releaseId').references(() => releases.id, { onDelete: 'set null' }),
     deploymentId: uuid('deploymentId').references(() => deployments.id, { onDelete: 'set null' }),
 
     triggeredBy: varchar('triggeredBy', { length: 20 }).notNull(),
@@ -622,6 +639,7 @@ export const migrationRuns = pgTable(
     serviceIdIdx: index('migrationRun_serviceId_idx').on(table.serviceId),
     environmentIdIdx: index('migrationRun_environmentId_idx').on(table.environmentId),
     databaseIdIdx: index('migrationRun_databaseId_idx').on(table.databaseId),
+    releaseIdIdx: index('migrationRun_releaseId_idx').on(table.releaseId),
     deploymentIdIdx: index('migrationRun_deploymentId_idx').on(table.deploymentId),
     statusIdx: index('migrationRun_status_idx').on(table.status),
   })
@@ -748,6 +766,69 @@ export const environmentVariables = pgTable(
 );
 
 // ============================================
+// Release Tables
+// ============================================
+
+export const releases = pgTable(
+  'release',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+
+    sourceRepository: varchar('sourceRepository', { length: 255 }).notNull(),
+    sourceRef: varchar('sourceRef', { length: 255 }).notNull(),
+    sourceCommitSha: varchar('sourceCommitSha', { length: 100 }),
+    configCommitSha: varchar('configCommitSha', { length: 100 }),
+    status: releaseStatusEnum('status').notNull().default('queued'),
+    triggeredBy: varchar('triggeredBy', { length: 20 }).notNull().default('api'),
+    triggeredByUserId: uuid('triggeredByUserId').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    summary: text('summary'),
+    errorMessage: text('errorMessage'),
+
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('release_projectId_idx').on(table.projectId),
+    environmentIdIdx: index('release_environmentId_idx').on(table.environmentId),
+    statusIdx: index('release_status_idx').on(table.status),
+    sourceRepoIdx: index('release_sourceRepository_idx').on(table.sourceRepository),
+  })
+);
+
+export const releaseArtifacts = pgTable(
+  'releaseArtifact',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    releaseId: uuid('releaseId')
+      .notNull()
+      .references(() => releases.id, { onDelete: 'cascade' }),
+    serviceId: uuid('serviceId')
+      .notNull()
+      .references(() => services.id, { onDelete: 'cascade' }),
+
+    imageUrl: varchar('imageUrl', { length: 500 }).notNull(),
+    imageDigest: varchar('imageDigest', { length: 255 }),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    releaseIdIdx: index('releaseArtifact_releaseId_idx').on(table.releaseId),
+    serviceIdIdx: index('releaseArtifact_serviceId_idx').on(table.serviceId),
+    releaseServiceUnique: unique('releaseArtifact_release_service_unique').on(
+      table.releaseId,
+      table.serviceId
+    ),
+  })
+);
+
+// ============================================
 // Deployment Tables
 // ============================================
 
@@ -755,6 +836,7 @@ export const deployments = pgTable(
   'deployment',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    releaseId: uuid('releaseId').references(() => releases.id, { onDelete: 'set null' }),
     projectId: uuid('projectId')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
@@ -779,6 +861,7 @@ export const deployments = pgTable(
     createdAt: timestamp('createdAt').defaultNow().notNull(),
   },
   (table) => ({
+    releaseIdIdx: index('deployment_releaseId_idx').on(table.releaseId),
     projectIdIdx: index('deployment_projectId_idx').on(table.projectId),
     statusIdx: index('deployment_status_idx').on(table.status),
   })
@@ -963,6 +1046,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   databases: many(databases),
   domains: many(domains),
   environmentVariables: many(environmentVariables),
+  releases: many(releases),
   deployments: many(deployments),
   webhooks: many(webhooks),
   initSteps: many(projectInitSteps),
@@ -984,6 +1068,7 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
   deployments: many(deployments),
   environmentVariables: many(environmentVariables),
   databases: many(databases),
+  releaseArtifacts: many(releaseArtifacts),
   migrationSpecifications: many(migrationSpecifications),
   migrationRuns: many(migrationRuns),
 }));
@@ -994,6 +1079,7 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
     references: [projects.id],
   }),
   domains: many(domains),
+  releases: many(releases),
   deployments: many(deployments),
   environmentVariables: many(environmentVariables),
   databases: many(databases),
@@ -1061,6 +1147,10 @@ export const migrationRunsRelations = relations(migrationRuns, ({ one, many }) =
     fields: [migrationRuns.specificationId],
     references: [migrationSpecifications.id],
   }),
+  release: one(releases, {
+    fields: [migrationRuns.releaseId],
+    references: [releases.id],
+  }),
   deployment: one(deployments, {
     fields: [migrationRuns.deploymentId],
     references: [deployments.id],
@@ -1116,7 +1206,40 @@ export const environmentVariablesRelations = relations(environmentVariables, ({ 
   }),
 }));
 
+export const releasesRelations = relations(releases, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [releases.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [releases.environmentId],
+    references: [environments.id],
+  }),
+  triggeredByUser: one(users, {
+    fields: [releases.triggeredByUserId],
+    references: [users.id],
+  }),
+  artifacts: many(releaseArtifacts),
+  deployments: many(deployments),
+  migrationRuns: many(migrationRuns),
+}));
+
+export const releaseArtifactsRelations = relations(releaseArtifacts, ({ one }) => ({
+  release: one(releases, {
+    fields: [releaseArtifacts.releaseId],
+    references: [releases.id],
+  }),
+  service: one(services, {
+    fields: [releaseArtifacts.serviceId],
+    references: [services.id],
+  }),
+}));
+
 export const deploymentsRelations = relations(deployments, ({ one, many }) => ({
+  release: one(releases, {
+    fields: [deployments.releaseId],
+    references: [releases.id],
+  }),
   project: one(projects, {
     fields: [deployments.projectId],
     references: [projects.id],

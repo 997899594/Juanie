@@ -26,6 +26,8 @@ export interface ResolvedMigrationSpec {
 export interface ExecuteMigrationRunOptions {
   imageUrl?: string | null;
   allowApprovalBypass?: boolean;
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
 }
 
 export interface MigrationExecutionPlan {

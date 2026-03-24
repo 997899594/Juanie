@@ -101,16 +101,16 @@ function EnvVarDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.key.trim()) {
-      setError('Key is required');
+      setError('变量名不能为空');
       return;
     }
     if (!form.value.trim() && !isEdit) {
-      setError('Value is required');
+      setError('变量值不能为空');
       return;
     }
     // 编辑模式下，value 为空时跳过值更新（只改 key 或 isSecret）
     if (isEdit && !form.value.trim()) {
-      setError('Enter a new value to update (secrets cannot be retrieved)');
+      setError('请输入新的变量值后再更新，密文变量无法回显');
       return;
     }
 
@@ -140,7 +140,7 @@ function EnvVarDialog({
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? 'Failed to save variable');
+        throw new Error(data.error ?? '保存变量失败');
       }
 
       setOpen(false);
@@ -157,41 +157,37 @@ function EnvVarDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Variable' : 'Add Variable'}</DialogTitle>
+          <DialogTitle>{isEdit ? '编辑变量' : '添加变量'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Key */}
           <div className="space-y-1.5">
-            <Label htmlFor="env-key">Key</Label>
+            <Label htmlFor="env-key">变量名</Label>
             <Input
               id="env-key"
-              placeholder="e.g. DATABASE_URL"
+              placeholder="例如 DATABASE_URL"
               value={form.key}
               onChange={(e) =>
                 setForm((f) => ({ ...f, key: e.target.value.toUpperCase().replace(/\s/g, '_') }))
               }
-              className="font-mono"
+              className="h-11 rounded-xl font-mono"
               autoComplete="off"
               autoFocus
             />
           </div>
 
-          {/* Value */}
           <div className="space-y-1.5">
             <Label htmlFor="env-value">
-              {isEdit ? 'New Value' : 'Value'}
-              {isEdit && (
-                <span className="ml-1.5 text-xs text-muted-foreground">(required to update)</span>
-              )}
+              {isEdit ? '新变量值' : '变量值'}
+              {isEdit && <span className="ml-1.5 text-xs text-muted-foreground">(更新时必填)</span>}
             </Label>
             <div className="relative">
               <Input
                 id="env-value"
                 type={form.isSecret && !showValue ? 'password' : 'text'}
-                placeholder={isEdit ? 'Enter new value to replace...' : 'Value'}
+                placeholder={isEdit ? '输入新的变量值以覆盖旧值' : '输入变量值'}
                 value={form.value}
                 onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-                className="font-mono pr-9"
+                className="h-11 rounded-xl pr-9 font-mono"
                 autoComplete="off"
               />
               {form.isSecret && (
@@ -207,13 +203,12 @@ function EnvVarDialog({
             </div>
           </div>
 
-          {/* isSecret */}
-          <div className="flex items-center gap-3 rounded-md border px-3 py-2.5">
+          <div className="flex items-center gap-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
             <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">Secret</p>
+              <p className="text-sm font-medium">密文变量</p>
               <p className="text-xs text-muted-foreground">
-                Value will be encrypted. Cannot be viewed after saving.
+                保存后会加密，之后无法在页面中查看原值。
               </p>
             </div>
             <Switch
@@ -228,14 +223,15 @@ function EnvVarDialog({
             <Button
               type="button"
               variant="outline"
+              className="rounded-xl"
               onClick={() => setOpen(false)}
               disabled={saving}
             >
-              Cancel
+              取消
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" className="rounded-xl" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isEdit ? 'Update' : 'Add'}
+              {isEdit ? '更新' : '添加'}
             </Button>
           </DialogFooter>
         </form>
@@ -274,14 +270,12 @@ function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: E
   };
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 group">
-      {/* Key */}
+    <div className="group flex items-center gap-3 px-5 py-4 transition-colors hover:bg-secondary/30">
       <div className="flex items-center gap-2 w-56 shrink-0">
         {envVar.isSecret && <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
         <code className="text-sm font-mono truncate">{envVar.key}</code>
       </div>
 
-      {/* Value */}
       <div className="flex-1 min-w-0">
         {envVar.isSecret ? (
           <span className="text-sm text-muted-foreground font-mono tracking-widest select-none">
@@ -294,15 +288,13 @@ function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: E
         )}
       </div>
 
-      {/* Badge */}
       {envVar.isSecret && (
-        <span className="shrink-0 inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+        <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
           <KeyRound className="h-3 w-3" />
-          secret
+          密文
         </span>
       )}
 
-      {/* Actions */}
       <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <EnvVarDialog
           projectId={projectId}
@@ -310,7 +302,7 @@ function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: E
           editTarget={envVar}
           onSuccess={onUpdated}
           trigger={
-            <Button variant="ghost" size="icon" className="h-7 w-7">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl">
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           }
@@ -321,7 +313,7 @@ function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: E
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-destructive hover:text-destructive"
+              className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
             >
               {deleting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -332,19 +324,19 @@ function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: E
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete variable?</AlertDialogTitle>
+              <AlertDialogTitle>删除变量？</AlertDialogTitle>
               <AlertDialogDescription>
-                <code className="font-mono font-semibold text-foreground">{envVar.key}</code> will
-                be permanently deleted and removed from the environment.
+                <code className="font-mono font-semibold text-foreground">{envVar.key}</code>{' '}
+                会被永久删除，并从当前环境移除。
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>取消</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleDelete}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                Delete
+                删除
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -383,17 +375,14 @@ export function EnvVarManager({ projectId, environmentId, environmentName }: Env
 
   return (
     <div className="space-y-3">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-medium capitalize">{environmentName}</h3>
           {!loading && (
             <p className="text-xs text-muted-foreground mt-0.5">
               {vars.length === 0
-                ? 'No variables'
-                : `${plainCount} variable${plainCount !== 1 ? 's' : ''}${
-                    secretCount > 0 ? `, ${secretCount} secret${secretCount !== 1 ? 's' : ''}` : ''
-                  }`}
+                ? '没有变量'
+                : `${plainCount} 个普通变量${secretCount > 0 ? `，${secretCount} 个密文变量` : ''}`}
             </p>
           )}
         </div>
@@ -402,53 +391,51 @@ export function EnvVarManager({ projectId, environmentId, environmentName }: Env
           environmentId={environmentId}
           onSuccess={fetchVars}
           trigger={
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" className="rounded-xl">
               <Plus className="h-4 w-4" />
-              Add
+              添加
             </Button>
           }
         />
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border overflow-hidden">
-        {/* Table header */}
-        <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 border-b">
+      <div className="overflow-hidden rounded-[20px] border border-border bg-background">
+        <div className="flex items-center gap-3 border-b border-border/70 bg-secondary/30 px-5 py-3">
           <span className="w-56 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Key
+            变量名
           </span>
           <span className="flex-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Value
+            变量值
           </span>
         </div>
 
         {loading ? (
-          <div className="divide-y">
+          <div className="divide-y divide-border/70">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3">
-                <div className="h-4 w-40 bg-muted rounded animate-pulse" />
-                <div className="h-4 w-56 bg-muted rounded animate-pulse" />
+              <div key={i} className="flex items-center gap-3 px-5 py-4">
+                <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-56 animate-pulse rounded bg-muted" />
               </div>
             ))}
           </div>
         ) : vars.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
             <KeyRound className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">No variables yet</p>
+            <p className="text-sm text-muted-foreground">还没有变量</p>
             <EnvVarDialog
               projectId={projectId}
               environmentId={environmentId}
               onSuccess={fetchVars}
               trigger={
-                <Button size="sm" variant="outline" className="mt-1">
+                <Button size="sm" variant="outline" className="mt-1 rounded-xl">
                   <Plus className="h-4 w-4" />
-                  Add first variable
+                  添加第一个变量
                 </Button>
               }
             />
           </div>
         ) : (
-          <div className={cn('divide-y')}>
+          <div className={cn('divide-y divide-border/70')}>
             {vars.map((v) => (
               <EnvVarRow
                 key={v.id}

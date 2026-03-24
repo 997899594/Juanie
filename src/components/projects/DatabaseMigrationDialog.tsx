@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle, Database, Loader2, Play, RefreshCw, TerminalSquare } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ interface MigrationRun {
   id: string;
   status: string;
   createdAt: string;
+  releaseId?: string | null;
   errorMessage: string | null;
   logExcerpt: string | null;
   specification: {
@@ -103,6 +105,45 @@ const statusTone: Record<string, 'default' | 'secondary' | 'destructive' | 'outl
   skipped: 'outline',
 };
 
+function formatRunStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    success: '成功',
+    running: '执行中',
+    queued: '排队中',
+    planning: '规划中',
+    awaiting_approval: '待审批',
+    failed: '失败',
+    canceled: '已取消',
+    skipped: '已跳过',
+  };
+
+  return labels[status] ?? status;
+}
+
+function formatCompatibilityLabel(value: string): string {
+  return value === 'breaking' ? '破坏性变更' : value === 'backward_compatible' ? '兼容变更' : value;
+}
+
+function formatApprovalPolicyLabel(value: string): string {
+  const labels: Record<string, string> = {
+    auto: '自动',
+    manual: '手动',
+    manual_in_production: '生产需审批',
+  };
+
+  return labels[value] ?? value;
+}
+
+function formatLockStrategyLabel(value: string): string {
+  const labels: Record<string, string> = {
+    none: '无锁',
+    advisory: '建议锁',
+    postgres_advisory: 'Postgres 建议锁',
+  };
+
+  return labels[value] ?? value;
+}
+
 export function DatabaseMigrationDialog({
   projectId,
   databaseId,
@@ -149,7 +190,7 @@ export function DatabaseMigrationDialog({
       });
       const data = await res.json();
       if (!res.ok) {
-        setMessage(data.error ?? 'Failed to load migration plan');
+        setMessage(data.error ?? '加载迁移计划失败');
         setPlan(null);
         return;
       }
@@ -193,38 +234,13 @@ export function DatabaseMigrationDialog({
       });
       const data = await res.json();
       if (!res.ok) {
-        setMessage(data.error ?? 'Failed to trigger migration');
+        setMessage(data.error ?? '触发迁移失败');
         return;
       }
-      setMessage(data.message ?? 'Migration queued');
+      setMessage(data.message ?? '迁移已加入队列');
       setConfirmationText('');
       await loadRuns();
       await loadPlan();
-    } finally {
-      setTriggering(false);
-    }
-  };
-
-  const handleAction = async (action: 'approve' | 'retry', runId: string) => {
-    setTriggering(true);
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/databases/${databaseId}/migrations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action,
-          runId,
-          imageUrl: latestImageUrl,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setMessage(data.error ?? `Failed to ${action} migration`);
-        return;
-      }
-      setMessage(data.message ?? `Migration ${action} queued`);
-      await loadRuns();
     } finally {
       setTriggering(false);
     }
@@ -236,59 +252,59 @@ export function DatabaseMigrationDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 text-xs">
-          <Database className="mr-1 h-3 w-3" />
-          Migrate
+        <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs">
+          <Database className="h-3 w-3" />
+          手动执行
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{databaseName} migrations</DialogTitle>
+          <DialogTitle>{databaseName} 手动迁移控制台</DialogTitle>
           <DialogDescription>
-            Review the execution plan, confirm the target, then queue the migration.
+            自动迁移应通过 release 执行。这里仅用于人工审批、重试或紧急手动执行。
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Badge variant="secondary">{databaseType}</Badge>
-            {latestStatus && <Badge variant="outline">db: {latestStatus}</Badge>}
+            {latestStatus && <Badge variant="outline">数据库：{latestStatus}</Badge>}
             {latestRun && (
               <Badge variant={statusTone[latestRun.status] ?? 'outline'}>
-                last: {latestRun.status}
+                最近：{formatRunStatusLabel(latestRun.status)}
               </Badge>
             )}
           </div>
 
           {message && <div className="text-sm text-muted-foreground">{message}</div>}
 
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="overflow-hidden rounded-[20px] border border-border bg-background">
+            <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
               <div>
-                <div className="text-sm font-medium">Execution Plan</div>
+                <div className="text-sm font-semibold">手动执行计划</div>
                 <div className="text-xs text-muted-foreground">
-                  Manual migrations require confirmation in every environment.
+                  平台仍会校验 runner、镜像、锁策略和确认文本。
                 </div>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-8 rounded-xl text-xs"
                 onClick={loadPlan}
                 disabled={planning}
               >
-                <RefreshCw className="mr-1 h-3 w-3" />
-                Refresh plan
+                <RefreshCw className="h-3 w-3" />
+                刷新计划
               </Button>
             </div>
-            <div className="space-y-4 px-4 py-3">
+            <div className="space-y-4 px-5 py-4">
               {planning ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading execution plan…
+                  正在加载执行计划…
                 </div>
               ) : !plan ? (
-                <div className="text-sm text-muted-foreground">Execution plan unavailable.</div>
+                <div className="text-sm text-muted-foreground">暂时无法获取执行计划。</div>
               ) : (
                 <>
                   <div className="flex flex-wrap items-center gap-2">
@@ -296,61 +312,65 @@ export function DatabaseMigrationDialog({
                     <Badge variant="outline">{plan.service.name}</Badge>
                     <Badge variant="outline">{plan.specification.tool}</Badge>
                     <Badge variant="outline">{plan.specification.phase}</Badge>
-                    {plan.environment.isProduction && (
-                      <Badge variant="destructive">production</Badge>
-                    )}
+                    {plan.environment.isProduction && <Badge variant="destructive">生产环境</Badge>}
                     {plan.specification.compatibility === 'breaking' && (
-                      <Badge variant="destructive">breaking</Badge>
+                      <Badge variant="destructive">破坏性变更</Badge>
                     )}
                   </div>
 
                   <div className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <div className="text-xs text-muted-foreground">Database</div>
+                      <div className="text-xs text-muted-foreground">数据库</div>
                       <div className="font-medium">{plan.database.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {plan.database.type} · {plan.database.status ?? 'unknown'}
+                        {plan.database.type} · {plan.database.status ?? '未知状态'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground">Runner</div>
+                      <div className="text-xs text-muted-foreground">执行器</div>
                       <div className="font-medium">{plan.runnerType}</div>
                       <div className="text-xs text-muted-foreground break-all">
                         {plan.runnerType === 'k8s_job'
-                          ? (plan.imageUrl ?? 'No image available')
-                          : 'Runs in the control-plane worker'}
+                          ? (plan.imageUrl ?? '没有可用镜像')
+                          : '由控制面 worker 执行'}
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground">Working Directory</div>
+                      <div className="text-xs text-muted-foreground">工作目录</div>
                       <code className="text-xs">{plan.specification.workingDirectory}</code>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground">Migration Path</div>
+                      <div className="text-xs text-muted-foreground">迁移路径</div>
                       <code className="text-xs">
                         {plan.specification.migrationPath ?? `migrations/${plan.database.type}`}
                       </code>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground">Compatibility</div>
-                      <div className="font-medium">{plan.specification.compatibility}</div>
+                      <div className="text-xs text-muted-foreground">兼容性</div>
+                      <div className="font-medium">
+                        {formatCompatibilityLabel(plan.specification.compatibility)}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground">Approval Policy</div>
-                      <div className="font-medium">{plan.specification.approvalPolicy}</div>
+                      <div className="text-xs text-muted-foreground">审批策略</div>
+                      <div className="font-medium">
+                        {formatApprovalPolicyLabel(plan.specification.approvalPolicy)}
+                      </div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground">Lock Strategy</div>
-                      <div className="font-medium">{plan.specification.lockStrategy}</div>
+                      <div className="text-xs text-muted-foreground">锁策略</div>
+                      <div className="font-medium">
+                        {formatLockStrategyLabel(plan.specification.lockStrategy)}
+                      </div>
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <TerminalSquare className="h-3.5 w-3.5" />
-                      Command preview
+                      命令预览
                     </div>
-                    <pre className="overflow-x-auto rounded bg-muted p-2 text-xs">
+                    <pre className="overflow-x-auto rounded-2xl border border-border bg-secondary/30 p-3 text-xs">
                       {plan.specification.command}
                     </pre>
                   </div>
@@ -358,10 +378,10 @@ export function DatabaseMigrationDialog({
                   {plan.specification.tool === 'sql' && (
                     <div className="space-y-2">
                       <div className="text-xs text-muted-foreground">
-                        SQL files to apply ({plan.sqlFiles.length})
+                        待执行 SQL 文件（{plan.sqlFiles.length}）
                       </div>
                       {plan.sqlFiles.length > 0 ? (
-                        <div className="space-y-1 rounded bg-muted/60 p-2">
+                        <div className="space-y-1 rounded-2xl border border-border bg-secondary/30 p-3">
                           {plan.sqlFiles.map((file) => (
                             <div key={file.name} className="text-xs text-muted-foreground">
                               {file.name}
@@ -370,17 +390,17 @@ export function DatabaseMigrationDialog({
                         </div>
                       ) : (
                         <div className="text-xs text-muted-foreground">
-                          No SQL files detected for the configured migration path.
+                          在当前迁移路径下没有找到 SQL 文件。
                         </div>
                       )}
                     </div>
                   )}
 
                   {(plan.warnings.length > 0 || plan.blockingReason || plan.filePreviewError) && (
-                    <div className="space-y-2 rounded border border-amber-500/30 bg-amber-500/5 p-3">
-                      <div className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-400">
+                    <div className="space-y-2 rounded-2xl border border-border bg-secondary/30 p-3">
+                      <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                         <AlertTriangle className="h-3.5 w-3.5" />
-                        Review before running
+                        执行前确认
                       </div>
                       {plan.warnings.map((warning) => (
                         <div key={warning} className="text-xs text-muted-foreground">
@@ -400,7 +420,7 @@ export function DatabaseMigrationDialog({
 
                   <div className="space-y-2">
                     <Label htmlFor={`migration-confirm-${databaseId}`}>
-                      Type <code>{plan.confirmationValue}</code> to confirm
+                      输入 <code>{plan.confirmationValue}</code> 以确认执行
                     </Label>
                     <Input
                       id={`migration-confirm-${databaseId}`}
@@ -417,33 +437,31 @@ export function DatabaseMigrationDialog({
             </div>
           </div>
 
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <div className="text-sm font-medium">Recent Runs</div>
+          <div className="overflow-hidden rounded-[20px] border border-border bg-background">
+            <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+              <div className="text-sm font-semibold">最近运行</div>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-8 rounded-xl text-xs"
                 onClick={() => {
                   loadRuns();
                   loadPlan();
                 }}
               >
-                <RefreshCw className="mr-1 h-3 w-3" />
-                Refresh
+                <RefreshCw className="h-3 w-3" />
+                刷新
               </Button>
             </div>
             <div className="max-h-80 overflow-y-auto">
               {loading ? (
-                <div className="px-4 py-6 text-sm text-muted-foreground">Loading…</div>
+                <div className="px-5 py-6 text-sm text-muted-foreground">加载中…</div>
               ) : runs.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-muted-foreground">
-                  No migration runs yet.
-                </div>
+                <div className="px-5 py-6 text-sm text-muted-foreground">还没有迁移记录。</div>
               ) : (
-                <div className="divide-y">
+                <div className="divide-y divide-border/70">
                   {runs.map((run) => (
-                    <div key={run.id} className="space-y-2 px-4 py-3">
+                    <div key={run.id} className="space-y-2 px-5 py-4">
                       <div className="flex items-center gap-2">
                         <Badge variant={statusTone[run.status] ?? 'outline'}>{run.status}</Badge>
                         <span className="text-xs text-muted-foreground">{run.service.name}</span>
@@ -457,30 +475,23 @@ export function DatabaseMigrationDialog({
                       {run.errorMessage && (
                         <div className="text-xs text-destructive">{run.errorMessage}</div>
                       )}
-                      <div className="flex items-center gap-2">
-                        {run.status === 'awaiting_approval' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => handleAction('approve', run.id)}
-                            disabled={triggering}
+                      {run.releaseId && (
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/projects/${projectId}/releases/${run.releaseId}`}
+                            className="text-xs text-muted-foreground hover:text-foreground"
                           >
-                            Approve
-                          </Button>
-                        )}
-                        {(run.status === 'failed' || run.status === 'canceled') && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => handleAction('retry', run.id)}
-                            disabled={triggering}
-                          >
-                            Retry
-                          </Button>
-                        )}
-                      </div>
+                            打开发布详情
+                          </Link>
+                          {(run.status === 'awaiting_approval' ||
+                            run.status === 'failed' ||
+                            run.status === 'canceled') && (
+                            <span className="text-xs text-muted-foreground">
+                              审批和重试都在发布页处理。
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {run.items.length > 0 && (
                         <div className="space-y-1">
                           {run.items.map((item) => (
@@ -491,7 +502,7 @@ export function DatabaseMigrationDialog({
                         </div>
                       )}
                       {run.logExcerpt && (
-                        <pre className="overflow-x-auto rounded bg-muted p-2 text-xs text-muted-foreground">
+                        <pre className="overflow-x-auto rounded-2xl border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
                           {run.logExcerpt}
                         </pre>
                       )}
@@ -505,15 +516,16 @@ export function DatabaseMigrationDialog({
 
         <DialogFooter>
           <Button
+            className="rounded-xl px-4"
             onClick={handleRun}
             disabled={triggering || planning || !plan || !plan.canRun || !confirmationMatches}
           >
             {triggering ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Play className="mr-1 h-4 w-4" />
+              <Play className="h-4 w-4" />
             )}
-            Run migration
+            Queue manual migration
           </Button>
         </DialogFooter>
       </DialogContent>

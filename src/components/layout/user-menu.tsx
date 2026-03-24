@@ -49,7 +49,7 @@ export function UserMenu() {
         <DropdownMenuItem asChild>
           <a href="/settings" className="cursor-pointer text-sm">
             <User className="mr-2 h-3.5 w-3.5" />
-            Profile
+            个人设置
           </a>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -58,7 +58,7 @@ export function UserMenu() {
           onClick={() => signOut({ callbackUrl: '/login' })}
         >
           <LogOut className="mr-2 h-3.5 w-3.5" />
-          Sign out
+          退出登录
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

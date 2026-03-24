@@ -74,12 +74,16 @@ async function markRunFailed(
   throw new Error(errorMessage);
 }
 
-async function runSqlMigration(runId: string, spec: ResolvedMigrationSpec): Promise<void> {
+async function runSqlMigration(
+  runId: string,
+  spec: ResolvedMigrationSpec,
+  options: ExecuteMigrationRunOptions
+): Promise<void> {
   const path = spec.specification.migrationPath ?? `migrations/${spec.database.type}`;
   const files = await fetchMigrationFilesFromRepoPath(
     spec.specification.projectId,
     path,
-    spec.environment.branch || 'main'
+    options.sourceCommitSha || options.sourceRef || spec.environment.branch || 'main'
   );
 
   const [item] = await db
@@ -332,7 +336,7 @@ export async function executeMigrationRun(
     .where(eq(migrationRuns.id, runId));
 
   if (spec.specification.tool === 'sql') {
-    await runSqlMigration(runId, spec);
+    await runSqlMigration(runId, spec, options);
     return;
   }
 

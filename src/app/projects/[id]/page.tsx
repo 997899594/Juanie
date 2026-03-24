@@ -1,10 +1,9 @@
 import { desc, eq } from 'drizzle-orm';
 import {
+  AlertTriangle,
   Box,
   Database,
   ExternalLink,
-  FolderKanban,
-  GitCommit,
   Globe,
   Link2,
   Rocket,
@@ -16,25 +15,26 @@ import { redirect } from 'next/navigation';
 import { DatabaseMigrationDialog } from '@/components/projects/DatabaseMigrationDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import {
   databases,
   deployments,
   domains,
-  environments,
   migrationRuns,
   projects,
+  releases,
   services,
   teams,
 } from '@/lib/db/schema';
 
 const navItems = [
-  { title: 'Deployments', href: 'deployments', icon: Rocket },
-  { title: 'Environments', href: 'environments', icon: Globe },
-  { title: 'Resources', href: 'resources', icon: Box },
-  { title: 'Webhooks', href: 'webhooks', icon: Webhook },
-  { title: 'Settings', href: 'settings', icon: Settings },
+  { title: '发布', href: 'releases', icon: Rocket },
+  { title: '环境', href: 'environments', icon: Globe },
+  { title: '资源', href: 'resources', icon: Box },
+  { title: '回调', href: 'webhooks', icon: Webhook },
+  { title: '设置', href: 'settings', icon: Settings },
 ];
 
 const statusColors: Record<string, string> = {
@@ -46,12 +46,36 @@ const statusColors: Record<string, string> = {
   archived: 'bg-muted-foreground',
 };
 
-const dbTypeColors: Record<string, string> = {
-  postgresql: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  mysql: 'bg-orange-500/15 text-orange-700 dark:text-orange-400',
-  redis: 'bg-red-500/15 text-red-700 dark:text-red-400',
-  mongodb: 'bg-green-500/15 text-green-700 dark:text-green-400',
+const releaseStatusColors: Record<string, string> = {
+  queued: 'bg-muted-foreground',
+  planning: 'bg-info',
+  migration_pre_running: 'bg-warning',
+  migration_pre_failed: 'bg-destructive',
+  deploying: 'bg-info',
+  verifying: 'bg-info',
+  migration_post_running: 'bg-warning',
+  degraded: 'bg-warning',
+  succeeded: 'bg-success',
+  failed: 'bg-destructive',
+  canceled: 'bg-muted-foreground',
 };
+
+function formatStatusLabel(value: string): string {
+  const labels: Record<string, string> = {
+    active: '运行中',
+    running: '运行中',
+    initializing: '初始化中',
+    pending: '待处理',
+    failed: '失败',
+    archived: '已归档',
+    queued: '排队中',
+    awaiting_approval: '待审批',
+    planning: '规划中',
+    success: '成功',
+    canceled: '已取消',
+  };
+  return labels[value] ?? value;
+}
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -73,7 +97,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     projectServices,
     projectDatabases,
     projectDomains,
-    recentDeployments,
+    recentReleases,
     recentMigrationRuns,
     deploymentImageCandidates,
   ] = await Promise.all([
@@ -81,26 +105,26 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     db.query.services.findMany({ where: eq(services.projectId, id) }),
     db.query.databases.findMany({ where: eq(databases.projectId, id) }),
     db.query.domains.findMany({ where: eq(domains.projectId, id) }),
-    db
-      .select({
-        id: deployments.id,
-        status: deployments.status,
-        version: deployments.version,
-        commitSha: deployments.commitSha,
-        commitMessage: deployments.commitMessage,
-        createdAt: deployments.createdAt,
-        environmentName: environments.name,
-      })
-      .from(deployments)
-      .innerJoin(environments, eq(environments.id, deployments.environmentId))
-      .where(eq(deployments.projectId, id))
-      .orderBy(desc(deployments.createdAt))
-      .limit(5),
+    db.query.releases.findMany({
+      where: eq(releases.projectId, id),
+      orderBy: [desc(releases.createdAt)],
+      limit: 20,
+      with: {
+        environment: true,
+        artifacts: {
+          with: {
+            service: true,
+          },
+        },
+      },
+    }),
     db.query.migrationRuns.findMany({
       where: eq(migrationRuns.projectId, id),
       orderBy: (run, { desc }) => [desc(run.createdAt)],
       with: {
         database: true,
+        service: true,
+        release: true,
       },
     }),
     db.query.deployments.findMany({
@@ -125,139 +149,182 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     }
   }
 
+  const latestReleaseByScope = new Map<string, (typeof recentReleases)[number]>();
+  for (const release of recentReleases) {
+    const projectScopeKey = `${release.environment.id}:project`;
+    if (!latestReleaseByScope.has(projectScopeKey)) {
+      latestReleaseByScope.set(projectScopeKey, release);
+    }
+
+    for (const artifact of release.artifacts) {
+      const serviceScopeKey = `${release.environment.id}:${artifact.service.id}`;
+      if (!latestReleaseByScope.has(serviceScopeKey)) {
+        latestReleaseByScope.set(serviceScopeKey, release);
+      }
+    }
+  }
+
+  const attentionRuns = recentMigrationRuns.filter((run) =>
+    ['awaiting_approval', 'failed', 'canceled'].includes(run.status)
+  );
+
+  const stats = [
+    { label: '服务', value: projectServices.length },
+    { label: '数据库', value: projectDatabases.length },
+    { label: '待处理', value: attentionRuns.length },
+    { label: '发布', value: recentReleases.length },
+  ];
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
-            <FolderKanban className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-              <span>{team?.name}</span>
-              <span>·</span>
-              <div className="flex items-center gap-1.5">
-                <div
-                  className={`h-1.5 w-1.5 rounded-full ${statusColors[project.status ?? ''] ?? 'bg-muted-foreground'}`}
-                />
-                <span className="capitalize">{project.status}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <Link href={`/projects/${id}/settings`}>
-          <Button variant="outline" size="sm" className="h-8">
-            <Settings className="h-4 w-4 mr-1.5" />
-            Settings
+    <div className="mx-auto max-w-7xl space-y-6">
+      <PageHeader
+        title={project.name}
+        description={`${team?.name ?? '团队'} · ${formatStatusLabel(project.status ?? 'pending')}`}
+        actions={
+          <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+            <Link href={`/projects/${id}/settings`}>
+              <Settings className="h-3.5 w-3.5" />
+              设置
+            </Link>
           </Button>
-        </Link>
+        }
+      />
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {stats.map((stat) => (
+          <div key={stat.label} className="console-panel px-5 py-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {stat.label}
+            </div>
+            <div className="mt-3 text-3xl font-semibold tracking-tight">{stat.value}</div>
+          </div>
+        ))}
       </div>
 
-      {/* Domains / URLs */}
       {projectDomains.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {projectDomains.map((domain) => (
-            <a
-              key={domain.id}
-              href={`https://${domain.hostname}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm hover:border-foreground/30 transition-colors"
-            >
-              <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
-              {domain.hostname}
-              <ExternalLink className="h-3 w-3 text-muted-foreground" />
-            </a>
-          ))}
+        <div className="console-panel px-5 py-4">
+          <div className="mb-3 text-sm font-semibold">域名</div>
+          <div className="flex flex-wrap gap-2">
+            {projectDomains.map((domain) => (
+              <a
+                key={domain.id}
+                href={`https://${domain.hostname}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-sm transition-colors hover:bg-secondary/70"
+              >
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                {domain.hostname}
+                <ExternalLink className="h-3 w-3 text-muted-foreground" />
+              </a>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Nav cards */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid gap-3 xl:grid-cols-5">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={`/projects/${id}/${item.href}`}
-              className="p-4 rounded-lg border bg-card hover:border-foreground/20 transition-colors group"
+              className="console-panel flex items-center gap-3 px-4 py-4 transition-colors hover:bg-secondary/30"
             >
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded bg-muted group-hover:bg-foreground group-hover:text-background transition-colors">
-                  <Icon className="h-4 w-4" />
-                </div>
-                <span className="text-sm font-medium">{item.title}</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary">
+                <Icon className="h-4 w-4" />
               </div>
+              <span className="text-sm font-semibold">{item.title}</span>
             </Link>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* Left column */}
+      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-4">
-          {/* Overview */}
-          <div className="rounded-lg border bg-card">
-            <div className="p-4 border-b">
-              <h2 className="font-medium text-sm">Overview</h2>
+          <section className="console-panel overflow-hidden">
+            <div className="border-b border-border px-5 py-4">
+              <div className="text-sm font-semibold">概览</div>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="space-y-4 px-5 py-4">
               {project.repository && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Repository</p>
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    仓库
+                  </div>
                   <a
                     href={project.repository.webUrl || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-sm hover:underline"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
                   >
                     {project.repository.fullName}
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
               )}
+
               {project.productionBranch && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Production Branch</p>
-                  <code className="text-sm bg-muted px-2 py-0.5 rounded">
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    生产分支
+                  </div>
+                  <code className="rounded bg-muted px-2 py-1 text-sm font-mono">
                     {project.productionBranch}
                   </code>
                 </div>
               )}
+
               {project.description && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Description</p>
-                  <p className="text-sm">{project.description}</p>
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    描述
+                  </div>
+                  <div className="text-sm text-muted-foreground">{project.description}</div>
                 </div>
               )}
-              <div className="pt-2 border-t">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Created</span>
-                  <span>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="console-card bg-secondary/20 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    状态
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-sm font-medium capitalize">
+                    <div
+                      className={`h-2 w-2 rounded-full ${statusColors[project.status ?? ''] ?? 'bg-muted-foreground'}`}
+                    />
+                    {project.status}
+                  </div>
+                </div>
+                <div className="console-card bg-secondary/20 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    创建时间
+                  </div>
+                  <div className="mt-2 text-sm font-medium">
                     {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : '—'}
-                  </span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Services */}
           {projectServices.length > 0 && (
-            <div className="rounded-lg border bg-card">
-              <div className="p-4 border-b">
-                <h2 className="font-medium text-sm">Services</h2>
+            <section className="console-panel overflow-hidden">
+              <div className="border-b border-border px-5 py-4">
+                <div className="text-sm font-semibold">服务</div>
               </div>
-              <div className="divide-y">
+              <div className="space-y-2 p-3">
                 {projectServices.map((svc) => (
-                  <div key={svc.id} className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
+                  <div
+                    key={svc.id}
+                    className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
                       <div
-                        className={`h-1.5 w-1.5 rounded-full ${statusColors[svc.status ?? ''] ?? 'bg-muted-foreground'}`}
+                        className={`h-2 w-2 rounded-full ${statusColors[svc.status ?? ''] ?? 'bg-muted-foreground'}`}
                       />
                       <span className="text-sm font-medium">{svc.name}</span>
-                      <Badge variant="secondary" className="text-xs capitalize">
+                      <Badge variant="secondary" className="capitalize">
                         {svc.type}
                       </Badge>
                     </div>
@@ -265,126 +332,178 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Databases */}
-          {projectDatabases.length > 0 && (
-            <div className="rounded-lg border bg-card">
-              <div className="p-4 border-b">
-                <h2 className="font-medium text-sm">Databases</h2>
-              </div>
-              <div className="divide-y">
-                {projectDatabases.map((dbItem) => (
-                  <div key={dbItem.id} className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Database className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-sm font-medium">{dbItem.name}</span>
-                      <span
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium ${dbTypeColors[dbItem.type] ?? ''}`}
-                      >
-                        {dbItem.type}
-                      </span>
-                      {dbItem.scope === 'service' && dbItem.serviceId && (
-                        <Badge variant="outline" className="text-xs">
-                          {projectServices.find((service) => service.id === dbItem.serviceId)
-                            ?.name ?? 'service'}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <div className="text-xs text-muted-foreground capitalize">
-                          {dbItem.status ?? 'pending'}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {latestMigrationByDatabase.get(dbItem.id)
-                            ? `migration ${latestMigrationByDatabase.get(dbItem.id)?.status}`
-                            : 'no migration runs'}
-                        </div>
-                      </div>
-                      <DatabaseMigrationDialog
-                        projectId={id}
-                        databaseId={dbItem.id}
-                        databaseName={dbItem.name}
-                        databaseType={dbItem.type}
-                        latestStatus={dbItem.status ?? null}
-                        latestImageUrl={
-                          latestImageByScope.get(
-                            `${dbItem.environmentId}:${dbItem.serviceId ?? 'project'}`
-                          ) ??
-                          latestImageByScope.get(`${dbItem.environmentId}:project`) ??
-                          null
-                        }
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            </section>
           )}
         </div>
 
-        {/* Right column: Recent Deployments */}
-        <div className="rounded-lg border bg-card">
-          <div className="p-4 border-b">
-            <h2 className="font-medium text-sm">Recent Deployments</h2>
-          </div>
-          <div className="p-2">
-            {recentDeployments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Rocket className="h-5 w-5 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No deployments yet</p>
+        <div className="space-y-4">
+          <section className="console-panel overflow-hidden">
+            <div className="border-b border-border px-5 py-4">
+              <div className="text-sm font-semibold">待处理</div>
+            </div>
+            <div className="p-3">
+              {attentionRuns.length === 0 ? (
+                <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
+                  <AlertTriangle className="mb-3 h-5 w-5 text-muted-foreground" />
+                  <div className="text-sm font-medium">当前没有待处理项</div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {attentionRuns.slice(0, 5).map((run) => (
+                    <Link
+                      key={run.id}
+                      href={
+                        run.releaseId
+                          ? `/projects/${id}/releases/${run.releaseId}`
+                          : `/projects/${id}/releases`
+                      }
+                      className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className={`h-2 w-2 rounded-full ${
+                            run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{run.database.name}</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {run.service?.name ?? '服务'} · {formatStatusLabel(run.status)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(run.createdAt).toLocaleDateString()}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {projectDatabases.length > 0 && (
+            <section className="console-panel overflow-hidden">
+              <div className="border-b border-border px-5 py-4">
+                <div className="text-sm font-semibold">数据库</div>
               </div>
-            ) : (
-              <div className="divide-y">
-                {recentDeployments.map((deploy) => (
-                  <div key={deploy.id} className="p-3 space-y-1">
-                    <div className="flex items-center justify-between">
+              <div className="space-y-3 p-3">
+                {projectDatabases.map((dbItem) => {
+                  const latestMigration = latestMigrationByDatabase.get(dbItem.id);
+                  const scopeKey = `${dbItem.environmentId}:${dbItem.serviceId ?? 'project'}`;
+                  const latestRelease =
+                    latestReleaseByScope.get(scopeKey) ??
+                    latestReleaseByScope.get(`${dbItem.environmentId}:project`);
+
+                  return (
+                    <div key={dbItem.id} className="console-card bg-secondary/20 px-4 py-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Database className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-sm font-medium">{dbItem.name}</span>
+                            <Badge variant="secondary" className="capitalize">
+                              {dbItem.type}
+                            </Badge>
+                            <Badge variant="outline" className="capitalize">
+                              {formatStatusLabel(dbItem.status ?? 'pending')}
+                            </Badge>
+                            {dbItem.scope === 'service' && dbItem.serviceId && (
+                              <Badge variant="outline">
+                                {projectServices.find((service) => service.id === dbItem.serviceId)
+                                  ?.name ?? '服务'}
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="space-y-1 text-xs text-muted-foreground">
+                            <div>
+                              {latestMigration
+                                ? `最近迁移：${formatStatusLabel(latestMigration.status)}`
+                                : '暂无迁移记录'}
+                            </div>
+                            {latestRelease ? (
+                              <Link
+                                href={`/projects/${id}/releases/${latestRelease.id}`}
+                                className="inline-flex items-center gap-1 hover:text-foreground"
+                              >
+                                <span>{latestRelease.summary || '发布'}</span>
+                                {latestRelease.sourceCommitSha && (
+                                  <code className="font-mono">
+                                    {latestRelease.sourceCommitSha.slice(0, 7)}
+                                  </code>
+                                )}
+                              </Link>
+                            ) : (
+                              <div>暂无关联发布</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          <DatabaseMigrationDialog
+                            projectId={id}
+                            databaseId={dbItem.id}
+                            databaseName={dbItem.name}
+                            databaseType={dbItem.type}
+                            latestStatus={dbItem.status ?? null}
+                            latestImageUrl={
+                              latestImageByScope.get(scopeKey) ??
+                              latestImageByScope.get(`${dbItem.environmentId}:project`) ??
+                              null
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          <section className="console-panel overflow-hidden">
+            <div className="border-b border-border px-5 py-4">
+              <div className="text-sm font-semibold">最近发布</div>
+            </div>
+            <div className="space-y-2 p-3">
+              {recentReleases.length === 0 ? (
+                <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
+                  还没有发布
+                </div>
+              ) : (
+                recentReleases.slice(0, 5).map((release) => (
+                  <Link
+                    key={release.id}
+                    href={`/projects/${id}/releases/${release.id}`}
+                    className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
+                  >
+                    <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`h-1.5 w-1.5 rounded-full ${statusColors[deploy.status] ?? 'bg-muted-foreground'}`}
+                          className={`h-2 w-2 rounded-full ${releaseStatusColors[release.status] ?? 'bg-muted-foreground'}`}
                         />
-                        <span className="text-sm font-medium">
-                          {deploy.version ? `v${deploy.version}` : '—'}
+                        <span className="truncate text-sm font-medium">
+                          {release.summary || '发布'}
                         </span>
-                        <Badge variant="secondary" className="text-xs capitalize">
-                          {deploy.environmentName}
+                        <Badge variant="secondary" className="capitalize">
+                          {release.environment.name}
                         </Badge>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {deploy.createdAt ? new Date(deploy.createdAt).toLocaleDateString() : '—'}
-                      </span>
+                      {(release.sourceCommitSha || release.sourceRef) && (
+                        <div className="truncate text-xs text-muted-foreground">
+                          {release.sourceCommitSha?.slice(0, 7)} {release.sourceRef}
+                        </div>
+                      )}
                     </div>
-                    {(deploy.commitMessage || deploy.commitSha) && (
-                      <div className="flex items-center gap-1.5 pl-3.5">
-                        {deploy.commitSha && (
-                          <GitCommit className="h-3 w-3 text-muted-foreground shrink-0" />
-                        )}
-                        {deploy.commitSha && (
-                          <code className="text-xs text-muted-foreground">
-                            {deploy.commitSha.slice(0, 7)}
-                          </code>
-                        )}
-                        {deploy.commitMessage && (
-                          <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                            {deploy.commitMessage}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="p-2 border-t">
-            <Link href={`/projects/${id}/deployments`}>
-              <Button variant="ghost" size="sm" className="w-full h-8 text-xs">
-                View all deployments
-              </Button>
-            </Link>
-          </div>
+                    <div className="text-xs text-muted-foreground">
+                      {release.createdAt ? new Date(release.createdAt).toLocaleDateString() : '—'}
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </div>

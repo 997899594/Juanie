@@ -10,7 +10,7 @@ import {
   services,
   teamMembers,
 } from '@/lib/db/schema';
-import { addDeploymentJob } from '@/lib/queue';
+import { createProjectRelease } from '@/lib/releases';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,6 +25,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, id),
+    with: {
+      repository: true,
+    },
   });
 
   if (!project) {
@@ -107,6 +110,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, id),
+    with: {
+      repository: true,
+    },
   });
 
   if (!project) {
@@ -121,7 +127,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const { environmentId, version, commitSha, commitMessage, serviceId } = await request.json();
+  const {
+    environmentId,
+    commitSha,
+    commitMessage,
+    ref,
+    serviceId,
+    serviceName,
+    image,
+    services: releaseServices,
+  } = await request.json();
 
   if (!environmentId) {
     return NextResponse.json({ error: 'Environment ID is required' }, { status: 400 });
@@ -144,25 +159,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
   }
 
-  const [deployment] = await db
-    .insert(deployments)
-    .values({
-      projectId: id,
-      environmentId,
-      version: version || '1.0.0',
-      commitSha,
-      commitMessage,
-      serviceId: serviceId ?? null,
-      status: 'queued',
-      deployedById: session.user.id,
-    })
-    .returning();
+  const requestedServices =
+    Array.isArray(releaseServices) && releaseServices.length > 0
+      ? releaseServices
+      : image
+        ? [
+            {
+              id: serviceId,
+              name: serviceName,
+              image,
+            },
+          ]
+        : [];
 
-  try {
-    await addDeploymentJob(deployment.id, id, environmentId);
-  } catch (error) {
-    console.error('Failed to queue deployment:', error);
+  if (requestedServices.length === 0) {
+    return NextResponse.json(
+      { error: 'Releases require image metadata. Provide image or services[]' },
+      { status: 400 }
+    );
   }
 
-  return NextResponse.json(deployment, { status: 201 });
+  const release = await createProjectRelease({
+    projectId: id,
+    environmentId,
+    services: requestedServices,
+    sourceRepository: project.repository?.fullName ?? project.name,
+    sourceRef: ref ?? `refs/heads/${environment.branch ?? project.productionBranch ?? 'main'}`,
+    sourceCommitSha: commitSha ?? null,
+    configCommitSha: commitSha ?? null,
+    triggeredBy: 'manual',
+    triggeredByUserId: session.user.id,
+    summary:
+      commitMessage ?? (commitSha ? `Manual release ${commitSha.slice(0, 7)}` : 'Manual release'),
+  });
+
+  return NextResponse.json(release, { status: 202 });
 }

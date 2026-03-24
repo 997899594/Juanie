@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
 import {
   Select,
@@ -55,6 +54,18 @@ function podPhaseStatus(phase: string): 'success' | 'warning' | 'error' | 'neutr
   }
 }
 
+function formatPodPhaseLabel(phase: string): string {
+  const labels: Record<string, string> = {
+    Running: '运行中',
+    Pending: '等待中',
+    Failed: '失败',
+    Succeeded: '已完成',
+    Unknown: '未知',
+  };
+
+  return labels[phase] ?? phase;
+}
+
 export default function ProjectResourcesPage({ params }: { params: Promise<{ id: string }> }) {
   const [projectId, setProjectId] = useState('');
   const [resourceType, setResourceType] = useState<'pods' | 'services' | 'deployments'>('pods');
@@ -68,6 +79,11 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
   const [selectedPod, setSelectedPod] = useState('');
   const [logs, setLogs] = useState('');
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const resourceTypeLabel: Record<'pods' | 'services' | 'deployments', string> = {
+    pods: 'Pod',
+    services: 'Service',
+    deployments: 'Deployment',
+  };
 
   useEffect(() => {
     params.then((p) => setProjectId(p.id));
@@ -111,7 +127,7 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
       .then(async (res) => {
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-          setLogs(`[Error] ${err.error ?? 'Failed to fetch logs'}`);
+          setLogs(`[错误] ${err.error ?? '获取日志失败'}`);
         } else {
           setLogs(await res.text());
         }
@@ -120,13 +136,13 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
   }, [projectId, environmentId, selectedPod]);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Resources" description="Kubernetes workloads running in this project" />
+    <div className="mx-auto max-w-7xl space-y-6">
+      <PageHeader title="资源" description="项目内 Kubernetes 资源" />
 
-      <div className="flex gap-3">
+      <div className="console-panel flex flex-wrap gap-3 px-4 py-4">
         <Select value={environmentId} onValueChange={setEnvironmentId}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Environment" />
+          <SelectTrigger className="w-[200px] rounded-xl">
+            <SelectValue placeholder="环境" />
           </SelectTrigger>
           <SelectContent>
             {environments.map((env) => (
@@ -141,73 +157,73 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
           value={resourceType}
           onValueChange={(v) => setResourceType(v as 'pods' | 'services' | 'deployments')}
         >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Resource type" />
+          <SelectTrigger className="w-[180px] rounded-xl">
+            <SelectValue placeholder="资源类型" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="pods">Pods</SelectItem>
-            <SelectItem value="services">Services</SelectItem>
-            <SelectItem value="deployments">Deployments</SelectItem>
+            <SelectItem value="pods">Pod</SelectItem>
+            <SelectItem value="services">Service</SelectItem>
+            <SelectItem value="deployments">Deployment</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <Card>
-        <CardHeader className="py-3 px-4 border-b">
-          <CardTitle className="text-sm font-medium capitalize">{resourceType}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+      <section className="console-panel overflow-hidden">
+        <div className="border-b border-border px-5 py-4">
+          <div className="text-sm font-semibold">{resourceTypeLabel[resourceType]}</div>
+        </div>
+        <div className="p-3">
           {resourceError ? (
-            <p className="text-sm text-destructive p-4">{resourceError}</p>
+            <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+              {resourceError}
+            </div>
           ) : loading ? (
-            <div className="space-y-2 p-4">
+            <div className="space-y-2">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-10 bg-muted rounded animate-pulse" />
+                <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted" />
               ))}
             </div>
           ) : resources.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-4">No {resourceType} found</p>
+            <div className="flex min-h-52 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
+              没有可用的 {resourceType}
+            </div>
           ) : resourceType === 'pods' ? (
-            <div className="divide-y">
+            <div className="space-y-2">
               {(resources as Pod[]).map((pod) => (
                 <div
                   key={pod.metadata.name}
-                  className="flex items-center justify-between px-4 py-3"
+                  className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <StatusIndicator status={podPhaseStatus(pod.status.phase)} />
-                    <span className="font-mono text-sm">{pod.metadata.name}</span>
-                    <span className="text-xs text-muted-foreground">{pod.status.phase}</span>
+                    <span className="truncate font-mono text-sm">{pod.metadata.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatPodPhaseLabel(pod.status.phase)}
+                    </span>
                     {pod.status.containerStatuses?.some((cs) => cs.restartCount > 0) && (
-                      <span className="text-xs text-warning">
+                      <span className="text-xs text-muted-foreground">
                         {pod.status.containerStatuses.reduce((sum, cs) => sum + cs.restartCount, 0)}{' '}
-                        restart
-                        {pod.status.containerStatuses.reduce(
-                          (sum, cs) => sum + cs.restartCount,
-                          0
-                        ) !== 1
-                          ? 's'
-                          : ''}
+                        次重启
                       </span>
                     )}
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs"
+                    className="rounded-xl"
                     onClick={() => setSelectedPod(pod.metadata.name)}
                   >
-                    Logs
+                    日志
                   </Button>
                 </div>
               ))}
             </div>
           ) : resourceType === 'services' ? (
-            <div className="divide-y">
+            <div className="space-y-2">
               {(resources as Service[]).map((svc) => (
                 <div
                   key={svc.metadata.name}
-                  className="flex items-center justify-between px-4 py-3"
+                  className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
                 >
                   <span className="font-mono text-sm">{svc.metadata.name}</span>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -220,11 +236,11 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
               ))}
             </div>
           ) : (
-            <div className="divide-y">
+            <div className="space-y-2">
               {(resources as K8sDeployment[]).map((deploy) => (
                 <div
                   key={deploy.metadata.name}
-                  className="flex items-center justify-between px-4 py-3"
+                  className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
                 >
                   <span className="font-mono text-sm">{deploy.metadata.name}</span>
                   <div className="flex items-center gap-2">
@@ -237,35 +253,35 @@ export default function ProjectResourcesPage({ params }: { params: Promise<{ id:
                       }
                     />
                     <span className="text-sm text-muted-foreground">
-                      {deploy.status.readyReplicas ?? 0}/{deploy.status.replicas ?? 0} ready
+                      {deploy.status.readyReplicas ?? 0}/{deploy.status.replicas ?? 0} 就绪
                     </span>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       {selectedPod && (
-        <Card>
-          <CardHeader className="py-3 px-4 border-b flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium">Logs: {selectedPod}</CardTitle>
+        <section className="console-panel overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <div className="text-sm font-semibold">日志 · {selectedPod}</div>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 text-xs"
+              className="rounded-xl"
               onClick={() => setSelectedPod('')}
             >
-              Close
+              关闭
             </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            <pre className="bg-zinc-950 text-zinc-100 p-4 rounded-b-lg overflow-x-auto text-xs font-mono max-h-[480px] overflow-y-auto whitespace-pre-wrap">
-              {loadingLogs ? 'Loading...' : logs || 'No logs available'}
+          </div>
+          <div className="p-3">
+            <pre className="max-h-[480px] overflow-x-auto overflow-y-auto rounded-2xl bg-zinc-950 p-4 font-mono text-xs whitespace-pre-wrap text-zinc-100">
+              {loadingLogs ? '加载中...' : logs || '暂无日志'}
             </pre>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
     </div>
   );

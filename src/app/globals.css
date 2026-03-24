@@ -1,49 +1,52 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #FFFFFF;
-  --color-foreground: #000000;
+  --color-background: #F5F6F7;
+  --color-foreground: #111111;
   
   --color-card: #FFFFFF;
-  --color-card-foreground: #000000;
+  --color-card-foreground: #111111;
   
   --color-popover: #FFFFFF;
-  --color-popover-foreground: #000000;
+  --color-popover-foreground: #111111;
   
-  --color-primary: #000000;
+  --color-primary: #111111;
   --color-primary-foreground: #FFFFFF;
   
-  --color-secondary: #F5F5F5;
-  --color-secondary-foreground: #000000;
+  --color-secondary: #F3F4F6;
+  --color-secondary-foreground: #111111;
   
-  --color-muted: #FAFAFA;
-  --color-muted-foreground: #666666;
+  --color-muted: #F7F7F8;
+  --color-muted-foreground: #6B7280;
   
-  --color-accent: #F5F5F5;
-  --color-accent-foreground: #000000;
+  --color-accent: #F3F4F6;
+  --color-accent-foreground: #111111;
   
   --color-destructive: #E5484D;
   --color-destructive-foreground: #FFFFFF;
   
-  --color-success: #30A46C;
+  --color-success: #2F7D57;
   --color-success-foreground: #FFFFFF;
   
-  --color-warning: #F5A623;
-  --color-warning-foreground: #000000;
+  --color-warning: #4B5563;
+  --color-warning-foreground: #FFFFFF;
   
-  --color-border: #EAEAEA;
-  --color-input: #E5E5E5;
+  --color-info: #2563EB;
+  --color-info-foreground: #FFFFFF;
+  
+  --color-border: #E5E7EB;
+  --color-input: #E5E7EB;
   --color-ring: #888888;
   
-  --color-sidebar: #FAFAFA;
-  --color-sidebar-foreground: #000000;
-  --color-sidebar-accent: #F0F0F0;
-  --color-sidebar-accent-foreground: #000000;
+  --color-sidebar: #FFFFFF;
+  --color-sidebar-foreground: #111111;
+  --color-sidebar-accent: #F3F4F6;
+  --color-sidebar-accent-foreground: #111111;
   
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-full: 9999px;
   
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -78,9 +81,16 @@ html {
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
+  font-family: var(--font-sans), sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
   line-height: 1.5;
   letter-spacing: -0.011em;
+}
+
+code,
+pre,
+.font-mono {
+  font-family: var(--font-mono), monospace;
 }
 
 :focus-visible {
@@ -113,7 +123,7 @@ body {
 
 @layer components {
   .glass {
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
@@ -161,6 +171,38 @@ body {
   .divider-vertical {
     width: 1px;
     background: linear-gradient(180deg, transparent, var(--color-border), transparent);
+  }
+
+  .console-panel {
+    border-radius: 20px;
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .console-card {
+    border-radius: 16px;
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+  }
+
+  .console-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-secondary);
+    padding: 0.35rem 0.65rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-muted-foreground);
+  }
+
+  .console-chip-active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-foreground);
   }
 }
 

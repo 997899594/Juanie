@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PageHeader } from '@/components/ui/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface ProjectSettings {
@@ -111,17 +112,19 @@ export default function ProjectSettingsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="h-8 w-40 bg-muted rounded animate-pulse" />
-        <div className="h-64 bg-muted rounded-lg animate-pulse" />
+      <div className="mx-auto max-w-4xl space-y-4">
+        <div className="h-20 animate-pulse rounded-[20px] bg-muted" />
+        <div className="h-80 animate-pulse rounded-[20px] bg-muted" />
       </div>
     );
   }
 
   if (!project) {
     return (
-      <div className="max-w-3xl mx-auto text-center py-24">
-        <p className="text-muted-foreground">Project not found</p>
+      <div className="mx-auto max-w-4xl">
+        <div className="console-panel flex min-h-72 items-center justify-center text-muted-foreground">
+          项目不存在
+        </div>
       </div>
     );
   }
@@ -129,84 +132,71 @@ export default function ProjectSettingsPage() {
   const canEdit = ['owner', 'admin'].includes(project.yourRole);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your project settings</p>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader title="设置" description="项目配置" />
 
-      <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="h-9">
-          <TabsTrigger value="general" className="text-sm">
-            General
+      <Tabs defaultValue="general" className="space-y-4">
+        <TabsList className="h-11 rounded-[18px] bg-secondary/70 p-1">
+          <TabsTrigger value="general" className="rounded-xl px-4">
+            常规
           </TabsTrigger>
-          <TabsTrigger value="git" className="text-sm">
+          <TabsTrigger value="git" className="rounded-xl px-4">
             Git
           </TabsTrigger>
-          <TabsTrigger value="danger" className="text-sm">
-            Danger Zone
+          <TabsTrigger value="danger" className="rounded-xl px-4">
+            危险操作
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
-          <div className="rounded-lg border bg-card">
-            <div className="p-4 border-b">
-              <h2 className="font-medium text-sm">General Settings</h2>
+          <div className="console-panel overflow-hidden">
+            <div className="border-b border-border px-5 py-4">
+              <div className="text-sm font-semibold">常规</div>
             </div>
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm">
-                  Project Name
-                </Label>
+                <Label htmlFor="name">项目名称</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="h-9"
+                  className="h-11 rounded-xl"
                   disabled={!canEdit}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-sm">
-                  Description
-                </Label>
+                <Label htmlFor="description">描述</Label>
                 <Input
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="h-9"
+                  className="h-11 rounded-xl"
                   disabled={!canEdit}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-sm">Team</Label>
-                <p className="text-sm text-muted-foreground">{project.teamName}</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm">Status</Label>
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      project.status === 'active'
-                        ? 'bg-success'
-                        : project.status === 'initializing'
-                          ? 'bg-warning'
-                          : 'bg-muted-foreground'
-                    }`}
-                  />
-                  <span className="text-sm text-muted-foreground capitalize">{project.status}</span>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="console-card bg-secondary/20 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    团队
+                  </div>
+                  <div className="mt-2 text-sm font-medium">{project.teamName}</div>
+                </div>
+                <div className="console-card bg-secondary/20 px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    状态
+                  </div>
+                  <div className="mt-2 text-sm font-medium capitalize">{project.status}</div>
                 </div>
               </div>
 
               {canEdit && (
                 <div className="flex items-center gap-3 pt-2">
-                  <Button type="submit" size="sm" className="h-8" disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Changes'}
+                  <Button type="submit" className="rounded-xl" disabled={saving}>
+                    {saving ? '保存中...' : '保存修改'}
                   </Button>
-                  {saved && <span className="text-xs text-success">Saved</span>}
+                  {saved && <span className="text-xs text-success">已保存</span>}
                 </div>
               )}
             </form>
@@ -214,44 +204,40 @@ export default function ProjectSettingsPage() {
         </TabsContent>
 
         <TabsContent value="git">
-          <div className="rounded-lg border bg-card">
-            <div className="p-4 border-b">
-              <h2 className="font-medium text-sm">Git Settings</h2>
+          <div className="console-panel overflow-hidden">
+            <div className="border-b border-border px-5 py-4">
+              <div className="text-sm font-semibold">代码仓库</div>
             </div>
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
               <div className="space-y-2">
-                <Label htmlFor="gitRepository" className="text-sm">
-                  Repository URL
-                </Label>
+                <Label htmlFor="gitRepository">仓库地址</Label>
                 <Input
                   id="gitRepository"
                   placeholder="https://github.com/owner/repo"
                   value={formData.gitRepository}
                   onChange={(e) => setFormData({ ...formData, gitRepository: e.target.value })}
-                  className="h-9"
+                  className="h-11 rounded-xl"
                   disabled={!canEdit}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="gitBranch" className="text-sm">
-                  Branch
-                </Label>
+                <Label htmlFor="gitBranch">分支</Label>
                 <Input
                   id="gitBranch"
                   value={formData.gitBranch}
                   onChange={(e) => setFormData({ ...formData, gitBranch: e.target.value })}
-                  className="h-9"
+                  className="h-11 rounded-xl"
                   disabled={!canEdit}
                 />
               </div>
 
               {canEdit && (
                 <div className="flex items-center gap-3 pt-2">
-                  <Button type="submit" size="sm" className="h-8" disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Changes'}
+                  <Button type="submit" className="rounded-xl" disabled={saving}>
+                    {saving ? '保存中...' : '保存修改'}
                   </Button>
-                  {saved && <span className="text-xs text-success">Saved</span>}
+                  {saved && <span className="text-xs text-success">已保存</span>}
                 </div>
               )}
             </form>
@@ -259,50 +245,45 @@ export default function ProjectSettingsPage() {
         </TabsContent>
 
         <TabsContent value="danger">
-          <div className="rounded-lg border border-destructive/50 bg-card">
-            <div className="p-4 border-b border-destructive/50">
-              <h2 className="font-medium text-sm text-destructive">Danger Zone</h2>
+          <div className="overflow-hidden rounded-[20px] border border-destructive/40 bg-background">
+            <div className="border-b border-destructive/30 px-5 py-4">
+              <div className="text-sm font-semibold text-destructive">危险操作</div>
             </div>
-            <div className="p-4">
+            <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="text-sm font-medium">Delete Project</p>
-                    <p className="text-xs text-muted-foreground">
-                      Once deleted, there is no going back
-                    </p>
+                    <div className="text-sm font-medium">删除项目</div>
+                    <div className="mt-1 text-sm text-muted-foreground">该操作无法撤销。</div>
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" className="h-8">
-                        <Trash2 className="h-4 w-4 mr-1.5" />
-                        Delete
+                      <Button variant="destructive" className="rounded-xl">
+                        <Trash2 className="h-4 w-4" />
+                        删除
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Project</AlertDialogTitle>
+                        <AlertDialogTitle>删除项目</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Are you sure you want to delete "{project.name}"? This action cannot be
-                          undone.
+                          确认删除 “{project.name}”？该操作无法撤销。
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleDelete}
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
-                          Delete
+                          删除
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  Only the project owner can delete this project.
-                </p>
+                <p className="text-sm text-muted-foreground">只有项目拥有者可以删除项目。</p>
               )}
             </div>
           </div>

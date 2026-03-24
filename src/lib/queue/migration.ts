@@ -10,6 +10,7 @@ export async function processMigration(job: Job<MigrationJobData>) {
   const run = await db.query.migrationRuns.findFirst({
     where: (table, { eq }) => eq(table.id, job.data.runId),
     with: {
+      release: true,
       specification: true,
     },
   });
@@ -22,7 +23,11 @@ export async function processMigration(job: Job<MigrationJobData>) {
     run.projectId,
     run.environmentId,
     run.specification.phase,
-    [run.serviceId]
+    {
+      serviceIds: [run.serviceId],
+      sourceRef: run.release?.sourceRef ?? null,
+      sourceCommitSha: run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
+    }
   );
   const spec = specs.find((candidate) => candidate.specification.id === run.specificationId);
 
@@ -42,6 +47,8 @@ export async function processMigration(job: Job<MigrationJobData>) {
   await executeMigrationRun(run.id, spec, {
     imageUrl: job.data.imageUrl,
     allowApprovalBypass: job.data.allowApprovalBypass,
+    sourceRef: run.release?.sourceRef ?? null,
+    sourceCommitSha: run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
   });
 
   return { success: true };

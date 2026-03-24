@@ -19,8 +19,10 @@ export function StatsCard({ title, value, description, icon, trend, className }:
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold tracking-tight">{value}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              {title}
+            </p>
+            <p className="text-3xl font-semibold tracking-tight">{value}</p>
             {description && <p className="text-xs text-muted-foreground">{description}</p>}
             {trend && (
               <p
@@ -35,7 +37,7 @@ export function StatsCard({ title, value, description, icon, trend, className }:
             )}
           </div>
           {icon && (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary">
               {icon}
             </div>
           )}

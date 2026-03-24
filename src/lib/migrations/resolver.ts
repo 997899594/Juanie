@@ -32,7 +32,11 @@ interface ServiceDatabaseBindingConfig {
 
 export async function syncMigrationSpecificationsFromRepo(
   projectId: string,
-  environmentId: string
+  environmentId: string,
+  options?: {
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+  }
 ): Promise<ResolvedMigrationSpec[]> {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
@@ -61,13 +65,16 @@ export async function syncMigrationSpecificationsFromRepo(
 
   const configPaths = ['juanie.yaml', 'juanie.yml'];
   let configContent: string | null = null;
+  const configRef =
+    options?.sourceCommitSha || options?.sourceRef || repository.defaultBranch || 'main';
+
   for (const configPath of configPaths) {
     try {
       const content = await gateway.getFileContent(
         session,
         repository.fullName,
         configPath,
-        repository.defaultBranch || 'main'
+        configRef
       );
       if (content) {
         configContent = content;
@@ -174,17 +181,21 @@ export async function resolveMigrationSpecifications(
   projectId: string,
   environmentId: string,
   phase: 'preDeploy' | 'postDeploy' | 'manual',
-  serviceIds?: string[]
+  options?: {
+    serviceIds?: string[];
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+  }
 ): Promise<ResolvedMigrationSpec[]> {
-  await syncMigrationSpecificationsFromRepo(projectId, environmentId);
+  await syncMigrationSpecificationsFromRepo(projectId, environmentId, options);
 
   const specList = await db.query.migrationSpecifications.findMany({
-    where: serviceIds?.length
+    where: options?.serviceIds?.length
       ? and(
           eq(migrationSpecifications.projectId, projectId),
           eq(migrationSpecifications.environmentId, environmentId),
           eq(migrationSpecifications.phase, phase),
-          inArray(migrationSpecifications.serviceId, serviceIds)
+          inArray(migrationSpecifications.serviceId, options.serviceIds)
         )
       : and(
           eq(migrationSpecifications.projectId, projectId),

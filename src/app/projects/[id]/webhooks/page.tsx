@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PageHeader } from '@/components/ui/page-header';
 import {
   Select,
   SelectContent,
@@ -44,10 +45,14 @@ interface Webhook {
 }
 
 const eventOptions = [
-  { value: 'deployment', label: 'Deployment' },
-  { value: 'rollback', label: 'Rollback' },
-  { value: 'health_check', label: 'Health Check' },
+  { value: 'deployment', label: '发布' },
+  { value: 'rollback', label: '回滚' },
+  { value: 'health_check', label: '健康检查' },
 ];
+
+function formatWebhookEventLabel(event: string): string {
+  return eventOptions.find((option) => option.value === event)?.label ?? event;
+}
 
 export default function WebhooksPage() {
   const params = useParams();
@@ -144,151 +149,145 @@ export default function WebhooksPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-5xl mx-auto space-y-6">
-        <div className="h-8 w-32 bg-muted rounded animate-pulse" />
-        <div className="space-y-4">
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="回调"
+        description={`${webhooks.length} 个回调`}
+        actions={
+          <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-9 rounded-xl px-4">
+                <Plus className="h-4 w-4" />
+                新建回调
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <form onSubmit={handleCreate}>
+                <DialogHeader>
+                  <DialogTitle>新建回调</DialogTitle>
+                  <DialogDescription>接收部署事件通知</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="url">URL</Label>
+                    <Input
+                      id="url"
+                      placeholder="https://example.com/webhook"
+                      value={formData.url}
+                      onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                      className="h-11 rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>事件</Label>
+                    <Select
+                      value={formData.events[0]}
+                      onValueChange={(value) => setFormData({ ...formData, events: [value] })}
+                    >
+                      <SelectTrigger className="h-11 rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {eventOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    取消
+                  </Button>
+                  <Button type="submit" className="rounded-xl" disabled={submitting}>
+                    {submitting ? '创建中...' : '创建'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      {loading ? (
+        <div className="space-y-3">
           {[1, 2].map((i) => (
-            <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
+            <div key={i} className="h-28 animate-pulse rounded-[20px] bg-muted" />
           ))}
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Webhooks</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {webhooks.length} webhook{webhooks.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="h-8">
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add Webhook
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <form onSubmit={handleCreate}>
-              <DialogHeader>
-                <DialogTitle>Add Webhook</DialogTitle>
-                <DialogDescription>Receive notifications about deployment events</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="url" className="text-sm">
-                    URL
-                  </Label>
-                  <Input
-                    id="url"
-                    placeholder="https://your-server.com/webhook"
-                    value={formData.url}
-                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                    className="h-9"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">Events</Label>
-                  <Select
-                    value={formData.events[0]}
-                    onValueChange={(value) => setFormData({ ...formData, events: [value] })}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {eventOptions.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm" className="h-8" disabled={submitting}>
-                  {submitting ? 'Creating...' : 'Create'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {webhooks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="p-4 rounded-full bg-muted mb-4">
+      ) : webhooks.length === 0 ? (
+        <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
+          <div className="mb-4 rounded-2xl bg-muted p-4">
             <WebhookIcon className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="text-lg font-medium mb-2">No webhooks yet</h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            Add a webhook to receive notifications about deployment events
-          </p>
-          <Button size="sm" className="h-8" onClick={() => setIsOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Webhook
+          <h2 className="text-lg font-medium">还没有回调</h2>
+          <p className="mt-2 text-sm text-muted-foreground">添加一个回调来接收部署事件通知。</p>
+          <Button className="mt-5 rounded-xl" onClick={() => setIsOpen(true)}>
+            <Plus className="h-4 w-4" />
+            新建回调
           </Button>
         </div>
       ) : (
         <div className="space-y-3">
           {webhooks.map((webhook) => (
-            <div key={webhook.id} className="rounded-lg border bg-card p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-sm font-medium truncate">{webhook.url}</p>
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          webhook.active ? 'bg-success' : 'bg-muted-foreground'
-                        }`}
-                      />
-                      <span className="text-xs text-muted-foreground">
-                        {webhook.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
+            <div key={webhook.id} className="console-panel px-5 py-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-semibold">{webhook.url}</span>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        webhook.active
+                          ? 'border border-border bg-secondary/30 text-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {webhook.active ? '启用中' : '未启用'}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground capitalize">
-                    Events: {webhook.events.join(', ')}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <code className="text-xs bg-muted px-2 py-0.5 rounded">
+
+                  <div className="flex flex-wrap gap-2">
+                    {webhook.events.map((event) => (
+                      <span
+                        key={event}
+                        className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                      >
+                        {formatWebhookEventLabel(event)}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
                       {webhook.secret.slice(0, 8)}...
                     </code>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 text-xs px-2"
+                      className="h-8 rounded-xl px-3 text-xs"
                       onClick={() => copySecret(webhook.id, webhook.secret)}
                     >
-                      <Copy className="h-3 w-3 mr-1" />
-                      {copiedId === webhook.id ? 'Copied' : 'Copy'}
+                      <Copy className="h-3.5 w-3.5" />
+                      {copiedId === webhook.id ? '已复制' : '复制密钥'}
                     </Button>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 ml-4">
+
+                <div className="flex items-center gap-3 xl:ml-4">
                   <Switch checked={webhook.active} onCheckedChange={() => handleToggle(webhook)} />
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    size="icon"
+                    className="h-9 w-9 rounded-xl text-muted-foreground hover:text-destructive"
                     onClick={() => setDeleteId(webhook.id)}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -303,18 +302,16 @@ export default function WebhooksPage() {
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Webhook</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this webhook? This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>删除回调</AlertDialogTitle>
+            <AlertDialogDescription>确认删除这个回调？该操作无法撤销。</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              删除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

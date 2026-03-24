@@ -2,11 +2,11 @@ import { and, desc, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { deployments, environments, projects, repositories, teamMembers } from '@/lib/db/schema';
+import { environments, projects, releases, repositories, teamMembers } from '@/lib/db/schema';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
-import { addDeploymentJob } from '@/lib/queue';
+import { createProjectRelease } from '@/lib/releases';
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
 
@@ -52,62 +52,73 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  // Find the latest successful staging deployment that has an imageUrl
-  const sourceDeployment = await db.query.deployments.findFirst({
+  const sourceRelease = await db.query.releases.findFirst({
     where: and(
-      eq(deployments.projectId, id),
-      eq(deployments.environmentId, stagingEnv.id),
-      eq(deployments.status, 'running')
+      eq(releases.projectId, id),
+      eq(releases.environmentId, stagingEnv.id),
+      eq(releases.status, 'succeeded')
     ),
-    orderBy: [desc(deployments.createdAt)],
+    orderBy: [desc(releases.createdAt)],
+    with: {
+      artifacts: {
+        with: {
+          service: true,
+        },
+      },
+    },
   });
 
-  if (!sourceDeployment) {
+  if (!sourceRelease) {
     return NextResponse.json(
-      { error: 'No successful staging deployment found to promote' },
+      { error: 'No successful staging release found to promote' },
       { status: 400 }
     );
   }
 
-  if (!sourceDeployment.imageUrl) {
+  if (sourceRelease.artifacts.length === 0) {
     return NextResponse.json(
-      { error: 'Staging deployment has no image URL — trigger a fresh deployment first' },
+      { error: 'Staging release has no artifacts — trigger a fresh release first' },
       { status: 400 }
     );
   }
 
-  // Create production deployment record, reusing the same image (no rebuild)
-  const [prodDeployment] = await db
-    .insert(deployments)
-    .values({
-      projectId: id,
-      environmentId: prodEnv.id,
-      status: 'queued',
-      imageUrl: sourceDeployment.imageUrl,
-      commitSha: sourceDeployment.commitSha,
-      commitMessage: sourceDeployment.commitMessage,
-      branch: sourceDeployment.branch,
-      version: sourceDeployment.version,
-      deployedById: session.user.id,
-    })
-    .returning();
-
-  // Queue the deployment (worker will skip build since imageUrl is already set)
-  await addDeploymentJob(prodDeployment.id, id, prodEnv.id);
+  const prodRelease = await createProjectRelease({
+    projectId: id,
+    environmentId: prodEnv.id,
+    services: sourceRelease.artifacts.map((artifact) => ({
+      id: artifact.serviceId,
+      name: artifact.service.name,
+      image: artifact.imageUrl,
+      digest: artifact.imageDigest,
+    })),
+    sourceRepository: project.repository?.fullName ?? project.name,
+    sourceRef: `refs/heads/${prodEnv.branch ?? project.productionBranch ?? 'main'}`,
+    sourceCommitSha: sourceRelease.sourceCommitSha,
+    configCommitSha: sourceRelease.configCommitSha,
+    triggeredBy: 'manual',
+    triggeredByUserId: session.user.id,
+    summary: `Promote ${sourceRelease.sourceCommitSha?.slice(0, 7) ?? 'release'} to production`,
+  });
 
   // Create git tag (best-effort, don't fail if this errors)
-  const tagName = await createGitTag(project, sourceDeployment.commitSha).catch((e) => {
+  const tagName = await createGitTag(project, sourceRelease.sourceCommitSha).catch((e) => {
     console.warn('Failed to create git tag:', e);
     return null;
   });
 
-  return NextResponse.json({
-    success: true,
-    deploymentId: prodDeployment.id,
-    imageUrl: sourceDeployment.imageUrl,
-    commitSha: sourceDeployment.commitSha,
-    tagName,
-  });
+  return NextResponse.json(
+    {
+      success: true,
+      releaseId: prodRelease?.id,
+      artifacts: prodRelease?.artifacts.map((artifact) => ({
+        service: artifact.service.name,
+        imageUrl: artifact.imageUrl,
+      })),
+      commitSha: sourceRelease.sourceCommitSha,
+      tagName,
+    },
+    { status: 202 }
+  );
 }
 
 async function createGitTag(

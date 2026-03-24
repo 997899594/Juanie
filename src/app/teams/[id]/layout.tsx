@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { notFound, redirect } from 'next/navigation';
+import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { teamMembers, teams } from '@/lib/db/schema';
@@ -26,11 +27,8 @@ export default async function TeamLayout({
   if (!member) notFound();
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{team.name}</h1>
-        <p className="text-sm text-muted-foreground">@{team.slug}</p>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <PageHeader title={team.name} description={`@${team.slug}`} />
       <TeamTabNav teamId={id} />
       {children}
     </div>

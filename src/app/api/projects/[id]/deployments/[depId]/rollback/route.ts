@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { deployments, projects, teamMembers } from '@/lib/db/schema';
-import { addDeploymentJob } from '@/lib/queue';
+import { createProjectRelease } from '@/lib/releases';
 
 export async function POST(
   _request: Request,
@@ -18,6 +18,9 @@ export async function POST(
 
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, id),
+    with: {
+      repository: true,
+    },
   });
 
   if (!project) {
@@ -51,39 +54,32 @@ export async function POST(
     );
   }
 
-  // Mark currently running deployments in the same environment as rolled_back
-  await db
-    .update(deployments)
-    .set({ status: 'rolled_back' })
-    .where(
-      and(
-        eq(deployments.projectId, id),
-        eq(deployments.environmentId, targetDeployment.environmentId),
-        eq(deployments.status, 'running')
-      )
-    );
-
-  // Create a new deployment record reusing the target's image (no rebuild)
-  const [newDeployment] = await db
-    .insert(deployments)
-    .values({
-      projectId: id,
-      environmentId: targetDeployment.environmentId,
-      status: 'queued',
-      imageUrl: targetDeployment.imageUrl,
-      commitSha: targetDeployment.commitSha,
-      commitMessage: targetDeployment.commitMessage,
-      branch: targetDeployment.branch,
-      version: targetDeployment.version,
-      deployedById: session.user.id,
-    })
-    .returning();
-
-  await addDeploymentJob(newDeployment.id, id, targetDeployment.environmentId);
-
-  return NextResponse.json({
-    success: true,
-    deploymentId: newDeployment.id,
-    imageUrl: targetDeployment.imageUrl,
+  const release = await createProjectRelease({
+    projectId: id,
+    environmentId: targetDeployment.environmentId,
+    services: [
+      {
+        id: targetDeployment.serviceId ?? undefined,
+        image: targetDeployment.imageUrl,
+      },
+    ],
+    sourceRepository: project.repository?.fullName ?? project.name,
+    sourceRef: targetDeployment.branch
+      ? `refs/heads/${targetDeployment.branch}`
+      : `refs/heads/${project.productionBranch ?? 'main'}`,
+    sourceCommitSha: targetDeployment.commitSha ?? null,
+    configCommitSha: targetDeployment.commitSha ?? null,
+    triggeredBy: 'manual',
+    triggeredByUserId: session.user.id,
+    summary: `Rollback to ${targetDeployment.commitSha?.slice(0, 7) ?? 'previous image'}`,
   });
+
+  return NextResponse.json(
+    {
+      success: true,
+      releaseId: release?.id,
+      imageUrl: targetDeployment.imageUrl,
+    },
+    { status: 202 }
+  );
 }

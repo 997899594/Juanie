@@ -1,12 +1,12 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useCallback, useEffect, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PageHeader } from '@/components/ui/page-header';
 
 interface UserData {
   id: string;
@@ -17,7 +17,6 @@ interface UserData {
 }
 
 export default function SettingsPage() {
-  const _router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,7 +28,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch('/api/user');
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as UserData;
         setUser(data);
         setFormData({ name: data.name || '' });
       }
@@ -56,7 +55,7 @@ export default function SettingsPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as UserData;
         setUser(data);
       }
     } catch (error) {
@@ -71,109 +70,124 @@ export default function SettingsPage() {
   };
 
   const getInitials = (name: string | null, email: string) => {
-    if (name)
+    if (name) {
       return name
         .split(' ')
-        .map((n) => n[0])
+        .map((part) => part[0])
         .join('')
         .toUpperCase()
         .slice(0, 2);
+    }
+
     return email[0].toUpperCase();
   };
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="h-8 w-24 bg-muted rounded animate-pulse" />
-        <div className="rounded-lg border bg-card p-6 space-y-4">
-          <div className="h-16 w-16 rounded-full bg-muted animate-pulse" />
-          <div className="h-10 w-full bg-muted rounded animate-pulse" />
-          <div className="h-8 w-24 bg-muted rounded animate-pulse" />
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="grid gap-3 md:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-24 animate-pulse rounded-[20px] bg-muted" />
+          ))}
         </div>
+        <div className="h-64 animate-pulse rounded-[20px] bg-muted" />
+        <div className="h-44 animate-pulse rounded-[20px] bg-muted" />
       </div>
     );
   }
 
+  const stats = [
+    {
+      label: '加入时间',
+      value: user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-',
+    },
+    {
+      label: '账户',
+      value: user?.id ? `${user.id.slice(0, 8)}...` : '-',
+    },
+    {
+      label: '邮箱',
+      value: user?.email ?? '-',
+    },
+  ];
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your account settings</p>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        title="设置"
+        description="个人资料与账户"
+        actions={
+          <Button variant="outline" className="h-9 rounded-xl px-4" onClick={handleSignOut}>
+            退出登录
+          </Button>
+        }
+      />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className="console-panel px-5 py-4">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              {stat.label}
+            </div>
+            <div className="mt-3 truncate text-sm font-semibold">{stat.value}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <div className="p-4 border-b">
-          <h2 className="font-medium text-sm">Profile</h2>
-        </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-6">
+      <div className="console-panel px-5 py-5">
+        <div className="flex flex-col gap-6 md:flex-row md:items-start">
           <div className="flex items-center gap-4">
-            <Avatar className="h-14 w-14">
+            <Avatar className="h-16 w-16 rounded-2xl">
               <AvatarImage src={user?.image ?? undefined} />
-              <AvatarFallback className="bg-muted text-sm font-medium">
+              <AvatarFallback className="rounded-2xl bg-secondary text-sm font-semibold">
                 {user ? getInitials(user.name, user.email) : '?'}
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="font-medium">{user?.name || 'User'}</p>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <p className="text-base font-semibold">{user?.name || '用户'}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{user?.email}</p>
             </div>
           </div>
 
-          <div className="space-y-4">
+          <form onSubmit={handleSubmit} className="grid flex-1 gap-4 md:max-w-xl">
             <div className="space-y-2">
               <Label htmlFor="name" className="text-sm">
-                Display Name
+                显示名称
               </Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Your name"
-                className="h-9"
+                placeholder="输入你的名称"
+                className="h-11 rounded-xl"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm">Email Address</Label>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <Label className="text-sm">邮箱地址</Label>
+              <div className="rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+                {user?.email}
+              </div>
             </div>
-          </div>
 
-          <div className="flex justify-end">
-            <Button type="submit" size="sm" className="h-8" disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        </form>
+            <div className="flex justify-end">
+              <Button type="submit" className="h-9 rounded-xl px-4" disabled={saving}>
+                {saving ? '保存中...' : '保存'}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <div className="p-4 border-b">
-          <h2 className="font-medium text-sm">Account</h2>
-        </div>
-        <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Member Since</p>
-              <p className="text-sm text-muted-foreground">
-                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-medium">Account ID</p>
-              <p className="text-sm text-muted-foreground font-mono">{user?.id.slice(0, 8)}...</p>
-            </div>
+      <div className="console-panel px-5 py-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-sm font-semibold">退出登录</div>
+            <div className="mt-1 text-xs text-muted-foreground">结束当前会话并返回登录页。</div>
           </div>
-
-          <div className="pt-4 border-t flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Sign Out</p>
-              <p className="text-sm text-muted-foreground">Sign out from all devices</p>
-            </div>
-            <Button variant="outline" size="sm" className="h-8" onClick={handleSignOut}>
-              Sign Out
-            </Button>
-          </div>
+          <Button variant="outline" className="h-9 rounded-xl px-4" onClick={handleSignOut}>
+            退出登录
+          </Button>
         </div>
       </div>
     </div>

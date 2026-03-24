@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Juanie UI V8 Real Home</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&display=swap');
+      :root {
+        --bg: #f5f6f7;
+        --surface: #ffffff;
+        --surface-soft: #fafafa;
+        --surface-muted: #f3f4f6;
+        --text: #111111;
+        --muted: #6b7280;
+        --line: rgba(17, 17, 17, 0.08);
+        --black: #111111;
+        --green: #2f7d57;
+        --red: #c74a43;
+        --slate: #4b5563;
+        --shadow: 0 18px 38px rgba(17, 17, 17, 0.05);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Noto Sans SC', sans-serif;
+      }
+      .frame {
+        width: 1540px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .shell {
+        border-radius: 28px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      .top {
+        padding: 18px 20px 14px;
+        border-bottom: 1px solid var(--line);
+        background: #fcfcfc;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .mark {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: #111;
+        color: #fff;
+        font-weight: 800;
+      }
+      .brand strong {
+        display: block;
+        font-size: 16px;
+      }
+      .brand span {
+        display: block;
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .actions,
+      .stats,
+      .grid-2,
+      .grid-3 {
+        display: grid;
+        gap: 12px;
+      }
+      .actions {
+        grid-auto-flow: column;
+        grid-auto-columns: max-content;
+        align-items: center;
+      }
+      .btn,
+      .btn-black {
+        min-height: 40px;
+        padding: 0 14px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .btn-black {
+        border-color: #111;
+        background: #111;
+        color: #fff;
+      }
+      .content {
+        padding: 18px 20px 20px;
+      }
+      .hello {
+        margin-bottom: 14px;
+      }
+      .hello strong {
+        display: block;
+        font-size: 18px;
+      }
+      .hello span {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .stats {
+        grid-template-columns: repeat(4, 1fr);
+        margin-bottom: 14px;
+      }
+      .stat,
+      .panel,
+      .shortcut {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: 0 10px 24px rgba(17, 17, 17, 0.04);
+      }
+      .stat {
+        padding: 16px;
+      }
+      .stat small {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .stat strong {
+        display: block;
+        font-size: 30px;
+        line-height: 1;
+      }
+      .grid-2 {
+        grid-template-columns: 1fr 1fr;
+        margin-bottom: 14px;
+      }
+      .panel {
+        overflow: hidden;
+      }
+      .panel-head {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .panel-head strong {
+        font-size: 14px;
+      }
+      .panel-body {
+        padding: 10px;
+      }
+      .row {
+        padding: 12px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .row + .row {
+        margin-top: 6px;
+      }
+      .row:hover {
+        background: var(--surface-soft);
+      }
+      .row-main {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: var(--surface-muted);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        flex: none;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--slate);
+        flex: none;
+      }
+      .dot.red { background: var(--red); }
+      .copy strong {
+        display: block;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+      .copy span {
+        display: block;
+        margin-top: 3px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .grid-3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .shortcut {
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .shortcut strong {
+        display: block;
+        font-size: 14px;
+      }
+      .shortcut span {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="shell">
+        <div class="top">
+          <div class="brand">
+            <div class="mark">J</div>
+            <div>
+              <strong>Juanie</strong>
+              <span>Dashboard</span>
+            </div>
+          </div>
+          <div class="actions">
+            <div class="btn">Projects</div>
+            <div class="btn">Approvals</div>
+            <div class="btn-black">New Project</div>
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="hello">
+            <strong>Welcome back</strong>
+            <span>团队、项目和待处理迁移</span>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <small>Projects</small>
+              <strong>5</strong>
+            </div>
+            <div class="stat">
+              <small>Teams</small>
+              <strong>2</strong>
+            </div>
+            <div class="stat">
+              <small>Attention</small>
+              <strong>4</strong>
+            </div>
+            <div class="stat">
+              <small>Resources</small>
+              <strong>—</strong>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <section class="panel">
+              <div class="panel-head">
+                <strong>Recent Projects</strong>
+                <div class="btn">View all</div>
+              </div>
+              <div class="panel-body">
+                <div class="row">
+                  <div class="row-main">
+                    <div class="icon">N</div>
+                    <div class="copy">
+                      <strong>nexusnote</strong>
+                      <span>org/nexusnote</span>
+                    </div>
+                  </div>
+                  <div class="meta">active</div>
+                </div>
+                <div class="row">
+                  <div class="row-main">
+                    <div class="icon">A</div>
+                    <div class="copy">
+                      <strong>ai-gateway</strong>
+                      <span>org/ai-gateway</span>
+                    </div>
+                  </div>
+                  <div class="meta">active</div>
+                </div>
+                <div class="row">
+                  <div class="row-main">
+                    <div class="icon">B</div>
+                    <div class="copy">
+                      <strong>billing</strong>
+                      <span>org/billing</span>
+                    </div>
+                  </div>
+                  <div class="meta">initializing</div>
+                </div>
+                <div class="row">
+                  <div class="row-main">
+                    <div class="icon">C</div>
+                    <div class="copy">
+                      <strong>cms</strong>
+                      <span>org/cms</span>
+                    </div>
+                  </div>
+                  <div class="meta">active</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <strong>Needs Attention</strong>
+                <div class="btn">View all</div>
+              </div>
+              <div class="panel-body">
+                <div class="row">
+                  <div class="row-main">
+                    <div class="dot"></div>
+                    <div class="copy">
+                      <strong>app-db</strong>
+                      <span>nexusnote · awaiting approval</span>
+                    </div>
+                  </div>
+                  <div class="meta">3m</div>
+                </div>
+                <div class="row">
+                  <div class="row-main">
+                    <div class="dot red"></div>
+                    <div class="copy">
+                      <strong>billing-db</strong>
+                      <span>billing · failed</span>
+                    </div>
+                  </div>
+                  <div class="meta">26m</div>
+                </div>
+                <div class="row">
+                  <div class="row-main">
+                    <div class="dot"></div>
+                    <div class="copy">
+                      <strong>cms-db</strong>
+                      <span>cms · awaiting approval</span>
+                    </div>
+                  </div>
+                  <div class="meta">1h</div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="grid-3">
+            <div class="shortcut">
+              <div class="icon" style="background:#111;color:#fff;">+</div>
+              <div>
+                <strong>New Project</strong>
+                <span>Create from template</span>
+              </div>
+            </div>
+            <div class="shortcut">
+              <div class="icon">T</div>
+              <div>
+                <strong>Manage Teams</strong>
+                <span>Invite members</span>
+              </div>
+            </div>
+            <div class="shortcut">
+              <div class="icon">G</div>
+              <div>
+                <strong>Connect Git Provider</strong>
+                <span>GitHub / GitLab</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

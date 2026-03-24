@@ -1,5 +1,6 @@
 import { and, eq, gt } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 import { auth, signIn } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { teamInvitations, teamMembers } from '@/lib/db/schema';
@@ -18,66 +19,89 @@ export default async function InvitePage({ params }: Props) {
 
   if (!invitation) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <h1 className="text-xl font-semibold">Invalid invitation</h1>
-          <p className="text-sm text-muted-foreground">
-            This invitation link is invalid or has expired.
-          </p>
+      <div className="min-h-screen bg-background px-6 py-6">
+        <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-3xl items-center justify-center">
+          <div className="console-panel w-full max-w-md px-8 py-10 text-center">
+            <h1 className="text-xl font-semibold">邀请无效</h1>
+            <p className="mt-2 text-sm text-muted-foreground">这个邀请链接无效，或已过期。</p>
+          </div>
         </div>
       </div>
     );
   }
 
+  const callbackUrl = `/invite/${token}`;
   const session = await auth();
 
   if (!session?.user?.id) {
-    const callbackUrl = `/invite/${token}`;
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-full max-w-sm space-y-6 text-center">
-          <div className="space-y-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-black text-white text-lg font-bold mx-auto">
-              J
+      <div className="min-h-screen bg-background px-6 py-6">
+        <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl items-center justify-center">
+          <div className="grid w-full gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="console-panel px-8 py-10">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-foreground text-lg font-semibold text-background">
+                J
+              </div>
+              <div className="mt-6 text-2xl font-semibold tracking-tight">你被邀请加入团队</div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                以 <strong>{invitation.role}</strong> 身份加入{' '}
+                <strong>{invitation.team.name}</strong>。
+              </div>
+
+              <div className="mt-8 space-y-3">
+                <form
+                  action={async () => {
+                    'use server';
+                    await signIn('github', { redirectTo: callbackUrl });
+                  }}
+                >
+                  <Button type="submit" variant="outline" className="h-11 w-full rounded-xl">
+                    使用 GitHub 继续
+                  </Button>
+                </form>
+                <form
+                  action={async () => {
+                    'use server';
+                    await signIn('gitlab', { redirectTo: callbackUrl });
+                  }}
+                >
+                  <Button type="submit" variant="outline" className="h-11 w-full rounded-xl">
+                    使用 GitLab 继续
+                  </Button>
+                </form>
+              </div>
             </div>
-            <h1 className="text-xl font-semibold">You&apos;re invited</h1>
-            <p className="text-sm text-muted-foreground">
-              Sign in to join <strong>{invitation.team.name}</strong> as{' '}
-              <strong>{invitation.role}</strong>.
-            </p>
+
+            <div className="console-panel hidden px-8 py-10 lg:block">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                邀请
+              </div>
+              <div className="mt-4 text-3xl font-semibold tracking-tight">
+                {invitation.team.name}
+              </div>
+              <div className="mt-6 grid gap-3">
+                <div className="rounded-[18px] border border-border/70 bg-secondary/40 px-5 py-4">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    角色
+                  </div>
+                  <div className="mt-3 text-sm font-semibold capitalize">{invitation.role}</div>
+                </div>
+                <div className="rounded-[18px] border border-border/70 bg-secondary/40 px-5 py-4">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    过期时间
+                  </div>
+                  <div className="mt-3 text-sm font-semibold">
+                    {new Date(invitation.expires).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <form
-            action={async () => {
-              'use server';
-              await signIn('github', { redirectTo: callbackUrl });
-            }}
-          >
-            <button
-              type="submit"
-              className="w-full h-10 flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-            >
-              Continue with GitHub
-            </button>
-          </form>
-          <form
-            action={async () => {
-              'use server';
-              await signIn('gitlab', { redirectTo: callbackUrl });
-            }}
-          >
-            <button
-              type="submit"
-              className="w-full h-10 flex items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-            >
-              Continue with GitLab
-            </button>
-          </form>
         </div>
       </div>
     );
   }
 
-  // Check if already a member
   const existingMember = await db.query.teamMembers.findFirst({
     where: and(eq(teamMembers.teamId, invitation.teamId), eq(teamMembers.userId, session.user.id)),
   });
@@ -90,6 +114,5 @@ export default async function InvitePage({ params }: Props) {
     });
   }
 
-  // Keep invitation alive so others can use the same link
   redirect(`/teams/${invitation.teamId}`);
 }

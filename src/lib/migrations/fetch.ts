@@ -14,7 +14,7 @@ interface MigrationFile {
 export async function fetchMigrationFilesFromRepoPath(
   projectId: string,
   path: string,
-  branch: string = 'main'
+  ref: string = 'main'
 ): Promise<MigrationFile[]> {
   // 获取项目和仓库信息
   const project = await db.query.projects.findFirst({
@@ -49,7 +49,7 @@ export async function fetchMigrationFilesFromRepoPath(
 
   try {
     // 列出目录内容
-    const contents = await gateway.listDirectory(session, repo.fullName, path, branch);
+    const contents = await gateway.listDirectory(session, repo.fullName, path, ref);
 
     // 过滤出迁移文件（.sql 或 .js）
     const migrationFiles = contents.filter(
@@ -59,7 +59,7 @@ export async function fetchMigrationFilesFromRepoPath(
     // 读取每个文件内容
     const migrations: MigrationFile[] = [];
     for (const file of migrationFiles) {
-      const content = await gateway.getFileContent(session, repo.fullName, file.path, branch);
+      const content = await gateway.getFileContent(session, repo.fullName, file.path, ref);
 
       if (content) {
         migrations.push({
@@ -82,7 +82,7 @@ export async function fetchMigrationFilesFromRepoPath(
 export async function fetchMigrationFilesFromRepo(
   projectId: string,
   databaseType: string,
-  branch: string = 'main'
+  ref: string = 'main'
 ): Promise<MigrationFile[]> {
-  return fetchMigrationFilesFromRepoPath(projectId, `migrations/${databaseType}`, branch);
+  return fetchMigrationFilesFromRepoPath(projectId, `migrations/${databaseType}`, ref);
 }

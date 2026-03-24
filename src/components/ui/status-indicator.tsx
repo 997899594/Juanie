@@ -32,7 +32,7 @@ export function StatusIndicator({ status, label, pulse, className }: StatusIndic
           className={cn('relative inline-flex rounded-full h-2.5 w-2.5', statusColors[status])}
         />
       </span>
-      {label && <span className="text-sm font-medium">{label}</span>}
+      {label && <span className="text-sm font-medium text-foreground">{label}</span>}
     </div>
   );
 }

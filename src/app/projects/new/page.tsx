@@ -3,6 +3,8 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CreateProjectForm } from '@/components/projects/create-project-form';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { teamMembers, teams } from '@/lib/db/schema';
@@ -22,30 +24,24 @@ export default async function NewProjectPage() {
 
   if (userTeams.length === 0) {
     return (
-      <div className="max-w-xl mx-auto space-y-6">
-        <div>
-          <Link
-            href="/projects"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to projects
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">Create a project</h1>
-        </div>
+      <div className="mx-auto max-w-4xl space-y-6">
+        <PageHeader
+          title="新建项目"
+          actions={
+            <Button asChild variant="outline" className="h-9 rounded-xl px-4">
+              <Link href="/projects">
+                <ArrowLeft className="h-4 w-4" />
+                返回
+              </Link>
+            </Button>
+          }
+        />
 
-        <div className="rounded-lg border bg-card p-8 text-center">
-          <h2 className="text-lg font-medium mb-2">No teams available</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            You need to be part of a team to create a project
-          </p>
-          <Link href="/teams/new">
-            <button
-              type="button"
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium"
-            >
-              Create a team first
-            </button>
+        <div className="console-panel flex min-h-72 flex-col items-center justify-center rounded-[20px] px-8 text-center">
+          <h2 className="text-lg font-medium">没有可用团队</h2>
+          <p className="mt-2 text-sm text-muted-foreground">先加入团队，才能创建项目。</p>
+          <Link href="/teams/new" className="mt-5">
+            <Button className="rounded-xl">先创建团队</Button>
           </Link>
         </div>
       </div>
@@ -53,20 +49,23 @@ export default async function NewProjectPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <Link
-          href="/projects"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to projects
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Create a project</h1>
-        <p className="text-sm text-muted-foreground mt-1">Deploy your first project in minutes</p>
-      </div>
+    <div className="mx-auto max-w-5xl space-y-6">
+      <PageHeader
+        title="新建项目"
+        description={`${userTeams.length} 个团队可用`}
+        actions={
+          <Button asChild variant="outline" className="h-9 rounded-xl px-4">
+            <Link href="/projects">
+              <ArrowLeft className="h-4 w-4" />
+              返回
+            </Link>
+          </Button>
+        }
+      />
 
-      <CreateProjectForm teams={userTeams} />
+      <div className="console-panel px-5 py-5">
+        <CreateProjectForm teams={userTeams} />
+      </div>
     </div>
   );
 }
