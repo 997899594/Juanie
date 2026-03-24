@@ -16,7 +16,9 @@ const migrationConfigSchema = z.object({
 });
 
 const serviceDatabaseBindingSchema = z.object({
-  binding: z.string().min(1).max(100),
+  binding: z.string().min(1).max(100).optional(),
+  role: z.enum(['primary', 'readonly', 'cache', 'queue', 'analytics']).optional(),
+  type: z.enum(['postgresql', 'mysql', 'redis', 'mongodb']).optional(),
   migrate: migrationConfigSchema,
 });
 
@@ -169,6 +171,10 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
 
   for (const service of config.services) {
     for (const binding of service.databases ?? []) {
+      if (!binding.binding) {
+        continue;
+      }
+
       const database = config.databases?.find((db) => db.name === binding.binding);
       if (!database) {
         warnings.push(

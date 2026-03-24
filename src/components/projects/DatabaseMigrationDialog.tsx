@@ -80,6 +80,15 @@ interface MigrationPlan {
     lockStrategy: string;
     autoRun: boolean;
   };
+  resolution: {
+    strategy: string;
+    selector: {
+      bindingName: string | null;
+      bindingRole: string | null;
+      bindingDatabaseType: string | null;
+    };
+  };
+  envVars: string[];
   sqlFiles: Array<{
     name: string;
   }>;
@@ -139,6 +148,20 @@ function formatLockStrategyLabel(value: string): string {
     none: '无锁',
     advisory: '建议锁',
     postgres_advisory: 'Postgres 建议锁',
+  };
+
+  return labels[value] ?? value;
+}
+
+function formatResolutionStrategyLabel(value: string): string {
+  const labels: Record<string, string> = {
+    binding_name: '按显式绑定名解析',
+    selector_match: '按逻辑选择器解析',
+    service_single: '按服务唯一数据库解析',
+    service_primary: '按服务主库解析',
+    implicit_primary: '按主库自动解析',
+    implicit_single: '按唯一候选库解析',
+    unknown: '已解析',
   };
 
   return labels[value] ?? value;
@@ -254,14 +277,14 @@ export function DatabaseMigrationDialog({
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs">
           <Database className="h-3 w-3" />
-          手动执行
+          对比并迁移
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{databaseName} 手动迁移控制台</DialogTitle>
           <DialogDescription>
-            自动迁移应通过 release 执行。这里仅用于人工审批、重试或紧急手动执行。
+            自动迁移应通过 release 执行。这里会先展示执行前对比，再决定是否手动执行。
           </DialogDescription>
         </DialogHeader>
 
@@ -281,9 +304,9 @@ export function DatabaseMigrationDialog({
           <div className="overflow-hidden rounded-[20px] border border-border bg-background">
             <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
               <div>
-                <div className="text-sm font-semibold">手动执行计划</div>
+                <div className="text-sm font-semibold">执行前对比</div>
                 <div className="text-xs text-muted-foreground">
-                  平台仍会校验 runner、镜像、锁策略和确认文本。
+                  平台会先解析目标数据库、执行器、命令和注入变量，再决定是否可执行。
                 </div>
               </div>
               <Button
@@ -327,6 +350,21 @@ export function DatabaseMigrationDialog({
                       </div>
                     </div>
                     <div>
+                      <div className="text-xs text-muted-foreground">解析方式</div>
+                      <div className="font-medium">
+                        {formatResolutionStrategyLabel(plan.resolution.strategy)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {plan.resolution.selector.bindingName
+                          ? `名称：${plan.resolution.selector.bindingName}`
+                          : plan.resolution.selector.bindingRole
+                            ? `角色：${plan.resolution.selector.bindingRole}`
+                            : plan.resolution.selector.bindingDatabaseType
+                              ? `类型：${plan.resolution.selector.bindingDatabaseType}`
+                              : '未指定，平台自动推断'}
+                      </div>
+                    </div>
+                    <div>
                       <div className="text-xs text-muted-foreground">执行器</div>
                       <div className="font-medium">{plan.runnerType}</div>
                       <div className="text-xs text-muted-foreground break-all">
@@ -366,6 +404,23 @@ export function DatabaseMigrationDialog({
                   </div>
 
                   <div className="space-y-2">
+                    <div className="text-xs text-muted-foreground">平台注入的数据库变量</div>
+                    <div className="flex flex-wrap gap-2">
+                      {plan.envVars.length > 0 ? (
+                        plan.envVars.map((envVar) => (
+                          <Badge key={envVar} variant="outline">
+                            {envVar}
+                          </Badge>
+                        ))
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          当前没有可注入的数据库变量。
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <TerminalSquare className="h-3.5 w-3.5" />
                       命令预览
@@ -400,7 +455,7 @@ export function DatabaseMigrationDialog({
                     <div className="space-y-2 rounded-2xl border border-border bg-secondary/30 p-3">
                       <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                         <AlertTriangle className="h-3.5 w-3.5" />
-                        执行前确认
+                        差异与风险提示
                       </div>
                       {plan.warnings.map((warning) => (
                         <div key={warning} className="text-xs text-muted-foreground">
@@ -463,7 +518,9 @@ export function DatabaseMigrationDialog({
                   {runs.map((run) => (
                     <div key={run.id} className="space-y-2 px-5 py-4">
                       <div className="flex items-center gap-2">
-                        <Badge variant={statusTone[run.status] ?? 'outline'}>{run.status}</Badge>
+                        <Badge variant={statusTone[run.status] ?? 'outline'}>
+                          {formatRunStatusLabel(run.status)}
+                        </Badge>
                         <span className="text-xs text-muted-foreground">{run.service.name}</span>
                         <span className="text-xs text-muted-foreground">
                           {run.specification.tool}
@@ -525,7 +582,7 @@ export function DatabaseMigrationDialog({
             ) : (
               <Play className="h-4 w-4" />
             )}
-            Queue manual migration
+            确认执行迁移
           </Button>
         </DialogFooter>
       </DialogContent>

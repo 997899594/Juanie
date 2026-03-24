@@ -16,7 +16,9 @@ import {
 import type { ResolvedMigrationSpec } from './types';
 
 interface ServiceDatabaseBindingConfig {
-  binding: string;
+  binding?: string;
+  role?: 'primary' | 'readonly' | 'cache' | 'queue' | 'analytics';
+  type?: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
   migrate: {
     tool: 'drizzle' | 'prisma' | 'knex' | 'typeorm' | 'sql' | 'custom';
     workingDirectory: string;
@@ -28,6 +30,121 @@ interface ServiceDatabaseBindingConfig {
     compatibility?: 'backward_compatible' | 'breaking';
     approvalPolicy?: 'auto' | 'manual_in_production';
   };
+}
+
+function getSelectorSnapshot(binding: ServiceDatabaseBindingConfig) {
+  return {
+    bindingName: binding.binding ?? null,
+    bindingRole: binding.role ?? null,
+    bindingDatabaseType: binding.type ?? null,
+  };
+}
+
+function getFallbackResolution() {
+  return {
+    strategy: 'unknown',
+    selector: {
+      bindingName: null,
+      bindingRole: null,
+      bindingDatabaseType: null,
+    },
+  };
+}
+
+function resolveDatabaseForBinding(
+  binding: ServiceDatabaseBindingConfig,
+  serviceId: string,
+  databaseList: Array<typeof databases.$inferSelect>
+) {
+  const baseCandidates = databaseList.filter(
+    (candidate) =>
+      candidate.serviceId === serviceId ||
+      candidate.serviceId === null ||
+      candidate.serviceId === undefined
+  );
+
+  const serviceCandidates = baseCandidates.filter((candidate) => candidate.serviceId === serviceId);
+  const selector = getSelectorSnapshot(binding);
+
+  if (binding.binding) {
+    const exactMatches = baseCandidates.filter((candidate) => candidate.name === binding.binding);
+    const exactServiceMatches = exactMatches.filter(
+      (candidate) => candidate.serviceId === serviceId
+    );
+
+    if (exactServiceMatches.length === 1) {
+      return {
+        database: exactServiceMatches[0],
+        resolution: { strategy: 'binding_name', selector },
+      };
+    }
+    if (exactMatches.length === 1) {
+      return { database: exactMatches[0], resolution: { strategy: 'binding_name', selector } };
+    }
+
+    return null;
+  }
+
+  let filtered = baseCandidates;
+
+  if (binding.role) {
+    filtered = filtered.filter((candidate) => candidate.role === binding.role);
+  }
+  if (binding.type) {
+    filtered = filtered.filter((candidate) => candidate.type === binding.type);
+  }
+
+  const filteredServiceCandidates = filtered.filter(
+    (candidate) => candidate.serviceId === serviceId
+  );
+  if ((binding.role || binding.type) && filteredServiceCandidates.length === 1) {
+    return {
+      database: filteredServiceCandidates[0],
+      resolution: { strategy: 'selector_match', selector },
+    };
+  }
+  if ((binding.role || binding.type) && filtered.length === 1) {
+    return {
+      database: filtered[0],
+      resolution: { strategy: 'selector_match', selector },
+    };
+  }
+
+  if (!binding.role && !binding.type) {
+    if (serviceCandidates.length === 1) {
+      return {
+        database: serviceCandidates[0],
+        resolution: { strategy: 'service_single', selector },
+      };
+    }
+
+    const servicePrimaryCandidates = serviceCandidates.filter(
+      (candidate) => candidate.role === 'primary'
+    );
+    if (servicePrimaryCandidates.length === 1) {
+      return {
+        database: servicePrimaryCandidates[0],
+        resolution: { strategy: 'service_primary', selector },
+      };
+    }
+  }
+
+  const primaryCandidates = filtered.filter((candidate) => candidate.role === 'primary');
+  if (primaryCandidates.length === 1) {
+    return {
+      database: primaryCandidates[0],
+      resolution: { strategy: 'implicit_primary', selector },
+    };
+  }
+
+  if (filtered.length === 1) {
+    return {
+      database: filtered[0],
+      resolution: { strategy: 'implicit_single', selector },
+    };
+  }
+
+  return null;
 }
 
 export async function syncMigrationSpecificationsFromRepo(
@@ -96,24 +213,19 @@ export async function syncMigrationSpecificationsFromRepo(
 
   const configServices = new Map(parsed.services.map((service) => [service.name, service]));
   const upsertedIds: string[] = [];
+  const resolutionBySpecId = new Map<string, ResolvedMigrationSpec['resolution']>();
 
   for (const serviceRecord of serviceList) {
     const serviceConfig = configServices.get(serviceRecord.name);
     const bindings = (serviceConfig?.databases ?? []) as ServiceDatabaseBindingConfig[];
 
     for (const binding of bindings) {
-      const databaseRecord = databaseList.find(
-        (candidate) =>
-          candidate.name === binding.binding &&
-          (candidate.serviceId === serviceRecord.id ||
-            candidate.serviceId === null ||
-            candidate.serviceId === undefined)
-      );
-
-      if (!databaseRecord) {
+      const resolved = resolveDatabaseForBinding(binding, serviceRecord.id, databaseList);
+      if (!resolved) {
         continue;
       }
 
+      const databaseRecord = resolved.database;
       const [specification] = await db
         .insert(migrationSpecifications)
         .values({
@@ -153,6 +265,7 @@ export async function syncMigrationSpecificationsFromRepo(
         .returning();
 
       upsertedIds.push(specification.id);
+      resolutionBySpecId.set(specification.id, resolved.resolution);
     }
   }
 
@@ -174,6 +287,7 @@ export async function syncMigrationSpecificationsFromRepo(
     service: specification.service,
     database: specification.database,
     environment: specification.environment,
+    resolution: resolutionBySpecId.get(specification.id) ?? getFallbackResolution(),
   }));
 }
 
@@ -187,7 +301,10 @@ export async function resolveMigrationSpecifications(
     sourceCommitSha?: string | null;
   }
 ): Promise<ResolvedMigrationSpec[]> {
-  await syncMigrationSpecificationsFromRepo(projectId, environmentId, options);
+  const syncedSpecs = await syncMigrationSpecificationsFromRepo(projectId, environmentId, options);
+  const syncedResolutionBySpecId = new Map(
+    syncedSpecs.map((spec) => [spec.specification.id, spec.resolution])
+  );
 
   const specList = await db.query.migrationSpecifications.findMany({
     where: options?.serviceIds?.length
@@ -214,5 +331,6 @@ export async function resolveMigrationSpecifications(
     service: specification.service,
     database: specification.database,
     environment: specification.environment,
+    resolution: syncedResolutionBySpecId.get(specification.id) ?? getFallbackResolution(),
   }));
 }

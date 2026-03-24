@@ -11,6 +11,19 @@ import type {
 
 export { resolveMigrationSpecifications } from './resolver';
 
+function buildPlanEnvVars(spec: ResolvedMigrationSpec): string[] {
+  const envVars: string[] = [];
+
+  if (spec.database.connectionString) envVars.push('DATABASE_URL');
+  if (spec.database.host) envVars.push('DB_HOST');
+  if (spec.database.port) envVars.push('DB_PORT');
+  if (spec.database.databaseName) envVars.push('DB_NAME');
+  if (spec.database.username) envVars.push('DB_USER');
+  if (spec.database.password) envVars.push('DB_PASSWORD');
+
+  return envVars;
+}
+
 export async function createMigrationRun(
   spec: ResolvedMigrationSpec,
   input: {
@@ -210,6 +223,8 @@ export async function buildMigrationExecutionPlan(
       lockStrategy: spec.specification.lockStrategy,
       autoRun: spec.specification.autoRun,
     },
+    resolution: spec.resolution,
+    envVars: buildPlanEnvVars(spec),
     sqlFiles,
   };
 }

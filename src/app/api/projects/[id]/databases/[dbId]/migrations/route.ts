@@ -14,10 +14,42 @@ import {
   createMigrationRun,
   getMigrationRunById,
 } from '@/lib/migrations';
+import { syncMigrationSpecificationsFromRepo } from '@/lib/migrations/resolver';
+import type { MigrationResolutionInfo, ResolvedMigrationSpec } from '@/lib/migrations/types';
 import { addMigrationJob } from '@/lib/queue';
 
 function getExpectedConfirmationValue(databaseName: string, environmentName: string): string {
   return `${databaseName}/${environmentName}`;
+}
+
+function getUnknownResolution(): MigrationResolutionInfo {
+  return {
+    strategy: 'unknown',
+    selector: {
+      bindingName: null,
+      bindingRole: null,
+      bindingDatabaseType: null,
+    },
+  };
+}
+
+function buildResolvedSpec(
+  specification: ResolvedMigrationSpec['specification'] & {
+    service: ResolvedMigrationSpec['service'];
+    environment: ResolvedMigrationSpec['environment'];
+  },
+  database: ResolvedMigrationSpec['database'],
+  syncedSpecs: ResolvedMigrationSpec[]
+): ResolvedMigrationSpec {
+  const synced = syncedSpecs.find((item) => item.specification.id === specification.id);
+
+  return {
+    specification,
+    database,
+    service: specification.service,
+    environment: specification.environment,
+    resolution: synced?.resolution ?? getUnknownResolution(),
+  };
 }
 
 export async function POST(
@@ -61,6 +93,8 @@ export async function POST(
     return NextResponse.json({ error: 'Database environment is missing' }, { status: 400 });
   }
 
+  const syncedSpecs = await syncMigrationSpecificationsFromRepo(projectId, database.environmentId);
+
   const specification = await db.query.migrationSpecifications.findFirst({
     where: and(
       eq(migrationSpecifications.projectId, projectId),
@@ -91,12 +125,7 @@ export async function POST(
 
     if (action === 'plan') {
       const plan = await buildMigrationExecutionPlan(
-        {
-          specification,
-          database,
-          service: specification.service,
-          environment: specification.environment,
-        },
+        buildResolvedSpec(specification, database, syncedSpecs),
         {
           imageUrl: imageUrl ?? null,
         }
@@ -166,12 +195,7 @@ export async function POST(
       }
 
       const retryRun = await createMigrationRun(
-        {
-          specification,
-          database,
-          service: specification.service,
-          environment: specification.environment,
-        },
+        buildResolvedSpec(specification, database, syncedSpecs),
         {
           triggeredBy: 'manual',
           triggeredByUserId: session.user.id,
@@ -204,19 +228,11 @@ export async function POST(
       );
     }
 
-    const run = await createMigrationRun(
-      {
-        specification,
-        database,
-        service: specification.service,
-        environment: specification.environment,
-      },
-      {
-        triggeredBy: 'manual',
-        triggeredByUserId: session.user.id,
-        runnerType: imageUrl ? 'k8s_job' : 'worker',
-      }
-    );
+    const run = await createMigrationRun(buildResolvedSpec(specification, database, syncedSpecs), {
+      triggeredBy: 'manual',
+      triggeredByUserId: session.user.id,
+      runnerType: imageUrl ? 'k8s_job' : 'worker',
+    });
 
     await addMigrationJob(run.id, { imageUrl, allowApprovalBypass: false });
 

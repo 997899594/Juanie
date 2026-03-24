@@ -16,11 +16,21 @@ export type ServiceRecord = typeof services.$inferSelect;
 export type EnvironmentRecord = typeof environments.$inferSelect;
 export type DeploymentRecord = typeof deployments.$inferSelect;
 
+export interface MigrationResolutionInfo {
+  strategy: string;
+  selector: {
+    bindingName: string | null;
+    bindingRole: DatabaseRecord['role'] | null;
+    bindingDatabaseType: DatabaseRecord['type'] | null;
+  };
+}
+
 export interface ResolvedMigrationSpec {
   specification: MigrationSpecificationRecord;
   database: DatabaseRecord;
   service: ServiceRecord;
   environment: EnvironmentRecord;
+  resolution: MigrationResolutionInfo;
 }
 
 export interface ExecuteMigrationRunOptions {
@@ -66,6 +76,8 @@ export interface MigrationExecutionPlan {
     lockStrategy: MigrationSpecificationRecord['lockStrategy'];
     autoRun: boolean;
   };
+  resolution: MigrationResolutionInfo;
+  envVars: string[];
   sqlFiles: Array<{
     name: string;
   }>;

@@ -6,6 +6,23 @@ import { migrationRuns, projects, teamMembers } from '@/lib/db/schema';
 import { createMigrationRun, getMigrationRunById } from '@/lib/migrations';
 import { addMigrationJob } from '@/lib/queue';
 
+function buildResolvedSpec(run: NonNullable<Awaited<ReturnType<typeof getMigrationRunById>>>) {
+  return {
+    specification: run.specification,
+    database: run.database,
+    service: run.service,
+    environment: run.environment,
+    resolution: {
+      strategy: 'unknown',
+      selector: {
+        bindingName: null,
+        bindingRole: null,
+        bindingDatabaseType: null,
+      },
+    },
+  };
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; runId: string }> }
@@ -80,23 +97,15 @@ export async function POST(
       );
     }
 
-    const retryRun = await createMigrationRun(
-      {
-        specification: run.specification,
-        database: run.database,
-        service: run.service,
-        environment: run.environment,
-      },
-      {
-        releaseId: run.releaseId,
-        deploymentId: run.deploymentId,
-        triggeredBy: 'manual',
-        triggeredByUserId: session.user.id,
-        sourceCommitSha: run.sourceCommitSha,
-        sourceCommitMessage: run.sourceCommitMessage,
-        runnerType: imageUrl ? 'k8s_job' : 'worker',
-      }
-    );
+    const retryRun = await createMigrationRun(buildResolvedSpec(run), {
+      releaseId: run.releaseId,
+      deploymentId: run.deploymentId,
+      triggeredBy: 'manual',
+      triggeredByUserId: session.user.id,
+      sourceCommitSha: run.sourceCommitSha,
+      sourceCommitMessage: run.sourceCommitMessage,
+      runnerType: imageUrl ? 'k8s_job' : 'worker',
+    });
 
     await addMigrationJob(retryRun.id, {
       imageUrl: imageUrl ?? null,
