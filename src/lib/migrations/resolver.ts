@@ -32,6 +32,25 @@ interface ServiceDatabaseBindingConfig {
   };
 }
 
+function getServiceBindingConfigs(serviceConfig?: {
+  migrate?: ServiceDatabaseBindingConfig['migrate'];
+  databases?: ServiceDatabaseBindingConfig[];
+}): ServiceDatabaseBindingConfig[] {
+  if (!serviceConfig) {
+    return [];
+  }
+
+  if ((serviceConfig.databases?.length ?? 0) > 0) {
+    return serviceConfig.databases ?? [];
+  }
+
+  if (serviceConfig.migrate) {
+    return [{ migrate: serviceConfig.migrate }];
+  }
+
+  return [];
+}
+
 function getSelectorSnapshot(binding: ServiceDatabaseBindingConfig) {
   return {
     bindingName: binding.binding ?? null,
@@ -217,7 +236,14 @@ export async function syncMigrationSpecificationsFromRepo(
 
   for (const serviceRecord of serviceList) {
     const serviceConfig = configServices.get(serviceRecord.name);
-    const bindings = (serviceConfig?.databases ?? []) as ServiceDatabaseBindingConfig[];
+    const bindings = getServiceBindingConfigs(
+      serviceConfig as
+        | {
+            migrate?: ServiceDatabaseBindingConfig['migrate'];
+            databases?: ServiceDatabaseBindingConfig[];
+          }
+        | undefined
+    );
 
     for (const binding of bindings) {
       const resolved = resolveDatabaseForBinding(binding, serviceRecord.id, databaseList);

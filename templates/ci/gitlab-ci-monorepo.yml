@@ -37,6 +37,21 @@ build:
           docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
           docker push $IMAGE_TAG
         fi
+
+        curl -fsSX POST "https://juanie.art/api/releases" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $CI_JOB_TOKEN" \
+          -d "{
+            \"repository\": \"$CI_PROJECT_PATH\",
+            \"sha\": \"$CI_COMMIT_SHA\",
+            \"ref\": \"$CI_COMMIT_REF_NAME\",
+            \"services\": [
+              {
+                \"name\": \"$SERVICE\",
+                \"image\": \"$IMAGE_TAG\"
+              }
+            ]
+          }"
       done
   rules:
     - if: $SERVICES != '[]'

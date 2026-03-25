@@ -61,3 +61,22 @@ jobs:
             docker build -t $IMAGE_TAG -f apps/${{ matrix.service }}/Dockerfile .
             docker push $IMAGE_TAG
           fi
+
+      - name: Trigger Juanie Release
+        if: success()
+        run: |
+          IMAGE_TAG=${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:sha-${{ github.sha }}
+          curl -fsSX POST "https://juanie.art/api/releases" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -d '{
+              "repository": "${{ github.repository }}",
+              "sha": "${{ github.sha }}",
+              "ref": "${{ github.ref }}",
+              "services": [
+                {
+                  "name": "${{ matrix.service }}",
+                  "image": "'"$IMAGE_TAG"'"
+                }
+              ]
+            }'

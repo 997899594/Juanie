@@ -31,7 +31,7 @@ export async function POST(
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   const project = await db.query.projects.findFirst({
@@ -39,7 +39,7 @@ export async function POST(
   });
 
   if (!project) {
-    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    return NextResponse.json({ error: '项目不存在' }, { status: 404 });
   }
 
   const member = await db.query.teamMembers.findFirst({
@@ -47,22 +47,19 @@ export async function POST(
   });
 
   if (!member || !['owner', 'admin'].includes(member.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: '没有权限执行这个操作' }, { status: 403 });
   }
 
   const run = await getMigrationRunById(runId);
   if (!run || run.projectId !== projectId) {
-    return NextResponse.json({ error: 'Migration run not found' }, { status: 404 });
+    return NextResponse.json({ error: '迁移记录不存在' }, { status: 404 });
   }
 
   const { action, imageUrl } = await request.json().catch(() => ({}));
 
   if (action === 'approve') {
     if (run.status !== 'awaiting_approval') {
-      return NextResponse.json(
-        { error: 'Migration run is not awaiting approval' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '当前迁移不在待审批状态' }, { status: 400 });
     }
 
     await db
@@ -82,7 +79,7 @@ export async function POST(
 
     return NextResponse.json(
       {
-        message: 'Migration approved and requeued',
+        message: '迁移审批已通过，已重新加入队列',
         runId: run.id,
       },
       { status: 202 }
@@ -91,10 +88,7 @@ export async function POST(
 
   if (action === 'retry') {
     if (!['failed', 'canceled'].includes(run.status)) {
-      return NextResponse.json(
-        { error: 'Only failed or canceled runs can be retried' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '只有失败或已取消的迁移才能重试' }, { status: 400 });
     }
 
     const retryRun = await createMigrationRun(buildResolvedSpec(run), {
@@ -114,12 +108,12 @@ export async function POST(
 
     return NextResponse.json(
       {
-        message: 'Migration retry queued',
+        message: '迁移重试已加入队列',
         runId: retryRun.id,
       },
       { status: 202 }
     );
   }
 
-  return NextResponse.json({ error: 'Unsupported action' }, { status: 400 });
+  return NextResponse.json({ error: '不支持的操作' }, { status: 400 });
 }

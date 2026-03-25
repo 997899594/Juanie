@@ -38,6 +38,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     validate_repository: 10,
     create_repository: 10,
     push_template: 15,
+    push_cicd_config: 15,
     setup_namespace: 15,
     deploy_services: 30,
     provision_databases: 20,

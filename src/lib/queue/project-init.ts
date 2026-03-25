@@ -148,6 +148,7 @@ const IMPORT_STEPS = [
 const CREATE_STEPS = [
   'create_repository',
   'push_template',
+  'push_cicd_config',
   'setup_registry_webhook',
   'setup_namespace',
   'provision_databases',
@@ -392,6 +393,271 @@ async function pushTemplate(
 
 const TEMPLATES_DIR = join(process.cwd(), 'templates');
 
+interface ProjectInitRenderContext {
+  services: Array<typeof services.$inferSelect>;
+  databases: Array<typeof databases.$inferSelect>;
+}
+
+type PackageManager = 'bun' | 'pnpm' | 'yarn' | 'npm';
+
+interface RepoAutomationContext {
+  monorepoType: MonorepoType;
+  rootFiles: string[];
+  packageManager: PackageManager;
+  packageJson: {
+    packageManager?: string;
+    scripts?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  } | null;
+}
+
+function supportsGeneratedMigration(dbType: typeof databases.$inferSelect.type): boolean {
+  return dbType === 'postgresql' || dbType === 'mysql';
+}
+
+function detectPackageManager(
+  rootFiles: string[],
+  packageJson: RepoAutomationContext['packageJson']
+): PackageManager {
+  const packageManager = packageJson?.packageManager;
+
+  if (typeof packageManager === 'string') {
+    if (packageManager.startsWith('bun@')) return 'bun';
+    if (packageManager.startsWith('pnpm@')) return 'pnpm';
+    if (packageManager.startsWith('yarn@')) return 'yarn';
+    if (packageManager.startsWith('npm@')) return 'npm';
+  }
+
+  if (rootFiles.includes('bun.lockb') || rootFiles.includes('bun.lock')) return 'bun';
+  if (rootFiles.includes('pnpm-lock.yaml')) return 'pnpm';
+  if (rootFiles.includes('yarn.lock')) return 'yarn';
+  return 'npm';
+}
+
+function buildRunScriptCommand(packageManager: PackageManager, script: string): string {
+  if (packageManager === 'yarn') {
+    return `yarn ${script}`;
+  }
+
+  return `${packageManager} run ${script}`;
+}
+
+function detectMigrationTool(packageJson: RepoAutomationContext['packageJson']) {
+  const dependencies = {
+    ...(packageJson?.dependencies ?? {}),
+    ...(packageJson?.devDependencies ?? {}),
+  };
+
+  if (dependencies.prisma || dependencies['@prisma/client']) return 'prisma';
+  if (dependencies['drizzle-kit'] || dependencies['drizzle-orm']) return 'drizzle';
+  if (dependencies.knex) return 'knex';
+  if (dependencies.typeorm) return 'typeorm';
+  return 'custom';
+}
+
+function inferMigrationCommand(
+  automation: RepoAutomationContext,
+  databaseType: typeof databases.$inferSelect.type
+): {
+  comment: string;
+  tool: 'drizzle' | 'prisma' | 'knex' | 'typeorm' | 'custom';
+  command: string;
+  autoRun: boolean;
+  approvalPolicy?: 'manual_in_production';
+} | null {
+  if (!supportsGeneratedMigration(databaseType) || automation.monorepoType !== 'none') {
+    return null;
+  }
+
+  const scripts = automation.packageJson?.scripts ?? {};
+  const tool = detectMigrationTool(automation.packageJson);
+
+  if (scripts['db:migrate']) {
+    return {
+      comment: 'Auto-generated from package.json script db:migrate',
+      tool,
+      command: buildRunScriptCommand(automation.packageManager, 'db:migrate'),
+      autoRun: true,
+      approvalPolicy: 'manual_in_production',
+    };
+  }
+
+  if (scripts['db:deploy']) {
+    return {
+      comment: 'Auto-generated from package.json script db:deploy',
+      tool,
+      command: buildRunScriptCommand(automation.packageManager, 'db:deploy'),
+      autoRun: true,
+      approvalPolicy: 'manual_in_production',
+    };
+  }
+
+  if (scripts['db:push']) {
+    return {
+      comment: 'Auto-generated from package.json script db:push; review before enabling auto-run',
+      tool,
+      command: buildRunScriptCommand(automation.packageManager, 'db:push'),
+      autoRun: false,
+      approvalPolicy: 'manual_in_production',
+    };
+  }
+
+  return null;
+}
+
+function buildGitHubReleaseServicesJson(serviceList: Array<typeof services.$inferSelect>): string {
+  const entries = serviceList.map(
+    (service) =>
+      `                {\n                  "name": "${service.name}",\n                  "image": "\${{ env.IMAGE_TAG }}"\n                }`
+  );
+
+  return `[\n${entries.join(',\n')}\n              ]`;
+}
+
+function buildGitLabReleaseServicesJson(serviceList: Array<typeof services.$inferSelect>): string {
+  const entries = serviceList.map(
+    (service) =>
+      `            {\n              "name": "${service.name}",\n              "image": "$IMAGE_TAG"\n            }`
+  );
+
+  return `[\n${entries.join(',\n')}\n          ]`;
+}
+
+function buildMigrationConfigLines(
+  indent: string,
+  inferred: ReturnType<typeof inferMigrationCommand>
+): string[] {
+  const lines = [
+    `${indent}# ${inferred?.comment ?? "TODO: replace with the repository's real migration command before enabling auto-run"}`,
+    `${indent}migrate:`,
+    `${indent}  tool: ${inferred?.tool ?? 'custom'}`,
+    `${indent}  workingDirectory: .`,
+    `${indent}  command: ${inferred?.command ?? 'npm run db:migrate'}`,
+    `${indent}  phase: preDeploy`,
+    `${indent}  autoRun: ${inferred?.autoRun ?? false}`,
+  ];
+
+  if (inferred?.approvalPolicy) {
+    lines.push(`${indent}  approvalPolicy: ${inferred.approvalPolicy}`);
+  }
+
+  return lines;
+}
+
+function buildServiceMigrationLines(
+  service: typeof services.$inferSelect,
+  serviceList: Array<typeof services.$inferSelect>,
+  databaseList: Array<typeof databases.$inferSelect>,
+  automation: RepoAutomationContext
+): string[] {
+  const serviceScopedRelationalDbs = databaseList.filter(
+    (database) => database.serviceId === service.id && supportsGeneratedMigration(database.type)
+  );
+
+  if (serviceScopedRelationalDbs.length === 1 && serviceScopedRelationalDbs[0].role === 'primary') {
+    return buildMigrationConfigLines(
+      '    ',
+      inferMigrationCommand(automation, serviceScopedRelationalDbs[0].type)
+    );
+  }
+
+  if (serviceScopedRelationalDbs.length > 0) {
+    const lines = ['    databases:'];
+
+    for (const database of serviceScopedRelationalDbs) {
+      const inferred = inferMigrationCommand(automation, database.type);
+      lines.push(
+        `      - role: ${database.role ?? 'primary'}`,
+        `        type: ${database.type}`,
+        ...buildMigrationConfigLines('        ', inferred)
+      );
+    }
+
+    return lines;
+  }
+
+  if (serviceList.length === 1) {
+    const accessibleRelationalDbs = databaseList.filter(
+      (database) =>
+        supportsGeneratedMigration(database.type) &&
+        (database.serviceId === service.id || database.serviceId === null)
+    );
+
+    if (accessibleRelationalDbs.length === 1 && accessibleRelationalDbs[0].role === 'primary') {
+      return buildMigrationConfigLines(
+        '    ',
+        inferMigrationCommand(automation, accessibleRelationalDbs[0].type)
+      );
+    }
+  }
+
+  return [];
+}
+
+function renderJuanieConfig(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  },
+  context: ProjectInitRenderContext,
+  automation: RepoAutomationContext
+): string {
+  const lines: string[] = ['# juanie.yaml', `name: ${project.slug}`, '', 'services:'];
+
+  for (const service of context.services) {
+    lines.push(
+      `  - name: ${service.name}`,
+      `    type: ${service.type}`,
+      '    build:',
+      `      command: ${service.buildCommand ?? 'npm run build'}`,
+      '    run:',
+      `      command: ${service.startCommand ?? 'npm start'}`
+    );
+
+    if (service.port) {
+      lines.push(`      port: ${service.port}`);
+    }
+
+    const healthPath = service.type === 'web' ? '/api/health' : '/health';
+    lines.push('    healthcheck:', `      path: ${healthPath}`, '      interval: 30');
+
+    const migrationLines = buildServiceMigrationLines(
+      service,
+      context.services,
+      context.databases,
+      automation
+    );
+    if (migrationLines.length > 0) {
+      lines.push(...migrationLines);
+    }
+  }
+
+  if (context.databases.length > 0) {
+    lines.push('', 'databases:');
+
+    for (const database of context.databases) {
+      lines.push(
+        `  - name: ${database.name}`,
+        `    type: ${database.type}`,
+        `    plan: ${database.plan ?? 'starter'}`,
+        `    scope: ${database.scope ?? (database.serviceId ? 'service' : 'project')}`,
+        `    role: ${database.role ?? 'primary'}`
+      );
+    }
+  }
+
+  lines.push(
+    '',
+    'environments:',
+    '  production:',
+    `    branch: ${project.productionBranch || 'main'}`,
+    '  staging:',
+    `    branch: ${project.productionBranch || 'main'}`
+  );
+
+  return `${lines.join('\n')}\n`;
+}
+
 /**
  * Push CI/CD configuration files to the repository.
  * This step is called during project import flow.
@@ -416,35 +682,73 @@ async function pushCicdConfig(
 
   // Detect monorepo type from repository root files using gateway
   let monorepoType: MonorepoType = 'none';
+  let rootFiles: string[] = [];
+  let packageJson: RepoAutomationContext['packageJson'] = null;
+
   try {
-    const rootFiles = await gateway.listRootFiles(
+    rootFiles = await gateway.listRootFiles(
       session,
       project.repository.fullName,
       project.productionBranch || 'main'
     );
     monorepoType = detectMonorepoType(rootFiles);
     console.log(`Detected monorepo type: ${monorepoType}`);
+
+    if (rootFiles.includes('package.json')) {
+      try {
+        const packageJsonContent = await gateway.getFileContent(
+          session,
+          project.repository.fullName,
+          'package.json',
+          project.productionBranch || 'main'
+        );
+        packageJson = packageJsonContent ? JSON.parse(packageJsonContent) : null;
+      } catch (error) {
+        console.warn('Failed to parse package.json, falling back to migration skeleton:', error);
+      }
+    }
   } catch (error) {
-    console.warn('Failed to detect monorepo type, defaulting to none:', error);
+    console.warn('Failed to inspect repository root, falling back to generated skeleton:', error);
   }
 
+  const [serviceList, databaseList] = await Promise.all([
+    db.query.services.findMany({
+      where: eq(services.projectId, project.id),
+      orderBy: (service, { asc }) => [asc(service.createdAt)],
+    }),
+    db.query.databases.findMany({
+      where: eq(databases.projectId, project.id),
+      orderBy: (database, { asc }) => [asc(database.createdAt)],
+    }),
+  ]);
+
+  const renderContext: ProjectInitRenderContext = {
+    services: serviceList,
+    databases: databaseList,
+  };
+  const automationContext: RepoAutomationContext = {
+    monorepoType,
+    rootFiles,
+    packageManager: detectPackageManager(rootFiles, packageJson),
+    packageJson,
+  };
   const files: Record<string, string> = {};
 
-  // 1. Push CI workflow configuration based on provider type and monorepo type
   const isMonorepo = monorepoType !== 'none';
   if (session.provider === 'github') {
     const ciTemplate = isMonorepo
       ? renderGitHubCIMonorepo(project, monorepoType)
-      : renderGitHubCI(project);
+      : renderGitHubCI(project, renderContext);
     files['.github/workflows/juanie-ci.yml'] = ciTemplate;
   } else if (session.provider === 'gitlab' || session.provider === 'gitlab-self-hosted') {
     const ciTemplate = isMonorepo
       ? renderGitLabCIMonorepo(project, monorepoType)
-      : renderGitLabCI(project);
+      : renderGitLabCI(project, renderContext);
     files['.gitlab-ci.yml'] = ciTemplate;
   }
 
-  // 2. Push environment variables template
+  files['juanie.yaml'] = renderJuanieConfig(project, renderContext, automationContext);
+
   const envTemplate = await renderEnvTemplate(project);
   files['.env.juanie.example'] = envTemplate;
 
@@ -457,7 +761,6 @@ async function pushCicdConfig(
     });
   }
 
-  // Update project configJson with monorepo info
   const existingConfig = (project.configJson as Record<string, unknown>) || {};
   await db
     .update(projects)
@@ -478,7 +781,8 @@ async function pushCicdConfig(
 function renderGitHubCI(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
-  }
+  },
+  context: ProjectInitRenderContext
 ): string {
   const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions.yml');
 
@@ -487,7 +791,8 @@ function renderGitHubCI(
     // Replace template variables
     content = content
       .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
+      .replace(/\{\{RELEASE_SERVICES_JSON\}\}/g, buildGitHubReleaseServicesJson(context.services));
     return content;
   }
 
@@ -500,7 +805,8 @@ function renderGitHubCI(
 function renderGitLabCI(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
-  }
+  },
+  context: ProjectInitRenderContext
 ): string {
   const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci.yml');
 
@@ -508,7 +814,8 @@ function renderGitLabCI(
     let content = readFileSync(templatePath, 'utf-8');
     content = content
       .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
+      .replace(/\{\{RELEASE_SERVICES_JSON\}\}/g, buildGitLabReleaseServicesJson(context.services));
     return content;
   }
 
@@ -589,6 +896,25 @@ jobs:
           IMAGE_TAG=\${{ env.REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
           docker build -t $IMAGE_TAG -f apps/\${{ matrix.service }}/Dockerfile .
           docker push $IMAGE_TAG
+
+      - name: Trigger Juanie Release
+        if: success()
+        run: |
+          IMAGE_TAG=\${{ env.REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
+          curl -fsSX POST "https://juanie.art/api/releases" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}" \
+            -d '{
+              "repository": "\${{ github.repository }}",
+              "sha": "\${{ github.sha }}",
+              "ref": "\${{ github.ref }}",
+              "services": [
+                {
+                  "name": "\${{ matrix.service }}",
+                  "image": "'"$IMAGE_TAG"'"
+                }
+              ]
+            }'
 `;
 }
 
@@ -641,6 +967,21 @@ build:
         IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE:sha-$CI_COMMIT_SHA
         docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
         docker push $IMAGE_TAG
+
+        curl -fsSX POST "https://juanie.art/api/releases" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer $CI_JOB_TOKEN" \
+          -d "{
+            \\"repository\\": \\"$CI_PROJECT_PATH\\",
+            \\"sha\\": \\"$CI_COMMIT_SHA\\",
+            \\"ref\\": \\"$CI_COMMIT_REF_NAME\\",
+            \\"services\\": [
+              {
+                \\"name\\": \\"$SERVICE\\",
+                \\"image\\": \\"$IMAGE_TAG\\"
+              }
+            ]
+          }"
       done
   rules:
     - if: $SERVICES != '[]'
@@ -777,7 +1118,7 @@ async function setupRegistryWebhook(
     .where(eq(projects.id, project.id));
 
   console.log(`✅ Configured deployment trigger for ${project.repository.fullName}`);
-  console.log(`   GitHub Actions will call /api/deployments/trigger after image push`);
+  console.log(`   Juanie CI will call /api/releases after image push`);
 }
 
 /**

@@ -22,6 +22,7 @@ const STEP_LABELS: Record<string, string> = {
   validate_repository: '验证仓库',
   create_repository: '创建仓库',
   push_template: '推送模板文件',
+  push_cicd_config: '注入 Juanie 配置',
   setup_namespace: '创建命名空间',
   deploy_services: '部署服务',
   provision_databases: '创建数据库',

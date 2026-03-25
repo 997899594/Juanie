@@ -60,7 +60,7 @@ export async function POST(
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   // 1. 验证权限
@@ -69,7 +69,7 @@ export async function POST(
   });
 
   if (!project) {
-    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    return NextResponse.json({ error: '项目不存在' }, { status: 404 });
   }
 
   const member = await db.query.teamMembers.findFirst({
@@ -77,7 +77,7 @@ export async function POST(
   });
 
   if (!member || !['owner', 'admin'].includes(member.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: '没有权限执行这个操作' }, { status: 403 });
   }
 
   // 2. 获取数据库
@@ -86,11 +86,11 @@ export async function POST(
   });
 
   if (!database) {
-    return NextResponse.json({ error: 'Database not found' }, { status: 404 });
+    return NextResponse.json({ error: '数据库不存在' }, { status: 404 });
   }
 
   if (!database.environmentId) {
-    return NextResponse.json({ error: 'Database environment is missing' }, { status: 400 });
+    return NextResponse.json({ error: '数据库缺少环境信息' }, { status: 400 });
   }
 
   const syncedSpecs = await syncMigrationSpecificationsFromRepo(projectId, database.environmentId);
@@ -108,7 +108,7 @@ export async function POST(
   });
 
   if (!specification) {
-    return NextResponse.json({ error: 'Migration specification not found' }, { status: 404 });
+    return NextResponse.json({ error: '没有找到迁移配置' }, { status: 404 });
   }
 
   try {
@@ -135,23 +135,20 @@ export async function POST(
     }
 
     if (database.status !== 'running') {
-      return NextResponse.json({ error: 'Database is not running' }, { status: 400 });
+      return NextResponse.json({ error: '数据库当前不可执行迁移' }, { status: 400 });
     }
 
     if (action === 'approve') {
       if (!runId) {
-        return NextResponse.json({ error: 'runId is required for approve' }, { status: 400 });
+        return NextResponse.json({ error: '审批操作缺少 runId' }, { status: 400 });
       }
 
       const run = await getMigrationRunById(runId);
       if (!run || run.databaseId !== dbId || run.projectId !== projectId) {
-        return NextResponse.json({ error: 'Migration run not found' }, { status: 404 });
+        return NextResponse.json({ error: '迁移记录不存在' }, { status: 404 });
       }
       if (run.status !== 'awaiting_approval') {
-        return NextResponse.json(
-          { error: 'Migration run is not awaiting approval' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: '当前迁移不在待审批状态' }, { status: 400 });
       }
 
       await db
@@ -180,18 +177,15 @@ export async function POST(
 
     if (action === 'retry') {
       if (!runId) {
-        return NextResponse.json({ error: 'runId is required for retry' }, { status: 400 });
+        return NextResponse.json({ error: '重试操作缺少 runId' }, { status: 400 });
       }
 
       const previousRun = await getMigrationRunById(runId);
       if (!previousRun || previousRun.databaseId !== dbId || previousRun.projectId !== projectId) {
-        return NextResponse.json({ error: 'Migration run not found' }, { status: 404 });
+        return NextResponse.json({ error: '迁移记录不存在' }, { status: 404 });
       }
       if (!['failed', 'canceled'].includes(previousRun.status)) {
-        return NextResponse.json(
-          { error: 'Only failed or canceled runs can be retried' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: '只有失败或已取消的迁移才能重试' }, { status: 400 });
       }
 
       const retryRun = await createMigrationRun(
@@ -222,7 +216,7 @@ export async function POST(
     if (confirmationText !== expectedConfirmationValue) {
       return NextResponse.json(
         {
-          error: `Confirmation text mismatch. Expected ${expectedConfirmationValue}`,
+          error: `确认文本不匹配，应输入 ${expectedConfirmationValue}`,
         },
         { status: 400 }
       );
@@ -257,7 +251,7 @@ export async function GET(
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   // 验证权限
@@ -266,7 +260,7 @@ export async function GET(
   });
 
   if (!project) {
-    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    return NextResponse.json({ error: '项目不存在' }, { status: 404 });
   }
 
   const member = await db.query.teamMembers.findFirst({
@@ -274,14 +268,14 @@ export async function GET(
   });
 
   if (!member) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: '没有权限查看迁移记录' }, { status: 403 });
   }
 
   const database = await db.query.databases.findFirst({
     where: and(eq(databases.id, dbId), eq(databases.projectId, projectId)),
   });
   if (!database) {
-    return NextResponse.json({ error: 'Database not found' }, { status: 404 });
+    return NextResponse.json({ error: '数据库不存在' }, { status: 404 });
   }
 
   const runs = await db.query.migrationRuns.findMany({

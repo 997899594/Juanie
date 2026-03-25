@@ -66,6 +66,7 @@ export const serviceSchema = z.object({
 
   domain: z.string().optional(),
   isPublic: z.boolean().optional(),
+  migrate: migrationConfigSchema.optional(),
   databases: z.array(serviceDatabaseBindingSchema).max(10).optional(),
 
   resources: z
@@ -170,6 +171,12 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
   }
 
   for (const service of config.services) {
+    if (service.migrate && (service.databases?.length ?? 0) > 0) {
+      warnings.push(
+        `Service "${service.name}" defines both service-level migrate and databases[].migrate; service-level migrate will only be used when no database bindings are defined`
+      );
+    }
+
     for (const binding of service.databases ?? []) {
       if (!binding.binding) {
         continue;
@@ -215,8 +222,19 @@ export function generateDefaultConfig(
     `      port: 3000`,
     `    healthcheck:`,
     `      path: /api/health`,
-    `    domain: ${name}.juanie.dev`,
   ];
+
+  if (options?.database === 'postgresql' || options?.database === 'mysql') {
+    lines.push(
+      `    # TODO: replace with the repository's real migration command before enabling auto-run`,
+      `    migrate:`,
+      `      tool: custom`,
+      `      workingDirectory: .`,
+      `      command: npm run db:migrate`,
+      `      phase: preDeploy`,
+      `      autoRun: false`
+    );
+  }
 
   if (options?.hasWorker) {
     lines.push(
@@ -235,9 +253,11 @@ export function generateDefaultConfig(
     lines.push(
       ``,
       `databases:`,
-      `  - name: ${options.database}`,
+      `  - name: primary`,
       `    type: ${options.database}`,
-      `    plan: starter`
+      `    plan: starter`,
+      `    scope: project`,
+      `    role: primary`
     );
   }
 
@@ -246,12 +266,8 @@ export function generateDefaultConfig(
     `environments:`,
     `  production:`,
     `    branch: main`,
-    `    domain: ${name}.juanie.dev`,
     `  staging:`,
-    `    branch: develop`,
-    ``,
-    `# Environment variables are configured in the dashboard`,
-    `# Do not commit secrets to the repository`
+    `    branch: develop`
   );
 
   return lines.join('\n');

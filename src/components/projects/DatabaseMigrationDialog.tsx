@@ -145,9 +145,8 @@ function formatApprovalPolicyLabel(value: string): string {
 
 function formatLockStrategyLabel(value: string): string {
   const labels: Record<string, string> = {
-    none: '无锁',
-    advisory: '建议锁',
-    postgres_advisory: 'Postgres 建议锁',
+    platform: '平台锁',
+    db_advisory: '数据库建议锁',
   };
 
   return labels[value] ?? value;

@@ -148,21 +148,21 @@ export async function buildMigrationExecutionPlan(
   let blockingReason: string | null =
     spec.database.status === 'running'
       ? null
-      : `Database status is ${spec.database.status ?? 'unknown'}, expected running`;
+      : `数据库状态为 ${spec.database.status ?? '未知'}，只有 running 状态才能执行迁移`;
   let filePreviewError: string | null = null;
   let sqlFiles: Array<{ name: string }> = [];
 
   if (spec.environment.isProduction) {
-    warnings.push('This migration targets the production environment.');
+    warnings.push('这次迁移会作用到生产环境。');
   }
   if (spec.specification.compatibility === 'breaking') {
-    warnings.push('This migration is marked as breaking.');
+    warnings.push('这次迁移被标记为破坏性变更。');
   }
   if (
     spec.specification.approvalPolicy === 'manual_in_production' &&
     spec.environment.isProduction
   ) {
-    warnings.push('Execution will pause for manual approval in production.');
+    warnings.push('生产环境会先暂停，等待人工审批后再执行。');
   }
 
   if (spec.specification.tool === 'sql') {
@@ -174,17 +174,16 @@ export async function buildMigrationExecutionPlan(
       );
       sqlFiles = files.map((file) => ({ name: file.name }));
       if (sqlFiles.length === 0) {
-        warnings.push(`No migration files were found in ${migrationPath}.`);
+        warnings.push(`在 ${migrationPath} 下没有找到迁移文件。`);
       }
     } catch (error) {
       canRun = false;
       filePreviewError = error instanceof Error ? error.message : String(error);
-      blockingReason = `Unable to load migration files from ${migrationPath}: ${filePreviewError}`;
+      blockingReason = `无法从 ${migrationPath} 读取迁移文件：${filePreviewError}`;
     }
   } else if (!imageUrl) {
     canRun = false;
-    blockingReason =
-      'A recent deployment image is required before command-based migrations can run.';
+    blockingReason = '命令式迁移需要最近一次可用的部署镜像。';
   }
 
   return {
