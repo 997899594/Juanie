@@ -8,6 +8,7 @@ import {
   repositories,
   services,
 } from '@/lib/db/schema';
+import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import {
   getK8sConfigMapName,
   getK8sSecretName,
@@ -16,6 +17,7 @@ import {
   syncEnvVarsToK8s,
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
+import { ensureEnvironmentScaffold } from '@/lib/environments/service';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import {
   createDeployment,
@@ -85,7 +87,47 @@ export async function executeDeploymentWorkload(
   await logDeployment(deploymentId, 'Deploying to Kubernetes');
   await progress?.(50);
 
-  await syncEnvVarsToK8s(project.id, environment.id);
+  await ensureEnvironmentScaffold({
+    project: {
+      id: project.id,
+      slug: project.slug,
+      teamId: project.teamId,
+    },
+    environment: {
+      id: environment.id,
+      name: environment.name,
+      namespace: environment.namespace,
+      isProduction: environment.isProduction,
+      isPreview: environment.isPreview,
+    },
+  });
+
+  const freshEnvironment = await db.query.environments.findFirst({
+    where: eq(environments.id, environment.id),
+  });
+  const targetEnvironment = freshEnvironment ?? environment;
+
+  await ensureEnvironmentDomains({
+    project: {
+      id: project.id,
+      slug: project.slug,
+    },
+    environment: {
+      id: targetEnvironment.id,
+      name: targetEnvironment.name,
+      namespace: targetEnvironment.namespace,
+      isPreview: targetEnvironment.isPreview,
+    },
+    services: serviceList.map((service) => ({
+      id: service.id,
+      name: service.name,
+      type: service.type,
+      isPublic: service.isPublic,
+      port: service.port,
+    })),
+  });
+
+  await syncEnvVarsToK8s(project.id, targetEnvironment.id);
 
   const imageName = deployment.imageUrl || buildImageName(project, deployment.commitSha);
   if (!imageName) {
@@ -105,19 +147,19 @@ export async function executeDeploymentWorkload(
   }
 
   let useGhcrPullSecret = false;
-  if (getIsConnected() && environment.namespace) {
+  if (getIsConnected() && targetEnvironment.namespace) {
     try {
       const teamSession = await getTeamIntegrationSession({
         teamId: project.teamId,
         requiredCapabilities: [],
       });
       if (teamSession.provider === 'github') {
-        await ensureGhcrPullSecret(environment.namespace, { token: teamSession.accessToken });
+        await ensureGhcrPullSecret(targetEnvironment.namespace, { token: teamSession.accessToken });
         useGhcrPullSecret = true;
       }
     } catch (error) {
       console.warn('Could not ensure GHCR pull secret, will try env var fallback:', error);
-      await ensureGhcrPullSecret(environment.namespace);
+      await ensureGhcrPullSecret(targetEnvironment.namespace);
       useGhcrPullSecret = !!process.env.GHCR_TOKEN;
     }
   }
@@ -125,11 +167,11 @@ export async function executeDeploymentWorkload(
   for (const service of targetServices) {
     await logDeployment(deploymentId, `Deploying service ${service.name}`);
 
-    if (!getIsConnected() || !environment.namespace) {
+    if (!getIsConnected() || !targetEnvironment.namespace) {
       continue;
     }
 
-    const svcEnv = await syncServiceEnvVarsToK8s(service.id, environment.namespace);
+    const svcEnv = await syncServiceEnvVarsToK8s(service.id, targetEnvironment.namespace);
     const envFrom: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }> = [
       { configMapRef: { name: getK8sConfigMapName(environment.id) } },
       { secretRef: { name: getK8sSecretName(environment.id) } },
@@ -141,14 +183,14 @@ export async function executeDeploymentWorkload(
 
     const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
     try {
-      await updateDeployment(environment.namespace, deploymentName, {
+      await updateDeployment(targetEnvironment.namespace, deploymentName, {
         image: imageName,
         envFrom,
       });
       await logDeployment(deploymentId, `Updated ${deploymentName} → ${imageName}`);
     } catch (_updateError) {
       await logDeployment(deploymentId, `${deploymentName} not found, creating new deployment`);
-      await createDeployment(environment.namespace, deploymentName, {
+      await createDeployment(targetEnvironment.namespace, deploymentName, {
         image: imageName,
         port: service.port ?? 3000,
         replicas: service.replicas ?? 1,

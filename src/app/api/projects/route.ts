@@ -15,6 +15,7 @@ import {
   teamMembers,
   teams,
 } from '@/lib/db/schema';
+import { buildPrimaryEnvironmentHostname } from '@/lib/domains/defaults';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { ensureRepository } from '@/lib/integrations/service/repository-service';
 import { addProjectInitJob } from '@/lib/queue';
@@ -190,7 +191,7 @@ export async function POST(request: Request) {
       await db.insert(domains).values({
         projectId: project.id,
         environmentId: stagingEnv.id,
-        hostname: `${slug}.juanie.art`,
+        hostname: buildPrimaryEnvironmentHostname(slug),
         isCustom: false,
         isVerified: true,
       });

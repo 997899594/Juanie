@@ -63,8 +63,6 @@ function generateBreadcrumbs(
     releases: '发布',
     environments: '环境',
     resources: '资源',
-    pipelines: '流水线',
-    webhooks: '回调',
     members: '成员',
     new: '新建',
   };

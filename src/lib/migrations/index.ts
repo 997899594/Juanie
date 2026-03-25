@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
+import { evaluateMigrationPolicy } from '@/lib/policies/delivery';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
 import { resolveMigrationSpecifications } from './resolver';
 import type {
@@ -152,18 +153,12 @@ export async function buildMigrationExecutionPlan(
   let filePreviewError: string | null = null;
   let sqlFiles: Array<{ name: string }> = [];
 
-  if (spec.environment.isProduction) {
-    warnings.push('这次迁移会作用到生产环境。');
-  }
-  if (spec.specification.compatibility === 'breaking') {
-    warnings.push('这次迁移被标记为破坏性变更。');
-  }
-  if (
-    spec.specification.approvalPolicy === 'manual_in_production' &&
-    spec.environment.isProduction
-  ) {
-    warnings.push('生产环境会先暂停，等待人工审批后再执行。');
-  }
+  warnings.push(
+    ...evaluateMigrationPolicy({
+      environment: spec.environment,
+      specification: spec.specification,
+    }).warnings
+  );
 
   if (spec.specification.tool === 'sql') {
     try {

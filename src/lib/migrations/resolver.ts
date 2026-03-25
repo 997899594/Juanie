@@ -32,7 +32,7 @@ interface ServiceDatabaseBindingConfig {
   };
 }
 
-function getServiceBindingConfigs(serviceConfig?: {
+export function getServiceBindingConfigs(serviceConfig?: {
   migrate?: ServiceDatabaseBindingConfig['migrate'];
   databases?: ServiceDatabaseBindingConfig[];
 }): ServiceDatabaseBindingConfig[] {
@@ -70,7 +70,7 @@ function getFallbackResolution() {
   };
 }
 
-function resolveDatabaseForBinding(
+export function resolveDatabaseForBinding(
   binding: ServiceDatabaseBindingConfig,
   serviceId: string,
   databaseList: Array<typeof databases.$inferSelect>

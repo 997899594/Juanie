@@ -4,6 +4,50 @@ import { db } from '@/lib/db';
 import { integrationIdentities, repositories } from '@/lib/db/schema';
 import { createRepositoryRelease } from '@/lib/releases';
 
+export function resolveRepositoryVerificationTarget(
+  repository: string,
+  provider: 'github' | 'gitlab' | 'gitlab-self-hosted',
+  repo: {
+    webUrl: string | null;
+    cloneUrl: string | null;
+  }
+): { url: string; headers: Record<string, string> } {
+  if (provider === 'github') {
+    return {
+      url: `https://api.github.com/repos/${repository}`,
+      headers: {
+        Accept: 'application/vnd.github+json',
+      },
+    };
+  }
+
+  const baseUrl =
+    provider === 'gitlab'
+      ? 'https://gitlab.com'
+      : repo.webUrl
+        ? new URL(repo.webUrl).origin
+        : repo.cloneUrl
+          ? new URL(repo.cloneUrl).origin
+          : null;
+
+  if (!baseUrl) {
+    throw new Error('Unable to resolve Git provider URL for repository');
+  }
+
+  return {
+    url: `${baseUrl}/api/v4/projects/${encodeURIComponent(repository)}`,
+    headers: {},
+  };
+}
+
+export function getRepositoryAccessDeniedMessage(
+  provider: 'github' | 'gitlab' | 'gitlab-self-hosted'
+): string {
+  return provider === 'github'
+    ? 'Token does not have access to this repository'
+    : 'Token does not have access to this GitLab repository';
+}
+
 async function verifyRepositoryAccess(repository: string, authHeader: string | null) {
   if (!authHeader?.startsWith('Bearer ')) {
     return;
@@ -26,52 +70,29 @@ async function verifyRepositoryAccess(repository: string, authHeader: string | n
     throw new Error('Repository integration identity not found');
   }
 
-  if (identity.provider === 'github') {
-    const repoRes = await fetch(`https://api.github.com/repos/${repository}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-      },
-    });
+  const target = resolveRepositoryVerificationTarget(repository, identity.provider, {
+    webUrl: repo.webUrl,
+    cloneUrl: repo.cloneUrl,
+  });
 
-    if (repoRes.ok) {
-      return;
-    }
-  } else {
-    const baseUrl =
-      identity.provider === 'gitlab'
-        ? 'https://gitlab.com'
-        : repo.webUrl
-          ? new URL(repo.webUrl).origin
-          : repo.cloneUrl
-            ? new URL(repo.cloneUrl).origin
-            : null;
+  const repoRes = await fetch(target.url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...target.headers,
+      ...(identity.provider === 'github'
+        ? {}
+        : {
+            'PRIVATE-TOKEN': token,
+            'JOB-TOKEN': token,
+          }),
+    },
+  });
 
-    if (!baseUrl) {
-      throw new Error('Unable to resolve Git provider URL for repository');
-    }
-
-    const encodedPath = encodeURIComponent(repository);
-    const repoRes = await fetch(`${baseUrl}/api/v4/projects/${encodedPath}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'PRIVATE-TOKEN': token,
-        'JOB-TOKEN': token,
-      },
-    });
-
-    if (repoRes.ok) {
-      return;
-    }
+  if (repoRes.ok) {
+    return;
   }
 
-  if (identity.provider === 'gitlab' || identity.provider === 'gitlab-self-hosted') {
-    throw new Error('Token does not have access to this GitLab repository');
-  }
-
-  if (identity.provider === 'github') {
-    throw new Error('Token does not have access to this repository');
-  }
+  throw new Error(getRepositoryAccessDeniedMessage(identity.provider));
 }
 
 export async function POST(request: Request) {
@@ -100,7 +121,7 @@ export async function POST(request: Request) {
       serviceName,
       image,
       triggeredBy: 'api',
-      summary: summary ?? (sha ? `Release ${sha.substring(0, 7)}` : 'Queued release'),
+      summary: summary ?? null,
     });
 
     return NextResponse.json(

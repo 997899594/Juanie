@@ -484,6 +484,7 @@ export const environments = pgTable(
     tagPattern: varchar('tagPattern', { length: 100 }),
     isPreview: boolean('isPreview').default(false),
     previewPrNumber: integer('previewPrNumber'),
+    expiresAt: timestamp('expiresAt'),
 
     autoDeploy: boolean('autoDeploy').default(true).notNull(),
     isProduction: boolean('isProduction').default(false).notNull(),
@@ -495,6 +496,8 @@ export const environments = pgTable(
   },
   (table) => ({
     projectIdIdx: index('environment_projectId_idx').on(table.projectId),
+    previewIdx: index('environment_preview_idx').on(table.projectId, table.isPreview),
+    previewPrIdx: index('environment_preview_pr_idx').on(table.projectId, table.previewPrNumber),
   })
 );
 

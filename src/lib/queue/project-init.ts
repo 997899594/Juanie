@@ -416,7 +416,7 @@ function supportsGeneratedMigration(dbType: typeof databases.$inferSelect.type):
   return dbType === 'postgresql' || dbType === 'mysql';
 }
 
-function detectPackageManager(
+export function detectPackageManager(
   rootFiles: string[],
   packageJson: RepoAutomationContext['packageJson']
 ): PackageManager {
@@ -435,7 +435,7 @@ function detectPackageManager(
   return 'npm';
 }
 
-function buildRunScriptCommand(packageManager: PackageManager, script: string): string {
+export function buildRunScriptCommand(packageManager: PackageManager, script: string): string {
   if (packageManager === 'yarn') {
     return `yarn ${script}`;
   }
@@ -443,7 +443,7 @@ function buildRunScriptCommand(packageManager: PackageManager, script: string): 
   return `${packageManager} run ${script}`;
 }
 
-function detectMigrationTool(packageJson: RepoAutomationContext['packageJson']) {
+export function detectMigrationTool(packageJson: RepoAutomationContext['packageJson']) {
   const dependencies = {
     ...(packageJson?.dependencies ?? {}),
     ...(packageJson?.devDependencies ?? {}),
@@ -456,7 +456,7 @@ function detectMigrationTool(packageJson: RepoAutomationContext['packageJson']) 
   return 'custom';
 }
 
-function inferMigrationCommand(
+export function inferMigrationCommand(
   automation: RepoAutomationContext,
   databaseType: typeof databases.$inferSelect.type
 ): {
@@ -524,7 +524,7 @@ function buildGitLabReleaseServicesJson(serviceList: Array<typeof services.$infe
   return `[\n${entries.join(',\n')}\n          ]`;
 }
 
-function buildMigrationConfigLines(
+export function buildMigrationConfigLines(
   indent: string,
   inferred: ReturnType<typeof inferMigrationCommand>
 ): string[] {
@@ -545,7 +545,7 @@ function buildMigrationConfigLines(
   return lines;
 }
 
-function buildServiceMigrationLines(
+export function buildServiceMigrationLines(
   service: typeof services.$inferSelect,
   serviceList: Array<typeof services.$inferSelect>,
   databaseList: Array<typeof databases.$inferSelect>,
@@ -595,7 +595,7 @@ function buildServiceMigrationLines(
   return [];
 }
 
-function renderJuanieConfig(
+export function renderJuanieConfig(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   },

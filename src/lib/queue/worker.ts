@@ -2,6 +2,7 @@ import { initK8sClient } from '@/lib/k8s';
 import { createDeploymentWorker } from './deployment';
 import { startDriftDetector } from './drift-detector';
 import { createMigrationWorker } from './migration';
+import { startPreviewEnvironmentCleanup } from './preview-cleanup';
 import { createProjectInitWorker } from './project-init';
 import { createReleaseWorker } from './release';
 
@@ -78,4 +79,8 @@ console.log('  - Migration worker: listening to "migration" queue');
 // 启动漂移检测
 if (process.env.ENABLE_DRIFT_DETECTOR !== 'false') {
   startDriftDetector();
+}
+
+if (process.env.ENABLE_PREVIEW_CLEANUP !== 'false') {
+  startPreviewEnvironmentCleanup();
 }

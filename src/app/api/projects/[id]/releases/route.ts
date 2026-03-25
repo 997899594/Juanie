@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, releases, teamMembers } from '@/lib/db/schema';
+import { decorateReleaseList } from '@/lib/releases/view';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +33,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     where: eq(releases.projectId, id),
     orderBy: [desc(releases.createdAt)],
     with: {
-      environment: true,
+      environment: {
+        with: {
+          domains: {
+            with: {
+              service: true,
+            },
+          },
+        },
+      },
       artifacts: {
         with: {
           service: true,
@@ -47,10 +56,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         with: {
           service: true,
           database: true,
+          specification: true,
         },
       },
     },
   });
 
-  return NextResponse.json(releaseList);
+  return NextResponse.json(decorateReleaseList(releaseList));
 }

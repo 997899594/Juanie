@@ -1,10 +1,50 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { environments, projects, releases, repositories, teamMembers } from '@/lib/db/schema';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
+import { buildPromotionPlan } from '@/lib/releases/planning';
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const project = await db.query.projects.findFirst({
+    where: eq(projects.id, id),
+  });
+
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  }
+
+  const member = await db.query.teamMembers.findFirst({
+    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, session.user.id)),
+  });
+
+  if (!member) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const envList = await db.query.environments.findMany({
+    where: eq(environments.projectId, id),
+  });
+  const prodEnv = envList.find((environment) => environment.isProduction);
+
+  if (prodEnv && !canManageEnvironment(member.role, prodEnv)) {
+    return NextResponse.json({ error: getEnvironmentGuardReason(prodEnv) }, { status: 403 });
+  }
+
+  const promotion = await buildPromotionPlan(id);
+
+  return NextResponse.json(promotion);
+}
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -45,6 +85,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!prodEnv) {
     return NextResponse.json({ error: 'No production environment found' }, { status: 400 });
   }
+  if (!canManageEnvironment(member.role, prodEnv)) {
+    return NextResponse.json({ error: getEnvironmentGuardReason(prodEnv) }, { status: 403 });
+  }
   if (!prodEnv.namespace) {
     return NextResponse.json(
       { error: 'Production environment namespace not provisioned yet' },
@@ -52,30 +95,28 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     );
   }
 
-  const sourceRelease = await db.query.releases.findFirst({
-    where: and(
-      eq(releases.projectId, id),
-      eq(releases.environmentId, stagingEnv.id),
-      eq(releases.status, 'succeeded')
-    ),
-    orderBy: [desc(releases.createdAt)],
-    with: {
-      artifacts: {
+  const promotion = await buildPromotionPlan(id);
+  const sourceRelease = promotion.sourceRelease
+    ? await db.query.releases.findFirst({
+        where: eq(releases.id, promotion.sourceRelease.id),
         with: {
-          service: true,
+          artifacts: {
+            with: {
+              service: true,
+            },
+          },
         },
-      },
-    },
-  });
+      })
+    : null;
 
-  if (!sourceRelease) {
+  if (!promotion.plan.canCreate) {
     return NextResponse.json(
-      { error: 'No successful staging release found to promote' },
+      { error: promotion.plan.blockingReason ?? 'Unable to promote' },
       { status: 400 }
     );
   }
 
-  if (sourceRelease.artifacts.length === 0) {
+  if (!sourceRelease || sourceRelease.artifacts.length === 0) {
     return NextResponse.json(
       { error: 'Staging release has no artifacts — trigger a fresh release first' },
       { status: 400 }
@@ -110,6 +151,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     {
       success: true,
       releaseId: prodRelease?.id,
+      plan: promotion.plan,
       artifacts: prodRelease?.artifacts.map((artifact) => ({
         service: artifact.service.name,
         imageUrl: artifact.imageUrl,

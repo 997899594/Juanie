@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { migrationRuns, projects, teamMembers } from '@/lib/db/schema';
 import { createMigrationRun, getMigrationRunById } from '@/lib/migrations';
+import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { addMigrationJob } from '@/lib/queue';
 
 function buildResolvedSpec(run: NonNullable<Awaited<ReturnType<typeof getMigrationRunById>>>) {
@@ -46,13 +47,20 @@ export async function POST(
     where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, session.user.id)),
   });
 
-  if (!member || !['owner', 'admin'].includes(member.role)) {
+  if (!member) {
     return NextResponse.json({ error: '没有权限执行这个操作' }, { status: 403 });
   }
 
   const run = await getMigrationRunById(runId);
   if (!run || run.projectId !== projectId) {
     return NextResponse.json({ error: '迁移记录不存在' }, { status: 404 });
+  }
+
+  if (!canManageEnvironment(member.role, run.environment)) {
+    return NextResponse.json(
+      { error: getEnvironmentGuardReason(run.environment) },
+      { status: 403 }
+    );
   }
 
   const { action, imageUrl } = await request.json().catch(() => ({}));

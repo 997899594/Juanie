@@ -6,6 +6,7 @@ import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
 import { createJob, deleteJob, getIsConnected, getJob, getPodLogs, getPods } from '@/lib/k8s';
 import { executeMigrationsForDatabase } from '@/lib/migrations/executor';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
+import { evaluateMigrationPolicy } from '@/lib/policies/delivery';
 import type { ExecuteMigrationRunOptions, ResolvedMigrationSpec } from './types';
 
 function sleep(ms: number): Promise<void> {
@@ -308,21 +309,23 @@ export async function executeMigrationRun(
     );
   }
 
-  if (
-    spec.specification.approvalPolicy === 'manual_in_production' &&
-    spec.environment.isProduction &&
-    !options.allowApprovalBypass
-  ) {
+  const policyDecision = evaluateMigrationPolicy({
+    environment: spec.environment,
+    specification: spec.specification,
+    allowApprovalBypass: options.allowApprovalBypass,
+  });
+
+  if (policyDecision.requiresApproval) {
     await db
       .update(migrationRuns)
       .set({
         status: 'awaiting_approval',
         updatedAt: new Date(),
         errorCode: 'MIGRATION_APPROVAL_REQUIRED',
-        errorMessage: 'Manual approval required for production migration',
+        errorMessage: policyDecision.approvalReason,
       })
       .where(eq(migrationRuns.id, runId));
-    throw new Error('Manual approval required for production migration');
+    throw new Error(policyDecision.approvalReason ?? '生产环境迁移需要人工审批');
   }
 
   const startedAt = new Date();

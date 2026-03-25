@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { environments, projects, teamMembers } from '@/lib/db/schema';
+import { decorateEnvironmentList } from '@/lib/environments/view';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,7 +34,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const envs = await db.query.environments.findMany({
     where: eq(environments.projectId, id),
+    with: {
+      domains: {
+        with: {
+          service: true,
+        },
+      },
+    },
   });
 
-  return NextResponse.json(envs);
+  return NextResponse.json(decorateEnvironmentList(envs));
 }

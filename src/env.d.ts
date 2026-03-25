@@ -21,6 +21,7 @@ export interface Env {
 
   // App
   NODE_ENV: 'development' | 'production' | 'test';
+  JUANIE_BASE_DOMAIN?: string;
 }
 
 declare global {

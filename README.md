@@ -12,7 +12,6 @@ A modern AI-driven DevOps platform built with Next.js 15, Drizzle ORM, and Kuber
 - **CI/CD Pipeline**: GitHub Actions integration
 - **Pod Logs & Exec**: View logs and execute commands in pods
 - **Secrets & ConfigMaps**: Manage Kubernetes secrets and config maps
-- **Webhook Notifications**: Deploy event notifications
 - **Audit Logging**: Track all team activities
 
 ## Tech Stack
@@ -99,7 +98,7 @@ src/
 - `GET /api/projects/[id]` - Get project details
 - `POST /api/projects/[id]/deployments` - Trigger deployment
 - `GET /api/events/deployments` - SSE for deployment updates
-- `POST /api/projects/init` - Initialize project (K8s/Flux)
+- `POST /api/releases` - Create a release
 - `GET /api/projects/[id]/resources` - Get K8s resources
 - `GET /api/projects/[id]/resources/logs` - Get pod logs
 

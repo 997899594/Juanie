@@ -18,12 +18,21 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
+import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
+import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
+import { buildEnvironmentAccessUrl, pickPrimaryEnvironmentDomain } from '@/lib/domains/defaults';
+import {
+  formatEnvironmentExpiry,
+  getEnvironmentScopeLabel,
+  getEnvironmentSourceLabel,
+} from '@/lib/environments/presentation';
+import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { cn } from '@/lib/utils';
 
 const releaseStatusConfig: Record<
@@ -89,6 +98,40 @@ interface Environment {
   name: string;
   autoDeploy: boolean;
   isProduction: boolean;
+  isPreview?: boolean;
+  previewPrNumber?: number | null;
+  branch?: string | null;
+  expiresAt?: string | null;
+}
+
+interface PromotePlan {
+  sourceRelease: {
+    id: string;
+    summary: string | null;
+    sourceCommitSha: string | null;
+  } | null;
+  plan: {
+    canCreate: boolean;
+    blockingReason: string | null;
+    summary: string | null;
+    environmentPolicy: {
+      level: 'normal' | 'protected' | 'preview';
+      reasons: string[];
+      summary: string | null;
+    };
+    releasePolicy: {
+      level: 'normal' | 'protected' | 'approval_required';
+      reasons: string[];
+      summary: string | null;
+      requiresApproval: boolean;
+    };
+    migration: {
+      preDeployCount: number;
+      postDeployCount: number;
+      warnings: string[];
+      requiresApproval: boolean;
+    };
+  };
 }
 
 interface ReleaseRecord {
@@ -105,6 +148,20 @@ interface ReleaseRecord {
     id: string;
     name: string;
     isProduction: boolean;
+    isPreview?: boolean;
+    previewPrNumber?: number | null;
+    branch?: string | null;
+    expiresAt?: string | null;
+    domains?: Array<{
+      id: string;
+      hostname: string;
+      isCustom?: boolean | null;
+      isVerified?: boolean | null;
+      service?: {
+        id: string;
+        name: string;
+      } | null;
+    }>;
   };
   artifacts: Array<{
     id: string;
@@ -137,7 +194,32 @@ interface ReleaseRecord {
       id: string;
       name: string;
     };
+    specification?: {
+      tool?: string;
+      phase?: string;
+      command?: string;
+      compatibility: string;
+      approvalPolicy: string;
+    } | null;
   }>;
+  intelligence: {
+    riskLevel: 'low' | 'medium' | 'high';
+    reasons: string[];
+    failureSummary: string | null;
+    issueCode: string | null;
+    actionLabel: string | null;
+  };
+  policy: {
+    level: 'normal' | 'protected' | 'approval_required';
+    reasons: string[];
+    summary: string | null;
+    requiresApproval: boolean;
+  };
+  diffSummary: {
+    isFirstRelease: boolean;
+    artifactChanges: number;
+    migrationChanges: number;
+  };
 }
 
 function formatImageLabel(imageUrl: string): string {
@@ -171,6 +253,7 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [promoting, setPromoting] = useState(false);
   const [promoteResult, setPromoteResult] = useState<string | null>(null);
+  const [promotePlan, setPromotePlan] = useState<PromotePlan | null>(null);
   const [expandedReleases, setExpandedReleases] = useState<Set<string>>(new Set());
 
   const loadReleases = useCallback(async () => {
@@ -179,6 +262,13 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
     if (!response.ok) return;
     const data = await response.json();
     setReleases(Array.isArray(data) ? data : []);
+  }, [projectId]);
+
+  const loadPromotePlan = useCallback(async () => {
+    if (!projectId) return;
+    const response = await fetch(`/api/projects/${projectId}/promote`);
+    const data = await response.json().catch(() => null);
+    setPromotePlan(response.ok && data?.plan ? data : null);
   }, [projectId]);
 
   useEffect(() => {
@@ -191,6 +281,10 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
       .then((response) => response.json())
       .then((data) => setEnvironments(Array.isArray(data) ? data : []));
   }, [projectId]);
+
+  useEffect(() => {
+    loadPromotePlan();
+  }, [loadPromotePlan]);
 
   const { isConnected, error } = useReleases({
     projectId,
@@ -209,6 +303,7 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
       if (response.ok) {
         setPromoteResult(data.tagName ? `已创建生产发布 · ${data.tagName}` : '已创建生产发布');
         await loadReleases();
+        await loadPromotePlan();
       } else {
         setPromoteResult(`错误：${data.error}`);
       }
@@ -268,7 +363,11 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
       )
     : null;
   const hasStagingProdSplit = environments.some((environment) => environment.isProduction);
-  const canPromote = hasStagingProdSplit && !!latestStagingRelease;
+  const canPromote =
+    hasStagingProdSplit &&
+    !!latestStagingRelease &&
+    (promotePlan?.plan.canCreate ?? true) &&
+    !promotePlan?.plan.blockingReason;
 
   const stats = [
     { label: '发布', value: filtered.length },
@@ -302,6 +401,15 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
               label={isConnected ? '在线' : '离线'}
               pulse={isConnected}
             />
+            <ManualReleaseDialog
+              projectId={projectId}
+              environments={environments}
+              releases={releases}
+              onCreated={async () => {
+                await loadReleases();
+                await loadPromotePlan();
+              }}
+            />
             {hasStagingProdSplit && (
               <Button
                 size="sm"
@@ -333,6 +441,55 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
           )}
         >
           {promoteResult}
+        </div>
+      )}
+
+      {hasStagingProdSplit && promotePlan && (
+        <div className="console-panel px-4 py-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {promotePlan.plan.summary && (
+              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                {promotePlan.plan.summary}
+              </span>
+            )}
+            {promotePlan.plan.releasePolicy.requiresApproval && (
+              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                需要审批
+              </span>
+            )}
+            {promotePlan.plan.migration.preDeployCount > 0 && (
+              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                前置迁移 {promotePlan.plan.migration.preDeployCount} 项
+              </span>
+            )}
+            {promotePlan.plan.migration.postDeployCount > 0 && (
+              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                后置迁移 {promotePlan.plan.migration.postDeployCount} 项
+              </span>
+            )}
+            {promotePlan.sourceRelease?.sourceCommitSha && (
+              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                来源 {promotePlan.sourceRelease.sourceCommitSha.slice(0, 7)}
+              </span>
+            )}
+          </div>
+          {promotePlan.plan.blockingReason && (
+            <div className="mt-3 text-sm text-muted-foreground">
+              {promotePlan.plan.blockingReason}
+            </div>
+          )}
+          {!promotePlan.plan.blockingReason && promotePlan.plan.migration.warnings.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {promotePlan.plan.migration.warnings.slice(0, 3).map((warning) => (
+                <span
+                  key={warning}
+                  className="rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-foreground"
+                >
+                  {warning}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -413,6 +570,19 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
             const approvalCount = release.migrationRuns.filter(
               (run) => run.status === 'awaiting_approval'
             ).length;
+            const intelligence = release.intelligence;
+            const policy = release.policy;
+            const environmentScope = getEnvironmentScopeLabel(release.environment);
+            const environmentSource = getEnvironmentSourceLabel(release.environment);
+            const expiryLabel = formatEnvironmentExpiry(release.environment.expiresAt);
+            const primaryDomain = pickPrimaryEnvironmentDomain(release.environment.domains ?? []);
+            const releaseDiff = release.diffSummary;
+            const riskTone =
+              intelligence.riskLevel === 'high'
+                ? 'border-destructive/15 bg-background text-destructive'
+                : intelligence.riskLevel === 'medium'
+                  ? 'border-border bg-secondary/30 text-foreground'
+                  : 'border-border bg-background text-muted-foreground';
 
             return (
               <div key={release.id} className="console-panel overflow-hidden">
@@ -446,15 +616,38 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                           >
                             {release.environment.name}
                           </Badge>
+                          {environmentScope && <Badge variant="outline">{environmentScope}</Badge>}
+                          {environmentSource && (
+                            <Badge variant="outline">{environmentSource}</Badge>
+                          )}
+                          {expiryLabel && <Badge variant="outline">{expiryLabel}</Badge>}
                           <Badge variant="outline">{release.artifacts.length} 个服务</Badge>
                           <Badge variant="outline" className="capitalize">
                             {release.triggeredBy}
                           </Badge>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2.5 py-1 text-xs font-medium',
+                              riskTone
+                            )}
+                          >
+                            风险{' '}
+                            {intelligence.riskLevel === 'high'
+                              ? '高'
+                              : intelligence.riskLevel === 'medium'
+                                ? '中'
+                                : '低'}
+                          </span>
+                          {policy.level !== 'normal' && (
+                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
+                              {policy.level === 'approval_required' ? '受保护 / 待审批' : '受保护'}
+                            </span>
+                          )}
                         </div>
 
                         <div className="space-y-2">
                           <div className="text-base font-semibold">
-                            {release.summary || '未命名发布'}
+                            {getReleaseDisplayTitle(release)}
                           </div>
                           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                             {release.sourceCommitSha && (
@@ -476,6 +669,17 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                                 次迁移
                               </span>
                             </div>
+                            {primaryDomain && (
+                              <a
+                                href={buildEnvironmentAccessUrl(primaryDomain.hostname)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 text-foreground underline underline-offset-4"
+                              >
+                                <Rocket className="h-3.5 w-3.5" />
+                                <span>打开</span>
+                              </a>
+                            )}
                           </div>
                         </div>
 
@@ -494,11 +698,35 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                           ))}
                         </div>
 
-                        {(release.errorMessage || failedMigrations > 0 || approvalCount > 0) && (
+                        {(intelligence.failureSummary ||
+                          policy.summary ||
+                          intelligence.reasons.length > 0 ||
+                          policy.reasons.length > 0 ||
+                          intelligence.actionLabel ||
+                          failedMigrations > 0 ||
+                          approvalCount > 0) && (
                           <div className="flex flex-wrap gap-2 text-xs">
-                            {release.errorMessage && (
+                            {intelligence.failureSummary && (
                               <span className="rounded-full border border-destructive/15 bg-background px-2.5 py-1 text-destructive">
-                                {release.errorMessage}
+                                {intelligence.failureSummary}
+                              </span>
+                            )}
+                            {intelligence.reasons.slice(0, 2).map((reason) => (
+                              <span
+                                key={reason}
+                                className="rounded-full border border-border bg-secondary/30 px-2.5 py-1 text-foreground"
+                              >
+                                {reason}
+                              </span>
+                            ))}
+                            {policy.summary && (
+                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                                {policy.summary}
+                              </span>
+                            )}
+                            {intelligence.actionLabel && (
+                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                                下一步：{intelligence.actionLabel}
                               </span>
                             )}
                             {failedMigrations > 0 && (
@@ -509,6 +737,21 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                             {approvalCount > 0 && (
                               <span className="rounded-full border border-border bg-secondary/30 px-2.5 py-1 text-foreground">
                                 {approvalCount} 个待审批
+                              </span>
+                            )}
+                            {releaseDiff.isFirstRelease && (
+                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                                首次发布
+                              </span>
+                            )}
+                            {releaseDiff.artifactChanges > 0 && (
+                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                                镜像变更 {releaseDiff.artifactChanges} 项
+                              </span>
+                            )}
+                            {releaseDiff.migrationChanges > 0 && (
+                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+                                迁移变更 {releaseDiff.migrationChanges} 项
                               </span>
                             )}
                           </div>
@@ -612,6 +855,12 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                                         {deployment.imageUrl}
                                       </div>
                                     )}
+                                    <div className="mb-3">
+                                      <DeploymentRollbackAction
+                                        projectId={projectId}
+                                        deploymentId={deployment.id}
+                                      />
+                                    </div>
                                     <DeploymentLogs
                                       projectId={projectId}
                                       deploymentId={deployment.id}

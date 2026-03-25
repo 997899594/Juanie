@@ -10,7 +10,9 @@ import {
   services,
   teamMembers,
 } from '@/lib/db/schema';
+import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
+import { buildProjectReleasePlan } from '@/lib/releases/planning';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -136,6 +138,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     serviceName,
     image,
     services: releaseServices,
+    dryRun,
   } = await request.json();
 
   if (!environmentId) {
@@ -148,6 +151,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (!environment || environment.projectId !== id) {
     return NextResponse.json({ error: 'Environment not found' }, { status: 404 });
+  }
+
+  if (!canManageEnvironment(member.role, environment)) {
+    return NextResponse.json({ error: getEnvironmentGuardReason(environment) }, { status: 403 });
   }
 
   if (serviceId) {
@@ -179,6 +186,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
+  if (dryRun) {
+    const plan = await buildProjectReleasePlan({
+      projectId: id,
+      environmentId,
+      services: requestedServices,
+      sourceRef: ref ?? `refs/heads/${environment.branch ?? project.productionBranch ?? 'main'}`,
+      sourceCommitSha: commitSha ?? null,
+    });
+
+    return NextResponse.json({ plan });
+  }
+
   const release = await createProjectRelease({
     projectId: id,
     environmentId,
@@ -189,8 +208,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     configCommitSha: commitSha ?? null,
     triggeredBy: 'manual',
     triggeredByUserId: session.user.id,
-    summary:
-      commitMessage ?? (commitSha ? `Manual release ${commitSha.slice(0, 7)}` : 'Manual release'),
+    summary: commitMessage ?? null,
   });
 
   return NextResponse.json(release, { status: 202 });

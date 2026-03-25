@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   environments,
@@ -8,7 +8,10 @@ import {
   repositories,
   services,
 } from '@/lib/db/schema';
+import { resolvePreviewEnvironment } from '@/lib/environments/preview';
+import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { addReleaseJob } from '@/lib/queue';
+import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 
@@ -56,6 +59,11 @@ export function resolveEnvironment(
   ref: string,
   envs: EnvironmentRecord[]
 ): EnvironmentRecord | undefined {
+  const previewEnvironment = resolvePreviewEnvironment(ref, envs);
+  if (previewEnvironment) {
+    return previewEnvironment;
+  }
+
   if (ref.startsWith('refs/tags/')) {
     const tag = ref.slice('refs/tags/'.length);
     const byTag = envs.find((env) => env.tagPattern && matchesGlob(env.tagPattern, tag));
@@ -143,7 +151,13 @@ async function persistRelease(
       status: 'queued',
       triggeredBy: meta.triggeredBy ?? 'api',
       triggeredByUserId: meta.triggeredByUserId ?? null,
-      summary: meta.summary ?? null,
+      summary:
+        meta.summary ??
+        buildDefaultReleaseSummary({
+          sourceRef: meta.sourceRef,
+          sourceCommitSha: meta.sourceCommitSha ?? null,
+          isPreview: environment.isPreview,
+        }),
     })
     .returning();
 
@@ -192,7 +206,19 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
     throw new Error(`No project linked to repository ${input.repository}`);
   }
 
-  const environment = resolveEnvironment(input.ref, project.environments);
+  let environment = resolveEnvironment(input.ref, project.environments);
+  if (!environment) {
+    const previewEnvironment = await ensurePreviewEnvironmentForRef({
+      projectId: project.id,
+      projectSlug: project.slug,
+      ref: input.ref,
+    });
+
+    if (previewEnvironment) {
+      environment = previewEnvironment;
+    }
+  }
+
   if (!environment) {
     throw new Error(`No environment configured for ref ${input.ref}`);
   }
@@ -257,7 +283,15 @@ export async function getReleaseById(releaseId: string) {
     where: eq(releases.id, releaseId),
     with: {
       project: true,
-      environment: true,
+      environment: {
+        with: {
+          domains: {
+            with: {
+              service: true,
+            },
+          },
+        },
+      },
       artifacts: {
         with: {
           service: true,
@@ -270,6 +304,35 @@ export async function getReleaseById(releaseId: string) {
           database: true,
           specification: true,
           items: true,
+        },
+      },
+    },
+  });
+}
+
+export async function getPreviousReleaseByScope(input: {
+  projectId: string;
+  environmentId: string;
+  createdAt: Date;
+}) {
+  return db.query.releases.findFirst({
+    where: and(
+      eq(releases.projectId, input.projectId),
+      eq(releases.environmentId, input.environmentId),
+      lt(releases.createdAt, input.createdAt)
+    ),
+    orderBy: [desc(releases.createdAt)],
+    with: {
+      artifacts: {
+        with: {
+          service: true,
+        },
+      },
+      migrationRuns: {
+        with: {
+          service: true,
+          database: true,
+          specification: true,
         },
       },
     },

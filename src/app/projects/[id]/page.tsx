@@ -8,7 +8,6 @@ import {
   Link2,
   Rocket,
   Settings,
-  Webhook,
 } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -28,12 +27,22 @@ import {
   services,
   teams,
 } from '@/lib/db/schema';
+import {
+  getEnvironmentScopeLabel,
+  getEnvironmentSourceLabel,
+} from '@/lib/environments/presentation';
+import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
+import {
+  getIssueLabel,
+  getMigrationAttentionIssueCode,
+  getReleaseActionLabel,
+} from '@/lib/releases/intelligence';
+import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 
 const navItems = [
   { title: '发布', href: 'releases', icon: Rocket },
   { title: '环境', href: 'environments', icon: Globe },
   { title: '资源', href: 'resources', icon: Box },
-  { title: '回调', href: 'webhooks', icon: Webhook },
   { title: '设置', href: 'settings', icon: Settings },
 ];
 
@@ -123,6 +132,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       orderBy: (run, { desc }) => [desc(run.createdAt)],
       with: {
         database: true,
+        environment: true,
         service: true,
         release: true,
       },
@@ -164,14 +174,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     }
   }
 
-  const attentionRuns = recentMigrationRuns.filter((run) =>
-    ['awaiting_approval', 'failed', 'canceled'].includes(run.status)
-  );
+  const attentionRuns = filterAttentionRuns(recentMigrationRuns);
+  const attentionStats = getAttentionStats(attentionRuns);
 
   const stats = [
     { label: '服务', value: projectServices.length },
     { label: '数据库', value: projectDatabases.length },
-    { label: '待处理', value: attentionRuns.length },
+    { label: '待处理', value: attentionStats.total },
     { label: '发布', value: recentReleases.length },
   ];
 
@@ -349,34 +358,66 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {attentionRuns.slice(0, 5).map((run) => (
-                    <Link
-                      key={run.id}
-                      href={
-                        run.releaseId
-                          ? `/projects/${id}/releases/${run.releaseId}`
-                          : `/projects/${id}/releases`
-                      }
-                      className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div
-                          className={`h-2 w-2 rounded-full ${
-                            run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
-                          }`}
-                        />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">{run.database.name}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {run.service?.name ?? '服务'} · {formatStatusLabel(run.status)}
+                  {attentionRuns.slice(0, 5).map((run) =>
+                    (() => {
+                      const issueCode = getMigrationAttentionIssueCode(run);
+                      const issueLabel = getIssueLabel(issueCode);
+                      const actionLabel = getReleaseActionLabel(issueCode);
+
+                      return (
+                        <Link
+                          key={run.id}
+                          href={
+                            run.releaseId
+                              ? `/projects/${id}/releases/${run.releaseId}`
+                              : `/projects/${id}/releases`
+                          }
+                          className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div
+                              className={`h-2 w-2 rounded-full ${
+                                run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
+                              }`}
+                            />
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium">
+                                {run.database.name}
+                              </div>
+                              <div className="truncate text-xs text-muted-foreground">
+                                {run.service?.name ?? '服务'}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                {issueLabel && (
+                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                    {issueLabel}
+                                  </span>
+                                )}
+                                {getEnvironmentScopeLabel(run.environment) && (
+                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                    {getEnvironmentScopeLabel(run.environment)}
+                                  </span>
+                                )}
+                                {getEnvironmentSourceLabel(run.environment) && (
+                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                    {getEnvironmentSourceLabel(run.environment)}
+                                  </span>
+                                )}
+                                {actionLabel && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    下一步：{actionLabel}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(run.createdAt).toLocaleDateString()}
-                      </div>
-                    </Link>
-                  ))}
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(run.createdAt).toLocaleDateString()}
+                          </div>
+                        </Link>
+                      );
+                    })()
+                  )}
                 </div>
               )}
             </div>
@@ -427,7 +468,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                                 href={`/projects/${id}/releases/${latestRelease.id}`}
                                 className="inline-flex items-center gap-1 hover:text-foreground"
                               >
-                                <span>{latestRelease.summary || '发布'}</span>
+                                <span>{getReleaseDisplayTitle(latestRelease)}</span>
                                 {latestRelease.sourceCommitSha && (
                                   <code className="font-mono">
                                     {latestRelease.sourceCommitSha.slice(0, 7)}
@@ -484,7 +525,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                           className={`h-2 w-2 rounded-full ${releaseStatusColors[release.status] ?? 'bg-muted-foreground'}`}
                         />
                         <span className="truncate text-sm font-medium">
-                          {release.summary || '发布'}
+                          {getReleaseDisplayTitle(release)}
                         </span>
                         <Badge variant="secondary" className="capitalize">
                           {release.environment.name}

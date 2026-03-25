@@ -17,6 +17,22 @@ import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { buildEnvironmentAccessUrl, pickPrimaryEnvironmentDomain } from '@/lib/domains/defaults';
+import {
+  formatEnvironmentExpiry,
+  getEnvironmentScopeLabel,
+  getEnvironmentSourceLabel,
+} from '@/lib/environments/presentation';
+import {
+  type AttentionFilterState,
+  filterAttentionRuns,
+  getAttentionStats,
+} from '@/lib/migrations/attention';
+import {
+  getIssueLabel,
+  getMigrationAttentionIssueCode,
+  getReleaseActionLabel,
+} from '@/lib/releases/intelligence';
 
 const migrationStatusConfig: Record<
   string,
@@ -62,7 +78,7 @@ export default async function ApprovalsPage({
   }
 
   const { state } = await searchParams;
-  const filterState =
+  const filterState: AttentionFilterState =
     state === 'approval' || state === 'failed' || state === 'canceled' ? state : 'all';
 
   const memberships = await db.query.teamMembers.findMany({
@@ -91,7 +107,11 @@ export default async function ApprovalsPage({
           orderBy: (run, { desc }) => [desc(run.createdAt)],
           with: {
             database: true,
-            environment: true,
+            environment: {
+              with: {
+                domains: true,
+              },
+            },
             service: true,
             project: true,
             specification: true,
@@ -104,25 +124,15 @@ export default async function ApprovalsPage({
         })
       : [];
 
-  const attentionRuns = runs.filter((run) =>
-    ['awaiting_approval', 'failed', 'canceled'].includes(run.status)
-  );
-  const filteredRuns = attentionRuns.filter((run) => {
-    if (filterState === 'all') return true;
-    if (filterState === 'approval') return run.status === 'awaiting_approval';
-    if (filterState === 'failed') return run.status === 'failed';
-    if (filterState === 'canceled') return run.status === 'canceled';
-    return true;
-  });
+  const attentionRuns = filterAttentionRuns(runs);
+  const filteredRuns = filterAttentionRuns(attentionRuns, filterState);
+  const attentionStats = getAttentionStats(attentionRuns);
 
   const stats = [
-    { label: '待处理', value: attentionRuns.length },
-    {
-      label: '待审批',
-      value: attentionRuns.filter((run) => run.status === 'awaiting_approval').length,
-    },
-    { label: '失败', value: attentionRuns.filter((run) => run.status === 'failed').length },
-    { label: '已取消', value: attentionRuns.filter((run) => run.status === 'canceled').length },
+    { label: '待处理', value: attentionStats.total },
+    { label: '待审批', value: attentionStats.approval },
+    { label: '失败', value: attentionStats.failed },
+    { label: '已取消', value: attentionStats.canceled },
   ];
 
   return (
@@ -170,6 +180,13 @@ export default async function ApprovalsPage({
             const imageUrl =
               run.release?.artifacts.find((artifact) => artifact.serviceId === run.serviceId)
                 ?.imageUrl ?? null;
+            const environmentScope = getEnvironmentScopeLabel(run.environment);
+            const environmentSource = getEnvironmentSourceLabel(run.environment);
+            const environmentExpiry = formatEnvironmentExpiry(run.environment.expiresAt);
+            const primaryDomain = pickPrimaryEnvironmentDomain(run.environment.domains ?? []);
+            const issueCode = getMigrationAttentionIssueCode(run);
+            const issueLabel = getIssueLabel(issueCode);
+            const actionLabel = getReleaseActionLabel(issueCode);
 
             return (
               <div key={run.id} className="console-panel overflow-hidden">
@@ -183,6 +200,9 @@ export default async function ApprovalsPage({
                       />
                       <Badge variant="secondary">{run.project.name}</Badge>
                       <Badge variant="outline">{run.environment.name}</Badge>
+                      {environmentScope && <Badge variant="outline">{environmentScope}</Badge>}
+                      {environmentSource && <Badge variant="outline">{environmentSource}</Badge>}
+                      {environmentExpiry && <Badge variant="outline">{environmentExpiry}</Badge>}
                       <Badge variant="outline">{run.database.name}</Badge>
                       <Badge variant="outline">{run.specification.phase}</Badge>
                     </div>
@@ -202,9 +222,19 @@ export default async function ApprovalsPage({
                         </div>
                         <div className="flex items-center gap-1.5">
                           <GitBranch className="h-3.5 w-3.5" />
-                          <span>{run.environment.branch ?? '未设置'}</span>
+                          <span>
+                            {run.release?.sourceRef ?? run.environment.branch ?? '未设置'}
+                          </span>
                         </div>
                       </div>
+                      {(issueLabel || actionLabel) && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {issueLabel && <Badge variant="secondary">{issueLabel}</Badge>}
+                          {actionLabel && (
+                            <span className="text-muted-foreground">下一步：{actionLabel}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="console-card bg-secondary/20 p-4">
@@ -230,17 +260,36 @@ export default async function ApprovalsPage({
                       imageUrl={imageUrl}
                     />
                     {run.releaseId ? (
-                      <Button
-                        asChild
-                        variant="outline"
-                        size="sm"
-                        className="justify-between rounded-xl"
-                      >
-                        <Link href={`/projects/${run.projectId}/releases/${run.releaseId}`}>
-                          打开发布
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
+                      <>
+                        {primaryDomain && (
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="justify-between rounded-xl"
+                          >
+                            <a
+                              href={buildEnvironmentAccessUrl(primaryDomain.hostname)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              打开环境
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                        )}
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="justify-between rounded-xl"
+                        >
+                          <Link href={`/projects/${run.projectId}/releases/${run.releaseId}`}>
+                            打开发布
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      </>
                     ) : (
                       <Button
                         asChild

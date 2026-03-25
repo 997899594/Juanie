@@ -9,7 +9,6 @@ import {
   Rocket,
   Settings,
   Users,
-  Webhook,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -70,11 +69,6 @@ const projectNav: NavItem[] = [
     title: '资源',
     href: '/resources',
     icon: <Box className="h-4 w-4" />,
-  },
-  {
-    title: '回调',
-    href: '/webhooks',
-    icon: <Webhook className="h-4 w-4" />,
   },
   {
     title: '设置',

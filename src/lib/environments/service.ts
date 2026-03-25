@@ -1,0 +1,200 @@
+import { and, eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { environments, services } from '@/lib/db/schema';
+import { ensureEnvironmentDomains } from '@/lib/domains/service';
+import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { createNamespace, createService, ensureGhcrPullSecret, getIsConnected } from '@/lib/k8s';
+import {
+  buildPreviewEnvironmentName,
+  buildPreviewNamespace,
+  calculatePreviewExpiry,
+  extractBranchFromRef,
+  extractPrNumberFromRef,
+} from './preview';
+
+function isConflictError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: number; statusCode?: number; body?: { code?: number } };
+  return candidate.code === 409 || candidate.statusCode === 409 || candidate.body?.code === 409;
+}
+
+export function buildEnvironmentNamespace(
+  projectSlug: string,
+  environment: {
+    name: string;
+    isProduction: boolean;
+    isPreview?: boolean | null;
+  }
+): string {
+  if (environment.isPreview) {
+    return buildPreviewNamespace(projectSlug, environment.name);
+  }
+
+  return environment.isProduction ? `juanie-${projectSlug}-prod` : `juanie-${projectSlug}`;
+}
+
+export async function ensurePreviewEnvironmentForRef(input: {
+  projectId: string;
+  projectSlug: string;
+  ref: string;
+  ttlHours?: number;
+}) {
+  const prNumber = extractPrNumberFromRef(input.ref);
+  const branch = extractBranchFromRef(input.ref);
+
+  if (prNumber === null && !branch) {
+    return null;
+  }
+
+  const environmentName = buildPreviewEnvironmentName({
+    branch,
+    prNumber,
+  });
+
+  const existingEnvironment = await db.query.environments.findFirst({
+    where: and(eq(environments.projectId, input.projectId), eq(environments.name, environmentName)),
+  });
+
+  const values = {
+    projectId: input.projectId,
+    name: environmentName,
+    branch,
+    isPreview: true,
+    previewPrNumber: prNumber,
+    expiresAt: calculatePreviewExpiry(input.ttlHours),
+    autoDeploy: true,
+    isProduction: false,
+    namespace: buildPreviewNamespace(input.projectSlug, environmentName),
+  };
+
+  if (existingEnvironment) {
+    const [updated] = await db
+      .update(environments)
+      .set({
+        ...values,
+        updatedAt: new Date(),
+      })
+      .where(eq(environments.id, existingEnvironment.id))
+      .returning();
+
+    const serviceList = await db.query.services.findMany({
+      where: eq(services.projectId, input.projectId),
+    });
+
+    await ensureEnvironmentDomains({
+      project: {
+        id: input.projectId,
+        slug: input.projectSlug,
+      },
+      environment: {
+        id: updated.id,
+        name: updated.name,
+        namespace: updated.namespace,
+        isPreview: updated.isPreview,
+      },
+      services: serviceList,
+    });
+
+    return updated;
+  }
+
+  const [created] = await db.insert(environments).values(values).returning();
+
+  const serviceList = await db.query.services.findMany({
+    where: eq(services.projectId, input.projectId),
+  });
+
+  await ensureEnvironmentDomains({
+    project: {
+      id: input.projectId,
+      slug: input.projectSlug,
+    },
+    environment: {
+      id: created.id,
+      name: created.name,
+      namespace: created.namespace,
+      isPreview: created.isPreview,
+    },
+    services: serviceList,
+  });
+
+  return created;
+}
+
+export async function ensureEnvironmentScaffold(input: {
+  project: {
+    id: string;
+    slug: string;
+    teamId: string;
+  };
+  environment: {
+    id: string;
+    name: string;
+    namespace: string | null;
+    isProduction: boolean;
+    isPreview?: boolean | null;
+  };
+}) {
+  if (!getIsConnected()) {
+    return;
+  }
+
+  const namespace =
+    input.environment.namespace ||
+    buildEnvironmentNamespace(input.project.slug, {
+      name: input.environment.name,
+      isProduction: input.environment.isProduction,
+      isPreview: input.environment.isPreview ?? false,
+    });
+
+  if (!input.environment.namespace) {
+    await db
+      .update(environments)
+      .set({
+        namespace,
+        updatedAt: new Date(),
+      })
+      .where(eq(environments.id, input.environment.id));
+  }
+
+  await createNamespace(namespace);
+
+  try {
+    const teamSession = await getTeamIntegrationSession({
+      teamId: input.project.teamId,
+      requiredCapabilities: [],
+    });
+
+    if (teamSession.provider === 'github') {
+      await ensureGhcrPullSecret(namespace, { token: teamSession.accessToken });
+    } else {
+      await ensureGhcrPullSecret(namespace);
+    }
+  } catch (_error) {
+    await ensureGhcrPullSecret(namespace).catch(() => {
+      // Ignore pull secret bootstrap failures in non-GitHub environments.
+    });
+  }
+
+  const serviceList = await db.query.services.findMany({
+    where: eq(services.projectId, input.project.id),
+  });
+
+  for (const service of serviceList) {
+    const serviceName = `${input.project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+
+    try {
+      await createService(namespace, serviceName, {
+        port: service.port || 3000,
+        targetPort: service.port || 3000,
+      });
+    } catch (error) {
+      if (!isConflictError(error)) {
+        throw error;
+      }
+    }
+  }
+}

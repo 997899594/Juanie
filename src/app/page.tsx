@@ -7,6 +7,16 @@ import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
+import {
+  getEnvironmentScopeLabel,
+  getEnvironmentSourceLabel,
+} from '@/lib/environments/presentation';
+import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
+import {
+  getIssueLabel,
+  getMigrationAttentionIssueCode,
+  getReleaseActionLabel,
+} from '@/lib/releases/intelligence';
 
 function formatRelativeTime(date: Date | string): string {
   const now = new Date();
@@ -71,14 +81,14 @@ export default async function HomePage() {
             limit: 5,
             with: {
               database: true,
+              environment: true,
               project: true,
               release: true,
             },
           })
-          .then((runs) =>
-            runs.filter((run) => ['awaiting_approval', 'failed', 'canceled'].includes(run.status))
-          )
+          .then((runs) => filterAttentionRuns(runs))
       : [];
+  const attentionStats = getAttentionStats(attentionRuns);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -107,7 +117,7 @@ export default async function HomePage() {
         {[
           { label: '项目', value: userProjects.length },
           { label: '团队', value: userTeams.length },
-          { label: '待处理', value: attentionRuns.length },
+          { label: '待处理', value: attentionStats.total },
           { label: '资源', value: '—' },
         ].map((stat) => (
           <div key={stat.label} className="console-panel px-5 py-4">
@@ -192,34 +202,64 @@ export default async function HomePage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {attentionRuns.map((run) => (
-                  <Link
-                    key={run.id}
-                    href={
-                      run.releaseId
-                        ? `/projects/${run.projectId}/releases/${run.releaseId}`
-                        : `/projects/${run.projectId}`
-                    }
-                    className="flex items-center justify-between rounded-2xl border border-transparent bg-secondary/20 px-4 py-3 transition-colors hover:border-border hover:bg-secondary/40"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div
-                        className={`h-2 w-2 rounded-full ${
-                          run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
-                        }`}
-                      />
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{run.database.name}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {run.project.name} · {run.status.replaceAll('_', ' ')}
+                {attentionRuns.map((run) =>
+                  (() => {
+                    const issueCode = getMigrationAttentionIssueCode(run);
+                    const issueLabel = getIssueLabel(issueCode);
+                    const actionLabel = getReleaseActionLabel(issueCode);
+
+                    return (
+                      <Link
+                        key={run.id}
+                        href={
+                          run.releaseId
+                            ? `/projects/${run.projectId}/releases/${run.releaseId}`
+                            : `/projects/${run.projectId}`
+                        }
+                        className="flex items-center justify-between rounded-2xl border border-transparent bg-secondary/20 px-4 py-3 transition-colors hover:border-border hover:bg-secondary/40"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            className={`h-2 w-2 rounded-full ${
+                              run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
+                            }`}
+                          />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">{run.database.name}</div>
+                            <div className="truncate text-xs text-muted-foreground">
+                              {run.project.name}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {issueLabel && (
+                                <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                  {issueLabel}
+                                </span>
+                              )}
+                              {getEnvironmentScopeLabel(run.environment) && (
+                                <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                  {getEnvironmentScopeLabel(run.environment)}
+                                </span>
+                              )}
+                              {getEnvironmentSourceLabel(run.environment) && (
+                                <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                  {getEnvironmentSourceLabel(run.environment)}
+                                </span>
+                              )}
+                              {actionLabel && (
+                                <span className="text-[11px] text-muted-foreground">
+                                  下一步：{actionLabel}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {run.createdAt ? formatRelativeTime(run.createdAt) : '—'}
-                    </div>
-                  </Link>
-                ))}
+                        <div className="text-xs text-muted-foreground">
+                          {run.createdAt ? formatRelativeTime(run.createdAt) : '—'}
+                        </div>
+                      </Link>
+                    );
+                  })()
+                )}
               </div>
             )}
           </div>
