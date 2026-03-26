@@ -6,11 +6,13 @@ describe('environment list view', () => {
     const environments = decorateEnvironmentList([
       {
         id: 'env-prod',
+        name: 'production',
         isProduction: true,
         isPreview: false,
       },
       {
         id: 'env-preview',
+        name: 'preview-pr-42',
         isProduction: false,
         isPreview: true,
       },

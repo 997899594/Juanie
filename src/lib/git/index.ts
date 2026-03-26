@@ -20,6 +20,17 @@ export interface GitRepository {
   isPrivate: boolean;
 }
 
+export interface GitReviewRequest {
+  number: number;
+  kind: 'pull_request' | 'merge_request';
+  label: string;
+  title: string;
+  state: 'open' | 'closed' | 'merged' | 'draft' | 'unknown';
+  stateLabel: string;
+  authorName: string | null;
+  webUrl: string | null;
+}
+
 export interface CreateRepoOptions {
   name: string;
   description?: string;
@@ -79,6 +90,11 @@ export interface GitProvider {
   ): Promise<GitRepository[]>;
 
   getRepository(accessToken: string, fullName: string): Promise<GitRepository | null>;
+  getReviewRequest(
+    accessToken: string,
+    repoFullName: string,
+    number: number
+  ): Promise<GitReviewRequest | null>;
 
   createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository>;
 

@@ -54,8 +54,9 @@ export async function getMasterKey(): Promise<Buffer> {
         }
       } catch (readErr: unknown) {
         // 404 = Secret 还不存在，自动 bootstrap；其他错误继续抛出
-        const status = (readErr as { statusCode?: number; code?: number })?.statusCode
-          ?? (readErr as { statusCode?: number; code?: number })?.code;
+        const status =
+          (readErr as { statusCode?: number; code?: number })?.statusCode ??
+          (readErr as { statusCode?: number; code?: number })?.code;
         if (status !== 404) throw readErr;
       }
 
@@ -72,7 +73,9 @@ export async function getMasterKey(): Promise<Buffer> {
         },
       });
       cachedMasterKey = Buffer.from(newKeyHex, 'hex');
-      console.log('[crypto] Master key auto-generated and saved to K8s Secret juanie/juanie-master-key');
+      console.log(
+        '[crypto] Master key auto-generated and saved to K8s Secret juanie/juanie-master-key'
+      );
       return cachedMasterKey;
     }
   } catch (e) {

@@ -2,49 +2,27 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { teamMembers, teams, users } from '@/lib/db/schema';
+import { teamMembers, users } from '@/lib/db/schema';
+import { getTeamMembersPageData } from '@/lib/teams/service';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
-  const team = await db.query.teams.findFirst({
-    where: eq(teams.id, id),
+  const pageData = await getTeamMembersPageData(id, session.user.id);
+
+  if (!pageData) {
+    return NextResponse.json({ error: '团队不存在或无权限访问' }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    governance: pageData.overview.governance,
+    members: pageData.overview.members,
   });
-
-  if (!team) {
-    return NextResponse.json({ error: 'Team not found' }, { status: 404 });
-  }
-
-  const member = await db.query.teamMembers.findFirst({
-    where: and(eq(teamMembers.teamId, id), eq(teamMembers.userId, session.user.id)),
-  });
-
-  if (!member || !['owner', 'admin'].includes(member.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const members = await db
-    .select({
-      id: teamMembers.id,
-      role: teamMembers.role,
-      createdAt: teamMembers.createdAt,
-      user: {
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        image: users.image,
-      },
-    })
-    .from(teamMembers)
-    .innerJoin(users, eq(users.id, teamMembers.userId))
-    .where(eq(teamMembers.teamId, id));
-
-  return NextResponse.json(members);
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -52,7 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   const member = await db.query.teamMembers.findFirst({
@@ -60,13 +38,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
 
   if (!member || member.role !== 'owner') {
-    return NextResponse.json({ error: 'Only owner can invite members' }, { status: 403 });
+    return NextResponse.json({ error: '只有 owner 可以直接邀请成员' }, { status: 403 });
   }
 
   const { email, role = 'member' } = await request.json();
 
   if (!email) {
-    return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+    return NextResponse.json({ error: '邮箱不能为空' }, { status: 400 });
   }
 
   const user = await db.query.users.findFirst({
@@ -74,7 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
 
   if (!user) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    return NextResponse.json({ error: '没有找到这个用户' }, { status: 404 });
   }
 
   const existingMember = await db.query.teamMembers.findFirst({
@@ -82,7 +60,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
 
   if (existingMember) {
-    return NextResponse.json({ error: 'User is already a member' }, { status: 400 });
+    return NextResponse.json({ error: '这个用户已经在团队里了' }, { status: 400 });
   }
 
   const [newMember] = await db

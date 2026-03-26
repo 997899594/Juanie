@@ -1,4 +1,3 @@
-import { desc, eq } from 'drizzle-orm';
 import {
   AlertTriangle,
   Box,
@@ -15,29 +14,10 @@ import { DatabaseMigrationDialog } from '@/components/projects/DatabaseMigration
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PlatformSignalBlock, PlatformSignalChipList } from '@/components/ui/platform-signals';
+import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import {
-  databases,
-  deployments,
-  domains,
-  migrationRuns,
-  projects,
-  releases,
-  services,
-  teams,
-} from '@/lib/db/schema';
-import {
-  getEnvironmentScopeLabel,
-  getEnvironmentSourceLabel,
-} from '@/lib/environments/presentation';
-import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
-import {
-  getIssueLabel,
-  getMigrationAttentionIssueCode,
-  getReleaseActionLabel,
-} from '@/lib/releases/intelligence';
-import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import { getProjectOverviewPageData } from '@/lib/projects/service';
 
 const navItems = [
   { title: '发布', href: 'releases', icon: Rocket },
@@ -94,101 +74,26 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     redirect('/login');
   }
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, id),
-    with: { repository: true },
-  });
+  const pageData = await getProjectOverviewPageData(id, session.user.id);
 
-  if (!project) redirect('/projects');
+  if (!pageData?.project) redirect('/projects');
 
-  const [
-    team,
-    projectServices,
-    projectDatabases,
-    projectDomains,
-    recentReleases,
-    recentMigrationRuns,
-    deploymentImageCandidates,
-  ] = await Promise.all([
-    db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }),
-    db.query.services.findMany({ where: eq(services.projectId, id) }),
-    db.query.databases.findMany({ where: eq(databases.projectId, id) }),
-    db.query.domains.findMany({ where: eq(domains.projectId, id) }),
-    db.query.releases.findMany({
-      where: eq(releases.projectId, id),
-      orderBy: [desc(releases.createdAt)],
-      limit: 20,
-      with: {
-        environment: true,
-        artifacts: {
-          with: {
-            service: true,
-          },
-        },
-      },
-    }),
-    db.query.migrationRuns.findMany({
-      where: eq(migrationRuns.projectId, id),
-      orderBy: (run, { desc }) => [desc(run.createdAt)],
-      with: {
-        database: true,
-        environment: true,
-        service: true,
-        release: true,
-      },
-    }),
-    db.query.deployments.findMany({
-      where: eq(deployments.projectId, id),
-      orderBy: (deployment, { desc }) => [desc(deployment.createdAt)],
-    }),
-  ]);
-
-  const latestMigrationByDatabase = new Map<string, (typeof recentMigrationRuns)[number]>();
-  for (const run of recentMigrationRuns) {
-    if (!latestMigrationByDatabase.has(run.databaseId)) {
-      latestMigrationByDatabase.set(run.databaseId, run);
-    }
-  }
-
-  const latestImageByScope = new Map<string, string>();
-  for (const deployment of deploymentImageCandidates) {
-    if (!deployment.imageUrl) continue;
-    const serviceKey = `${deployment.environmentId}:${deployment.serviceId ?? 'project'}`;
-    if (!latestImageByScope.has(serviceKey)) {
-      latestImageByScope.set(serviceKey, deployment.imageUrl);
-    }
-  }
-
-  const latestReleaseByScope = new Map<string, (typeof recentReleases)[number]>();
-  for (const release of recentReleases) {
-    const projectScopeKey = `${release.environment.id}:project`;
-    if (!latestReleaseByScope.has(projectScopeKey)) {
-      latestReleaseByScope.set(projectScopeKey, release);
-    }
-
-    for (const artifact of release.artifacts) {
-      const serviceScopeKey = `${release.environment.id}:${artifact.service.id}`;
-      if (!latestReleaseByScope.has(serviceScopeKey)) {
-        latestReleaseByScope.set(serviceScopeKey, release);
-      }
-    }
-  }
-
-  const attentionRuns = filterAttentionRuns(recentMigrationRuns);
-  const attentionStats = getAttentionStats(attentionRuns);
-
-  const stats = [
-    { label: '服务', value: projectServices.length },
-    { label: '数据库', value: projectDatabases.length },
-    { label: '待处理', value: attentionStats.total },
-    { label: '发布', value: recentReleases.length },
-  ];
+  const {
+    project,
+    stats,
+    overview,
+    serviceCards,
+    domainCards,
+    attentionItems,
+    databaseCards,
+    recentReleaseCards,
+  } = pageData;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title={project.name}
-        description={`${team?.name ?? '团队'} · ${formatStatusLabel(project.status ?? 'pending')}`}
+        description={overview.headerDescription}
         actions={
           <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
             <Link href={`/projects/${id}/settings`}>
@@ -210,14 +115,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         ))}
       </div>
 
-      {projectDomains.length > 0 && (
+      {domainCards.length > 0 && (
         <div className="console-panel px-5 py-4">
           <div className="mb-3 text-sm font-semibold">域名</div>
           <div className="flex flex-wrap gap-2">
-            {projectDomains.map((domain) => (
+            {domainCards.map((domain) => (
               <a
                 key={domain.id}
-                href={`https://${domain.hostname}`}
+                href={domain.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1.5 text-sm transition-colors hover:bg-secondary/70"
@@ -256,40 +161,40 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <div className="text-sm font-semibold">概览</div>
             </div>
             <div className="space-y-4 px-5 py-4">
-              {project.repository && (
+              {overview.repository && (
                 <div className="space-y-1">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     仓库
                   </div>
                   <a
-                    href={project.repository.webUrl || '#'}
+                    href={overview.repository.webUrl || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
                   >
-                    {project.repository.fullName}
+                    {overview.repository.fullName}
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
               )}
 
-              {project.productionBranch && (
+              {overview.productionBranch && (
                 <div className="space-y-1">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     生产分支
                   </div>
                   <code className="rounded bg-muted px-2 py-1 text-sm font-mono">
-                    {project.productionBranch}
+                    {overview.productionBranch}
                   </code>
                 </div>
               )}
 
-              {project.description && (
+              {overview.description && (
                 <div className="space-y-1">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     描述
                   </div>
-                  <div className="text-sm text-muted-foreground">{project.description}</div>
+                  <div className="text-sm text-muted-foreground">{overview.description}</div>
                 </div>
               )}
 
@@ -302,28 +207,26 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                     <div
                       className={`h-2 w-2 rounded-full ${statusColors[project.status ?? ''] ?? 'bg-muted-foreground'}`}
                     />
-                    {project.status}
+                    {overview.statusLabel}
                   </div>
                 </div>
                 <div className="console-card bg-secondary/20 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     创建时间
                   </div>
-                  <div className="mt-2 text-sm font-medium">
-                    {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : '—'}
-                  </div>
+                  <div className="mt-2 text-sm font-medium">{overview.createdDateLabel}</div>
                 </div>
               </div>
             </div>
           </section>
 
-          {projectServices.length > 0 && (
+          {serviceCards.length > 0 && (
             <section className="console-panel overflow-hidden">
               <div className="border-b border-border px-5 py-4">
                 <div className="text-sm font-semibold">服务</div>
               </div>
               <div className="space-y-2 p-3">
-                {projectServices.map((svc) => (
+                {serviceCards.map((svc) => (
                   <div
                     key={svc.id}
                     className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
@@ -337,7 +240,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                         {svc.type}
                       </Badge>
                     </div>
-                    {svc.port && <span className="text-xs text-muted-foreground">:{svc.port}</span>}
+                    {svc.portLabel && (
+                      <span className="text-xs text-muted-foreground">{svc.portLabel}</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -351,91 +256,100 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <div className="text-sm font-semibold">待处理</div>
             </div>
             <div className="p-3">
-              {attentionRuns.length === 0 ? (
+              {attentionItems.length === 0 ? (
                 <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
                   <AlertTriangle className="mb-3 h-5 w-5 text-muted-foreground" />
                   <div className="text-sm font-medium">当前没有待处理项</div>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {attentionRuns.slice(0, 5).map((run) =>
-                    (() => {
-                      const issueCode = getMigrationAttentionIssueCode(run);
-                      const issueLabel = getIssueLabel(issueCode);
-                      const actionLabel = getReleaseActionLabel(issueCode);
-
-                      return (
-                        <Link
-                          key={run.id}
-                          href={
-                            run.releaseId
-                              ? `/projects/${id}/releases/${run.releaseId}`
-                              : `/projects/${id}/releases`
-                          }
-                          className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div
-                              className={`h-2 w-2 rounded-full ${
-                                run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
-                              }`}
+                  {attentionItems.slice(0, 5).map((run) => (
+                    <Link
+                      key={run.id}
+                      href={
+                        run.releaseId
+                          ? `/projects/${id}/releases/${run.releaseId}`
+                          : `/projects/${id}/releases`
+                      }
+                      className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className={`h-2 w-2 rounded-full ${
+                            run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {run.database?.name ?? '数据库'}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {run.service?.name ?? '服务'}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <PlatformSignalChipList
+                              chips={run.platformSignals.chips}
+                              className="gap-1.5"
                             />
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium">
-                                {run.database.name}
-                              </div>
-                              <div className="truncate text-xs text-muted-foreground">
-                                {run.service?.name ?? '服务'}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                {issueLabel && (
-                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                    {issueLabel}
-                                  </span>
-                                )}
-                                {getEnvironmentScopeLabel(run.environment) && (
-                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                    {getEnvironmentScopeLabel(run.environment)}
-                                  </span>
-                                )}
-                                {getEnvironmentSourceLabel(run.environment) && (
-                                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                    {getEnvironmentSourceLabel(run.environment)}
-                                  </span>
-                                )}
-                                {actionLabel && (
-                                  <span className="text-[11px] text-muted-foreground">
-                                    下一步：{actionLabel}
-                                  </span>
-                                )}
-                              </div>
+                            {run.environmentScopeLabel && (
+                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                {run.environmentScopeLabel}
+                              </span>
+                            )}
+                            {run.environmentSourceLabel && (
+                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                {run.environmentSourceLabel}
+                              </span>
+                            )}
+                            {run.previewSourceMeta.label && (
+                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                {run.previewSourceMeta.label}
+                              </span>
+                            )}
+                            {run.environmentExpiryLabel && (
+                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                {run.environmentExpiryLabel}
+                              </span>
+                            )}
+                          </div>
+                          <PlatformSignalBlock
+                            chips={[]}
+                            summary={run.platformSignals.primarySummary}
+                            nextActionLabel={run.platformSignals.nextActionLabel}
+                            summaryClassName="mt-1 border-transparent bg-transparent px-0 py-0"
+                          />
+                          {run.primaryDomainUrl && (
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                              <PreviewSourceSummary meta={run.previewSourceMeta} />
+                              <span className="text-foreground underline underline-offset-4">
+                                打开环境
+                              </span>
                             </div>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(run.createdAt).toLocaleDateString()}
-                          </div>
-                        </Link>
-                      );
-                    })()
-                  )}
+                          )}
+                          {run.previewLifecycle?.summary && (
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              {run.previewLifecycle.summary}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(run.createdAt).toLocaleDateString()}
+                      </div>
+                    </Link>
+                  ))}
                 </div>
               )}
             </div>
           </section>
 
-          {projectDatabases.length > 0 && (
+          {databaseCards.length > 0 && (
             <section className="console-panel overflow-hidden">
               <div className="border-b border-border px-5 py-4">
                 <div className="text-sm font-semibold">数据库</div>
               </div>
               <div className="space-y-3 p-3">
-                {projectDatabases.map((dbItem) => {
-                  const latestMigration = latestMigrationByDatabase.get(dbItem.id);
-                  const scopeKey = `${dbItem.environmentId}:${dbItem.serviceId ?? 'project'}`;
-                  const latestRelease =
-                    latestReleaseByScope.get(scopeKey) ??
-                    latestReleaseByScope.get(`${dbItem.environmentId}:project`);
-
+                {databaseCards.map((dbItem) => {
                   return (
                     <div key={dbItem.id} className="console-card bg-secondary/20 px-4 py-4">
                       <div className="flex items-start justify-between gap-4">
@@ -450,28 +364,38 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                               {formatStatusLabel(dbItem.status ?? 'pending')}
                             </Badge>
                             {dbItem.scope === 'service' && dbItem.serviceId && (
-                              <Badge variant="outline">
-                                {projectServices.find((service) => service.id === dbItem.serviceId)
-                                  ?.name ?? '服务'}
-                              </Badge>
+                              <Badge variant="outline">{dbItem.serviceName ?? '服务'}</Badge>
                             )}
                           </div>
 
                           <div className="space-y-1 text-xs text-muted-foreground">
                             <div>
-                              {latestMigration
-                                ? `最近迁移：${formatStatusLabel(latestMigration.status)}`
+                              {dbItem.latestMigration
+                                ? `最近迁移：${formatStatusLabel(dbItem.latestMigration.status)}`
                                 : '暂无迁移记录'}
                             </div>
-                            {latestRelease ? (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {dbItem.manualControl.issueLabel && (
+                                <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                                  {dbItem.manualControl.issueLabel}
+                                </span>
+                              )}
+                              {dbItem.manualControl.actionLabel && (
+                                <span className="text-[11px] text-muted-foreground">
+                                  下一步：{dbItem.manualControl.actionLabel}
+                                </span>
+                              )}
+                            </div>
+                            <div>{dbItem.manualControl.reason}</div>
+                            {dbItem.latestRelease ? (
                               <Link
-                                href={`/projects/${id}/releases/${latestRelease.id}`}
+                                href={`/projects/${id}/releases/${dbItem.latestRelease.id}`}
                                 className="inline-flex items-center gap-1 hover:text-foreground"
                               >
-                                <span>{getReleaseDisplayTitle(latestRelease)}</span>
-                                {latestRelease.sourceCommitSha && (
+                                <span>{dbItem.latestRelease.title}</span>
+                                {dbItem.latestRelease.commitSha && (
                                   <code className="font-mono">
-                                    {latestRelease.sourceCommitSha.slice(0, 7)}
+                                    {dbItem.latestRelease.commitSha.slice(0, 7)}
                                   </code>
                                 )}
                               </Link>
@@ -487,12 +411,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                             databaseId={dbItem.id}
                             databaseName={dbItem.name}
                             databaseType={dbItem.type}
+                            disabled={!dbItem.manualMigrationAction.allowed}
+                            disabledSummary={dbItem.manualMigrationAction.summary}
                             latestStatus={dbItem.status ?? null}
-                            latestImageUrl={
-                              latestImageByScope.get(scopeKey) ??
-                              latestImageByScope.get(`${dbItem.environmentId}:project`) ??
-                              null
-                            }
+                            latestMigration={dbItem.latestMigration}
+                            latestRelease={dbItem.latestRelease}
+                            latestImageUrl={dbItem.latestImageUrl}
                           />
                         </div>
                       </div>
@@ -508,12 +432,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <div className="text-sm font-semibold">最近发布</div>
             </div>
             <div className="space-y-2 p-3">
-              {recentReleases.length === 0 ? (
+              {recentReleaseCards.length === 0 ? (
                 <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
                   还没有发布
                 </div>
               ) : (
-                recentReleases.slice(0, 5).map((release) => (
+                recentReleaseCards.slice(0, 5).map((release) => (
                   <Link
                     key={release.id}
                     href={`/projects/${id}/releases/${release.id}`}
@@ -522,20 +446,46 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`h-2 w-2 rounded-full ${releaseStatusColors[release.status] ?? 'bg-muted-foreground'}`}
+                          className={`h-2 w-2 rounded-full ${releaseStatusColors[release.status ?? ''] ?? 'bg-muted-foreground'}`}
                         />
-                        <span className="truncate text-sm font-medium">
-                          {getReleaseDisplayTitle(release)}
-                        </span>
+                        <span className="truncate text-sm font-medium">{release.title}</span>
                         <Badge variant="secondary" className="capitalize">
-                          {release.environment.name}
+                          {release.environment.name ?? '环境'}
                         </Badge>
+                        {release.environmentScopeLabel && (
+                          <Badge variant="outline">{release.environmentScopeLabel}</Badge>
+                        )}
+                        {release.environmentSourceLabel && (
+                          <Badge variant="outline">{release.environmentSourceLabel}</Badge>
+                        )}
+                        {release.previewSourceMeta.label && (
+                          <Badge variant="outline">{release.previewSourceMeta.label}</Badge>
+                        )}
+                        {release.environmentExpiryLabel && (
+                          <Badge variant="outline">{release.environmentExpiryLabel}</Badge>
+                        )}
                       </div>
-                      {(release.sourceCommitSha || release.sourceRef) && (
+                      {release.sourceSummary && (
                         <div className="truncate text-xs text-muted-foreground">
-                          {release.sourceCommitSha?.slice(0, 7)} {release.sourceRef}
+                          {release.sourceSummary}
                         </div>
                       )}
+                      {release.primaryDomainUrl && (
+                        <div className="truncate text-xs text-foreground underline underline-offset-4">
+                          {release.primaryDomainUrl.replace('https://', '')}
+                        </div>
+                      )}
+                      <PreviewSourceSummary
+                        meta={release.previewSourceMeta}
+                        className="truncate"
+                        truncate
+                      />
+                      <PlatformSignalBlock
+                        chips={[]}
+                        summary={release.platformSignals.primarySummary}
+                        nextActionLabel={release.platformSignals.nextActionLabel}
+                        summaryClassName="truncate border-transparent bg-transparent px-0 py-0"
+                      />
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {release.createdAt ? new Date(release.createdAt).toLocaleDateString() : '—'}

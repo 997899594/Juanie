@@ -15,9 +15,7 @@ export function ProjectProvider({
   children,
 }: ProjectContextValue & { children: React.ReactNode }) {
   return (
-    <ProjectContext.Provider value={{ projectId, projectName }}>
-      {children}
-    </ProjectContext.Provider>
+    <ProjectContext.Provider value={{ projectId, projectName }}>{children}</ProjectContext.Provider>
   );
 }
 

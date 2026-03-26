@@ -7,6 +7,12 @@ import type {
   migrationSpecifications,
   services,
 } from '@/lib/db/schema';
+import type {
+  EnvironmentPolicySnapshot,
+  MigrationPolicyDecision,
+  ReleasePolicySnapshot,
+} from '@/lib/policies/delivery';
+import type { PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 export type MigrationSpecificationRecord = typeof migrationSpecifications.$inferSelect;
 export type MigrationRunRecord = typeof migrationRuns.$inferSelect;
@@ -46,6 +52,10 @@ export interface MigrationExecutionPlan {
   blockingReason: string | null;
   filePreviewError: string | null;
   warnings: string[];
+  platformSignals: PlatformSignalSnapshot;
+  environmentPolicy: EnvironmentPolicySnapshot;
+  migrationPolicy: MigrationPolicyDecision;
+  releasePolicy: ReleasePolicySnapshot;
   runnerType: 'k8s_job' | 'worker';
   imageUrl: string | null;
   database: {

@@ -1,7 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
-import { evaluateMigrationPolicy } from '@/lib/policies/delivery';
+import {
+  evaluateEnvironmentPolicy,
+  evaluateMigrationPolicy,
+  evaluateReleasePolicy,
+} from '@/lib/policies/delivery';
+import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
 import { resolveMigrationSpecifications } from './resolver';
 import type {
@@ -141,7 +146,20 @@ export async function buildMigrationExecutionPlan(
   options: ExecuteMigrationRunOptions = {}
 ): Promise<MigrationExecutionPlan> {
   const confirmationValue = `${spec.database.name}/${spec.environment.name}`;
-  const warnings: string[] = [];
+  const migrationPolicy = evaluateMigrationPolicy({
+    environment: spec.environment,
+    specification: spec.specification,
+  });
+  const environmentPolicy = evaluateEnvironmentPolicy(spec.environment);
+  const releasePolicy = evaluateReleasePolicy({
+    environment: spec.environment,
+    migrationRuns: [
+      {
+        specification: spec.specification,
+      },
+    ],
+  });
+  const warnings: string[] = [...migrationPolicy.warnings];
   const migrationPath = spec.specification.migrationPath ?? `migrations/${spec.database.type}`;
   const imageUrl = options.imageUrl ?? null;
   const runnerType: 'k8s_job' | 'worker' = spec.specification.tool === 'sql' ? 'worker' : 'k8s_job';
@@ -152,13 +170,6 @@ export async function buildMigrationExecutionPlan(
       : `数据库状态为 ${spec.database.status ?? '未知'}，只有 running 状态才能执行迁移`;
   let filePreviewError: string | null = null;
   let sqlFiles: Array<{ name: string }> = [];
-
-  warnings.push(
-    ...evaluateMigrationPolicy({
-      environment: spec.environment,
-      specification: spec.specification,
-    }).warnings
-  );
 
   if (spec.specification.tool === 'sql') {
     try {
@@ -187,6 +198,17 @@ export async function buildMigrationExecutionPlan(
     blockingReason,
     filePreviewError,
     warnings,
+    platformSignals: buildPlatformSignalSnapshot({
+      environmentPolicySignals: environmentPolicy.signals,
+      environmentPolicySignal: environmentPolicy.primarySignal,
+      releasePolicySignals: releasePolicy.signals,
+      releasePolicySignal: releasePolicy.primarySignal,
+      migrationPolicySignals: migrationPolicy.signals,
+      migrationPolicySignal: migrationPolicy.primarySignal,
+    }),
+    environmentPolicy,
+    migrationPolicy,
+    releasePolicy,
     runnerType,
     imageUrl,
     database: {

@@ -1,6 +1,7 @@
 import type {
   CreateRepoOptions,
   GitRepository,
+  GitReviewRequest,
   PushOptions,
   RegistryWebhookOptions,
   WebhookOptions,
@@ -31,6 +32,15 @@ export const githubAdapter = {
   ): Promise<GitRepository | null> {
     const provider = createProvider('github');
     return provider.getRepository(session.accessToken, fullName);
+  },
+
+  async getReviewRequest(
+    session: IntegrationSession,
+    repoFullName: string,
+    number: number
+  ): Promise<GitReviewRequest | null> {
+    const provider = createProvider('github');
+    return provider.getReviewRequest(session.accessToken, repoFullName, number);
   },
 
   async createRepository(

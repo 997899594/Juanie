@@ -282,9 +282,27 @@ export async function getReleaseById(releaseId: string) {
   return db.query.releases.findFirst({
     where: eq(releases.id, releaseId),
     with: {
-      project: true,
+      project: {
+        with: {
+          repository: true,
+        },
+      },
       environment: {
         with: {
+          baseEnvironment: {
+            columns: {
+              id: true,
+              name: true,
+            },
+          },
+          databases: {
+            columns: {
+              id: true,
+              name: true,
+              status: true,
+              sourceDatabaseId: true,
+            },
+          },
           domains: {
             with: {
               service: true,

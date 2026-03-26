@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projectInitSteps, projects, teamMembers } from '@/lib/db/schema';
+import { buildProjectInitOverview } from '@/lib/projects/init-view';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const session = await auth();
 
   if (!session?.user?.id) {
-    return new Response('Unauthorized', { status: 401 });
+    return new Response('未登录', { status: 401 });
   }
 
   const { id } = await params;
@@ -21,7 +22,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   });
 
   if (!project) {
-    return new Response('Project not found', { status: 404 });
+    return new Response('项目不存在', { status: 404 });
   }
 
   const member = await db.query.teamMembers.findFirst({
@@ -29,7 +30,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   });
 
   if (!member) {
-    return new Response('Forbidden', { status: 403 });
+    return new Response('无权限访问该项目', { status: 403 });
   }
 
   const stream = new ReadableStream({
@@ -38,34 +39,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
       const sendEvent = (data: object) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-      };
-
-      const stepWeights: Record<string, number> = {
-        validate_repository: 10,
-        create_repository: 10,
-        push_template: 15,
-        push_cicd_config: 15,
-        setup_namespace: 15,
-        deploy_services: 30,
-        provision_databases: 20,
-        configure_dns: 10,
-      };
-
-      const calculateProgress = (steps: (typeof projectInitSteps.$inferSelect)[]) => {
-        let completedWeight = 0;
-        let totalWeight = 0;
-
-        for (const step of steps) {
-          const weight = stepWeights[step.step] || 10;
-          totalWeight += weight;
-          if (step.status === 'completed') {
-            completedWeight += weight;
-          } else if (step.status === 'running') {
-            completedWeight += weight * ((step.progress ?? 0) / 100);
-          }
-        }
-
-        return totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0;
       };
 
       let isComplete = false;
@@ -78,47 +51,49 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
               where: eq(projectInitSteps.projectId, id),
               orderBy: (steps, { asc }) => [asc(steps.createdAt)],
             });
+            const overview = buildProjectInitOverview(
+              steps.map((step) => ({
+                id: step.id,
+                step: step.step,
+                status: step.status,
+                message: step.message,
+                progress: step.progress,
+                errorCode: step.errorCode,
+                error: step.error,
+              }))
+            );
 
-            if (steps.length === 0) {
+            if (overview.steps.length === 0) {
               sendEvent({
                 type: 'progress',
-                steps: [],
-                overallProgress: 0,
+                overview,
               });
               await new Promise((r) => setTimeout(r, 1000));
               continue;
             }
 
-            const overallProgress = calculateProgress(steps);
-
             sendEvent({
               type: 'progress',
-              steps: steps.map((s) => ({
-                id: s.id,
-                step: s.step,
-                status: s.status,
-                message: s.message,
-                progress: s.progress,
-                error: s.error,
-              })),
-              overallProgress,
+              overview,
             });
 
-            const allComplete = steps.every((s) => s.status === 'completed');
-            const anyFailed = steps.some((s) => s.status === 'failed');
-
-            if (anyFailed) {
-              const failedStep = steps.find((s) => s.status === 'failed');
+            if (overview.status === 'failed' && overview.recoveryAction?.kind !== 'wait') {
               sendEvent({
                 type: 'error',
-                message: failedStep?.error || 'Initialization failed',
+                message: overview.primarySummary,
+                overview,
               });
               hasError = true;
               controller.close();
               return;
             }
 
-            if (allComplete) {
+            if (overview.status === 'failed' && overview.recoveryAction?.kind === 'wait') {
+              await new Promise((r) => setTimeout(r, 1000));
+              continue;
+            }
+
+            if (overview.status === 'active') {
               await db
                 .update(projects)
                 .set({ status: 'active', updatedAt: new Date() })
@@ -126,7 +101,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
               sendEvent({
                 type: 'complete',
-                message: 'Project initialized successfully',
+                message: '项目初始化完成',
+                overview,
               });
               isComplete = true;
               controller.close();
@@ -138,7 +114,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             console.error('Poll error:', err);
             sendEvent({
               type: 'error',
-              message: 'Failed to fetch progress',
+              message: '读取初始化进度失败',
             });
             hasError = true;
             controller.close();

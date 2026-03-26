@@ -46,6 +46,8 @@ interface EnvVarManagerProps {
   projectId: string;
   environmentId: string; // 当前环境 ID
   environmentName: string;
+  canManage?: boolean;
+  disabledSummary?: string | null;
 }
 
 // ============================================
@@ -62,6 +64,8 @@ interface EnvVarDialogProps {
   projectId: string;
   environmentId: string;
   editTarget?: EnvVar; // 有值时为编辑模式
+  disabled?: boolean;
+  disabledSummary?: string | null;
   onSuccess: () => void;
   trigger: React.ReactNode;
 }
@@ -70,6 +74,8 @@ function EnvVarDialog({
   projectId,
   environmentId,
   editTarget,
+  disabled = false,
+  disabledSummary,
   onSuccess,
   trigger,
 }: EnvVarDialogProps) {
@@ -172,6 +178,7 @@ function EnvVarDialog({
               className="h-11 rounded-xl font-mono"
               autoComplete="off"
               autoFocus
+              disabled={disabled}
             />
           </div>
 
@@ -189,6 +196,7 @@ function EnvVarDialog({
                 onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
                 className="h-11 rounded-xl pr-9 font-mono"
                 autoComplete="off"
+                disabled={disabled}
               />
               {form.isSecret && (
                 <button
@@ -214,8 +222,13 @@ function EnvVarDialog({
             <Switch
               checked={form.isSecret}
               onCheckedChange={(checked) => setForm((f) => ({ ...f, isSecret: checked }))}
+              disabled={disabled}
             />
           </div>
+
+          {disabledSummary && (
+            <div className="text-sm text-muted-foreground">{disabledSummary}</div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -229,7 +242,7 @@ function EnvVarDialog({
             >
               取消
             </Button>
-            <Button type="submit" className="rounded-xl" disabled={saving}>
+            <Button type="submit" className="rounded-xl" disabled={saving || disabled}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? '更新' : '添加'}
             </Button>
@@ -248,11 +261,21 @@ interface EnvVarRowProps {
   envVar: EnvVar;
   projectId: string;
   environmentId: string;
+  canManage: boolean;
+  disabledSummary?: string | null;
   onUpdated: () => void;
   onDeleted: () => void;
 }
 
-function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: EnvVarRowProps) {
+function EnvVarRow({
+  envVar,
+  projectId,
+  environmentId,
+  canManage,
+  disabledSummary,
+  onUpdated,
+  onDeleted,
+}: EnvVarRowProps) {
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -300,9 +323,17 @@ function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: E
           projectId={projectId}
           environmentId={environmentId}
           editTarget={envVar}
+          disabled={!canManage}
+          disabledSummary={disabledSummary}
           onSuccess={onUpdated}
           trigger={
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-xl"
+              disabled={!canManage}
+              title={!canManage ? (disabledSummary ?? undefined) : undefined}
+            >
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           }
@@ -314,6 +345,8 @@ function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: E
               variant="ghost"
               size="icon"
               className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
+              disabled={!canManage}
+              title={!canManage ? (disabledSummary ?? undefined) : undefined}
             >
               {deleting ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -350,7 +383,13 @@ function EnvVarRow({ envVar, projectId, environmentId, onUpdated, onDeleted }: E
 // 主组件
 // ============================================
 
-export function EnvVarManager({ projectId, environmentId, environmentName }: EnvVarManagerProps) {
+export function EnvVarManager({
+  projectId,
+  environmentId,
+  environmentName,
+  canManage = true,
+  disabledSummary,
+}: EnvVarManagerProps) {
   const [vars, setVars] = useState<EnvVar[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -389,15 +428,27 @@ export function EnvVarManager({ projectId, environmentId, environmentName }: Env
         <EnvVarDialog
           projectId={projectId}
           environmentId={environmentId}
+          disabled={!canManage}
+          disabledSummary={disabledSummary}
           onSuccess={fetchVars}
           trigger={
-            <Button size="sm" variant="outline" className="rounded-xl">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl"
+              disabled={!canManage}
+              title={!canManage ? (disabledSummary ?? undefined) : undefined}
+            >
               <Plus className="h-4 w-4" />
               添加
             </Button>
           }
         />
       </div>
+
+      {!canManage && disabledSummary && (
+        <div className="text-xs text-muted-foreground">{disabledSummary}</div>
+      )}
 
       <div className="overflow-hidden rounded-[20px] border border-border bg-background">
         <div className="flex items-center gap-3 border-b border-border/70 bg-secondary/30 px-5 py-3">
@@ -425,9 +476,17 @@ export function EnvVarManager({ projectId, environmentId, environmentName }: Env
             <EnvVarDialog
               projectId={projectId}
               environmentId={environmentId}
+              disabled={!canManage}
+              disabledSummary={disabledSummary}
               onSuccess={fetchVars}
               trigger={
-                <Button size="sm" variant="outline" className="mt-1 rounded-xl">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-1 rounded-xl"
+                  disabled={!canManage}
+                  title={!canManage ? (disabledSummary ?? undefined) : undefined}
+                >
                   <Plus className="h-4 w-4" />
                   添加第一个变量
                 </Button>
@@ -442,6 +501,8 @@ export function EnvVarManager({ projectId, environmentId, environmentName }: Env
                 envVar={v}
                 projectId={projectId}
                 environmentId={environmentId}
+                canManage={canManage}
+                disabledSummary={disabledSummary}
                 onUpdated={fetchVars}
                 onDeleted={fetchVars}
               />

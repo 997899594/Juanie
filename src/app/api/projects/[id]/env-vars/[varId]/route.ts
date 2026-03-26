@@ -26,9 +26,9 @@ async function authorizeProjectAccess(projectId: string, userId: string) {
   const member = await db.query.teamMembers.findFirst({
     where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
   });
-  if (!member) return { error: 'Forbidden', status: 403 };
+  if (!member) return { error: 'Forbidden', status: 403, member: null };
 
-  return { error: null, status: 200 };
+  return { error: null, status: 200, member };
 }
 
 // ============================================
@@ -53,8 +53,11 @@ export async function PUT(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { error, status } = await authorizeProjectAccess(projectId, session.user.id);
+  const { error, status, member } = await authorizeProjectAccess(projectId, session.user.id);
   if (error) return NextResponse.json({ error }, { status });
+  if (!member || !['owner', 'admin'].includes(member.role)) {
+    return NextResponse.json({ error: '环境变量变更只允许 owner 或 admin' }, { status: 403 });
+  }
 
   const envVar = await db.query.environmentVariables.findFirst({
     where: and(eq(environmentVariables.id, varId), eq(environmentVariables.projectId, projectId)),
@@ -185,8 +188,11 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { error, status } = await authorizeProjectAccess(projectId, session.user.id);
+  const { error, status, member } = await authorizeProjectAccess(projectId, session.user.id);
   if (error) return NextResponse.json({ error }, { status });
+  if (!member || !['owner', 'admin'].includes(member.role)) {
+    return NextResponse.json({ error: '环境变量变更只允许 owner 或 admin' }, { status: 403 });
+  }
 
   const envVar = await db.query.environmentVariables.findFirst({
     where: and(eq(environmentVariables.id, varId), eq(environmentVariables.projectId, projectId)),

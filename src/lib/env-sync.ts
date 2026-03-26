@@ -12,10 +12,11 @@
  *   → 服务级（serviceId=X）
  */
 
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { decrypt, encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
-import { environmentVariables, environments } from '@/lib/db/schema';
+import { environments, environmentVariables } from '@/lib/db/schema';
+import { getEnvironmentLineage } from '@/lib/environments/inheritance';
 import { getIsConnected, upsertConfigMap, upsertSecret } from '@/lib/k8s';
 
 // Simple console logger fallback
@@ -69,20 +70,35 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
     return;
   }
 
-  // 查询项目级 + 当前环境级变量（不含服务级，服务级由部署时按 service 单独处理）
+  const lineage = await getEnvironmentLineage(environmentId);
+  const inheritedEnvironmentIds = lineage.map((item) => item.id);
+  const scopeOrder = new Map<string, number>(lineage.map((item, index) => [item.id, index]));
+
+  // 查询项目级 + 继承链环境级变量（不含服务级，服务级由部署时按 service 单独处理）
   const vars = await db.query.environmentVariables.findMany({
     where: and(
       eq(environmentVariables.projectId, projectId),
       or(
         // 项目级：无 environmentId 且无 serviceId
         and(isNull(environmentVariables.environmentId), isNull(environmentVariables.serviceId)),
-        // 环境级：匹配当前 environmentId 且无 serviceId
+        // 环境级：匹配当前环境或继承链环境，且无 serviceId
         and(
-          eq(environmentVariables.environmentId, environmentId),
+          inArray(environmentVariables.environmentId, inheritedEnvironmentIds),
           isNull(environmentVariables.serviceId)
         )
       )
     ),
+  });
+
+  vars.sort((left, right) => {
+    const leftScope = left.environmentId ? (scopeOrder.get(left.environmentId) ?? -1) : -1;
+    const rightScope = right.environmentId ? (scopeOrder.get(right.environmentId) ?? -1) : -1;
+
+    if (leftScope !== rightScope) {
+      return leftScope - rightScope;
+    }
+
+    return new Date(left.updatedAt).getTime() - new Date(right.updatedAt).getTime();
   });
 
   const secrets: Record<string, string> = {};
@@ -117,8 +133,11 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
           secrets[v.key] = v.value;
           logger.info('Migrated plaintext secret to encrypted form', { varId: v.id, key: v.key });
         } catch (e) {
-          logger.error('Failed to migrate plaintext secret', e instanceof Error ? e : new Error(String(e)), { varId: v.id, key: v.key });
-          continue;
+          logger.error(
+            'Failed to migrate plaintext secret',
+            e instanceof Error ? e : new Error(String(e)),
+            { varId: v.id, key: v.key }
+          );
         }
       } else {
         try {
@@ -192,10 +211,13 @@ export async function syncServiceEnvVarsToK8s(
     if (v.isSecret) {
       if (!v.encryptedValue || !v.iv || !v.authTag) {
         if (!v.value) {
-          logger.warn('Service-level secret variable has no value and no encryption fields, skipping', {
-            varId: v.id,
-            key: v.key,
-          });
+          logger.warn(
+            'Service-level secret variable has no value and no encryption fields, skipping',
+            {
+              varId: v.id,
+              key: v.key,
+            }
+          );
           continue;
         }
         try {
@@ -211,10 +233,16 @@ export async function syncServiceEnvVarsToK8s(
             })
             .where(eq(environmentVariables.id, v.id));
           secrets[v.key] = v.value;
-          logger.info('Migrated plaintext service secret to encrypted form', { varId: v.id, key: v.key });
+          logger.info('Migrated plaintext service secret to encrypted form', {
+            varId: v.id,
+            key: v.key,
+          });
         } catch (e) {
-          logger.error('Failed to migrate plaintext service secret', e instanceof Error ? e : new Error(String(e)), { varId: v.id, key: v.key });
-          continue;
+          logger.error(
+            'Failed to migrate plaintext service secret',
+            e instanceof Error ? e : new Error(String(e)),
+            { varId: v.id, key: v.key }
+          );
         }
       } else {
         try {

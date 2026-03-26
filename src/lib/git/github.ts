@@ -3,6 +3,7 @@ import type {
   GitProvider,
   GitProviderConfig,
   GitRepository,
+  GitReviewRequest,
   GitUser,
   PushOptions,
   RegistryWebhookOptions,
@@ -134,6 +135,42 @@ export class GitHubProvider implements GitProvider {
     }
 
     return this.mapRepository(await res.json());
+  }
+
+  async getReviewRequest(
+    accessToken: string,
+    repoFullName: string,
+    number: number
+  ): Promise<GitReviewRequest | null> {
+    const [owner, repo] = repoFullName.split('/');
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${number}`, {
+      headers: this.getHeaders(accessToken),
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = await res.json();
+    const state = this.mapReviewState({
+      draft: Boolean(data.draft),
+      state: typeof data.state === 'string' ? data.state : null,
+      mergedAt: typeof data.merged_at === 'string' ? data.merged_at : null,
+    });
+
+    return {
+      number,
+      kind: 'pull_request',
+      label: `PR #${number}`,
+      title: data.title as string,
+      state,
+      stateLabel: this.getReviewStateLabel(state),
+      authorName: ((data.user as { name?: string | null; login?: string | null } | undefined)
+        ?.name ??
+        (data.user as { login?: string | null } | undefined)?.login ??
+        null) as string | null,
+      webUrl: (data.html_url as string | null) ?? null,
+    };
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {
@@ -390,5 +427,40 @@ export class GitHubProvider implements GitProvider {
       defaultBranch: (data.default_branch as string) || 'main',
       isPrivate: data.private as boolean,
     };
+  }
+
+  private mapReviewState(input: {
+    draft: boolean;
+    state: string | null;
+    mergedAt: string | null;
+  }): GitReviewRequest['state'] {
+    if (input.mergedAt) {
+      return 'merged';
+    }
+    if (input.draft) {
+      return 'draft';
+    }
+    if (input.state === 'open') {
+      return 'open';
+    }
+    if (input.state === 'closed') {
+      return 'closed';
+    }
+    return 'unknown';
+  }
+
+  private getReviewStateLabel(state: GitReviewRequest['state']): string {
+    switch (state) {
+      case 'open':
+        return '进行中';
+      case 'closed':
+        return '已关闭';
+      case 'merged':
+        return '已合并';
+      case 'draft':
+        return '草稿';
+      default:
+        return '未知';
+    }
   }
 }

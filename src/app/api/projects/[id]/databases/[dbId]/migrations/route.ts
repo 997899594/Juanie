@@ -52,6 +52,23 @@ function buildResolvedSpec(
   };
 }
 
+function pickResolvedSpecForDatabase(
+  databaseId: string,
+  environmentId: string,
+  syncedSpecs: ResolvedMigrationSpec[]
+): ResolvedMigrationSpec | null {
+  const candidates = syncedSpecs.filter(
+    (item) => item.database.id === databaseId && item.environment.id === environmentId
+  );
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const serviceScoped = candidates.find((item) => item.database.serviceId === item.service.id);
+  return serviceScoped ?? candidates[0] ?? null;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; dbId: string }> }
@@ -94,20 +111,29 @@ export async function POST(
   }
 
   const syncedSpecs = await syncMigrationSpecificationsFromRepo(projectId, database.environmentId);
+  const syncedSpec = pickResolvedSpecForDatabase(dbId, database.environmentId, syncedSpecs);
 
-  const specification = await db.query.migrationSpecifications.findFirst({
-    where: and(
-      eq(migrationSpecifications.projectId, projectId),
-      eq(migrationSpecifications.databaseId, dbId),
-      eq(migrationSpecifications.environmentId, database.environmentId)
-    ),
-    with: {
-      service: true,
-      environment: true,
-    },
-  });
+  const persistedSpecification = syncedSpec
+    ? null
+    : await db.query.migrationSpecifications.findFirst({
+        where: and(
+          eq(migrationSpecifications.projectId, projectId),
+          eq(migrationSpecifications.databaseId, dbId),
+          eq(migrationSpecifications.environmentId, database.environmentId)
+        ),
+        with: {
+          service: true,
+          environment: true,
+        },
+      });
 
-  if (!specification) {
+  const resolvedSpec = syncedSpec
+    ? syncedSpec
+    : persistedSpecification
+      ? buildResolvedSpec(persistedSpecification, database, syncedSpecs)
+      : null;
+
+  if (!resolvedSpec) {
     return NextResponse.json({ error: '没有找到迁移配置' }, { status: 404 });
   }
 
@@ -120,16 +146,13 @@ export async function POST(
     } = await request.json().catch(() => ({}));
     const expectedConfirmationValue = getExpectedConfirmationValue(
       database.name,
-      specification.environment.name
+      resolvedSpec.environment.name
     );
 
     if (action === 'plan') {
-      const plan = await buildMigrationExecutionPlan(
-        buildResolvedSpec(specification, database, syncedSpecs),
-        {
-          imageUrl: imageUrl ?? null,
-        }
-      );
+      const plan = await buildMigrationExecutionPlan(resolvedSpec, {
+        imageUrl: imageUrl ?? null,
+      });
 
       return NextResponse.json(plan);
     }
@@ -188,16 +211,13 @@ export async function POST(
         return NextResponse.json({ error: '只有失败或已取消的迁移才能重试' }, { status: 400 });
       }
 
-      const retryRun = await createMigrationRun(
-        buildResolvedSpec(specification, database, syncedSpecs),
-        {
-          triggeredBy: 'manual',
-          triggeredByUserId: session.user.id,
-          sourceCommitSha: previousRun.sourceCommitSha,
-          sourceCommitMessage: previousRun.sourceCommitMessage,
-          runnerType: imageUrl ? 'k8s_job' : 'worker',
-        }
-      );
+      const retryRun = await createMigrationRun(resolvedSpec, {
+        triggeredBy: 'manual',
+        triggeredByUserId: session.user.id,
+        sourceCommitSha: previousRun.sourceCommitSha,
+        sourceCommitMessage: previousRun.sourceCommitMessage,
+        runnerType: imageUrl ? 'k8s_job' : 'worker',
+      });
 
       await addMigrationJob(retryRun.id, {
         imageUrl: imageUrl ?? null,
@@ -222,7 +242,7 @@ export async function POST(
       );
     }
 
-    const run = await createMigrationRun(buildResolvedSpec(specification, database, syncedSpecs), {
+    const run = await createMigrationRun(resolvedSpec, {
       triggeredBy: 'manual',
       triggeredByUserId: session.user.id,
       runnerType: imageUrl ? 'k8s_job' : 'worker',

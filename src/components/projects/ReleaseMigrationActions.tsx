@@ -4,12 +4,15 @@ import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { executeMigrationRunAction } from '@/lib/releases/client-actions';
 
 interface ReleaseMigrationActionsProps {
   projectId: string;
   runId: string;
   status: string;
   imageUrl?: string | null;
+  disabled?: boolean;
+  disabledSummary?: string | null;
 }
 
 export function ReleaseMigrationActions({
@@ -17,32 +20,29 @@ export function ReleaseMigrationActions({
   runId,
   status,
   imageUrl,
+  disabled = false,
+  disabledSummary,
 }: ReleaseMigrationActionsProps) {
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<'approve' | 'retry' | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const canApprove = status === 'awaiting_approval';
   const canRetry = status === 'failed' || status === 'canceled';
 
   const handleAction = async (action: 'approve' | 'retry') => {
     setPendingAction(action);
+    setError(null);
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/migration-runs/${runId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action,
-          imageUrl: imageUrl ?? null,
-        }),
+      await executeMigrationRunAction({
+        projectId,
+        runId,
+        action,
+        imageUrl,
       });
-
-      if (!response.ok) {
-        return;
-      }
-
       router.refresh();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : '操作失败');
     } finally {
       setPendingAction(null);
     }
@@ -53,33 +53,43 @@ export function ReleaseMigrationActions({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      {canApprove && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 rounded-xl px-3 text-xs"
-          onClick={() => handleAction('approve')}
-          disabled={pendingAction !== null}
-        >
-          {pendingAction === 'approve' ? (
-            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-          ) : null}
-          Approve
-        </Button>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        {canApprove && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-xl px-3 text-xs"
+            onClick={() => handleAction('approve')}
+            disabled={pendingAction !== null || disabled}
+            title={disabled ? (disabledSummary ?? undefined) : undefined}
+          >
+            {pendingAction === 'approve' ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : null}
+            Approve
+          </Button>
+        )}
+        {canRetry && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-xl px-3 text-xs"
+            onClick={() => handleAction('retry')}
+            disabled={pendingAction !== null || disabled}
+            title={disabled ? (disabledSummary ?? undefined) : undefined}
+          >
+            {pendingAction === 'retry' ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : null}
+            Retry
+          </Button>
+        )}
+      </div>
+      {disabled && disabledSummary && (
+        <div className="text-xs text-muted-foreground">{disabledSummary}</div>
       )}
-      {canRetry && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 rounded-xl px-3 text-xs"
-          onClick={() => handleAction('retry')}
-          disabled={pendingAction !== null}
-        >
-          {pendingAction === 'retry' ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-          Retry
-        </Button>
-      )}
+      {error && <div className="text-xs text-destructive">{error}</div>}
     </div>
   );
 }

@@ -69,7 +69,17 @@ export async function addProjectInitJob(
   mode: 'import' | 'create',
   template?: string
 ) {
-  return getProjectInitQueue().add('init', { projectId, mode, template });
+  return getProjectInitQueue().add(
+    'init',
+    { projectId, mode, template },
+    {
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 5000,
+      },
+    }
+  );
 }
 
 export async function addDeploymentJob(

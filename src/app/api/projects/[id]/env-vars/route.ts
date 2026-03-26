@@ -38,7 +38,7 @@ async function authorizeProjectAccess(projectId: string, userId: string) {
     return { error: 'Forbidden', status: 403, project: null };
   }
 
-  return { error: null, status: 200, project };
+  return { error: null, status: 200, project, member };
 }
 
 // ============================================
@@ -122,8 +122,11 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { error, status } = await authorizeProjectAccess(projectId, session.user.id);
+  const { error, status, member } = await authorizeProjectAccess(projectId, session.user.id);
   if (error) return NextResponse.json({ error }, { status });
+  if (!member || !['owner', 'admin'].includes(member.role)) {
+    return NextResponse.json({ error: '环境变量变更只允许 owner 或 admin' }, { status: 403 });
+  }
 
   let body: z.infer<typeof createEnvVarSchema>;
   try {

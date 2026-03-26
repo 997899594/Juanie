@@ -1,15 +1,22 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, releases, services } from '@/lib/db/schema';
+import {
+  getEnvironmentDatabaseStrategyLabel,
+  getEnvironmentInheritancePresentation,
+} from '@/lib/environments/presentation';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
 import {
   type EnvironmentPolicySnapshot,
   evaluateEnvironmentPolicy,
   evaluateMigrationPolicy,
   evaluateReleasePolicy,
+  type MigrationPolicySignalSnapshot,
   type ReleasePolicySnapshot,
 } from '@/lib/policies/delivery';
 import type { ReleaseServiceInput } from '@/lib/releases';
+import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
+import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 interface PlanningServiceLike {
   id: string;
@@ -31,23 +38,101 @@ interface PlanningMigrationSpecLike {
   };
 }
 
+interface PlanningEnvironmentLike {
+  id?: string;
+  isProduction?: boolean | null;
+  isPreview?: boolean | null;
+  databaseStrategy?: 'direct' | 'inherit' | 'isolated_clone' | null;
+  baseEnvironment?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
 export interface ReleasePlanningSnapshot {
   canCreate: boolean;
   blockingReason: string | null;
   services: PlanningServiceLike[];
   environmentPolicy: EnvironmentPolicySnapshot;
   releasePolicy: ReleasePolicySnapshot;
+  issue: ReleaseIssueSnapshot | null;
+  platformSignals: PlatformSignalSnapshot;
   migration: {
     preDeployCount: number;
     postDeployCount: number;
     warnings: string[];
+    signals: MigrationPolicySignalSnapshot[];
+    primarySignal: MigrationPolicySignalSnapshot | null;
     requiresApproval: boolean;
   };
+  environmentInheritance: string | null;
+  environmentDatabaseStrategy: string | null;
   summary: string | null;
+}
+
+function buildStaticPlanningSnapshot(input: {
+  canCreate: boolean;
+  blockingReason: string | null;
+  environment: PlanningEnvironmentLike;
+  summary?: string | null;
+}): ReleasePlanningSnapshot {
+  const environmentPolicy = evaluateEnvironmentPolicy(input.environment);
+  const releasePolicy = evaluateReleasePolicy({
+    environment: input.environment,
+    migrationRuns: [],
+  });
+
+  const environmentInheritance = getEnvironmentInheritancePresentation(input.environment);
+  const environmentDatabaseStrategy = getEnvironmentDatabaseStrategyLabel(
+    input.environment.databaseStrategy
+  );
+
+  return {
+    canCreate: input.canCreate,
+    blockingReason: input.blockingReason,
+    services: [],
+    environmentPolicy,
+    releasePolicy,
+    issue: null,
+    platformSignals: buildPlatformSignalSnapshot({
+      environmentPolicySignals: environmentPolicy.signals,
+      environmentPolicySignal: environmentPolicy.primarySignal,
+      releasePolicySignals: releasePolicy.signals,
+      releasePolicySignal: releasePolicy.primarySignal,
+    }),
+    migration: {
+      preDeployCount: 0,
+      postDeployCount: 0,
+      warnings: [],
+      signals: [],
+      primarySignal: null,
+      requiresApproval: false,
+    },
+    environmentInheritance: environmentInheritance?.label ?? null,
+    environmentDatabaseStrategy,
+    summary: input.summary ?? environmentPolicy.summary ?? environmentInheritance?.summary ?? null,
+  };
 }
 
 function dedupe(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function dedupeMigrationSignals(
+  signals: MigrationPolicySignalSnapshot[]
+): MigrationPolicySignalSnapshot[] {
+  const seen = new Set<string>();
+  const result: MigrationPolicySignalSnapshot[] = [];
+
+  for (const signal of signals) {
+    if (seen.has(signal.code)) {
+      continue;
+    }
+    seen.add(signal.code);
+    result.push(signal);
+  }
+
+  return result;
 }
 
 function resolvePlanningServices(
@@ -90,24 +175,22 @@ function resolvePlanningServices(
 }
 
 export function summarizeReleasePlan(input: {
-  environment: {
-    isProduction?: boolean | null;
-    isPreview?: boolean | null;
-  };
+  environment: PlanningEnvironmentLike;
   services: PlanningServiceLike[];
   migrationSpecs: PlanningMigrationSpecLike[];
 }): ReleasePlanningSnapshot {
   const autoRunSpecs = input.migrationSpecs.filter((spec) => spec.specification.autoRun);
   const preDeploySpecs = autoRunSpecs.filter((spec) => spec.specification.phase === 'preDeploy');
   const postDeploySpecs = autoRunSpecs.filter((spec) => spec.specification.phase === 'postDeploy');
-  const warnings = dedupe(
-    autoRunSpecs.flatMap(
-      (spec) =>
-        evaluateMigrationPolicy({
-          environment: spec.environment,
-          specification: spec.specification,
-        }).warnings
-    )
+  const migrationDecisions = autoRunSpecs.map((spec) =>
+    evaluateMigrationPolicy({
+      environment: spec.environment,
+      specification: spec.specification,
+    })
+  );
+  const warnings = dedupe(migrationDecisions.flatMap((decision) => decision.warnings));
+  const migrationSignals = dedupeMigrationSignals(
+    migrationDecisions.flatMap((decision) => decision.signals)
   );
   const environmentPolicy = evaluateEnvironmentPolicy(input.environment);
   const releasePolicy = evaluateReleasePolicy({
@@ -116,7 +199,30 @@ export function summarizeReleasePlan(input: {
       specification: spec.specification,
     })),
   });
+  const issue = releasePolicy.requiresApproval ? buildIssueSnapshot('approval_blocked') : null;
   const totalAutoRun = preDeploySpecs.length + postDeploySpecs.length;
+  const environmentInheritance = getEnvironmentInheritancePresentation(input.environment);
+  const environmentDatabaseStrategy = getEnvironmentDatabaseStrategyLabel(
+    input.environment.databaseStrategy
+  );
+  const platformSignals = buildPlatformSignalSnapshot({
+    customSignals: environmentInheritance
+      ? [
+          {
+            key: environmentInheritance.key,
+            label: environmentInheritance.label,
+            tone: 'neutral',
+          },
+        ]
+      : null,
+    issue,
+    environmentPolicySignals: environmentPolicy.signals,
+    environmentPolicySignal: environmentPolicy.primarySignal,
+    releasePolicySignals: releasePolicy.signals,
+    releasePolicySignal: releasePolicy.primarySignal,
+    migrationPolicySignals: migrationSignals,
+    migrationPolicySignal: migrationSignals[0] ?? null,
+  });
 
   return {
     canCreate: true,
@@ -124,15 +230,22 @@ export function summarizeReleasePlan(input: {
     services: input.services,
     environmentPolicy,
     releasePolicy,
+    issue,
+    platformSignals,
     migration: {
       preDeployCount: preDeploySpecs.length,
       postDeployCount: postDeploySpecs.length,
       warnings,
+      signals: migrationSignals,
+      primarySignal: migrationSignals[0] ?? null,
       requiresApproval: releasePolicy.requiresApproval,
     },
+    environmentInheritance: environmentInheritance?.label ?? null,
+    environmentDatabaseStrategy,
     summary:
       releasePolicy.summary ??
       environmentPolicy.summary ??
+      environmentInheritance?.summary ??
       (totalAutoRun > 0 ? `包含 ${totalAutoRun} 项自动迁移` : null),
   };
 }
@@ -157,6 +270,14 @@ export async function buildProjectReleasePlan(input: {
 
   const environment = await db.query.environments.findFirst({
     where: eq(environments.id, input.environmentId),
+    with: {
+      baseEnvironment: {
+        columns: {
+          id: true,
+          name: true,
+        },
+      },
+    },
   });
 
   if (!environment || environment.projectId !== project.id) {
@@ -213,46 +334,23 @@ export async function buildPromotionPlan(projectId: string): Promise<{
   if (!prodEnv) {
     return {
       sourceRelease: null,
-      plan: {
+      plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'No production environment found',
-        services: [],
-        environmentPolicy: evaluateEnvironmentPolicy({ isProduction: false }),
-        releasePolicy: evaluateReleasePolicy({
-          environment: { isProduction: false },
-          migrationRuns: [],
-        }),
-        migration: {
-          preDeployCount: 0,
-          postDeployCount: 0,
-          warnings: [],
-          requiresApproval: false,
-        },
+        environment: { isProduction: false },
         summary: null,
-      },
+      }),
     };
   }
 
   if (!stagingEnv) {
     return {
       sourceRelease: null,
-      plan: {
+      plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'No staging environment found',
-        services: [],
-        environmentPolicy: evaluateEnvironmentPolicy(prodEnv),
-        releasePolicy: evaluateReleasePolicy({
-          environment: prodEnv,
-          migrationRuns: [],
-        }),
-        migration: {
-          preDeployCount: 0,
-          postDeployCount: 0,
-          warnings: [],
-          requiresApproval: false,
-        },
-        summary: evaluateEnvironmentPolicy(prodEnv).summary,
-      },
+        environment: prodEnv,
+      }),
     };
   }
 
@@ -275,23 +373,11 @@ export async function buildPromotionPlan(projectId: string): Promise<{
   if (!sourceRelease || sourceRelease.artifacts.length === 0) {
     return {
       sourceRelease: null,
-      plan: {
+      plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'No successful staging release found to promote',
-        services: [],
-        environmentPolicy: evaluateEnvironmentPolicy(prodEnv),
-        releasePolicy: evaluateReleasePolicy({
-          environment: prodEnv,
-          migrationRuns: [],
-        }),
-        migration: {
-          preDeployCount: 0,
-          postDeployCount: 0,
-          warnings: [],
-          requiresApproval: false,
-        },
-        summary: evaluateEnvironmentPolicy(prodEnv).summary,
-      },
+        environment: prodEnv,
+      }),
     };
   }
 
@@ -348,23 +434,12 @@ export async function buildRollbackPlan(input: {
   if (!targetDeployment || targetDeployment.projectId !== input.projectId) {
     return {
       sourceDeployment: null,
-      plan: {
+      plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'Deployment not found',
-        services: [],
-        environmentPolicy: evaluateEnvironmentPolicy({ isProduction: false }),
-        releasePolicy: evaluateReleasePolicy({
-          environment: { isProduction: false },
-          migrationRuns: [],
-        }),
-        migration: {
-          preDeployCount: 0,
-          postDeployCount: 0,
-          warnings: [],
-          requiresApproval: false,
-        },
+        environment: { isProduction: false },
         summary: null,
-      },
+      }),
     };
   }
 
@@ -375,46 +450,23 @@ export async function buildRollbackPlan(input: {
   if (!environment || environment.projectId !== input.projectId) {
     return {
       sourceDeployment: null,
-      plan: {
+      plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'Environment not found',
-        services: [],
-        environmentPolicy: evaluateEnvironmentPolicy({ isProduction: false }),
-        releasePolicy: evaluateReleasePolicy({
-          environment: { isProduction: false },
-          migrationRuns: [],
-        }),
-        migration: {
-          preDeployCount: 0,
-          postDeployCount: 0,
-          warnings: [],
-          requiresApproval: false,
-        },
+        environment: { isProduction: false },
         summary: null,
-      },
+      }),
     };
   }
 
   if (!targetDeployment.imageUrl) {
     return {
       sourceDeployment: null,
-      plan: {
+      plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'Deployment has no image URL — cannot roll back to this version',
-        services: [],
-        environmentPolicy: evaluateEnvironmentPolicy(environment),
-        releasePolicy: evaluateReleasePolicy({
-          environment,
-          migrationRuns: [],
-        }),
-        migration: {
-          preDeployCount: 0,
-          postDeployCount: 0,
-          warnings: [],
-          requiresApproval: false,
-        },
-        summary: evaluateEnvironmentPolicy(environment).summary,
-      },
+        environment,
+      }),
     };
   }
 

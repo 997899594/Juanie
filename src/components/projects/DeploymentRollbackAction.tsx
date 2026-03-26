@@ -3,7 +3,6 @@
 import { RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,39 +13,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-
-interface RollbackPlanResponse {
-  sourceDeployment: {
-    id: string;
-    imageUrl: string;
-    commitSha: string | null;
-    environmentId: string;
-    serviceId: string | null;
-    branch: string | null;
-  } | null;
-  plan: {
-    canCreate: boolean;
-    blockingReason: string | null;
-    summary: string | null;
-    releasePolicy: {
-      requiresApproval: boolean;
-    };
-    migration: {
-      preDeployCount: number;
-      postDeployCount: number;
-      warnings: string[];
-    };
-  };
-}
+import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import {
+  createRollbackRelease,
+  fetchRollbackPlan,
+  type RollbackPlanResponse,
+} from '@/lib/releases/client-actions';
+import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 
 interface DeploymentRollbackActionProps {
   projectId: string;
   deploymentId: string;
+  disabled?: boolean;
+  disabledSummary?: string | null;
 }
 
 export function DeploymentRollbackAction({
   projectId,
   deploymentId,
+  disabled = false,
+  disabledSummary,
 }: DeploymentRollbackActionProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -54,6 +40,13 @@ export function DeploymentRollbackAction({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<RollbackPlanResponse | null>(null);
+  const planningPanel = plan
+    ? buildReleasePlanningPanel({
+        plan: plan.plan,
+        sourceCommitSha: plan.sourceDeployment?.commitSha,
+        sourceImageUrl: plan.sourceDeployment?.imageUrl,
+      })
+    : null;
 
   useEffect(() => {
     if (!open) return;
@@ -62,12 +55,8 @@ export function DeploymentRollbackAction({
     setLoadingPlan(true);
     setError(null);
 
-    fetch(`/api/projects/${projectId}/deployments/${deploymentId}/rollback`)
-      .then(async (response) => {
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(data?.error || '加载回滚预检失败');
-        }
+    fetchRollbackPlan({ projectId, deploymentId })
+      .then((data) => {
         if (!cancelled) {
           setPlan(data);
         }
@@ -93,17 +82,7 @@ export function DeploymentRollbackAction({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/projects/${projectId}/deployments/${deploymentId}/rollback`,
-        {
-          method: 'POST',
-        }
-      );
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(data?.error || '创建回滚发布失败');
-      }
+      const data = await createRollbackRelease({ projectId, deploymentId });
 
       setOpen(false);
       if (data?.releaseId) {
@@ -120,7 +99,13 @@ export function DeploymentRollbackAction({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 rounded-xl px-3">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 rounded-xl px-3"
+          disabled={disabled}
+          title={disabled ? (disabledSummary ?? undefined) : undefined}
+        >
           <RotateCcw className="h-3.5 w-3.5" />
           回滚
         </Button>
@@ -134,59 +119,37 @@ export function DeploymentRollbackAction({
         </DialogHeader>
 
         <div className="space-y-4">
+          {disabledSummary && (
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+              {disabledSummary}
+            </div>
+          )}
           {loadingPlan ? (
             <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
               正在加载回滚预检...
             </div>
-          ) : plan ? (
+          ) : planningPanel ? (
             <>
-              <div className="flex flex-wrap gap-2 text-xs">
-                {plan.plan.summary && (
-                  <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                    {plan.plan.summary}
-                  </span>
-                )}
-                {plan.plan.releasePolicy.requiresApproval && (
-                  <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                    需要审批
-                  </span>
-                )}
-                {plan.plan.migration.preDeployCount > 0 && (
-                  <Badge variant="outline">前置迁移 {plan.plan.migration.preDeployCount} 项</Badge>
-                )}
-                {plan.plan.migration.postDeployCount > 0 && (
-                  <Badge variant="outline">后置迁移 {plan.plan.migration.postDeployCount} 项</Badge>
-                )}
-                {plan.sourceDeployment?.commitSha && (
-                  <Badge variant="outline">
-                    来源 {plan.sourceDeployment.commitSha.slice(0, 7)}
-                  </Badge>
-                )}
-              </div>
+              <PlatformSignalChipList chips={planningPanel.chips} />
+              <PlatformSignalSummary
+                summary={planningPanel.issueSummary}
+                nextActionLabel={planningPanel.nextActionLabel}
+              />
 
-              {plan.sourceDeployment?.imageUrl && (
+              {planningPanel.sourceImageUrl && (
                 <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-xs text-muted-foreground">
-                  {plan.sourceDeployment.imageUrl}
+                  {planningPanel.sourceImageUrl}
                 </div>
               )}
 
-              {plan.plan.blockingReason && (
+              {planningPanel.blockingReason && (
                 <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
-                  {plan.plan.blockingReason}
+                  {planningPanel.blockingReason}
                 </div>
               )}
 
-              {!plan.plan.blockingReason && plan.plan.migration.warnings.length > 0 && (
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {plan.plan.migration.warnings.map((warning) => (
-                    <span
-                      key={warning}
-                      className="rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-foreground"
-                    >
-                      {warning}
-                    </span>
-                  ))}
-                </div>
+              {!planningPanel.blockingReason && planningPanel.warningChips.length > 0 && (
+                <PlatformSignalChipList chips={planningPanel.warningChips} />
               )}
             </>
           ) : null}
@@ -204,9 +167,7 @@ export function DeploymentRollbackAction({
           </Button>
           <Button
             onClick={handleRollback}
-            disabled={
-              submitting || loadingPlan || !plan?.plan.canCreate || !!plan?.plan.blockingReason
-            }
+            disabled={submitting || loadingPlan || !planningPanel?.canSubmit}
           >
             {submitting ? '创建中...' : '确认回滚'}
           </Button>

@@ -7,6 +7,7 @@ export type ReleaseIssueCode =
   | 'preview_expired'
   | 'degraded'
   | 'release_failed';
+export type ReleaseIssueKind = 'approval' | 'migration' | 'deployment' | 'environment' | 'release';
 
 interface ReleaseLike {
   status: string;
@@ -36,12 +37,38 @@ export interface MigrationAttentionLike {
   } | null;
 }
 
+export interface DatabaseManualControlInput {
+  latestMigration?: {
+    status: string;
+    releaseId?: string | null;
+  } | null;
+  hasLatestRelease: boolean;
+  hasLatestImage: boolean;
+  planBlockingReason?: string | null;
+}
+
+export interface DatabaseManualControlSnapshot {
+  issueCode: ReleaseIssueCode | null;
+  issueLabel: string | null;
+  actionLabel: string | null;
+  reason: string;
+}
+
+export interface ReleaseIssueSnapshot {
+  code: ReleaseIssueCode;
+  kind: ReleaseIssueKind;
+  label: string;
+  summary: string;
+  nextActionLabel: string;
+}
+
 export interface ReleaseIntelligenceSnapshot {
   riskLevel: ReleaseRiskLevel;
   reasons: string[];
   failureSummary: string | null;
   issueCode: ReleaseIssueCode | null;
   actionLabel: string | null;
+  issue: ReleaseIssueSnapshot | null;
 }
 
 function uniqueReasons(reasons: string[]): string[] {
@@ -210,6 +237,142 @@ export function getReleaseActionLabel(issueCode: ReleaseIssueCode | null): strin
   }
 }
 
+export function getIssueKind(issueCode: ReleaseIssueCode | null): ReleaseIssueKind | null {
+  switch (issueCode) {
+    case 'approval_blocked':
+      return 'approval';
+    case 'migration_failed':
+    case 'migration_canceled':
+      return 'migration';
+    case 'deployment_failed':
+      return 'deployment';
+    case 'preview_expired':
+      return 'environment';
+    case 'degraded':
+    case 'release_failed':
+      return 'release';
+    default:
+      return null;
+  }
+}
+
+export function getIssueSummary(issueCode: ReleaseIssueCode | null): string | null {
+  switch (issueCode) {
+    case 'approval_blocked':
+      return '发布被待审批迁移阻塞';
+    case 'migration_failed':
+      return '发布被失败迁移阻塞';
+    case 'migration_canceled':
+      return '发布被取消迁移中断';
+    case 'deployment_failed':
+      return '发布被失败部署中断';
+    case 'preview_expired':
+      return '预览环境已经过期';
+    case 'degraded':
+      return '发布已完成但处于降级状态';
+    case 'release_failed':
+      return '发布流程执行失败';
+    default:
+      return null;
+  }
+}
+
+export function buildIssueSnapshot(
+  issueCode: ReleaseIssueCode | null
+): ReleaseIssueSnapshot | null {
+  if (!issueCode) {
+    return null;
+  }
+
+  const kind = getIssueKind(issueCode);
+  const label = getIssueLabel(issueCode);
+  const summary = getIssueSummary(issueCode);
+  const nextActionLabel = getReleaseActionLabel(issueCode);
+
+  if (!kind || !label || !summary || !nextActionLabel) {
+    return null;
+  }
+
+  return {
+    code: issueCode,
+    kind,
+    label,
+    summary,
+    nextActionLabel,
+  };
+}
+
+export function getDatabaseManualControlSnapshot(
+  input: DatabaseManualControlInput
+): DatabaseManualControlSnapshot {
+  const issueCode = input.latestMigration
+    ? getMigrationAttentionIssueCode({ status: input.latestMigration.status })
+    : null;
+
+  if (input.latestMigration?.status === 'failed') {
+    return {
+      issueCode,
+      issueLabel: getIssueLabel(issueCode),
+      actionLabel: input.latestMigration.releaseId ? '去 release 重试' : '人工重试',
+      reason: '最近一次迁移失败，这里适合人工重试和排障。',
+    };
+  }
+
+  if (input.latestMigration?.status === 'awaiting_approval') {
+    return {
+      issueCode,
+      issueLabel: getIssueLabel(issueCode),
+      actionLabel: input.latestMigration.releaseId ? '去 release 审批' : '人工审批',
+      reason: input.latestMigration.releaseId
+        ? '最近一次迁移正在等待审批；常规处理应回到关联 release。'
+        : '最近一次迁移正在等待审批；这里只适合应急人工执行。',
+    };
+  }
+
+  if (input.latestMigration?.status === 'canceled') {
+    return {
+      issueCode,
+      issueLabel: getIssueLabel(issueCode),
+      actionLabel: input.latestMigration.releaseId ? '去 release 重试' : '人工重试',
+      reason: '最近一次迁移已取消，这里适合重新确认后再人工执行。',
+    };
+  }
+
+  if (input.planBlockingReason) {
+    return {
+      issueCode: null,
+      issueLabel: null,
+      actionLabel: null,
+      reason: '当前计划存在阻断条件，手动入口仅用于查看原因和后续介入。',
+    };
+  }
+
+  if (!input.hasLatestImage) {
+    return {
+      issueCode: null,
+      issueLabel: null,
+      actionLabel: input.hasLatestRelease ? '补齐镜像来源' : '先创建 release',
+      reason: '命令式迁移依赖最近一次可用 release 镜像；当前没有可用镜像。',
+    };
+  }
+
+  if (input.hasLatestRelease) {
+    return {
+      issueCode: null,
+      issueLabel: null,
+      actionLabel: '优先走 release',
+      reason: '常规迁移应跟随 release 执行；这里用于人工介入、重试和紧急处理。',
+    };
+  }
+
+  return {
+    issueCode: null,
+    issueLabel: null,
+    actionLabel: '手动执行',
+    reason: '当前没有关联 release，手动迁移会直接走控制面队列。',
+  };
+}
+
 export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseIntelligenceSnapshot {
   const reasons: string[] = [];
   let riskLevel: ReleaseRiskLevel = 'low';
@@ -289,12 +452,14 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   }
 
   const issueCode = getReleaseIssueCode(release);
+  const issue = buildIssueSnapshot(issueCode);
 
   return {
     riskLevel,
     reasons: uniqueReasons(reasons),
     failureSummary: getReleaseFailureSummary(release),
     issueCode,
-    actionLabel: getReleaseActionLabel(issueCode),
+    actionLabel: issue?.nextActionLabel ?? null,
+    issue,
   };
 }

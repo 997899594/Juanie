@@ -10,12 +10,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   const team = await db.query.teams.findFirst({ where: eq(teams.id, id) });
   if (!team) {
-    return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    return NextResponse.json({ error: '没有找到团队' }, { status: 404 });
   }
 
   const member = await db.query.teamMembers.findFirst({
@@ -23,7 +23,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
 
   if (!member || !['owner', 'admin'].includes(member.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: '当前角色不能查看邀请链接' }, { status: 403 });
   }
 
   const now = new Date();
@@ -39,12 +39,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   const team = await db.query.teams.findFirst({ where: eq(teams.id, id) });
   if (!team) {
-    return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    return NextResponse.json({ error: '没有找到团队' }, { status: 404 });
   }
 
   const member = await db.query.teamMembers.findFirst({
@@ -52,14 +52,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
 
   if (!member || !['owner', 'admin'].includes(member.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: '当前角色不能生成邀请链接' }, { status: 403 });
   }
 
   const { role = 'member' } = await request.json();
 
   const validRoles = ['admin', 'member'];
   if (!validRoles.includes(role)) {
-    return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    return NextResponse.json({ error: '角色无效' }, { status: 400 });
   }
 
   const token = randomUUID();

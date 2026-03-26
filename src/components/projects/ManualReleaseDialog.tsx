@@ -3,7 +3,6 @@
 import { Rocket } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,6 +14,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { createManualRelease, fetchManualReleasePlan } from '@/lib/releases/client-actions';
+import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 
 interface ManualReleaseEnvironment {
@@ -50,13 +52,55 @@ interface ManualReleasePlan {
   canCreate: boolean;
   blockingReason: string | null;
   summary: string | null;
+  issue: {
+    code: string;
+    kind: 'approval' | 'migration' | 'deployment' | 'environment' | 'release';
+    label: string;
+    summary: string;
+    nextActionLabel: string;
+  } | null;
+  platformSignals: {
+    chips: Array<{
+      key: string;
+      label: string;
+      tone: 'danger' | 'neutral';
+    }>;
+    primarySummary: string | null;
+    nextActionLabel: string | null;
+  };
   releasePolicy: {
     requiresApproval: boolean;
+    primarySignal: {
+      code: string;
+      kind: 'environment' | 'release';
+      level: 'protected' | 'preview' | 'approval_required' | 'progressive';
+      label: string;
+      summary: string;
+      nextActionLabel: string | null;
+    } | null;
+  };
+  environmentPolicy: {
+    primarySignal: {
+      code: string;
+      kind: 'environment' | 'release';
+      level: 'protected' | 'preview' | 'approval_required' | 'progressive';
+      label: string;
+      summary: string;
+      nextActionLabel: string | null;
+    } | null;
   };
   migration: {
     preDeployCount: number;
     postDeployCount: number;
     warnings: string[];
+    primarySignal: {
+      code: string;
+      kind: 'migration';
+      level: 'warning' | 'approval_required';
+      label: string;
+      summary: string;
+      nextActionLabel: string | null;
+    } | null;
   };
 }
 
@@ -64,6 +108,7 @@ interface ManualReleaseDialogProps {
   projectId: string;
   environments: ManualReleaseEnvironment[];
   releases: ManualReleaseSource[];
+  disabledSummary?: string | null;
   onCreated?: () => Promise<void> | void;
 }
 
@@ -71,6 +116,7 @@ export function ManualReleaseDialog({
   projectId,
   environments,
   releases,
+  disabledSummary,
   onCreated,
 }: ManualReleaseDialogProps) {
   const router = useRouter();
@@ -120,30 +166,20 @@ export function ManualReleaseDialog({
     setLoadingPlan(true);
     setError(null);
 
-    fetch(`/api/projects/${projectId}/deployments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        dryRun: true,
-        environmentId,
-        ref: sourceRelease.sourceRef,
-        commitSha: sourceRelease.sourceCommitSha,
-        commitMessage: summary || sourceRelease.summary || null,
-        services: sourceRelease.artifacts.map((artifact) => ({
-          id: artifact.service.id,
-          name: artifact.service.name,
-          image: artifact.imageUrl,
-          digest: artifact.imageDigest ?? null,
-        })),
-      }),
+    fetchManualReleasePlan({
+      projectId,
+      environmentId,
+      sourceRef: sourceRelease.sourceRef,
+      sourceCommitSha: sourceRelease.sourceCommitSha,
+      summary: summary || sourceRelease.summary || null,
+      services: sourceRelease.artifacts.map((artifact) => ({
+        id: artifact.service.id,
+        name: artifact.service.name,
+        image: artifact.imageUrl,
+        digest: artifact.imageDigest ?? null,
+      })),
     })
-      .then(async (response) => {
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(data?.error || '加载发布预检失败');
-        }
+      .then((data) => {
         if (!cancelled) {
           setPlan(data?.plan ?? null);
         }
@@ -165,37 +201,36 @@ export function ManualReleaseDialog({
     };
   }, [environmentId, open, projectId, sourceReleaseId, successfulSources, summary]);
 
+  const selectedSourceRelease =
+    successfulSources.find((release) => release.id === sourceReleaseId) ?? null;
+  const planningPanel = plan
+    ? buildReleasePlanningPanel({
+        plan,
+        sourceCommitSha: selectedSourceRelease?.sourceCommitSha,
+      })
+    : null;
+
   const handleCreate = async () => {
-    const sourceRelease = successfulSources.find((release) => release.id === sourceReleaseId);
+    const sourceRelease = selectedSourceRelease;
     if (!sourceRelease) return;
 
     setSubmitting(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/deployments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          environmentId,
-          ref: sourceRelease.sourceRef,
-          commitSha: sourceRelease.sourceCommitSha,
-          commitMessage: summary || sourceRelease.summary || null,
+      const data = await createManualRelease({
+        environmentId,
+        projectId,
+        sourceRef: sourceRelease.sourceRef,
+        sourceCommitSha: sourceRelease.sourceCommitSha,
+        summary: summary || sourceRelease.summary || null,
         services: sourceRelease.artifacts.map((artifact) => ({
-            id: artifact.service.id,
-            name: artifact.service.name,
-            image: artifact.imageUrl,
-            digest: artifact.imageDigest ?? null,
-          })),
-        }),
+          id: artifact.service.id,
+          name: artifact.service.name,
+          image: artifact.imageUrl,
+          digest: artifact.imageDigest ?? null,
+        })),
       });
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(data?.error || '创建手动发布失败');
-      }
 
       setOpen(false);
       await onCreated?.();
@@ -213,7 +248,13 @@ export function ManualReleaseDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 rounded-xl px-4">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 rounded-xl px-4"
+          disabled={environments.length === 0}
+          title={environments.length === 0 ? (disabledSummary ?? undefined) : undefined}
+        >
           <Rocket className="h-3.5 w-3.5" />
           手动发布
         </Button>
@@ -225,6 +266,11 @@ export function ManualReleaseDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {disabledSummary && environments.length > 0 && (
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+              {disabledSummary}
+            </div>
+          )}
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>目标环境</Label>
@@ -272,44 +318,22 @@ export function ManualReleaseDialog({
             <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
               正在加载发布预检...
             </div>
-          ) : plan ? (
+          ) : planningPanel ? (
             <div className="space-y-3">
-              <div className="flex flex-wrap gap-2 text-xs">
-                {plan.summary && (
-                  <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                    {plan.summary}
-                  </span>
-                )}
-                {plan.releasePolicy.requiresApproval && (
-                  <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                    需要审批
-                  </span>
-                )}
-                {plan.migration.preDeployCount > 0 && (
-                  <Badge variant="outline">前置迁移 {plan.migration.preDeployCount} 项</Badge>
-                )}
-                {plan.migration.postDeployCount > 0 && (
-                  <Badge variant="outline">后置迁移 {plan.migration.postDeployCount} 项</Badge>
-                )}
-              </div>
+              <PlatformSignalChipList chips={planningPanel.chips} />
+              <PlatformSignalSummary
+                summary={planningPanel.issueSummary}
+                nextActionLabel={planningPanel.nextActionLabel}
+              />
 
-              {plan.blockingReason && (
+              {planningPanel.blockingReason && (
                 <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
-                  {plan.blockingReason}
+                  {planningPanel.blockingReason}
                 </div>
               )}
 
-              {!plan.blockingReason && plan.migration.warnings.length > 0 && (
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {plan.migration.warnings.map((warning) => (
-                    <span
-                      key={warning}
-                      className="rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-foreground"
-                    >
-                      {warning}
-                    </span>
-                  ))}
-                </div>
+              {!planningPanel.blockingReason && planningPanel.warningChips.length > 0 && (
+                <PlatformSignalChipList chips={planningPanel.warningChips} />
               )}
             </div>
           ) : null}
@@ -330,8 +354,7 @@ export function ManualReleaseDialog({
             disabled={
               submitting ||
               loadingPlan ||
-              !plan?.canCreate ||
-              !!plan?.blockingReason ||
+              !planningPanel?.canSubmit ||
               !environmentId ||
               !sourceReleaseId
             }

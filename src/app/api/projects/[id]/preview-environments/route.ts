@@ -20,6 +20,7 @@ async function authorizeProject(projectId: string, userId: string) {
 
   return {
     project,
+    member,
     forbidden: !member,
   };
 }
@@ -56,7 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
-  const { project, forbidden } = await authorizeProject(id, session.user.id);
+  const { project, member, forbidden } = await authorizeProject(id, session.user.id);
 
   if (!project) {
     return NextResponse.json(
@@ -74,17 +75,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : null;
   const ttlHours =
     typeof body.ttlHours === 'number' && Number.isFinite(body.ttlHours) ? body.ttlHours : 72;
+  const databaseStrategy =
+    body.databaseStrategy === 'isolated_clone' ? 'isolated_clone' : 'inherit';
 
   if (!branch && !prNumber) {
     return NextResponse.json({ error: '预览环境需要分支或 PR 号' }, { status: 400 });
   }
+  if (
+    databaseStrategy === 'isolated_clone' &&
+    (!member || !['owner', 'admin'].includes(member.role))
+  ) {
+    return NextResponse.json({ error: '独立预览库只允许 owner 或 admin 创建' }, { status: 403 });
+  }
   const ref = prNumber ? `refs/pull/${prNumber}/merge` : `refs/heads/${branch}`;
-  const environment = await ensurePreviewEnvironmentForRef({
-    projectId: id,
-    projectSlug: project.slug,
-    ref,
-    ttlHours,
-  });
+  try {
+    const environment = await ensurePreviewEnvironmentForRef({
+      projectId: id,
+      projectSlug: project.slug,
+      ref,
+      ttlHours,
+      databaseStrategy,
+    });
 
-  return NextResponse.json(environment, { status: environment ? 201 : 200 });
+    return NextResponse.json(environment, { status: environment ? 201 : 200 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : '创建预览环境失败' },
+      { status: 400 }
+    );
+  }
 }

@@ -1,9 +1,9 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { projects, releases, teamMembers } from '@/lib/db/schema';
-import { decorateReleaseList } from '@/lib/releases/view';
+import { projects, teamMembers } from '@/lib/db/schema';
+import { getProjectReleaseListData } from '@/lib/releases/service';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,38 +29,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const releaseList = await db.query.releases.findMany({
-    where: eq(releases.projectId, id),
-    orderBy: [desc(releases.createdAt)],
-    with: {
-      environment: {
-        with: {
-          domains: {
-            with: {
-              service: true,
-            },
-          },
-        },
-      },
-      artifacts: {
-        with: {
-          service: true,
-        },
-      },
-      deployments: {
-        with: {
-          service: true,
-        },
-      },
-      migrationRuns: {
-        with: {
-          service: true,
-          database: true,
-          specification: true,
-        },
-      },
-    },
-  });
-
-  return NextResponse.json(decorateReleaseList(releaseList));
+  return NextResponse.json(await getProjectReleaseListData(id));
 }

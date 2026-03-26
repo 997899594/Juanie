@@ -26,7 +26,8 @@ export async function processMigration(job: Job<MigrationJobData>) {
     {
       serviceIds: [run.serviceId],
       sourceRef: run.release?.sourceRef ?? null,
-      sourceCommitSha: run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
+      sourceCommitSha:
+        run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
     }
   );
   const spec = specs.find((candidate) => candidate.specification.id === run.specificationId);
@@ -48,7 +49,8 @@ export async function processMigration(job: Job<MigrationJobData>) {
     imageUrl: job.data.imageUrl,
     allowApprovalBypass: job.data.allowApprovalBypass,
     sourceRef: run.release?.sourceRef ?? null,
-    sourceCommitSha: run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
+    sourceCommitSha:
+      run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
   });
 
   return { success: true };

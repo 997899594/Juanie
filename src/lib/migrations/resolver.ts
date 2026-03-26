@@ -9,6 +9,7 @@ import {
   repositories,
   services,
 } from '@/lib/db/schema';
+import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -185,9 +186,7 @@ export async function syncMigrationSpecificationsFromRepo(
     db.query.environments.findFirst({ where: eq(environments.id, environmentId) }),
     db.query.repositories.findFirst({ where: eq(repositories.id, project.repositoryId) }),
     db.query.services.findMany({ where: eq(services.projectId, projectId) }),
-    db.query.databases.findMany({
-      where: and(eq(databases.projectId, projectId), eq(databases.environmentId, environmentId)),
-    }),
+    getDatabasesForEnvironment({ projectId, environmentId }),
   ]);
 
   if (!environment || !repository) {

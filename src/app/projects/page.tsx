@@ -1,12 +1,11 @@
-import { desc, eq, inArray } from 'drizzle-orm';
 import { FolderKanban, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { projects, repositories, teamMembers, teams } from '@/lib/db/schema';
+import { getProjectsListPageData } from '@/lib/projects/list-service';
 
 export default async function ProjectsPage() {
   const session = await auth();
@@ -15,40 +14,13 @@ export default async function ProjectsPage() {
     redirect('/login');
   }
 
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, session.user.id),
-    with: {
-      team: true,
-    },
-  });
-
-  const teamIds = userTeams.map((tm) => tm.teamId);
-
-  const userProjects =
-    teamIds.length > 0
-      ? await db
-          .select({
-            project: projects,
-            teamName: teams.name,
-            repoFullName: repositories.fullName,
-          })
-          .from(projects)
-          .innerJoin(teams, eq(teams.id, projects.teamId))
-          .leftJoin(repositories, eq(repositories.id, projects.repositoryId))
-          .where(inArray(projects.teamId, teamIds))
-          .orderBy(desc(projects.createdAt))
-      : [];
-
-  const stats = [
-    { label: '项目', value: userProjects.length },
-    { label: '团队', value: userTeams.length },
-  ];
+  const { headerDescription, stats, projectCards } = await getProjectsListPageData(session.user.id);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title="项目"
-        description={`${userProjects.length} 个项目`}
+        description={headerDescription}
         actions={
           <Button asChild className="h-9 rounded-xl px-4">
             <Link href="/projects/new">
@@ -70,7 +42,7 @@ export default async function ProjectsPage() {
         ))}
       </div>
 
-      {userProjects.length === 0 ? (
+      {projectCards.length === 0 ? (
         <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
           <div className="mb-4 rounded-2xl bg-muted p-4">
             <FolderKanban className="h-8 w-8 text-muted-foreground" />
@@ -86,10 +58,10 @@ export default async function ProjectsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {userProjects.map((item) => (
+          {projectCards.map((project) => (
             <Link
-              key={item.project.id}
-              href={`/projects/${item.project.id}`}
+              key={project.id}
+              href={`/projects/${project.id}`}
               className="console-panel flex items-center justify-between px-5 py-4 transition-colors hover:bg-secondary/30"
             >
               <div className="flex min-w-0 items-center gap-4">
@@ -97,37 +69,37 @@ export default async function ProjectsPage() {
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{item.project.name}</div>
+                  <div className="truncate text-sm font-semibold">{project.name}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>{item.teamName}</span>
-                    {item.repoFullName && (
+                    <span>{project.teamName}</span>
+                    {project.repositoryLabel && (
                       <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
-                        {item.repoFullName}
+                        {project.repositoryLabel}
                       </code>
                     )}
+                  </div>
+                  <PlatformSignalChipList chips={project.governanceSignals} className="mt-2" />
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {project.governanceSummary}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
                 <div
                   className={`h-2 w-2 rounded-full ${
-                    item.project.status === 'active'
+                    project.status === 'active'
                       ? 'bg-success'
-                      : item.project.status === 'initializing'
+                      : project.status === 'initializing'
                         ? 'bg-warning'
-                        : item.project.status === 'failed'
+                        : project.status === 'failed'
                           ? 'bg-destructive'
                           : 'bg-muted-foreground'
                   }`}
                 />
                 <span className="text-xs capitalize text-muted-foreground">
-                  {item.project.status}
+                  {project.statusLabel}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {item.project.createdAt
-                    ? new Date(item.project.createdAt).toLocaleDateString()
-                    : '—'}
-                </span>
+                <span className="text-xs text-muted-foreground">{project.createdAtLabel}</span>
               </div>
             </Link>
           ))}

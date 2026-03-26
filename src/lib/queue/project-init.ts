@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Job, Worker } from 'bullmq';
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import postgres from 'postgres';
 import { encrypt } from '@/lib/crypto';
@@ -19,6 +19,7 @@ import {
   teams,
 } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
+import { buildPreviewNamespace } from '@/lib/environments/preview';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
   gateway,
@@ -157,6 +158,29 @@ const CREATE_STEPS = [
 ] as const;
 
 type StepName = (typeof IMPORT_STEPS)[number] | (typeof CREATE_STEPS)[number];
+type ProjectInitErrorCode =
+  | 'repository_missing'
+  | 'repository_access_denied'
+  | 'repository_create_denied'
+  | 'repository_create_failed'
+  | 'template_push_failed'
+  | 'cicd_config_push_failed'
+  | 'registry_webhook_failed'
+  | 'k8s_namespace_failed'
+  | 'database_provision_failed'
+  | 'service_deploy_failed'
+  | 'dns_config_failed'
+  | 'init_step_failed';
+
+function isAutoRetryableProjectInitError(code: ProjectInitErrorCode): boolean {
+  return (
+    code === 'k8s_namespace_failed' ||
+    code === 'database_provision_failed' ||
+    code === 'service_deploy_failed' ||
+    code === 'dns_config_failed' ||
+    code === 'init_step_failed'
+  );
+}
 
 // ============================================
 // Helper Functions
@@ -166,19 +190,54 @@ async function updateStepStatus(
   projectId: string,
   step: StepName,
   status: 'running' | 'completed' | 'failed' | 'skipped',
-  data?: { message?: string; progress?: number; error?: string }
+  data?: { message?: string; progress?: number; error?: string; errorCode?: ProjectInitErrorCode }
 ) {
   await db
     .update(projectInitSteps)
     .set({
       status,
-      message: data?.message,
+      message:
+        status === 'running' || status === 'completed' || status === 'skipped'
+          ? (data?.message ?? null)
+          : data?.message,
       progress: data?.progress,
-      error: data?.error,
+      errorCode:
+        status === 'running' || status === 'completed' || status === 'skipped'
+          ? null
+          : data?.errorCode,
+      error:
+        status === 'running' || status === 'completed' || status === 'skipped' ? null : data?.error,
       startedAt: status === 'running' ? new Date() : undefined,
       completedAt: status === 'completed' || status === 'skipped' ? new Date() : undefined,
     })
     .where(and(eq(projectInitSteps.projectId, projectId), eq(projectInitSteps.step, step)));
+}
+
+function classifyProjectInitError(step: StepName, error: unknown): ProjectInitErrorCode {
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+
+  if (step === 'validate_repository') {
+    if (message.includes('no repository linked')) return 'repository_missing';
+    if (message.includes('no access to repository')) return 'repository_access_denied';
+  }
+
+  if (step === 'create_repository') {
+    if (message.includes('write_repo') || message.includes('permission')) {
+      return 'repository_create_denied';
+    }
+    return 'repository_create_failed';
+  }
+
+  if (step === 'push_template') return 'template_push_failed';
+  if (step === 'push_cicd_config') return 'cicd_config_push_failed';
+  if (step === 'setup_registry_webhook') return 'registry_webhook_failed';
+  if (step === 'setup_namespace') return 'k8s_namespace_failed';
+  if (step === 'provision_databases') return 'database_provision_failed';
+  if (step === 'deploy_services') return 'service_deploy_failed';
+  if (step === 'configure_dns') return 'dns_config_failed';
+
+  return 'init_step_failed';
 }
 
 export async function processProjectInit(job: Job<ProjectInitJobData>) {
@@ -195,12 +254,23 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
     throw new Error(`Project ${projectId} not found`);
   }
 
+  await db
+    .update(projects)
+    .set({ status: 'initializing', updatedAt: new Date() })
+    .where(eq(projects.id, projectId));
+
   const hasK8s = isK8sAvailable();
   const steps = mode === 'import' ? IMPORT_STEPS : CREATE_STEPS;
+  const currentAttempt = job.attemptsMade + 1;
+  const totalAttempts =
+    typeof job.opts.attempts === 'number' && job.opts.attempts > 0 ? job.opts.attempts : 1;
 
   for (const step of steps) {
     try {
-      await updateStepStatus(projectId, step, 'running', { progress: 0 });
+      await updateStepStatus(projectId, step, 'running', {
+        progress: 0,
+        message: currentAttempt > 1 ? `平台正在自动重试（第 ${currentAttempt} 次尝试）` : undefined,
+      });
 
       switch (step) {
         case 'validate_repository':
@@ -270,7 +340,26 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      await updateStepStatus(projectId, step, 'failed', { error: message });
+      const errorCode = classifyProjectInitError(step, error);
+      const autoRetryPending =
+        isAutoRetryableProjectInitError(errorCode) && currentAttempt < totalAttempts;
+      await updateStepStatus(projectId, step, 'failed', {
+        error: message,
+        errorCode,
+        message: autoRetryPending
+          ? `平台将在稍后自动重试（下一次为第 ${currentAttempt + 1} 次尝试）`
+          : currentAttempt > 1
+            ? `平台已执行 ${currentAttempt} 次尝试，后续需要人工处理`
+            : undefined,
+      });
+      await db
+        .update(projects)
+        .set({ status: 'failed', updatedAt: new Date() })
+        .where(eq(projects.id, projectId));
+
+      if (!autoRetryPending) {
+        job.discard();
+      }
       throw error;
     }
   }
@@ -1310,13 +1399,42 @@ export async function provisionDatabase(
     return;
   }
 
-  const namespace = `juanie-${project.slug}`;
+  const environment = database.environmentId
+    ? await db.query.environments.findFirst({
+        where: eq(environments.id, database.environmentId),
+        columns: {
+          id: true,
+          name: true,
+          namespace: true,
+          isPreview: true,
+          isProduction: true,
+        },
+      })
+    : null;
+  const namespace =
+    environment?.namespace ??
+    (environment?.isPreview
+      ? buildPreviewNamespace(project.slug, environment.name)
+      : environment?.isProduction
+        ? `juanie-${project.slug}-prod`
+        : `juanie-${project.slug}`);
   const dbPassword = nanoid(32);
-  const resourceName = `${project.slug}-${database.name}`;
+  const resourceName = [
+    project.slug,
+    environment?.isPreview ? environment.name : environment?.isProduction ? 'prod' : null,
+    database.name,
+  ]
+    .filter(Boolean)
+    .join('-')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 63);
   const secretName = `${resourceName}-creds`;
 
   console.log(`Provisioning standalone database ${database.name} for project ${project.name}`);
 
+  await createNamespace(namespace);
   await createSecret(namespace, secretName, { password: dbPassword });
 
   if (database.type === 'postgresql') {
@@ -1380,8 +1498,31 @@ async function provisionSharedPostgreSQL(
   const adminUrl = process.env.DATABASE_URL;
   if (!adminUrl) throw new Error('DATABASE_URL not set; cannot provision shared PostgreSQL');
 
-  const dbIdentifier =
-    `juanie_${sanitizePgName(project.slug)}_${sanitizePgName(database.name)}`.slice(0, 63);
+  const environment = database.environmentId
+    ? await db.query.environments.findFirst({
+        where: eq(environments.id, database.environmentId),
+        columns: {
+          id: true,
+          name: true,
+          isPreview: true,
+          isProduction: true,
+        },
+      })
+    : null;
+  const environmentSegment = environment?.isPreview
+    ? sanitizePgName(environment.name)
+    : environment?.isProduction
+      ? 'prod'
+      : null;
+  const dbIdentifier = [
+    'juanie',
+    sanitizePgName(project.slug),
+    environmentSegment,
+    sanitizePgName(database.name),
+  ]
+    .filter(Boolean)
+    .join('_')
+    .slice(0, 63);
   const dbPassword = nanoid(32); // URL-safe chars: A-Za-z0-9_- — safe in SQL string literals
 
   const adminConn = postgres(adminUrl, { max: 1 });
@@ -1817,6 +1958,48 @@ export async function injectDatabaseEnvVars(
   console.log(
     `✅ Injected ${Object.keys(vars).length} env vars for database ${database.name} [${scope}]: ${Object.keys(vars).join(', ')}`
   );
+}
+
+const DATABASE_ENV_KEYS = [
+  'DATABASE_URL',
+  'POSTGRES_HOST',
+  'POSTGRES_PORT',
+  'POSTGRES_USER',
+  'POSTGRES_PASSWORD',
+  'POSTGRES_DB',
+  'REDIS_URL',
+  'REDIS_HOST',
+  'REDIS_PORT',
+  'REDIS_PASSWORD',
+  'REDIS_DB',
+  'MYSQL_URL',
+  'MYSQL_HOST',
+  'MYSQL_PORT',
+  'MYSQL_USER',
+  'MYSQL_PASSWORD',
+  'MYSQL_DATABASE',
+  'MONGODB_URL',
+  'MONGODB_HOST',
+  'MONGODB_PORT',
+  'MONGODB_USER',
+  'MONGODB_PASSWORD',
+  'MONGODB_DATABASE',
+] as const;
+
+export async function removeInjectedDatabaseEnvVars(
+  projectId: string,
+  environmentId: string
+): Promise<void> {
+  await db
+    .delete(environmentVariables)
+    .where(
+      and(
+        eq(environmentVariables.projectId, projectId),
+        eq(environmentVariables.environmentId, environmentId),
+        isNull(environmentVariables.serviceId),
+        inArray(environmentVariables.key, [...DATABASE_ENV_KEYS])
+      )
+    );
 }
 
 export function createProjectInitWorker() {

@@ -3,11 +3,13 @@ import { db } from '@/lib/db';
 import {
   deploymentLogs,
   deployments,
+  domains,
   environments,
   projects,
   repositories,
   services,
 } from '@/lib/db/schema';
+import { buildDomainRouteName } from '@/lib/domains/defaults';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import {
   getK8sConfigMapName,
@@ -20,12 +22,140 @@ import {
 import { ensureEnvironmentScaffold } from '@/lib/environments/service';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import {
+  createCiliumHTTPRoute,
   createDeployment,
+  createService,
+  deleteCiliumHTTPRoute,
+  deleteDeployment,
+  deleteService,
+  deploymentExists,
   ensureGhcrPullSecret,
   GHCR_PULL_SECRET_NAME,
   getIsConnected,
   updateDeployment,
 } from '@/lib/k8s';
+
+function buildServiceResourceName(projectSlug: string, serviceName: string): string {
+  return `${projectSlug}-${serviceName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+}
+
+function buildCandidateResourceName(baseName: string): string {
+  return `${baseName}-candidate`.slice(0, 63);
+}
+
+function isProgressiveStrategy(
+  strategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null
+): strategy is 'controlled' | 'canary' | 'blue_green' {
+  return strategy === 'controlled' || strategy === 'canary' || strategy === 'blue_green';
+}
+
+function buildTrafficBackends(input: {
+  strategy: 'controlled' | 'canary' | 'blue_green';
+  stableExists: boolean;
+  stableName: string;
+  candidateName: string;
+  servicePort: number;
+}) {
+  if (!input.stableExists) {
+    return [
+      {
+        serviceName: input.candidateName,
+        servicePort: input.servicePort,
+        weight: 100,
+      },
+    ];
+  }
+
+  if (input.strategy === 'canary') {
+    return [
+      {
+        serviceName: input.stableName,
+        servicePort: input.servicePort,
+        weight: 90,
+      },
+      {
+        serviceName: input.candidateName,
+        servicePort: input.servicePort,
+        weight: 10,
+      },
+    ];
+  }
+
+  if (input.strategy === 'blue_green') {
+    return [
+      {
+        serviceName: input.candidateName,
+        servicePort: input.servicePort,
+        weight: 100,
+      },
+    ];
+  }
+
+  return [
+    {
+      serviceName: input.stableName,
+      servicePort: input.servicePort,
+      weight: 100,
+    },
+  ];
+}
+
+async function syncServiceTrafficRoutes(input: {
+  projectId: string;
+  projectSlug: string;
+  environmentId: string;
+  namespace: string;
+  service: {
+    id: string;
+    name: string;
+    type: string;
+    isPublic?: boolean | null;
+    port?: number | null;
+  };
+  backends: Array<{
+    serviceName: string;
+    servicePort: number;
+    weight?: number;
+  }>;
+}) {
+  if (input.service.type !== 'web' || input.service.isPublic === false) {
+    return;
+  }
+
+  const domainList = await db.query.domains.findMany({
+    where: eq(domains.environmentId, input.environmentId),
+  });
+
+  const serviceDomains = domainList.filter(
+    (domain) => domain.serviceId === input.service.id || domain.serviceId === null
+  );
+
+  for (const domain of serviceDomains) {
+    const routeName = buildDomainRouteName(domain.hostname);
+    const routeSpec = {
+      name: routeName,
+      namespace: input.namespace,
+      gatewayName: 'shared-gateway',
+      gatewayNamespace: 'juanie',
+      sectionName: 'https-wildcard',
+      hostnames: [domain.hostname],
+      serviceName:
+        input.backends[0]?.serviceName ??
+        buildServiceResourceName(input.projectSlug, input.service.name),
+      servicePort: input.backends[0]?.servicePort ?? input.service.port ?? 80,
+      backendRefs: input.backends,
+      path: '/',
+    };
+
+    await deleteCiliumHTTPRoute(input.namespace, routeName).catch(() => undefined);
+    await createCiliumHTTPRoute(routeSpec);
+  }
+}
+
+async function cleanupCandidateResources(namespace: string, candidateName: string) {
+  await deleteDeployment(namespace, candidateName).catch(() => undefined);
+  await deleteService(namespace, candidateName).catch(() => undefined);
+}
 
 export async function logDeployment(
   deploymentId: string,
@@ -106,6 +236,7 @@ export async function executeDeploymentWorkload(
     where: eq(environments.id, environment.id),
   });
   const targetEnvironment = freshEnvironment ?? environment;
+  const deploymentStrategy = targetEnvironment.deploymentStrategy ?? 'rolling';
 
   await ensureEnvironmentDomains({
     project: {
@@ -181,16 +312,73 @@ export async function executeDeploymentWorkload(
       ...(svcEnv.hasSecrets ? [{ secretRef: { name: getK8sSvcSecretName(service.id) } }] : []),
     ];
 
-    const deploymentName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+    const stableName = buildServiceResourceName(project.slug, service.name);
+    const candidateName = buildCandidateResourceName(stableName);
+
+    if (!isProgressiveStrategy(deploymentStrategy)) {
+      try {
+        await updateDeployment(targetEnvironment.namespace, stableName, {
+          image: imageName,
+          envFrom,
+        });
+        await logDeployment(deploymentId, `Updated ${stableName} → ${imageName}`);
+      } catch (_updateError) {
+        await logDeployment(deploymentId, `${stableName} not found, creating new deployment`);
+        await createDeployment(targetEnvironment.namespace, stableName, {
+          image: imageName,
+          port: service.port ?? 3000,
+          replicas: service.replicas ?? 1,
+          envFrom,
+          imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+          cpuRequest: service.cpuRequest ?? undefined,
+          cpuLimit: service.cpuLimit ?? undefined,
+          memoryRequest: service.memoryRequest ?? undefined,
+          memoryLimit: service.memoryLimit ?? undefined,
+        });
+        await logDeployment(deploymentId, `Created ${stableName} → ${imageName}`);
+      }
+
+      await cleanupCandidateResources(targetEnvironment.namespace, candidateName);
+      await syncServiceTrafficRoutes({
+        projectId: project.id,
+        projectSlug: project.slug,
+        environmentId: targetEnvironment.id,
+        namespace: targetEnvironment.namespace,
+        service,
+        backends: [
+          {
+            serviceName: stableName,
+            servicePort: service.port ?? 80,
+            weight: 100,
+          },
+        ],
+      });
+      continue;
+    }
+
+    const stableExists = await deploymentExists(targetEnvironment.namespace, stableName);
+
     try {
-      await updateDeployment(targetEnvironment.namespace, deploymentName, {
+      await createService(targetEnvironment.namespace, candidateName, {
+        port: service.port ?? 3000,
+        targetPort: service.port ?? 3000,
+      });
+    } catch (_serviceError) {
+      // Service already exists or will be recreated by the next route sync.
+    }
+
+    try {
+      await updateDeployment(targetEnvironment.namespace, candidateName, {
         image: imageName,
         envFrom,
       });
-      await logDeployment(deploymentId, `Updated ${deploymentName} → ${imageName}`);
+      await logDeployment(deploymentId, `Updated ${candidateName} → ${imageName}`);
     } catch (_updateError) {
-      await logDeployment(deploymentId, `${deploymentName} not found, creating new deployment`);
-      await createDeployment(targetEnvironment.namespace, deploymentName, {
+      await logDeployment(
+        deploymentId,
+        `${candidateName} not found, creating candidate deployment`
+      );
+      await createDeployment(targetEnvironment.namespace, candidateName, {
         image: imageName,
         port: service.port ?? 3000,
         replicas: service.replicas ?? 1,
@@ -201,8 +389,32 @@ export async function executeDeploymentWorkload(
         memoryRequest: service.memoryRequest ?? undefined,
         memoryLimit: service.memoryLimit ?? undefined,
       });
-      await logDeployment(deploymentId, `Created ${deploymentName} → ${imageName}`);
+      await logDeployment(deploymentId, `Created ${candidateName} → ${imageName}`);
     }
+
+    const backends = buildTrafficBackends({
+      strategy: deploymentStrategy,
+      stableExists,
+      stableName,
+      candidateName,
+      servicePort: service.port ?? 80,
+    });
+
+    await syncServiceTrafficRoutes({
+      projectId: project.id,
+      projectSlug: project.slug,
+      environmentId: targetEnvironment.id,
+      namespace: targetEnvironment.namespace,
+      service,
+      backends,
+    });
+
+    await logDeployment(
+      deploymentId,
+      `Applied ${deploymentStrategy} route for ${service.name}: ${backends
+        .map((backend) => `${backend.serviceName}:${backend.weight ?? 100}%`)
+        .join(', ')}`
+    );
   }
 
   await progress?.(80);

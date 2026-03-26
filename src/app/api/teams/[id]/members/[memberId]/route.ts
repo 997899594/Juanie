@@ -12,7 +12,7 @@ export async function PATCH(
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   const currentMember = await db.query.teamMembers.findFirst({
@@ -20,13 +20,13 @@ export async function PATCH(
   });
 
   if (!currentMember || currentMember.role !== 'owner') {
-    return NextResponse.json({ error: 'Only owner can change member roles' }, { status: 403 });
+    return NextResponse.json({ error: '只有 owner 可以调整成员角色' }, { status: 403 });
   }
 
   const { role } = await request.json();
 
-  if (!role || !['admin', 'member', 'viewer'].includes(role)) {
-    return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+  if (!role || !['admin', 'member'].includes(role)) {
+    return NextResponse.json({ error: '角色无效' }, { status: 400 });
   }
 
   const targetMember = await db.query.teamMembers.findFirst({
@@ -34,11 +34,11 @@ export async function PATCH(
   });
 
   if (!targetMember || targetMember.teamId !== id) {
-    return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+    return NextResponse.json({ error: '没有找到这个成员' }, { status: 404 });
   }
 
   if (targetMember.role === 'owner') {
-    return NextResponse.json({ error: 'Cannot change owner role' }, { status: 400 });
+    return NextResponse.json({ error: '不能修改 owner 的角色' }, { status: 400 });
   }
 
   const [updated] = await db
@@ -58,7 +58,7 @@ export async function DELETE(
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   const currentMember = await db.query.teamMembers.findFirst({
@@ -66,7 +66,7 @@ export async function DELETE(
   });
 
   if (!currentMember || !['owner', 'admin'].includes(currentMember.role)) {
-    return NextResponse.json({ error: 'Only owner/admin can remove members' }, { status: 403 });
+    return NextResponse.json({ error: '只有 owner 或 admin 可以移除成员' }, { status: 403 });
   }
 
   const targetMember = await db.query.teamMembers.findFirst({
@@ -74,15 +74,15 @@ export async function DELETE(
   });
 
   if (!targetMember || targetMember.teamId !== id) {
-    return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+    return NextResponse.json({ error: '没有找到这个成员' }, { status: 404 });
   }
 
   if (targetMember.role === 'owner') {
-    return NextResponse.json({ error: 'Cannot remove owner' }, { status: 400 });
+    return NextResponse.json({ error: '不能移除 owner' }, { status: 400 });
   }
 
   if (targetMember.userId === session.user.id && currentMember.role !== 'owner') {
-    return NextResponse.json({ error: 'Cannot remove yourself' }, { status: 400 });
+    return NextResponse.json({ error: 'admin 不能移除自己' }, { status: 400 });
   }
 
   await db.delete(teamMembers).where(eq(teamMembers.id, memberId));

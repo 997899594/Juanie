@@ -1,0 +1,321 @@
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { deploymentLogs, deployments, environments, projects, services } from '@/lib/db/schema';
+import {
+  createDeployment,
+  createService,
+  deleteDeployment,
+  deleteService,
+  deploymentExists,
+  getDeploymentSnapshot,
+  getIsConnected,
+  updateDeployment,
+} from '@/lib/k8s';
+import {
+  buildCandidateDeploymentName,
+  buildStableDeploymentName,
+  syncEnvironmentServiceTrafficRoutes,
+} from '@/lib/releases/traffic';
+import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
+
+type ProgressiveDeploymentStrategy = 'controlled' | 'canary' | 'blue_green';
+
+function isProgressiveStrategy(
+  strategy?: string | null
+): strategy is ProgressiveDeploymentStrategy {
+  return strategy === 'controlled' || strategy === 'canary' || strategy === 'blue_green';
+}
+
+function getStrategyLabel(strategy: ProgressiveDeploymentStrategy): string {
+  switch (strategy) {
+    case 'controlled':
+      return '受控放量';
+    case 'canary':
+      return '金丝雀';
+    case 'blue_green':
+      return '蓝绿切换';
+  }
+}
+
+async function appendDeploymentLog(deploymentId: string, message: string) {
+  await db.insert(deploymentLogs).values({
+    deploymentId,
+    message,
+    level: 'info',
+  });
+}
+
+export async function buildDeploymentRolloutPlan(input: {
+  projectId: string;
+  deploymentId: string;
+}) {
+  const deployment = await db.query.deployments.findFirst({
+    where: eq(deployments.id, input.deploymentId),
+  });
+
+  if (!deployment || deployment.projectId !== input.projectId) {
+    throw new Error('部署不存在');
+  }
+
+  const [project, environment, service] = await Promise.all([
+    db.query.projects.findFirst({
+      where: eq(projects.id, input.projectId),
+    }),
+    db.query.environments.findFirst({
+      where: eq(environments.id, deployment.environmentId),
+    }),
+    deployment.serviceId
+      ? db.query.services.findFirst({
+          where: eq(services.id, deployment.serviceId),
+        })
+      : null,
+  ]);
+
+  if (!project || !environment) {
+    throw new Error('无法解析部署上下文');
+  }
+
+  if (!service) {
+    return {
+      deployment: null,
+      plan: {
+        canFinalize: false,
+        blockingReason: '当前部署没有服务上下文，无法推进放量',
+        strategyLabel: null,
+        platformSignals: buildPlatformSignalSnapshot({
+          customSignals: [
+            {
+              key: 'rollout:missing-service',
+              label: '缺少服务上下文',
+              tone: 'danger',
+            },
+          ],
+          customSummary: '当前部署缺少服务上下文，无法推进渐进式发布',
+          customNextActionLabel: '检查部署记录',
+        }),
+      },
+    };
+  }
+
+  if (!isProgressiveStrategy(environment.deploymentStrategy)) {
+    return {
+      deployment: {
+        id: deployment.id,
+        serviceId: service.id,
+      },
+      plan: {
+        canFinalize: false,
+        blockingReason: '当前环境不是渐进式发布策略',
+        strategyLabel: null,
+        platformSignals: buildPlatformSignalSnapshot({
+          customSignals: [
+            {
+              key: 'rollout:not-progressive',
+              label: '非渐进式发布',
+              tone: 'neutral',
+            },
+          ],
+          customSummary: '当前环境不是渐进式发布策略，不需要推进放量',
+          customNextActionLabel: '继续观察当前发布',
+        }),
+      },
+    };
+  }
+
+  if (!getIsConnected() || !environment.namespace) {
+    return {
+      deployment: {
+        id: deployment.id,
+        serviceId: service.id,
+      },
+      plan: {
+        canFinalize: false,
+        blockingReason: 'Kubernetes 未连接或环境命名空间缺失',
+        strategyLabel: getStrategyLabel(environment.deploymentStrategy),
+        platformSignals: buildPlatformSignalSnapshot({
+          customSignals: [
+            {
+              key: 'rollout:k8s-missing',
+              label: '缺少集群连接',
+              tone: 'danger',
+            },
+          ],
+          customSummary: '当前无法连接 Kubernetes，不能推进渐进式发布',
+          customNextActionLabel: '检查集群连接',
+        }),
+      },
+    };
+  }
+
+  const stableName = buildStableDeploymentName(project.slug, service.name);
+  const candidateName = buildCandidateDeploymentName(stableName);
+  const [stableExists, candidateSnapshot] = await Promise.all([
+    deploymentExists(environment.namespace, stableName),
+    getDeploymentSnapshot(environment.namespace, candidateName),
+  ]);
+
+  const canFinalize = !!candidateSnapshot?.image;
+  const strategyLabel = getStrategyLabel(environment.deploymentStrategy);
+
+  return {
+    deployment: {
+      id: deployment.id,
+      serviceId: service.id,
+      serviceName: service.name,
+      stableName,
+      candidateName,
+      candidateImage: candidateSnapshot?.image ?? null,
+      stableExists,
+    },
+    plan: {
+      canFinalize,
+      blockingReason: canFinalize ? null : '当前还没有 candidate 工作负载，无法推进放量',
+      strategyLabel,
+      platformSignals: buildPlatformSignalSnapshot({
+        customSignals: [
+          {
+            key: `rollout:${environment.deploymentStrategy}`,
+            label: strategyLabel,
+            tone: 'neutral',
+          },
+          ...(stableExists
+            ? []
+            : [
+                {
+                  key: 'rollout:first-cutover',
+                  label: '首次切换',
+                  tone: 'neutral' as const,
+                },
+              ]),
+          ...(candidateSnapshot?.image
+            ? [
+                {
+                  key: 'rollout:candidate-ready',
+                  label: '候选版本已就绪',
+                  tone: 'neutral' as const,
+                },
+              ]
+            : [
+                {
+                  key: 'rollout:candidate-missing',
+                  label: '候选版本未就绪',
+                  tone: 'danger' as const,
+                },
+              ]),
+        ],
+        customSummary: candidateSnapshot?.image
+          ? `当前可以完成 ${strategyLabel}，把候选版本切为正式版本`
+          : '当前还没有可切换的候选版本',
+        customNextActionLabel: candidateSnapshot?.image ? '确认推进放量' : '等待候选版本部署完成',
+      }),
+    },
+  };
+}
+
+export async function finalizeDeploymentRollout(input: {
+  projectId: string;
+  deploymentId: string;
+}) {
+  const rollout = await buildDeploymentRolloutPlan(input);
+
+  if (!rollout.deployment || !rollout.plan.canFinalize) {
+    throw new Error(rollout.plan.blockingReason ?? '当前无法推进放量');
+  }
+
+  const { candidateName, stableName } = rollout.deployment;
+
+  if (!candidateName || !stableName) {
+    throw new Error('当前部署缺少渐进式发布上下文');
+  }
+
+  const deployment = await db.query.deployments.findFirst({
+    where: eq(deployments.id, input.deploymentId),
+  });
+  const [project, environment, service] = await Promise.all([
+    db.query.projects.findFirst({
+      where: eq(projects.id, input.projectId),
+    }),
+    deployment
+      ? db.query.environments.findFirst({
+          where: eq(environments.id, deployment.environmentId),
+        })
+      : null,
+    rollout.deployment.serviceId
+      ? db.query.services.findFirst({
+          where: eq(services.id, rollout.deployment.serviceId),
+        })
+      : null,
+  ]);
+
+  const candidateSnapshot = environment?.namespace
+    ? await getDeploymentSnapshot(environment.namespace, candidateName)
+    : null;
+
+  if (!deployment || !project || !environment || !service || !candidateSnapshot?.image) {
+    throw new Error('无法解析放量上下文');
+  }
+
+  const { namespace } = environment;
+
+  if (!namespace) {
+    throw new Error('当前环境缺少命名空间，无法推进放量');
+  }
+
+  if (rollout.deployment.stableExists) {
+    await updateDeployment(namespace, stableName, {
+      image: candidateSnapshot.image,
+      envFrom: candidateSnapshot.envFrom,
+      replicas: candidateSnapshot.replicas,
+    });
+  } else {
+    try {
+      await createService(namespace, stableName, {
+        port: candidateSnapshot.port,
+        targetPort: candidateSnapshot.port,
+      });
+    } catch {
+      // Ignore existing stable service.
+    }
+
+    await createDeployment(namespace, stableName, {
+      image: candidateSnapshot.image,
+      port: candidateSnapshot.port,
+      replicas: candidateSnapshot.replicas,
+      envFrom: candidateSnapshot.envFrom,
+      imagePullSecrets: candidateSnapshot.imagePullSecrets,
+      cpuRequest: candidateSnapshot.cpuRequest,
+      cpuLimit: candidateSnapshot.cpuLimit,
+      memoryRequest: candidateSnapshot.memoryRequest,
+      memoryLimit: candidateSnapshot.memoryLimit,
+    });
+  }
+
+  await syncEnvironmentServiceTrafficRoutes({
+    projectSlug: project.slug,
+    environmentId: environment.id,
+    namespace,
+    service,
+    backends: [
+      {
+        serviceName: stableName,
+        servicePort: service.port ?? 80,
+        weight: 100,
+      },
+    ],
+  });
+
+  await deleteDeployment(namespace, candidateName).catch(() => undefined);
+  await deleteService(namespace, candidateName).catch(() => undefined);
+
+  await appendDeploymentLog(
+    deployment.id,
+    `Completed ${rollout.plan.strategyLabel ?? '渐进式发布'}: switched ${service.name} to stable ${candidateSnapshot.image}`
+  );
+
+  return {
+    success: true,
+    deploymentId: deployment.id,
+    imageUrl: candidateSnapshot.image,
+    strategyLabel: rollout.plan.strategyLabel,
+  };
+}

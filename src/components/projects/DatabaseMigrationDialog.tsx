@@ -16,7 +16,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { Separator } from '@/components/ui/separator';
+import { getDatabaseManualControlSnapshot } from '@/lib/releases/intelligence';
 
 interface MigrationRunItem {
   id: string;
@@ -50,6 +52,55 @@ interface MigrationPlan {
   blockingReason: string | null;
   filePreviewError: string | null;
   warnings: string[];
+  platformSignals: {
+    chips: Array<{
+      key: string;
+      label: string;
+      tone: 'danger' | 'neutral';
+    }>;
+    primarySummary: string | null;
+    nextActionLabel: string | null;
+  };
+  environmentPolicy: {
+    level: 'normal' | 'protected' | 'preview';
+    reasons: string[];
+    summary: string | null;
+    primarySignal: {
+      code: string;
+      kind: 'environment' | 'release';
+      level: 'protected' | 'preview' | 'approval_required' | 'progressive';
+      label: string;
+      summary: string;
+      nextActionLabel: string | null;
+    } | null;
+  };
+  migrationPolicy: {
+    warnings: string[];
+    requiresApproval: boolean;
+    approvalReason: string | null;
+    primarySignal: {
+      code: string;
+      kind: 'migration';
+      level: 'warning' | 'approval_required';
+      label: string;
+      summary: string;
+      nextActionLabel: string | null;
+    } | null;
+  };
+  releasePolicy: {
+    level: 'normal' | 'protected' | 'approval_required';
+    reasons: string[];
+    summary: string | null;
+    requiresApproval: boolean;
+    primarySignal: {
+      code: string;
+      kind: 'environment' | 'release';
+      level: 'protected' | 'preview' | 'approval_required' | 'progressive';
+      label: string;
+      summary: string;
+      nextActionLabel: string | null;
+    } | null;
+  };
   runnerType: 'k8s_job' | 'worker';
   imageUrl: string | null;
   database: {
@@ -99,8 +150,20 @@ interface DatabaseMigrationDialogProps {
   databaseId: string;
   databaseName: string;
   databaseType: string;
+  disabled?: boolean;
+  disabledSummary?: string | null;
   latestImageUrl?: string | null;
   latestStatus?: string | null;
+  latestRelease?: {
+    id: string;
+    title: string;
+    commitSha?: string | null;
+  } | null;
+  latestMigration?: {
+    id: string;
+    status: string;
+    releaseId?: string | null;
+  } | null;
 }
 
 const statusTone: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -171,8 +234,12 @@ export function DatabaseMigrationDialog({
   databaseId,
   databaseName,
   databaseType,
+  disabled = false,
+  disabledSummary,
   latestImageUrl,
   latestStatus,
+  latestRelease,
+  latestMigration,
 }: DatabaseMigrationDialogProps) {
   const [open, setOpen] = useState(false);
   const [runs, setRuns] = useState<MigrationRun[]>([]);
@@ -270,11 +337,33 @@ export function DatabaseMigrationDialog({
 
   const latestRun = runs[0];
   const confirmationMatches = plan ? confirmationText.trim() === plan.confirmationValue : false;
+  const manualControl = getDatabaseManualControlSnapshot({
+    latestMigration: latestMigration
+      ? {
+          status: latestMigration.status,
+          releaseId: latestMigration.releaseId,
+        }
+      : latestRun
+        ? {
+            status: latestRun.status,
+            releaseId: latestRun.releaseId,
+          }
+        : null,
+    hasLatestRelease: Boolean(latestRelease),
+    hasLatestImage: Boolean(latestImageUrl),
+    planBlockingReason: plan?.blockingReason,
+  });
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 rounded-xl text-xs"
+          disabled={disabled}
+          title={disabled ? (disabledSummary ?? undefined) : undefined}
+        >
           <Database className="h-3 w-3" />
           对比并迁移
         </Button>
@@ -288,6 +377,11 @@ export function DatabaseMigrationDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {disabledSummary && (
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+              {disabledSummary}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <Badge variant="secondary">{databaseType}</Badge>
             {latestStatus && <Badge variant="outline">数据库：{latestStatus}</Badge>}
@@ -299,6 +393,10 @@ export function DatabaseMigrationDialog({
           </div>
 
           {message && <div className="text-sm text-muted-foreground">{message}</div>}
+
+          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+            {manualControl.reason}
+          </div>
 
           <div className="overflow-hidden rounded-[20px] border border-border bg-background">
             <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
@@ -329,12 +427,60 @@ export function DatabaseMigrationDialog({
                 <div className="text-sm text-muted-foreground">暂时无法获取执行计划。</div>
               ) : (
                 <>
+                  <div className="space-y-2 rounded-2xl border border-border bg-secondary/20 p-4 text-sm">
+                    <div className="font-medium">控制面上下文</div>
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      {latestRelease ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>关联发布</span>
+                          <Link
+                            href={`/projects/${projectId}/releases/${latestRelease.id}`}
+                            className="text-foreground underline underline-offset-4"
+                          >
+                            {latestRelease.title}
+                          </Link>
+                          {latestRelease.commitSha && (
+                            <code className="rounded bg-background px-1.5 py-0.5 font-mono">
+                              {latestRelease.commitSha.slice(0, 7)}
+                            </code>
+                          )}
+                        </div>
+                      ) : (
+                        <div>当前没有关联 release，手动迁移会直接走控制面队列。</div>
+                      )}
+                      <div>
+                        {plan.runnerType === 'k8s_job'
+                          ? latestImageUrl
+                            ? '命令式迁移会使用最近一次可用 release 镜像执行。'
+                            : '命令式迁移需要最近一次可用 release 镜像；当前没有可用镜像。'
+                          : '当前迁移由控制面 worker 直接执行，不依赖 release 镜像。'}
+                      </div>
+                      <div>
+                        手动迁移只用于人工介入、重试和紧急执行；常规路径仍然应该走 release。
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{plan.environment.name}</Badge>
                     <Badge variant="outline">{plan.service.name}</Badge>
                     <Badge variant="outline">{plan.specification.tool}</Badge>
                     <Badge variant="outline">{plan.specification.phase}</Badge>
-                    {plan.environment.isProduction && <Badge variant="destructive">生产环境</Badge>}
+                    {plan.platformSignals.chips.map((chip) => {
+                      if (chip.tone === 'danger') {
+                        return (
+                          <Badge key={chip.key} variant="destructive">
+                            {chip.label}
+                          </Badge>
+                        );
+                      }
+
+                      return (
+                        <Badge key={chip.key} variant="outline">
+                          {chip.label}
+                        </Badge>
+                      );
+                    })}
                     {plan.specification.compatibility === 'breaking' && (
                       <Badge variant="destructive">破坏性变更</Badge>
                     )}
@@ -393,6 +539,13 @@ export function DatabaseMigrationDialog({
                       <div className="font-medium">
                         {formatApprovalPolicyLabel(plan.specification.approvalPolicy)}
                       </div>
+                      {(plan.migrationPolicy.primarySignal?.summary ??
+                        plan.migrationPolicy.approvalReason) && (
+                        <div className="text-xs text-muted-foreground">
+                          {plan.migrationPolicy.primarySignal?.summary ??
+                            plan.migrationPolicy.approvalReason}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">锁策略</div>
@@ -450,12 +603,22 @@ export function DatabaseMigrationDialog({
                     </div>
                   )}
 
-                  {(plan.warnings.length > 0 || plan.blockingReason || plan.filePreviewError) && (
+                  {(plan.warnings.length > 0 ||
+                    plan.platformSignals.primarySummary ||
+                    plan.platformSignals.nextActionLabel ||
+                    plan.blockingReason ||
+                    plan.filePreviewError) && (
                     <div className="space-y-2 rounded-2xl border border-border bg-secondary/30 p-3">
                       <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                         <AlertTriangle className="h-3.5 w-3.5" />
                         差异与风险提示
                       </div>
+                      <PlatformSignalChipList chips={plan.platformSignals.chips} />
+                      <PlatformSignalSummary
+                        summary={plan.platformSignals.primarySummary}
+                        nextActionLabel={plan.platformSignals.nextActionLabel}
+                        className="border-border bg-background"
+                      />
                       {plan.warnings.map((warning) => (
                         <div key={warning} className="text-xs text-muted-foreground">
                           {warning}
@@ -574,7 +737,9 @@ export function DatabaseMigrationDialog({
           <Button
             className="rounded-xl px-4"
             onClick={handleRun}
-            disabled={triggering || planning || !plan || !plan.canRun || !confirmationMatches}
+            disabled={
+              disabled || triggering || planning || !plan || !plan.canRun || !confirmationMatches
+            }
           >
             {triggering ? (
               <Loader2 className="h-4 w-4 animate-spin" />

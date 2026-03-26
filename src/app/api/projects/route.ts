@@ -41,7 +41,7 @@ export async function GET() {
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录', code: 'unauthorized' }, { status: 401 });
   }
 
   const userProjects = await db
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     const session = await auth();
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: '未登录', code: 'unauthorized' }, { status: 401 });
     }
 
     const body: CreateProjectRequest = await request.json();
@@ -86,7 +86,10 @@ export async function POST(request: Request) {
     } = body;
 
     if (!teamId || !name || !slug) {
-      return NextResponse.json({ error: 'Team ID, name, and slug are required' }, { status: 400 });
+      return NextResponse.json(
+        { error: '团队、名称和标识不能为空', code: 'project_create_failed' },
+        { status: 400 }
+      );
     }
 
     const teamMember = await db.query.teamMembers.findFirst({
@@ -94,19 +97,47 @@ export async function POST(request: Request) {
     });
 
     if (!teamMember || !['owner', 'admin', 'member'].includes(teamMember.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        { error: '当前团队不可用于创建项目', code: 'team_scope_missing' },
+        { status: 403 }
+      );
     }
 
     const uniqueSlug = `${slug}-${nanoid(6).toLowerCase()}`;
 
+    let integrationSession: Awaited<ReturnType<typeof getTeamIntegrationSession>> | null = null;
+
+    if (mode === 'import') {
+      try {
+        integrationSession = await getTeamIntegrationSession({
+          teamId,
+          requiredCapabilities: ['read_repo'],
+        });
+      } catch {
+        return NextResponse.json(
+          { error: '当前团队没有可用的仓库读取授权', code: 'repo_read_missing' },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (mode === 'create') {
+      try {
+        await getTeamIntegrationSession({
+          teamId,
+          requiredCapabilities: ['write_repo'],
+        });
+      } catch {
+        return NextResponse.json(
+          { error: '当前团队没有可用的仓库创建授权', code: 'repo_write_missing' },
+          { status: 403 }
+        );
+      }
+    }
+
     // For import mode, ensure repository record exists
     let dbRepositoryId: string | null = null;
-    if (mode === 'import' && repositoryId && repositoryFullName) {
-      const integrationSession = await getTeamIntegrationSession({
-        teamId,
-        requiredCapabilities: ['read_repo'],
-      });
-
+    if (mode === 'import' && repositoryId && repositoryFullName && integrationSession) {
       dbRepositoryId = await ensureRepository(repositoryId, repositoryFullName, integrationSession);
     }
 
@@ -120,6 +151,12 @@ export async function POST(request: Request) {
         repositoryId: dbRepositoryId,
         productionBranch,
         autoDeploy,
+        configJson: {
+          projectInit: {
+            mode,
+            template: template ?? null,
+          },
+        },
         status: 'initializing',
       })
       .returning();
@@ -133,6 +170,8 @@ export async function POST(request: Request) {
         branch: productionBranch,
         autoDeploy: true,
         isProduction: false,
+        databaseStrategy: 'direct',
+        deploymentStrategy: 'rolling',
       })
       .returning();
 
@@ -141,6 +180,8 @@ export async function POST(request: Request) {
       name: 'production',
       autoDeploy: false,
       isProduction: true,
+      databaseStrategy: 'direct',
+      deploymentStrategy: 'controlled',
     });
 
     const createdServices = new Map<string, string>();
@@ -240,7 +281,8 @@ export async function POST(request: Request) {
     console.error('Failed to create project:', error);
     return NextResponse.json(
       {
-        error: 'Failed to create project',
+        error: '创建项目失败',
+        code: 'project_create_failed',
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }

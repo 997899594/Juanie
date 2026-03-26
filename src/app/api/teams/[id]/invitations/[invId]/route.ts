@@ -12,12 +12,12 @@ export async function DELETE(
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
 
   const team = await db.query.teams.findFirst({ where: eq(teams.id, id) });
   if (!team) {
-    return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    return NextResponse.json({ error: '没有找到团队' }, { status: 404 });
   }
 
   const member = await db.query.teamMembers.findFirst({
@@ -25,7 +25,7 @@ export async function DELETE(
   });
 
   if (!member || !['owner', 'admin'].includes(member.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: '当前角色不能撤销邀请链接' }, { status: 403 });
   }
 
   const invitation = await db.query.teamInvitations.findFirst({
@@ -33,7 +33,7 @@ export async function DELETE(
   });
 
   if (!invitation) {
-    return NextResponse.json({ error: 'Invitation not found' }, { status: 404 });
+    return NextResponse.json({ error: '没有找到这个邀请' }, { status: 404 });
   }
 
   await db.delete(teamInvitations).where(eq(teamInvitations.id, invId));

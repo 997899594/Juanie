@@ -16,92 +16,41 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
+import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
-import { buildEnvironmentAccessUrl, pickPrimaryEnvironmentDomain } from '@/lib/domains/defaults';
-import {
-  formatEnvironmentExpiry,
-  getEnvironmentScopeLabel,
-  getEnvironmentSourceLabel,
-} from '@/lib/environments/presentation';
-import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import { createProductionRelease } from '@/lib/releases/client-actions';
+import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import { cn } from '@/lib/utils';
-
-const releaseStatusConfig: Record<
-  string,
-  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean; label: string }
-> = {
-  queued: { color: 'neutral', pulse: false, label: '排队中' },
-  planning: { color: 'info', pulse: true, label: '规划中' },
-  migration_pre_running: { color: 'warning', pulse: true, label: '前置迁移' },
-  migration_pre_failed: { color: 'error', pulse: false, label: '前置迁移失败' },
-  deploying: { color: 'info', pulse: true, label: '发布中' },
-  verifying: { color: 'info', pulse: true, label: '校验中' },
-  migration_post_running: { color: 'warning', pulse: true, label: '后置迁移' },
-  degraded: { color: 'warning', pulse: false, label: '降级' },
-  succeeded: { color: 'success', pulse: false, label: '成功' },
-  failed: { color: 'error', pulse: false, label: '失败' },
-  canceled: { color: 'neutral', pulse: false, label: '已取消' },
-};
-
-const deploymentStatusConfig: Record<
-  string,
-  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean; label: string }
-> = {
-  queued: { color: 'neutral', pulse: false, label: '排队中' },
-  building: { color: 'info', pulse: true, label: '构建中' },
-  deploying: { color: 'info', pulse: true, label: '发布中' },
-  running: { color: 'success', pulse: false, label: '运行中' },
-  failed: { color: 'error', pulse: false, label: '失败' },
-  rolled_back: { color: 'warning', pulse: false, label: '已回滚' },
-};
-
-const migrationStatusConfig: Record<
-  string,
-  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean }
-> = {
-  queued: { color: 'neutral', pulse: false },
-  awaiting_approval: { color: 'warning', pulse: false },
-  planning: { color: 'info', pulse: true },
-  running: { color: 'info', pulse: true },
-  success: { color: 'success', pulse: false },
-  failed: { color: 'error', pulse: false },
-  canceled: { color: 'neutral', pulse: false },
-  skipped: { color: 'neutral', pulse: false },
-};
-
-function formatMigrationStatusLabel(value: string): string {
-  const labels: Record<string, string> = {
-    awaiting_approval: '待审批',
-    queued: '排队中',
-    planning: '规划中',
-    running: '执行中',
-    success: '成功',
-    failed: '失败',
-    canceled: '已取消',
-    skipped: '已跳过',
-  };
-
-  return labels[value] ?? value.replaceAll('_', ' ');
-}
 
 interface Environment {
   id: string;
   name: string;
   autoDeploy: boolean;
   isProduction: boolean;
-  isPreview?: boolean;
+  isPreview?: boolean | null;
+  deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
   previewPrNumber?: number | null;
   branch?: string | null;
-  expiresAt?: string | null;
+  expiresAt?: string | Date | null;
 }
 
 interface PromotePlan {
@@ -114,21 +63,61 @@ interface PromotePlan {
     canCreate: boolean;
     blockingReason: string | null;
     summary: string | null;
+    issue: {
+      code: string;
+      kind: 'approval' | 'migration' | 'deployment' | 'environment' | 'release';
+      label: string;
+      summary: string;
+      nextActionLabel: string;
+    } | null;
+    platformSignals: {
+      chips: Array<{
+        key: string;
+        label: string;
+        tone: 'danger' | 'neutral';
+      }>;
+      primarySummary: string | null;
+      nextActionLabel: string | null;
+    };
     environmentPolicy: {
       level: 'normal' | 'protected' | 'preview';
       reasons: string[];
       summary: string | null;
+      primarySignal: {
+        code: string;
+        kind: 'environment' | 'release';
+        level: 'protected' | 'preview' | 'approval_required' | 'progressive';
+        label: string;
+        summary: string;
+        nextActionLabel: string | null;
+      } | null;
     };
     releasePolicy: {
       level: 'normal' | 'protected' | 'approval_required';
       reasons: string[];
       summary: string | null;
       requiresApproval: boolean;
+      primarySignal: {
+        code: string;
+        kind: 'environment' | 'release';
+        level: 'protected' | 'preview' | 'approval_required' | 'progressive';
+        label: string;
+        summary: string;
+        nextActionLabel: string | null;
+      } | null;
     };
     migration: {
       preDeployCount: number;
       postDeployCount: number;
       warnings: string[];
+      primarySignal: {
+        code: string;
+        kind: 'migration';
+        level: 'warning' | 'approval_required';
+        label: string;
+        summary: string;
+        nextActionLabel: string | null;
+      } | null;
       requiresApproval: boolean;
     };
   };
@@ -136,22 +125,24 @@ interface PromotePlan {
 
 interface ReleaseRecord {
   id: string;
+  displayTitle: string;
   status: string;
   sourceRef: string;
   sourceCommitSha: string | null;
   summary: string | null;
   errorMessage: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
   triggeredBy: string;
   environment: {
     id: string;
     name: string;
     isProduction: boolean;
-    isPreview?: boolean;
+    isPreview?: boolean | null;
+    deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
     previewPrNumber?: number | null;
     branch?: string | null;
-    expiresAt?: string | null;
+    expiresAt?: string | Date | null;
     domains?: Array<{
       id: string;
       hostname: string;
@@ -177,15 +168,15 @@ interface ReleaseRecord {
     status: string;
     version: string | null;
     imageUrl: string | null;
-    createdAt: string;
+    createdAt: string | Date;
     serviceId: string | null;
   }>;
   migrationRuns: Array<{
     id: string;
     status: string;
-    createdAt: string;
-    startedAt: string | null;
-    finishedAt: string | null;
+    createdAt: string | Date;
+    startedAt: string | Date | null;
+    finishedAt: string | Date | null;
     service: {
       id: string;
       name: string;
@@ -208,17 +199,115 @@ interface ReleaseRecord {
     failureSummary: string | null;
     issueCode: string | null;
     actionLabel: string | null;
+    issue: {
+      code: string;
+      kind: 'approval' | 'migration' | 'deployment' | 'environment' | 'release';
+      label: string;
+      summary: string;
+      nextActionLabel: string;
+    } | null;
   };
   policy: {
     level: 'normal' | 'protected' | 'approval_required';
     reasons: string[];
     summary: string | null;
     requiresApproval: boolean;
+    primarySignal: {
+      code: string;
+      kind: 'environment' | 'release';
+      level: 'protected' | 'preview' | 'approval_required' | 'progressive';
+      label: string;
+      summary: string;
+      nextActionLabel: string | null;
+    } | null;
   };
+  riskLabel: string;
+  statusDecoration: {
+    color: 'success' | 'warning' | 'error' | 'info' | 'neutral';
+    pulse: boolean;
+    label: string;
+  };
+  environmentScope: string | null;
+  environmentSource: string | null;
+  environmentStrategy: string | null;
+  environmentDatabaseStrategy: string | null;
+  environmentInheritance: string | null;
+  environmentExpiry: string | null;
+  primaryDomainUrl: string | null;
+  approvalRunsCount: number;
+  failedMigrationRunsCount: number;
+  signalChips: Array<{
+    key: string;
+    label: string;
+    tone: 'danger' | 'neutral';
+  }>;
+  deploymentItems: Array<{
+    id: string;
+    status: string;
+    serviceId: string | null;
+    version: string | null;
+    imageUrl: string | null;
+    statusDecoration: {
+      color: 'success' | 'warning' | 'error' | 'info' | 'neutral';
+      pulse: boolean;
+      label: string;
+    };
+    serviceName: string;
+  }>;
+  migrationItems: Array<{
+    id: string;
+    status: string;
+    serviceId: string | null;
+    database: {
+      id: string;
+      name: string;
+    };
+    specification: {
+      tool: string;
+      phase: string;
+      command: string;
+    };
+    statusDecoration: {
+      color: 'success' | 'warning' | 'error' | 'info' | 'neutral';
+      pulse: boolean;
+      label: string;
+    };
+    imageUrl: string | null;
+    serviceName: string;
+    createdAtLabel: string;
+  }>;
   diffSummary: {
     isFirstRelease: boolean;
     artifactChanges: number;
     migrationChanges: number;
+  };
+  previewSourceMeta: {
+    kind: 'pr' | 'branch' | 'standard';
+    label: string | null;
+    title: string | null;
+    reference: string | null;
+    detail: string | null;
+    stateLabel: string | null;
+    authorName: string | null;
+    webUrl: string | null;
+  };
+  previewLifecycle: {
+    stateLabel: string;
+    summary: string | null;
+    nextActionLabel: string;
+  } | null;
+  platformSignals: {
+    chips: Array<{
+      key: string;
+      label: string;
+      tone: 'danger' | 'neutral';
+    }>;
+    primarySummary: string | null;
+    nextActionLabel: string | null;
+  };
+  actions: {
+    canManage: boolean;
+    summary: string;
   };
 }
 
@@ -229,66 +318,49 @@ function formatImageLabel(imageUrl: string): string {
   return `${repository}:${tag}`;
 }
 
-function getDeploymentStatusConfig(status: string) {
-  return deploymentStatusConfig[status] || deploymentStatusConfig.queued;
-}
-
 interface ReleasesPageClientProps {
   projectId: string;
+  initialData: {
+    releases: ReleaseRecord[];
+    filteredReleases: ReleaseRecord[];
+    environments: Environment[];
+    governance: {
+      roleLabel: string;
+      primarySummary: string;
+      manageableEnvironmentIds: string[];
+      promoteToProduction: {
+        allowed: boolean;
+        summary: string;
+      };
+      manualMigration: {
+        allowed: boolean;
+        summary: string;
+      };
+    };
+    environmentOptions: string[];
+    selectedEnv: string;
+    selectedRisk: 'all' | 'attention' | 'approval' | 'failed';
+    stats: Array<{
+      label: string;
+      value: number | string;
+    }>;
+    promotePlan: PromotePlan | null;
+    hasStagingProdSplit: boolean;
+  };
 }
 
-export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
+export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClientProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const envFilter = searchParams.get('env');
-  const filter = envFilter || 'all';
-  const riskQuery = searchParams.get('risk');
-  const riskFilter: 'all' | 'attention' | 'approval' | 'failed' =
-    riskQuery === 'attention' || riskQuery === 'approval' || riskQuery === 'failed'
-      ? riskQuery
-      : 'all';
-
-  const [releases, setReleases] = useState<ReleaseRecord[]>([]);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
   const [promoting, setPromoting] = useState(false);
   const [promoteResult, setPromoteResult] = useState<string | null>(null);
-  const [promotePlan, setPromotePlan] = useState<PromotePlan | null>(null);
+  const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
   const [expandedReleases, setExpandedReleases] = useState<Set<string>>(new Set());
-
-  const loadReleases = useCallback(async () => {
-    if (!projectId) return;
-    const response = await fetch(`/api/projects/${projectId}/releases`);
-    if (!response.ok) return;
-    const data = await response.json();
-    setReleases(Array.isArray(data) ? data : []);
-  }, [projectId]);
-
-  const loadPromotePlan = useCallback(async () => {
-    if (!projectId) return;
-    const response = await fetch(`/api/projects/${projectId}/promote`);
-    const data = await response.json().catch(() => null);
-    setPromotePlan(response.ok && data?.plan ? data : null);
-  }, [projectId]);
-
-  useEffect(() => {
-    loadReleases();
-  }, [loadReleases]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    fetch(`/api/projects/${projectId}/environments`)
-      .then((response) => response.json())
-      .then((data) => setEnvironments(Array.isArray(data) ? data : []));
-  }, [projectId]);
-
-  useEffect(() => {
-    loadPromotePlan();
-  }, [loadPromotePlan]);
 
   const { isConnected, error } = useReleases({
     projectId,
-    onRelease: () => loadReleases(),
+    onRelease: () => router.refresh(),
   });
 
   const handlePromote = async () => {
@@ -297,16 +369,15 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
     setPromoteResult(null);
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/promote`, { method: 'POST' });
-      const data = await response.json();
+      const data = await createProductionRelease({ projectId });
 
-      if (response.ok) {
-        setPromoteResult(data.tagName ? `已创建生产发布 · ${data.tagName}` : '已创建生产发布');
-        await loadReleases();
-        await loadPromotePlan();
-      } else {
-        setPromoteResult(`错误：${data.error}`);
-      }
+      setPromoteResult(data.tagName ? `已创建生产发布 · ${data.tagName}` : '已创建生产发布');
+      setPromoteDialogOpen(false);
+      router.refresh();
+    } catch (promoteError) {
+      setPromoteResult(
+        `错误：${promoteError instanceof Error ? promoteError.message : '创建生产发布失败'}`
+      );
     } finally {
       setPromoting(false);
       setTimeout(() => setPromoteResult(null), 5000);
@@ -331,25 +402,13 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
-  const envNames = ['all', ...new Set(releases.map((release) => release.environment.name))];
-  const envFiltered =
-    filter === 'all' ? releases : releases.filter((release) => release.environment.name === filter);
-  const filtered = envFiltered.filter((release) => {
-    if (riskFilter === 'all') return true;
-
-    const hasApproval = release.migrationRuns.some((run) => run.status === 'awaiting_approval');
-    const hasFailedMigration = release.migrationRuns.some((run) => run.status === 'failed');
-    const hasAttention =
-      hasApproval ||
-      hasFailedMigration ||
-      ['migration_pre_failed', 'failed', 'degraded'].includes(release.status);
-
-    if (riskFilter === 'attention') return hasAttention;
-    if (riskFilter === 'approval') return hasApproval;
-    if (riskFilter === 'failed')
-      return hasFailedMigration || ['failed', 'migration_pre_failed'].includes(release.status);
-    return true;
-  });
+  const releases = initialData.releases;
+  const environments = initialData.environments;
+  const governance = initialData.governance;
+  const filter = initialData.selectedEnv;
+  const riskFilter = initialData.selectedRisk;
+  const filtered = initialData.filteredReleases;
+  const promotePlan = initialData.promotePlan;
 
   const stagingEnv = environments.find(
     (environment) => environment.autoDeploy && !environment.isProduction
@@ -362,32 +421,22 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
           release.artifacts.length > 0
       )
     : null;
-  const hasStagingProdSplit = environments.some((environment) => environment.isProduction);
+  const hasStagingProdSplit = initialData.hasStagingProdSplit;
   const canPromote =
     hasStagingProdSplit &&
     !!latestStagingRelease &&
+    governance.promoteToProduction.allowed &&
     (promotePlan?.plan.canCreate ?? true) &&
     !promotePlan?.plan.blockingReason;
-
-  const stats = [
-    { label: '发布', value: filtered.length },
-    {
-      label: '待审批',
-      value: filtered.filter((release) =>
-        release.migrationRuns.some((run) => run.status === 'awaiting_approval')
-      ).length,
-    },
-    {
-      label: '失败',
-      value: filtered.filter((release) =>
-        release.migrationRuns.some((run) => run.status === 'failed')
-      ).length,
-    },
-    {
-      label: '实时',
-      value: isConnected ? '在线' : '离线',
-    },
-  ];
+  const promotePanel = promotePlan
+    ? buildReleasePlanningPanel({
+        plan: promotePlan.plan,
+        sourceCommitSha: promotePlan.sourceRelease?.sourceCommitSha,
+      })
+    : null;
+  const stats = initialData.stats.map((stat) =>
+    stat.label === '实时' ? { ...stat, value: isConnected ? '在线' : '离线' } : stat
+  );
 
   return (
     <div className="space-y-6">
@@ -403,19 +452,22 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
             />
             <ManualReleaseDialog
               projectId={projectId}
-              environments={environments}
+              environments={environments.filter((environment) =>
+                governance.manageableEnvironmentIds.includes(environment.id)
+              )}
               releases={releases}
+              disabledSummary={governance.primarySummary}
               onCreated={async () => {
-                await loadReleases();
-                await loadPromotePlan();
+                router.refresh();
               }}
             />
             {hasStagingProdSplit && (
               <Button
                 size="sm"
                 className="h-9 rounded-xl px-4"
-                onClick={handlePromote}
+                onClick={() => setPromoteDialogOpen(true)}
                 disabled={promoting || !canPromote}
+                title={governance.promoteToProduction.summary}
               >
                 <ArrowUpCircle className="h-3.5 w-3.5" />
                 {promoting ? '发布中...' : '发布到生产'}
@@ -444,51 +496,73 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
         </div>
       )}
 
-      {hasStagingProdSplit && promotePlan && (
-        <div className="console-panel px-4 py-4">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {promotePlan.plan.summary && (
-              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                {promotePlan.plan.summary}
-              </span>
-            )}
-            {promotePlan.plan.releasePolicy.requiresApproval && (
-              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                需要审批
-              </span>
-            )}
-            {promotePlan.plan.migration.preDeployCount > 0 && (
-              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                前置迁移 {promotePlan.plan.migration.preDeployCount} 项
-              </span>
-            )}
-            {promotePlan.plan.migration.postDeployCount > 0 && (
-              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                后置迁移 {promotePlan.plan.migration.postDeployCount} 项
-              </span>
-            )}
-            {promotePlan.sourceRelease?.sourceCommitSha && (
-              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                来源 {promotePlan.sourceRelease.sourceCommitSha.slice(0, 7)}
-              </span>
+      <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+        当前角色：{governance.roleLabel}。{governance.primarySummary}。
+        {governance.promoteToProduction.summary}。
+      </div>
+
+      <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>发布到生产</DialogTitle>
+            <DialogDescription>
+              平台会先沿用 staging 成功版本，再按 preflight 结果创建生产 release。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {promotePanel ? (
+              <>
+                <PlatformSignalChipList chips={promotePanel.chips} />
+                <PlatformSignalSummary
+                  summary={promotePanel.issueSummary}
+                  nextActionLabel={promotePanel.nextActionLabel}
+                />
+
+                {promotePanel.blockingReason && (
+                  <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                    {promotePanel.blockingReason}
+                  </div>
+                )}
+
+                {!promotePanel.blockingReason && promotePanel.warningChips.length > 0 && (
+                  <PlatformSignalChipList chips={promotePanel.warningChips} />
+                )}
+              </>
+            ) : (
+              <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
+                正在加载发布预检...
+              </div>
             )}
           </div>
-          {promotePlan.plan.blockingReason && (
-            <div className="mt-3 text-sm text-muted-foreground">
-              {promotePlan.plan.blockingReason}
-            </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>
+              关闭
+            </Button>
+            <Button onClick={handlePromote} disabled={promoting || !canPromote}>
+              {promoting ? '发布中...' : '确认发布'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {hasStagingProdSplit && promotePanel && (
+        <div className="console-panel px-4 py-4">
+          <PlatformSignalChipList chips={promotePanel.chips} className="items-center" />
+          {promotePanel.blockingReason && (
+            <div className="mt-3 text-sm text-muted-foreground">{promotePanel.blockingReason}</div>
           )}
-          {!promotePlan.plan.blockingReason && promotePlan.plan.migration.warnings.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              {promotePlan.plan.migration.warnings.slice(0, 3).map((warning) => (
-                <span
-                  key={warning}
-                  className="rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-foreground"
-                >
-                  {warning}
-                </span>
-              ))}
-            </div>
+          <PlatformSignalSummary
+            summary={promotePanel.issueSummary}
+            nextActionLabel={promotePanel.nextActionLabel}
+            className="mt-3"
+          />
+          {!promotePanel.blockingReason && promotePanel.warningChips.length > 0 && (
+            <PlatformSignalChipList
+              chips={promotePanel.warningChips.slice(0, 3)}
+              className="mt-3"
+            />
           )}
         </div>
       )}
@@ -507,7 +581,7 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
       <div className="console-panel space-y-4 px-4 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          {envNames.map((env) => (
+          {initialData.environmentOptions.map((env) => (
             <Button
               key={env}
               variant={filter === env ? 'default' : 'outline'}
@@ -562,21 +636,9 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
       ) : (
         <div className="space-y-3">
           {filtered.map((release) => {
-            const config = releaseStatusConfig[release.status] || releaseStatusConfig.queued;
             const expanded = expandedReleases.has(release.id);
-            const failedMigrations = release.migrationRuns.filter(
-              (run) => run.status === 'failed'
-            ).length;
-            const approvalCount = release.migrationRuns.filter(
-              (run) => run.status === 'awaiting_approval'
-            ).length;
             const intelligence = release.intelligence;
             const policy = release.policy;
-            const environmentScope = getEnvironmentScopeLabel(release.environment);
-            const environmentSource = getEnvironmentSourceLabel(release.environment);
-            const expiryLabel = formatEnvironmentExpiry(release.environment.expiresAt);
-            const primaryDomain = pickPrimaryEnvironmentDomain(release.environment.domains ?? []);
-            const releaseDiff = release.diffSummary;
             const riskTone =
               intelligence.riskLevel === 'high'
                 ? 'border-destructive/15 bg-background text-destructive'
@@ -590,13 +652,13 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                   <div
                     className={cn(
                       'w-1 shrink-0 self-stretch',
-                      config.color === 'success'
+                      release.statusDecoration.color === 'success'
                         ? 'bg-success'
-                        : config.color === 'warning'
+                        : release.statusDecoration.color === 'warning'
                           ? 'bg-warning'
-                          : config.color === 'error'
+                          : release.statusDecoration.color === 'error'
                             ? 'bg-destructive'
-                            : config.color === 'info'
+                            : release.statusDecoration.color === 'info'
                               ? 'bg-info'
                               : 'bg-muted-foreground/30'
                     )}
@@ -606,9 +668,9 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                       <div className="min-w-0 flex-1 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <StatusIndicator
-                            status={config.color}
-                            pulse={config.pulse}
-                            label={config.label}
+                            status={release.statusDecoration.color}
+                            pulse={release.statusDecoration.pulse}
+                            label={release.statusDecoration.label}
                           />
                           <Badge
                             variant={release.environment.isProduction ? 'default' : 'secondary'}
@@ -616,11 +678,27 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                           >
                             {release.environment.name}
                           </Badge>
-                          {environmentScope && <Badge variant="outline">{environmentScope}</Badge>}
-                          {environmentSource && (
-                            <Badge variant="outline">{environmentSource}</Badge>
+                          {release.environmentScope && (
+                            <Badge variant="outline">{release.environmentScope}</Badge>
                           )}
-                          {expiryLabel && <Badge variant="outline">{expiryLabel}</Badge>}
+                          {release.environmentSource && (
+                            <Badge variant="outline">{release.environmentSource}</Badge>
+                          )}
+                          {release.environmentStrategy && (
+                            <Badge variant="outline">{release.environmentStrategy}</Badge>
+                          )}
+                          {release.environmentDatabaseStrategy && (
+                            <Badge variant="outline">{release.environmentDatabaseStrategy}</Badge>
+                          )}
+                          {release.environmentInheritance && (
+                            <Badge variant="outline">{release.environmentInheritance}</Badge>
+                          )}
+                          {release.previewSourceMeta.label && (
+                            <Badge variant="outline">{release.previewSourceMeta.label}</Badge>
+                          )}
+                          {release.environmentExpiry && (
+                            <Badge variant="outline">{release.environmentExpiry}</Badge>
+                          )}
                           <Badge variant="outline">{release.artifacts.length} 个服务</Badge>
                           <Badge variant="outline" className="capitalize">
                             {release.triggeredBy}
@@ -631,24 +709,27 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                               riskTone
                             )}
                           >
-                            风险{' '}
-                            {intelligence.riskLevel === 'high'
-                              ? '高'
-                              : intelligence.riskLevel === 'medium'
-                                ? '中'
-                                : '低'}
+                            {release.riskLabel}
                           </span>
-                          {policy.level !== 'normal' && (
+                          {policy.primarySignal?.label ? (
+                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
+                              {policy.primarySignal.label}
+                            </span>
+                          ) : policy.level !== 'normal' ? (
                             <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
                               {policy.level === 'approval_required' ? '受保护 / 待审批' : '受保护'}
                             </span>
-                          )}
+                          ) : null}
                         </div>
 
                         <div className="space-y-2">
-                          <div className="text-base font-semibold">
-                            {getReleaseDisplayTitle(release)}
-                          </div>
+                          <div className="text-base font-semibold">{release.displayTitle}</div>
+                          <PreviewSourceSummary meta={release.previewSourceMeta} />
+                          {release.platformSignals.primarySummary && (
+                            <div className="text-xs text-muted-foreground">
+                              {release.platformSignals.primarySummary}
+                            </div>
+                          )}
                           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                             {release.sourceCommitSha && (
                               <div className="flex items-center gap-1.5">
@@ -669,9 +750,9 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                                 次迁移
                               </span>
                             </div>
-                            {primaryDomain && (
+                            {release.primaryDomainUrl && (
                               <a
-                                href={buildEnvironmentAccessUrl(primaryDomain.hostname)}
+                                href={release.primaryDomainUrl}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="inline-flex items-center gap-1.5 text-foreground underline underline-offset-4"
@@ -698,62 +779,25 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                           ))}
                         </div>
 
-                        {(intelligence.failureSummary ||
-                          policy.summary ||
-                          intelligence.reasons.length > 0 ||
-                          policy.reasons.length > 0 ||
-                          intelligence.actionLabel ||
-                          failedMigrations > 0 ||
-                          approvalCount > 0) && (
+                        {release.signalChips.length > 0 && (
                           <div className="flex flex-wrap gap-2 text-xs">
-                            {intelligence.failureSummary && (
-                              <span className="rounded-full border border-destructive/15 bg-background px-2.5 py-1 text-destructive">
-                                {intelligence.failureSummary}
-                              </span>
-                            )}
-                            {intelligence.reasons.slice(0, 2).map((reason) => (
+                            {release.signalChips.map((chip) => (
                               <span
-                                key={reason}
-                                className="rounded-full border border-border bg-secondary/30 px-2.5 py-1 text-foreground"
+                                key={chip.key}
+                                className={
+                                  chip.tone === 'danger'
+                                    ? 'rounded-full border border-destructive/15 bg-background px-2.5 py-1 text-destructive'
+                                    : 'rounded-full border border-border bg-background px-2.5 py-1 text-foreground'
+                                }
                               >
-                                {reason}
+                                {chip.label}
                               </span>
                             ))}
-                            {policy.summary && (
-                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                                {policy.summary}
-                              </span>
-                            )}
-                            {intelligence.actionLabel && (
-                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                                下一步：{intelligence.actionLabel}
-                              </span>
-                            )}
-                            {failedMigrations > 0 && (
-                              <span className="rounded-full border border-destructive/15 bg-background px-2.5 py-1 text-destructive">
-                                {failedMigrations} 个失败迁移
-                              </span>
-                            )}
-                            {approvalCount > 0 && (
-                              <span className="rounded-full border border-border bg-secondary/30 px-2.5 py-1 text-foreground">
-                                {approvalCount} 个待审批
-                              </span>
-                            )}
-                            {releaseDiff.isFirstRelease && (
-                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                                首次发布
-                              </span>
-                            )}
-                            {releaseDiff.artifactChanges > 0 && (
-                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                                镜像变更 {releaseDiff.artifactChanges} 项
-                              </span>
-                            )}
-                            {releaseDiff.migrationChanges > 0 && (
-                              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                                迁移变更 {releaseDiff.migrationChanges} 项
-                              </span>
-                            )}
+                          </div>
+                        )}
+                        {release.platformSignals.nextActionLabel && (
+                          <div className="text-xs text-muted-foreground">
+                            下一步：{release.platformSignals.nextActionLabel}
                           </div>
                         )}
                       </div>
@@ -824,51 +868,52 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                               部署进度
                             </div>
                             <div className="space-y-3">
-                              {release.deployments.map((deployment) => {
-                                const deploymentConfig = getDeploymentStatusConfig(
-                                  deployment.status
-                                );
-                                const serviceLabel = deployment.serviceId
-                                  ? release.artifacts.find(
-                                      (artifact) => artifact.service.id === deployment.serviceId
-                                    )?.service.name
-                                  : '项目';
-
-                                return (
-                                  <div
-                                    key={deployment.id}
-                                    className="rounded-2xl border border-border bg-background px-4 py-3"
-                                  >
-                                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                                      <StatusIndicator
-                                        status={deploymentConfig.color}
-                                        pulse={deploymentConfig.pulse}
-                                        label={deploymentConfig.label}
-                                      />
-                                      <Badge variant="outline">{serviceLabel ?? '服务'}</Badge>
-                                      {deployment.version && (
-                                        <Badge variant="secondary">v{deployment.version}</Badge>
-                                      )}
-                                    </div>
-                                    {deployment.imageUrl && (
-                                      <div className="mb-3 break-all text-xs text-muted-foreground">
-                                        {deployment.imageUrl}
-                                      </div>
+                              {release.deploymentItems.map((deployment) => (
+                                <div
+                                  key={deployment.id}
+                                  className="rounded-2xl border border-border bg-background px-4 py-3"
+                                >
+                                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                                    <StatusIndicator
+                                      status={deployment.statusDecoration.color}
+                                      pulse={deployment.statusDecoration.pulse}
+                                      label={deployment.statusDecoration.label}
+                                    />
+                                    <Badge variant="outline">{deployment.serviceName}</Badge>
+                                    {deployment.version && (
+                                      <Badge variant="secondary">v{deployment.version}</Badge>
                                     )}
-                                    <div className="mb-3">
-                                      <DeploymentRollbackAction
-                                        projectId={projectId}
-                                        deploymentId={deployment.id}
-                                      />
+                                  </div>
+                                  {deployment.imageUrl && (
+                                    <div className="mb-3 break-all text-xs text-muted-foreground">
+                                      {deployment.imageUrl}
                                     </div>
-                                    <DeploymentLogs
+                                  )}
+                                  <div className="mb-3 flex flex-wrap gap-2">
+                                    {release.environment.deploymentStrategy &&
+                                      release.environment.deploymentStrategy !== 'rolling' && (
+                                        <DeploymentRolloutAction
+                                          projectId={projectId}
+                                          deploymentId={deployment.id}
+                                          strategyLabel={release.environmentStrategy}
+                                          disabled={!release.actions.canManage}
+                                          disabledSummary={release.actions.summary}
+                                        />
+                                      )}
+                                    <DeploymentRollbackAction
                                       projectId={projectId}
                                       deploymentId={deployment.id}
-                                      status={deployment.status}
+                                      disabled={!release.actions.canManage}
+                                      disabledSummary={release.actions.summary}
                                     />
                                   </div>
-                                );
-                              })}
+                                  <DeploymentLogs
+                                    projectId={projectId}
+                                    deploymentId={deployment.id}
+                                    status={deployment.status}
+                                  />
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -881,32 +926,25 @@ export function ReleasesPageClient({ projectId }: ReleasesPageClientProps) {
                                 没有自动迁移记录
                               </div>
                             ) : (
-                              release.migrationRuns.map((run) => {
-                                const migrationConfig =
-                                  migrationStatusConfig[run.status] || migrationStatusConfig.queued;
-
-                                return (
-                                  <div
-                                    key={run.id}
-                                    className="rounded-2xl border border-border bg-background px-4 py-3"
-                                  >
-                                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                                      <StatusIndicator
-                                        status={migrationConfig.color}
-                                        pulse={migrationConfig.pulse}
-                                        label={formatMigrationStatusLabel(run.status)}
-                                      />
-                                      <Badge variant="outline">{run.database.name}</Badge>
-                                    </div>
-                                    <div className="text-sm font-medium">
-                                      {run.service?.name ?? '服务'}
-                                    </div>
-                                    <div className="mt-1 text-xs text-muted-foreground">
-                                      {new Date(run.createdAt).toLocaleString()}
-                                    </div>
+                              release.migrationItems.map((run) => (
+                                <div
+                                  key={run.id}
+                                  className="rounded-2xl border border-border bg-background px-4 py-3"
+                                >
+                                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                                    <StatusIndicator
+                                      status={run.statusDecoration.color}
+                                      pulse={run.statusDecoration.pulse}
+                                      label={run.statusDecoration.label}
+                                    />
+                                    <Badge variant="outline">{run.database.name}</Badge>
                                   </div>
-                                );
-                              })
+                                  <div className="text-sm font-medium">{run.serviceName}</div>
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    {run.createdAtLabel}
+                                  </div>
+                                </div>
+                              ))
                             )}
                           </div>
                         </div>

@@ -814,6 +814,11 @@ export interface CiliumHTTPRouteSpec {
   hostnames: string[];
   serviceName: string;
   servicePort: number;
+  backendRefs?: Array<{
+    serviceName: string;
+    servicePort: number;
+    weight?: number;
+  }>;
   path?: string;
 }
 
@@ -939,11 +944,20 @@ export async function createCiliumHTTPRoute(spec: CiliumHTTPRouteSpec): Promise<
       rules: [
         {
           backendRefs: [
-            {
-              kind: 'Service',
-              name: spec.serviceName,
-              port: spec.servicePort,
-            },
+            ...(spec.backendRefs?.length
+              ? spec.backendRefs.map((backend) => ({
+                  kind: 'Service',
+                  name: backend.serviceName,
+                  port: backend.servicePort,
+                  ...(backend.weight !== undefined ? { weight: backend.weight } : {}),
+                }))
+              : [
+                  {
+                    kind: 'Service',
+                    name: spec.serviceName,
+                    port: spec.servicePort,
+                  },
+                ]),
           ],
           matches: [
             {
@@ -965,6 +979,75 @@ export async function createCiliumHTTPRoute(spec: CiliumHTTPRouteSpec): Promise<
     plural: 'httproutes',
     body: route,
   });
+}
+
+export async function deploymentExists(namespace: string, name: string): Promise<boolean> {
+  const { apps } = getK8sClient();
+
+  try {
+    await apps.readNamespacedDeployment({ namespace, name });
+    return true;
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      return false;
+    }
+
+    throw e;
+  }
+}
+
+export interface DeploymentSnapshot {
+  image: string | null;
+  replicas: number;
+  envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
+  imagePullSecrets?: string[];
+  port: number;
+  cpuRequest?: string;
+  cpuLimit?: string;
+  memoryRequest?: string;
+  memoryLimit?: string;
+}
+
+export async function getDeploymentSnapshot(
+  namespace: string,
+  name: string
+): Promise<DeploymentSnapshot | null> {
+  const { apps } = getK8sClient();
+
+  try {
+    const current = await apps.readNamespacedDeployment({ namespace, name });
+    const container = current.spec?.template?.spec?.containers?.[0];
+
+    if (!container) {
+      return null;
+    }
+
+    return {
+      image: container.image ?? null,
+      replicas: current.spec?.replicas ?? 1,
+      envFrom:
+        container.envFrom?.map((item) => ({
+          ...(item.secretRef?.name ? { secretRef: { name: item.secretRef.name } } : {}),
+          ...(item.configMapRef?.name ? { configMapRef: { name: item.configMapRef.name } } : {}),
+        })) ?? undefined,
+      imagePullSecrets: current.spec?.template?.spec?.imagePullSecrets
+        ?.map((item) => item.name)
+        .filter(Boolean) as string[] | undefined,
+      port: container.ports?.[0]?.containerPort ?? 3000,
+      cpuRequest: container.resources?.requests?.cpu,
+      cpuLimit: container.resources?.limits?.cpu,
+      memoryRequest: container.resources?.requests?.memory,
+      memoryLimit: container.resources?.limits?.memory,
+    };
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      return null;
+    }
+
+    throw e;
+  }
 }
 
 export async function deleteCiliumGateway(namespace: string, name: string): Promise<void> {

@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { environments, projects, teamMembers, teams } from '@/lib/db/schema';
 import { deleteNamespace, getIsConnected, initK8sClient } from '@/lib/k8s';
+import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,6 +16,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, id),
+    with: {
+      repository: true,
+    },
   });
 
   if (!project) {
@@ -32,12 +36,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const team = await db.query.teams.findFirst({
     where: eq(teams.id, project.teamId),
   });
+  const environmentList = await db.query.environments.findMany({
+    where: eq(environments.projectId, id),
+  });
 
   return NextResponse.json({
     ...project,
+    repositoryFullName: project.repository?.fullName ?? null,
+    repositoryWebUrl: project.repository?.webUrl ?? null,
     teamName: team?.name,
     teamSlug: team?.slug,
     yourRole: teamMember.role,
+    governance: buildProjectGovernanceSnapshot({
+      role: teamMember.role,
+      environments: environmentList,
+    }),
   });
 }
 
@@ -67,7 +80,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const updates = await request.json();
 
-  const allowedFields = ['name', 'description', 'gitRepository', 'gitBranch'];
+  const allowedFields = ['name', 'description', 'productionBranch'];
   const filteredUpdates: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(updates)) {

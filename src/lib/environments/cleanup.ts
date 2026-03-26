@@ -1,6 +1,6 @@
 import { and, eq, isNotNull, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { databases, domains, environments } from '@/lib/db/schema';
+import { databases, domains, environments, environmentVariables } from '@/lib/db/schema';
 import { deleteNamespace, getIsConnected, initK8sClient } from '@/lib/k8s';
 
 const activeReleaseStatuses = [
@@ -53,6 +53,10 @@ export async function deletePreviewEnvironmentById(environmentId: string): Promi
   if (environment.domains.length > 0) {
     await db.delete(domains).where(eq(domains.environmentId, environment.id));
   }
+
+  await db
+    .delete(environmentVariables)
+    .where(eq(environmentVariables.environmentId, environment.id));
 
   if (environment.databases.length > 0) {
     await db.delete(databases).where(eq(databases.environmentId, environment.id));

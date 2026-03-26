@@ -2,8 +2,8 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { environments, projects, teamMembers } from '@/lib/db/schema';
-import { decorateEnvironmentList } from '@/lib/environments/view';
+import { projects, teamMembers } from '@/lib/db/schema';
+import { getProjectEnvironmentListData } from '@/lib/environments/page-data';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,16 +32,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const envs = await db.query.environments.findMany({
-    where: eq(environments.projectId, id),
-    with: {
-      domains: {
-        with: {
-          service: true,
-        },
-      },
-    },
-  });
-
-  return NextResponse.json(decorateEnvironmentList(envs));
+  return NextResponse.json(await getProjectEnvironmentListData(id, member.role));
 }

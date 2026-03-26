@@ -1,0 +1,37 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
+
+const tabs = [
+  { label: '个人资料', href: '/settings' },
+  { label: '集成', href: '/settings/integrations' },
+];
+
+export function SettingsTabNav() {
+  const pathname = usePathname();
+
+  return (
+    <div className="console-panel flex flex-wrap items-center gap-2 px-3 py-3">
+      {tabs.map((tab) => {
+        const isActive = pathname === tab.href;
+
+        return (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            className={cn(
+              'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+              isActive
+                ? 'console-chip-active'
+                : 'console-chip text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}

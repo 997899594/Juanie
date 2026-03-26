@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PlatformSignalBlock } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -26,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { submitCreateProject } from '@/lib/projects/create-client-actions';
 import { cn } from '@/lib/utils';
 
 interface DetectedService {
@@ -50,7 +52,28 @@ interface DatabaseWithId {
 }
 
 interface CreateProjectFormProps {
-  teams: Array<{ id: string; name: string; slug: string }>;
+  teamScopes: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    role: 'owner' | 'admin' | 'member';
+    roleLabel: string;
+    providerLabels: string[];
+    importEnabled: boolean;
+    createEnabled: boolean;
+    importSummary: string;
+    createSummary: string;
+    importSignals: {
+      chips: Array<{ key: string; label: string; tone: 'danger' | 'neutral' }>;
+      primarySummary: string | null;
+      nextActionLabel: string | null;
+    };
+    createSignals: {
+      chips: Array<{ key: string; label: string; tone: 'danger' | 'neutral' }>;
+      primarySummary: string | null;
+      nextActionLabel: string | null;
+    };
+  }>;
 }
 
 type CreateMode = 'import' | 'create';
@@ -99,12 +122,19 @@ const TEMPLATES = [
   { id: 'blank', name: 'Blank', description: '从空白项目开始', language: 'Docker' },
 ];
 
-export function CreateProjectForm({ teams }: CreateProjectFormProps) {
+export function CreateProjectForm({ teamScopes }: CreateProjectFormProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<Step>('mode');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingAnalyze, setIsLoadingAnalyze] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [submitSnapshot, setSubmitSnapshot] = useState<{
+    platformSignals: {
+      chips: Array<{ key: string; label: string; tone: 'danger' | 'neutral' }>;
+      primarySummary: string | null;
+      nextActionLabel: string | null;
+    };
+  } | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     mode: 'import',
@@ -116,7 +146,7 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
     name: '',
     slug: '',
     description: '',
-    teamId: teams[0]?.id || '',
+    teamId: teamScopes[0]?.id || '',
     services: [],
     databases: [],
     domain: '',
@@ -137,6 +167,10 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
     }>
   >([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const selectedTeam =
+    teamScopes.find((team) => team.id === formData.teamId) ?? teamScopes[0] ?? null;
+  const selectedModeSignals =
+    formData.mode === 'import' ? selectedTeam?.importSignals : selectedTeam?.createSignals;
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
   const isFirstStep = currentStepIndex === 0;
@@ -144,6 +178,12 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
 
   const fetchRepositories = useCallback(
     async (search?: string) => {
+      const scope = teamScopes.find((team) => team.id === formData.teamId);
+      if (!scope?.importEnabled) {
+        setRepositories([]);
+        return;
+      }
+
       const url = new URL('/api/git/repositories', window.location.origin);
       url.searchParams.set('teamId', formData.teamId);
       if (search) url.searchParams.set('search', search);
@@ -154,7 +194,7 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
         setRepositories(data);
       }
     },
-    [formData.teamId]
+    [formData.teamId, teamScopes]
   );
 
   const analyzeRepository = useCallback(
@@ -232,6 +272,18 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
     }
   }, [currentStep, formData.mode, fetchRepositories]);
 
+  const updateTeamId = (teamId: string) => {
+    setSubmitSnapshot(null);
+    setFormData((prev) => ({
+      ...prev,
+      teamId,
+      repositoryId: prev.mode === 'import' ? '' : prev.repositoryId,
+      repositoryFullName: prev.mode === 'import' ? '' : prev.repositoryFullName,
+      services: prev.mode === 'import' ? [] : prev.services,
+    }));
+    setRepositories([]);
+  };
+
   const handleNext = () => {
     if (!isLastStep) {
       setCurrentStep(STEPS[currentStepIndex + 1].id);
@@ -296,6 +348,7 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setSubmitSnapshot(null);
 
     try {
       // Filter out disabled services
@@ -303,25 +356,25 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
         (s) => !(s as ServiceWithId & { disabled?: boolean }).disabled
       );
 
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          services: activeServices,
-        }),
+      const result = await submitCreateProject({
+        ...formData,
+        services: activeServices,
       });
 
-      if (res.ok) {
-        const { project } = await res.json();
-        router.push(`/projects/${project.id}/initializing`);
+      if (result.ok) {
+        router.push(`/projects/${result.project.id}/initializing`);
       } else {
-        const error = await res.json();
-        alert(error.error || '创建项目失败');
+        setSubmitSnapshot(result.snapshot);
       }
     } catch (error) {
       console.error('Failed to create project:', error);
-      alert('创建项目失败');
+      setSubmitSnapshot({
+        platformSignals: {
+          chips: [{ key: 'create:request-failed', label: '创建项目失败', tone: 'danger' }],
+          primarySummary: '创建请求失败，请稍后重试',
+          nextActionLabel: '检查网络后重试',
+        },
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -333,9 +386,9 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
         return true;
       case 'repository':
         if (formData.mode === 'import') {
-          return !!formData.repositoryId;
+          return !!formData.repositoryId && !!selectedTeam?.importEnabled;
         }
-        return !!formData.repositoryName;
+        return !!formData.repositoryName && !!selectedTeam?.createEnabled;
       case 'config':
         return !!formData.name && !!formData.teamId;
       case 'review': {
@@ -392,11 +445,55 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
       </div>
 
       <div className="console-panel px-6 py-6">
+        {submitSnapshot && (
+          <PlatformSignalBlock
+            chips={submitSnapshot.platformSignals.chips}
+            summary={submitSnapshot.platformSignals.primarySummary}
+            nextActionLabel={submitSnapshot.platformSignals.nextActionLabel}
+            summaryClassName="mb-6"
+          />
+        )}
+
         {currentStep === 'mode' && (
           <div className="space-y-6">
+            {selectedTeam && (
+              <div className="rounded-[20px] border border-border bg-secondary/30 p-4">
+                <div className="text-sm font-medium">{selectedTeam.name}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {selectedTeam.roleLabel} ·{' '}
+                  {selectedTeam.providerLabels.length > 0
+                    ? selectedTeam.providerLabels.join(' / ')
+                    : '还没有可用代码托管授权'}
+                </div>
+                <PlatformSignalBlock
+                  chips={selectedModeSignals?.chips ?? []}
+                  summary={selectedModeSignals?.primarySummary}
+                  nextActionLabel={selectedModeSignals?.nextActionLabel}
+                  chipsClassName="mt-3"
+                  summaryClassName="mt-3"
+                />
+              </div>
+            )}
+
             <div>
               <h2 className="text-lg font-semibold mb-1">你想如何创建项目？</h2>
               <p className="text-sm text-muted-foreground">导入现有仓库，或从模板创建新仓库</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>团队</Label>
+              <Select value={formData.teamId} onValueChange={updateTeamId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="选择团队" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teamScopes.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -411,7 +508,9 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
                 )}
               >
                 <div className="font-medium mb-1">导入仓库</div>
-                <div className="text-sm text-muted-foreground">连接现有 Git 仓库</div>
+                <div className="text-sm text-muted-foreground">
+                  {selectedTeam?.importSummary ?? '连接现有 Git 仓库'}
+                </div>
               </button>
 
               <button
@@ -425,7 +524,9 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
                 )}
               >
                 <div className="font-medium mb-1">新建仓库</div>
-                <div className="text-sm text-muted-foreground">从模板创建一个新仓库</div>
+                <div className="text-sm text-muted-foreground">
+                  {selectedTeam?.createSummary ?? '从模板创建一个新仓库'}
+                </div>
               </button>
             </div>
           </div>
@@ -433,6 +534,49 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
 
         {currentStep === 'repository' && (
           <div className="space-y-6">
+            {selectedTeam && (
+              <div className="rounded-[20px] border border-border bg-secondary/30 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">{selectedTeam.name}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {selectedTeam.roleLabel} ·{' '}
+                      {selectedTeam.providerLabels.length > 0
+                        ? selectedTeam.providerLabels.join(' / ')
+                        : '还没有可用代码托管授权'}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formData.mode === 'import'
+                      ? selectedTeam.importSummary
+                      : selectedTeam.createSummary}
+                  </div>
+                </div>
+                <PlatformSignalBlock
+                  chips={selectedModeSignals?.chips ?? []}
+                  summary={selectedModeSignals?.primarySummary}
+                  nextActionLabel={selectedModeSignals?.nextActionLabel}
+                  chipsClassName="mt-3"
+                  summaryClassName="mt-3"
+                />
+                <div className="mt-4">
+                  <Label>团队</Label>
+                  <Select value={formData.teamId} onValueChange={updateTeamId}>
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder="选择团队" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teamScopes.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             {formData.mode === 'import' ? (
               <>
                 <div>
@@ -451,7 +595,11 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
                 </div>
 
                 <div className="max-h-80 overflow-y-auto rounded-[20px] border border-border">
-                  {repositories.length === 0 ? (
+                  {!selectedTeam?.importEnabled ? (
+                    <div className="p-8 text-center text-muted-foreground">
+                      当前团队没有可用的仓库读取授权
+                    </div>
+                  ) : repositories.length === 0 ? (
                     <div className="p-8 text-center text-muted-foreground">没有找到仓库</div>
                   ) : (
                     repositories.map((repo) => (
@@ -623,21 +771,27 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>团队</Label>
-                  <Select
-                    value={formData.teamId}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, teamId: value }))}
-                  >
+                  <Select value={formData.teamId} onValueChange={updateTeamId}>
                     <SelectTrigger>
                       <SelectValue placeholder="选择团队" />
                     </SelectTrigger>
                     <SelectContent>
-                      {teams.map((team) => (
+                      {teamScopes.map((team) => (
                         <SelectItem key={team.id} value={team.id}>
                           {team.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {selectedTeam && (
+                    <PlatformSignalBlock
+                      chips={selectedModeSignals?.chips ?? []}
+                      summary={selectedModeSignals?.primarySummary}
+                      nextActionLabel={selectedModeSignals?.nextActionLabel}
+                      chipsClassName="mt-2"
+                      summaryClassName="mt-2"
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -700,15 +854,21 @@ export function CreateProjectForm({ teams }: CreateProjectFormProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">团队</p>
-                  <p className="font-medium">
-                    {teams.find((t) => t.id === formData.teamId)?.name || '-'}
-                  </p>
+                  <p className="font-medium">{selectedTeam?.name || '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">分支</p>
                   <p className="font-medium">{formData.productionBranch}</p>
                 </div>
               </div>
+
+              {selectedTeam && (
+                <div className="rounded-[18px] bg-secondary/40 p-3 text-sm text-muted-foreground">
+                  {formData.mode === 'import'
+                    ? selectedTeam.importSummary
+                    : selectedTeam.createSummary}
+                </div>
+              )}
 
               {formData.monorepoType !== 'none' && (
                 <div className="flex items-center gap-2 rounded-[18px] bg-secondary/40 p-3">

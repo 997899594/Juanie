@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -99,6 +100,16 @@ export type MigrationApprovalPolicy = (typeof migrationApprovalPolicies)[number]
 export const initStepStatuses = ['pending', 'running', 'completed', 'failed', 'skipped'] as const;
 export type InitStepStatus = (typeof initStepStatuses)[number];
 
+export const environmentDeploymentStrategies = [
+  'rolling',
+  'controlled',
+  'canary',
+  'blue_green',
+] as const;
+export type EnvironmentDeploymentStrategy = (typeof environmentDeploymentStrategies)[number];
+export const environmentDatabaseStrategies = ['direct', 'inherit', 'isolated_clone'] as const;
+export type EnvironmentDatabaseStrategy = (typeof environmentDatabaseStrategies)[number];
+
 export const teamRoles = ['owner', 'admin', 'member'] as const;
 export type TeamRole = (typeof teamRoles)[number];
 
@@ -138,6 +149,14 @@ export const migrationCompatibilityEnum = pgEnum(
 export const migrationApprovalPolicyEnum = pgEnum(
   'migrationApprovalPolicy',
   migrationApprovalPolicies
+);
+export const environmentDeploymentStrategyEnum = pgEnum(
+  'environmentDeploymentStrategy',
+  environmentDeploymentStrategies
+);
+export const environmentDatabaseStrategyEnum = pgEnum(
+  'environmentDatabaseStrategy',
+  environmentDatabaseStrategies
 );
 
 // ============================================
@@ -408,6 +427,7 @@ export const projectInitSteps = pgTable(
     status: initStepStatusEnum('status').notNull().default('pending'),
     message: text('message'),
     progress: integer('progress').default(0),
+    errorCode: varchar('errorCode', { length: 100 }),
     error: text('error'),
 
     startedAt: timestamp('startedAt'),
@@ -485,9 +505,18 @@ export const environments = pgTable(
     isPreview: boolean('isPreview').default(false),
     previewPrNumber: integer('previewPrNumber'),
     expiresAt: timestamp('expiresAt'),
+    baseEnvironmentId: uuid('baseEnvironmentId').references((): AnyPgColumn => environments.id, {
+      onDelete: 'set null',
+    }),
+    databaseStrategy: environmentDatabaseStrategyEnum('databaseStrategy')
+      .default('direct')
+      .notNull(),
 
     autoDeploy: boolean('autoDeploy').default(true).notNull(),
     isProduction: boolean('isProduction').default(false).notNull(),
+    deploymentStrategy: environmentDeploymentStrategyEnum('deploymentStrategy')
+      .default('rolling')
+      .notNull(),
 
     namespace: varchar('namespace', { length: 100 }),
 
@@ -498,6 +527,7 @@ export const environments = pgTable(
     projectIdIdx: index('environment_projectId_idx').on(table.projectId),
     previewIdx: index('environment_preview_idx').on(table.projectId, table.isPreview),
     previewPrIdx: index('environment_preview_pr_idx').on(table.projectId, table.previewPrNumber),
+    baseEnvironmentIdx: index('environment_base_env_idx').on(table.baseEnvironmentId),
   })
 );
 
@@ -513,6 +543,9 @@ export const databases = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
     environmentId: uuid('environmentId').references(() => environments.id, {
+      onDelete: 'set null',
+    }),
+    sourceDatabaseId: uuid('sourceDatabaseId').references((): AnyPgColumn => databases.id, {
       onDelete: 'set null',
     }),
     serviceId: uuid('serviceId').references(() => services.id, { onDelete: 'set null' }),
@@ -541,6 +574,12 @@ export const databases = pgTable(
   },
   (table) => ({
     projectIdIdx: index('database_projectId_idx').on(table.projectId),
+    environmentIdIdx: index('database_environmentId_idx').on(table.environmentId),
+    sourceDatabaseIdIdx: index('database_sourceDatabaseId_idx').on(table.sourceDatabaseId),
+    environmentSourceUnique: unique('database_environment_source_unique').on(
+      table.environmentId,
+      table.sourceDatabaseId
+    ),
   })
 );
 
@@ -1081,6 +1120,14 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
     fields: [environments.projectId],
     references: [projects.id],
   }),
+  baseEnvironment: one(environments, {
+    fields: [environments.baseEnvironmentId],
+    references: [environments.id],
+    relationName: 'environment_inheritance',
+  }),
+  derivedEnvironments: many(environments, {
+    relationName: 'environment_inheritance',
+  }),
   domains: many(domains),
   releases: many(releases),
   deployments: many(deployments),
@@ -1100,6 +1147,14 @@ export const databasesRelations = relations(databases, ({ one, many }) => ({
   service: one(services, {
     fields: [databases.serviceId],
     references: [services.id],
+  }),
+  sourceDatabase: one(databases, {
+    fields: [databases.sourceDatabaseId],
+    references: [databases.id],
+    relationName: 'database_clone',
+  }),
+  derivedDatabases: many(databases, {
+    relationName: 'database_clone',
   }),
   migrations: many(databaseMigrations),
   migrationSpecifications: many(migrationSpecifications),

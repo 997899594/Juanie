@@ -10,84 +10,23 @@ import {
   Rocket,
 } from 'lucide-react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
+import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PlatformSignalBlock } from '@/components/ui/platform-signals';
+import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
+import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { releases } from '@/lib/db/schema';
-import { buildEnvironmentAccessUrl, pickPrimaryEnvironmentDomain } from '@/lib/domains/defaults';
-import {
-  formatEnvironmentExpiry,
-  getEnvironmentScopeLabel,
-  getEnvironmentSourceLabel,
-} from '@/lib/environments/presentation';
-import { evaluateReleasePolicy } from '@/lib/policies/delivery';
-import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
-import { buildReleaseDiff } from '@/lib/releases/diff';
-import { getReleaseIntelligenceSnapshot } from '@/lib/releases/intelligence';
+import { projects, teamMembers } from '@/lib/db/schema';
+import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
-
-const releaseStatusConfig: Record<
-  string,
-  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean; label: string }
-> = {
-  queued: { color: 'neutral', pulse: false, label: '排队中' },
-  planning: { color: 'info', pulse: true, label: '规划中' },
-  migration_pre_running: { color: 'warning', pulse: true, label: '前置迁移' },
-  migration_pre_failed: { color: 'error', pulse: false, label: '前置迁移失败' },
-  deploying: { color: 'info', pulse: true, label: '发布中' },
-  verifying: { color: 'info', pulse: true, label: '校验中' },
-  migration_post_running: { color: 'warning', pulse: true, label: '后置迁移' },
-  degraded: { color: 'warning', pulse: false, label: '降级' },
-  succeeded: { color: 'success', pulse: false, label: '成功' },
-  failed: { color: 'error', pulse: false, label: '失败' },
-  canceled: { color: 'neutral', pulse: false, label: '已取消' },
-};
-
-const deploymentStatusConfig: Record<
-  string,
-  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean; label: string }
-> = {
-  queued: { color: 'neutral', pulse: false, label: '排队中' },
-  building: { color: 'info', pulse: true, label: '构建中' },
-  deploying: { color: 'info', pulse: true, label: '发布中' },
-  running: { color: 'success', pulse: false, label: '运行中' },
-  failed: { color: 'error', pulse: false, label: '失败' },
-  rolled_back: { color: 'warning', pulse: false, label: '已回滚' },
-};
-
-const migrationStatusConfig: Record<
-  string,
-  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean }
-> = {
-  queued: { color: 'neutral', pulse: false },
-  awaiting_approval: { color: 'warning', pulse: false },
-  planning: { color: 'info', pulse: true },
-  running: { color: 'info', pulse: true },
-  success: { color: 'success', pulse: false },
-  failed: { color: 'error', pulse: false },
-  canceled: { color: 'neutral', pulse: false },
-  skipped: { color: 'neutral', pulse: false },
-};
-
-function formatStatusLabel(value: string): string {
-  const labels: Record<string, string> = {
-    queued: '排队中',
-    awaiting_approval: '待审批',
-    planning: '规划中',
-    running: '执行中',
-    success: '成功',
-    failed: '失败',
-    canceled: '已取消',
-    skipped: '已跳过',
-  };
-  return labels[value] ?? value;
-}
+import { getReleaseDetailPageData } from '@/lib/releases/service';
 
 export default async function ReleaseDetailPage({
   params,
@@ -95,44 +34,34 @@ export default async function ReleaseDetailPage({
   params: Promise<{ id: string; releaseId: string }>;
 }) {
   const { id, releaseId } = await params;
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect('/login');
+  }
 
-  const releaseHeader = await db.query.releases.findFirst({
-    where: and(eq(releases.id, releaseId), eq(releases.projectId, id)),
+  const project = await db.query.projects.findFirst({
+    where: eq(projects.id, id),
   });
-
-  if (!releaseHeader) {
+  if (!project) {
     notFound();
   }
 
-  const release = await getReleaseById(releaseId);
-  if (!release || release.projectId !== id) {
-    notFound();
+  const member = await db.query.teamMembers.findFirst({
+    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, session.user.id)),
+  });
+  if (!member) {
+    redirect('/projects');
   }
 
-  const previousRelease = await getPreviousReleaseByScope({
+  const pageData = await getReleaseDetailPageData({
     projectId: id,
-    environmentId: release.environmentId,
-    createdAt: release.createdAt,
+    releaseId,
   });
-
-  const releaseConfig = releaseStatusConfig[release.status] || releaseStatusConfig.queued;
-  const approvalRuns = release.migrationRuns.filter((run) => run.status === 'awaiting_approval');
-  const failedRuns = release.migrationRuns.filter((run) =>
-    ['failed', 'canceled'].includes(run.status)
-  );
-  const intelligence = getReleaseIntelligenceSnapshot(release);
-  const policy = evaluateReleasePolicy(release);
-  const riskLabel =
-    intelligence.riskLevel === 'high'
-      ? '高风险'
-      : intelligence.riskLevel === 'medium'
-        ? '中风险'
-        : '低风险';
-  const environmentScope = getEnvironmentScopeLabel(release.environment ?? {});
-  const environmentSource = getEnvironmentSourceLabel(release.environment ?? {});
-  const environmentExpiry = formatEnvironmentExpiry(release.environment?.expiresAt);
-  const primaryDomain = pickPrimaryEnvironmentDomain(release.environment?.domains ?? []);
-  const releaseDiff = buildReleaseDiff(release, previousRelease ?? null);
+  if (!pageData) {
+    notFound();
+  }
+  const { release, previousReleaseLink } = pageData;
+  const releaseActions = buildReleaseEnvironmentActionSnapshot(member.role, release.environment);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -141,13 +70,9 @@ export default async function ReleaseDetailPage({
         description={release.sourceRef}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {primaryDomain && (
+            {release.primaryDomainUrl && (
               <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-                <a
-                  href={buildEnvironmentAccessUrl(primaryDomain.hostname)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a href={release.primaryDomainUrl} target="_blank" rel="noreferrer">
                   打开环境
                 </a>
               </Button>
@@ -166,43 +91,45 @@ export default async function ReleaseDetailPage({
         <div className="console-panel px-5 py-4">
           <div className="mb-2">
             <StatusIndicator
-              status={releaseConfig.color}
-              pulse={releaseConfig.pulse}
-              label={releaseConfig.label}
+              status={release.statusDecoration.color}
+              pulse={release.statusDecoration.pulse}
+              label={release.statusDecoration.label}
             />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>{release.environment?.name ?? '环境'}</span>
-            {environmentScope && <Badge variant="outline">{environmentScope}</Badge>}
-            {environmentSource && <Badge variant="outline">{environmentSource}</Badge>}
-            {environmentExpiry && <Badge variant="outline">{environmentExpiry}</Badge>}
-            <Badge variant="outline">{riskLabel}</Badge>
+            {release.environmentScope && (
+              <Badge variant="outline">{release.environmentScope}</Badge>
+            )}
+            {release.environmentSource && (
+              <Badge variant="outline">{release.environmentSource}</Badge>
+            )}
+            {release.environmentStrategy && (
+              <Badge variant="outline">{release.environmentStrategy}</Badge>
+            )}
+            {release.environmentDatabaseStrategy && (
+              <Badge variant="outline">{release.environmentDatabaseStrategy}</Badge>
+            )}
+            {release.environmentInheritance && (
+              <Badge variant="outline">{release.environmentInheritance}</Badge>
+            )}
+            {release.previewSourceMeta.label && (
+              <Badge variant="outline">{release.previewSourceMeta.label}</Badge>
+            )}
+            {release.environmentExpiry && (
+              <Badge variant="outline">{release.environmentExpiry}</Badge>
+            )}
+            <Badge variant="outline">{release.riskLabel}</Badge>
           </div>
         </div>
-        <div className="console-panel px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            服务
+        {release.stats.map((stat) => (
+          <div key={stat.label} className="console-panel px-5 py-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {stat.label}
+            </div>
+            <div className="mt-3 text-3xl font-semibold tracking-tight">{stat.value}</div>
           </div>
-          <div className="mt-3 text-3xl font-semibold tracking-tight">
-            {release.artifacts.length}
-          </div>
-        </div>
-        <div className="console-panel px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            部署
-          </div>
-          <div className="mt-3 text-3xl font-semibold tracking-tight">
-            {release.deployments.length}
-          </div>
-        </div>
-        <div className="console-panel px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            迁移
-          </div>
-          <div className="mt-3 text-3xl font-semibold tracking-tight">
-            {release.migrationRuns.length}
-          </div>
-        </div>
+        ))}
       </div>
 
       <div className="console-panel px-5 py-4">
@@ -219,6 +146,12 @@ export default async function ReleaseDetailPage({
             <GitBranch className="h-3.5 w-3.5" />
             <span>{release.sourceRef}</span>
           </div>
+          {release.previewSourceMeta.title && (
+            <div className="flex items-center gap-1.5">
+              <Rocket className="h-3.5 w-3.5" />
+              <PreviewSourceSummary meta={release.previewSourceMeta} />
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <Clock3 className="h-3.5 w-3.5" />
             <span>{new Date(release.createdAt).toLocaleString()}</span>
@@ -228,46 +161,22 @@ export default async function ReleaseDetailPage({
             <span>{release.sourceRepository}</span>
           </div>
         </div>
-        {(intelligence.failureSummary ||
-          policy.summary ||
-          intelligence.reasons.length > 0 ||
-          policy.reasons.length > 0 ||
-          intelligence.actionLabel) && (
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            {intelligence.failureSummary && (
-              <span className="rounded-full border border-destructive/15 bg-background px-2.5 py-1 text-destructive">
-                {intelligence.failureSummary}
-              </span>
-            )}
-            {intelligence.reasons.map((reason) => (
-              <span
-                key={reason}
-                className="rounded-full border border-border bg-secondary/30 px-2.5 py-1 text-foreground"
-              >
-                {reason}
-              </span>
-            ))}
-            {policy.summary && (
-              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                {policy.summary}
-              </span>
-            )}
-            {intelligence.actionLabel && (
-              <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-                下一步：{intelligence.actionLabel}
-              </span>
-            )}
-          </div>
-        )}
+        <PlatformSignalBlock
+          chips={release.signalChips}
+          summary={release.platformSignals.primarySummary}
+          nextActionLabel={release.platformSignals.nextActionLabel}
+          chipsClassName="mt-4"
+          summaryClassName="mt-3"
+        />
       </div>
 
       <section className="console-panel p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm font-semibold">变更</div>
-          {previousRelease ? (
+          {previousReleaseLink ? (
             <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-              <Link href={`/projects/${id}/releases/${previousRelease.id}`}>
-                对比上一版：{getReleaseDisplayTitle(previousRelease)}
+              <Link href={`/projects/${id}/releases/${previousReleaseLink.id}`}>
+                对比上一版：{previousReleaseLink.title}
               </Link>
             </Button>
           ) : (
@@ -280,12 +189,12 @@ export default async function ReleaseDetailPage({
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               镜像变化
             </div>
-            {releaseDiff.changedArtifacts.length === 0 ? (
+            {release.diff.changedArtifacts.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
                 当前没有镜像变化。
               </div>
             ) : (
-              releaseDiff.changedArtifacts.map((item) => (
+              release.diff.changedArtifacts.map((item) => (
                 <div
                   key={`${item.serviceId}:${item.change}`}
                   className="console-card bg-secondary/20 px-4 py-3"
@@ -317,12 +226,12 @@ export default async function ReleaseDetailPage({
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               迁移变化
             </div>
-            {releaseDiff.changedMigrations.length === 0 ? (
+            {release.diff.changedMigrations.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
                 当前没有迁移计划变化。
               </div>
             ) : (
-              releaseDiff.changedMigrations.map((item) => (
+              release.diff.changedMigrations.map((item) => (
                 <div key={item.key} className="console-card bg-secondary/20 px-4 py-3">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <div className="text-sm font-medium">{item.label}</div>
@@ -338,7 +247,9 @@ export default async function ReleaseDetailPage({
         </div>
       </section>
 
-      {(approvalRuns.length > 0 || failedRuns.length > 0 || release.errorMessage) && (
+      {(release.approvalRunsCount > 0 ||
+        release.retryableRunsCount > 0 ||
+        release.errorMessage) && (
         <div className="rounded-2xl border border-border bg-secondary/20 px-5 py-4">
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-background p-2 text-foreground">
@@ -347,8 +258,18 @@ export default async function ReleaseDetailPage({
             <div className="space-y-2">
               <div className="text-sm font-semibold">需要处理</div>
               <div className="text-sm text-muted-foreground">
-                {approvalRuns.length > 0 && <span>{approvalRuns.length} 个待审批。 </span>}
-                {failedRuns.length > 0 && <span>{failedRuns.length} 个可重试。 </span>}
+                {release.intelligence.issue?.summary && (
+                  <span>{release.intelligence.issue.summary}。 </span>
+                )}
+                {release.approvalRunsCount > 0 && (
+                  <span>{release.approvalRunsCount} 个待审批。 </span>
+                )}
+                {release.retryableRunsCount > 0 && (
+                  <span>{release.retryableRunsCount} 个可重试。 </span>
+                )}
+                {release.intelligence.issue?.nextActionLabel && (
+                  <span>下一步：{release.intelligence.issue.nextActionLabel}。 </span>
+                )}
                 {release.errorMessage && <span>{release.errorMessage}</span>}
               </div>
             </div>
@@ -365,7 +286,10 @@ export default async function ReleaseDetailPage({
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {release.artifacts.map((artifact) => (
-                <div key={artifact.id} className="console-card bg-secondary/20 px-4 py-3">
+                <div
+                  key={artifact.id ?? artifact.service.id}
+                  className="console-card bg-secondary/20 px-4 py-3"
+                >
                   <div className="mb-1 text-sm font-medium">{artifact.service.name}</div>
                   <div className="break-all text-xs text-muted-foreground">{artifact.imageUrl}</div>
                   {artifact.imageDigest && (
@@ -389,45 +313,49 @@ export default async function ReleaseDetailPage({
               </div>
             ) : (
               <div className="space-y-3">
-                {release.deployments.map((deployment) => {
-                  const deploymentConfig =
-                    deploymentStatusConfig[deployment.status] || deploymentStatusConfig.queued;
-
-                  return (
-                    <div key={deployment.id} className="console-card bg-secondary/20 px-4 py-3">
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <StatusIndicator
-                          status={deploymentConfig.color}
-                          pulse={deploymentConfig.pulse}
-                          label={deploymentConfig.label}
-                        />
-                        <Badge variant="outline">
-                          {deployment.serviceId
-                            ? (release.artifacts.find(
-                                (artifact) => artifact.serviceId === deployment.serviceId
-                              )?.service.name ?? 'service')
-                            : '项目'}
-                        </Badge>
-                        {deployment.version && (
-                          <Badge variant="secondary">v{deployment.version}</Badge>
-                        )}
-                      </div>
-                      {deployment.imageUrl && (
-                        <div className="mb-3 break-all text-xs text-muted-foreground">
-                          {deployment.imageUrl}
-                        </div>
+                {release.deploymentItems.map((deployment) => (
+                  <div key={deployment.id} className="console-card bg-secondary/20 px-4 py-3">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <StatusIndicator
+                        status={deployment.statusDecoration.color}
+                        pulse={deployment.statusDecoration.pulse}
+                        label={deployment.statusDecoration.label}
+                      />
+                      <Badge variant="outline">{deployment.serviceName}</Badge>
+                      {deployment.version && (
+                        <Badge variant="secondary">v{deployment.version}</Badge>
                       )}
-                      <div className="mb-3">
-                        <DeploymentRollbackAction projectId={id} deploymentId={deployment.id} />
+                    </div>
+                    {deployment.imageUrl && (
+                      <div className="mb-3 break-all text-xs text-muted-foreground">
+                        {deployment.imageUrl}
                       </div>
-                      <DeploymentLogs
+                    )}
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {release.environment?.deploymentStrategy &&
+                        release.environment.deploymentStrategy !== 'rolling' && (
+                          <DeploymentRolloutAction
+                            projectId={id}
+                            deploymentId={deployment.id}
+                            strategyLabel={release.environmentStrategy}
+                            disabled={!releaseActions.canManage}
+                            disabledSummary={releaseActions.summary}
+                          />
+                        )}
+                      <DeploymentRollbackAction
                         projectId={id}
                         deploymentId={deployment.id}
-                        status={deployment.status}
+                        disabled={!releaseActions.canManage}
+                        disabledSummary={releaseActions.summary}
                       />
                     </div>
-                  );
-                })}
+                    <DeploymentLogs
+                      projectId={id}
+                      deploymentId={deployment.id}
+                      status={deployment.status}
+                    />
+                  </div>
+                ))}
               </div>
             )}
           </section>
@@ -442,41 +370,35 @@ export default async function ReleaseDetailPage({
               </div>
             ) : (
               <div className="space-y-3">
-                {release.migrationRuns.map((run) => {
-                  const migrationConfig =
-                    migrationStatusConfig[run.status] || migrationStatusConfig.queued;
-                  const runImageUrl =
-                    release.artifacts.find((artifact) => artifact.serviceId === run.serviceId)
-                      ?.imageUrl ?? null;
-
-                  return (
-                    <div key={run.id} className="console-card bg-secondary/20 px-4 py-3">
-                      <div className="mb-2 flex items-start justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <StatusIndicator
-                            status={migrationConfig.color}
-                            pulse={migrationConfig.pulse}
-                            label={formatStatusLabel(run.status)}
-                          />
-                          <Badge variant="outline">{run.specification.phase}</Badge>
-                          <Badge variant="secondary">{run.database.name}</Badge>
-                        </div>
-                        <ReleaseMigrationActions
-                          projectId={id}
-                          runId={run.id}
-                          status={run.status}
-                          imageUrl={runImageUrl}
+                {release.migrationItems.map((run) => (
+                  <div key={run.id} className="console-card bg-secondary/20 px-4 py-3">
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusIndicator
+                          status={run.statusDecoration.color}
+                          pulse={run.statusDecoration.pulse}
+                          label={run.statusDecoration.label}
                         />
+                        <Badge variant="outline">{run.specification.phase}</Badge>
+                        <Badge variant="secondary">{run.database.name}</Badge>
                       </div>
-                      <div className="text-sm font-medium">
-                        {run.service?.name ?? '服务'} · {run.specification.tool}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {run.specification.command}
-                      </div>
+                      <ReleaseMigrationActions
+                        projectId={id}
+                        runId={run.id}
+                        status={run.status}
+                        imageUrl={run.imageUrl}
+                        disabled={!releaseActions.canManage}
+                        disabledSummary={releaseActions.summary}
+                      />
                     </div>
-                  );
-                })}
+                    <div className="text-sm font-medium">
+                      {run.serviceName} · {run.specification.tool}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {run.specification.command}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </section>
@@ -484,18 +406,18 @@ export default async function ReleaseDetailPage({
           <section className="console-panel p-5">
             <div className="mb-4 text-sm font-semibold">元数据</div>
             <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">配置提交</span>
-                <span>{release.configCommitSha?.slice(0, 7) ?? '—'}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">更新时间</span>
-                <span>{new Date(release.updatedAt).toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">发布 ID</span>
-                <code className="rounded bg-muted px-2 py-1 text-xs font-mono">{release.id}</code>
-              </div>
+              {release.metadataItems.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  {item.mono ? (
+                    <code className="rounded bg-muted px-2 py-1 text-xs font-mono">
+                      {item.value}
+                    </code>
+                  ) : (
+                    <span>{item.value}</span>
+                  )}
+                </div>
+              ))}
             </div>
           </section>
         </div>

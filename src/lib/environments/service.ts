@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { syncPreviewEnvironmentDatabases } from '@/lib/databases/preview';
 import { db } from '@/lib/db';
 import { environments, services } from '@/lib/db/schema';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
@@ -11,6 +12,22 @@ import {
   extractBranchFromRef,
   extractPrNumberFromRef,
 } from './preview';
+
+async function resolvePreviewBaseEnvironmentId(projectId: string): Promise<string | null> {
+  const environmentList = await db.query.environments.findMany({
+    where: eq(environments.projectId, projectId),
+  });
+
+  const preferred =
+    environmentList.find(
+      (environment) => !environment.isPreview && !environment.isProduction && environment.autoDeploy
+    ) ??
+    environmentList.find((environment) => !environment.isPreview && !environment.isProduction) ??
+    environmentList.find((environment) => !environment.isPreview) ??
+    null;
+
+  return preferred?.id ?? null;
+}
 
 function isConflictError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -41,6 +58,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
   projectSlug: string;
   ref: string;
   ttlHours?: number;
+  databaseStrategy?: 'inherit' | 'isolated_clone';
 }) {
   const prNumber = extractPrNumberFromRef(input.ref);
   const branch = extractBranchFromRef(input.ref);
@@ -57,6 +75,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
   const existingEnvironment = await db.query.environments.findFirst({
     where: and(eq(environments.projectId, input.projectId), eq(environments.name, environmentName)),
   });
+  const baseEnvironmentId = await resolvePreviewBaseEnvironmentId(input.projectId);
 
   const values = {
     projectId: input.projectId,
@@ -65,8 +84,11 @@ export async function ensurePreviewEnvironmentForRef(input: {
     isPreview: true,
     previewPrNumber: prNumber,
     expiresAt: calculatePreviewExpiry(input.ttlHours),
+    baseEnvironmentId,
+    databaseStrategy: input.databaseStrategy ?? 'inherit',
     autoDeploy: true,
     isProduction: false,
+    deploymentStrategy: 'rolling' as const,
     namespace: buildPreviewNamespace(input.projectSlug, environmentName),
   };
 
@@ -97,6 +119,10 @@ export async function ensurePreviewEnvironmentForRef(input: {
       },
       services: serviceList,
     });
+    await syncPreviewEnvironmentDatabases({
+      projectId: input.projectId,
+      environmentId: updated.id,
+    });
 
     return updated;
   }
@@ -119,6 +145,10 @@ export async function ensurePreviewEnvironmentForRef(input: {
       isPreview: created.isPreview,
     },
     services: serviceList,
+  });
+  await syncPreviewEnvironmentDatabases({
+    projectId: input.projectId,
+    environmentId: created.id,
   });
 
   return created;

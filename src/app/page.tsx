@@ -1,38 +1,12 @@
-import { desc, eq } from 'drizzle-orm';
 import { AlertTriangle, ArrowRight, FolderKanban, Plus, Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PlatformSignalBlock, PlatformSignalChipList } from '@/components/ui/platform-signals';
+import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { projects, teamMembers } from '@/lib/db/schema';
-import {
-  getEnvironmentScopeLabel,
-  getEnvironmentSourceLabel,
-} from '@/lib/environments/presentation';
-import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
-import {
-  getIssueLabel,
-  getMigrationAttentionIssueCode,
-  getReleaseActionLabel,
-} from '@/lib/releases/intelligence';
-
-function formatRelativeTime(date: Date | string): string {
-  const now = new Date();
-  const d = typeof date === 'string' ? new Date(date) : date;
-  const diff = now.getTime() - d.getTime();
-
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes} 分钟前`;
-  if (hours < 24) return `${hours} 小时前`;
-  if (days < 7) return `${days} 天前`;
-  return d.toLocaleDateString();
-}
+import { getHomePageData } from '@/lib/home/service';
 
 export default async function HomePage() {
   const session = await auth();
@@ -41,60 +15,16 @@ export default async function HomePage() {
     redirect('/login');
   }
 
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, session.user.id),
-    with: {
-      team: true,
-    },
-  });
-
-  const teamIds = userTeams.map((tm) => tm.teamId);
-  const teamProjects =
-    teamIds.length > 0
-      ? await db.query.projects.findMany({
-          where: (project, { inArray }) => inArray(project.teamId, teamIds),
-          columns: {
-            id: true,
-          },
-        })
-      : [];
-  const teamProjectIds = teamProjects.map((project) => project.id);
-
-  const userProjects =
-    teamIds.length > 0
-      ? await db.query.projects.findMany({
-          where: (p, { inArray }) => inArray(p.teamId, teamIds),
-          limit: 5,
-          orderBy: [desc(projects.createdAt)],
-          with: {
-            repository: true,
-          },
-        })
-      : [];
-
-  const attentionRuns =
-    teamProjectIds.length > 0
-      ? await db.query.migrationRuns
-          .findMany({
-            where: (run, { inArray }) => inArray(run.projectId, teamProjectIds),
-            orderBy: (run, { desc }) => [desc(run.createdAt)],
-            limit: 5,
-            with: {
-              database: true,
-              environment: true,
-              project: true,
-              release: true,
-            },
-          })
-          .then((runs) => filterAttentionRuns(runs))
-      : [];
-  const attentionStats = getAttentionStats(attentionRuns);
+  const { headerDescription, stats, projectCards, attentionItems } = await getHomePageData(
+    session.user.id,
+    session.user.name
+  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title="概览"
-        description={session.user.name ? `${session.user.name}` : '控制台'}
+        description={headerDescription}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
@@ -114,12 +44,7 @@ export default async function HomePage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          { label: '项目', value: userProjects.length },
-          { label: '团队', value: userTeams.length },
-          { label: '待处理', value: attentionStats.total },
-          { label: '资源', value: '—' },
-        ].map((stat) => (
+        {stats.map((stat) => (
           <div key={stat.label} className="console-panel px-5 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {stat.label}
@@ -141,7 +66,7 @@ export default async function HomePage() {
             </Button>
           </div>
           <div className="p-3">
-            {userProjects.length === 0 ? (
+            {projectCards.length === 0 ? (
               <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
                 <div className="mb-4 rounded-2xl bg-secondary p-3">
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
@@ -157,7 +82,7 @@ export default async function HomePage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {userProjects.map((project) => (
+                {projectCards.map((project) => (
                   <Link
                     key={project.id}
                     href={`/projects/${project.id}`}
@@ -170,11 +95,24 @@ export default async function HomePage() {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">{project.name}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {project.repository?.fullName || '未绑定仓库'}
+                          {project.repositoryLabel}
                         </div>
+                        {project.governanceSignals.length > 0 && (
+                          <PlatformSignalChipList
+                            chips={project.governanceSignals}
+                            className="mt-1 gap-1.5"
+                          />
+                        )}
+                        {project.governanceSummary && (
+                          <div className="mt-1 truncate text-[11px] text-muted-foreground">
+                            {project.governanceSummary}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="text-xs capitalize text-muted-foreground">{project.status}</div>
+                    <div className="text-xs capitalize text-muted-foreground">
+                      {project.statusLabel}
+                    </div>
                   </Link>
                 ))}
               </div>
@@ -193,7 +131,7 @@ export default async function HomePage() {
             </Button>
           </div>
           <div className="p-3">
-            {attentionRuns.length === 0 ? (
+            {attentionItems.length === 0 ? (
               <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
                 <div className="mb-4 rounded-2xl bg-secondary p-3">
                   <AlertTriangle className="h-5 w-5 text-muted-foreground" />
@@ -202,64 +140,76 @@ export default async function HomePage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {attentionRuns.map((run) =>
-                  (() => {
-                    const issueCode = getMigrationAttentionIssueCode(run);
-                    const issueLabel = getIssueLabel(issueCode);
-                    const actionLabel = getReleaseActionLabel(issueCode);
-
-                    return (
-                      <Link
-                        key={run.id}
-                        href={
-                          run.releaseId
-                            ? `/projects/${run.projectId}/releases/${run.releaseId}`
-                            : `/projects/${run.projectId}`
-                        }
-                        className="flex items-center justify-between rounded-2xl border border-transparent bg-secondary/20 px-4 py-3 transition-colors hover:border-border hover:bg-secondary/40"
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div
-                            className={`h-2 w-2 rounded-full ${
-                              run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
-                            }`}
+                {attentionItems.map((run) => (
+                  <Link
+                    key={run.id}
+                    href={run.href}
+                    className="flex items-center justify-between rounded-2xl border border-transparent bg-secondary/20 px-4 py-3 transition-colors hover:border-border hover:bg-secondary/40"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className={`h-2 w-2 rounded-full ${
+                          run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
+                        }`}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{run.databaseName}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {run.projectName}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <PlatformSignalChipList
+                            chips={run.platformSignals.chips}
+                            className="gap-1.5"
                           />
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium">{run.database.name}</div>
-                            <div className="truncate text-xs text-muted-foreground">
-                              {run.project.name}
-                            </div>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              {issueLabel && (
-                                <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                  {issueLabel}
-                                </span>
-                              )}
-                              {getEnvironmentScopeLabel(run.environment) && (
-                                <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                  {getEnvironmentScopeLabel(run.environment)}
-                                </span>
-                              )}
-                              {getEnvironmentSourceLabel(run.environment) && (
-                                <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                  {getEnvironmentSourceLabel(run.environment)}
-                                </span>
-                              )}
-                              {actionLabel && (
-                                <span className="text-[11px] text-muted-foreground">
-                                  下一步：{actionLabel}
-                                </span>
-                              )}
-                            </div>
+                          {run.environmentScopeLabel && (
+                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                              {run.environmentScopeLabel}
+                            </span>
+                          )}
+                          {run.environmentSourceLabel && (
+                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                              {run.environmentSourceLabel}
+                            </span>
+                          )}
+                          {run.previewSourceMeta.label && (
+                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                              {run.previewSourceMeta.label}
+                            </span>
+                          )}
+                          {run.environmentExpiryLabel && (
+                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
+                              {run.environmentExpiryLabel}
+                            </span>
+                          )}
+                        </div>
+                        <PlatformSignalBlock
+                          chips={[]}
+                          summary={run.platformSignals.primarySummary}
+                          nextActionLabel={run.platformSignals.nextActionLabel}
+                          summaryClassName="mt-1 border-transparent bg-transparent px-0 py-0"
+                        />
+                        {(run.releaseTitle || run.primaryDomainUrl) && (
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            {run.releaseTitle && <span>{run.releaseTitle}</span>}
+                            <PreviewSourceSummary meta={run.previewSourceMeta} />
+                            {run.primaryDomainUrl && (
+                              <span className="text-foreground underline underline-offset-4">
+                                打开环境
+                              </span>
+                            )}
                           </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {run.createdAt ? formatRelativeTime(run.createdAt) : '—'}
-                        </div>
-                      </Link>
-                    );
-                  })()
-                )}
+                        )}
+                        {run.previewLifecycle?.summary && (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            {run.previewLifecycle.summary}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{run.createdAtLabel}</div>
+                  </Link>
+                ))}
               </div>
             )}
           </div>

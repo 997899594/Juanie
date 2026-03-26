@@ -4,6 +4,7 @@ import { integrationIdentities, teamMembers } from '@/lib/db/schema';
 import type {
   CreateRepoOptions,
   GitRepository,
+  GitReviewRequest,
   PushOptions,
   RegistryWebhookOptions,
   WebhookOptions,
@@ -127,6 +128,15 @@ export const gateway = {
   ): Promise<GitRepository | null> {
     const adapter = resolveAdapter(session.provider);
     return adapter.getRepository(session, fullName);
+  },
+
+  async getReviewRequest(
+    session: IntegrationSession,
+    repoFullName: string,
+    number: number
+  ): Promise<GitReviewRequest | null> {
+    const adapter = resolveAdapter(session.provider);
+    return adapter.getReviewRequest(session, repoFullName, number);
   },
 
   async createRepository(
