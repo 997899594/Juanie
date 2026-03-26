@@ -97,15 +97,11 @@ export default async function HomePage() {
                         <div className="truncate text-xs text-muted-foreground">
                           {project.repositoryLabel}
                         </div>
-                        {project.governanceSignals.length > 0 && (
-                          <PlatformSignalChipList
-                            chips={project.governanceSignals}
-                            className="mt-1 gap-1.5"
-                          />
-                        )}
-                        {project.governanceSummary && (
-                          <div className="mt-1 truncate text-[11px] text-muted-foreground">
-                            {project.governanceSummary}
+                        {project.roleLabel && (
+                          <div className="mt-2">
+                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
+                              {project.roleLabel}
+                            </span>
                           </div>
                         )}
                       </div>

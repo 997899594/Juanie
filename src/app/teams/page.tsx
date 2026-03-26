@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import { auth } from '@/lib/auth';
 import { getTeamsListPageData } from '@/lib/teams/list-service';
 
@@ -65,14 +64,10 @@ export default async function TeamsPage() {
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{team.name}</div>
                       <div className="mt-1 text-xs text-muted-foreground">@{team.slug}</div>
-                      <PlatformSignalChipList chips={team.governanceSignals} className="mt-2" />
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        {team.governanceSummary}
-                      </div>
                     </div>
                   </div>
                   <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium capitalize text-muted-foreground">
-                    {team.role}
+                    {team.roleLabel}
                   </span>
                 </div>
               </Link>

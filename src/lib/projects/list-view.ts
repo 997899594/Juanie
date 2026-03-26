@@ -26,8 +26,7 @@ export interface ProjectListCard {
   teamName: string;
   repositoryLabel: string | null;
   createdAtLabel: string;
-  governanceSummary: string;
-  governanceSignals: ReturnType<typeof buildProjectGovernanceSnapshot>['signals'];
+  roleLabel: ReturnType<typeof buildProjectGovernanceSnapshot>['roleLabel'];
 }
 
 export interface ProjectListStat {
@@ -81,8 +80,7 @@ export function decorateProjectListCards<TProject extends ProjectListItemLike>(
       teamName: project.teamName,
       repositoryLabel: project.repositoryFullName ?? null,
       createdAtLabel: formatCreatedAtLabel(project.createdAt),
-      governanceSummary: governance.primarySummary,
-      governanceSignals: governance.signals,
+      roleLabel: governance.roleLabel,
     };
   });
 }

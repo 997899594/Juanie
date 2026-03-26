@@ -14,8 +14,6 @@ export interface TeamListCard {
   role: 'owner' | 'admin' | 'member';
   roleLabel: string;
   initials: string;
-  governanceSummary: string;
-  governanceSignals: ReturnType<typeof buildTeamGovernanceSnapshot>['signals'];
 }
 
 export function decorateTeamListCards<TTeam extends TeamListItemLike>(
@@ -37,8 +35,6 @@ export function decorateTeamListCards<TTeam extends TeamListItemLike>(
       role: item.role,
       roleLabel: governance.roleLabel,
       initials,
-      governanceSummary: governance.platformSummary,
-      governanceSignals: governance.signals,
     };
   });
 }

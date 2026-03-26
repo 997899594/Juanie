@@ -33,6 +33,22 @@ interface ServiceDatabaseBindingConfig {
   };
 }
 
+function getImplicitDatabaseTypesForMigrationTool(
+  tool: ServiceDatabaseBindingConfig['migrate']['tool']
+): Array<ServiceDatabaseBindingConfig['type']> | null {
+  switch (tool) {
+    case 'drizzle':
+    case 'prisma':
+    case 'knex':
+    case 'sql':
+      return ['postgresql', 'mysql'];
+    case 'typeorm':
+      return ['postgresql', 'mysql', 'mongodb'];
+    default:
+      return null;
+  }
+}
+
 export function getServiceBindingConfigs(serviceConfig?: {
   migrate?: ServiceDatabaseBindingConfig['migrate'];
   databases?: ServiceDatabaseBindingConfig[];
@@ -106,6 +122,19 @@ export function resolveDatabaseForBinding(
   }
 
   let filtered = baseCandidates;
+
+  if (!binding.binding && !binding.role && !binding.type) {
+    const implicitDatabaseTypes = getImplicitDatabaseTypesForMigrationTool(binding.migrate.tool);
+    if (implicitDatabaseTypes) {
+      const implicitlyTypedCandidates = filtered.filter((candidate) =>
+        implicitDatabaseTypes.includes(candidate.type as ServiceDatabaseBindingConfig['type'])
+      );
+
+      if (implicitlyTypedCandidates.length > 0) {
+        filtered = implicitlyTypedCandidates;
+      }
+    }
+  }
 
   if (binding.role) {
     filtered = filtered.filter((candidate) => candidate.role === binding.role);

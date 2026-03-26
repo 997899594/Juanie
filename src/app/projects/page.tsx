@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import { auth } from '@/lib/auth';
 import { getProjectsListPageData } from '@/lib/projects/list-service';
 
@@ -78,10 +77,13 @@ export default async function ProjectsPage() {
                       </code>
                     )}
                   </div>
-                  <PlatformSignalChipList chips={project.governanceSignals} className="mt-2" />
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {project.governanceSummary}
-                  </div>
+                  {project.roleLabel && (
+                    <div className="mt-2">
+                      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
+                        {project.roleLabel}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3">

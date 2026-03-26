@@ -86,12 +86,7 @@ export interface HomeAttentionRunLike {
 export interface HomeProjectDecorations {
   statusLabel: string;
   repositoryLabel: string;
-  governanceSummary: string | null;
-  governanceSignals: Array<{
-    key: string;
-    label: string;
-    tone: 'danger' | 'neutral';
-  }>;
+  roleLabel: string | null;
 }
 
 export interface HomeAttentionRunDecorations {
@@ -167,8 +162,7 @@ export function decorateHomeProjects<TProject extends HomeProjectLike>(
       const role = input.rolesByTeamId?.get(project.teamId);
       if (!role) {
         return {
-          governanceSummary: null,
-          governanceSignals: [],
+          roleLabel: null,
         };
       }
 
@@ -178,8 +172,7 @@ export function decorateHomeProjects<TProject extends HomeProjectLike>(
       });
 
       return {
-        governanceSummary: governance.primarySummary,
-        governanceSignals: governance.signals,
+        roleLabel: governance.roleLabel,
       };
     })(),
     ...project,
