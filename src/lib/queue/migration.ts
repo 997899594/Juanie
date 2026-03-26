@@ -45,13 +45,37 @@ export async function processMigration(job: Job<MigrationJobData>) {
     throw new Error('Migration specification could not be resolved');
   }
 
-  await executeMigrationRun(run.id, spec, {
-    imageUrl: job.data.imageUrl,
-    allowApprovalBypass: job.data.allowApprovalBypass,
-    sourceRef: run.release?.sourceRef ?? null,
-    sourceCommitSha:
-      run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
-  });
+  try {
+    await executeMigrationRun(run.id, spec, {
+      imageUrl: job.data.imageUrl,
+      allowApprovalBypass: job.data.allowApprovalBypass,
+      sourceRef: run.release?.sourceRef ?? null,
+      sourceCommitSha:
+        run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
+    });
+  } catch (error) {
+    const latestRun = await db.query.migrationRuns.findFirst({
+      where: (table, { eq }) => eq(table.id, run.id),
+      columns: {
+        status: true,
+      },
+    });
+
+    if (latestRun && ['queued', 'planning', 'running'].includes(latestRun.status)) {
+      await db
+        .update(migrationRuns)
+        .set({
+          status: 'failed',
+          errorCode: 'MIGRATION_RUNNER_ERROR',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          finishedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(migrationRuns.id, run.id));
+    }
+
+    throw error;
+  }
 
   return { success: true };
 }

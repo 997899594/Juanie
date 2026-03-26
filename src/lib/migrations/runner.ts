@@ -7,6 +7,7 @@ import { createJob, deleteJob, getIsConnected, getJob, getPodLogs, getPods } fro
 import { executeMigrationsForDatabase } from '@/lib/migrations/executor';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import { evaluateMigrationPolicy } from '@/lib/policies/delivery';
+import { assessMigrationCommandSafety } from './command-safety';
 import type { ExecuteMigrationRunOptions, ResolvedMigrationSpec } from './types';
 
 function sleep(ms: number): Promise<void> {
@@ -44,6 +45,34 @@ async function appendRunLog(runId: string, message: string): Promise<void> {
     .update(migrationRuns)
     .set({ logExcerpt: next, updatedAt: new Date() })
     .where(eq(migrationRuns.id, runId));
+}
+
+function isRetryablePodLogError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return (
+    message.includes('ContainerCreating') ||
+    message.includes('waiting to start') ||
+    message.includes('is waiting') ||
+    message.includes('BadRequest')
+  );
+}
+
+async function tryGetPodLogs(
+  namespace: string,
+  podName: string,
+  runId: string
+): Promise<string | null> {
+  try {
+    return await getPodLogs(namespace, podName, undefined, 200);
+  } catch (error) {
+    if (isRetryablePodLogError(error)) {
+      await appendRunLog(runId, '迁移容器仍在启动，等待日志可读...');
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 async function getRunStartedAt(runId: string): Promise<Date | null> {
@@ -230,9 +259,10 @@ async function runCommandMigration(
       const pods = await getPods(namespace!, `job-name=${jobName}`);
       const podName = pods[0]?.metadata?.name;
       if (podName) {
-        finalLogs = await getPodLogs(namespace!, podName, undefined, 200);
-        if (finalLogs) {
-          await appendRunLog(runId, finalLogs);
+        const podLogs = await tryGetPodLogs(namespace!, podName, runId);
+        if (podLogs) {
+          finalLogs = podLogs;
+          await appendRunLog(runId, podLogs);
         }
       }
 
@@ -348,6 +378,15 @@ export async function executeMigrationRun(
       runId,
       'MIGRATION_UNSUPPORTED_TOOL',
       `Migration tool ${spec.specification.tool} requires an image URL for runner execution`
+    );
+  }
+
+  const commandSafety = assessMigrationCommandSafety(spec.specification);
+  if (commandSafety.blocksExecution) {
+    await markRunFailed(
+      runId,
+      'MIGRATION_INTERACTIVE_COMMAND_BLOCKED',
+      commandSafety.summary ?? '迁移命令可能进入交互式会话，平台已阻止执行'
     );
   }
 

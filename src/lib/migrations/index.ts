@@ -7,6 +7,7 @@ import {
   evaluateReleasePolicy,
 } from '@/lib/policies/delivery';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
+import { assessMigrationCommandSafety } from './command-safety';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
 import { resolveMigrationSpecifications } from './resolver';
 import type {
@@ -170,6 +171,7 @@ export async function buildMigrationExecutionPlan(
       : `数据库状态为 ${spec.database.status ?? '未知'}，只有 running 状态才能执行迁移`;
   let filePreviewError: string | null = null;
   let sqlFiles: Array<{ name: string }> = [];
+  const commandSafety = assessMigrationCommandSafety(spec.specification);
 
   if (spec.specification.tool === 'sql') {
     try {
@@ -192,12 +194,18 @@ export async function buildMigrationExecutionPlan(
     blockingReason = '命令式迁移需要最近一次可用的部署镜像。';
   }
 
+  if (commandSafety.blocksExecution) {
+    canRun = false;
+    blockingReason = commandSafety.summary;
+  }
+
   return {
     confirmationValue,
     canRun,
     blockingReason,
     filePreviewError,
     warnings,
+    commandSafety,
     platformSignals: buildPlatformSignalSnapshot({
       environmentPolicySignals: environmentPolicy.signals,
       environmentPolicySignal: environmentPolicy.primarySignal,

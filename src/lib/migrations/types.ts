@@ -52,6 +52,10 @@ export interface MigrationExecutionPlan {
   blockingReason: string | null;
   filePreviewError: string | null;
   warnings: string[];
+  commandSafety: {
+    blocksExecution: boolean;
+    summary: string | null;
+  };
   platformSignals: PlatformSignalSnapshot;
   environmentPolicy: EnvironmentPolicySnapshot;
   migrationPolicy: MigrationPolicyDecision;
