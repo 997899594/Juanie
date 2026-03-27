@@ -463,7 +463,7 @@ export function DatabaseMigrationDialog({
           对比并迁移
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0 sm:max-h-[88vh]">
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[88vh]">
         <DialogHeader className="shrink-0 border-b border-border/70 px-6 py-5">
           <DialogTitle>{databaseName} 手动迁移控制台</DialogTitle>
           <DialogDescription>
@@ -471,7 +471,7 @@ export function DatabaseMigrationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
           <div className="space-y-4">
             {disabledSummary && (
               <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
@@ -842,7 +842,7 @@ export function DatabaseMigrationDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border/70 px-6 py-4">
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-6 py-4">
           <Button
             className="rounded-xl px-4"
             onClick={handleRun}
