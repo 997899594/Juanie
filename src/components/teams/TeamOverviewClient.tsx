@@ -4,7 +4,6 @@ import { FolderKanban, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { TeamGovernancePanel } from '@/components/teams/TeamGovernancePanel';
 import { Button } from '@/components/ui/button';
-import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import type { getTeamOverviewPageData } from '@/lib/teams/service';
 
 interface TeamOverviewClientProps {
@@ -73,10 +72,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
                 <p className="mt-1 text-xs text-muted-foreground capitalize">
                   {project.statusLabel}
                 </p>
-                <PlatformSignalChipList chips={project.governance.signals} className="mt-2" />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {project.governance.primarySummary}
-                </p>
+                <p className="mt-2 text-xs text-muted-foreground">{project.governance.roleLabel}</p>
               </div>
             </Link>
           ))}

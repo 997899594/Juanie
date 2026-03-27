@@ -14,7 +14,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalBlock, PlatformSignalChipList } from '@/components/ui/platform-signals';
 import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { getApprovalsPageData } from '@/lib/approvals/service';
@@ -122,17 +121,8 @@ export default async function ApprovalsPage({
                       />
                       <Badge variant="secondary">{run.project.name}</Badge>
                       <Badge variant="outline">{run.environment.name}</Badge>
-                      {run.environmentScope && (
-                        <Badge variant="outline">{run.environmentScope}</Badge>
-                      )}
-                      {run.environmentSource && (
-                        <Badge variant="outline">{run.environmentSource}</Badge>
-                      )}
                       {run.previewSourceMeta.label && (
                         <Badge variant="outline">{run.previewSourceMeta.label}</Badge>
-                      )}
-                      {run.environmentExpiry && (
-                        <Badge variant="outline">{run.environmentExpiry}</Badge>
                       )}
                       <Badge variant="outline">{run.database.name}</Badge>
                       <Badge variant="outline">{run.specification.phase}</Badge>
@@ -157,16 +147,14 @@ export default async function ApprovalsPage({
                         </div>
                         <PreviewSourceSummary meta={run.previewSourceMeta} />
                       </div>
-                      <PlatformSignalChipList chips={run.platformSignals.chips} />
-                      <PlatformSignalBlock
-                        chips={[]}
-                        summary={run.platformSignals.primarySummary}
-                        nextActionLabel={run.platformSignals.nextActionLabel}
-                        summaryClassName="border-transparent bg-transparent px-0 py-0"
-                      />
-                      {run.previewLifecycle?.summary && (
+                      {run.platformSignals.primarySummary && (
+                        <div className="text-sm text-foreground">
+                          {run.platformSignals.primarySummary}
+                        </div>
+                      )}
+                      {run.platformSignals.nextActionLabel && (
                         <div className="text-xs text-muted-foreground">
-                          {run.previewLifecycle.summary}
+                          下一步：{run.platformSignals.nextActionLabel}
                         </div>
                       )}
                     </div>

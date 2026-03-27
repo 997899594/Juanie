@@ -2,6 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { environments, releases, type TeamRole } from '@/lib/db/schema';
 import {
+  buildEnvironmentManageActionSnapshot,
   buildEnvironmentPageGovernanceSnapshot,
   buildPreviewEnvironmentActionSnapshot,
 } from '@/lib/environments/governance-view';
@@ -12,7 +13,10 @@ export function buildProjectEnvironmentListData<
 >(environments: TEnvironment[], role: TeamRole) {
   return decorateEnvironmentList(environments).map((environment) => ({
     ...environment,
-    actions: environment.isPreview ? buildPreviewEnvironmentActionSnapshot(role) : null,
+    actions: {
+      ...buildEnvironmentManageActionSnapshot(role, environment),
+      ...(environment.isPreview ? buildPreviewEnvironmentActionSnapshot(role) : {}),
+    },
   }));
 }
 

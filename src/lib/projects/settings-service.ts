@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { environments, projects, teamMembers, teams } from '@/lib/db/schema';
+import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governance-view';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
 export async function getProjectSettingsPageData(projectId: string, userId: string) {
@@ -50,6 +51,15 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
       teamSlug: team?.slug ?? '',
       yourRole: teamMember.role,
       governance,
+      environments: environmentList.map((environment) => ({
+        id: environment.id,
+        name: environment.name,
+        isProduction: Boolean(environment.isProduction),
+        isPreview: Boolean(environment.isPreview),
+        deploymentStrategy: environment.deploymentStrategy,
+        databaseStrategy: environment.databaseStrategy,
+        actions: buildEnvironmentManageActionSnapshot(teamMember.role, environment),
+      })),
     },
     overview: {
       headerDescription: `${team?.name ?? '团队'} · ${project.status ?? 'active'}`,

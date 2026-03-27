@@ -1,4 +1,5 @@
 import type { TeamRole } from '@/lib/db/schema';
+import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 
 export interface EnvironmentPageGovernanceSnapshot {
   roleLabel: string;
@@ -23,6 +24,11 @@ export interface EnvironmentPageGovernanceSnapshot {
 export interface PreviewEnvironmentActionSnapshot {
   canDelete: boolean;
   deleteSummary: string;
+}
+
+export interface EnvironmentManageActionSnapshot {
+  canConfigureStrategy: boolean;
+  configureStrategySummary: string;
 }
 
 function formatRoleLabel(role: TeamRole): string {
@@ -75,5 +81,23 @@ export function buildPreviewEnvironmentActionSnapshot(
     deleteSummary: canDelete
       ? '可删除没有活跃发布的预览环境'
       : '只有 owner 或 admin 可以删除预览环境',
+  };
+}
+
+export function buildEnvironmentManageActionSnapshot(
+  role: TeamRole,
+  environment: {
+    isProduction?: boolean | null;
+  }
+): EnvironmentManageActionSnapshot {
+  const canConfigureStrategy = canManageEnvironment(role, environment);
+
+  return {
+    canConfigureStrategy,
+    configureStrategySummary: canConfigureStrategy
+      ? environment.isProduction
+        ? '可调整当前生产环境的发布策略'
+        : '可调整当前环境的发布策略'
+      : getEnvironmentGuardReason(environment),
   };
 }

@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalBlock, PlatformSignalChipList } from '@/components/ui/platform-signals';
 import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { auth } from '@/lib/auth';
 import { getHomePageData } from '@/lib/home/service';
@@ -154,10 +153,6 @@ export default async function HomePage() {
                           {run.projectName}
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          <PlatformSignalChipList
-                            chips={run.platformSignals.chips}
-                            className="gap-1.5"
-                          />
                           {run.environmentScopeLabel && (
                             <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
                               {run.environmentScopeLabel}
@@ -179,12 +174,16 @@ export default async function HomePage() {
                             </span>
                           )}
                         </div>
-                        <PlatformSignalBlock
-                          chips={[]}
-                          summary={run.platformSignals.primarySummary}
-                          nextActionLabel={run.platformSignals.nextActionLabel}
-                          summaryClassName="mt-1 border-transparent bg-transparent px-0 py-0"
-                        />
+                        {run.platformSignals.primarySummary && (
+                          <div className="mt-1 text-sm text-foreground">
+                            {run.platformSignals.primarySummary}
+                          </div>
+                        )}
+                        {run.platformSignals.nextActionLabel && (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            下一步：{run.platformSignals.nextActionLabel}
+                          </div>
+                        )}
                         {(run.releaseTitle || run.primaryDomainUrl) && (
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                             {run.releaseTitle && <span>{run.releaseTitle}</span>}
@@ -194,11 +193,6 @@ export default async function HomePage() {
                                 打开环境
                               </span>
                             )}
-                          </div>
-                        )}
-                        {run.previewLifecycle?.summary && (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            {run.previewLifecycle.summary}
                           </div>
                         )}
                       </div>

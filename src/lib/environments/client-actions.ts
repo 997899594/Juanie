@@ -24,6 +24,12 @@ export interface PreviewEnvironmentRecord {
   name: string;
 }
 
+export interface UpdateEnvironmentStrategyInput {
+  projectId: string;
+  environmentId: string;
+  deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green';
+}
+
 export interface CreatePreviewEnvironmentInput {
   projectId: string;
   branch?: string;
@@ -63,6 +69,25 @@ export async function deletePreviewEnvironment(
   const response = await fetch(`/api/projects/${projectId}/preview-environments/${environmentId}`, {
     method: 'DELETE',
   });
+
+  await parseJsonResponse<{ success: boolean }>(response);
+}
+
+export async function updateEnvironmentStrategy(
+  input: UpdateEnvironmentStrategyInput
+): Promise<void> {
+  const response = await fetch(
+    `/api/projects/${input.projectId}/environments/${input.environmentId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        deploymentStrategy: input.deploymentStrategy,
+      }),
+    }
+  );
 
   await parseJsonResponse<{ success: boolean }>(response);
 }

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { Separator } from '@/components/ui/separator';
 import { getDatabaseManualControlSnapshot } from '@/lib/releases/intelligence';
 
@@ -381,11 +381,15 @@ export function DatabaseMigrationDialog({
 
   useEffect(() => {
     if (!open) return;
+    const hasActiveRuns = runs.some((run) =>
+      ['queued', 'planning', 'running', 'awaiting_approval'].includes(run.status)
+    );
+    if (!hasActiveRuns) return;
     const interval = setInterval(() => {
       loadRuns({ silent: true });
     }, 3000);
     return () => clearInterval(interval);
-  }, [open, loadRuns]);
+  }, [open, runs, loadRuns]);
 
   useEffect(() => {
     if (!open) {
@@ -486,9 +490,7 @@ export function DatabaseMigrationDialog({
 
             {message && <div className="text-sm text-muted-foreground">{message}</div>}
 
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-              {manualControl.reason}
-            </div>
+            <div className="text-sm text-muted-foreground">{manualControl.reason}</div>
 
             <div className="overflow-hidden rounded-[20px] border border-border bg-background">
               <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
@@ -547,9 +549,6 @@ export function DatabaseMigrationDialog({
                               : '命令式迁移需要最近一次可用 release 镜像；当前没有可用镜像。'
                             : '当前迁移由控制面 worker 直接执行，不依赖 release 镜像。'}
                         </div>
-                        <div>
-                          手动迁移只用于人工介入、重试和紧急执行；常规路径仍然应该走 release。
-                        </div>
                       </div>
                     </div>
 
@@ -558,21 +557,6 @@ export function DatabaseMigrationDialog({
                       <Badge variant="outline">{plan.service.name}</Badge>
                       <Badge variant="outline">{plan.specification.tool}</Badge>
                       <Badge variant="outline">{plan.specification.phase}</Badge>
-                      {plan.platformSignals.chips.map((chip) => {
-                        if (chip.tone === 'danger') {
-                          return (
-                            <Badge key={chip.key} variant="destructive">
-                              {chip.label}
-                            </Badge>
-                          );
-                        }
-
-                        return (
-                          <Badge key={chip.key} variant="outline">
-                            {chip.label}
-                          </Badge>
-                        );
-                      })}
                       {plan.specification.compatibility === 'breaking' && (
                         <Badge variant="destructive">破坏性变更</Badge>
                       )}
@@ -736,7 +720,6 @@ export function DatabaseMigrationDialog({
                           <AlertTriangle className="h-3.5 w-3.5" />
                           差异与风险提示
                         </div>
-                        <PlatformSignalChipList chips={plan.platformSignals.chips} />
                         <PlatformSignalSummary
                           summary={plan.platformSignals.primarySummary}
                           nextActionLabel={plan.platformSignals.nextActionLabel}
@@ -789,10 +772,7 @@ export function DatabaseMigrationDialog({
                   variant="ghost"
                   size="sm"
                   className="h-8 rounded-xl text-xs"
-                  onClick={() => {
-                    loadRuns();
-                    loadPlan();
-                  }}
+                  onClick={() => loadRuns()}
                 >
                   <RefreshCw className="h-3 w-3" />
                   刷新

@@ -18,7 +18,7 @@ import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationA
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalBlock } from '@/components/ui/platform-signals';
+import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { auth } from '@/lib/auth';
@@ -104,15 +104,6 @@ export default async function ReleaseDetailPage({
             {release.environmentSource && (
               <Badge variant="outline">{release.environmentSource}</Badge>
             )}
-            {release.environmentStrategy && (
-              <Badge variant="outline">{release.environmentStrategy}</Badge>
-            )}
-            {release.environmentDatabaseStrategy && (
-              <Badge variant="outline">{release.environmentDatabaseStrategy}</Badge>
-            )}
-            {release.environmentInheritance && (
-              <Badge variant="outline">{release.environmentInheritance}</Badge>
-            )}
             {release.previewSourceMeta.label && (
               <Badge variant="outline">{release.previewSourceMeta.label}</Badge>
             )}
@@ -161,12 +152,27 @@ export default async function ReleaseDetailPage({
             <span>{release.sourceRepository}</span>
           </div>
         </div>
-        <PlatformSignalBlock
-          chips={release.signalChips}
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {release.environmentStrategy && (
+            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+              {release.environmentStrategy}
+            </span>
+          )}
+          {release.environmentDatabaseStrategy && (
+            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+              {release.environmentDatabaseStrategy}
+            </span>
+          )}
+          {release.environmentInheritance && (
+            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
+              {release.environmentInheritance}
+            </span>
+          )}
+        </div>
+        <PlatformSignalSummary
           summary={release.platformSignals.primarySummary}
           nextActionLabel={release.platformSignals.nextActionLabel}
-          chipsClassName="mt-4"
-          summaryClassName="mt-3"
+          className="mt-4"
         />
       </div>
 
@@ -279,6 +285,47 @@ export default async function ReleaseDetailPage({
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-4">
+          {release.environment?.deploymentStrategy &&
+            release.environment.deploymentStrategy !== 'rolling' &&
+            release.deploymentItems.length > 0 && (
+              <section className="console-panel p-5">
+                <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+                  <Rocket className="h-4 w-4" />
+                  Rollout
+                </div>
+                <div className="mb-4 text-sm text-muted-foreground">
+                  当前环境使用 {release.environmentStrategy ?? '渐进式发布'}
+                  。候选版本准备好后，在这里完成放量或切换。
+                </div>
+                <div className="space-y-3">
+                  {release.deploymentItems.map((deployment) => (
+                    <div
+                      key={`rollout-${deployment.id}`}
+                      className="console-card bg-secondary/20 px-4 py-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium">{deployment.serviceName}</div>
+                          {deployment.imageUrl && (
+                            <div className="mt-1 break-all text-xs text-muted-foreground">
+                              {deployment.imageUrl}
+                            </div>
+                          )}
+                        </div>
+                        <DeploymentRolloutAction
+                          projectId={id}
+                          deploymentId={deployment.id}
+                          strategyLabel={release.environmentStrategy}
+                          disabled={!releaseActions.canManage}
+                          disabledSummary={releaseActions.summary}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
           <section className="console-panel p-5">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
               <Package2 className="h-4 w-4" />
@@ -332,16 +379,6 @@ export default async function ReleaseDetailPage({
                       </div>
                     )}
                     <div className="mb-3 flex flex-wrap gap-2">
-                      {release.environment?.deploymentStrategy &&
-                        release.environment.deploymentStrategy !== 'rolling' && (
-                          <DeploymentRolloutAction
-                            projectId={id}
-                            deploymentId={deployment.id}
-                            strategyLabel={release.environmentStrategy}
-                            disabled={!releaseActions.canManage}
-                            disabledSummary={releaseActions.summary}
-                          />
-                        )}
                       <DeploymentRollbackAction
                         projectId={id}
                         deploymentId={deployment.id}

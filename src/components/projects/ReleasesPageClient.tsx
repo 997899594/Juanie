@@ -19,7 +19,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
-import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -681,28 +680,10 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                           {release.environmentScope && (
                             <Badge variant="outline">{release.environmentScope}</Badge>
                           )}
-                          {release.environmentSource && (
-                            <Badge variant="outline">{release.environmentSource}</Badge>
-                          )}
-                          {release.environmentStrategy && (
-                            <Badge variant="outline">{release.environmentStrategy}</Badge>
-                          )}
-                          {release.environmentDatabaseStrategy && (
-                            <Badge variant="outline">{release.environmentDatabaseStrategy}</Badge>
-                          )}
-                          {release.environmentInheritance && (
-                            <Badge variant="outline">{release.environmentInheritance}</Badge>
-                          )}
                           {release.previewSourceMeta.label && (
                             <Badge variant="outline">{release.previewSourceMeta.label}</Badge>
                           )}
-                          {release.environmentExpiry && (
-                            <Badge variant="outline">{release.environmentExpiry}</Badge>
-                          )}
                           <Badge variant="outline">{release.artifacts.length} 个服务</Badge>
-                          <Badge variant="outline" className="capitalize">
-                            {release.triggeredBy}
-                          </Badge>
                           <span
                             className={cn(
                               'rounded-full border px-2.5 py-1 text-xs font-medium',
@@ -778,28 +759,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                             </Badge>
                           ))}
                         </div>
-
-                        {release.signalChips.length > 0 && (
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            {release.signalChips.map((chip) => (
-                              <span
-                                key={chip.key}
-                                className={
-                                  chip.tone === 'danger'
-                                    ? 'rounded-full border border-destructive/15 bg-background px-2.5 py-1 text-destructive'
-                                    : 'rounded-full border border-border bg-background px-2.5 py-1 text-foreground'
-                                }
-                              >
-                                {chip.label}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {release.platformSignals.nextActionLabel && (
-                          <div className="text-xs text-muted-foreground">
-                            下一步：{release.platformSignals.nextActionLabel}
-                          </div>
-                        )}
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2 xl:flex-col xl:items-end">
@@ -890,16 +849,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                                     </div>
                                   )}
                                   <div className="mb-3 flex flex-wrap gap-2">
-                                    {release.environment.deploymentStrategy &&
-                                      release.environment.deploymentStrategy !== 'rolling' && (
-                                        <DeploymentRolloutAction
-                                          projectId={projectId}
-                                          deploymentId={deployment.id}
-                                          strategyLabel={release.environmentStrategy}
-                                          disabled={!release.actions.canManage}
-                                          disabledSummary={release.actions.summary}
-                                        />
-                                      )}
                                     <DeploymentRollbackAction
                                       projectId={projectId}
                                       deploymentId={deployment.id}

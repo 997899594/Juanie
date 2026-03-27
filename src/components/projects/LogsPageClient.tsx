@@ -4,7 +4,6 @@ import { RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -153,12 +152,14 @@ export function LogsPageClient({ projectId, projectName, initialData }: LogsPage
       <PageHeader title="日志" description={`${projectName} 的实时 Pod 日志`} />
 
       <div className="console-panel px-4 py-4">
-        <PlatformSignalChipList chips={initialData.governance.signals} />
-        <PlatformSignalSummary
-          summary={initialData.governance.primarySummary}
-          nextActionLabel={initialData.governance.logs.summary}
-          className="mt-3"
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
+            {initialData.governance.roleLabel}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            {initialData.governance.logs.summary}
+          </span>
+        </div>
       </div>
 
       <div className="console-panel flex flex-wrap items-center gap-3 px-4 py-4">

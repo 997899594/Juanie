@@ -1,15 +1,6 @@
 'use client';
 
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronUp,
-  Clock3,
-  GitBranch,
-  Globe,
-  Plus,
-  Trash2,
-} from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock3, GitBranch, Globe, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import { EnvVarManager } from '@/components/projects/EnvVarManager';
@@ -38,7 +29,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -50,6 +41,7 @@ import {
   createPreviewEnvironment,
   deletePreviewEnvironment,
   fetchProjectEnvironments,
+  updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
 import { cn } from '@/lib/utils';
 
@@ -116,10 +108,19 @@ interface EnvironmentRecord {
     createdAtLabel: string | null;
   } | null;
   actions: {
-    canDelete: boolean;
-    deleteSummary: string;
-  } | null;
+    canConfigureStrategy: boolean;
+    configureStrategySummary: string;
+    canDelete?: boolean;
+    deleteSummary?: string;
+  };
 }
+
+const deploymentStrategyOptions = [
+  { value: 'rolling', label: '滚动发布' },
+  { value: 'controlled', label: '受控放量' },
+  { value: 'canary', label: '金丝雀' },
+  { value: 'blue_green', label: '蓝绿切换' },
+] as const;
 
 interface PreviewDialogProps {
   open: boolean;
@@ -290,6 +291,7 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
   const [dialogLoading, setDialogLoading] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const fetchEnvironments = useCallback(async () => {
@@ -393,6 +395,29 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
     }
   };
 
+  const handleStrategyChange = async (
+    environmentId: string,
+    deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
+  ) => {
+    setSavingStrategyId(environmentId);
+
+    try {
+      await updateEnvironmentStrategy({
+        projectId,
+        environmentId,
+        deploymentStrategy,
+      });
+      await fetchEnvironments();
+      setFeedback('发布策略已更新');
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '更新发布策略失败');
+      setTimeout(() => setFeedback(null), 5000);
+    } finally {
+      setSavingStrategyId(null);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
@@ -430,8 +455,7 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
       )}
 
       <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-        当前角色：{governance.roleLabel}。{governance.createPreview.summary}。
-        {governance.createIsolatedPreview.summary}。{governance.deletePreview.summary}。
+        当前角色：{governance.roleLabel}
       </div>
 
       {environments.length === 0 ? (
@@ -487,30 +511,6 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
                           {environment.autoDeploy && !environment.isProduction && (
                             <Badge variant="secondary">自动部署</Badge>
                           )}
-                          {environment.strategyLabel && (
-                            <Badge variant="outline">{environment.strategyLabel}</Badge>
-                          )}
-                          {environment.databaseStrategyLabel && (
-                            <Badge variant="outline">{environment.databaseStrategyLabel}</Badge>
-                          )}
-                          {environment.inheritanceLabel && (
-                            <Badge variant="outline">{environment.inheritanceLabel}</Badge>
-                          )}
-                          {environment.platformSignals.chips.map((chip) => {
-                            if (chip.tone === 'danger') {
-                              return (
-                                <Badge key={chip.key} variant="destructive">
-                                  {chip.label}
-                                </Badge>
-                              );
-                            }
-
-                            return (
-                              <Badge key={chip.key} variant="outline">
-                                {chip.label}
-                              </Badge>
-                            );
-                          })}
                           {environment.latestReleaseCard && (
                             <Badge variant="outline">
                               最近发布 {environment.latestReleaseCard.shortCommitSha ?? '最新'}
@@ -526,14 +526,50 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
 
                       {isExpanded && (
                         <div className="border-t border-border/70 px-5 py-4">
-                          {(environment.platformSignals.primarySummary ||
-                            environment.platformSignals.nextActionLabel) && (
-                            <PlatformSignalSummary
-                              summary={environment.platformSignals.primarySummary}
-                              nextActionLabel={environment.platformSignals.nextActionLabel}
-                              className="mb-4"
-                            />
+                          {environment.platformSignals.primarySummary && (
+                            <div className="mb-4 text-sm text-foreground">
+                              {environment.platformSignals.primarySummary}
+                            </div>
                           )}
+                          {environment.platformSignals.nextActionLabel && (
+                            <div className="mb-4 text-xs text-muted-foreground">
+                              下一步：{environment.platformSignals.nextActionLabel}
+                            </div>
+                          )}
+                          <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium">发布策略</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  控制这个环境如何切换新版本。
+                                </div>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {environment.actions.configureStrategySummary}
+                              </div>
+                            </div>
+                            <Select
+                              value={environment.deploymentStrategy ?? 'rolling'}
+                              onValueChange={(
+                                value: 'rolling' | 'controlled' | 'canary' | 'blue_green'
+                              ) => handleStrategyChange(environment.id, value)}
+                              disabled={
+                                savingStrategyId === environment.id ||
+                                !environment.actions.canConfigureStrategy
+                              }
+                            >
+                              <SelectTrigger className="max-w-sm">
+                                <SelectValue placeholder="选择发布策略" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {deploymentStrategyOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                           {environment.latestReleaseCard && (
                             <div className="mb-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
                               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -604,30 +640,6 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
                               {environment.sourceLabel && (
                                 <Badge variant="outline">{environment.sourceLabel}</Badge>
                               )}
-                              {environment.strategyLabel && (
-                                <Badge variant="outline">{environment.strategyLabel}</Badge>
-                              )}
-                              {environment.databaseStrategyLabel && (
-                                <Badge variant="outline">{environment.databaseStrategyLabel}</Badge>
-                              )}
-                              {environment.inheritanceLabel && (
-                                <Badge variant="outline">{environment.inheritanceLabel}</Badge>
-                              )}
-                              {environment.platformSignals.chips.map((chip) => {
-                                if (chip.tone === 'danger') {
-                                  return (
-                                    <Badge key={chip.key} variant="destructive">
-                                      {chip.label}
-                                    </Badge>
-                                  );
-                                }
-
-                                return (
-                                  <Badge key={chip.key} variant="outline">
-                                    {chip.label}
-                                  </Badge>
-                                );
-                              })}
                               {environment.expiryLabel && (
                                 <Badge
                                   variant={
@@ -726,26 +738,51 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
 
                       {isExpanded && (
                         <div className="border-t border-border/70 px-5 py-4">
-                          <div className="mb-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-                            <div className="flex items-start gap-2">
-                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
-                              <div>
-                                预览环境和正式环境走同一套 release、migration、deployment
-                                主链，只是会自动过期回收。
-                              </div>
-                            </div>
-                          </div>
                           {(environment.platformSignals.primarySummary ||
                             environment.platformSignals.nextActionLabel) && (
-                            <div className="mb-4 space-y-2">
-                              <PlatformSignalChipList chips={environment.platformSignals.chips} />
-                              <PlatformSignalSummary
-                                summary={environment.platformSignals.primarySummary}
-                                nextActionLabel={environment.platformSignals.nextActionLabel}
-                                className="border-border bg-background"
-                              />
-                            </div>
+                            <PlatformSignalSummary
+                              summary={environment.platformSignals.primarySummary}
+                              nextActionLabel={environment.platformSignals.nextActionLabel}
+                              className="mb-4 border-border bg-background"
+                            />
                           )}
+                          <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium">发布策略</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {environment.databaseStrategyLabel}
+                                  {environment.inheritanceLabel
+                                    ? ` · ${environment.inheritanceLabel}`
+                                    : ''}
+                                </div>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {environment.actions.configureStrategySummary}
+                              </div>
+                            </div>
+                            <Select
+                              value={environment.deploymentStrategy ?? 'rolling'}
+                              onValueChange={(
+                                value: 'rolling' | 'controlled' | 'canary' | 'blue_green'
+                              ) => handleStrategyChange(environment.id, value)}
+                              disabled={
+                                savingStrategyId === environment.id ||
+                                !environment.actions.canConfigureStrategy
+                              }
+                            >
+                              <SelectTrigger className="max-w-sm">
+                                <SelectValue placeholder="选择发布策略" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {deploymentStrategyOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                           {environment.latestReleaseCard && (
                             <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-3">
                               <div className="flex flex-wrap items-center justify-between gap-3">

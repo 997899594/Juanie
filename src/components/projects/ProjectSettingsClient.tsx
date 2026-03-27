@@ -19,7 +19,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/ui/page-header';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { updateEnvironmentStrategy } from '@/lib/environments/client-actions';
 import type { ProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
 interface ProjectSettingsClientProps {
@@ -38,6 +46,18 @@ interface ProjectSettingsClientProps {
       teamSlug: string;
       yourRole: string;
       governance: ProjectGovernanceSnapshot;
+      environments: Array<{
+        id: string;
+        name: string;
+        isProduction: boolean;
+        isPreview: boolean;
+        deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green';
+        databaseStrategy: 'direct' | 'inherit' | 'isolated_clone';
+        actions: {
+          canConfigureStrategy: boolean;
+          configureStrategySummary: string;
+        };
+      }>;
     };
     overview: {
       headerDescription: string;
@@ -49,11 +69,25 @@ interface ProjectSettingsClientProps {
   };
 }
 
+const deploymentStrategyOptions = [
+  { value: 'rolling', label: '滚动发布' },
+  { value: 'controlled', label: '受控放量' },
+  { value: 'canary', label: '金丝雀' },
+  { value: 'blue_green', label: '蓝绿切换' },
+] as const;
+
+const databaseStrategyLabels: Record<'direct' | 'inherit' | 'isolated_clone', string> = {
+  direct: '直接使用环境数据库',
+  inherit: '继承基础环境数据库',
+  isolated_clone: '独立预览库',
+};
+
 export function ProjectSettingsClient({ projectId, initialData }: ProjectSettingsClientProps) {
   const router = useRouter();
   const [project, setProject] = useState(initialData.project);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savingEnvironmentId, setSavingEnvironmentId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: initialData.project.name || '',
     description: initialData.project.description || '',
@@ -61,6 +95,30 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
   });
 
   const canEdit = ['owner', 'admin'].includes(project.yourRole);
+
+  const handleEnvironmentStrategyChange = async (
+    environmentId: string,
+    deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
+  ) => {
+    setSavingEnvironmentId(environmentId);
+
+    try {
+      await updateEnvironmentStrategy({
+        projectId,
+        environmentId,
+        deploymentStrategy,
+      });
+
+      setProject((prev) => ({
+        ...prev,
+        environments: prev.environments.map((environment) =>
+          environment.id === environmentId ? { ...environment, deploymentStrategy } : environment
+        ),
+      }));
+    } finally {
+      setSavingEnvironmentId(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,6 +177,9 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
           </TabsTrigger>
           <TabsTrigger value="git" className="rounded-xl px-4">
             Git
+          </TabsTrigger>
+          <TabsTrigger value="environments" className="rounded-xl px-4">
+            环境
           </TabsTrigger>
           <TabsTrigger value="governance" className="rounded-xl px-4">
             治理
@@ -216,6 +277,80 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                 </div>
               )}
             </form>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="environments">
+          <div className="console-panel overflow-hidden">
+            <div className="border-b border-border px-5 py-4">
+              <div className="text-sm font-semibold">环境策略</div>
+            </div>
+            <div className="space-y-3 px-5 py-4">
+              {project.environments.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
+                  当前项目还没有环境。
+                </div>
+              ) : (
+                project.environments.map((environment) => (
+                  <div
+                    key={environment.id}
+                    className="rounded-2xl border border-border bg-secondary/20 px-4 py-4"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-semibold">{environment.name}</div>
+                          {environment.isProduction && (
+                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
+                              生产
+                            </span>
+                          )}
+                          {environment.isPreview && (
+                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
+                              预览
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {environment.actions.configureStrategySummary}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          数据库策略：{databaseStrategyLabels[environment.databaseStrategy]}
+                        </div>
+                      </div>
+
+                      <div className="w-full md:w-56">
+                        <Label className="mb-2 block">发布策略</Label>
+                        <Select
+                          value={environment.deploymentStrategy}
+                          onValueChange={(value) =>
+                            handleEnvironmentStrategyChange(
+                              environment.id,
+                              value as 'rolling' | 'controlled' | 'canary' | 'blue_green'
+                            )
+                          }
+                          disabled={
+                            savingEnvironmentId === environment.id ||
+                            !environment.actions.canConfigureStrategy
+                          }
+                        >
+                          <SelectTrigger className="h-11 rounded-xl bg-background">
+                            <SelectValue placeholder="选择发布策略" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {deploymentStrategyOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </TabsContent>
 
