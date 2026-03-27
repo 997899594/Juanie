@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
@@ -129,16 +130,42 @@ export function ResourcesPageClient({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="资源" description={`${projectName} 的 Kubernetes 资源`} />
+      <PageHeader
+        title="资源浏览"
+        description={`${projectName} 的 Kubernetes 原始资源视图，仅用于诊断与排障。`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <Link href={`/projects/${projectId}/environments`}>环境</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <Link href={`/projects/${projectId}/releases`}>发布</Link>
+            </Button>
+            <Button asChild size="sm" className="rounded-xl">
+              <Link
+                href={`/projects/${projectId}/logs${environmentId ? `?env=${environmentId}` : ''}`}
+              >
+                日志
+              </Link>
+            </Button>
+          </div>
+        }
+      />
 
       <div className="console-panel px-4 py-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
-            {initialData.governance.roleLabel}
-          </span>
-          <span className="text-sm text-muted-foreground">
-            {initialData.governance.resources.summary}
-          </span>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
+              {initialData.governance.roleLabel}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {initialData.governance.resources.summary}
+            </span>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            日常操作优先走环境、发布和日志。只有在需要查看 Pod / Service / Deployment
+            原始状态时，再进入这里。
+          </div>
         </div>
       </div>
 
@@ -269,15 +296,29 @@ export function ResourcesPageClient({
       {selectedPod && (
         <section className="console-panel overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <div className="text-sm font-semibold">日志 · {selectedPod}</div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="rounded-xl"
-              onClick={() => setSelectedPod('')}
-            >
-              关闭
-            </Button>
+            <div>
+              <div className="text-sm font-semibold">Pod 原始日志 · {selectedPod}</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                这里适合看单个 Pod 细节；如果要看整条环境日志，请回到日志页。
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <Link
+                  href={`/projects/${projectId}/logs${environmentId ? `?env=${environmentId}` : ''}`}
+                >
+                  环境日志
+                </Link>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => setSelectedPod('')}
+              >
+                关闭
+              </Button>
+            </div>
           </div>
           <div className="p-3">
             <pre className="max-h-[480px] overflow-x-auto overflow-y-auto rounded-2xl bg-zinc-950 p-4 font-mono text-xs whitespace-pre-wrap text-zinc-100">

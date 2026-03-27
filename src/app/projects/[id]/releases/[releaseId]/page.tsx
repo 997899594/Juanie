@@ -9,6 +9,7 @@ import {
   GitCommit,
   Package2,
   Rocket,
+  ScrollText,
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
@@ -63,6 +64,11 @@ export default async function ReleaseDetailPage({
   }
   const { release, previousReleaseLink } = pageData;
   const releaseActions = buildReleaseEnvironmentActionSnapshot(member.role, release.environment);
+  const environmentId = release.environment?.id ?? release.environmentId;
+  const environmentLogsHref = `/projects/${id}/logs?env=${environmentId}`;
+  const environmentsHref = `/projects/${id}/environments`;
+  const resourcesHref = `/projects/${id}/resources`;
+  const releasesHref = `/projects/${id}/releases`;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -71,6 +77,12 @@ export default async function ReleaseDetailPage({
         description={release.sourceRef}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" className="h-9 rounded-xl px-4">
+              <Link href={environmentLogsHref}>
+                <ScrollText className="h-3.5 w-3.5" />
+                查看日志
+              </Link>
+            </Button>
             {release.primaryDomainUrl && (
               <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
                 <a href={release.primaryDomainUrl} target="_blank" rel="noreferrer">
@@ -79,7 +91,7 @@ export default async function ReleaseDetailPage({
               </Button>
             )}
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-              <Link href={`/projects/${id}/releases`}>
+              <Link href={releasesHref}>
                 <ArrowLeft className="h-3.5 w-3.5" />
                 返回
               </Link>
@@ -177,7 +189,7 @@ export default async function ReleaseDetailPage({
         />
       </div>
 
-      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <section className="grid gap-4 xl:grid-cols-[0.78fr_1fr_0.8fr]">
         <div className="console-panel p-5">
           <div className="mb-4 text-sm font-semibold">发布总结</div>
           <div className="space-y-4">
@@ -267,6 +279,60 @@ export default async function ReleaseDetailPage({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="console-panel p-5">
+          <div className="mb-4 text-sm font-semibold">观察与入口</div>
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                当前环境
+              </div>
+              <div className="mt-2 text-sm font-medium text-foreground">
+                {release.environment?.name ?? '环境'}
+              </div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                先看日志，再结合时间线判断是迁移、部署还是放量阶段出问题。
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button asChild size="sm" className="rounded-xl">
+                  <Link href={environmentLogsHref}>打开环境日志</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                  <Link href={environmentsHref}>查看环境</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                发布链路
+              </div>
+              <div className="mt-2 text-sm text-foreground">
+                主链路保持简单：环境决定发布位置，release 承载一次变更，deployment / migration
+                只是执行细节。
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                  <Link href={releasesHref}>回到发布中心</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                  <Link href={resourcesHref}>资源诊断</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                排障顺序
+              </div>
+              <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+                <div>1. 看发布时间线，确认卡在哪一步。</div>
+                <div>2. 进环境日志，看运行时真实输出。</div>
+                <div>3. 只有需要 Pod/Service 细节时，再看资源浏览。</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -445,9 +511,14 @@ export default async function ReleaseDetailPage({
           </section>
 
           <section className="console-panel p-5">
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
-              <Rocket className="h-4 w-4" />
-              部署进度
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Rocket className="h-4 w-4" />
+                部署进度
+              </div>
+              <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
+                <Link href={environmentLogsHref}>查看环境日志</Link>
+              </Button>
             </div>
             {release.deployments.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-8 text-center text-sm text-muted-foreground">
@@ -495,7 +566,12 @@ export default async function ReleaseDetailPage({
 
         <div className="space-y-4">
           <section className="console-panel p-5">
-            <div className="mb-4 text-sm font-semibold">迁移记录</div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm font-semibold">迁移记录</div>
+              <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
+                <Link href={environmentLogsHref}>查看环境日志</Link>
+              </Button>
+            </div>
             {release.migrationRuns.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-8 text-center text-sm text-muted-foreground">
                 没有自动迁移记录。
