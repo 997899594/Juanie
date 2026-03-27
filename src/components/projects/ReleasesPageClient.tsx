@@ -10,6 +10,7 @@ import {
   Filter,
   GitBranch,
   GitCommit,
+  Globe,
   Layers3,
   Rocket,
   ScrollText,
@@ -408,6 +409,15 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const riskFilter = initialData.selectedRisk;
   const filtered = initialData.filteredReleases;
   const promotePlan = initialData.promotePlan;
+  const environmentReleaseCenter = environments.map((environment) => {
+    const latestRelease =
+      releases.find((release) => release.environment.id === environment.id) ?? null;
+
+    return {
+      environment,
+      latestRelease,
+    };
+  });
 
   const stagingEnv = environments.find(
     (environment) => environment.autoDeploy && !environment.isProduction
@@ -441,7 +451,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     <div className="space-y-6">
       <PageHeader
         title="发布"
-        description="发布、迁移与部署记录"
+        description="按环境查看当前版本、风险信号与发布记录。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusIndicator
@@ -449,6 +459,12 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               label={isConnected ? '在线' : '离线'}
               pulse={isConnected}
             />
+            <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+              <Link href={`/projects/${projectId}/logs`}>
+                <ScrollText className="h-3.5 w-3.5" />
+                查看日志
+              </Link>
+            </Button>
             <ManualReleaseDialog
               projectId={projectId}
               environments={environments.filter((environment) =>
@@ -499,6 +515,101 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         当前角色：{governance.roleLabel}。{governance.primarySummary}。
         {governance.promoteToProduction.summary}。
       </div>
+
+      <section className="console-panel px-4 py-4">
+        <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
+          <Globe className="h-4 w-4" />
+          环境发布中心
+        </div>
+        <div className="grid gap-3 xl:grid-cols-3">
+          {environmentReleaseCenter.map(({ environment, latestRelease }) => (
+            <div key={environment.id} className="console-card bg-secondary/20 px-4 py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className={cn(
+                    'h-2 w-2 rounded-full',
+                    latestRelease?.status === 'succeeded'
+                      ? 'bg-success'
+                      : latestRelease?.status === 'failed' ||
+                          latestRelease?.status === 'migration_pre_failed'
+                        ? 'bg-destructive'
+                        : latestRelease
+                          ? 'bg-warning'
+                          : 'bg-muted-foreground'
+                  )}
+                />
+                <span className="text-sm font-medium">{environment.name}</span>
+                {environment.isProduction ? (
+                  <Badge>生产</Badge>
+                ) : environment.isPreview ? (
+                  <Badge variant="secondary">预览</Badge>
+                ) : (
+                  <Badge variant="secondary">非生产</Badge>
+                )}
+                {environment.deploymentStrategy ? (
+                  <Badge variant="outline" className="capitalize">
+                    {environment.deploymentStrategy}
+                  </Badge>
+                ) : null}
+              </div>
+
+              <div className="mt-3">
+                {latestRelease ? (
+                  <>
+                    <div className="text-sm font-medium">{latestRelease.displayTitle}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {latestRelease.platformSignals.primarySummary ??
+                        latestRelease.summary ??
+                        '打开发布查看详情'}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      <span>{latestRelease.statusDecoration.label}</span>
+                      {latestRelease.sourceCommitSha ? (
+                        <code className="rounded bg-background px-1.5 py-0.5 font-mono text-foreground">
+                          {latestRelease.sourceCommitSha.slice(0, 7)}
+                        </code>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-sm font-medium">还没有发布</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      从这个环境发第一版后，这里会显示当前 live release。
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                  <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>查看日志</Link>
+                </Button>
+                {latestRelease ? (
+                  <Button asChild size="sm" className="rounded-xl">
+                    <Link href={`/projects/${projectId}/releases/${latestRelease.id}`}>
+                      打开发布
+                    </Link>
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="rounded-xl"
+                    onClick={() =>
+                      updateFilters({
+                        env: environment.name,
+                        risk: 'all',
+                      })
+                    }
+                  >
+                    查看记录
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
@@ -767,6 +878,13 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                           <span>{new Date(release.createdAt).toLocaleString()}</span>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button asChild variant="outline" size="sm" className="rounded-xl">
+                            <Link
+                              href={`/projects/${projectId}/logs?env=${release.environment.id}`}
+                            >
+                              日志
+                            </Link>
+                          </Button>
                           <Button asChild variant="outline" size="sm" className="rounded-xl">
                             <Link href={`/projects/${projectId}/releases/${release.id}`}>
                               打开

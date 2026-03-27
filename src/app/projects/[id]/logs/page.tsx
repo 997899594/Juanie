@@ -3,9 +3,16 @@ import { LogsPageClient } from '@/components/projects/LogsPageClient';
 import { auth } from '@/lib/auth';
 import { getProjectObservabilityPageData } from '@/lib/observability/page-data';
 
-export default async function LogsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LogsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ env?: string }>;
+}) {
   const session = await auth();
   const { id } = await params;
+  const { env } = await searchParams;
 
   if (!session?.user?.id) {
     redirect('/login');
@@ -18,6 +25,11 @@ export default async function LogsPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <LogsPageClient projectId={id} projectName={pageData.project.name} initialData={pageData} />
+    <LogsPageClient
+      projectId={id}
+      projectName={pageData.project.name}
+      initialData={pageData}
+      initialEnvId={env}
+    />
   );
 }

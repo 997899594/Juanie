@@ -1,11 +1,11 @@
 import {
   AlertTriangle,
-  Box,
   Database,
   ExternalLink,
   Globe,
   Link2,
   Rocket,
+  ScrollText,
   Settings,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -19,9 +19,9 @@ import { auth } from '@/lib/auth';
 import { getProjectOverviewPageData } from '@/lib/projects/service';
 
 const navItems = [
-  { title: '发布', href: 'releases', icon: Rocket },
   { title: '环境', href: 'environments', icon: Globe },
-  { title: '资源', href: 'resources', icon: Box },
+  { title: '发布', href: 'releases', icon: Rocket },
+  { title: '日志', href: 'logs', icon: ScrollText },
   { title: '设置', href: 'settings', icon: Settings },
 ];
 
@@ -81,6 +81,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     project,
     stats,
     overview,
+    environmentCards,
     serviceCards,
     domainCards,
     attentionItems,
@@ -136,7 +137,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
       )}
 
-      <div className="grid gap-3 xl:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-4">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -188,10 +189,88 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   </a>
                 </Button>
               )}
+              <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+                <Link href={`/projects/${id}/logs?env=${currentRelease.environment.id}`}>
+                  查看日志
+                </Link>
+              </Button>
               <Button asChild size="sm" className="h-9 rounded-xl px-4">
                 <Link href={`/projects/${id}/releases/${currentRelease.id}`}>打开发布</Link>
               </Button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {environmentCards.length > 0 && (
+        <section className="console-panel px-5 py-4">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">环境入口</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                先选环境，再进入对应发布与执行详情。
+              </div>
+            </div>
+            <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+              <Link href={`/projects/${id}/environments`}>管理环境</Link>
+            </Button>
+          </div>
+          <div className="grid gap-3 xl:grid-cols-3">
+            {environmentCards.map((environment) => (
+              <div key={environment.id} className="console-card bg-secondary/20 px-4 py-4">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <div
+                    className={`h-2 w-2 rounded-full ${
+                      environment.primaryDomainUrl ? 'bg-success' : 'bg-warning'
+                    }`}
+                  />
+                  <span className="text-sm font-medium">{environment.name}</span>
+                  {environment.isProduction ? <Badge>生产</Badge> : null}
+                  {environment.scopeLabel ? (
+                    <Badge variant="secondary">{environment.scopeLabel}</Badge>
+                  ) : null}
+                  {environment.sourceLabel ? (
+                    <Badge variant="outline">{environment.sourceLabel}</Badge>
+                  ) : null}
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {environment.platformSignals.primarySummary ??
+                    '进入环境查看当前 live release 与最近发布。'}
+                </div>
+                {environment.latestReleaseCard && (
+                  <div className="mt-3 rounded-2xl border border-border bg-background px-3 py-2">
+                    <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      最近发布
+                    </div>
+                    <div className="mt-1 text-sm font-medium">
+                      {environment.latestReleaseCard.title}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {environment.latestReleaseCard.createdAtLabel ?? '最近发布'}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
+                    <Link href={`/projects/${id}/environments`}>打开环境</Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
+                    <Link href={`/projects/${id}/logs?env=${environment.id}`}>查看日志</Link>
+                  </Button>
+                  {environment.latestReleaseCard ? (
+                    <Button asChild size="sm" className="h-8 rounded-xl px-3">
+                      <Link href={`/projects/${id}/releases/${environment.latestReleaseCard.id}`}>
+                        打开发布
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button asChild size="sm" className="h-8 rounded-xl px-3">
+                      <Link href={`/projects/${id}/releases?env=${environment.id}`}>进入发布</Link>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       )}

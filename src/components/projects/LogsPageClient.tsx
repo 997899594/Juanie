@@ -37,11 +37,21 @@ interface LogsPageClientProps {
   projectId: string;
   projectName: string;
   initialData: ObservabilityPageData;
+  initialEnvId?: string;
 }
 
-export function LogsPageClient({ projectId, projectName, initialData }: LogsPageClientProps) {
+export function LogsPageClient({
+  projectId,
+  projectName,
+  initialData,
+  initialEnvId,
+}: LogsPageClientProps) {
   const [pods, setPods] = useState<Pod[]>([]);
-  const [envId, setEnvId] = useState(initialData.environments[0]?.id ?? '');
+  const [envId, setEnvId] = useState(
+    initialData.environments.some((environment) => environment.id === initialEnvId)
+      ? (initialEnvId ?? '')
+      : (initialData.environments[0]?.id ?? '')
+  );
   const [podName, setPodName] = useState('');
   const [tail, setTail] = useState('100');
   const [follow, setFollow] = useState(true);

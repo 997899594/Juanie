@@ -13,6 +13,7 @@ import {
   teams,
 } from '@/lib/db/schema';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
+import { decorateEnvironmentList } from '@/lib/environments/view';
 import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 import {
@@ -46,6 +47,33 @@ export function buildProjectOverviewPageData<
   project: TProject;
   governance: ReturnType<typeof buildProjectGovernanceSnapshot> | null;
   team: TTeam;
+  projectEnvironments: Array<{
+    id: string;
+    name: string;
+    baseEnvironment?: {
+      id: string;
+      name: string;
+    } | null;
+    databaseStrategy?: 'direct' | 'inherit' | 'isolated_clone' | null;
+    isProduction?: boolean | null;
+    isPreview?: boolean | null;
+    previewPrNumber?: number | null;
+    branch?: string | null;
+    expiresAt?: Date | string | null;
+    deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
+    domains?: Array<{
+      id: string;
+      hostname: string;
+      isCustom?: boolean | null;
+      isVerified?: boolean | null;
+    }> | null;
+    databases?: Array<{
+      id: string;
+      name: string;
+      status?: string | null;
+      sourceDatabaseId?: string | null;
+    }> | null;
+  }>;
   projectServices: TService[];
   projectDatabases: TDatabase[];
   projectDomains: TDomain[];
@@ -68,6 +96,27 @@ export function buildProjectOverviewPageData<
       attentionCount: attentionStats.total,
       releaseCount: input.recentReleases.length,
     }),
+    environmentCards: decorateEnvironmentList(
+      input.projectEnvironments.map((environment) => {
+        const latestRelease =
+          input.recentReleases.find((release) => release.environment.id === environment.id) ?? null;
+
+        return {
+          ...environment,
+          latestRelease: latestRelease
+            ? {
+                id: latestRelease.id,
+                status: latestRelease.status ?? 'queued',
+                summary: latestRelease.summary,
+                sourceRef: latestRelease.sourceRef,
+                sourceCommitSha: latestRelease.sourceCommitSha,
+                createdAt: latestRelease.createdAt,
+                environment: latestRelease.environment,
+              }
+            : null,
+        };
+      })
+    ),
     serviceCards: decorateProjectServices(input.projectServices),
     domainCards: decorateProjectDomains(input.projectDomains),
     attentionItems: decorateProjectAttentionRuns(attentionRuns),
@@ -109,7 +158,26 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
     db.query.teamMembers.findFirst({
       where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
     }),
-    db.query.environments.findMany({ where: eq(environments.projectId, projectId) }),
+    db.query.environments.findMany({
+      where: eq(environments.projectId, projectId),
+      with: {
+        baseEnvironment: {
+          columns: {
+            id: true,
+            name: true,
+          },
+        },
+        domains: true,
+        databases: {
+          columns: {
+            id: true,
+            name: true,
+            status: true,
+            sourceDatabaseId: true,
+          },
+        },
+      },
+    }),
     db.query.services.findMany({ where: eq(services.projectId, projectId) }),
     db.query.databases.findMany({ where: eq(databases.projectId, projectId) }),
     db.query.domains.findMany({ where: eq(domains.projectId, projectId) }),
@@ -190,6 +258,7 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
       environments: projectEnvironments,
     }),
     team,
+    projectEnvironments,
     projectServices,
     projectDatabases,
     projectDomains,

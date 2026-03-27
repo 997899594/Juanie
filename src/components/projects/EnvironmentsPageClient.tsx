@@ -1,6 +1,16 @@
 'use client';
 
-import { ChevronDown, ChevronUp, Clock3, GitBranch, Globe, Plus, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  GitBranch,
+  Globe,
+  Plus,
+  Rocket,
+  ScrollText,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import { EnvVarManager } from '@/components/projects/EnvVarManager';
@@ -422,12 +432,29 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="环境"
-        description="固定环境与预览环境共用同一套发布主链。"
+        description="先选环境，再进入对应发布、预览与配置。"
         actions={
-          <Button onClick={() => setDialogOpen(true)} disabled={!governance.createPreview.allowed}>
-            <Plus className="h-4 w-4" />
-            新建预览环境
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href={`/projects/${projectId}/releases`}>
+                <Rocket className="h-4 w-4" />
+                查看发布
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={`/projects/${projectId}/logs`}>
+                <ScrollText className="h-4 w-4" />
+                查看日志
+              </Link>
+            </Button>
+            <Button
+              onClick={() => setDialogOpen(true)}
+              disabled={!governance.createPreview.allowed}
+            >
+              <Plus className="h-4 w-4" />
+              新建预览环境
+            </Button>
+          </div>
         }
       />
 
@@ -473,7 +500,7 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
           <section className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Globe className="h-4 w-4" />
-              固定环境
+              核心环境
             </div>
             {standardEnvironments.length === 0 ? (
               <div className="rounded-[20px] border border-dashed border-border bg-secondary/20 px-5 py-8 text-sm text-muted-foreground">
@@ -581,6 +608,11 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
                                     {environment.latestReleaseCard.createdAtLabel ?? '最近发布'}
                                   </div>
                                 </div>
+                                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                                  <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>
+                                    查看日志
+                                  </Link>
+                                </Button>
                                 <Button asChild variant="outline" size="sm" className="rounded-xl">
                                   <Link
                                     href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}
@@ -794,6 +826,11 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
                                     {environment.latestReleaseCard.createdAtLabel ?? '最近发布'}
                                   </div>
                                 </div>
+                                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                                  <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>
+                                    查看日志
+                                  </Link>
+                                </Button>
                                 <Button asChild variant="outline" size="sm" className="rounded-xl">
                                   <Link
                                     href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}

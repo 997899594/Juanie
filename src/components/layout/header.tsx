@@ -59,10 +59,11 @@ function generateBreadcrumbs(
     approvals: '审批',
     teams: '团队',
     settings: '设置',
-    deployments: '发布',
+    deployments: '部署执行',
     releases: '发布',
     environments: '环境',
-    resources: '资源',
+    logs: '日志',
+    resources: '资源浏览',
     members: '成员',
     new: '新建',
   };

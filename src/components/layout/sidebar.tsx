@@ -2,11 +2,11 @@
 
 import {
   AlertTriangle,
-  Box,
   FolderKanban,
   Globe,
   Home,
   Rocket,
+  ScrollText,
   Settings,
   Users,
 } from 'lucide-react';
@@ -56,19 +56,19 @@ const projectNav: NavItem[] = [
     icon: <Home className="h-4 w-4" />,
   },
   {
-    title: '发布',
-    href: '/releases',
-    icon: <Rocket className="h-4 w-4" />,
-  },
-  {
     title: '环境',
     href: '/environments',
     icon: <Globe className="h-4 w-4" />,
   },
   {
-    title: '资源',
-    href: '/resources',
-    icon: <Box className="h-4 w-4" />,
+    title: '发布',
+    href: '/releases',
+    icon: <Rocket className="h-4 w-4" />,
+  },
+  {
+    title: '日志',
+    href: '/logs',
+    icon: <ScrollText className="h-4 w-4" />,
   },
   {
     title: '设置',
@@ -106,7 +106,7 @@ export function Sidebar() {
             </div>
             <div className="min-w-0">
               <div className="text-sm font-semibold">Juanie</div>
-              <div className="text-xs text-muted-foreground">发布控制台</div>
+              <div className="text-xs text-muted-foreground">Release Control</div>
             </div>
           </Link>
         </div>

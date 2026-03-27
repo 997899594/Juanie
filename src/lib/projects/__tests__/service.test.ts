@@ -20,6 +20,20 @@ describe('project overview service', () => {
       } as never,
       governance: null,
       team: { id: 'team-1', name: '平台团队' } as never,
+      projectEnvironments: [
+        {
+          id: 'env-1',
+          name: 'production',
+          isProduction: true,
+          isPreview: false,
+          branch: 'main',
+          deploymentStrategy: 'rolling',
+          databaseStrategy: 'direct',
+          domains: [{ id: 'dom-1', hostname: 'demo.juanie.run' }],
+          databases: [],
+          baseEnvironment: null,
+        },
+      ],
       projectServices: [
         { id: 'svc-1', name: 'web', status: 'active', port: 3000, type: 'web' },
       ] as never,
@@ -52,6 +66,7 @@ describe('project overview service', () => {
 
     expect(result.overview.headerDescription).toBe('平台团队 · 运行中');
     expect(result.stats[0]?.value).toBe(1);
+    expect(result.environmentCards[0]?.name).toBe('production');
     expect(result.serviceCards[0]?.name).toBe('web');
     expect(result.domainCards[0]?.url).toBe('https://demo.juanie.run');
     expect(result.recentReleaseCards[0]?.title).toBe('main 发布 · abc1234');
