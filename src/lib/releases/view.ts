@@ -105,6 +105,7 @@ interface ReleaseViewLike {
   errorMessage?: string | null;
   deployments: Array<{
     id?: string;
+    createdAt?: Date | string;
     serviceId?: string | null;
     version?: string | null;
     imageUrl?: string | null;
@@ -242,6 +243,22 @@ export interface ReleaseDetailMetadataItem {
   mono?: boolean;
 }
 
+export interface ReleaseSummarySnapshot {
+  changed: string;
+  risk: string;
+  result: string;
+  nextAction: string | null;
+}
+
+export interface ReleaseTimelineItem {
+  key: string;
+  at: string | null;
+  title: string;
+  description: string;
+  tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+  href: string | null;
+}
+
 export interface ReleaseDetailDecorations {
   previewSourceMeta: PreviewSourceMetadata;
   previewLifecycle: PreviewLifecycleSummary | null;
@@ -262,6 +279,8 @@ export interface ReleaseDetailDecorations {
   retryableRunsCount: number;
   stats: ReleaseDetailStat[];
   signalChips: ReleaseDetailChip[];
+  summary: ReleaseSummarySnapshot;
+  timeline: ReleaseTimelineItem[];
   metadataItems: ReleaseDetailMetadataItem[];
   deploymentItems: Array<{
     id: string;
@@ -339,6 +358,11 @@ function formatReleaseMetadataValue(value?: Date | string | null): string {
   }
 
   return date.toLocaleString();
+}
+
+function formatTimelineTimestamp(value?: Date | string | null): string | null {
+  const label = formatReleaseMetadataValue(value);
+  return label === '—' ? null : label;
 }
 
 function getReleaseRiskLabel(riskLevel: ReleaseIntelligenceSnapshot['riskLevel']): string {
@@ -477,6 +501,157 @@ function buildMigrationItems(
     serviceName: run.service?.name ?? '服务',
     createdAtLabel: formatReleaseMetadataValue(run.createdAt),
   }));
+}
+
+function getTimelineTone(
+  status: string,
+  kind: 'release' | 'migration' | 'deployment' | 'preview' | 'rollout'
+): ReleaseTimelineItem['tone'] {
+  if (kind === 'preview') return 'success';
+  if (status === 'failed' || status === 'migration_pre_failed') return 'danger';
+  if (status === 'awaiting_approval' || status === 'degraded') return 'warning';
+  if (status === 'running' || status === 'planning' || status === 'deploying') return 'info';
+  if (status === 'success' || status === 'succeeded') return 'success';
+  return 'neutral';
+}
+
+function buildReleaseSummary(input: {
+  release: ReleaseViewLike;
+  intelligence: ReleaseIntelligenceSnapshot;
+  platformSignals: PlatformSignalSnapshot;
+  riskLabel: string;
+  approvalRunsCount: number;
+  retryableRunsCount: number;
+  environmentStrategy: string | null;
+  previewLifecycle: PreviewLifecycleSummary | null;
+}): ReleaseSummarySnapshot {
+  const artifactSummary =
+    input.release.artifacts.length === 0
+      ? '这次发布没有镜像变更'
+      : `这次发布更新了 ${input.release.artifacts.length} 个服务镜像`;
+  const migrationSummary =
+    input.release.migrationRuns.length > 0
+      ? `，包含 ${input.release.migrationRuns.length} 个迁移步骤`
+      : '';
+
+  const risk =
+    input.platformSignals.primarySummary ??
+    input.intelligence.issue?.summary ??
+    `${input.riskLabel}${input.environmentStrategy ? ` · ${input.environmentStrategy}` : ''}`;
+
+  const resultParts = [releaseStatusConfig[input.release.status]?.label ?? input.release.status];
+  if (input.approvalRunsCount > 0) resultParts.push(`${input.approvalRunsCount} 个待审批`);
+  if (input.retryableRunsCount > 0) resultParts.push(`${input.retryableRunsCount} 个可重试`);
+  if (input.previewLifecycle?.stateLabel) resultParts.push(input.previewLifecycle.stateLabel);
+
+  return {
+    changed: `${artifactSummary}${migrationSummary}`,
+    risk,
+    result: resultParts.join(' · '),
+    nextAction:
+      input.platformSignals.nextActionLabel ??
+      input.intelligence.issue?.nextActionLabel ??
+      input.intelligence.actionLabel ??
+      null,
+  };
+}
+
+function buildReleaseTimeline(input: {
+  release: ReleaseViewLike;
+  statusDecoration: ReleaseStatusDecoration;
+  primaryDomainUrl: string | null;
+  environmentStrategy: string | null;
+}): ReleaseTimelineItem[] {
+  const { release } = input;
+  const releaseHref = release.projectId
+    ? `/projects/${release.projectId}/releases/${release.id}`
+    : null;
+  const items: Array<ReleaseTimelineItem & { sortValue: number }> = [];
+
+  items.push({
+    key: 'release-created',
+    at: formatTimelineTimestamp(release.createdAt),
+    title: '发布已创建',
+    description: getReleaseDisplayTitle(release),
+    tone: 'neutral',
+    href: releaseHref,
+    sortValue: release.createdAt ? new Date(release.createdAt).getTime() : 0,
+  });
+
+  for (const run of release.migrationRuns) {
+    items.push({
+      key: `migration-${run.id ?? `${run.serviceId ?? 'service'}-${run.status}`}`,
+      at: formatTimelineTimestamp(run.createdAt),
+      title: `迁移${migrationStatusConfig[run.status]?.label ?? run.status}`,
+      description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · ${run.specification?.phase ?? 'manual'}`,
+      tone: getTimelineTone(run.status, 'migration'),
+      href: releaseHref,
+      sortValue: run.createdAt ? new Date(run.createdAt).getTime() : 0,
+    });
+  }
+
+  for (const deployment of release.deployments) {
+    const serviceName =
+      release.artifacts.find((artifact) => artifact.service.id === deployment.serviceId)?.service
+        .name ?? '服务';
+
+    items.push({
+      key: `deployment-${deployment.id ?? `${deployment.serviceId ?? 'service'}-${deployment.status}`}`,
+      at: formatTimelineTimestamp(deployment.createdAt),
+      title: `部署${deploymentStatusConfig[deployment.status]?.label ?? deployment.status}`,
+      description: serviceName,
+      tone: getTimelineTone(deployment.status, 'deployment'),
+      href: releaseHref,
+      sortValue: deployment.createdAt ? new Date(deployment.createdAt).getTime() : 0,
+    });
+  }
+
+  if (
+    release.environment?.deploymentStrategy &&
+    release.environment.deploymentStrategy !== 'rolling'
+  ) {
+    items.push({
+      key: 'rollout-ready',
+      at: formatTimelineTimestamp(release.updatedAt),
+      title: '渐进式发布待推进',
+      description: input.environmentStrategy
+        ? `${input.environmentStrategy} 已启用，可继续完成放量或切换`
+        : '当前发布可继续推进 rollout',
+      tone: 'warning',
+      href: releaseHref,
+      sortValue: release.updatedAt ? new Date(release.updatedAt).getTime() : 0,
+    });
+  }
+
+  if (
+    release.environment?.isPreview &&
+    input.primaryDomainUrl &&
+    ['succeeded', 'degraded'].includes(release.status)
+  ) {
+    items.push({
+      key: 'preview-ready',
+      at: formatTimelineTimestamp(release.updatedAt),
+      title: '预览环境可访问',
+      description: input.primaryDomainUrl.replace('https://', ''),
+      tone: 'success',
+      href: input.primaryDomainUrl,
+      sortValue: release.updatedAt ? new Date(release.updatedAt).getTime() : 0,
+    });
+  }
+
+  if (release.status !== 'queued') {
+    items.push({
+      key: 'release-result',
+      at: formatTimelineTimestamp(release.updatedAt),
+      title: `发布${input.statusDecoration.label}`,
+      description: release.errorMessage ?? getReleaseDisplayTitle(release),
+      tone: getTimelineTone(release.status, 'release'),
+      href: releaseHref,
+      sortValue: release.updatedAt ? new Date(release.updatedAt).getTime() : 0,
+    });
+  }
+
+  return items.sort((a, b) => a.sortValue - b.sortValue).map(({ sortValue, ...item }) => item);
 }
 
 export function decorateReleaseList<T extends ReleaseViewLike>(
@@ -714,6 +889,22 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
       { label: '部署', value: release.deployments.length },
       { label: '迁移', value: release.migrationRuns.length },
     ],
+    summary: buildReleaseSummary({
+      release,
+      intelligence,
+      platformSignals,
+      riskLabel,
+      approvalRunsCount,
+      retryableRunsCount,
+      environmentStrategy,
+      previewLifecycle,
+    }),
+    timeline: buildReleaseTimeline({
+      release,
+      statusDecoration: releaseStatusConfig[release.status] ?? releaseStatusConfig.queued,
+      primaryDomainUrl,
+      environmentStrategy,
+    }),
     signalChips: buildReleaseSignalChips({
       platformSignals,
       intelligence,

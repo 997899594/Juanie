@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Clock3,
   Database,
+  Dot,
   GitBranch,
   GitCommit,
   Package2,
@@ -175,6 +176,98 @@ export default async function ReleaseDetailPage({
           className="mt-4"
         />
       </div>
+
+      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="console-panel p-5">
+          <div className="mb-4 text-sm font-semibold">发布总结</div>
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                这次发了什么
+              </div>
+              <div className="mt-2 text-sm text-foreground">{release.summary.changed}</div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                风险点
+              </div>
+              <div className="mt-2 text-sm text-foreground">{release.summary.risk}</div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                当前结果
+              </div>
+              <div className="mt-2 text-sm text-foreground">{release.summary.result}</div>
+            </div>
+            {release.summary.nextAction && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  下一步建议
+                </div>
+                <div className="mt-2 text-sm text-foreground">{release.summary.nextAction}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="console-panel p-5">
+          <div className="mb-4 text-sm font-semibold">发布时间线</div>
+          <div className="space-y-3">
+            {release.timeline.map((item, index) => (
+              <div key={item.key} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div
+                    className={
+                      item.tone === 'danger'
+                        ? 'text-destructive'
+                        : item.tone === 'warning'
+                          ? 'text-warning'
+                          : item.tone === 'success'
+                            ? 'text-success'
+                            : item.tone === 'info'
+                              ? 'text-info'
+                              : 'text-muted-foreground'
+                    }
+                  >
+                    <Dot className="h-5 w-5" />
+                  </div>
+                  {index < release.timeline.length - 1 && (
+                    <div className="mt-1 h-full w-px bg-border" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 pb-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-medium">{item.title}</div>
+                    {item.at && <div className="text-xs text-muted-foreground">{item.at}</div>}
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">{item.description}</div>
+                  {item.href && (
+                    <div className="mt-2">
+                      {item.href.startsWith('http') ? (
+                        <a
+                          href={item.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-foreground underline underline-offset-4"
+                        >
+                          打开
+                        </a>
+                      ) : (
+                        <Link
+                          href={item.href}
+                          className="text-xs text-foreground underline underline-offset-4"
+                        >
+                          打开
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <section className="console-panel p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

@@ -87,6 +87,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     databaseCards,
     recentReleaseCards,
   } = pageData;
+  const currentRelease = recentReleaseCards[0] ?? null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -152,6 +153,48 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           );
         })}
       </div>
+
+      {currentRelease && (
+        <section className="console-panel px-5 py-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold">当前发布</div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div
+                  className={`h-2 w-2 rounded-full ${releaseStatusColors[currentRelease.status ?? ''] ?? 'bg-muted-foreground'}`}
+                />
+                <span className="text-sm font-medium">{currentRelease.title}</span>
+                <Badge variant="secondary">{currentRelease.environment.name ?? '环境'}</Badge>
+                {currentRelease.previewSourceMeta.label && (
+                  <Badge variant="outline">{currentRelease.previewSourceMeta.label}</Badge>
+                )}
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                {currentRelease.platformSignals.primarySummary ??
+                  currentRelease.sourceSummary ??
+                  '进入发布页查看这次发布的变更、时间线与执行结果'}
+              </div>
+              {currentRelease.platformSignals.nextActionLabel && (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  下一步：{currentRelease.platformSignals.nextActionLabel}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {currentRelease.primaryDomainUrl && (
+                <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+                  <a href={currentRelease.primaryDomainUrl} target="_blank" rel="noreferrer">
+                    打开环境
+                  </a>
+                </Button>
+              )}
+              <Button asChild size="sm" className="h-9 rounded-xl px-4">
+                <Link href={`/projects/${id}/releases/${currentRelease.id}`}>打开发布</Link>
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-4">
@@ -280,10 +323,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                         />
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium">
-                            {run.database?.name ?? '数据库'}
+                            {run.releaseTitle ?? run.issueLabel ?? run.database?.name ?? '待处理项'}
                           </div>
                           <div className="truncate text-xs text-muted-foreground">
-                            {run.service?.name ?? '服务'}
+                            {[run.service?.name ?? '服务', run.database?.name ?? '数据库'].join(
+                              ' · '
+                            )}
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             {run.environmentScopeLabel && (
@@ -312,16 +357,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                               {run.platformSignals.primarySummary}
                             </div>
                           )}
-                          {run.platformSignals.nextActionLabel && (
+                          {(run.platformSignals.nextActionLabel || run.actionLabel) && (
                             <div className="mt-1 text-[11px] text-muted-foreground">
-                              下一步：{run.platformSignals.nextActionLabel}
+                              下一步：{run.platformSignals.nextActionLabel ?? run.actionLabel}
                             </div>
                           )}
-                          {run.primaryDomainUrl && (
+                          {(run.releaseTitle || run.primaryDomainUrl) && (
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                              <PreviewSourceSummary meta={run.previewSourceMeta} />
+                              {run.releaseTitle && <span>{run.releaseTitle}</span>}
+                              {run.previewSourceMeta.label && (
+                                <PreviewSourceSummary meta={run.previewSourceMeta} />
+                              )}
                               <span className="text-foreground underline underline-offset-4">
-                                打开环境
+                                {run.primaryDomainUrl ? '打开环境' : '打开发布'}
                               </span>
                             </div>
                           )}
@@ -453,19 +501,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                       <div className="truncate text-xs text-muted-foreground">
                         {release.platformSignals.primarySummary ??
                           release.sourceSummary ??
-                          release.environmentSourceLabel ??
                           '查看这次发布的详情'}
                       </div>
-                      {release.primaryDomainUrl && (
-                        <div className="truncate text-xs text-foreground underline underline-offset-4">
-                          {release.primaryDomainUrl.replace('https://', '')}
-                        </div>
-                      )}
-                      <PreviewSourceSummary
-                        meta={release.previewSourceMeta}
-                        className="truncate"
-                        truncate
-                      />
                       {release.platformSignals.nextActionLabel && (
                         <div className="truncate text-[11px] text-muted-foreground">
                           下一步：{release.platformSignals.nextActionLabel}

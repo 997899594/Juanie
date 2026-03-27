@@ -148,9 +148,11 @@ export default async function HomePage() {
                         }`}
                       />
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{run.databaseName}</div>
+                        <div className="truncate text-sm font-medium">
+                          {run.releaseTitle ?? run.issueLabel ?? run.databaseName}
+                        </div>
                         <div className="truncate text-xs text-muted-foreground">
-                          {run.projectName}
+                          {[run.projectName, run.databaseName].join(' · ')}
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                           {run.environmentScopeLabel && (
@@ -179,9 +181,9 @@ export default async function HomePage() {
                             {run.platformSignals.primarySummary}
                           </div>
                         )}
-                        {run.platformSignals.nextActionLabel && (
+                        {(run.platformSignals.nextActionLabel || run.actionLabel) && (
                           <div className="mt-1 text-[11px] text-muted-foreground">
-                            下一步：{run.platformSignals.nextActionLabel}
+                            下一步：{run.platformSignals.nextActionLabel ?? run.actionLabel}
                           </div>
                         )}
                         {(run.releaseTitle || run.primaryDomainUrl) && (

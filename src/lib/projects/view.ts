@@ -78,7 +78,13 @@ export interface ProjectAttentionRunLike {
     }> | null;
   } | null;
   release?: {
+    id?: string;
+    summary?: string | null;
     sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+    environment?: {
+      isPreview?: boolean | null;
+    } | null;
   } | null;
   previewReviewMetadata?: PreviewReviewMetadata | null;
 }
@@ -166,6 +172,7 @@ export interface ProjectAttentionItemDecorations {
   environmentSourceLabel: string | null;
   environmentExpiryLabel: string | null;
   primaryDomainUrl: string | null;
+  releaseTitle: string | null;
   previewSourceMeta: PreviewSourceMetadata;
   previewLifecycle: PreviewLifecycleSummary | null;
 }
@@ -347,11 +354,18 @@ export function decorateProjectAttentionRuns<TRun extends ProjectAttentionRunLik
       environment: run.environment,
       reviewRequest: run.previewReviewMetadata ?? null,
     });
+    const releaseTitle = run.release ? getReleaseDisplayTitle(run.release) : null;
     const previewLifecycle = run.environment?.isPreview
       ? buildPreviewLifecycleSummary({
           sourceLabel: previewSourceMeta.label ?? environmentSourceLabel,
           expiryLabel: environmentExpiryLabel,
           primaryDomainUrl,
+          latestRelease: run.release
+            ? {
+                id: run.release.id ?? run.releaseId ?? run.id ?? 'release',
+                title: releaseTitle ?? '最近发布',
+              }
+            : null,
         })
       : null;
 
@@ -369,6 +383,7 @@ export function decorateProjectAttentionRuns<TRun extends ProjectAttentionRunLik
       environmentSourceLabel,
       environmentExpiryLabel,
       primaryDomainUrl,
+      releaseTitle,
       previewSourceMeta,
       previewLifecycle,
     };
