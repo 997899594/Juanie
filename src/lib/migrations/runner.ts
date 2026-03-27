@@ -6,6 +6,7 @@ import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
 import { createJob, deleteJob, getIsConnected, getJob, getPodLogs, getPods } from '@/lib/k8s';
 import { executeMigrationsForDatabase } from '@/lib/migrations/executor';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
+import { resolveMigrationPath } from '@/lib/migrations/path';
 import { evaluateMigrationPolicy } from '@/lib/policies/delivery';
 import { assessMigrationCommandSafety } from './command-safety';
 import type { ExecuteMigrationRunOptions, ResolvedMigrationSpec } from './types';
@@ -49,12 +50,20 @@ async function appendRunLog(runId: string, message: string): Promise<void> {
 
 function isRetryablePodLogError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
+  const statusCode =
+    typeof error === 'object' && error !== null
+      ? ((error as { code?: number; statusCode?: number }).code ??
+        (error as { code?: number; statusCode?: number }).statusCode)
+      : undefined;
 
   return (
+    statusCode === 400 ||
+    statusCode === 404 ||
     message.includes('ContainerCreating') ||
     message.includes('waiting to start') ||
     message.includes('is waiting') ||
-    message.includes('BadRequest')
+    message.includes('BadRequest') ||
+    message.includes('Error occurred in log request')
   );
 }
 
@@ -109,7 +118,9 @@ async function runSqlMigration(
   spec: ResolvedMigrationSpec,
   options: ExecuteMigrationRunOptions
 ): Promise<void> {
-  const path = spec.specification.migrationPath ?? `migrations/${spec.database.type}`;
+  const path =
+    resolveMigrationPath(spec.specification, spec.database.type) ??
+    `migrations/${spec.database.type}`;
   const files = await fetchMigrationFilesFromRepoPath(
     spec.specification.projectId,
     path,
@@ -188,11 +199,10 @@ async function runCommandMigration(
     );
   }
 
+  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type) ?? '';
   const checksum = crypto
     .createHash('sha256')
-    .update(
-      `${spec.specification.command}:${spec.specification.workingDirectory}:${spec.specification.migrationPath ?? ''}`
-    )
+    .update(`${spec.specification.command}:${spec.specification.workingDirectory}:${migrationPath}`)
     .digest('hex');
 
   const jobName = `migration-${runId.slice(0, 8)}`;

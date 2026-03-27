@@ -9,6 +9,7 @@ import {
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 import { assessMigrationCommandSafety } from './command-safety';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
+import { resolveMigrationPath } from './path';
 import { resolveMigrationSpecifications } from './resolver';
 import type {
   ExecuteMigrationRunOptions,
@@ -161,7 +162,7 @@ export async function buildMigrationExecutionPlan(
     ],
   });
   const warnings: string[] = [...migrationPolicy.warnings];
-  const migrationPath = spec.specification.migrationPath ?? `migrations/${spec.database.type}`;
+  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
   const imageUrl = options.imageUrl ?? null;
   const runnerType: 'k8s_job' | 'worker' = spec.specification.tool === 'sql' ? 'worker' : 'k8s_job';
   let canRun = spec.database.status === 'running';
@@ -177,7 +178,7 @@ export async function buildMigrationExecutionPlan(
     try {
       const files = await fetchMigrationFilesFromRepoPath(
         spec.specification.projectId,
-        migrationPath,
+        migrationPath ?? `migrations/${spec.database.type}`,
         spec.environment.branch || 'main'
       );
       sqlFiles = files.map((file) => ({ name: file.name }));
@@ -240,7 +241,7 @@ export async function buildMigrationExecutionPlan(
       tool: spec.specification.tool,
       phase: spec.specification.phase,
       workingDirectory: spec.specification.workingDirectory,
-      migrationPath: spec.specification.migrationPath ?? null,
+      migrationPath,
       command: spec.specification.command,
       compatibility: spec.specification.compatibility,
       approvalPolicy: spec.specification.approvalPolicy,

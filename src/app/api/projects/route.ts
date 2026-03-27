@@ -18,12 +18,14 @@ import {
 import { buildPrimaryEnvironmentHostname } from '@/lib/domains/defaults';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { ensureRepository } from '@/lib/integrations/service/repository-service';
+import type { CreateRuntimeProfile } from '@/lib/projects/create-defaults';
 import { addProjectInitJob } from '@/lib/queue';
 
 interface CreateProjectRequest {
   mode: 'import' | 'create';
   repositoryId?: string;
   repositoryFullName?: string;
+  isPrivate?: boolean;
   template?: string;
   name: string;
   slug: string;
@@ -35,6 +37,9 @@ interface CreateProjectRequest {
   useCustomDomain?: boolean;
   productionBranch: string;
   autoDeploy: boolean;
+  productionDeploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green';
+  previewDatabaseStrategy?: 'inherit' | 'isolated_clone';
+  runtimeProfile?: CreateRuntimeProfile;
 }
 
 export async function GET() {
@@ -72,6 +77,7 @@ export async function POST(request: Request) {
       mode,
       repositoryId,
       repositoryFullName,
+      isPrivate,
       name,
       slug,
       description,
@@ -83,6 +89,9 @@ export async function POST(request: Request) {
       productionBranch,
       autoDeploy,
       template,
+      productionDeploymentStrategy,
+      previewDatabaseStrategy,
+      runtimeProfile,
     } = body;
 
     if (!teamId || !name || !slug) {
@@ -155,6 +164,12 @@ export async function POST(request: Request) {
           projectInit: {
             mode,
             template: template ?? null,
+            isPrivate: Boolean(isPrivate),
+          },
+          creationDefaults: {
+            runtimeProfile: runtimeProfile ?? 'standard',
+            productionDeploymentStrategy: productionDeploymentStrategy ?? 'controlled',
+            previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
           },
         },
         status: 'initializing',
@@ -168,7 +183,7 @@ export async function POST(request: Request) {
         projectId: project.id,
         name: 'staging',
         branch: productionBranch,
-        autoDeploy: true,
+        autoDeploy,
         isProduction: false,
         databaseStrategy: 'direct',
         deploymentStrategy: 'rolling',
@@ -181,11 +196,13 @@ export async function POST(request: Request) {
       autoDeploy: false,
       isProduction: true,
       databaseStrategy: 'direct',
-      deploymentStrategy: 'controlled',
+      deploymentStrategy: productionDeploymentStrategy ?? 'controlled',
     });
 
     const createdServices = new Map<string, string>();
     for (const serviceConfig of serviceConfigs) {
+      const scaling = serviceConfig.scaling ?? null;
+      const resources = serviceConfig.resources ?? null;
       const [service] = await db
         .insert(services)
         .values({
@@ -193,10 +210,27 @@ export async function POST(request: Request) {
           name: serviceConfig.name,
           type: serviceConfig.type,
           buildCommand: serviceConfig.build?.command,
+          dockerfile: serviceConfig.build?.dockerfile,
+          dockerContext: serviceConfig.build?.context,
           startCommand: serviceConfig.run?.command,
           port: serviceConfig.run?.port,
           cronSchedule: serviceConfig.type === 'cron' ? serviceConfig.schedule : null,
-          replicas: 1,
+          replicas: scaling?.min ?? 1,
+          healthcheckPath: serviceConfig.healthcheck?.path ?? null,
+          healthcheckInterval: serviceConfig.healthcheck?.interval ?? 30,
+          cpuRequest: resources?.cpuRequest ?? '100m',
+          cpuLimit: resources?.cpuLimit ?? '500m',
+          memoryRequest: resources?.memoryRequest ?? '256Mi',
+          memoryLimit: resources?.memoryLimit ?? '512Mi',
+          autoscaling:
+            scaling && ((scaling.max ?? 0) > (scaling.min ?? 0) || Boolean(scaling.cpu))
+              ? {
+                  min: scaling.min ?? 1,
+                  max: scaling.max ?? scaling.min ?? 1,
+                  cpu: scaling.cpu ?? 80,
+                }
+              : null,
+          isPublic: serviceConfig.isPublic ?? true,
           status: 'pending',
         })
         .returning();

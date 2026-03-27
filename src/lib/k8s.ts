@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { Writable } from 'node:stream';
 import * as k8s from '@kubernetes/client-node';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
@@ -182,17 +183,28 @@ export async function getPodLogs(
   tailLines: number = 100,
   follow: boolean = false
 ): Promise<string> {
-  const { core } = getK8sClient();
+  const { config } = getK8sClient();
+  const logger = new k8s.Log(config);
+  let output = '';
 
-  const response = await core.readNamespacedPodLog({
-    namespace,
-    name: podName,
-    container: containerName,
-    tailLines,
-    follow,
+  const stream = new Writable({
+    write(chunk, _encoding, callback) {
+      output += chunk.toString();
+      callback();
+    },
   });
 
-  return response as unknown as string;
+  await logger.log(namespace, podName, containerName ?? '', stream, {
+    follow,
+    tailLines,
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    stream.on('finish', () => resolve());
+    stream.on('error', reject);
+  });
+
+  return output;
 }
 
 export async function createJob(namespace: string, body: k8s.V1Job): Promise<void> {
@@ -601,11 +613,11 @@ export async function createDeployment(
                 resources: {
                   requests: {
                     cpu: spec.cpuRequest || '100m',
-                    memory: spec.memoryRequest || '128Mi',
+                    memory: spec.memoryRequest || '256Mi',
                   },
                   limits: {
                     cpu: spec.cpuLimit || '500m',
-                    memory: spec.memoryLimit || '256Mi',
+                    memory: spec.memoryLimit || '512Mi',
                   },
                 },
               },

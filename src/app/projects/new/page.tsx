@@ -76,7 +76,7 @@ export default async function NewProjectPage() {
       />
 
       <div className="console-panel px-5 py-5">
-        <CreateProjectForm teamScopes={pageData.teamScopes} />
+        <CreateProjectForm teamScopes={pageData.teamScopes} templates={pageData.templates} />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import type { TeamRole } from '@/lib/db/schema';
+import type { CreateTemplateOption } from '@/lib/projects/create-defaults';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 interface TeamScopeLike {
@@ -33,6 +34,7 @@ export interface CreateProjectPageDataView {
   }>;
   platformSignals: PlatformSignalSnapshot;
   teamScopes: CreateProjectTeamScope[];
+  templates: CreateTemplateOption[];
 }
 
 export interface CreateProjectSubmissionSnapshot {
@@ -84,6 +86,7 @@ function buildCreateCapabilitySignals(input: {
 
 export function buildCreateProjectPageData(input: {
   teamScopes: TeamScopeLike[];
+  templates: CreateTemplateOption[];
 }): CreateProjectPageDataView {
   const teamScopes = input.teamScopes.map((team) => {
     const capabilitySet = new Set(team.capabilities);
@@ -165,6 +168,7 @@ export function buildCreateProjectPageData(input: {
     ],
     platformSignals,
     teamScopes,
+    templates: input.templates,
   };
 }
 

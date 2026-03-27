@@ -469,8 +469,8 @@ export const services = pgTable(
 
     cpuRequest: varchar('cpuRequest', { length: 50 }).default('100m'),
     cpuLimit: varchar('cpuLimit', { length: 50 }).default('500m'),
-    memoryRequest: varchar('memoryRequest', { length: 50 }).default('128Mi'),
-    memoryLimit: varchar('memoryLimit', { length: 50 }).default('256Mi'),
+    memoryRequest: varchar('memoryRequest', { length: 50 }).default('256Mi'),
+    memoryLimit: varchar('memoryLimit', { length: 50 }).default('512Mi'),
 
     autoscaling: jsonb('autoscaling'),
 

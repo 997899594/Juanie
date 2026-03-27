@@ -423,10 +423,21 @@ async function createRepository(project: typeof projects.$inferSelect) {
     requiredCapabilities: requiredCapabilitiesForStep('create_repository'),
   });
 
+  const projectConfig =
+    project.configJson && typeof project.configJson === 'object'
+      ? (project.configJson as Record<string, unknown>)
+      : null;
+  const projectInitConfig =
+    projectConfig?.projectInit && typeof projectConfig.projectInit === 'object'
+      ? (projectConfig.projectInit as Record<string, unknown>)
+      : null;
+  const isPrivate =
+    typeof projectInitConfig?.isPrivate === 'boolean' ? projectInitConfig.isPrivate : true;
+
   const repo = await gateway.createRepository(session, {
     name: project.slug,
     description: project.description || undefined,
-    isPrivate: true,
+    isPrivate,
     autoInit: false,
   });
 
@@ -694,6 +705,13 @@ export function renderJuanieConfig(
   const lines: string[] = ['# juanie.yaml', `name: ${project.slug}`, '', 'services:'];
 
   for (const service of context.services) {
+    const autoscaling =
+      service.autoscaling &&
+      typeof service.autoscaling === 'object' &&
+      !Array.isArray(service.autoscaling)
+        ? (service.autoscaling as { max?: number; cpu?: number })
+        : null;
+
     lines.push(
       `  - name: ${service.name}`,
       `    type: ${service.type}`,
@@ -707,8 +725,32 @@ export function renderJuanieConfig(
       lines.push(`      port: ${service.port}`);
     }
 
-    const healthPath = service.type === 'web' ? '/api/health' : '/health';
-    lines.push('    healthcheck:', `      path: ${healthPath}`, '      interval: 30');
+    const healthPath =
+      service.healthcheckPath ?? (service.type === 'web' ? '/api/health' : '/health');
+    lines.push(
+      '    healthcheck:',
+      `      path: ${healthPath}`,
+      `      interval: ${service.healthcheckInterval ?? 30}`
+    );
+
+    lines.push(
+      '    scaling:',
+      `      min: ${service.replicas ?? 1}`,
+      ...(autoscaling?.max ? [`      max: ${autoscaling.max}`] : []),
+      ...(autoscaling?.cpu ? [`      cpu: ${autoscaling.cpu}`] : [])
+    );
+
+    lines.push(
+      '    resources:',
+      `      cpuRequest: ${service.cpuRequest ?? '100m'}`,
+      `      cpuLimit: ${service.cpuLimit ?? '500m'}`,
+      `      memoryRequest: ${service.memoryRequest ?? '256Mi'}`,
+      `      memoryLimit: ${service.memoryLimit ?? '512Mi'}`
+    );
+
+    if (service.isPublic === false) {
+      lines.push('    isPublic: false');
+    }
 
     const migrationLines = buildServiceMigrationLines(
       service,

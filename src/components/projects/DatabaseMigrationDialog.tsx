@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { Separator } from '@/components/ui/separator';
+import { resolveMigrationPath } from '@/lib/migrations/path';
 import { getDatabaseManualControlSnapshot } from '@/lib/releases/intelligence';
 
 interface MigrationRunItem {
@@ -173,8 +174,28 @@ function buildPlanDiff(
   if (!latestRun) return [];
 
   const previousSpec = latestRun.specification;
-  const currentPath = plan.specification.migrationPath ?? `migrations/${plan.database.type}`;
-  const previousPath = previousSpec.migrationPath ?? `migrations/${plan.database.type}`;
+  const currentPath =
+    resolveMigrationPath(
+      {
+        tool: plan.specification.tool as
+          | 'drizzle'
+          | 'prisma'
+          | 'knex'
+          | 'typeorm'
+          | 'sql'
+          | 'custom',
+        migrationPath: plan.specification.migrationPath,
+      },
+      plan.database.type as 'postgresql' | 'mysql' | 'redis' | 'mongodb'
+    ) ?? `migrations/${plan.database.type}`;
+  const previousPath =
+    resolveMigrationPath(
+      {
+        tool: previousSpec.tool as 'drizzle' | 'prisma' | 'knex' | 'typeorm' | 'sql' | 'custom',
+        migrationPath: previousSpec.migrationPath,
+      },
+      plan.database.type as 'postgresql' | 'mysql' | 'redis' | 'mongodb'
+    ) ?? `migrations/${plan.database.type}`;
 
   const comparisons: Array<MigrationDiffItem | null> = [
     plan.runnerType !== 'worker' || latestRun.specification.tool === 'sql'
@@ -219,6 +240,24 @@ function buildPlanDiff(
 
   return comparisons.filter(
     (item): item is MigrationDiffItem => item !== null && item.current !== item.previous
+  );
+}
+
+function getDisplayMigrationPath(plan: MigrationPlan): string {
+  return (
+    resolveMigrationPath(
+      {
+        tool: plan.specification.tool as
+          | 'drizzle'
+          | 'prisma'
+          | 'knex'
+          | 'typeorm'
+          | 'sql'
+          | 'custom',
+        migrationPath: plan.specification.migrationPath,
+      },
+      plan.database.type as 'postgresql' | 'mysql' | 'redis' | 'mongodb'
+    ) ?? `migrations/${plan.database.type}`
   );
 }
 
@@ -431,6 +470,7 @@ export function DatabaseMigrationDialog({
 
   const latestRun = runs[0];
   const diffItems = useMemo(() => (plan ? buildPlanDiff(plan, latestRun) : []), [plan, latestRun]);
+  const displayMigrationPath = plan ? getDisplayMigrationPath(plan) : null;
   const confirmationMatches = plan ? confirmationText.trim() === plan.confirmationValue : false;
   const manualControl = getDatabaseManualControlSnapshot({
     latestMigration: latestMigration
@@ -600,9 +640,7 @@ export function DatabaseMigrationDialog({
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">迁移路径</div>
-                        <code className="text-xs">
-                          {plan.specification.migrationPath ?? `migrations/${plan.database.type}`}
-                        </code>
+                        <code className="text-xs">{displayMigrationPath}</code>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">兼容性</div>

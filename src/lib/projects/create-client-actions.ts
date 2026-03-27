@@ -6,6 +6,7 @@ interface CreateProjectPayload {
   mode: 'import' | 'create';
   repositoryId?: string;
   repositoryFullName?: string;
+  isPrivate?: boolean;
   template?: string;
   name: string;
   slug: string;
@@ -17,6 +18,9 @@ interface CreateProjectPayload {
   useCustomDomain?: boolean;
   productionBranch: string;
   autoDeploy: boolean;
+  productionDeploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green';
+  previewDatabaseStrategy?: 'inherit' | 'isolated_clone';
+  runtimeProfile?: 'standard' | 'resilient' | 'performance';
 }
 
 export async function submitCreateProject(payload: CreateProjectPayload): Promise<

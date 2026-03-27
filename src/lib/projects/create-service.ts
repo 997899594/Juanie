@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -7,8 +9,16 @@ import {
   teamMembers,
 } from '@/lib/db/schema';
 import { buildCreateProjectPageData } from '@/lib/projects/create-view';
+import { createTemplateCatalog } from './create-defaults';
+
+function getAvailableCreateTemplates() {
+  return createTemplateCatalog.filter((template) =>
+    existsSync(join(process.cwd(), 'templates', template.id))
+  );
+}
 
 export async function getCreateProjectPageData(userId: string) {
+  const templates = getAvailableCreateTemplates();
   const memberships = await db.query.teamMembers.findMany({
     where: eq(teamMembers.userId, userId),
     with: {
@@ -18,7 +28,7 @@ export async function getCreateProjectPageData(userId: string) {
   });
 
   if (memberships.length === 0) {
-    return buildCreateProjectPageData({ teamScopes: [] });
+    return buildCreateProjectPageData({ teamScopes: [], templates });
   }
 
   const teamIds = memberships.map((membership) => membership.teamId);
@@ -78,6 +88,7 @@ export async function getCreateProjectPageData(userId: string) {
   const ownerByTeamId = new Map(owners.map((owner) => [owner.teamId, owner]));
 
   return buildCreateProjectPageData({
+    templates,
     teamScopes: memberships.map((membership) => {
       const owner = ownerByTeamId.get(membership.teamId) ?? null;
       const ownerIdentities = owner ? (identitiesByUserId.get(owner.userId) ?? []) : [];
