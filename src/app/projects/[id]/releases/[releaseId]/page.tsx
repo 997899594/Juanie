@@ -185,26 +185,28 @@ export default async function ReleaseDetailPage({
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 这次发了什么
               </div>
-              <div className="mt-2 text-sm text-foreground">{release.summary.changed}</div>
+              <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.changed}</div>
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 风险点
               </div>
-              <div className="mt-2 text-sm text-foreground">{release.summary.risk}</div>
+              <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.risk}</div>
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 当前结果
               </div>
-              <div className="mt-2 text-sm text-foreground">{release.summary.result}</div>
+              <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.result}</div>
             </div>
-            {release.summary.nextAction && (
+            {release.narrativeSummary.nextAction && (
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   下一步建议
                 </div>
-                <div className="mt-2 text-sm text-foreground">{release.summary.nextAction}</div>
+                <div className="mt-2 text-sm text-foreground">
+                  {release.narrativeSummary.nextAction}
+                </div>
               </div>
             )}
           </div>

@@ -279,7 +279,7 @@ export interface ReleaseDetailDecorations {
   retryableRunsCount: number;
   stats: ReleaseDetailStat[];
   signalChips: ReleaseDetailChip[];
-  summary: ReleaseSummarySnapshot;
+  narrativeSummary: ReleaseSummarySnapshot;
   timeline: ReleaseTimelineItem[];
   metadataItems: ReleaseDetailMetadataItem[];
   deploymentItems: Array<{
@@ -889,7 +889,7 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
       { label: '部署', value: release.deployments.length },
       { label: '迁移', value: release.migrationRuns.length },
     ],
-    summary: buildReleaseSummary({
+    narrativeSummary: buildReleaseSummary({
       release,
       intelligence,
       platformSignals,
