@@ -2,8 +2,10 @@
 
 import {
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Database,
   GitBranch,
   Globe,
@@ -336,6 +338,9 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
     }>
   >([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [configAdvancedOpen, setConfigAdvancedOpen] = useState(false);
+  const [reviewServicesOpen, setReviewServicesOpen] = useState(false);
+  const [reviewDatabasesOpen, setReviewDatabasesOpen] = useState(false);
 
   const selectedTeam =
     teamScopes.find((team) => team.id === formData.teamId) ?? teamScopes[0] ?? null;
@@ -345,6 +350,15 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === STEPS.length - 1;
   const activeServices = formData.services.filter((service) => !service.disabled);
+  const runtimeProfileLabel =
+    createRuntimeProfiles.find((profile) => profile.value === formData.runtimeProfile)?.label ??
+    formData.runtimeProfile;
+  const deploymentStrategyLabel =
+    getEnvironmentDeploymentStrategyLabel(formData.productionDeploymentStrategy) ??
+    formData.productionDeploymentStrategy;
+  const previewDatabaseStrategyLabel =
+    getEnvironmentDatabaseStrategyLabel(formData.previewDatabaseStrategy) ??
+    formData.previewDatabaseStrategy;
 
   const fetchRepositories = useCallback(
     async (search?: string) => {
@@ -968,6 +982,37 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </p>
             </div>
 
+            <div className="rounded-[20px] border border-border bg-secondary/20 p-4">
+              <div className="text-sm font-medium">平台推荐配置</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                先用平台默认方案把主链路配齐，服务与数据库细节可在下方高级调整。
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
+                  <div className="text-xs text-muted-foreground">资源档位</div>
+                  <div className="mt-1 text-sm font-medium">{runtimeProfileLabel}</div>
+                </div>
+                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
+                  <div className="text-xs text-muted-foreground">生产发布</div>
+                  <div className="mt-1 text-sm font-medium">{deploymentStrategyLabel}</div>
+                </div>
+                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
+                  <div className="text-xs text-muted-foreground">预览数据库</div>
+                  <div className="mt-1 text-sm font-medium">{previewDatabaseStrategyLabel}</div>
+                </div>
+                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
+                  <div className="text-xs text-muted-foreground">基础环境</div>
+                  <div className="mt-1 text-sm font-medium">
+                    {formData.autoDeploy ? '自动部署' : '手动触发'}
+                  </div>
+                </div>
+                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
+                  <div className="text-xs text-muted-foreground">识别服务</div>
+                  <div className="mt-1 text-sm font-medium">{formData.services.length} 个</div>
+                </div>
+              </div>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>项目名称</Label>
@@ -1049,32 +1094,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-[18px] border border-border px-4 py-3">
-                <div>
-                  <div className="text-sm font-medium">自定义域名</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    创建时就把主域名挂上，避免后面再补接入。
-                  </div>
-                </div>
-                <Switch
-                  checked={formData.useCustomDomain}
-                  onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, useCustomDomain: checked }))
-                  }
-                />
-              </div>
-              {formData.useCustomDomain && (
-                <Input
-                  value={formData.domain}
-                  onChange={(event) =>
-                    setFormData((prev) => ({ ...prev, domain: event.target.value }))
-                  }
-                  placeholder="app.example.com"
-                />
-              )}
             </div>
 
             <div className="space-y-3">
@@ -1168,56 +1187,110 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-[20px] border border-border">
+              <button
+                type="button"
+                onClick={() => setConfigAdvancedOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+              >
                 <div>
-                  <h3 className="text-sm font-medium">服务预览</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    平台将基于这些服务生成默认交付骨架和运行配置。
-                  </p>
+                  <div className="text-sm font-medium">高级调整</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    自定义域名、服务识别结果和仓库结构信号都放在这里。
+                  </div>
                 </div>
-                <Badge variant="outline">{formData.services.length} 个服务</Badge>
-              </div>
+                {configAdvancedOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
 
-              {(formData.monorepoType !== 'none' || formData.hasDockerBake) && (
-                <div className="flex flex-wrap gap-2 rounded-[18px] bg-secondary/40 p-3 text-xs text-muted-foreground">
-                  {formData.monorepoType !== 'none' && (
-                    <Badge variant="secondary">Monorepo · {formData.monorepoType}</Badge>
-                  )}
-                  {formData.hasDockerBake && <Badge variant="secondary">docker-bake.hcl</Badge>}
-                  {formData.bakeTargets.map((target) => (
-                    <Badge key={target} variant="outline">
-                      {target}
-                    </Badge>
-                  ))}
+              {configAdvancedOpen && (
+                <div className="space-y-4 border-t border-border px-4 py-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-[18px] border border-border px-4 py-3">
+                      <div>
+                        <div className="text-sm font-medium">自定义域名</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          创建时就把主域名挂上，避免后面再补接入。
+                        </div>
+                      </div>
+                      <Switch
+                        checked={formData.useCustomDomain}
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({ ...prev, useCustomDomain: checked }))
+                        }
+                      />
+                    </div>
+                    {formData.useCustomDomain && (
+                      <Input
+                        value={formData.domain}
+                        onChange={(event) =>
+                          setFormData((prev) => ({ ...prev, domain: event.target.value }))
+                        }
+                        placeholder="app.example.com"
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-medium">服务预览</h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          平台将基于这些服务生成默认交付骨架和运行配置。
+                        </p>
+                      </div>
+                      <Badge variant="outline">{formData.services.length} 个服务</Badge>
+                    </div>
+
+                    {(formData.monorepoType !== 'none' || formData.hasDockerBake) && (
+                      <div className="flex flex-wrap gap-2 rounded-[18px] bg-secondary/40 p-3 text-xs text-muted-foreground">
+                        {formData.monorepoType !== 'none' && (
+                          <Badge variant="secondary">Monorepo · {formData.monorepoType}</Badge>
+                        )}
+                        {formData.hasDockerBake && (
+                          <Badge variant="secondary">docker-bake.hcl</Badge>
+                        )}
+                        {formData.bakeTargets.map((target) => (
+                          <Badge key={target} variant="outline">
+                            {target}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="overflow-hidden rounded-[20px] border border-border">
+                      {formData.services.length === 0 ? (
+                        <div className="p-5 text-sm text-muted-foreground">
+                          当前还没有可创建的服务。
+                        </div>
+                      ) : (
+                        formData.services.map((service) => (
+                          <div
+                            key={service._id}
+                            className="border-b border-border px-4 py-4 last:border-b-0"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="font-medium">{service.name}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {service.appDir} · {service.type}
+                                  {typeof service.run.port === 'number'
+                                    ? ` · port ${service.run.port}`
+                                    : ''}
+                                </div>
+                              </div>
+                              <Badge variant="outline">{getServiceRuntimeSummary(service)}</Badge>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
-
-              <div className="overflow-hidden rounded-[20px] border border-border">
-                {formData.services.length === 0 ? (
-                  <div className="p-5 text-sm text-muted-foreground">当前还没有可创建的服务。</div>
-                ) : (
-                  formData.services.map((service) => (
-                    <div
-                      key={service._id}
-                      className="border-b border-border px-4 py-4 last:border-b-0"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="font-medium">{service.name}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {service.appDir} · {service.type}
-                            {typeof service.run.port === 'number'
-                              ? ` · port ${service.run.port}`
-                              : ''}
-                          </div>
-                        </div>
-                        <Badge variant="outline">{getServiceRuntimeSummary(service)}</Badge>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
             </div>
           </div>
         )}
@@ -1298,382 +1371,445 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </div>
             )}
 
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-medium">服务与资源</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    这里可以对最终落地的服务做最后的启停、入口和资源修正。
-                  </p>
+            <div className="rounded-[20px] border border-border bg-secondary/20 p-4">
+              <div className="text-sm font-medium">最终会创建这些能力</div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-[16px] border border-border bg-background px-4 py-3">
+                  <div className="text-xs text-muted-foreground">启用服务</div>
+                  <div className="mt-1 text-sm font-medium">{activeServices.length} 个</div>
                 </div>
-                <Badge variant="outline">{activeServices.length} 个启用中</Badge>
-              </div>
-
-              <div className="overflow-hidden rounded-[20px] border border-border">
-                {formData.services.length === 0 ? (
-                  <div className="p-5 text-sm text-muted-foreground">没有识别到服务。</div>
-                ) : (
-                  formData.services.map((service) => (
-                    <div
-                      key={service._id}
-                      className="border-b border-border px-4 py-4 last:border-b-0"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-3">
-                            <Switch
-                              checked={!service.disabled}
-                              onCheckedChange={() =>
-                                updateService(service._id, (current) => ({
-                                  ...current,
-                                  disabled: !current.disabled,
-                                }))
-                              }
-                            />
-                            <div className="font-medium">{service.name}</div>
-                            <Badge variant="outline">{service.type}</Badge>
-                          </div>
-                          <div className="pl-11 text-xs text-muted-foreground">
-                            {service.appDir} · 启动命令 {service.run.command}
-                            {typeof service.run.port === 'number'
-                              ? ` · port ${service.run.port}`
-                              : ''}
-                          </div>
-                        </div>
-                        <Badge variant="secondary">{getServiceRuntimeSummary(service)}</Badge>
-                      </div>
-
-                      {!service.disabled && (
-                        <div className="mt-4 space-y-4 pl-11">
-                          {service.type === 'web' && (
-                            <div className="flex items-center justify-between rounded-[16px] border border-border px-4 py-3">
-                              <div>
-                                <div className="text-sm font-medium">公网入口</div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  关闭后服务仍会部署，但不会作为公开入口暴露。
-                                </div>
-                              </div>
-                              <Switch
-                                checked={service.isPublic ?? true}
-                                onCheckedChange={(checked) =>
-                                  updateService(service._id, (current) => ({
-                                    ...current,
-                                    isPublic: checked,
-                                  }))
-                                }
-                              />
-                            </div>
-                          )}
-
-                          <div className="grid gap-4 md:grid-cols-3">
-                            <div className="space-y-2">
-                              <Label>副本数</Label>
-                              <Input
-                                type="number"
-                                min={1}
-                                value={service.scaling?.min ?? 1}
-                                onChange={(event) =>
-                                  updateService(service._id, (current) => {
-                                    const min = Number(event.target.value) || 1;
-                                    const max =
-                                      current.scaling?.max && current.scaling.max < min
-                                        ? min
-                                        : current.scaling?.max;
-                                    return {
-                                      ...current,
-                                      scaling: {
-                                        ...current.scaling,
-                                        min,
-                                        ...(typeof max === 'number' ? { max } : {}),
-                                      },
-                                    };
-                                  })
-                                }
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>端口</Label>
-                              <Input
-                                type="number"
-                                min={1}
-                                max={65535}
-                                value={service.run.port ?? ''}
-                                onChange={(event) =>
-                                  updateService(service._id, (current) => ({
-                                    ...current,
-                                    run: {
-                                      ...current.run,
-                                      port: event.target.value
-                                        ? Number(event.target.value)
-                                        : undefined,
-                                    },
-                                  }))
-                                }
-                                disabled={service.type !== 'web'}
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>健康检查路径</Label>
-                              <Input
-                                value={service.healthcheck?.path ?? ''}
-                                onChange={(event) =>
-                                  updateService(service._id, (current) => ({
-                                    ...current,
-                                    healthcheck: {
-                                      ...current.healthcheck,
-                                      path: event.target.value || undefined,
-                                      interval: current.healthcheck?.interval ?? 30,
-                                    },
-                                  }))
-                                }
-                                placeholder={service.type === 'web' ? '/api/health' : '/health'}
-                                disabled={service.type !== 'web'}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                            <div className="space-y-2">
-                              <Label>CPU 请求</Label>
-                              <Input
-                                value={service.resources?.cpuRequest ?? ''}
-                                onChange={(event) =>
-                                  updateService(service._id, (current) => ({
-                                    ...current,
-                                    resources: {
-                                      ...current.resources,
-                                      cpuRequest: event.target.value,
-                                    },
-                                  }))
-                                }
-                                placeholder="100m"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>CPU 上限</Label>
-                              <Input
-                                value={service.resources?.cpuLimit ?? ''}
-                                onChange={(event) =>
-                                  updateService(service._id, (current) => ({
-                                    ...current,
-                                    resources: {
-                                      ...current.resources,
-                                      cpuLimit: event.target.value,
-                                    },
-                                  }))
-                                }
-                                placeholder="500m"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>内存请求</Label>
-                              <Input
-                                value={service.resources?.memoryRequest ?? ''}
-                                onChange={(event) =>
-                                  updateService(service._id, (current) => ({
-                                    ...current,
-                                    resources: {
-                                      ...current.resources,
-                                      memoryRequest: event.target.value,
-                                    },
-                                  }))
-                                }
-                                placeholder="256Mi"
-                              />
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>内存上限</Label>
-                              <Input
-                                value={service.resources?.memoryLimit ?? ''}
-                                onChange={(event) =>
-                                  updateService(service._id, (current) => ({
-                                    ...current,
-                                    resources: {
-                                      ...current.resources,
-                                      memoryLimit: event.target.value,
-                                    },
-                                  }))
-                                }
-                                placeholder="512Mi"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+                <div className="rounded-[16px] border border-border bg-background px-4 py-3">
+                  <div className="text-xs text-muted-foreground">数据库</div>
+                  <div className="mt-1 text-sm font-medium">{formData.databases.length} 个</div>
+                </div>
+                <div className="rounded-[16px] border border-border bg-background px-4 py-3">
+                  <div className="text-xs text-muted-foreground">默认链路</div>
+                  <div className="mt-1 text-sm font-medium">
+                    {deploymentStrategyLabel} · {previewDatabaseStrategyLabel}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-[20px] border border-border">
+              <button
+                type="button"
+                onClick={() => setReviewServicesOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+              >
                 <div>
-                  <h3 className="text-sm font-medium">数据库</h3>
+                  <h3 className="text-sm font-medium">高级调整 · 服务与资源</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    可以直接把平台托管数据库或外部数据库一起挂进来。
+                    仅在需要覆盖平台推荐值时展开。
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {DATABASE_TYPE_OPTIONS.map((databaseType) => (
-                    <Button
-                      key={databaseType.value}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          databases: [...prev.databases, createDatabaseDraft(databaseType.value)],
-                        }))
-                      }
-                    >
-                      <Plus className="mr-1 h-3 w-3" />
-                      {databaseType.label}
-                    </Button>
-                  ))}
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline">{activeServices.length} 个启用中</Badge>
+                  {reviewServicesOpen ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
                 </div>
-              </div>
+              </button>
 
-              <div className="overflow-hidden rounded-[20px] border border-border">
-                {formData.databases.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 p-6 text-center text-muted-foreground">
-                    <Database className="h-5 w-5 opacity-40" />
-                    <span className="text-sm">当前没有数据库，需要时可直接添加。</span>
-                  </div>
-                ) : (
-                  formData.databases.map((database) => {
-                    const sharedDisabled = database.type === 'mysql' || database.type === 'mongodb';
-
-                    const updateDatabase = (updates: Partial<DatabaseWithId>) => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        databases: prev.databases.map((item) =>
-                          item._id === database._id ? { ...item, ...updates } : item
-                        ),
-                      }));
-                    };
-
-                    return (
-                      <div
-                        key={database._id}
-                        className="space-y-4 border-b border-border px-4 py-4 last:border-b-0"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <Database className="h-4 w-4 text-muted-foreground" />
-                            <Input
-                              value={database.name}
-                              onChange={(event) => updateDatabase({ name: event.target.value })}
-                              className="h-9 w-44"
-                            />
-                            <Badge variant="outline">
-                              {
-                                DATABASE_TYPE_OPTIONS.find(
-                                  (option) => option.value === database.type
-                                )?.label
-                              }
-                            </Badge>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                databases: prev.databases.filter(
-                                  (item) => item._id !== database._id
-                                ),
-                              }))
-                            }
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label>规格</Label>
-                            <Select
-                              value={database.plan}
-                              onValueChange={(value: DatabaseWithId['plan']) =>
-                                updateDatabase({ plan: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="选择规格" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {DATABASE_PLAN_OPTIONS.map((plan) => (
-                                  <SelectItem key={plan.value} value={plan.value}>
-                                    {plan.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>接入方式</Label>
-                            <div className="flex flex-wrap gap-2">
-                              {(
-                                [
-                                  { value: 'shared', label: '共享资源' },
-                                  { value: 'standalone', label: '独立资源' },
-                                  { value: 'external', label: '外部实例' },
-                                ] as const
-                              ).map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  disabled={option.value === 'shared' && sharedDisabled}
-                                  onClick={() => updateDatabase({ provisionType: option.value })}
-                                  className={cn(
-                                    'rounded-full border px-3 py-1.5 text-xs transition-colors',
-                                    database.provisionType === option.value
-                                      ? 'border-foreground bg-foreground text-background'
-                                      : 'border-border bg-background hover:bg-secondary/40',
-                                    option.value === 'shared' &&
-                                      sharedDisabled &&
-                                      'cursor-not-allowed opacity-40'
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
+              {reviewServicesOpen && (
+                <div className="border-t border-border px-4 py-4">
+                  <div className="overflow-hidden rounded-[20px] border border-border">
+                    {formData.services.length === 0 ? (
+                      <div className="p-5 text-sm text-muted-foreground">没有识别到服务。</div>
+                    ) : (
+                      formData.services.map((service) => (
+                        <div
+                          key={service._id}
+                          className="border-b border-border px-4 py-4 last:border-b-0"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-3">
+                                <Switch
+                                  checked={!service.disabled}
+                                  onCheckedChange={() =>
+                                    updateService(service._id, (current) => ({
+                                      ...current,
+                                      disabled: !current.disabled,
+                                    }))
+                                  }
+                                />
+                                <div className="font-medium">{service.name}</div>
+                                <Badge variant="outline">{service.type}</Badge>
+                              </div>
+                              <div className="pl-11 text-xs text-muted-foreground">
+                                {service.appDir} · 启动命令 {service.run.command}
+                                {typeof service.run.port === 'number'
+                                  ? ` · port ${service.run.port}`
+                                  : ''}
+                              </div>
                             </div>
+                            <Badge variant="secondary">{getServiceRuntimeSummary(service)}</Badge>
                           </div>
-                        </div>
 
-                        {database.provisionType === 'external' && (
-                          <div className="space-y-2">
-                            <Label>连接串</Label>
-                            <Input
-                              value={database.externalUrl ?? ''}
-                              onChange={(event) =>
-                                updateDatabase({ externalUrl: event.target.value })
-                              }
-                              placeholder={
-                                database.type === 'redis'
-                                  ? 'redis://:password@host:6379'
-                                  : database.type === 'mongodb'
-                                    ? 'mongodb://user:pass@host:27017/db'
-                                    : 'postgresql://user:pass@host:5432/db'
-                              }
-                            />
-                          </div>
-                        )}
+                          {!service.disabled && (
+                            <div className="mt-4 space-y-4 pl-11">
+                              {service.type === 'web' && (
+                                <div className="flex items-center justify-between rounded-[16px] border border-border px-4 py-3">
+                                  <div>
+                                    <div className="text-sm font-medium">公网入口</div>
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                      关闭后服务仍会部署，但不会作为公开入口暴露。
+                                    </div>
+                                  </div>
+                                  <Switch
+                                    checked={service.isPublic ?? true}
+                                    onCheckedChange={(checked) =>
+                                      updateService(service._id, (current) => ({
+                                        ...current,
+                                        isPublic: checked,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                              )}
+
+                              <div className="grid gap-4 md:grid-cols-3">
+                                <div className="space-y-2">
+                                  <Label>副本数</Label>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    value={service.scaling?.min ?? 1}
+                                    onChange={(event) =>
+                                      updateService(service._id, (current) => {
+                                        const min = Number(event.target.value) || 1;
+                                        const max =
+                                          current.scaling?.max && current.scaling.max < min
+                                            ? min
+                                            : current.scaling?.max;
+                                        return {
+                                          ...current,
+                                          scaling: {
+                                            ...current.scaling,
+                                            min,
+                                            ...(typeof max === 'number' ? { max } : {}),
+                                          },
+                                        };
+                                      })
+                                    }
+                                  />
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>端口</Label>
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    max={65535}
+                                    value={service.run.port ?? ''}
+                                    onChange={(event) =>
+                                      updateService(service._id, (current) => ({
+                                        ...current,
+                                        run: {
+                                          ...current.run,
+                                          port: event.target.value
+                                            ? Number(event.target.value)
+                                            : undefined,
+                                        },
+                                      }))
+                                    }
+                                    disabled={service.type !== 'web'}
+                                  />
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>健康检查路径</Label>
+                                  <Input
+                                    value={service.healthcheck?.path ?? ''}
+                                    onChange={(event) =>
+                                      updateService(service._id, (current) => ({
+                                        ...current,
+                                        healthcheck: {
+                                          ...current.healthcheck,
+                                          path: event.target.value || undefined,
+                                          interval: current.healthcheck?.interval ?? 30,
+                                        },
+                                      }))
+                                    }
+                                    placeholder={service.type === 'web' ? '/api/health' : '/health'}
+                                    disabled={service.type !== 'web'}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                <div className="space-y-2">
+                                  <Label>CPU 请求</Label>
+                                  <Input
+                                    value={service.resources?.cpuRequest ?? ''}
+                                    onChange={(event) =>
+                                      updateService(service._id, (current) => ({
+                                        ...current,
+                                        resources: {
+                                          ...current.resources,
+                                          cpuRequest: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="100m"
+                                  />
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>CPU 上限</Label>
+                                  <Input
+                                    value={service.resources?.cpuLimit ?? ''}
+                                    onChange={(event) =>
+                                      updateService(service._id, (current) => ({
+                                        ...current,
+                                        resources: {
+                                          ...current.resources,
+                                          cpuLimit: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="500m"
+                                  />
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>内存请求</Label>
+                                  <Input
+                                    value={service.resources?.memoryRequest ?? ''}
+                                    onChange={(event) =>
+                                      updateService(service._id, (current) => ({
+                                        ...current,
+                                        resources: {
+                                          ...current.resources,
+                                          memoryRequest: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="256Mi"
+                                  />
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label>内存上限</Label>
+                                  <Input
+                                    value={service.resources?.memoryLimit ?? ''}
+                                    onChange={(event) =>
+                                      updateService(service._id, (current) => ({
+                                        ...current,
+                                        resources: {
+                                          ...current.resources,
+                                          memoryLimit: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder="512Mi"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-[20px] border border-border">
+              <button
+                type="button"
+                onClick={() => setReviewDatabasesOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+              >
+                <div>
+                  <h3 className="text-sm font-medium">高级调整 · 数据库</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    需要托管数据库或外部连接时再展开。
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge variant="outline">{formData.databases.length} 个</Badge>
+                  {reviewDatabasesOpen ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
+              </button>
+
+              {reviewDatabasesOpen && (
+                <div className="space-y-3 border-t border-border px-4 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs text-muted-foreground">
+                      可以直接把平台托管数据库或外部数据库一起挂进来。
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {DATABASE_TYPE_OPTIONS.map((databaseType) => (
+                        <Button
+                          key={databaseType.value}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              databases: [
+                                ...prev.databases,
+                                createDatabaseDraft(databaseType.value),
+                              ],
+                            }))
+                          }
+                        >
+                          <Plus className="mr-1 h-3 w-3" />
+                          {databaseType.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="overflow-hidden rounded-[20px] border border-border">
+                    {formData.databases.length === 0 ? (
+                      <div className="flex flex-col items-center gap-2 p-6 text-center text-muted-foreground">
+                        <Database className="h-5 w-5 opacity-40" />
+                        <span className="text-sm">当前没有数据库，需要时可直接添加。</span>
                       </div>
-                    );
-                  })
-                )}
-              </div>
+                    ) : (
+                      formData.databases.map((database) => {
+                        const sharedDisabled =
+                          database.type === 'mysql' || database.type === 'mongodb';
+
+                        const updateDatabase = (updates: Partial<DatabaseWithId>) => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            databases: prev.databases.map((item) =>
+                              item._id === database._id ? { ...item, ...updates } : item
+                            ),
+                          }));
+                        };
+
+                        return (
+                          <div
+                            key={database._id}
+                            className="space-y-4 border-b border-border px-4 py-4 last:border-b-0"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <Database className="h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  value={database.name}
+                                  onChange={(event) => updateDatabase({ name: event.target.value })}
+                                  className="h-9 w-44"
+                                />
+                                <Badge variant="outline">
+                                  {
+                                    DATABASE_TYPE_OPTIONS.find(
+                                      (option) => option.value === database.type
+                                    )?.label
+                                  }
+                                </Badge>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    databases: prev.databases.filter(
+                                      (item) => item._id !== database._id
+                                    ),
+                                  }))
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label>规格</Label>
+                                <Select
+                                  value={database.plan}
+                                  onValueChange={(value: DatabaseWithId['plan']) =>
+                                    updateDatabase({ plan: value })
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="选择规格" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {DATABASE_PLAN_OPTIONS.map((plan) => (
+                                      <SelectItem key={plan.value} value={plan.value}>
+                                        {plan.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label>接入方式</Label>
+                                <div className="flex flex-wrap gap-2">
+                                  {(
+                                    [
+                                      { value: 'shared', label: '共享资源' },
+                                      { value: 'standalone', label: '独立资源' },
+                                      { value: 'external', label: '外部实例' },
+                                    ] as const
+                                  ).map((option) => (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      disabled={option.value === 'shared' && sharedDisabled}
+                                      onClick={() =>
+                                        updateDatabase({ provisionType: option.value })
+                                      }
+                                      className={cn(
+                                        'rounded-full border px-3 py-1.5 text-xs transition-colors',
+                                        database.provisionType === option.value
+                                          ? 'border-foreground bg-foreground text-background'
+                                          : 'border-border bg-background hover:bg-secondary/40',
+                                        option.value === 'shared' &&
+                                          sharedDisabled &&
+                                          'cursor-not-allowed opacity-40'
+                                      )}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {database.provisionType === 'external' && (
+                              <div className="space-y-2">
+                                <Label>连接串</Label>
+                                <Input
+                                  value={database.externalUrl ?? ''}
+                                  onChange={(event) =>
+                                    updateDatabase({ externalUrl: event.target.value })
+                                  }
+                                  placeholder={
+                                    database.type === 'redis'
+                                      ? 'redis://:password@host:6379'
+                                      : database.type === 'mongodb'
+                                        ? 'mongodb://user:pass@host:27017/db'
+                                        : 'postgresql://user:pass@host:5432/db'
+                                  }
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

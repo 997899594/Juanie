@@ -30,6 +30,31 @@ export interface HomeStat {
   value: number | string;
 }
 
+export interface HomeCommandCenterAction {
+  label: string;
+  href: string;
+  description: string;
+  tone: 'danger' | 'neutral';
+}
+
+export interface HomeCommandCenterFocusItem {
+  id: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  href: string;
+  meta: string;
+  tone: 'danger' | 'neutral';
+}
+
+export interface HomeCommandCenter {
+  title: string;
+  summary: string;
+  primaryAction: HomeCommandCenterAction;
+  secondaryAction?: Pick<HomeCommandCenterAction, 'label' | 'href'> | null;
+  focusItems: HomeCommandCenterFocusItem[];
+}
+
 export interface HomeProjectLike {
   id: string;
   name: string;
@@ -121,6 +146,10 @@ function formatProjectStatusLabel(value?: string | null): string {
   return value ? (labels[value] ?? value) : '待处理';
 }
 
+function needsProjectAttention(status?: string | null): boolean {
+  return status === 'initializing' || status === 'pending' || status === 'failed';
+}
+
 export function formatRelativeTime(date: Date | string): string {
   const now = new Date();
   const target = typeof date === 'string' ? new Date(date) : date;
@@ -141,13 +170,13 @@ export function buildHomeStats(input: {
   projectCount: number;
   teamCount: number;
   attentionCount: number;
-  resourceValue?: string;
+  activeProjectCount: number;
 }): HomeStat[] {
   return [
     { label: '项目', value: input.projectCount },
     { label: '团队', value: input.teamCount },
     { label: '待处理', value: input.attentionCount },
-    { label: '资源', value: input.resourceValue ?? '—' },
+    { label: '运行中', value: input.activeProjectCount },
   ];
 }
 
@@ -246,4 +275,131 @@ export function decorateHomeAttentionRuns<TRun extends HomeAttentionRunLike>(
       previewLifecycle,
     };
   });
+}
+
+export function buildHomeCommandCenter<
+  TProject extends HomeProjectLike & HomeProjectDecorations,
+  TRun extends HomeAttentionRunLike & HomeAttentionRunDecorations,
+>(input: { projectCards: TProject[]; attentionItems: TRun[] }): HomeCommandCenter {
+  const projectNeedingAttention = input.projectCards.filter((project) =>
+    needsProjectAttention(project.status)
+  );
+
+  const primaryAction = (() => {
+    const firstAttention = input.attentionItems[0];
+    if (firstAttention) {
+      return {
+        title:
+          firstAttention.issueLabel ??
+          firstAttention.releaseTitle ??
+          `${firstAttention.projectName} 需要处理`,
+        summary:
+          firstAttention.platformSignals.primarySummary ??
+          `${firstAttention.projectName} 有待确认的数据库变更或迁移结果。`,
+        primaryAction: {
+          label: '打开待处理项',
+          href: firstAttention.href,
+          description: `下一步：${firstAttention.platformSignals.nextActionLabel ?? firstAttention.actionLabel ?? '进入详情处理'}`,
+          tone: firstAttention.status === 'failed' ? 'danger' : 'neutral',
+        } satisfies HomeCommandCenterAction,
+        secondaryAction: input.projectCards[0]
+          ? {
+              label: '查看项目',
+              href: `/projects/${input.projectCards[0].id}`,
+            }
+          : null,
+      };
+    }
+
+    const firstProjectAttention = projectNeedingAttention[0];
+    if (firstProjectAttention) {
+      return {
+        title: `继续推进 ${firstProjectAttention.name}`,
+        summary: `${firstProjectAttention.name} 当前处于${firstProjectAttention.statusLabel}，建议先进入项目确认环境、发布与诊断状态。`,
+        primaryAction: {
+          label: '打开项目',
+          href: `/projects/${firstProjectAttention.id}`,
+          description: `${firstProjectAttention.repositoryLabel} · ${firstProjectAttention.statusLabel}`,
+          tone: firstProjectAttention.status === 'failed' ? 'danger' : 'neutral',
+        } satisfies HomeCommandCenterAction,
+        secondaryAction: {
+          label: '查看全部项目',
+          href: '/projects',
+        },
+      };
+    }
+
+    const firstProject = input.projectCards[0];
+    if (firstProject) {
+      return {
+        title: `继续查看 ${firstProject.name}`,
+        summary: '平台当前没有阻塞项，你可以直接进入项目查看环境、发布和日志。',
+        primaryAction: {
+          label: '打开最近项目',
+          href: `/projects/${firstProject.id}`,
+          description: `${firstProject.repositoryLabel} · ${firstProject.statusLabel}`,
+          tone: 'neutral',
+        } satisfies HomeCommandCenterAction,
+        secondaryAction: {
+          label: '查看审批',
+          href: '/approvals',
+        },
+      };
+    }
+
+    return {
+      title: '创建第一个项目',
+      summary: '先把仓库接进来，平台就能开始管理环境、发布、迁移和日志。',
+      primaryAction: {
+        label: '新建项目',
+        href: '/projects/new',
+        description: '从模板创建，或导入现有仓库',
+        tone: 'neutral',
+      } satisfies HomeCommandCenterAction,
+      secondaryAction: {
+        label: '查看项目列表',
+        href: '/projects',
+      },
+    };
+  })();
+
+  const focusItems = [
+    ...input.attentionItems.slice(0, 3).map(
+      (item) =>
+        ({
+          id: item.id,
+          eyebrow: item.status === 'awaiting_approval' ? '待审批' : '待处理',
+          title: item.releaseTitle ?? item.issueLabel ?? item.databaseName,
+          description:
+            item.platformSignals.primarySummary ??
+            `${item.projectName} · ${item.databaseName} 需要进一步处理`,
+          href: item.href,
+          meta: `${item.projectName} · ${item.createdAtLabel}`,
+          tone: item.status === 'failed' ? 'danger' : 'neutral',
+        }) satisfies HomeCommandCenterFocusItem
+    ),
+    ...projectNeedingAttention
+      .filter((project) => !input.attentionItems.some((item) => item.projectId === project.id))
+      .slice(0, 3)
+      .map(
+        (project) =>
+          ({
+            id: `project:${project.id}`,
+            eyebrow: '项目状态',
+            title: project.name,
+            description: `${project.repositoryLabel} · ${project.statusLabel}`,
+            href: `/projects/${project.id}`,
+            meta: project.roleLabel ?? '项目成员',
+            tone: project.status === 'failed' ? 'danger' : 'neutral',
+          }) satisfies HomeCommandCenterFocusItem
+      ),
+  ].slice(0, 4);
+
+  return {
+    title: primaryAction.title,
+    summary: primaryAction.summary,
+    primaryAction: primaryAction.primaryAction,
+    secondaryAction: primaryAction.secondaryAction,
+    focusItems,
+  };
 }

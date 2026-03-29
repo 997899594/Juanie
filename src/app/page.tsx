@@ -1,4 +1,13 @@
-import { AlertTriangle, ArrowRight, FolderKanban, Plus, Settings, Users } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  FolderKanban,
+  Gauge,
+  Plus,
+  Settings,
+  Sparkles,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -14,10 +23,8 @@ export default async function HomePage() {
     redirect('/login');
   }
 
-  const { headerDescription, stats, projectCards, attentionItems } = await getHomePageData(
-    session.user.id,
-    session.user.name
-  );
+  const { headerDescription, stats, commandCenter, projectCards, attentionItems } =
+    await getHomePageData(session.user.id, session.user.name);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -42,6 +49,97 @@ export default async function HomePage() {
         }
       />
 
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <section className="console-panel overflow-hidden px-5 py-5">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <Gauge className="h-3.5 w-3.5" />
+            发布指挥台
+          </div>
+          <div className="mt-4 max-w-2xl">
+            <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
+              {commandCenter.title}
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">{commandCenter.summary}</p>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Button asChild size="sm" className="h-10 rounded-xl px-4">
+              <Link href={commandCenter.primaryAction.href}>
+                {commandCenter.primaryAction.label}
+              </Link>
+            </Button>
+            {commandCenter.secondaryAction ? (
+              <Button asChild variant="outline" size="sm" className="h-10 rounded-xl px-4">
+                <Link href={commandCenter.secondaryAction.href}>
+                  {commandCenter.secondaryAction.label}
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+          <div className="mt-5 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              当前建议
+            </div>
+            <div className="mt-2 text-sm font-medium">
+              {commandCenter.primaryAction.description}
+            </div>
+          </div>
+        </section>
+
+        <section className="console-panel overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Sparkles className="h-4 w-4" />
+              当前队列
+            </div>
+            <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
+              <Link href="/approvals">
+                查看审批
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+          <div className="p-3">
+            {commandCenter.focusItems.length === 0 ? (
+              <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
+                <div className="text-sm font-medium">当前链路平稳</div>
+                <div className="mt-1 text-sm text-muted-foreground">
+                  没有阻塞项，可以直接进入项目继续推进。
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {commandCenter.focusItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className="block rounded-2xl border border-transparent bg-secondary/20 px-4 py-3 transition-colors hover:border-border hover:bg-secondary/40"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`h-2 w-2 rounded-full ${
+                              item.tone === 'danger' ? 'bg-destructive' : 'bg-warning'
+                            }`}
+                          />
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                            {item.eyebrow}
+                          </div>
+                        </div>
+                        <div className="mt-2 truncate text-sm font-medium">{item.title}</div>
+                        <div className="mt-1 text-sm text-muted-foreground">{item.description}</div>
+                        <div className="mt-2 text-[11px] text-muted-foreground">{item.meta}</div>
+                      </div>
+                      <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
           <div key={stat.label} className="console-panel px-5 py-4">
@@ -56,7 +154,7 @@ export default async function HomePage() {
       <div className="grid gap-4 xl:grid-cols-2">
         <section className="console-panel overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <div className="text-sm font-semibold">最近项目</div>
+            <div className="text-sm font-semibold">项目入口</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
               <Link href="/projects">
                 查看全部
@@ -117,7 +215,7 @@ export default async function HomePage() {
 
         <section className="console-panel overflow-hidden">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <div className="text-sm font-semibold">待处理</div>
+            <div className="text-sm font-semibold">待处理详情</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
               <Link href="/approvals">
                 查看全部

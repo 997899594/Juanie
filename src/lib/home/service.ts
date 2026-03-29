@@ -2,7 +2,12 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
-import { buildHomeStats, decorateHomeAttentionRuns, decorateHomeProjects } from '@/lib/home/view';
+import {
+  buildHomeCommandCenter,
+  buildHomeStats,
+  decorateHomeAttentionRuns,
+  decorateHomeProjects,
+} from '@/lib/home/view';
 import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
 
 export function buildHomePageData<
@@ -61,6 +66,11 @@ export function buildHomePageData<
   const rolesByTeamId = new Map(
     input.userTeams.map((membership) => [membership.teamId, membership.role])
   );
+  const projectCards = decorateHomeProjects(input.userProjects, { rolesByTeamId });
+  const attentionItems = decorateHomeAttentionRuns(input.attentionRuns);
+  const activeProjectCount = input.userProjects.filter(
+    (project) => project.status === 'active' || project.status === 'running'
+  ).length;
 
   return {
     headerDescription: input.userName || '控制台',
@@ -68,9 +78,14 @@ export function buildHomePageData<
       projectCount: input.userProjects.length,
       teamCount: input.userTeams.length,
       attentionCount: attentionStats.total,
+      activeProjectCount,
     }),
-    projectCards: decorateHomeProjects(input.userProjects, { rolesByTeamId }),
-    attentionItems: decorateHomeAttentionRuns(input.attentionRuns),
+    commandCenter: buildHomeCommandCenter({
+      projectCards,
+      attentionItems,
+    }),
+    projectCards,
+    attentionItems,
   };
 }
 

@@ -14,7 +14,6 @@ import { DatabaseMigrationDialog } from '@/components/projects/DatabaseMigration
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { auth } from '@/lib/auth';
 import { getProjectOverviewPageData } from '@/lib/projects/service';
 
@@ -89,6 +88,82 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     recentReleaseCards,
   } = pageData;
   const currentRelease = recentReleaseCards[0] ?? null;
+  const primaryAttention = attentionItems[0] ?? null;
+  const primaryEnvironment = environmentCards[0] ?? null;
+  const projectCommandCenter = (() => {
+    if (primaryAttention) {
+      return {
+        eyebrow: '待处理优先',
+        title: primaryAttention.releaseTitle ?? primaryAttention.issueLabel ?? '处理当前阻塞项',
+        summary:
+          primaryAttention.platformSignals.primarySummary ??
+          '当前有迁移审批或失败项需要先处理，处理完再继续推进发布。',
+        primaryAction: {
+          label: '打开待处理项',
+          href: primaryAttention.releaseId
+            ? `/projects/${id}/releases/${primaryAttention.releaseId}`
+            : `/projects/${id}/releases`,
+        },
+        secondaryAction: primaryEnvironment
+          ? {
+              label: '查看环境日志',
+              href: `/projects/${id}/logs?env=${primaryEnvironment.id}`,
+            }
+          : null,
+      };
+    }
+
+    if (currentRelease) {
+      return {
+        eyebrow: '当前主链路',
+        title: currentRelease.title,
+        summary:
+          currentRelease.platformSignals.primarySummary ??
+          currentRelease.sourceSummary ??
+          '进入发布详情查看时间线、迁移和部署进度。',
+        primaryAction: {
+          label: '打开当前发布',
+          href: `/projects/${id}/releases/${currentRelease.id}`,
+        },
+        secondaryAction: {
+          label: '查看环境日志',
+          href: `/projects/${id}/logs?env=${currentRelease.environment.id}`,
+        },
+      };
+    }
+
+    if (primaryEnvironment) {
+      return {
+        eyebrow: '从环境开始',
+        title: `进入 ${primaryEnvironment.name}`,
+        summary:
+          primaryEnvironment.platformSignals.primarySummary ??
+          '先进入环境确认 live 状态、发布记录和诊断信息。',
+        primaryAction: {
+          label: '打开环境',
+          href: `/projects/${id}/environments`,
+        },
+        secondaryAction: {
+          label: '查看发布',
+          href: `/projects/${id}/releases`,
+        },
+      };
+    }
+
+    return {
+      eyebrow: '项目初始化',
+      title: '继续完成项目配置',
+      summary: '先补齐环境和第一次发布，平台主链路才会完整运行起来。',
+      primaryAction: {
+        label: '查看环境',
+        href: `/projects/${id}/environments`,
+      },
+      secondaryAction: {
+        label: '查看设置',
+        href: `/projects/${id}/settings`,
+      },
+    };
+  })();
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -104,6 +179,60 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </Button>
         }
       />
+
+      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="console-panel px-5 py-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {projectCommandCenter.eyebrow}
+          </div>
+          <div className="mt-4">
+            <h2 className="text-2xl font-semibold tracking-tight">{projectCommandCenter.title}</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {projectCommandCenter.summary}
+            </p>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Button asChild size="sm" className="h-10 rounded-xl px-4">
+              <Link href={projectCommandCenter.primaryAction.href}>
+                {projectCommandCenter.primaryAction.label}
+              </Link>
+            </Button>
+            {projectCommandCenter.secondaryAction ? (
+              <Button asChild variant="outline" size="sm" className="h-10 rounded-xl px-4">
+                <Link href={projectCommandCenter.secondaryAction.href}>
+                  {projectCommandCenter.secondaryAction.label}
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="console-panel px-5 py-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            当前入口
+          </div>
+          <div className="mt-4 grid gap-3">
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+              <div className="text-xs text-muted-foreground">当前发布</div>
+              <div className="mt-1 text-sm font-medium">
+                {currentRelease?.title ?? '还没有发布'}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+              <div className="text-xs text-muted-foreground">待处理</div>
+              <div className="mt-1 text-sm font-medium">
+                {primaryAttention?.issueLabel ?? '当前无阻塞项'}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+              <div className="text-xs text-muted-foreground">主环境</div>
+              <div className="mt-1 text-sm font-medium">
+                {primaryEnvironment?.name ?? '还没有环境'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
@@ -154,53 +283,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           );
         })}
       </div>
-
-      {currentRelease && (
-        <section className="console-panel px-5 py-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold">当前发布</div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <div
-                  className={`h-2 w-2 rounded-full ${releaseStatusColors[currentRelease.status ?? ''] ?? 'bg-muted-foreground'}`}
-                />
-                <span className="text-sm font-medium">{currentRelease.title}</span>
-                <Badge variant="secondary">{currentRelease.environment.name ?? '环境'}</Badge>
-                {currentRelease.previewSourceMeta.label && (
-                  <Badge variant="outline">{currentRelease.previewSourceMeta.label}</Badge>
-                )}
-              </div>
-              <div className="mt-2 text-sm text-muted-foreground">
-                {currentRelease.platformSignals.primarySummary ??
-                  currentRelease.sourceSummary ??
-                  '进入发布页查看这次发布的变更、时间线与执行结果'}
-              </div>
-              {currentRelease.platformSignals.nextActionLabel && (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  下一步：{currentRelease.platformSignals.nextActionLabel}
-                </div>
-              )}
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {currentRelease.primaryDomainUrl && (
-                <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-                  <a href={currentRelease.primaryDomainUrl} target="_blank" rel="noreferrer">
-                    打开环境
-                  </a>
-                </Button>
-              )}
-              <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-                <Link href={`/projects/${id}/logs?env=${currentRelease.environment.id}`}>
-                  查看日志
-                </Link>
-              </Button>
-              <Button asChild size="sm" className="h-9 rounded-xl px-4">
-                <Link href={`/projects/${id}/releases/${currentRelease.id}`}>打开发布</Link>
-              </Button>
-            </div>
-          </div>
-        </section>
-      )}
 
       {environmentCards.length > 0 && (
         <section className="console-panel px-5 py-4">
@@ -279,7 +361,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <div className="space-y-4">
           <section className="console-panel overflow-hidden">
             <div className="border-b border-border px-5 py-4">
-              <div className="text-sm font-semibold">概览</div>
+              <div className="text-sm font-semibold">项目定义</div>
             </div>
             <div className="space-y-4 px-5 py-4">
               {overview.repository && (
@@ -338,43 +420,38 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   <div className="mt-2 text-sm font-medium">{overview.createdDateLabel}</div>
                 </div>
               </div>
+              {serviceCards.length > 0 && (
+                <div className="space-y-3 border-t border-border pt-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    服务模型
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {serviceCards.map((svc) => (
+                      <div
+                        key={svc.id}
+                        className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/20 px-3 py-1.5"
+                      >
+                        <div
+                          className={`h-2 w-2 rounded-full ${statusColors[svc.status ?? ''] ?? 'bg-muted-foreground'}`}
+                        />
+                        <span className="text-sm font-medium">{svc.name}</span>
+                        <span className="text-xs text-muted-foreground capitalize">{svc.type}</span>
+                        {svc.portLabel && (
+                          <span className="text-xs text-muted-foreground">{svc.portLabel}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
-
-          {serviceCards.length > 0 && (
-            <section className="console-panel overflow-hidden">
-              <div className="border-b border-border px-5 py-4">
-                <div className="text-sm font-semibold">服务</div>
-              </div>
-              <div className="space-y-2 p-3">
-                {serviceCards.map((svc) => (
-                  <div
-                    key={svc.id}
-                    className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`h-2 w-2 rounded-full ${statusColors[svc.status ?? ''] ?? 'bg-muted-foreground'}`}
-                      />
-                      <span className="text-sm font-medium">{svc.name}</span>
-                      <Badge variant="secondary" className="capitalize">
-                        {svc.type}
-                      </Badge>
-                    </div>
-                    {svc.portLabel && (
-                      <span className="text-xs text-muted-foreground">{svc.portLabel}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
         </div>
 
         <div className="space-y-4">
           <section className="console-panel overflow-hidden">
             <div className="border-b border-border px-5 py-4">
-              <div className="text-sm font-semibold">待处理</div>
+              <div className="text-sm font-semibold">执行队列</div>
             </div>
             <div className="p-3">
               {attentionItems.length === 0 ? (
@@ -425,11 +502,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                                 {run.previewSourceMeta.label}
                               </span>
                             )}
-                            {run.environmentExpiryLabel && (
-                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                {run.environmentExpiryLabel}
-                              </span>
-                            )}
                           </div>
                           {run.platformSignals.primarySummary && (
                             <div className="mt-1 text-sm text-foreground">
@@ -439,17 +511,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                           {(run.platformSignals.nextActionLabel || run.actionLabel) && (
                             <div className="mt-1 text-[11px] text-muted-foreground">
                               下一步：{run.platformSignals.nextActionLabel ?? run.actionLabel}
-                            </div>
-                          )}
-                          {(run.releaseTitle || run.primaryDomainUrl) && (
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                              {run.releaseTitle && <span>{run.releaseTitle}</span>}
-                              {run.previewSourceMeta.label && (
-                                <PreviewSourceSummary meta={run.previewSourceMeta} />
-                              )}
-                              <span className="text-foreground underline underline-offset-4">
-                                {run.primaryDomainUrl ? '打开环境' : '打开发布'}
-                              </span>
                             </div>
                           )}
                         </div>
@@ -467,7 +528,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           {databaseCards.length > 0 && (
             <section className="console-panel overflow-hidden">
               <div className="border-b border-border px-5 py-4">
-                <div className="text-sm font-semibold">数据库</div>
+                <div className="text-sm font-semibold">数据库与迁移</div>
               </div>
               <div className="space-y-3 p-3">
                 {databaseCards.map((dbItem) => {
@@ -547,10 +608,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               </div>
             </section>
           )}
-
           <section className="console-panel overflow-hidden">
             <div className="border-b border-border px-5 py-4">
-              <div className="text-sm font-semibold">最近发布</div>
+              <div className="text-sm font-semibold">发布轨迹</div>
             </div>
             <div className="space-y-2 p-3">
               {recentReleaseCards.length === 0 ? (

@@ -8,12 +8,13 @@ describe('home view', () => {
         projectCount: 2,
         teamCount: 1,
         attentionCount: 3,
+        activeProjectCount: 1,
       })
     ).toEqual([
       { label: '项目', value: 2 },
       { label: '团队', value: 1 },
       { label: '待处理', value: 3 },
-      { label: '资源', value: '—' },
+      { label: '运行中', value: 1 },
     ]);
   });
 
