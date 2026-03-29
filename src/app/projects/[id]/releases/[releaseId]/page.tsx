@@ -66,8 +66,8 @@ export default async function ReleaseDetailPage({
   const releaseActions = buildReleaseEnvironmentActionSnapshot(member.role, release.environment);
   const environmentId = release.environment?.id ?? release.environmentId;
   const environmentLogsHref = `/projects/${id}/logs?env=${environmentId}`;
-  const environmentsHref = `/projects/${id}/environments`;
-  const resourcesHref = `/projects/${id}/resources`;
+  const environmentDetailHref = `/projects/${id}/environments?env=${environmentId}`;
+  const environmentDiagnosticsHref = `/projects/${id}/environments?env=${environmentId}&panel=diagnostics`;
   const releasesHref = `/projects/${id}/releases`;
 
   return (
@@ -225,7 +225,22 @@ export default async function ReleaseDetailPage({
         </div>
 
         <div className="console-panel p-5">
-          <div className="mb-4 text-sm font-semibold">发布时间线</div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">发布时间线</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                把这次 release 的迁移、部署、放量和环境可达性串成一条线。
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <Link href={environmentLogsHref}>环境日志</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <Link href={environmentDiagnosticsHref}>环境诊断</Link>
+              </Button>
+            </div>
+          </div>
           <div className="space-y-3">
             {release.timeline.map((item, index) => (
               <div key={item.key} className="flex gap-3">
@@ -300,7 +315,7 @@ export default async function ReleaseDetailPage({
                   <Link href={environmentLogsHref}>打开环境日志</Link>
                 </Button>
                 <Button asChild variant="outline" size="sm" className="rounded-xl">
-                  <Link href={environmentsHref}>查看环境</Link>
+                  <Link href={environmentDetailHref}>查看环境</Link>
                 </Button>
               </div>
             </div>
@@ -318,7 +333,7 @@ export default async function ReleaseDetailPage({
                   <Link href={releasesHref}>回到发布中心</Link>
                 </Button>
                 <Button asChild variant="outline" size="sm" className="rounded-xl">
-                  <Link href={resourcesHref}>资源诊断</Link>
+                  <Link href={environmentDiagnosticsHref}>环境诊断</Link>
                 </Button>
               </div>
             </div>
@@ -330,7 +345,7 @@ export default async function ReleaseDetailPage({
               <div className="mt-2 space-y-2 text-sm text-muted-foreground">
                 <div>1. 看发布时间线，确认卡在哪一步。</div>
                 <div>2. 进环境日志，看运行时真实输出。</div>
-                <div>3. 只有需要 Pod/Service 细节时，再看资源浏览。</div>
+                <div>3. 只有需要 Pod/Service 细节时，再展开环境里的资源诊断。</div>
               </div>
             </div>
           </div>

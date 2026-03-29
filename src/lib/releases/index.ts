@@ -30,7 +30,7 @@ export interface CreateRepositoryReleaseInput {
   serviceId?: string;
   serviceName?: string;
   image?: string;
-  triggeredBy?: 'api' | 'manual' | 'webhook';
+  triggeredBy?: 'api' | 'manual';
   triggeredByUserId?: string | null;
   summary?: string | null;
 }
@@ -43,7 +43,7 @@ export interface CreateProjectReleaseInput {
   sourceRef: string;
   sourceCommitSha?: string | null;
   configCommitSha?: string | null;
-  triggeredBy?: 'api' | 'manual' | 'webhook';
+  triggeredBy?: 'api' | 'manual';
   triggeredByUserId?: string | null;
   summary?: string | null;
 }
@@ -118,7 +118,7 @@ async function persistRelease(
     sourceRef: string;
     sourceCommitSha?: string | null;
     configCommitSha?: string | null;
-    triggeredBy?: 'api' | 'manual' | 'webhook';
+    triggeredBy?: 'api' | 'manual';
     triggeredByUserId?: string | null;
     summary?: string | null;
   }

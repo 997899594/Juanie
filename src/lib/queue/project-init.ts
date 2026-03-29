@@ -51,7 +51,7 @@ export const requiredCapabilitiesForStep = (step: StepName): Capability[] => {
     case 'push_cicd_config':
     case 'push_template':
       return ['write_repo', 'write_workflow'];
-    case 'setup_registry_webhook':
+    case 'configure_release_trigger':
       return ['read_repo'];
     case 'create_repository':
       return ['write_repo'];
@@ -139,7 +139,7 @@ function isK8sAvailable(): boolean {
 const IMPORT_STEPS = [
   'validate_repository',
   'push_cicd_config',
-  'setup_registry_webhook',
+  'configure_release_trigger',
   'setup_namespace',
   'provision_databases',
   'deploy_services',
@@ -150,7 +150,7 @@ const CREATE_STEPS = [
   'create_repository',
   'push_template',
   'push_cicd_config',
-  'setup_registry_webhook',
+  'configure_release_trigger',
   'setup_namespace',
   'provision_databases',
   'deploy_services',
@@ -165,7 +165,7 @@ type ProjectInitErrorCode =
   | 'repository_create_failed'
   | 'template_push_failed'
   | 'cicd_config_push_failed'
-  | 'registry_webhook_failed'
+  | 'release_trigger_failed'
   | 'k8s_namespace_failed'
   | 'database_provision_failed'
   | 'service_deploy_failed'
@@ -231,7 +231,7 @@ function classifyProjectInitError(step: StepName, error: unknown): ProjectInitEr
 
   if (step === 'push_template') return 'template_push_failed';
   if (step === 'push_cicd_config') return 'cicd_config_push_failed';
-  if (step === 'setup_registry_webhook') return 'registry_webhook_failed';
+  if (step === 'configure_release_trigger') return 'release_trigger_failed';
   if (step === 'setup_namespace') return 'k8s_namespace_failed';
   if (step === 'provision_databases') return 'database_provision_failed';
   if (step === 'deploy_services') return 'service_deploy_failed';
@@ -294,8 +294,8 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
         case 'push_template':
           await pushTemplate(project, template);
           break;
-        case 'setup_registry_webhook':
-          await setupRegistryWebhook(project);
+        case 'configure_release_trigger':
+          await configureReleaseTrigger(project);
           break;
         case 'setup_namespace':
           await setupNamespace(project, hasK8s, (p) =>
@@ -1211,19 +1211,18 @@ async function renderEnvTemplate(
 }
 
 /**
- * Setup registry webhook configuration.
- * For GitHub, deployments are triggered via GitHub Actions calling our API.
- * No webhook or secret needed - GitHub Actions uses GITHUB_TOKEN for auth.
+ * Configure the release trigger metadata Juanie needs after project bootstrap.
+ * Deployments are triggered by Juanie release creation through managed CI.
  */
-async function setupRegistryWebhook(
+async function configureReleaseTrigger(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   }
 ) {
-  console.log(`Configuring registry deployment trigger for project ${project.name}`);
+  console.log(`Configuring release trigger for project ${project.name}`);
 
   if (!project.repository) {
-    console.log('No repository linked, skipping registry configuration');
+    console.log('No repository linked, skipping release trigger configuration');
     return;
   }
 
@@ -1243,12 +1242,12 @@ async function setupRegistryWebhook(
       configJson: {
         ...config,
         imageName,
-        registryWebhookConfigured: true,
+        releaseTriggerConfigured: true,
       },
     })
     .where(eq(projects.id, project.id));
 
-  console.log(`✅ Configured deployment trigger for ${project.repository.fullName}`);
+  console.log(`✅ Configured release trigger for ${project.repository.fullName}`);
   console.log(`   Juanie CI will call /api/releases after image push`);
 }
 

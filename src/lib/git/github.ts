@@ -6,8 +6,6 @@ import type {
   GitReviewRequest,
   GitUser,
   PushOptions,
-  RegistryWebhookOptions,
-  WebhookOptions,
 } from './index';
 
 export class GitHubProvider implements GitProvider {
@@ -26,7 +24,7 @@ export class GitHubProvider implements GitProvider {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
-      scope: 'repo workflow admin:repo_hook admin:org_hook user:email',
+      scope: 'repo workflow user:email',
       state,
       prompt: 'consent',
     });
@@ -237,72 +235,6 @@ export class GitHubProvider implements GitProvider {
         throw new Error(error.message || `Failed to push file: ${path}`);
       }
     }
-  }
-
-  async createWebhook(accessToken: string, options: WebhookOptions): Promise<{ id: string }> {
-    const [owner, repo] = options.repoFullName.split('/');
-
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/hooks`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        name: 'web',
-        active: true,
-        events: options.events,
-        config: {
-          url: options.webhookUrl,
-          content_type: 'json',
-          secret: options.secret,
-        },
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create webhook');
-    }
-
-    const data = await res.json();
-    return { id: String(data.id) };
-  }
-
-  async deleteWebhook(accessToken: string, repoFullName: string, webhookId: string): Promise<void> {
-    const [owner, repo] = repoFullName.split('/');
-
-    await fetch(`https://api.github.com/repos/${owner}/${repo}/hooks/${webhookId}`, {
-      method: 'DELETE',
-      headers: this.getHeaders(accessToken),
-    });
-  }
-
-  async setupRegistryWebhook(
-    accessToken: string,
-    options: RegistryWebhookOptions
-  ): Promise<{ id: string }> {
-    const webhookUrl = `https://juanie.art/api/webhooks/registry?project_id=${options.juanieProjectId}`;
-
-    const res = await fetch(`https://api.github.com/orgs/${options.ownerOrProjectPath}/hooks`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        name: 'web',
-        active: true,
-        events: ['package'],
-        config: {
-          url: webhookUrl,
-          content_type: 'json',
-          secret: options.webhookSecret,
-        },
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create GitHub package webhook');
-    }
-
-    const data = await res.json();
-    return { id: String(data.id) };
   }
 
   private getHeaders(accessToken: string): HeadersInit {

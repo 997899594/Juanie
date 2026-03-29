@@ -1,14 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { integrationIdentities, teamMembers } from '@/lib/db/schema';
-import type {
-  CreateRepoOptions,
-  GitRepository,
-  GitReviewRequest,
-  PushOptions,
-  RegistryWebhookOptions,
-  WebhookOptions,
-} from '@/lib/git';
+import type { CreateRepoOptions, GitRepository, GitReviewRequest, PushOptions } from '@/lib/git';
 import { githubAdapter } from '@/lib/integrations/adapters/github-adapter';
 import { gitlabAdapter } from '@/lib/integrations/adapters/gitlab-adapter';
 import {
@@ -145,22 +138,6 @@ export const gateway = {
   ): Promise<GitRepository> {
     const adapter = resolveAdapter(session.provider);
     return adapter.createRepository(session, options);
-  },
-
-  async createWebhook(
-    session: IntegrationSession,
-    options: WebhookOptions
-  ): Promise<{ id: string }> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.createWebhook(session, options);
-  },
-
-  async setupRegistryWebhook(
-    session: IntegrationSession,
-    options: RegistryWebhookOptions
-  ): Promise<{ id: string }> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.setupRegistryWebhook(session, options);
   },
 
   async listRootFiles(

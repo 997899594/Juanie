@@ -4,8 +4,6 @@ import {
   type GitRepository,
   type GitReviewRequest,
   type PushOptions,
-  type RegistryWebhookOptions,
-  type WebhookOptions,
 } from '@/lib/git';
 import type { IntegrationSession } from '@/lib/integrations/service/session-service';
 
@@ -57,22 +55,6 @@ export const gitlabAdapter = {
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {
     const provider = createProvider(resolveGitLabProvider(session));
     await provider.pushFiles(session.accessToken, options);
-  },
-
-  async createWebhook(
-    session: IntegrationSession,
-    options: WebhookOptions
-  ): Promise<{ id: string }> {
-    const provider = createProvider(resolveGitLabProvider(session));
-    return provider.createWebhook(session.accessToken, options);
-  },
-
-  async setupRegistryWebhook(
-    session: IntegrationSession,
-    options: RegistryWebhookOptions
-  ): Promise<{ id: string }> {
-    const provider = createProvider(resolveGitLabProvider(session));
-    return provider.setupRegistryWebhook(session.accessToken, options);
   },
 
   async listRootFiles(

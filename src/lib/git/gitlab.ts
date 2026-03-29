@@ -6,8 +6,6 @@ import type {
   GitReviewRequest,
   GitUser,
   PushOptions,
-  RegistryWebhookOptions,
-  WebhookOptions,
 } from './index';
 
 export class GitLabProvider implements GitProvider {
@@ -217,71 +215,6 @@ export class GitLabProvider implements GitProvider {
         );
       }
     }
-  }
-
-  async createWebhook(accessToken: string, options: WebhookOptions): Promise<{ id: string }> {
-    const encodedPath = encodeURIComponent(options.repoFullName);
-
-    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/hooks`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        url: options.webhookUrl,
-        token: options.secret,
-        push_events: options.events.includes('push'),
-        issues_events: options.events.includes('issues'),
-        merge_requests_events: options.events.includes('merge_requests'),
-        tag_push_events: options.events.includes('tag_push'),
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create webhook');
-    }
-
-    const data = await res.json();
-    return { id: String(data.id) };
-  }
-
-  async deleteWebhook(accessToken: string, repoFullName: string, webhookId: string): Promise<void> {
-    const encodedPath = encodeURIComponent(repoFullName);
-    await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/hooks/${webhookId}`, {
-      method: 'DELETE',
-      headers: this.getHeaders(accessToken),
-    });
-  }
-
-  async setupRegistryWebhook(
-    accessToken: string,
-    options: RegistryWebhookOptions
-  ): Promise<{ id: string }> {
-    const webhookUrl = `https://juanie.art/api/webhooks/registry?project_id=${options.juanieProjectId}`;
-    const encodedPath = encodeURIComponent(options.ownerOrProjectPath);
-
-    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/hooks`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        url: webhookUrl,
-        token: options.webhookSecret,
-        push_events: false,
-        tag_push_events: false,
-        pipeline_events: false,
-        job_events: false,
-        deployment_events: false,
-        releases_events: false,
-        container_registry_events: true, // Image push events
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create GitLab registry webhook');
-    }
-
-    const data = await res.json();
-    return { id: String(data.id) };
   }
 
   private getHeaders(accessToken: string): HeadersInit {

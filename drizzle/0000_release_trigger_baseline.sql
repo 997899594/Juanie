@@ -3,9 +3,11 @@ CREATE TYPE "public"."databaseRole" AS ENUM('primary', 'readonly', 'cache', 'que
 CREATE TYPE "public"."databaseScope" AS ENUM('project', 'service');--> statement-breakpoint
 CREATE TYPE "public"."databaseType" AS ENUM('postgresql', 'mysql', 'redis', 'mongodb');--> statement-breakpoint
 CREATE TYPE "public"."deploymentStatus" AS ENUM('queued', 'migration_pending', 'migration_running', 'migration_failed', 'building', 'deploying', 'running', 'failed', 'rolled_back');--> statement-breakpoint
+CREATE TYPE "public"."environmentDatabaseStrategy" AS ENUM('direct', 'inherit', 'isolated_clone');--> statement-breakpoint
+CREATE TYPE "public"."environmentDeploymentStrategy" AS ENUM('rolling', 'controlled', 'canary', 'blue_green');--> statement-breakpoint
 CREATE TYPE "public"."gitProviderType" AS ENUM('github', 'gitlab', 'gitlab-self-hosted');--> statement-breakpoint
 CREATE TYPE "public"."initStepStatus" AS ENUM('pending', 'running', 'completed', 'failed', 'skipped');--> statement-breakpoint
-CREATE TYPE "public"."integrationCapability" AS ENUM('read_repo', 'write_repo', 'write_workflow', 'manage_webhook');--> statement-breakpoint
+CREATE TYPE "public"."integrationCapability" AS ENUM('read_repo', 'write_repo', 'write_workflow');--> statement-breakpoint
 CREATE TYPE "public"."migrationApprovalPolicy" AS ENUM('auto', 'manual_in_production');--> statement-breakpoint
 CREATE TYPE "public"."migrationCompatibility" AS ENUM('backward_compatible', 'breaking');--> statement-breakpoint
 CREATE TYPE "public"."migrationLockStrategy" AS ENUM('platform', 'db_advisory');--> statement-breakpoint
@@ -17,7 +19,6 @@ CREATE TYPE "public"."projectStatus" AS ENUM('initializing', 'active', 'failed',
 CREATE TYPE "public"."releaseStatus" AS ENUM('queued', 'planning', 'migration_pre_running', 'migration_pre_failed', 'deploying', 'verifying', 'migration_post_running', 'degraded', 'succeeded', 'failed', 'canceled');--> statement-breakpoint
 CREATE TYPE "public"."serviceType" AS ENUM('web', 'worker', 'cron');--> statement-breakpoint
 CREATE TYPE "public"."teamRole" AS ENUM('owner', 'admin', 'member');--> statement-breakpoint
-CREATE TYPE "public"."webhookType" AS ENUM('git-push', 'registry');--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"userId" uuid NOT NULL,
@@ -62,6 +63,7 @@ CREATE TABLE "database" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"projectId" uuid NOT NULL,
 	"environmentId" uuid,
+	"sourceDatabaseId" uuid,
 	"serviceId" uuid,
 	"name" varchar(255) NOT NULL,
 	"type" "databaseType" NOT NULL,
@@ -79,7 +81,8 @@ CREATE TABLE "database" (
 	"serviceName" varchar(255),
 	"status" varchar(50) DEFAULT 'pending',
 	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "database_environment_source_unique" UNIQUE("environmentId","sourceDatabaseId")
 );
 --> statement-breakpoint
 CREATE TABLE "deploymentLog" (
@@ -150,8 +153,11 @@ CREATE TABLE "environment" (
 	"isPreview" boolean DEFAULT false,
 	"previewPrNumber" integer,
 	"expiresAt" timestamp,
+	"baseEnvironmentId" uuid,
+	"databaseStrategy" "environmentDatabaseStrategy" DEFAULT 'direct' NOT NULL,
 	"autoDeploy" boolean DEFAULT true NOT NULL,
 	"isProduction" boolean DEFAULT false NOT NULL,
+	"deploymentStrategy" "environmentDeploymentStrategy" DEFAULT 'rolling' NOT NULL,
 	"namespace" varchar(100),
 	"createdAt" timestamp DEFAULT now() NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
@@ -274,6 +280,7 @@ CREATE TABLE "projectInitStep" (
 	"status" "initStepStatus" DEFAULT 'pending' NOT NULL,
 	"message" text,
 	"progress" integer DEFAULT 0,
+	"errorCode" varchar(100),
 	"error" text,
 	"startedAt" timestamp,
 	"completedAt" timestamp,
@@ -373,8 +380,8 @@ CREATE TABLE "service" (
 	"cronSchedule" varchar(100),
 	"cpuRequest" varchar(50) DEFAULT '100m',
 	"cpuLimit" varchar(50) DEFAULT '500m',
-	"memoryRequest" varchar(50) DEFAULT '128Mi',
-	"memoryLimit" varchar(50) DEFAULT '256Mi',
+	"memoryRequest" varchar(50) DEFAULT '256Mi',
+	"memoryLimit" varchar(50) DEFAULT '512Mi',
 	"autoscaling" jsonb,
 	"isPublic" boolean DEFAULT true,
 	"internalDomain" varchar(255),
@@ -437,27 +444,13 @@ CREATE TABLE "verificationToken" (
 	"expires" timestamp NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "webhook" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"projectId" uuid NOT NULL,
-	"externalId" varchar(255),
-	"type" "webhookType" DEFAULT 'git-push' NOT NULL,
-	"externalRegistryHookId" text,
-	"url" varchar(500) NOT NULL,
-	"events" text[] NOT NULL,
-	"secret" varchar(255),
-	"active" boolean DEFAULT true,
-	"lastTriggeredAt" timestamp,
-	"createdAt" timestamp DEFAULT now() NOT NULL,
-	"updatedAt" timestamp DEFAULT now() NOT NULL
-);
---> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auditLog" ADD CONSTRAINT "auditLog_teamId_team_id_fk" FOREIGN KEY ("teamId") REFERENCES "public"."team"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "auditLog" ADD CONSTRAINT "auditLog_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "databaseMigration" ADD CONSTRAINT "databaseMigration_databaseId_database_id_fk" FOREIGN KEY ("databaseId") REFERENCES "public"."database"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "database" ADD CONSTRAINT "database_projectId_project_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."project"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "database" ADD CONSTRAINT "database_environmentId_environment_id_fk" FOREIGN KEY ("environmentId") REFERENCES "public"."environment"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "database" ADD CONSTRAINT "database_sourceDatabaseId_database_id_fk" FOREIGN KEY ("sourceDatabaseId") REFERENCES "public"."database"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "database" ADD CONSTRAINT "database_serviceId_service_id_fk" FOREIGN KEY ("serviceId") REFERENCES "public"."service"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deploymentLog" ADD CONSTRAINT "deploymentLog_deploymentId_deployment_id_fk" FOREIGN KEY ("deploymentId") REFERENCES "public"."deployment"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "deployment" ADD CONSTRAINT "deployment_releaseId_release_id_fk" FOREIGN KEY ("releaseId") REFERENCES "public"."release"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -472,6 +465,7 @@ ALTER TABLE "environmentVariable" ADD CONSTRAINT "environmentVariable_projectId_
 ALTER TABLE "environmentVariable" ADD CONSTRAINT "environmentVariable_environmentId_environment_id_fk" FOREIGN KEY ("environmentId") REFERENCES "public"."environment"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "environmentVariable" ADD CONSTRAINT "environmentVariable_serviceId_service_id_fk" FOREIGN KEY ("serviceId") REFERENCES "public"."service"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "environment" ADD CONSTRAINT "environment_projectId_project_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."project"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "environment" ADD CONSTRAINT "environment_baseEnvironmentId_environment_id_fk" FOREIGN KEY ("baseEnvironmentId") REFERENCES "public"."environment"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "gitProvider" ADD CONSTRAINT "gitProvider_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration_capability_snapshot" ADD CONSTRAINT "integration_capability_snapshot_integrationGrantId_integration_grant_id_fk" FOREIGN KEY ("integrationGrantId") REFERENCES "public"."integration_grant"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "integration_grant" ADD CONSTRAINT "integration_grant_integrationIdentityId_integration_identity_id_fk" FOREIGN KEY ("integrationIdentityId") REFERENCES "public"."integration_identity"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -503,11 +497,12 @@ ALTER TABLE "session" ADD CONSTRAINT "session_userId_user_id_fk" FOREIGN KEY ("u
 ALTER TABLE "teamInvitation" ADD CONSTRAINT "teamInvitation_teamId_team_id_fk" FOREIGN KEY ("teamId") REFERENCES "public"."team"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "teamMember" ADD CONSTRAINT "teamMember_teamId_team_id_fk" FOREIGN KEY ("teamId") REFERENCES "public"."team"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "teamMember" ADD CONSTRAINT "teamMember_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "webhook" ADD CONSTRAINT "webhook_projectId_project_id_fk" FOREIGN KEY ("projectId") REFERENCES "public"."project"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "auditLog_teamId_idx" ON "auditLog" USING btree ("teamId");--> statement-breakpoint
 CREATE INDEX "auditLog_createdAt_idx" ON "auditLog" USING btree ("createdAt");--> statement-breakpoint
 CREATE INDEX "databaseMigration_databaseId_idx" ON "databaseMigration" USING btree ("databaseId");--> statement-breakpoint
 CREATE INDEX "database_projectId_idx" ON "database" USING btree ("projectId");--> statement-breakpoint
+CREATE INDEX "database_environmentId_idx" ON "database" USING btree ("environmentId");--> statement-breakpoint
+CREATE INDEX "database_sourceDatabaseId_idx" ON "database" USING btree ("sourceDatabaseId");--> statement-breakpoint
 CREATE INDEX "deploymentLog_deploymentId_idx" ON "deploymentLog" USING btree ("deploymentId");--> statement-breakpoint
 CREATE INDEX "deployment_releaseId_idx" ON "deployment" USING btree ("releaseId");--> statement-breakpoint
 CREATE INDEX "deployment_projectId_idx" ON "deployment" USING btree ("projectId");--> statement-breakpoint
@@ -518,6 +513,7 @@ CREATE INDEX "environmentVariable_projectId_idx" ON "environmentVariable" USING 
 CREATE INDEX "environment_projectId_idx" ON "environment" USING btree ("projectId");--> statement-breakpoint
 CREATE INDEX "environment_preview_idx" ON "environment" USING btree ("projectId","isPreview");--> statement-breakpoint
 CREATE INDEX "environment_preview_pr_idx" ON "environment" USING btree ("projectId","previewPrNumber");--> statement-breakpoint
+CREATE INDEX "environment_base_env_idx" ON "environment" USING btree ("baseEnvironmentId");--> statement-breakpoint
 CREATE INDEX "gitProvider_userId_idx" ON "gitProvider" USING btree ("userId");--> statement-breakpoint
 CREATE INDEX "gitProvider_type_idx" ON "gitProvider" USING btree ("type");--> statement-breakpoint
 CREATE INDEX "integration_capability_snapshot_grant_id_idx" ON "integration_capability_snapshot" USING btree ("integrationGrantId");--> statement-breakpoint

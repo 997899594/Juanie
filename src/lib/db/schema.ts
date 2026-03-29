@@ -113,15 +113,7 @@ export type EnvironmentDatabaseStrategy = (typeof environmentDatabaseStrategies)
 export const teamRoles = ['owner', 'admin', 'member'] as const;
 export type TeamRole = (typeof teamRoles)[number];
 
-export const webhookTypes = ['git-push', 'registry'] as const;
-export type WebhookType = (typeof webhookTypes)[number];
-
-export const integrationCapabilities = [
-  'read_repo',
-  'write_repo',
-  'write_workflow',
-  'manage_webhook',
-] as const;
+export const integrationCapabilities = ['read_repo', 'write_repo', 'write_workflow'] as const;
 export type IntegrationCapability = (typeof integrationCapabilities)[number];
 
 export const gitProviderTypeEnum = pgEnum('gitProviderType', gitProviderTypes);
@@ -135,7 +127,6 @@ export const releaseStatusEnum = pgEnum('releaseStatus', releaseStatuses);
 export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuses);
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);
-export const webhookTypeEnum = pgEnum('webhookType', webhookTypes);
 export const integrationCapabilityEnum = pgEnum('integrationCapability', integrationCapabilities);
 export const migrationToolEnum = pgEnum('migrationTool', migrationTools);
 export const migrationPhaseEnum = pgEnum('migrationPhase', migrationPhases);
@@ -930,34 +921,6 @@ export const deploymentLogs = pgTable(
 );
 
 // ============================================
-// Webhook Tables
-// ============================================
-
-export const webhooks = pgTable('webhook', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  projectId: uuid('projectId')
-    .notNull()
-    .references(() => projects.id, { onDelete: 'cascade' }),
-
-  // Git 平台返回的 webhook ID，用于删除
-  externalId: varchar('externalId', { length: 255 }),
-  // Webhook 类型：git-push, registry
-  type: webhookTypeEnum('type').notNull().default('git-push'),
-  // 镜像仓库 webhook ID，用于更新/删除
-  externalRegistryHookId: text('externalRegistryHookId'),
-
-  url: varchar('url', { length: 500 }).notNull(),
-  events: text('events').array().notNull(),
-  secret: varchar('secret', { length: 255 }),
-  active: boolean('active').default(true),
-
-  lastTriggeredAt: timestamp('lastTriggeredAt'),
-
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
-});
-
-// ============================================
 // Project Templates
 // ============================================
 
@@ -1090,7 +1053,6 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   environmentVariables: many(environmentVariables),
   releases: many(releases),
   deployments: many(deployments),
-  webhooks: many(webhooks),
   initSteps: many(projectInitSteps),
 }));
 
@@ -1321,13 +1283,6 @@ export const deploymentLogsRelations = relations(deploymentLogs, ({ one }) => ({
   deployment: one(deployments, {
     fields: [deploymentLogs.deploymentId],
     references: [deployments.id],
-  }),
-}));
-
-export const webhooksRelations = relations(webhooks, ({ one }) => ({
-  project: one(projects, {
-    fields: [webhooks.projectId],
-    references: [projects.id],
   }),
 }));
 

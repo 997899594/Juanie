@@ -1,5 +1,5 @@
 {
-  "id": "29ccffce-8065-43d4-bd49-eba4a39b99b0",
+  "id": "f251a6dd-9298-4228-b03b-17d29dce2670",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -363,6 +363,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "sourceDatabaseId": {
+          "name": "sourceDatabaseId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "serviceId": {
           "name": "serviceId",
           "type": "uuid",
@@ -498,6 +504,36 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "database_environmentId_idx": {
+          "name": "database_environmentId_idx",
+          "columns": [
+            {
+              "expression": "environmentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "database_sourceDatabaseId_idx": {
+          "name": "database_sourceDatabaseId_idx",
+          "columns": [
+            {
+              "expression": "sourceDatabaseId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -527,6 +563,19 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
+        "database_sourceDatabaseId_database_id_fk": {
+          "name": "database_sourceDatabaseId_database_id_fk",
+          "tableFrom": "database",
+          "tableTo": "database",
+          "columnsFrom": [
+            "sourceDatabaseId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "database_serviceId_service_id_fk": {
           "name": "database_serviceId_service_id_fk",
           "tableFrom": "database",
@@ -542,7 +591,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "database_environment_source_unique": {
+          "name": "database_environment_source_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "environmentId",
+            "sourceDatabaseId"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1221,6 +1279,20 @@
           "primaryKey": false,
           "notNull": false
         },
+        "baseEnvironmentId": {
+          "name": "baseEnvironmentId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "databaseStrategy": {
+          "name": "databaseStrategy",
+          "type": "environmentDatabaseStrategy",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'direct'"
+        },
         "autoDeploy": {
           "name": "autoDeploy",
           "type": "boolean",
@@ -1234,6 +1306,14 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "deploymentStrategy": {
+          "name": "deploymentStrategy",
+          "type": "environmentDeploymentStrategy",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'rolling'"
         },
         "namespace": {
           "name": "namespace",
@@ -1313,6 +1393,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "environment_base_env_idx": {
+          "name": "environment_base_env_idx",
+          "columns": [
+            {
+              "expression": "baseEnvironmentId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1327,6 +1422,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "environment_baseEnvironmentId_environment_id_fk": {
+          "name": "environment_baseEnvironmentId_environment_id_fk",
+          "tableFrom": "environment",
+          "tableTo": "environment",
+          "columnsFrom": [
+            "baseEnvironmentId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2586,6 +2694,12 @@
           "notNull": false,
           "default": 0
         },
+        "errorCode": {
+          "name": "errorCode",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "error": {
           "name": "error",
           "type": "text",
@@ -3500,14 +3614,14 @@
           "type": "varchar(50)",
           "primaryKey": false,
           "notNull": false,
-          "default": "'128Mi'"
+          "default": "'256Mi'"
         },
         "memoryLimit": {
           "name": "memoryLimit",
           "type": "varchar(50)",
           "primaryKey": false,
           "notNull": false,
-          "default": "'256Mi'"
+          "default": "'512Mi'"
         },
         "autoscaling": {
           "name": "autoscaling",
@@ -3991,111 +4105,6 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
-    },
-    "public.webhook": {
-      "name": "webhook",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "projectId": {
-          "name": "projectId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "externalId": {
-          "name": "externalId",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "type": {
-          "name": "type",
-          "type": "webhookType",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'git-push'"
-        },
-        "externalRegistryHookId": {
-          "name": "externalRegistryHookId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "url": {
-          "name": "url",
-          "type": "varchar(500)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "events": {
-          "name": "events",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "secret": {
-          "name": "secret",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "active": {
-          "name": "active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false,
-          "default": true
-        },
-        "lastTriggeredAt": {
-          "name": "lastTriggeredAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "webhook_projectId_project_id_fk": {
-          "name": "webhook_projectId_project_id_fk",
-          "tableFrom": "webhook",
-          "tableTo": "project",
-          "columnsFrom": [
-            "projectId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
     }
   },
   "enums": {
@@ -4152,6 +4161,25 @@
         "rolled_back"
       ]
     },
+    "public.environmentDatabaseStrategy": {
+      "name": "environmentDatabaseStrategy",
+      "schema": "public",
+      "values": [
+        "direct",
+        "inherit",
+        "isolated_clone"
+      ]
+    },
+    "public.environmentDeploymentStrategy": {
+      "name": "environmentDeploymentStrategy",
+      "schema": "public",
+      "values": [
+        "rolling",
+        "controlled",
+        "canary",
+        "blue_green"
+      ]
+    },
     "public.gitProviderType": {
       "name": "gitProviderType",
       "schema": "public",
@@ -4178,8 +4206,7 @@
       "values": [
         "read_repo",
         "write_repo",
-        "write_workflow",
-        "manage_webhook"
+        "write_workflow"
       ]
     },
     "public.migrationApprovalPolicy": {
@@ -4293,14 +4320,6 @@
         "owner",
         "admin",
         "member"
-      ]
-    },
-    "public.webhookType": {
-      "name": "webhookType",
-      "schema": "public",
-      "values": [
-        "git-push",
-        "registry"
       ]
     }
   },

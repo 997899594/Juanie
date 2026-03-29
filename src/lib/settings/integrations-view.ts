@@ -99,7 +99,6 @@ function formatCapabilityLabel(capability: Capability): string {
     read_repo: '读取仓库',
     write_repo: '写入仓库',
     write_workflow: '写入流水线',
-    manage_webhook: '管理回调',
   };
 
   return labels[capability];

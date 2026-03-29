@@ -6,9 +6,19 @@ import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
 import { getProjectEnvironmentListData } from '@/lib/environments/page-data';
 
-export default async function EnvironmentsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EnvironmentsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{
+    env?: string;
+    panel?: string;
+  }>;
+}) {
   const session = await auth();
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
   if (!session?.user?.id) {
     redirect('/login');
@@ -32,5 +42,14 @@ export default async function EnvironmentsPage({ params }: { params: Promise<{ i
 
   const initialData = await getProjectEnvironmentListData(id, member.role);
 
-  return <EnvironmentsPageClient projectId={id} initialData={initialData} />;
+  return (
+    <EnvironmentsPageClient
+      projectId={id}
+      initialData={initialData}
+      initialEnvId={resolvedSearchParams?.env ?? null}
+      initialDiagnosticsEnvId={
+        resolvedSearchParams?.panel === 'diagnostics' ? (resolvedSearchParams?.env ?? null) : null
+      }
+    />
+  );
 }

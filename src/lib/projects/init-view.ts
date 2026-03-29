@@ -49,7 +49,7 @@ interface ProjectInitIssueSnapshot {
     | 'repository_creation_failed'
     | 'template_push_failed'
     | 'ci_config_push_failed'
-    | 'registry_webhook_failed'
+    | 'release_trigger_failed'
     | 'namespace_setup_failed'
     | 'service_deploy_failed'
     | 'database_provision_failed'
@@ -65,7 +65,7 @@ export const PROJECT_INIT_STEP_LABELS: Record<string, string> = {
   create_repository: '创建仓库',
   push_template: '推送模板文件',
   push_cicd_config: '注入 Juanie 配置',
-  setup_registry_webhook: '配置镜像回调',
+  configure_release_trigger: '配置发布触发',
   setup_namespace: '创建命名空间',
   deploy_services: '部署服务',
   provision_databases: '创建数据库',
@@ -77,7 +77,7 @@ export const PROJECT_INIT_STEP_WEIGHTS: Record<string, number> = {
   create_repository: 10,
   push_template: 15,
   push_cicd_config: 15,
-  setup_registry_webhook: 10,
+  configure_release_trigger: 10,
   setup_namespace: 15,
   deploy_services: 30,
   provision_databases: 20,
@@ -159,12 +159,12 @@ function buildProjectInitIssue(
         summary: error || '平台无法注入 Juanie 配置和 CI',
         nextActionLabel: '检查仓库写入与工作流权限',
       };
-    case 'registry_webhook_failed':
+    case 'release_trigger_failed':
       return {
-        code: 'registry_webhook_failed',
-        label: '镜像回调配置失败',
-        summary: error || '平台无法创建镜像回调链路',
-        nextActionLabel: '检查仓库与回调配置',
+        code: 'release_trigger_failed',
+        label: '发布触发配置失败',
+        summary: error || '平台无法配置发布触发链路',
+        nextActionLabel: '检查仓库与发布触发配置',
       };
     case 'k8s_namespace_failed':
       return {
@@ -225,12 +225,12 @@ function buildProjectInitIssue(
         summary: error || '平台无法注入 Juanie 配置和 CI',
         nextActionLabel: '检查仓库写入与工作流权限',
       };
-    case 'setup_registry_webhook':
+    case 'configure_release_trigger':
       return {
-        code: 'registry_webhook_failed',
-        label: '镜像回调配置失败',
-        summary: error || '平台无法创建镜像回调链路',
-        nextActionLabel: '检查仓库和镜像回调配置',
+        code: 'release_trigger_failed',
+        label: '发布触发配置失败',
+        summary: error || '平台无法配置发布触发链路',
+        nextActionLabel: '检查仓库和发布触发配置',
       };
     case 'setup_namespace':
       return {
@@ -360,7 +360,7 @@ function buildProjectInitRecoveryAction(
     case 'repository_access_denied':
     case 'repository_create_denied':
     case 'cicd_config_push_failed':
-    case 'registry_webhook_failed':
+    case 'release_trigger_failed':
       return {
         kind: 'link',
         label: '打开集成设置',

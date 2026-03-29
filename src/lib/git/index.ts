@@ -45,22 +45,6 @@ export interface PushOptions {
   message: string;
 }
 
-export interface WebhookOptions {
-  repoFullName: string;
-  webhookUrl: string;
-  secret: string;
-  events: string[];
-}
-
-export interface RegistryWebhookOptions {
-  /** For GitHub: the organization owner name. For GitLab: the project full name (namespace/project) */
-  ownerOrProjectPath: string;
-  /** Juanie project ID for callback URL */
-  juanieProjectId: string;
-  /** Secret for webhook verification */
-  webhookSecret: string;
-}
-
 export interface GitProviderConfig {
   type: GitProviderType;
   serverUrl?: string;
@@ -99,19 +83,6 @@ export interface GitProvider {
   createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository>;
 
   pushFiles(accessToken: string, options: PushOptions): Promise<void>;
-
-  createWebhook(accessToken: string, options: WebhookOptions): Promise<{ id: string }>;
-  deleteWebhook(accessToken: string, repoFullName: string, webhookId: string): Promise<void>;
-
-  /**
-   * Setup a registry webhook for container image push events.
-   * For GitHub: creates an organization-level package webhook.
-   * For GitLab: creates a project-level container_registry_events webhook.
-   */
-  setupRegistryWebhook(
-    accessToken: string,
-    options: RegistryWebhookOptions
-  ): Promise<{ id: string }>;
 
   /**
    * List files in the root directory of a repository.

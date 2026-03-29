@@ -1,11 +1,4 @@
-import type {
-  CreateRepoOptions,
-  GitRepository,
-  GitReviewRequest,
-  PushOptions,
-  RegistryWebhookOptions,
-  WebhookOptions,
-} from '@/lib/git';
+import type { CreateRepoOptions, GitRepository, GitReviewRequest, PushOptions } from '@/lib/git';
 import { createGitProvider } from '@/lib/git';
 import type { IntegrationSession } from '@/lib/integrations/service/session-service';
 
@@ -54,22 +47,6 @@ export const githubAdapter = {
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {
     const provider = createProvider('github');
     return provider.pushFiles(session.accessToken, options);
-  },
-
-  async createWebhook(
-    session: IntegrationSession,
-    options: WebhookOptions
-  ): Promise<{ id: string }> {
-    const provider = createProvider('github');
-    return provider.createWebhook(session.accessToken, options);
-  },
-
-  async setupRegistryWebhook(
-    session: IntegrationSession,
-    options: RegistryWebhookOptions
-  ): Promise<{ id: string }> {
-    const provider = createProvider('github');
-    return provider.setupRegistryWebhook(session.accessToken, options);
   },
 
   async listRootFiles(

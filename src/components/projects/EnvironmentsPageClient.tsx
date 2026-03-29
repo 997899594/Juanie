@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
+import { EnvironmentResourcePanel } from '@/components/projects/EnvironmentResourcePanel';
 import { EnvVarManager } from '@/components/projects/EnvVarManager';
 import {
   AlertDialog,
@@ -267,6 +268,8 @@ function PreviewEnvironmentDialog({
 
 interface EnvironmentsPageClientProps {
   projectId: string;
+  initialEnvId?: string | null;
+  initialDiagnosticsEnvId?: string | null;
   initialData: {
     governance: {
       roleLabel: string;
@@ -291,10 +294,24 @@ interface EnvironmentsPageClientProps {
   };
 }
 
-export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsPageClientProps) {
+export function EnvironmentsPageClient({
+  projectId,
+  initialEnvId,
+  initialDiagnosticsEnvId,
+  initialData,
+}: EnvironmentsPageClientProps) {
+  const defaultExpandedEnvId =
+    initialData.environments.find((environment) => environment.id === initialEnvId)?.id ??
+    initialData.environments[0]?.id ??
+    null;
   const [environments, setEnvironments] = useState(initialData.environments);
   const [expanded, setExpanded] = useState<Record<string, boolean>>(
-    initialData.environments[0] ? { [initialData.environments[0].id]: true } : {}
+    defaultExpandedEnvId ? { [defaultExpandedEnvId]: true } : {}
+  );
+  const [diagnosticEnvId, setDiagnosticEnvId] = useState<string | null>(
+    initialData.environments.some((environment) => environment.id === initialDiagnosticsEnvId)
+      ? (initialDiagnosticsEnvId ?? null)
+      : null
   );
   const [governance, setGovernance] = useState(initialData.governance);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -347,6 +364,11 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
 
   const toggleExpanded = (envId: string) => {
     setExpanded((prev) => ({ ...prev, [envId]: !prev[envId] }));
+  };
+
+  const toggleDiagnostics = (envId: string) => {
+    setExpanded((prev) => ({ ...prev, [envId]: true }));
+    setDiagnosticEnvId((current) => (current === envId ? null : envId));
   };
 
   const handleCreatePreview = async (input: {
@@ -563,6 +585,30 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
                               下一步：{environment.platformSignals.nextActionLabel}
                             </div>
                           )}
+                          <div className="mb-4 flex flex-wrap gap-2">
+                            <Button asChild variant="outline" size="sm" className="rounded-xl">
+                              <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>
+                                查看日志
+                              </Link>
+                            </Button>
+                            {environment.latestReleaseCard && (
+                              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                                <Link
+                                  href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}
+                                >
+                                  打开发布
+                                </Link>
+                              </Button>
+                            )}
+                            <Button
+                              variant={diagnosticEnvId === environment.id ? 'default' : 'outline'}
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => toggleDiagnostics(environment.id)}
+                            >
+                              {diagnosticEnvId === environment.id ? '收起资源诊断' : '资源诊断'}
+                            </Button>
+                          </div>
                           <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
                             <div className="mb-3 flex items-start justify-between gap-3">
                               <div>
@@ -608,19 +654,16 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
                                     {environment.latestReleaseCard.createdAtLabel ?? '最近发布'}
                                   </div>
                                 </div>
-                                <Button asChild variant="outline" size="sm" className="rounded-xl">
-                                  <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>
-                                    查看日志
-                                  </Link>
-                                </Button>
-                                <Button asChild variant="outline" size="sm" className="rounded-xl">
-                                  <Link
-                                    href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}
-                                  >
-                                    打开发布
-                                  </Link>
-                                </Button>
                               </div>
+                            </div>
+                          )}
+                          {diagnosticEnvId === environment.id && (
+                            <div className="mb-4">
+                              <EnvironmentResourcePanel
+                                projectId={projectId}
+                                environmentId={environment.id}
+                                environmentName={environment.name}
+                              />
                             </div>
                           )}
                           <EnvVarManager
@@ -778,6 +821,30 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
                               className="mb-4 border-border bg-background"
                             />
                           )}
+                          <div className="mb-4 flex flex-wrap gap-2">
+                            <Button asChild variant="outline" size="sm" className="rounded-xl">
+                              <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>
+                                查看日志
+                              </Link>
+                            </Button>
+                            {environment.latestReleaseCard && (
+                              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                                <Link
+                                  href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}
+                                >
+                                  打开发布
+                                </Link>
+                              </Button>
+                            )}
+                            <Button
+                              variant={diagnosticEnvId === environment.id ? 'default' : 'outline'}
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => toggleDiagnostics(environment.id)}
+                            >
+                              {diagnosticEnvId === environment.id ? '收起资源诊断' : '资源诊断'}
+                            </Button>
+                          </div>
                           <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
                             <div className="mb-3 flex items-start justify-between gap-3">
                               <div>
@@ -826,19 +893,16 @@ export function EnvironmentsPageClient({ projectId, initialData }: EnvironmentsP
                                     {environment.latestReleaseCard.createdAtLabel ?? '最近发布'}
                                   </div>
                                 </div>
-                                <Button asChild variant="outline" size="sm" className="rounded-xl">
-                                  <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>
-                                    查看日志
-                                  </Link>
-                                </Button>
-                                <Button asChild variant="outline" size="sm" className="rounded-xl">
-                                  <Link
-                                    href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}
-                                  >
-                                    打开发布
-                                  </Link>
-                                </Button>
                               </div>
+                            </div>
+                          )}
+                          {diagnosticEnvId === environment.id && (
+                            <div className="mb-4">
+                              <EnvironmentResourcePanel
+                                projectId={projectId}
+                                environmentId={environment.id}
+                                environmentName={environment.name}
+                              />
                             </div>
                           )}
                           {environment.domains.length > 0 && (

@@ -14,9 +14,7 @@ export type AuditAction =
   | 'team.member_role_changed'
   | 'cluster.added'
   | 'cluster.removed'
-  | 'git_connected'
-  | 'webhook.created'
-  | 'webhook.deleted';
+  | 'git_connected';
 
 export type ResourceType =
   | 'project'
@@ -25,8 +23,7 @@ export type ResourceType =
   | 'team'
   | 'member'
   | 'cluster'
-  | 'git_connection'
-  | 'webhook';
+  | 'git_connection';
 
 interface AuditLogParams {
   teamId: string;
@@ -92,8 +89,6 @@ export function formatAuditAction(action: AuditAction): string {
     'cluster.added': 'added cluster',
     'cluster.removed': 'removed cluster',
     git_connected: 'connected git provider',
-    'webhook.created': 'created webhook',
-    'webhook.deleted': 'deleted webhook',
   };
 
   return actionLabels[action] || action;

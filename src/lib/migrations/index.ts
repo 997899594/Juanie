@@ -37,7 +37,7 @@ export async function createMigrationRun(
   input: {
     releaseId?: string | null;
     deploymentId?: string | null;
-    triggeredBy: 'deploy' | 'manual' | 'api' | 'webhook';
+    triggeredBy: 'deploy' | 'manual' | 'api';
     triggeredByUserId?: string | null;
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
@@ -76,7 +76,7 @@ export async function resolveAndRunMigrations(
   input: {
     releaseId?: string | null;
     deploymentId?: string | null;
-    triggeredBy: 'deploy' | 'manual' | 'api' | 'webhook';
+    triggeredBy: 'deploy' | 'manual' | 'api';
     triggeredByUserId?: string | null;
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
@@ -96,7 +96,7 @@ export async function resolveAndCreateMigrationRuns(
   input: {
     releaseId?: string | null;
     deploymentId?: string | null;
-    triggeredBy: 'deploy' | 'manual' | 'api' | 'webhook';
+    triggeredBy: 'deploy' | 'manual' | 'api';
     triggeredByUserId?: string | null;
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
