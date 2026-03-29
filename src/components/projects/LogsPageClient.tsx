@@ -247,7 +247,7 @@ export function LogsPageClient({
           <ScrollText className="h-4 w-4" />
           诊断选择
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 overflow-x-auto pb-1">
           <Select value={envId} onValueChange={setEnvId}>
             <SelectTrigger className="h-10 w-40 rounded-xl text-xs">
               <SelectValue placeholder="环境" />
@@ -307,10 +307,7 @@ export function LogsPageClient({
         </div>
       </div>
 
-      <div
-        className="overflow-hidden rounded-[20px] border border-zinc-800 bg-zinc-950"
-        style={{ height: 'calc(100vh - 320px)' }}
-      >
+      <div className="h-[56vh] overflow-hidden rounded-[20px] border border-zinc-800 bg-zinc-950 md:h-[calc(100vh-320px)]">
         <div className="border-b border-zinc-800 bg-zinc-950/90 px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -348,6 +345,37 @@ export function LogsPageClient({
             lines.map((line) => <LogEntry key={line.id} text={line.text} />)
           )}
           <div ref={bottomRef} />
+        </div>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
+        <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn('min-w-0 flex-1 rounded-xl', follow && 'text-foreground')}
+            onClick={() => setFollow((f) => !f)}
+          >
+            {follow ? '跟随中' : '跟随'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="min-w-0 flex-1 rounded-xl"
+            onClick={startStream}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            重连
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-w-0 flex-1 rounded-xl"
+            onClick={() => setLines([])}
+          >
+            <X className="h-3.5 w-3.5" />
+            清空
+          </Button>
         </div>
       </div>
     </div>

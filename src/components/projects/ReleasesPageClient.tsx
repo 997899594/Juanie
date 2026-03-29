@@ -409,6 +409,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const riskFilter = initialData.selectedRisk;
   const filtered = initialData.filteredReleases;
   const promotePlan = initialData.promotePlan;
+  const manageableEnvironments = environments.filter((environment) =>
+    governance.manageableEnvironmentIds.includes(environment.id)
+  );
   const environmentReleaseCenter = environments.map((environment) => {
     const latestRelease =
       releases.find((release) => release.environment.id === environment.id) ?? null;
@@ -467,9 +470,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             </Button>
             <ManualReleaseDialog
               projectId={projectId}
-              environments={environments.filter((environment) =>
-                governance.manageableEnvironmentIds.includes(environment.id)
-              )}
+              environments={manageableEnvironments}
               releases={releases}
               disabledSummary={governance.primarySummary}
               onCreated={async () => {
@@ -521,7 +522,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           <Globe className="h-4 w-4" />
           环境发布中心
         </div>
-        <div className="grid gap-3 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {environmentReleaseCenter.map(({ environment, latestRelease }) => (
             <div key={environment.id} className="console-card bg-secondary/20 px-4 py-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -677,63 +678,69 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {stats.map((stat) => (
           <div key={stat.label} className="console-panel px-5 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {stat.label}
             </div>
-            <div className="mt-3 text-3xl font-semibold tracking-tight">{stat.value}</div>
+            <div className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
+              {stat.value}
+            </div>
           </div>
         ))}
       </div>
 
       <div className="console-panel space-y-4 px-4 py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          {initialData.environmentOptions.map((env) => (
-            <Button
-              key={env}
-              variant={filter === env ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => updateFilters({ env })}
-              className="capitalize"
-            >
-              {env}
-            </Button>
-          ))}
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            {initialData.environmentOptions.map((env) => (
+              <Button
+                key={env}
+                variant={filter === env ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => updateFilters({ env })}
+                className="capitalize"
+              >
+                {env}
+              </Button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant={riskFilter === 'all' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateFilters({ risk: 'all' })}
-          >
-            全部状态
-          </Button>
-          <Button
-            variant={riskFilter === 'attention' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateFilters({ risk: 'attention' })}
-          >
-            <AlertTriangle className="h-3.5 w-3.5" />
-            待处理
-          </Button>
-          <Button
-            variant={riskFilter === 'approval' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateFilters({ risk: 'approval' })}
-          >
-            待审批
-          </Button>
-          <Button
-            variant={riskFilter === 'failed' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateFilters({ risk: 'failed' })}
-          >
-            失败迁移
-          </Button>
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-2">
+            <Button
+              variant={riskFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateFilters({ risk: 'all' })}
+            >
+              全部状态
+            </Button>
+            <Button
+              variant={riskFilter === 'attention' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateFilters({ risk: 'attention' })}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              待处理
+            </Button>
+            <Button
+              variant={riskFilter === 'approval' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateFilters({ risk: 'approval' })}
+            >
+              待审批
+            </Button>
+            <Button
+              variant={riskFilter === 'failed' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateFilters({ risk: 'failed' })}
+            >
+              失败迁移
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -872,20 +879,30 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-2 xl:flex-col xl:items-end">
+                      <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center xl:items-end">
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="h-3.5 w-3.5" />
                           <span>{new Date(release.createdAt).toLocaleString()}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button asChild variant="outline" size="sm" className="rounded-xl">
+                        <div className="flex w-full items-center gap-2 sm:w-auto">
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="min-w-0 flex-1 rounded-xl sm:flex-none"
+                          >
                             <Link
                               href={`/projects/${projectId}/logs?env=${release.environment.id}`}
                             >
                               日志
                             </Link>
                           </Button>
-                          <Button asChild variant="outline" size="sm" className="rounded-xl">
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="min-w-0 flex-1 rounded-xl sm:flex-none"
+                          >
                             <Link href={`/projects/${projectId}/releases/${release.id}`}>
                               打开
                               <ArrowRight className="h-3.5 w-3.5" />
@@ -1024,6 +1041,38 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           })}
         </div>
       )}
+
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
+        <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
+            <Link href={`/projects/${projectId}/logs`}>
+              <ScrollText className="h-3.5 w-3.5" />
+              日志
+            </Link>
+          </Button>
+          <ManualReleaseDialog
+            projectId={projectId}
+            environments={manageableEnvironments}
+            releases={releases}
+            disabledSummary={governance.primarySummary}
+            onCreated={async () => {
+              router.refresh();
+            }}
+          />
+          {hasStagingProdSplit && (
+            <Button
+              size="sm"
+              className="rounded-xl"
+              onClick={() => setPromoteDialogOpen(true)}
+              disabled={promoting || !canPromote}
+              title={governance.promoteToProduction.summary}
+            >
+              <ArrowUpCircle className="h-3.5 w-3.5" />
+              生产
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -100,7 +100,7 @@ export default async function ReleaseDetailPage({
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <div className="console-panel px-5 py-4">
           <div className="mb-2">
             <StatusIndicator
@@ -131,7 +131,9 @@ export default async function ReleaseDetailPage({
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {stat.label}
             </div>
-            <div className="mt-3 text-3xl font-semibold tracking-tight">{stat.value}</div>
+            <div className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
+              {stat.value}
+            </div>
           </div>
         ))}
       </div>
@@ -643,6 +645,20 @@ export default async function ReleaseDetailPage({
               ))}
             </div>
           </section>
+        </div>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
+        <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+          <Button asChild size="sm" className="min-w-0 flex-1 rounded-xl">
+            <Link href={environmentLogsHref}>日志</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
+            <Link href={environmentDetailHref}>环境</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
+            <Link href={releasesHref}>发布中心</Link>
+          </Button>
         </div>
       </div>
     </div>

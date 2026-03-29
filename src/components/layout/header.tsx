@@ -1,10 +1,14 @@
 'use client';
 
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React from 'react';
+import React, { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useProjectContext } from '@/lib/project-context';
+import { cn } from '@/lib/utils';
+import { buildProjectNavHref, isNavItemActive, mainNav, projectNav } from './navigation';
 import { UserMenu } from './user-menu';
 
 interface BreadcrumbItem {
@@ -16,10 +20,23 @@ export function Header() {
   const pathname = usePathname();
   const project = useProjectContext();
   const breadcrumbs = generateBreadcrumbs(pathname, project ?? undefined);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const currentTitle = breadcrumbs[breadcrumbs.length - 1]?.title ?? '首页';
+  const projectId = project?.projectId ?? null;
+  const mobileProjectTabs = useMemo(() => {
+    if (!projectId) {
+      return [];
+    }
+
+    return projectNav.map((item) => ({
+      ...item,
+      href: buildProjectNavHref(projectId, item.href),
+    }));
+  }, [projectId]);
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-sm">
-      <div className="flex h-16 items-center justify-between px-6">
+      <div className="hidden h-16 items-center justify-between px-6 lg:flex">
         <nav className="flex items-center text-sm">
           {breadcrumbs.map((item, index) => (
             <React.Fragment key={item.title}>
@@ -40,6 +57,135 @@ export function Header() {
 
         <UserMenu />
       </div>
+
+      <div className="lg:hidden">
+        <div className="flex h-16 items-center justify-between gap-3 px-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-2xl"
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+            <div className="min-w-0">
+              <div className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {project ? project.projectName : 'Juanie'}
+              </div>
+              <div className="truncate text-sm font-semibold">{currentTitle}</div>
+            </div>
+          </div>
+
+          <UserMenu />
+        </div>
+
+        {mobileProjectTabs.length > 0 && (
+          <div className="overflow-x-auto px-4 pb-3">
+            <nav className="flex min-w-max items-center gap-2">
+              {mobileProjectTabs.map((item) => {
+                const Icon = item.icon;
+                const isActive = isNavItemActive(pathname, item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition-colors',
+                      isActive
+                        ? 'border-black bg-black text-white'
+                        : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{item.title}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <DialogContent className="left-0 top-0 h-[100dvh] max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 sm:left-0 sm:top-0 sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-none">
+          <DialogTitle className="sr-only">移动端导航</DialogTitle>
+          <div className="flex h-full flex-col bg-background">
+            <div className="border-b border-border px-5 py-5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Juanie
+              </div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight">导航</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                先进入主链路，再展开具体诊断与操作。
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <div>
+                <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  全局
+                </div>
+                <nav className="space-y-2">
+                  {mainNav.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = isNavItemActive(pathname, item.href);
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={cn(
+                          'flex items-center gap-3 rounded-[20px] border px-4 py-3.5 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'border-black bg-black text-white'
+                            : 'border-border bg-card text-foreground hover:bg-secondary'
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {mobileProjectTabs.length > 0 && (
+                <div className="mt-6">
+                  <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {project?.projectName ?? '项目'}
+                  </div>
+                  <nav className="space-y-2">
+                    {mobileProjectTabs.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = isNavItemActive(pathname, item.href);
+
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            'flex items-center gap-3 rounded-[20px] border px-4 py-3.5 text-sm font-medium transition-colors',
+                            isActive
+                              ? 'border-black bg-black text-white'
+                              : 'border-border bg-card text-foreground hover:bg-secondary'
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

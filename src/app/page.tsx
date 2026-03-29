@@ -140,13 +140,15 @@ export default async function HomePage() {
         </section>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {stats.map((stat) => (
           <div key={stat.label} className="console-panel px-5 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {stat.label}
             </div>
-            <div className="mt-3 text-3xl font-semibold tracking-tight">{stat.value}</div>
+            <div className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
+              {stat.value}
+            </div>
           </div>
         ))}
       </div>

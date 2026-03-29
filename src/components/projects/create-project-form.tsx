@@ -639,8 +639,8 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
+      <div className="mb-8 overflow-x-auto pb-1">
+        <div className="flex min-w-max items-center justify-between">
           {STEPS.map((step, index) => (
             <div key={step.id} className="flex items-center">
               <div
@@ -1815,31 +1815,33 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         )}
       </div>
 
-      <div className="mt-6 flex items-center justify-between">
-        <Button
-          variant="outline"
-          className="rounded-xl px-4"
-          onClick={handleBack}
-          disabled={isFirstStep || isSubmitting}
-        >
-          <ChevronLeft className="mr-2 h-4 w-4" />
-          上一步
-        </Button>
-
-        {isLastStep ? (
+      <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-20 mt-6 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
+        <div className="flex items-center justify-between gap-3">
           <Button
+            variant="outline"
             className="rounded-xl px-4"
-            onClick={handleSubmit}
-            disabled={!canProceed() || isSubmitting}
+            onClick={handleBack}
+            disabled={isFirstStep || isSubmitting}
           >
-            {isSubmitting ? '创建中...' : '创建项目'}
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            上一步
           </Button>
-        ) : (
-          <Button className="rounded-xl px-4" onClick={handleNext} disabled={!canProceed()}>
-            下一步
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Button>
-        )}
+
+          {isLastStep ? (
+            <Button
+              className="rounded-xl px-4"
+              onClick={handleSubmit}
+              disabled={!canProceed() || isSubmitting}
+            >
+              {isSubmitting ? '创建中...' : '创建项目'}
+            </Button>
+          ) : (
+            <Button className="rounded-xl px-4" onClick={handleNext} disabled={!canProceed()}>
+              下一步
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
