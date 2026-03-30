@@ -173,90 +173,141 @@ function PreviewEnvironmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+        <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>新建预览环境</DialogTitle>
           <DialogDescription>
             输入分支或 PR 号。平台会创建或续期对应的预览环境，并沿用现有 release 流程发布。
           </DialogDescription>
         </DialogHeader>
 
-        {disabledSummary && (
-          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-            {disabledSummary}
-          </div>
-        )}
+        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+              <div className="space-y-4">
+                {disabledSummary && (
+                  <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                    {disabledSummary}
+                  </div>
+                )}
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="preview-branch">分支</Label>
-              <Input
-                id="preview-branch"
-                placeholder="feature/release-intel"
-                value={branch}
-                onChange={(event) => setBranch(event.target.value)}
-                disabled={loading || disabled}
-              />
+                <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="preview-branch">分支</Label>
+                      <Input
+                        id="preview-branch"
+                        placeholder="feature/release-intel"
+                        value={branch}
+                        onChange={(event) => setBranch(event.target.value)}
+                        disabled={loading || disabled}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="preview-pr">PR 号</Label>
+                      <Input
+                        id="preview-pr"
+                        inputMode="numeric"
+                        placeholder="42"
+                        value={prNumber}
+                        onChange={(event) => setPrNumber(event.target.value)}
+                        disabled={loading || disabled}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <Label htmlFor="preview-ttl">保留时长（小时）</Label>
+                    <Input
+                      id="preview-ttl"
+                      inputMode="numeric"
+                      placeholder="72"
+                      value={ttlHours}
+                      onChange={(event) => setTtlHours(event.target.value)}
+                      disabled={loading || disabled}
+                    />
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    <Label>数据库策略</Label>
+                    <Select
+                      value={databaseStrategy}
+                      onValueChange={(value: 'inherit' | 'isolated_clone') =>
+                        setDatabaseStrategy(value)
+                      }
+                      disabled={loading || disabled}
+                    >
+                      <SelectTrigger className="rounded-xl">
+                        <SelectValue placeholder="选择数据库策略" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="inherit">继承基础数据库</SelectItem>
+                        <SelectItem value="isolated_clone" disabled={!allowIsolatedClone}>
+                          独立预览库
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {databaseStrategy === 'isolated_clone' && isolatedCloneSummary && (
+                      <div className="text-xs text-muted-foreground">{isolatedCloneSummary}</div>
+                    )}
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
+                  <div className="space-y-1">
+                    <div className="text-sm font-semibold text-foreground">创建说明</div>
+                    <div className="text-xs leading-5 text-muted-foreground">
+                      预览环境会复用正式发布链路，但会按分支或 PR 建立临时作用域。
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3 text-sm">
+                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                      <div className="text-xs text-muted-foreground">标识来源</div>
+                      <div className="mt-1 text-foreground">
+                        {branch ? `分支 ${branch}` : prNumber ? `PR #${prNumber}` : '等待输入'}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                      <div className="text-xs text-muted-foreground">保留时长</div>
+                      <div className="mt-1 text-foreground">
+                        {ttlHours ? `${ttlHours} 小时` : '等待输入'}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                      <div className="text-xs text-muted-foreground">数据库方案</div>
+                      <div className="mt-1 text-foreground">
+                        {databaseStrategy === 'isolated_clone' ? '独立预览库' : '继承基础数据库'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="preview-pr">PR 号</Label>
-              <Input
-                id="preview-pr"
-                inputMode="numeric"
-                placeholder="42"
-                value={prNumber}
-                onChange={(event) => setPrNumber(event.target.value)}
-                disabled={loading || disabled}
-              />
-            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="preview-ttl">保留时长（小时）</Label>
-            <Input
-              id="preview-ttl"
-              inputMode="numeric"
-              placeholder="72"
-              value={ttlHours}
-              onChange={(event) => setTtlHours(event.target.value)}
-              disabled={loading || disabled}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>数据库策略</Label>
-            <Select
-              value={databaseStrategy}
-              onValueChange={(value: 'inherit' | 'isolated_clone') => setDatabaseStrategy(value)}
-              disabled={loading || disabled}
+          <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full rounded-xl sm:w-auto"
+              onClick={() => onOpenChange(false)}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="选择数据库策略" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="inherit">继承基础数据库</SelectItem>
-                <SelectItem value="isolated_clone" disabled={!allowIsolatedClone}>
-                  独立预览库
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            {databaseStrategy === 'isolated_clone' && isolatedCloneSummary && (
-              <div className="text-xs text-muted-foreground">{isolatedCloneSummary}</div>
-            )}
-          </div>
-
-          {error && (
-            <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>
-            <Button type="submit" disabled={loading || disabled}>
+            <Button
+              type="submit"
+              className="w-full rounded-xl sm:w-auto"
+              disabled={loading || disabled}
+            >
               {loading ? '创建中...' : '创建预览环境'}
             </Button>
           </DialogFooter>

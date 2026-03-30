@@ -110,62 +110,103 @@ export function DeploymentRollbackAction({
           回滚
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+        <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>回滚预检</DialogTitle>
           <DialogDescription>
             平台会先评估环境保护、迁移和阻断条件，再创建新的回滚 release。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {disabledSummary && (
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-              {disabledSummary}
-            </div>
-          )}
-          {loadingPlan ? (
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
-              正在加载回滚预检...
-            </div>
-          ) : planningPanel ? (
-            <>
-              <PlatformSignalChipList chips={planningPanel.chips} />
-              <PlatformSignalSummary
-                summary={planningPanel.issueSummary}
-                nextActionLabel={planningPanel.nextActionLabel}
-              />
-
-              {planningPanel.sourceImageUrl && (
-                <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-xs text-muted-foreground">
-                  {planningPanel.sourceImageUrl}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+            <div className="space-y-4">
+              {disabledSummary && (
+                <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                  {disabledSummary}
                 </div>
               )}
 
-              {planningPanel.blockingReason && (
+              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold text-foreground">回滚来源</div>
+                  <div className="text-xs leading-5 text-muted-foreground">
+                    这里展示将被恢复的来源版本，帮助你确认回滚目标是否正确。
+                  </div>
+                </div>
+
+                {planningPanel?.sourceImageUrl ? (
+                  <div className="mt-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+                    <div className="text-xs text-muted-foreground">来源镜像</div>
+                    <code className="mt-2 block break-all text-xs text-foreground">
+                      {planningPanel.sourceImageUrl}
+                    </code>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
+                    当前没有可回显的来源镜像信息，平台仍会按预检规则判断是否允许回滚。
+                  </div>
+                )}
+              </div>
+
+              {error && (
                 <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
-                  {planningPanel.blockingReason}
+                  {error}
                 </div>
               )}
-
-              {!planningPanel.blockingReason && planningPanel.warningChips.length > 0 && (
-                <PlatformSignalChipList chips={planningPanel.warningChips} />
-              )}
-            </>
-          ) : null}
-
-          {error && (
-            <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
-              {error}
             </div>
-          )}
+
+            <div className="space-y-4">
+              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                <div className="mb-3 space-y-1">
+                  <div className="text-sm font-semibold text-foreground">回滚预检</div>
+                  <div className="text-xs leading-5 text-muted-foreground">
+                    回滚不会直接覆盖线上，而是先走一次新的 release 创建流程。
+                  </div>
+                </div>
+
+                {loadingPlan ? (
+                  <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
+                    正在加载回滚预检...
+                  </div>
+                ) : planningPanel ? (
+                  <div className="space-y-3">
+                    <PlatformSignalChipList chips={planningPanel.chips} />
+                    <PlatformSignalSummary
+                      summary={planningPanel.issueSummary}
+                      nextActionLabel={planningPanel.nextActionLabel}
+                    />
+
+                    {planningPanel.blockingReason && (
+                      <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                        {planningPanel.blockingReason}
+                      </div>
+                    )}
+
+                    {!planningPanel.blockingReason && planningPanel.warningChips.length > 0 && (
+                      <PlatformSignalChipList chips={planningPanel.warningChips} />
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
+                    打开面板后会自动加载回滚预检结果。
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+          <Button
+            variant="outline"
+            className="w-full rounded-xl sm:w-auto"
+            onClick={() => setOpen(false)}
+          >
             关闭
           </Button>
           <Button
+            className="w-full rounded-xl sm:w-auto"
             onClick={handleRollback}
             disabled={submitting || loadingPlan || !planningPanel?.canSubmit}
           >
