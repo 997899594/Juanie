@@ -31,7 +31,9 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium">项目</div>
-            <div className="mt-1 text-xs text-muted-foreground">{overview.memberSummary}</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {overview.memberSummary} · 从这里进入当前团队的项目主链路。
+            </div>
           </div>
           <Link href="/projects/new">
             <Button className="h-9 rounded-xl px-4">
@@ -70,9 +72,8 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{project.name}</p>
                 <p className="mt-1 text-xs text-muted-foreground capitalize">
-                  {project.statusLabel}
+                  {[project.statusLabel, project.governance.roleLabel].filter(Boolean).join(' · ')}
                 </p>
-                <p className="mt-2 text-xs text-muted-foreground">{project.governance.roleLabel}</p>
               </div>
             </Link>
           ))}
@@ -86,7 +87,9 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
           </div>
           <div className="min-w-0">
             <div className="text-sm font-semibold">团队成员</div>
-            <div className="mt-1 text-xs text-muted-foreground">成员和邀请都在成员页里管理。</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              成员与邀请都集中在成员页处理，不在这里重复展开。
+            </div>
           </div>
           <Link href={`/teams/${teamId}/members`} className="ml-auto">
             <Button variant="outline" className="h-9 rounded-xl px-4">

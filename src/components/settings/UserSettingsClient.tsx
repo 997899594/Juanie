@@ -185,16 +185,10 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
                     {integration.statusLabel}
                   </Badge>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {integration.capabilities.length > 0 ? (
-                    integration.capabilities.map((capability) => (
-                      <Badge key={capability} variant="outline">
-                        {capability}
-                      </Badge>
-                    ))
-                  ) : (
-                    <Badge variant="outline">暂无能力快照</Badge>
-                  )}
+                <div className="mt-3 text-[11px] text-muted-foreground">
+                  {integration.capabilities.length > 0
+                    ? integration.capabilities.join(' · ')
+                    : '暂无能力快照'}
                 </div>
                 <div className="mt-3 text-xs text-muted-foreground">{integration.summary}</div>
                 <div className="mt-1 text-[11px] text-muted-foreground">
@@ -203,18 +197,6 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
               </div>
             ))
           )}
-        </div>
-      </div>
-
-      <div className="console-panel px-5 py-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-sm font-semibold">退出登录</div>
-            <div className="mt-1 text-xs text-muted-foreground">结束当前会话并返回登录页。</div>
-          </div>
-          <Button variant="outline" className="h-9 rounded-xl px-4" onClick={handleSignOut}>
-            退出登录
-          </Button>
         </div>
       </div>
     </div>
