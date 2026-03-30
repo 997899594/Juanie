@@ -77,13 +77,9 @@ export default async function ProjectsPage() {
                       </code>
                     )}
                   </div>
-                  {project.roleLabel && (
-                    <div className="mt-2">
-                      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
-                        {project.roleLabel}
-                      </span>
-                    </div>
-                  )}
+                  <div className="mt-1 text-[11px] text-muted-foreground">
+                    {[project.roleLabel, project.createdAtLabel].filter(Boolean).join(' · ')}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -101,7 +97,6 @@ export default async function ProjectsPage() {
                 <span className="text-xs capitalize text-muted-foreground">
                   {project.statusLabel}
                 </span>
-                <span className="text-xs text-muted-foreground">{project.createdAtLabel}</span>
               </div>
             </Link>
           ))}

@@ -525,7 +525,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {environmentReleaseCenter.map(({ environment, latestRelease }) => (
             <div key={environment.id} className="console-card bg-secondary/20 px-4 py-4">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <div
                   className={cn(
                     'h-2 w-2 rounded-full',
@@ -540,18 +540,14 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                   )}
                 />
                 <span className="text-sm font-medium">{environment.name}</span>
-                {environment.isProduction ? (
-                  <Badge>生产</Badge>
-                ) : environment.isPreview ? (
-                  <Badge variant="secondary">预览</Badge>
-                ) : (
-                  <Badge variant="secondary">非生产</Badge>
-                )}
-                {environment.deploymentStrategy ? (
-                  <Badge variant="outline" className="capitalize">
-                    {environment.deploymentStrategy}
-                  </Badge>
-                ) : null}
+              </div>
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                {[
+                  environment.isProduction ? '生产' : environment.isPreview ? '预览' : '非生产',
+                  environment.deploymentStrategy,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </div>
 
               <div className="mt-3">
@@ -563,13 +559,15 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                         latestRelease.summary ??
                         '打开发布查看详情'}
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                      <span>{latestRelease.statusDecoration.label}</span>
-                      {latestRelease.sourceCommitSha ? (
-                        <code className="rounded bg-background px-1.5 py-0.5 font-mono text-foreground">
-                          {latestRelease.sourceCommitSha.slice(0, 7)}
-                        </code>
-                      ) : null}
+                    <div className="mt-2 text-[11px] text-muted-foreground">
+                      {[
+                        latestRelease.statusDecoration.label,
+                        latestRelease.sourceCommitSha
+                          ? latestRelease.sourceCommitSha.slice(0, 7)
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </div>
                   </>
                 ) : (
@@ -841,19 +839,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                             pulse={release.statusDecoration.pulse}
                             label={release.statusDecoration.label}
                           />
-                          <Badge
-                            variant={release.environment.isProduction ? 'default' : 'secondary'}
-                            className="capitalize"
-                          >
+                          <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
                             {release.environment.name}
-                          </Badge>
-                          {release.environmentScope && (
-                            <Badge variant="outline">{release.environmentScope}</Badge>
-                          )}
-                          {release.previewSourceMeta.label && (
-                            <Badge variant="outline">{release.previewSourceMeta.label}</Badge>
-                          )}
-                          <Badge variant="outline">{release.artifacts.length} 个服务</Badge>
+                          </span>
                           <span
                             className={cn(
                               'rounded-full border px-2.5 py-1 text-xs font-medium',
@@ -862,20 +850,29 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                           >
                             {release.riskLabel}
                           </span>
-                          {policy.primarySignal?.label ? (
-                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
-                              {policy.primarySignal.label}
-                            </span>
-                          ) : policy.level !== 'normal' ? (
-                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
-                              {policy.level === 'approval_required' ? '受保护 / 待审批' : '受保护'}
-                            </span>
-                          ) : null}
                         </div>
 
                         <div className="space-y-2">
                           <div className="text-base font-semibold">{release.displayTitle}</div>
-                          <PreviewSourceSummary meta={release.previewSourceMeta} />
+                          <div className="text-[11px] text-muted-foreground">
+                            {[
+                              release.environmentScope,
+                              release.previewSourceMeta.label,
+                              `${release.artifacts.length} 个服务`,
+                              policy.primarySignal?.label
+                                ? policy.primarySignal.label
+                                : policy.level !== 'normal'
+                                  ? policy.level === 'approval_required'
+                                    ? '受保护 / 待审批'
+                                    : '受保护'
+                                  : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                          {release.previewSourceMeta.title && (
+                            <PreviewSourceSummary meta={release.previewSourceMeta} />
+                          )}
                           {release.platformSignals.primarySummary && (
                             <div className="text-xs text-muted-foreground">
                               {release.platformSignals.primarySummary}

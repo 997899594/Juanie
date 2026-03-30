@@ -233,9 +233,14 @@ export function LogsPageClient({
               </div>
             </div>
             <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">日志窗口</div>
+              <div className="text-xs text-muted-foreground">日志策略</div>
               <div className="mt-1 text-sm font-medium">
                 最近 {tail} 条 · {follow ? '自动跟随' : '手动浏览'}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {pods.length > 0
+                  ? `${runningPodCount} 个运行中 · ${readyPodCount} 个就绪`
+                  : '等待识别运行实例'}
               </div>
             </div>
           </div>
