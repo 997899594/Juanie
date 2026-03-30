@@ -80,6 +80,13 @@ jobs:
               kubectl get events -n juanie --sort-by=.metadata.creationTimestamp | tail -n 80 || true
             }
 
+            dump_schema_debug() {
+              echo "⚠️ Schema 同步失败，输出数据库与应用诊断信息..."
+              kubectl get pods -n juanie -o wide || true
+              kubectl logs deployment/juanie-web -n juanie --tail=120 || true
+              kubectl logs deployment/juanie-worker -n juanie --tail=120 || true
+            }
+
             echo "🚀 部署 Juanie..."
             echo "   镜像: $IMAGE"
 
@@ -102,6 +109,9 @@ jobs:
 
             # 3. 在新 pod 上同步数据库 Schema
             echo "🔄 同步数据库 Schema..."
-            kubectl exec -n juanie deployment/juanie-web -- bun run db:push || echo "⚠️ Schema 同步跳过"
+            if ! kubectl exec -n juanie deployment/juanie-web -- bun run db:push; then
+              dump_schema_debug
+              exit 1
+            fi
 
             echo "✅ 部署完成!"
