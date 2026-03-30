@@ -211,25 +211,34 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             当前入口
           </div>
-          <div className="mt-4 grid gap-3">
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">当前发布</div>
-              <div className="mt-1 text-sm font-medium">
-                {currentRelease?.title ?? '还没有发布'}
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-secondary/20">
+            {[
+              {
+                label: '当前发布',
+                value: currentRelease?.title ?? '还没有发布',
+                meta:
+                  currentRelease?.platformSignals.primarySummary ?? currentRelease?.sourceSummary,
+              },
+              {
+                label: '待处理',
+                value: primaryAttention?.issueLabel ?? '当前无阻塞项',
+                meta: primaryAttention?.platformSignals.primarySummary,
+              },
+              {
+                label: '主环境',
+                value: primaryEnvironment?.name ?? '还没有环境',
+                meta: primaryEnvironment?.platformSignals.primarySummary,
+              },
+            ].map((item, index) => (
+              <div
+                key={item.label}
+                className={`px-4 py-3 ${index > 0 ? 'border-t border-border/70' : ''}`}
+              >
+                <div className="text-xs text-muted-foreground">{item.label}</div>
+                <div className="mt-1 text-sm font-medium">{item.value}</div>
+                {item.meta && <div className="mt-1 text-xs text-muted-foreground">{item.meta}</div>}
               </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">待处理</div>
-              <div className="mt-1 text-sm font-medium">
-                {primaryAttention?.issueLabel ?? '当前无阻塞项'}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">主环境</div>
-              <div className="mt-1 text-sm font-medium">
-                {primaryEnvironment?.name ?? '还没有环境'}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
@@ -302,20 +311,22 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <div className="grid gap-3 xl:grid-cols-3">
             {environmentCards.map((environment) => (
               <div key={environment.id} className="console-card bg-secondary/20 px-4 py-4">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <div
                     className={`h-2 w-2 rounded-full ${
                       environment.primaryDomainUrl ? 'bg-success' : 'bg-warning'
                     }`}
                   />
                   <span className="text-sm font-medium">{environment.name}</span>
-                  {environment.isProduction ? <Badge>生产</Badge> : null}
-                  {environment.scopeLabel ? (
-                    <Badge variant="secondary">{environment.scopeLabel}</Badge>
-                  ) : null}
-                  {environment.sourceLabel ? (
-                    <Badge variant="outline">{environment.sourceLabel}</Badge>
-                  ) : null}
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {[
+                    environment.isProduction ? '生产' : null,
+                    environment.scopeLabel,
+                    environment.sourceLabel,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">
                   {environment.platformSignals.primarySummary ??
@@ -488,22 +499,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                               ' · '
                             )}
                           </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            {run.environmentScopeLabel && (
-                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                {run.environmentScopeLabel}
-                              </span>
-                            )}
-                            {run.environmentSourceLabel && (
-                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                {run.environmentSourceLabel}
-                              </span>
-                            )}
-                            {run.previewSourceMeta.label && (
-                              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                                {run.previewSourceMeta.label}
-                              </span>
-                            )}
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            {[
+                              run.environmentScopeLabel,
+                              run.environmentSourceLabel,
+                              run.previewSourceMeta.label,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
                           </div>
                           {run.platformSignals.primarySummary && (
                             <div className="mt-1 text-sm text-foreground">

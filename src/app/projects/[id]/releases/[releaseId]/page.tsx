@@ -21,7 +21,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PlatformSignalSummary } from '@/components/ui/platform-signals';
-import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -109,21 +108,17 @@ export default async function ReleaseDetailPage({
               label={release.statusDecoration.label}
             />
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>{release.environment?.name ?? '环境'}</span>
-            {release.environmentScope && (
-              <Badge variant="outline">{release.environmentScope}</Badge>
-            )}
-            {release.environmentSource && (
-              <Badge variant="outline">{release.environmentSource}</Badge>
-            )}
-            {release.previewSourceMeta.label && (
-              <Badge variant="outline">{release.previewSourceMeta.label}</Badge>
-            )}
-            {release.environmentExpiry && (
-              <Badge variant="outline">{release.environmentExpiry}</Badge>
-            )}
-            <Badge variant="outline">{release.riskLabel}</Badge>
+          <div className="text-sm font-medium">{release.environment?.name ?? '环境'}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {[
+              release.environmentScope,
+              release.environmentSource,
+              release.previewSourceMeta.label,
+              release.environmentExpiry,
+              release.riskLabel,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </div>
         </div>
         {release.stats.map((stat) => (
@@ -139,50 +134,50 @@ export default async function ReleaseDetailPage({
       </div>
 
       <div className="console-panel px-5 py-4">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {release.sourceCommitSha && (
-            <div className="flex items-center gap-1.5">
-              <GitCommit className="h-3.5 w-3.5" />
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <GitCommit className="h-3.5 w-3.5" />
+                提交
+              </div>
+              <code className="mt-2 inline-flex rounded bg-background px-2 py-1 text-xs font-mono">
                 {release.sourceCommitSha.slice(0, 7)}
               </code>
             </div>
           )}
-          <div className="flex items-center gap-1.5">
-            <GitBranch className="h-3.5 w-3.5" />
-            <span>{release.sourceRef}</span>
-          </div>
-          {release.previewSourceMeta.title && (
-            <div className="flex items-center gap-1.5">
-              <Rocket className="h-3.5 w-3.5" />
-              <PreviewSourceSummary meta={release.previewSourceMeta} />
+          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <GitBranch className="h-3.5 w-3.5" />
+              来源分支
             </div>
-          )}
-          <div className="flex items-center gap-1.5">
-            <Clock3 className="h-3.5 w-3.5" />
-            <span>{new Date(release.createdAt).toLocaleString()}</span>
+            <div className="mt-2 text-sm font-medium">{release.sourceRef}</div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Database className="h-3.5 w-3.5" />
-            <span>{release.sourceRepository}</span>
+          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock3 className="h-3.5 w-3.5" />
+              创建时间
+            </div>
+            <div className="mt-2 text-sm font-medium">
+              {new Date(release.createdAt).toLocaleString()}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Database className="h-3.5 w-3.5" />
+              仓库来源
+            </div>
+            <div className="mt-2 text-sm font-medium">{release.sourceRepository}</div>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {release.environmentStrategy && (
-            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-              {release.environmentStrategy}
-            </span>
-          )}
-          {release.environmentDatabaseStrategy && (
-            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-              {release.environmentDatabaseStrategy}
-            </span>
-          )}
-          {release.environmentInheritance && (
-            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-foreground">
-              {release.environmentInheritance}
-            </span>
-          )}
+        <div className="mt-4 text-sm text-muted-foreground">
+          {[
+            release.environmentStrategy,
+            release.environmentDatabaseStrategy,
+            release.environmentInheritance,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </div>
         <PlatformSignalSummary
           summary={release.platformSignals.primarySummary}
@@ -304,7 +299,7 @@ export default async function ReleaseDetailPage({
           <div className="space-y-4">
             <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                当前环境
+                主要入口
               </div>
               <div className="mt-2 text-sm font-medium text-foreground">
                 {release.environment?.name ?? '环境'}
@@ -322,24 +317,6 @@ export default async function ReleaseDetailPage({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                发布链路
-              </div>
-              <div className="mt-2 text-sm text-foreground">
-                主链路保持简单：环境决定发布位置，release 承载一次变更，deployment / migration
-                只是执行细节。
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button asChild variant="outline" size="sm" className="rounded-xl">
-                  <Link href={releasesHref}>回到发布中心</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm" className="rounded-xl">
-                  <Link href={environmentDiagnosticsHref}>环境诊断</Link>
-                </Button>
-              </div>
-            </div>
-
             <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-4">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 排障顺序
@@ -348,6 +325,11 @@ export default async function ReleaseDetailPage({
                 <div>1. 看发布时间线，确认卡在哪一步。</div>
                 <div>2. 进环境日志，看运行时真实输出。</div>
                 <div>3. 只有需要 Pod/Service 细节时，再展开环境里的资源诊断。</div>
+              </div>
+              <div className="mt-3">
+                <Button asChild variant="outline" size="sm" className="rounded-xl">
+                  <Link href={releasesHref}>回到发布中心</Link>
+                </Button>
               </div>
             </div>
           </div>

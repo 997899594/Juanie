@@ -12,7 +12,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { auth } from '@/lib/auth';
 import { getHomePageData } from '@/lib/home/service';
 
@@ -196,18 +195,12 @@ export default async function HomePage() {
                         <div className="truncate text-xs text-muted-foreground">
                           {project.repositoryLabel}
                         </div>
-                        {project.roleLabel && (
-                          <div className="mt-2">
-                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
-                              {project.roleLabel}
-                            </span>
-                          </div>
-                        )}
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          {[project.roleLabel, project.statusLabel].filter(Boolean).join(' · ')}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-xs capitalize text-muted-foreground">
-                      {project.statusLabel}
-                    </div>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   </Link>
                 ))}
               </div>
@@ -254,27 +247,15 @@ export default async function HomePage() {
                         <div className="truncate text-xs text-muted-foreground">
                           {[run.projectName, run.databaseName].join(' · ')}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                          {run.environmentScopeLabel && (
-                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                              {run.environmentScopeLabel}
-                            </span>
-                          )}
-                          {run.environmentSourceLabel && (
-                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                              {run.environmentSourceLabel}
-                            </span>
-                          )}
-                          {run.previewSourceMeta.label && (
-                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                              {run.previewSourceMeta.label}
-                            </span>
-                          )}
-                          {run.environmentExpiryLabel && (
-                            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground">
-                              {run.environmentExpiryLabel}
-                            </span>
-                          )}
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          {[
+                            run.environmentScopeLabel,
+                            run.environmentSourceLabel,
+                            run.previewSourceMeta.label,
+                            run.environmentExpiryLabel,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </div>
                         {run.platformSignals.primarySummary && (
                           <div className="mt-1 text-sm text-foreground">
@@ -289,7 +270,6 @@ export default async function HomePage() {
                         {(run.releaseTitle || run.primaryDomainUrl) && (
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                             {run.releaseTitle && <span>{run.releaseTitle}</span>}
-                            <PreviewSourceSummary meta={run.previewSourceMeta} />
                             {run.primaryDomainUrl && (
                               <span className="text-foreground underline underline-offset-4">
                                 打开环境
