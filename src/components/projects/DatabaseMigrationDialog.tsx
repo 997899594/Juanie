@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -472,6 +473,9 @@ export function DatabaseMigrationDialog({
   const diffItems = useMemo(() => (plan ? buildPlanDiff(plan, latestRun) : []), [plan, latestRun]);
   const displayMigrationPath = plan ? getDisplayMigrationPath(plan) : null;
   const confirmationMatches = plan ? confirmationText.trim() === plan.confirmationValue : false;
+  const hasActiveRuns = runs.some((run) =>
+    ['queued', 'planning', 'running', 'awaiting_approval'].includes(run.status)
+  );
   const manualControl = getDatabaseManualControlSnapshot({
     latestMigration: latestMigration
       ? {
@@ -503,22 +507,22 @@ export function DatabaseMigrationDialog({
           对比并迁移
         </Button>
       </DialogTrigger>
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[88vh]">
-        <DialogHeader className="shrink-0 border-b border-border/70 px-6 py-5">
+      <DialogContent className="flex max-h-[calc(100vh-1rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+        <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>{databaseName} 手动迁移控制台</DialogTitle>
           <DialogDescription>
             自动迁移应通过 release 执行。这里会先展示执行前对比，再决定是否手动执行。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="space-y-4">
             {disabledSummary && (
               <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
                 {disabledSummary}
               </div>
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">{databaseType}</Badge>
               {latestStatus && <Badge variant="outline">数据库：{latestStatus}</Badge>}
               {latestRun && (
@@ -528,9 +532,18 @@ export function DatabaseMigrationDialog({
               )}
             </div>
 
-            {message && <div className="text-sm text-muted-foreground">{message}</div>}
+            {message && (
+              <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                {message}
+              </div>
+            )}
 
-            <div className="text-sm text-muted-foreground">{manualControl.reason}</div>
+            <div className="rounded-[24px] border border-border bg-secondary/20 px-4 py-4">
+              <div className="text-sm font-semibold text-foreground">当前控制策略</div>
+              <div className="mt-1 text-sm leading-6 text-muted-foreground">
+                {manualControl.reason}
+              </div>
+            </div>
 
             <div className="overflow-hidden rounded-[20px] border border-border bg-background">
               <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
@@ -560,245 +573,256 @@ export function DatabaseMigrationDialog({
                 ) : !plan ? (
                   <div className="text-sm text-muted-foreground">暂时无法获取执行计划。</div>
                 ) : (
-                  <>
-                    <div className="space-y-2 rounded-2xl border border-border bg-secondary/20 p-4 text-sm">
-                      <div className="font-medium">控制面上下文</div>
-                      <div className="space-y-1 text-xs text-muted-foreground">
-                        {latestRelease ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span>关联发布</span>
-                            <Link
-                              href={`/projects/${projectId}/releases/${latestRelease.id}`}
-                              className="text-foreground underline underline-offset-4"
-                            >
-                              {latestRelease.title}
-                            </Link>
-                            {latestRelease.commitSha && (
-                              <code className="rounded bg-background px-1.5 py-0.5 font-mono">
-                                {latestRelease.commitSha.slice(0, 7)}
-                              </code>
-                            )}
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+                    <div className="space-y-4">
+                      <div className="space-y-2 rounded-2xl border border-border bg-secondary/20 p-4 text-sm">
+                        <div className="font-medium">控制面上下文</div>
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                          {latestRelease ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span>关联发布</span>
+                              <Link
+                                href={`/projects/${projectId}/releases/${latestRelease.id}`}
+                                className="text-foreground underline underline-offset-4"
+                              >
+                                {latestRelease.title}
+                              </Link>
+                              {latestRelease.commitSha && (
+                                <code className="rounded bg-background px-1.5 py-0.5 font-mono">
+                                  {latestRelease.commitSha.slice(0, 7)}
+                                </code>
+                              )}
+                            </div>
+                          ) : (
+                            <div>当前没有关联 release，手动迁移会直接走控制面队列。</div>
+                          )}
+                          <div>
+                            {plan.runnerType === 'k8s_job'
+                              ? latestImageUrl
+                                ? '命令式迁移会使用最近一次可用 release 镜像执行。'
+                                : '命令式迁移需要最近一次可用 release 镜像；当前没有可用镜像。'
+                              : '当前迁移由控制面 worker 直接执行，不依赖 release 镜像。'}
                           </div>
-                        ) : (
-                          <div>当前没有关联 release，手动迁移会直接走控制面队列。</div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{plan.environment.name}</Badge>
+                        <Badge variant="outline">{plan.service.name}</Badge>
+                        <Badge variant="outline">{plan.specification.tool}</Badge>
+                        <Badge variant="outline">{plan.specification.phase}</Badge>
+                        {plan.specification.compatibility === 'breaking' && (
+                          <Badge variant="destructive">破坏性变更</Badge>
                         )}
-                        <div>
-                          {plan.runnerType === 'k8s_job'
-                            ? latestImageUrl
-                              ? '命令式迁移会使用最近一次可用 release 镜像执行。'
-                              : '命令式迁移需要最近一次可用 release 镜像；当前没有可用镜像。'
-                            : '当前迁移由控制面 worker 直接执行，不依赖 release 镜像。'}
-                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary">{plan.environment.name}</Badge>
-                      <Badge variant="outline">{plan.service.name}</Badge>
-                      <Badge variant="outline">{plan.specification.tool}</Badge>
-                      <Badge variant="outline">{plan.specification.phase}</Badge>
-                      {plan.specification.compatibility === 'breaking' && (
-                        <Badge variant="destructive">破坏性变更</Badge>
-                      )}
-                    </div>
-
-                    <div className="grid gap-3 text-sm sm:grid-cols-2">
-                      <div>
-                        <div className="text-xs text-muted-foreground">数据库</div>
-                        <div className="font-medium">{plan.database.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {plan.database.type} · {plan.database.status ?? '未知状态'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">解析方式</div>
-                        <div className="font-medium">
-                          {formatResolutionStrategyLabel(plan.resolution.strategy)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {plan.resolution.selector.bindingName
-                            ? `名称：${plan.resolution.selector.bindingName}`
-                            : plan.resolution.selector.bindingRole
-                              ? `角色：${plan.resolution.selector.bindingRole}`
-                              : plan.resolution.selector.bindingDatabaseType
-                                ? `类型：${plan.resolution.selector.bindingDatabaseType}`
-                                : '未指定，平台自动推断'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">执行器</div>
-                        <div className="font-medium">{plan.runnerType}</div>
-                        <div className="text-xs text-muted-foreground break-all">
-                          {plan.runnerType === 'k8s_job'
-                            ? (plan.imageUrl ?? '没有可用镜像')
-                            : '由控制面 worker 执行'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">工作目录</div>
-                        <code className="text-xs">{plan.specification.workingDirectory}</code>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">迁移路径</div>
-                        <code className="text-xs">{displayMigrationPath}</code>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">兼容性</div>
-                        <div className="font-medium">
-                          {formatCompatibilityLabel(plan.specification.compatibility)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">审批策略</div>
-                        <div className="font-medium">
-                          {formatApprovalPolicyLabel(plan.specification.approvalPolicy)}
-                        </div>
-                        {(plan.migrationPolicy.primarySignal?.summary ??
-                          plan.migrationPolicy.approvalReason) && (
+                      <div className="grid gap-3 text-sm sm:grid-cols-2">
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">数据库</div>
+                          <div className="mt-1 font-medium">{plan.database.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {plan.migrationPolicy.primarySignal?.summary ??
-                              plan.migrationPolicy.approvalReason}
+                            {plan.database.type} · {plan.database.status ?? '未知状态'}
                           </div>
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">锁策略</div>
-                        <div className="font-medium">
-                          {formatLockStrategyLabel(plan.specification.lockStrategy)}
+                        </div>
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">解析方式</div>
+                          <div className="mt-1 font-medium">
+                            {formatResolutionStrategyLabel(plan.resolution.strategy)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {plan.resolution.selector.bindingName
+                              ? `名称：${plan.resolution.selector.bindingName}`
+                              : plan.resolution.selector.bindingRole
+                                ? `角色：${plan.resolution.selector.bindingRole}`
+                                : plan.resolution.selector.bindingDatabaseType
+                                  ? `类型：${plan.resolution.selector.bindingDatabaseType}`
+                                  : '未指定，平台自动推断'}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">执行器</div>
+                          <div className="mt-1 font-medium">{plan.runnerType}</div>
+                          <div className="break-all text-xs text-muted-foreground">
+                            {plan.runnerType === 'k8s_job'
+                              ? (plan.imageUrl ?? '没有可用镜像')
+                              : '由控制面 worker 执行'}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">工作目录</div>
+                          <code className="mt-1 block text-xs">
+                            {plan.specification.workingDirectory}
+                          </code>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">迁移路径</div>
+                          <code className="mt-1 block text-xs">{displayMigrationPath}</code>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">兼容性</div>
+                          <div className="mt-1 font-medium">
+                            {formatCompatibilityLabel(plan.specification.compatibility)}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">审批策略</div>
+                          <div className="mt-1 font-medium">
+                            {formatApprovalPolicyLabel(plan.specification.approvalPolicy)}
+                          </div>
+                          {(plan.migrationPolicy.primarySignal?.summary ??
+                            plan.migrationPolicy.approvalReason) && (
+                            <div className="text-xs text-muted-foreground">
+                              {plan.migrationPolicy.primarySignal?.summary ??
+                                plan.migrationPolicy.approvalReason}
+                            </div>
+                          )}
+                        </div>
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">锁策略</div>
+                          <div className="mt-1 font-medium">
+                            {formatLockStrategyLabel(plan.specification.lockStrategy)}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <div className="text-xs text-muted-foreground">平台注入的数据库变量</div>
-                      <div className="flex flex-wrap gap-2">
-                        {plan.envVars.length > 0 ? (
-                          plan.envVars.map((envVar) => (
-                            <Badge key={envVar} variant="outline">
-                              {envVar}
-                            </Badge>
-                          ))
-                        ) : (
-                          <div className="text-xs text-muted-foreground">
-                            当前没有可注入的数据库变量。
-                          </div>
-                        )}
+                      <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
+                        <div className="text-xs text-muted-foreground">平台注入的数据库变量</div>
+                        <div className="flex flex-wrap gap-2">
+                          {plan.envVars.length > 0 ? (
+                            plan.envVars.map((envVar) => (
+                              <Badge key={envVar} variant="outline">
+                                {envVar}
+                              </Badge>
+                            ))
+                          ) : (
+                            <div className="text-xs text-muted-foreground">
+                              当前没有可注入的数据库变量。
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <TerminalSquare className="h-3.5 w-3.5" />
-                        命令预览
+                      <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <TerminalSquare className="h-3.5 w-3.5" />
+                          命令预览
+                        </div>
+                        <pre className="overflow-x-auto rounded-2xl border border-border bg-secondary/30 p-3 text-xs">
+                          {plan.specification.command}
+                        </pre>
                       </div>
-                      <pre className="overflow-x-auto rounded-2xl border border-border bg-secondary/30 p-3 text-xs">
-                        {plan.specification.command}
-                      </pre>
-                    </div>
 
-                    <div className="space-y-2">
-                      <div className="text-xs font-medium text-foreground">
-                        与最近一次运行的差异
-                      </div>
-                      {latestRun ? (
-                        diffItems.length > 0 ? (
-                          <div className="space-y-2 rounded-2xl border border-border bg-secondary/20 p-3">
-                            {diffItems.map((item) => (
-                              <div key={item.key} className="space-y-1 text-xs">
-                                <div className="font-medium text-foreground">{item.label}</div>
-                                <div className="text-muted-foreground">
-                                  之前：<code>{item.previous}</code>
+                      <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
+                        <div className="text-xs font-medium text-foreground">
+                          与最近一次运行的差异
+                        </div>
+                        {latestRun ? (
+                          diffItems.length > 0 ? (
+                            <div className="space-y-2 rounded-2xl border border-border bg-secondary/20 p-3">
+                              {diffItems.map((item) => (
+                                <div key={item.key} className="space-y-1 text-xs">
+                                  <div className="font-medium text-foreground">{item.label}</div>
+                                  <div className="text-muted-foreground">
+                                    之前：<code>{item.previous}</code>
+                                  </div>
+                                  <div className="text-foreground">
+                                    现在：<code>{item.current}</code>
+                                  </div>
                                 </div>
-                                <div className="text-foreground">
-                                  现在：<code>{item.current}</code>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-2xl border border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
+                              当前计划和最近一次运行没有可见差异。
+                            </div>
+                          )
                         ) : (
                           <div className="rounded-2xl border border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
-                            当前计划和最近一次运行没有可见差异。
+                            这是第一次手动迁移，没有可对比的历史运行。
                           </div>
-                        )
-                      ) : (
-                        <div className="rounded-2xl border border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
-                          这是第一次手动迁移，没有可对比的历史运行。
+                        )}
+                      </div>
+
+                      {plan.specification.tool === 'sql' && (
+                        <div className="space-y-2 rounded-2xl border border-border bg-background p-4">
+                          <div className="text-xs text-muted-foreground">
+                            待执行 SQL 文件（{plan.sqlFiles.length}）
+                          </div>
+                          {plan.sqlFiles.length > 0 ? (
+                            <div className="space-y-1 rounded-2xl border border-border bg-secondary/30 p-3">
+                              {plan.sqlFiles.map((file) => (
+                                <div key={file.name} className="text-xs text-muted-foreground">
+                                  {file.name}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">
+                              在当前迁移路径下没有找到 SQL 文件。
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
 
-                    {plan.specification.tool === 'sql' && (
-                      <div className="space-y-2">
-                        <div className="text-xs text-muted-foreground">
-                          待执行 SQL 文件（{plan.sqlFiles.length}）
+                    <div className="space-y-4">
+                      {(plan.warnings.length > 0 ||
+                        plan.platformSignals.primarySummary ||
+                        plan.platformSignals.nextActionLabel ||
+                        plan.blockingReason ||
+                        plan.filePreviewError) && (
+                        <div className="space-y-3 rounded-[24px] border border-border bg-secondary/30 p-4">
+                          <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            差异与风险提示
+                          </div>
+                          <PlatformSignalSummary
+                            summary={plan.platformSignals.primarySummary}
+                            nextActionLabel={plan.platformSignals.nextActionLabel}
+                            className="border-border bg-background"
+                          />
+                          {plan.warnings.map((warning) => (
+                            <div key={warning} className="text-xs text-muted-foreground">
+                              {warning}
+                            </div>
+                          ))}
+                          {plan.commandSafety.summary && (
+                            <div className="text-xs text-destructive">
+                              {plan.commandSafety.summary}
+                            </div>
+                          )}
+                          {plan.blockingReason && (
+                            <div className="text-xs text-destructive">{plan.blockingReason}</div>
+                          )}
+                          {plan.filePreviewError && !plan.blockingReason && (
+                            <div className="text-xs text-destructive">{plan.filePreviewError}</div>
+                          )}
                         </div>
-                        {plan.sqlFiles.length > 0 ? (
-                          <div className="space-y-1 rounded-2xl border border-border bg-secondary/30 p-3">
-                            {plan.sqlFiles.map((file) => (
-                              <div key={file.name} className="text-xs text-muted-foreground">
-                                {file.name}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-muted-foreground">
-                            在当前迁移路径下没有找到 SQL 文件。
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      )}
 
-                    {(plan.warnings.length > 0 ||
-                      plan.platformSignals.primarySummary ||
-                      plan.platformSignals.nextActionLabel ||
-                      plan.blockingReason ||
-                      plan.filePreviewError) && (
-                      <div className="space-y-2 rounded-2xl border border-border bg-secondary/30 p-3">
-                        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          差异与风险提示
+                      <div className="rounded-[24px] border border-border bg-background p-4">
+                        <div className="text-sm font-semibold text-foreground">执行确认</div>
+                        <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                          输入确认短语后才允许执行，避免误触发。正在运行的迁移会自动刷新最近记录。
                         </div>
-                        <PlatformSignalSummary
-                          summary={plan.platformSignals.primarySummary}
-                          nextActionLabel={plan.platformSignals.nextActionLabel}
-                          className="border-border bg-background"
-                        />
-                        {plan.warnings.map((warning) => (
-                          <div key={warning} className="text-xs text-muted-foreground">
-                            {warning}
-                          </div>
-                        ))}
-                        {plan.commandSafety.summary && (
-                          <div className="text-xs text-destructive">
-                            {plan.commandSafety.summary}
-                          </div>
-                        )}
-                        {plan.blockingReason && (
-                          <div className="text-xs text-destructive">{plan.blockingReason}</div>
-                        )}
-                        {plan.filePreviewError && !plan.blockingReason && (
-                          <div className="text-xs text-destructive">{plan.filePreviewError}</div>
-                        )}
+                        <Separator className="my-4" />
+                        <div className="space-y-2">
+                          <Label htmlFor={`migration-confirm-${databaseId}`}>
+                            输入 <code>{plan.confirmationValue}</code> 以确认执行
+                          </Label>
+                          <Input
+                            id={`migration-confirm-${databaseId}`}
+                            value={confirmationText}
+                            onChange={(event) => setConfirmationText(event.target.value)}
+                            placeholder={plan.confirmationValue}
+                            autoCapitalize="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                          />
+                        </div>
                       </div>
-                    )}
-
-                    <Separator />
-
-                    <div className="space-y-2">
-                      <Label htmlFor={`migration-confirm-${databaseId}`}>
-                        输入 <code>{plan.confirmationValue}</code> 以确认执行
-                      </Label>
-                      <Input
-                        id={`migration-confirm-${databaseId}`}
-                        value={confirmationText}
-                        onChange={(event) => setConfirmationText(event.target.value)}
-                        placeholder={plan.confirmationValue}
-                        autoCapitalize="off"
-                        autoCorrect="off"
-                        spellCheck={false}
-                      />
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
@@ -880,9 +904,21 @@ export function DatabaseMigrationDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-6 py-4">
+        <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+          <div className="text-xs leading-5 text-muted-foreground sm:mr-auto">
+            {plan?.commandSafety.blocksExecution
+              ? '当前计划被平台安全策略拦截，需先修正命令或配置。'
+              : hasActiveRuns
+                ? '检测到迁移仍在执行中，最近运行列表会自动刷新。'
+                : '确认短语完全匹配后，平台才会允许执行迁移。'}
+          </div>
+          <DialogClose asChild>
+            <Button variant="outline" className="w-full rounded-xl sm:w-auto">
+              关闭
+            </Button>
+          </DialogClose>
           <Button
-            className="rounded-xl px-4"
+            className="w-full rounded-xl px-4 sm:w-auto"
             onClick={handleRun}
             disabled={
               disabled || triggering || planning || !plan || !plan.canRun || !confirmationMatches
