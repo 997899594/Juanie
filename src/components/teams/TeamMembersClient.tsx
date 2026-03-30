@@ -254,49 +254,85 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   邀请链接
                 </Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
+              <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+                <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
                   <DialogTitle>生成邀请链接</DialogTitle>
-                  <DialogDescription>生成一个可分享的入组链接。</DialogDescription>
+                  <DialogDescription>
+                    生成一个可分享的入组链接，适合快速邀请临时协作者。
+                  </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm">新成员角色</Label>
-                    <Select value={linkRole} onValueChange={setLinkRole}>
-                      <SelectTrigger className="h-11 rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">管理员</SelectItem>
-                        <SelectItem value="member">成员</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+                    <div className="space-y-4">
+                      <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                        <div className="space-y-2">
+                          <Label className="text-sm">新成员角色</Label>
+                          <Select value={linkRole} onValueChange={setLinkRole}>
+                            <SelectTrigger className="h-11 rounded-xl">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">管理员</SelectItem>
+                              <SelectItem value="member">成员</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-                  {generatedLink && (
-                    <div className="space-y-2">
-                      <Label className="text-sm">邀请链接</Label>
-                      <div className="flex gap-2">
-                        <Input value={generatedLink} readOnly className="h-11 rounded-xl text-xs" />
-                        <Button className="h-11 shrink-0 rounded-xl px-4" onClick={handleCopyLink}>
-                          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                        </Button>
+                        {generatedLink && (
+                          <div className="mt-4 space-y-2">
+                            <Label className="text-sm">邀请链接</Label>
+                            <div className="flex gap-2">
+                              <Input
+                                value={generatedLink}
+                                readOnly
+                                className="h-11 rounded-xl text-xs"
+                              />
+                              <Button
+                                className="h-11 shrink-0 rounded-xl px-4"
+                                onClick={handleCopyLink}
+                              >
+                                {copied ? (
+                                  <Check className="h-4 w-4" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
+
+                    <div className="space-y-4">
+                      <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold text-foreground">使用说明</div>
+                          <div className="text-xs leading-5 text-muted-foreground">
+                            链接生成后可直接分享。角色决定新加入成员的默认权限，你也可以之后再调整。
+                          </div>
+                        </div>
+                        <div className="mt-4 rounded-2xl border border-border bg-background px-4 py-3 text-sm">
+                          <div className="text-xs text-muted-foreground">当前角色</div>
+                          <div className="mt-1 text-foreground">
+                            {linkRole === 'admin' ? '管理员' : '成员'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
                   <Button
                     type="button"
                     variant="outline"
-                    className="rounded-xl"
+                    className="w-full rounded-xl sm:w-auto"
                     onClick={() => setIsLinkDialogOpen(false)}
                   >
                     关闭
                   </Button>
                   <Button
                     type="button"
-                    className="rounded-xl"
+                    className="w-full rounded-xl sm:w-auto"
                     onClick={handleGenerateLink}
                     disabled={generatingLink}
                   >
@@ -313,50 +349,77 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   邀请成员
                 </Button>
               </DialogTrigger>
-              <DialogContent>
-                <form onSubmit={handleInvite}>
-                  <DialogHeader>
+              <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+                <form onSubmit={handleInvite} className="flex min-h-0 flex-1 flex-col">
+                  <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
                     <DialogTitle>邀请成员</DialogTitle>
                     <DialogDescription>输入邮箱地址后发送邀请。</DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-sm">
-                        邮箱
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="colleague@example.com"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        className="h-11 rounded-xl"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm">角色</Label>
-                      <Select value={inviteRole} onValueChange={setInviteRole}>
-                        <SelectTrigger className="h-11 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">管理员</SelectItem>
-                          <SelectItem value="member">成员</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+                      <div className="space-y-4">
+                        <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                          <div className="space-y-2">
+                            <Label htmlFor="email" className="text-sm">
+                              邮箱
+                            </Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              placeholder="colleague@example.com"
+                              value={inviteEmail}
+                              onChange={(e) => setInviteEmail(e.target.value)}
+                              className="h-11 rounded-xl"
+                              required
+                            />
+                          </div>
+                          <div className="mt-4 space-y-2">
+                            <Label className="text-sm">角色</Label>
+                            <Select value={inviteRole} onValueChange={setInviteRole}>
+                              <SelectTrigger className="h-11 rounded-xl">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="admin">管理员</SelectItem>
+                                <SelectItem value="member">成员</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
+                          <div className="space-y-1">
+                            <div className="text-sm font-semibold text-foreground">邀请说明</div>
+                            <div className="text-xs leading-5 text-muted-foreground">
+                              邮件邀请更适合正式成员。角色会决定新成员进入团队后的初始权限范围。
+                            </div>
+                          </div>
+                          <div className="mt-4 rounded-2xl border border-border bg-background px-4 py-3 text-sm">
+                            <div className="text-xs text-muted-foreground">将授予角色</div>
+                            <div className="mt-1 text-foreground">
+                              {inviteRole === 'admin' ? '管理员' : '成员'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
                     <Button
                       type="button"
                       variant="outline"
-                      className="rounded-xl"
+                      className="w-full rounded-xl sm:w-auto"
                       onClick={() => setIsOpen(false)}
                     >
                       取消
                     </Button>
-                    <Button type="submit" className="rounded-xl" disabled={submitting}>
+                    <Button
+                      type="submit"
+                      className="w-full rounded-xl sm:w-auto"
+                      disabled={submitting}
+                    >
                       {submitting ? '邀请中...' : '发送邀请'}
                     </Button>
                   </DialogFooter>
@@ -508,9 +571,17 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
             <AlertDialogTitle>移除成员？</AlertDialogTitle>
             <AlertDialogDescription>该成员会失去当前团队的访问权限。</AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+            移除后不会删除该用户账号，只会撤销他在当前团队中的成员关系。
+          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRemoveMember}>确认移除</AlertDialogAction>
+            <AlertDialogCancel className="w-full rounded-xl sm:w-auto">取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveMember}
+              className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+            >
+              确认移除
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

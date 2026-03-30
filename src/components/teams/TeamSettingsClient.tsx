@@ -132,15 +132,20 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
       </section>
 
       <section className="console-panel border-destructive/20 px-5 py-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 rounded-[24px] border border-destructive/20 bg-destructive/[0.03] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
             <div className="text-sm font-semibold text-destructive">删除团队</div>
-            <div className="mt-1 text-xs text-muted-foreground">会永久删除团队和所有关联项目。</div>
+            <div className="text-xs text-muted-foreground">
+              会永久删除团队和所有关联项目。这个动作无法恢复。
+            </div>
           </div>
           {overview.canDelete ? (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="h-9 shrink-0 rounded-xl px-4">
+                <Button
+                  variant="destructive"
+                  className="h-9 w-full shrink-0 rounded-xl px-4 md:w-auto"
+                >
                   <Trash2 className="h-4 w-4" />
                   删除团队
                 </Button>
@@ -152,12 +157,17 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                     这会永久删除团队及其关联项目和部署，且无法恢复。
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+                <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                  如果你只是想限制访问，优先考虑调整成员和治理策略。删除团队会直接移除该团队下的全部项目视图。
+                </div>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
+                    取消
+                  </AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                   >
                     {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : '删除团队'}
                   </AlertDialogAction>

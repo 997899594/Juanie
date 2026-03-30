@@ -372,14 +372,16 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             </div>
             <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="text-sm font-medium">删除项目</div>
-                    <div className="mt-1 text-sm text-muted-foreground">该操作无法撤销。</div>
+                <div className="flex flex-col gap-4 rounded-[24px] border border-destructive/20 bg-destructive/[0.03] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-foreground">删除项目</div>
+                    <div className="text-sm text-muted-foreground">
+                      这会移除项目记录、环境配置和关联的发布视图。该操作无法撤销。
+                    </div>
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" className="rounded-xl">
+                      <Button variant="destructive" className="w-full rounded-xl md:w-auto">
                         <Trash2 className="h-4 w-4" />
                         删除
                       </Button>
@@ -388,14 +390,21 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                       <AlertDialogHeader>
                         <AlertDialogTitle>删除项目</AlertDialogTitle>
                         <AlertDialogDescription>
-                          确认删除 “{project.name}”？该操作无法撤销。
+                          确认删除{' '}
+                          <span className="font-medium text-foreground">{project.name}</span>
+                          ？该操作无法撤销。
                         </AlertDialogDescription>
                       </AlertDialogHeader>
+                      <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                        删除后，项目主页、环境设置、发布记录入口都会被移除。若你只是想停止发布，应该优先调整环境或治理策略，而不是删项目。
+                      </div>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
+                          取消
+                        </AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleDelete}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                         >
                           删除
                         </AlertDialogAction>

@@ -829,7 +829,7 @@ export function EnvironmentsPageClient({
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-9 shrink-0"
+                              className="h-9 shrink-0 rounded-xl"
                               disabled={
                                 deletingId === environment.id || !environment.actions?.canDelete
                               }
@@ -843,14 +843,22 @@ export function EnvironmentsPageClient({
                             <AlertDialogHeader>
                               <AlertDialogTitle>删除预览环境？</AlertDialogTitle>
                               <AlertDialogDescription>
-                                这会删除 {environment.name} 及其关联资源。若还有活跃 release，
-                                平台会拒绝删除。
+                                <span className="font-medium text-foreground">
+                                  {environment.name}
+                                </span>{' '}
+                                及其关联资源会被一并删除。若仍存在活跃 release，平台会拒绝执行。
                               </AlertDialogDescription>
                             </AlertDialogHeader>
+                            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                              预览环境适合短期验证，删除后不会影响正式环境，但会回收该预览环境的域名、变量和运行资源。
+                            </div>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>取消</AlertDialogCancel>
+                              <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
+                                取消
+                              </AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => handleDeletePreview(environment.id)}
+                                className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                                 disabled={
                                   deletingId === environment.id || !environment.actions?.canDelete
                                 }
