@@ -28,6 +28,7 @@ import { projects, teamMembers } from '@/lib/db/schema';
 import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { getReleaseDetailPageData } from '@/lib/releases/service';
+import { formatPlatformDateTime } from '@/lib/time/format';
 
 export default async function ReleaseDetailPage({
   params,
@@ -159,7 +160,7 @@ export default async function ReleaseDetailPage({
               创建时间
             </div>
             <div className="mt-2 text-sm font-medium">
-              {new Date(release.createdAt).toLocaleString()}
+              {formatPlatformDateTime(release.createdAt) ?? '—'}
             </div>
           </div>
           <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
@@ -188,8 +189,25 @@ export default async function ReleaseDetailPage({
 
       <section className="grid gap-4 xl:grid-cols-[0.78fr_1fr_0.8fr]">
         <div className="console-panel p-5">
-          <div className="mb-4 text-sm font-semibold">发布总结</div>
+          <div className="mb-4 text-sm font-semibold">阻塞原因与总结</div>
           <div className="space-y-4">
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                阻塞原因
+              </div>
+              <div className="mt-2 text-sm font-medium text-foreground">
+                {release.blockingReason?.label ?? '当前没有明显阻塞'}
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                {release.blockingReason?.summary ??
+                  '发布链路没有发现明显的迁移、调度、镜像或运行时异常。'}
+              </div>
+              {release.blockingReason?.nextActionLabel && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  下一步：{release.blockingReason.nextActionLabel}
+                </div>
+              )}
+            </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 这次发了什么
@@ -208,6 +226,16 @@ export default async function ReleaseDetailPage({
               </div>
               <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.result}</div>
             </div>
+            {release.narrativeSummary.governance && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  平台处理
+                </div>
+                <div className="mt-2 text-sm text-foreground">
+                  {release.narrativeSummary.governance}
+                </div>
+              </div>
+            )}
             {release.narrativeSummary.nextAction && (
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -226,7 +254,7 @@ export default async function ReleaseDetailPage({
             <div>
               <div className="text-sm font-semibold">发布时间线</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                把这次 release 的迁移、部署、放量和环境可达性串成一条线。
+                把 release、迁移、部署、放量和基础设施异常串成一条线。
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -297,6 +325,42 @@ export default async function ReleaseDetailPage({
         <div className="console-panel p-5">
           <div className="mb-4 text-sm font-semibold">观察与入口</div>
           <div className="space-y-4">
+            {release.infrastructureDiagnostics && (
+              <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  容量与治理
+                </div>
+                <div className="mt-2 text-sm font-medium text-foreground">
+                  剩余 {release.infrastructureDiagnostics.capacity.availableMemoryLabel}
+                  {release.infrastructureDiagnostics.capacity.saturationLabel
+                    ? ` · 使用率 ${release.infrastructureDiagnostics.capacity.saturationLabel}`
+                    : ''}
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  <div>
+                    集群已请求 {release.infrastructureDiagnostics.capacity.requestedMemoryLabel} /
+                    可分配 {release.infrastructureDiagnostics.capacity.allocatableMemoryLabel}
+                  </div>
+                  <div>
+                    平台占用{' '}
+                    {release.infrastructureDiagnostics.capacity.platformRequestedMemoryLabel}
+                    ，当前环境占用{' '}
+                    {release.infrastructureDiagnostics.capacity.environmentRequestedMemoryLabel}
+                  </div>
+                  <div>
+                    这次放量预估增量{' '}
+                    {release.infrastructureDiagnostics.capacity.estimatedRolloutDeltaMemoryLabel}
+                  </div>
+                  <div>
+                    {
+                      release.infrastructureDiagnostics.abnormalResources.clusterTerminatingPods
+                        .label
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 主要入口

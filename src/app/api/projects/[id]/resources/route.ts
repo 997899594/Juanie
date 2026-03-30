@@ -2,7 +2,8 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { environments, projects, teamMembers } from '@/lib/db/schema';
+import { environments, projects, services, teamMembers } from '@/lib/db/schema';
+import { getInfrastructureDiagnostics } from '@/lib/infrastructure/diagnostics';
 import { getDeployments, getEvents, getK8sClient, getPods, getServices } from '@/lib/k8s';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -54,6 +55,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     let data: unknown;
 
     switch (resourceType) {
+      case 'diagnostics': {
+        const workloadList = await db.query.services.findMany({
+          where: eq(services.projectId, id),
+          columns: {
+            id: true,
+            name: true,
+            type: true,
+            replicas: true,
+            cpuRequest: true,
+            memoryRequest: true,
+          },
+        });
+
+        data = await getInfrastructureDiagnostics({
+          namespace: environment.namespace,
+          deploymentStrategy: environment.deploymentStrategy,
+          workloads: workloadList,
+        });
+        break;
+      }
       case 'pods':
         data = await getPods(environment.namespace);
         break;

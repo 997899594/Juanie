@@ -13,6 +13,7 @@ import {
   getEnvironmentSourceLabel,
   getPreviewDatabasePresentation,
 } from '@/lib/environments/presentation';
+import { isPreviewEnvironmentExpired } from '@/lib/environments/preview';
 import { type EnvironmentPolicySnapshot, evaluateEnvironmentPolicy } from '@/lib/policies/delivery';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
@@ -54,6 +55,7 @@ interface EnvironmentViewLike {
       isPreview?: boolean | null;
     } | null;
   } | null;
+  activeReleaseCount?: number;
 }
 
 export interface EnvironmentListDecorations {
@@ -73,6 +75,11 @@ export interface EnvironmentListDecorations {
     title: string;
     shortCommitSha: string | null;
     createdAtLabel: string | null;
+  } | null;
+  cleanupState: {
+    state: 'active' | 'expired_ready' | 'expired_blocked';
+    label: string;
+    summary: string;
   } | null;
 }
 
@@ -115,6 +122,33 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
           latestRelease: latestReleaseCard,
         })
       : null;
+    const cleanupState = (() => {
+      if (!environment.isPreview) {
+        return null;
+      }
+
+      if (!isPreviewEnvironmentExpired(environment)) {
+        return {
+          state: 'active' as const,
+          label: '按 TTL 存续',
+          summary: '当前预览环境还在有效期内，会按到期时间进入自动治理。',
+        };
+      }
+
+      if ((environment.activeReleaseCount ?? 0) > 0) {
+        return {
+          state: 'expired_blocked' as const,
+          label: '过期但被发布阻塞',
+          summary: `环境已经过期，但仍有 ${environment.activeReleaseCount} 个活跃 release，平台暂时不会自动删除。`,
+        };
+      }
+
+      return {
+        state: 'expired_ready' as const,
+        label: '过期待回收',
+        summary: '环境已经过期，没有活跃发布，平台会自动清理，也可以手动立即回收。',
+      };
+    })();
 
     return {
       ...environment,
@@ -156,6 +190,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
       primaryDomainUrl,
       previewLifecycle,
       latestReleaseCard,
+      cleanupState,
     };
   });
 }

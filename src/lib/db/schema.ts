@@ -13,6 +13,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { ReleaseRecapRecord } from '@/lib/releases/recap';
 
 // ============================================
 // Enums
@@ -823,6 +824,7 @@ export const releases = pgTable(
       onDelete: 'set null',
     }),
     summary: text('summary'),
+    recap: jsonb('recap').$type<ReleaseRecapRecord | null>(),
     errorMessage: text('errorMessage'),
 
     createdAt: timestamp('createdAt').defaultNow().notNull(),

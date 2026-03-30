@@ -1,7 +1,21 @@
 # 生产环境覆盖配置
 replicaCount:
-  web: 2
+  web: 1
   worker: 1
+
+deployment:
+  progressDeadlineSeconds: 1200
+  revisionHistoryLimit: 3
+  web:
+    strategy:
+      type: RollingUpdate
+      maxSurge: 0
+      maxUnavailable: 1
+  worker:
+    strategy:
+      type: RollingUpdate
+      maxSurge: 0
+      maxUnavailable: 1
 
 resources:
   web:

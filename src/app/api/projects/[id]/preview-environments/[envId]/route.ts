@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
+import { createAuditLog } from '@/lib/audit';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { environments, projects, teamMembers } from '@/lib/db/schema';
@@ -55,6 +56,20 @@ export async function DELETE(
 
     return NextResponse.json({ error: '删除预览环境失败' }, { status: 400 });
   }
+
+  await createAuditLog({
+    teamId: project.teamId,
+    userId: session.user.id,
+    action: 'environment.preview_deleted',
+    resourceType: 'environment',
+    resourceId: envId,
+    metadata: {
+      projectId: id,
+      environmentId: envId,
+      environmentName: environment.name,
+      mode: 'manual',
+    },
+  });
 
   return NextResponse.json({ success: true });
 }

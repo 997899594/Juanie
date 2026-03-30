@@ -1,3 +1,5 @@
+import { formatPlatformDateTimeShort } from '@/lib/time/format';
+
 export interface PresentableEnvironment {
   id?: string;
   isPreview?: boolean | null;
@@ -167,21 +169,7 @@ export function formatEnvironmentExpiry(
 }
 
 export function formatEnvironmentTimestamp(value?: Date | string | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date.toLocaleString('zh-CN', {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatPlatformDateTimeShort(value);
 }
 
 export function getEnvironmentDeploymentStrategyLabel(

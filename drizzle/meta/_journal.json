@@ -8,6 +8,13 @@
       "when": 1774776930244,
       "tag": "0000_release_trigger_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774865447063,
+      "tag": "0001_aberrant_black_crow",
+      "breakpoints": true
     }
   ]
 }

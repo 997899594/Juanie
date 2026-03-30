@@ -26,6 +26,7 @@ import {
 } from '@/lib/releases/intelligence';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
+import { formatPlatformDate } from '@/lib/time/format';
 
 export interface ProjectDatabaseLike {
   id: string;
@@ -472,7 +473,7 @@ export function buildProjectOverviewDetails(
     productionBranch: project.productionBranch ?? null,
     description: project.description ?? null,
     statusLabel: formatProjectStatusLabel(project.status),
-    createdDateLabel: project.createdAt ? new Date(project.createdAt).toLocaleDateString() : '—',
+    createdDateLabel: formatPlatformDate(project.createdAt) ?? '—',
   };
 }
 

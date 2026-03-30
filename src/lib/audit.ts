@@ -9,6 +9,9 @@ export type AuditAction =
   | 'deployment.triggered'
   | 'deployment.rolled_back'
   | 'environment.created'
+  | 'environment.preview_deleted'
+  | 'environment.preview_cleanup_completed'
+  | 'environment.remediation_triggered'
   | 'team.member_added'
   | 'team.member_removed'
   | 'team.member_role_changed'
@@ -83,6 +86,9 @@ export function formatAuditAction(action: AuditAction): string {
     'deployment.triggered': 'triggered deployment',
     'deployment.rolled_back': 'rolled back deployment',
     'environment.created': 'created environment',
+    'environment.preview_deleted': 'deleted preview environment',
+    'environment.preview_cleanup_completed': 'completed preview cleanup',
+    'environment.remediation_triggered': 'triggered environment remediation',
     'team.member_added': 'added team member',
     'team.member_removed': 'removed team member',
     'team.member_role_changed': 'changed member role',

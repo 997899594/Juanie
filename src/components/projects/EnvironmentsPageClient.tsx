@@ -49,6 +49,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  cleanupPreviewEnvironments,
   createPreviewEnvironment,
   deletePreviewEnvironment,
   fetchProjectEnvironments,
@@ -117,6 +118,11 @@ interface EnvironmentRecord {
     title: string;
     shortCommitSha: string | null;
     createdAtLabel: string | null;
+  } | null;
+  cleanupState: {
+    state: 'active' | 'expired_ready' | 'expired_blocked';
+    label: string;
+    summary: string;
   } | null;
   actions: {
     canConfigureStrategy: boolean;
@@ -340,6 +346,19 @@ interface EnvironmentsPageClientProps {
         allowed: boolean;
         summary: string;
       };
+      cleanupPreviews: {
+        allowed: boolean;
+        summary: string;
+        eligibleCount: number;
+        blockedCount: number;
+        expiredCount: number;
+      };
+      recentEvents: Array<{
+        key: string;
+        label: string;
+        summary: string;
+        createdAtLabel: string | null;
+      }>;
     };
     environments: EnvironmentRecord[];
   };
@@ -369,6 +388,7 @@ export function EnvironmentsPageClient({
   const [dialogLoading, setDialogLoading] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [cleaningExpired, setCleaningExpired] = useState(false);
   const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -501,6 +521,33 @@ export function EnvironmentsPageClient({
     }
   };
 
+  const handleCleanupExpiredPreviews = async () => {
+    if (cleaningExpired) return;
+    setCleaningExpired(true);
+
+    try {
+      const result = await cleanupPreviewEnvironments(projectId);
+      const parts = [];
+
+      if (result.deletedIds.length > 0) {
+        parts.push(`已回收 ${result.deletedIds.length} 个过期预览环境`);
+      }
+
+      if (result.skipped.length > 0) {
+        parts.push(`${result.skipped.length} 个仍被活跃发布阻塞`);
+      }
+
+      setFeedback(parts.join(' · ') || '当前没有可回收的过期预览环境');
+      await fetchEnvironments();
+      setTimeout(() => setFeedback(null), 5000);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '执行预览环境治理失败');
+      setTimeout(() => setFeedback(null), 5000);
+    } finally {
+      setCleaningExpired(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
@@ -568,6 +615,55 @@ export function EnvironmentsPageClient({
             .join(' · ')}
         </div>
       </div>
+
+      <div className="rounded-2xl border border-border bg-background px-4 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              预览环境治理
+            </div>
+            <div className="mt-2 text-sm text-foreground">{governance.cleanupPreviews.summary}</div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              可回收 {governance.cleanupPreviews.eligibleCount} · 被阻塞{' '}
+              {governance.cleanupPreviews.blockedCount} · 过期总数{' '}
+              {governance.cleanupPreviews.expiredCount}
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
+            onClick={handleCleanupExpiredPreviews}
+            disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
+          >
+            {cleaningExpired ? '治理中...' : '立即治理'}
+          </Button>
+        </div>
+      </div>
+
+      {governance.recentEvents.length > 0 && (
+        <div className="rounded-2xl border border-border bg-background px-4 py-4">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            最近治理事件
+          </div>
+          <div className="mt-3 grid gap-3 xl:grid-cols-2">
+            {governance.recentEvents.map((event) => (
+              <div
+                key={event.key}
+                className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-sm font-medium">{event.label}</div>
+                  {event.createdAtLabel && (
+                    <div className="text-xs text-muted-foreground">{event.createdAtLabel}</div>
+                  )}
+                </div>
+                <div className="mt-1 text-sm text-muted-foreground">{event.summary}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {environments.length === 0 ? (
         <EmptyState
@@ -667,7 +763,7 @@ export function EnvironmentsPageClient({
                               className="rounded-xl"
                               onClick={() => toggleDiagnostics(environment.id)}
                             >
-                              {diagnosticEnvId === environment.id ? '收起资源诊断' : '资源诊断'}
+                              {diagnosticEnvId === environment.id ? '收起容量与异常' : '容量与异常'}
                             </Button>
                           </div>
                           <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
@@ -724,6 +820,8 @@ export function EnvironmentsPageClient({
                                 projectId={projectId}
                                 environmentId={environment.id}
                                 environmentName={environment.name}
+                                canManage={environment.actions.canConfigureStrategy}
+                                manageSummary={environment.actions.configureStrategySummary}
                               />
                             </div>
                           )}
@@ -818,6 +916,12 @@ export function EnvironmentsPageClient({
                                 {environment.platformSignals.primarySummary}
                               </div>
                             )}
+                            {environment.cleanupState && (
+                              <div className="text-xs text-muted-foreground">
+                                {environment.cleanupState.label} ·{' '}
+                                {environment.cleanupState.summary}
+                              </div>
+                            )}
                           </div>
 
                           {isExpanded ? (
@@ -839,7 +943,9 @@ export function EnvironmentsPageClient({
                               title={environment.actions?.deleteSummary}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
-                              删除
+                              {environment.cleanupState?.state === 'expired_ready'
+                                ? '回收'
+                                : '删除'}
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
@@ -853,7 +959,9 @@ export function EnvironmentsPageClient({
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-                              预览环境适合短期验证，删除后不会影响正式环境，但会回收该预览环境的域名、变量和运行资源。
+                              {environment.cleanupState?.state === 'expired_ready'
+                                ? '这个预览环境已经过期，当前可以直接回收。删除后会释放域名、变量、数据库和运行资源。'
+                                : '预览环境适合短期验证，删除后不会影响正式环境，但会回收该预览环境的域名、变量和运行资源。'}
                             </div>
                             <AlertDialogFooter>
                               <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
@@ -904,7 +1012,7 @@ export function EnvironmentsPageClient({
                               className="rounded-xl"
                               onClick={() => toggleDiagnostics(environment.id)}
                             >
-                              {diagnosticEnvId === environment.id ? '收起资源诊断' : '资源诊断'}
+                              {diagnosticEnvId === environment.id ? '收起容量与异常' : '容量与异常'}
                             </Button>
                           </div>
                           <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
@@ -964,6 +1072,8 @@ export function EnvironmentsPageClient({
                                 projectId={projectId}
                                 environmentId={environment.id}
                                 environmentName={environment.name}
+                                canManage={environment.actions.canConfigureStrategy}
+                                manageSummary={environment.actions.configureStrategySummary}
                               />
                             </div>
                           )}

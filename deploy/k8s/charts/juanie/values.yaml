@@ -11,6 +11,20 @@ replicaCount:
   web: 1
   worker: 1
 
+deployment:
+  progressDeadlineSeconds: 900
+  revisionHistoryLimit: 5
+  web:
+    strategy:
+      type: RollingUpdate
+      maxSurge: 0
+      maxUnavailable: 1
+  worker:
+    strategy:
+      type: RollingUpdate
+      maxSurge: 0
+      maxUnavailable: 1
+
 # 资源配置
 resources:
   web:

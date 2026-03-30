@@ -67,7 +67,7 @@ export async function deletePreviewEnvironmentById(environmentId: string): Promi
   return { deleted: true };
 }
 
-export async function cleanupExpiredPreviewEnvironments(): Promise<{
+export async function cleanupExpiredPreviewEnvironments(input?: { projectId?: string }): Promise<{
   deletedIds: string[];
   skipped: Array<{ id: string; reason: string }>;
 }> {
@@ -75,7 +75,8 @@ export async function cleanupExpiredPreviewEnvironments(): Promise<{
     where: and(
       eq(environments.isPreview, true),
       isNotNull(environments.expiresAt),
-      lt(environments.expiresAt, new Date())
+      lt(environments.expiresAt, new Date()),
+      input?.projectId ? eq(environments.projectId, input.projectId) : undefined
     ),
     with: {
       releases: {

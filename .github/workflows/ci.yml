@@ -66,9 +66,19 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 20m
           script: |
             set -e
             IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+            dump_rollout_debug() {
+              local deployment_name="$1"
+              echo "⚠️ Rollout 失败，输出 ${deployment_name} 诊断信息..."
+              kubectl describe deployment "${deployment_name}" -n juanie || true
+              kubectl get rs -n juanie -l app.kubernetes.io/name=juanie -o wide || true
+              kubectl get pods -n juanie -o wide || true
+              kubectl get events -n juanie --sort-by=.metadata.creationTimestamp | tail -n 80 || true
+            }
 
             echo "🚀 部署 Juanie..."
             echo "   镜像: $IMAGE"
@@ -81,8 +91,14 @@ jobs:
             kubectl set env deployment/juanie-worker -n juanie NODE_TLS_REJECT_UNAUTHORIZED=0
 
             # 2. 等待滚动更新（新 pod 就绪）
-            kubectl rollout status deployment/juanie-web -n juanie --timeout=600s
-            kubectl rollout status deployment/juanie-worker -n juanie --timeout=600s
+            if ! kubectl rollout status deployment/juanie-web -n juanie --timeout=900s; then
+              dump_rollout_debug juanie-web
+              exit 1
+            fi
+            if ! kubectl rollout status deployment/juanie-worker -n juanie --timeout=900s; then
+              dump_rollout_debug juanie-worker
+              exit 1
+            fi
 
             # 3. 在新 pod 上同步数据库 Schema
             echo "🔄 同步数据库 Schema..."

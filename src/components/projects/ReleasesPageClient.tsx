@@ -36,9 +36,10 @@ import { PageHeader } from '@/components/ui/page-header';
 import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
-import { useReleases } from '@/hooks/useReleases';
+import { buildReleaseEventStateKey, useReleases } from '@/hooks/useReleases';
 import { createProductionRelease } from '@/lib/releases/client-actions';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
+import { formatPlatformDateTime } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
 
 interface Environment {
@@ -130,6 +131,25 @@ interface ReleaseRecord {
   sourceRef: string;
   sourceCommitSha: string | null;
   summary: string | null;
+  recap: {
+    version: 1;
+    generatedAt: string;
+    statusLabel: string;
+    headline: string;
+    primarySummary: string;
+    narrative: {
+      changed: string;
+      risk: string;
+      result: string;
+      governance: string | null;
+      nextAction: string | null;
+    };
+    blockingReason: {
+      label: string;
+      summary: string;
+      nextActionLabel: string | null;
+    } | null;
+  } | null;
   errorMessage: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -357,9 +377,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const [promoteResult, setPromoteResult] = useState<string | null>(null);
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
   const [expandedReleases, setExpandedReleases] = useState<Set<string>>(new Set());
+  const initialLatestReleaseState = buildReleaseEventStateKey(initialData.releases[0] ?? null);
 
   const { isConnected, error } = useReleases({
     projectId,
+    initialStateKey: initialLatestReleaseState,
     onRelease: () => router.refresh(),
   });
 
@@ -555,7 +577,8 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                   <>
                     <div className="text-sm font-medium">{latestRelease.displayTitle}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {latestRelease.platformSignals.primarySummary ??
+                      {latestRelease.recap?.primarySummary ??
+                        latestRelease.platformSignals.primarySummary ??
                         latestRelease.summary ??
                         '打开发布查看详情'}
                     </div>
@@ -873,9 +896,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                           {release.previewSourceMeta.title && (
                             <PreviewSourceSummary meta={release.previewSourceMeta} />
                           )}
-                          {release.platformSignals.primarySummary && (
+                          {(release.recap?.primarySummary ||
+                            release.platformSignals.primarySummary) && (
                             <div className="text-xs text-muted-foreground">
-                              {release.platformSignals.primarySummary}
+                              {release.recap?.primarySummary ??
+                                release.platformSignals.primarySummary}
                             </div>
                           )}
                           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
@@ -931,7 +956,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                       <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center xl:items-end">
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="h-3.5 w-3.5" />
-                          <span>{new Date(release.createdAt).toLocaleString()}</span>
+                          <span>{formatPlatformDateTime(release.createdAt) ?? '—'}</span>
                         </div>
                         <div className="flex w-full items-center gap-2 sm:w-auto">
                           <Button

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import type { MigrationRunStatus, ReleaseStatus } from '@/lib/db/schema';
 import { deployments, migrationRuns, releases } from '@/lib/db/schema';
 import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
+import { persistReleaseRecapById } from '@/lib/releases/recap-service';
 import { addDeploymentJob, addMigrationJob, type ReleaseJobData } from './index';
 
 async function loadRelease(releaseId: string) {
@@ -191,6 +192,9 @@ export async function processRelease(job: Job<ReleaseJobData>) {
     await updateReleaseStatus(release.id, 'migration_post_running');
     await runMigrationPhase(release, 'postDeploy');
     await updateReleaseStatus(release.id, 'succeeded');
+    await persistReleaseRecapById(release.id).catch((recapError) => {
+      console.error(`[Release] Failed to persist recap for ${release.id}:`, recapError);
+    });
 
     return { success: true };
   } catch (error) {
@@ -207,6 +211,10 @@ export async function processRelease(job: Job<ReleaseJobData>) {
     } else {
       await updateReleaseStatus(release.id, 'failed', message);
     }
+
+    await persistReleaseRecapById(release.id).catch((recapError) => {
+      console.error(`[Release] Failed to persist recap for ${release.id}:`, recapError);
+    });
 
     throw error;
   }

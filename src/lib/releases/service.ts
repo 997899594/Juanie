@@ -9,6 +9,7 @@ import {
 } from '@/lib/releases/governance-view';
 import { buildPromotionPlan } from '@/lib/releases/planning';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import { getReleaseOperationalContext } from '@/lib/releases/runtime-context';
 import {
   buildReleaseListStats,
   decorateReleaseDetail,
@@ -248,11 +249,26 @@ export async function getReleaseDetailPageData(input: { projectId: string; relea
     return null;
   }
 
-  const previousRelease = await getPreviousReleaseByScope({
-    projectId: input.projectId,
-    environmentId: release.environmentId,
-    createdAt: release.createdAt,
-  });
+  const [previousRelease, runtimeContext] = await Promise.all([
+    getPreviousReleaseByScope({
+      projectId: input.projectId,
+      environmentId: release.environmentId,
+      createdAt: release.createdAt,
+    }),
+    getReleaseOperationalContext({
+      projectId: release.projectId,
+      teamId: release.project.teamId,
+      environmentId: release.environmentId,
+      environmentName: release.environment.name,
+      environmentIsPreview: release.environment.isPreview,
+      namespace: release.environment.namespace,
+      deploymentStrategy: release.environment.deploymentStrategy,
+      releaseWindow: {
+        startedAt: release.createdAt,
+        finishedAt: release.updatedAt,
+      },
+    }),
+  ]);
 
   const previewReviewMetadataById = await buildPreviewReviewMetadataByItemId({
     projects: [
@@ -292,6 +308,8 @@ export async function getReleaseDetailPageData(input: { projectId: string; relea
     release: {
       ...release,
       previewReviewMetadata: previewReviewMetadataById.get(release.id) ?? null,
+      infrastructureDiagnostics: runtimeContext.infrastructureDiagnostics,
+      governanceEvents: runtimeContext.governanceEvents,
     },
     previousRelease: previousRelease ?? null,
   });

@@ -17,6 +17,7 @@ import {
   buildPreviewSourceMetadata,
   type PreviewSourceMetadata,
 } from '@/lib/environments/source-metadata';
+import type { InfrastructureDiagnosticsSnapshot } from '@/lib/infrastructure/diagnostics';
 import {
   evaluateEnvironmentPolicy,
   evaluateReleasePolicy,
@@ -29,7 +30,15 @@ import {
   type ReleaseIntelligenceSnapshot,
 } from '@/lib/releases/intelligence';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import {
+  buildReleaseRecap,
+  type ReleaseBlockingReason,
+  type ReleaseGovernanceEvent,
+  type ReleaseRecapRecord,
+  type ReleaseSummarySnapshot,
+} from '@/lib/releases/recap';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
+import { formatPlatformDateTime } from '@/lib/time/format';
 
 interface ReleaseViewLike {
   id: string;
@@ -103,6 +112,7 @@ interface ReleaseViewLike {
   }>;
   status: string;
   errorMessage?: string | null;
+  recap?: ReleaseRecapRecord | null;
   deployments: Array<{
     id?: string;
     createdAt?: Date | string;
@@ -111,6 +121,8 @@ interface ReleaseViewLike {
     imageUrl?: string | null;
     status: string;
   }>;
+  infrastructureDiagnostics?: InfrastructureDiagnosticsSnapshot | null;
+  governanceEvents?: ReleaseGovernanceEvent[] | null;
 }
 
 interface ReleaseDiffComparableLike {
@@ -243,13 +255,6 @@ export interface ReleaseDetailMetadataItem {
   mono?: boolean;
 }
 
-export interface ReleaseSummarySnapshot {
-  changed: string;
-  risk: string;
-  result: string;
-  nextAction: string | null;
-}
-
 export interface ReleaseTimelineItem {
   key: string;
   at: string | null;
@@ -280,7 +285,10 @@ export interface ReleaseDetailDecorations {
   stats: ReleaseDetailStat[];
   signalChips: ReleaseDetailChip[];
   narrativeSummary: ReleaseSummarySnapshot;
+  blockingReason: ReleaseBlockingReason | null;
   timeline: ReleaseTimelineItem[];
+  infrastructureDiagnostics: InfrastructureDiagnosticsSnapshot | null;
+  governanceEvents: ReleaseGovernanceEvent[];
   metadataItems: ReleaseDetailMetadataItem[];
   deploymentItems: Array<{
     id: string;
@@ -348,16 +356,7 @@ const migrationStatusConfig: Record<
 };
 
 function formatReleaseMetadataValue(value?: Date | string | null): string {
-  if (!value) {
-    return '—';
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '—';
-  }
-
-  return date.toLocaleString();
+  return formatPlatformDateTime(value) ?? '—';
 }
 
 function formatTimelineTimestamp(value?: Date | string | null): string | null {
@@ -384,6 +383,7 @@ function buildReleaseSignalChips(input: {
   diff: ReleaseDiffSnapshot;
   failedMigrationRunsCount?: number;
   approvalRunsCount?: number;
+  infrastructureDiagnostics?: InfrastructureDiagnosticsSnapshot | null;
 }): ReleaseDetailChip[] {
   const chips: ReleaseDetailChip[] = [...input.platformSignals.chips];
 
@@ -459,6 +459,14 @@ function buildReleaseSignalChips(input: {
     });
   }
 
+  if (input.infrastructureDiagnostics?.abnormalResources.clusterLongPendingPods.count) {
+    chips.push({
+      key: 'cluster-long-pending',
+      label: input.infrastructureDiagnostics.abnormalResources.clusterLongPendingPods.label,
+      tone: 'neutral',
+    });
+  }
+
   return chips;
 }
 
@@ -515,52 +523,13 @@ function getTimelineTone(
   return 'neutral';
 }
 
-function buildReleaseSummary(input: {
-  release: ReleaseViewLike;
-  intelligence: ReleaseIntelligenceSnapshot;
-  platformSignals: PlatformSignalSnapshot;
-  riskLabel: string;
-  approvalRunsCount: number;
-  retryableRunsCount: number;
-  environmentStrategy: string | null;
-  previewLifecycle: PreviewLifecycleSummary | null;
-}): ReleaseSummarySnapshot {
-  const artifactSummary =
-    input.release.artifacts.length === 0
-      ? '这次发布没有镜像变更'
-      : `这次发布更新了 ${input.release.artifacts.length} 个服务镜像`;
-  const migrationSummary =
-    input.release.migrationRuns.length > 0
-      ? `，包含 ${input.release.migrationRuns.length} 个迁移步骤`
-      : '';
-
-  const risk =
-    input.platformSignals.primarySummary ??
-    input.intelligence.issue?.summary ??
-    `${input.riskLabel}${input.environmentStrategy ? ` · ${input.environmentStrategy}` : ''}`;
-
-  const resultParts = [releaseStatusConfig[input.release.status]?.label ?? input.release.status];
-  if (input.approvalRunsCount > 0) resultParts.push(`${input.approvalRunsCount} 个待审批`);
-  if (input.retryableRunsCount > 0) resultParts.push(`${input.retryableRunsCount} 个可重试`);
-  if (input.previewLifecycle?.stateLabel) resultParts.push(input.previewLifecycle.stateLabel);
-
-  return {
-    changed: `${artifactSummary}${migrationSummary}`,
-    risk,
-    result: resultParts.join(' · '),
-    nextAction:
-      input.platformSignals.nextActionLabel ??
-      input.intelligence.issue?.nextActionLabel ??
-      input.intelligence.actionLabel ??
-      null,
-  };
-}
-
 function buildReleaseTimeline(input: {
   release: ReleaseViewLike;
   statusDecoration: ReleaseStatusDecoration;
   primaryDomainUrl: string | null;
   environmentStrategy: string | null;
+  infrastructureDiagnostics?: InfrastructureDiagnosticsSnapshot | null;
+  governanceEvents?: ReleaseGovernanceEvent[] | null;
 }): ReleaseTimelineItem[] {
   const { release } = input;
   const releaseHref = release.projectId
@@ -612,7 +581,7 @@ function buildReleaseTimeline(input: {
   ) {
     items.push({
       key: 'rollout-ready',
-      at: formatTimelineTimestamp(release.updatedAt),
+      at: null,
       title: '渐进式发布待推进',
       description: input.environmentStrategy
         ? `${input.environmentStrategy} 已启用，可继续完成放量或切换`
@@ -630,7 +599,7 @@ function buildReleaseTimeline(input: {
   ) {
     items.push({
       key: 'preview-ready',
-      at: formatTimelineTimestamp(release.updatedAt),
+      at: null,
       title: '预览环境可访问',
       description: input.primaryDomainUrl.replace('https://', ''),
       tone: 'success',
@@ -648,6 +617,30 @@ function buildReleaseTimeline(input: {
       tone: getTimelineTone(release.status, 'release'),
       href: releaseHref,
       sortValue: release.updatedAt ? new Date(release.updatedAt).getTime() : 0,
+    });
+  }
+
+  for (const incident of input.infrastructureDiagnostics?.incidents ?? []) {
+    items.push({
+      key: incident.key,
+      at: formatTimelineTimestamp(incident.at),
+      title: incident.title,
+      description: incident.description,
+      tone: incident.tone,
+      href: releaseHref,
+      sortValue: incident.timestamp ? new Date(incident.timestamp).getTime() : 0,
+    });
+  }
+
+  for (const event of input.governanceEvents ?? []) {
+    items.push({
+      key: event.key,
+      at: formatTimelineTimestamp(event.at),
+      title: event.title,
+      description: event.description,
+      tone: event.tone,
+      href: releaseHref,
+      sortValue: event.at ? new Date(event.at).getTime() : 0,
     });
   }
 
@@ -743,9 +736,11 @@ export function decorateReleaseList<T extends ReleaseViewLike>(
       releasePolicySignal: policy.primarySignal,
       previewLifecycle,
     });
+    const recap = release.recap ?? buildReleaseRecap(release);
 
     return {
       ...release,
+      recap,
       displayTitle: getReleaseDisplayTitle(release),
       previewSourceMeta,
       previewLifecycle,
@@ -834,6 +829,15 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
         },
       })
     : null;
+  const effectiveIssue = release.infrastructureDiagnostics?.primaryIssue
+    ? {
+        code: release.infrastructureDiagnostics.primaryIssue.code,
+        kind: 'release' as const,
+        label: release.infrastructureDiagnostics.primaryIssue.label,
+        summary: release.infrastructureDiagnostics.primaryIssue.summary,
+        nextActionLabel: release.infrastructureDiagnostics.primaryIssue.nextActionLabel,
+      }
+    : intelligence.issue;
   const platformSignals = buildPlatformSignalSnapshot({
     customSignals: [
       ...(environmentInheritance
@@ -854,19 +858,28 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
             },
           ]
         : []),
+      ...(release.infrastructureDiagnostics?.signalChips ?? []),
     ],
-    customSummary: previewDatabase?.summary ?? null,
-    customNextActionLabel: previewDatabase?.nextActionLabel ?? null,
-    issue: intelligence.issue,
+    customSummary: release.infrastructureDiagnostics?.summary ?? previewDatabase?.summary ?? null,
+    customNextActionLabel:
+      release.infrastructureDiagnostics?.nextActionLabel ??
+      previewDatabase?.nextActionLabel ??
+      null,
+    issue: effectiveIssue,
     environmentPolicySignals: environmentPolicy.signals,
     environmentPolicySignal: environmentPolicy.primarySignal,
     releasePolicySignals: policy.signals,
     releasePolicySignal: policy.primarySignal,
     previewLifecycle,
   });
+  const recap =
+    release.infrastructureDiagnostics || (release.governanceEvents?.length ?? 0) > 0
+      ? buildReleaseRecap(release)
+      : (release.recap ?? buildReleaseRecap(release));
 
   return {
     ...release,
+    recap,
     previewSourceMeta,
     previewLifecycle,
     platformSignals,
@@ -889,21 +902,15 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
       { label: '部署', value: release.deployments.length },
       { label: '迁移', value: release.migrationRuns.length },
     ],
-    narrativeSummary: buildReleaseSummary({
-      release,
-      intelligence,
-      platformSignals,
-      riskLabel,
-      approvalRunsCount,
-      retryableRunsCount,
-      environmentStrategy,
-      previewLifecycle,
-    }),
+    narrativeSummary: recap.narrative,
+    blockingReason: recap.blockingReason,
     timeline: buildReleaseTimeline({
       release,
       statusDecoration: releaseStatusConfig[release.status] ?? releaseStatusConfig.queued,
       primaryDomainUrl,
       environmentStrategy,
+      infrastructureDiagnostics: release.infrastructureDiagnostics,
+      governanceEvents: release.governanceEvents,
     }),
     signalChips: buildReleaseSignalChips({
       platformSignals,
@@ -912,7 +919,10 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
       diff,
       failedMigrationRunsCount,
       approvalRunsCount,
+      infrastructureDiagnostics: release.infrastructureDiagnostics,
     }),
+    infrastructureDiagnostics: release.infrastructureDiagnostics ?? null,
+    governanceEvents: release.governanceEvents ?? [],
     metadataItems: [
       {
         label: '配置提交',

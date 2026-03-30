@@ -70,6 +70,9 @@ export async function GET(request: Request) {
           latestRelease.status,
           latestRelease.sourceCommitSha ?? '',
           latestRelease.updatedAt.toISOString(),
+          latestRelease.recap && typeof latestRelease.recap === 'object'
+            ? String((latestRelease.recap as { generatedAt?: string }).generatedAt ?? '')
+            : '',
         ].join(':');
 
         if (lastReleaseState === nextState) {
@@ -83,6 +86,7 @@ export async function GET(request: Request) {
         });
       };
 
+      await checkReleases();
       const interval = setInterval(checkReleases, 3000);
 
       request.signal.addEventListener('abort', () => {

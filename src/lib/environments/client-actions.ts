@@ -73,6 +73,20 @@ export async function deletePreviewEnvironment(
   await parseJsonResponse<{ success: boolean }>(response);
 }
 
+export async function cleanupPreviewEnvironments(projectId: string): Promise<{
+  deletedIds: string[];
+  skipped: Array<{ id: string; reason: string }>;
+}> {
+  const response = await fetch(`/api/projects/${projectId}/preview-environments/cleanup`, {
+    method: 'POST',
+  });
+
+  return parseJsonResponse<{
+    deletedIds: string[];
+    skipped: Array<{ id: string; reason: string }>;
+  }>(response);
+}
+
 export async function updateEnvironmentStrategy(
   input: UpdateEnvironmentStrategyInput
 ): Promise<void> {

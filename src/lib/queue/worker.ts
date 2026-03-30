@@ -1,6 +1,7 @@
 import { initK8sClient } from '@/lib/k8s';
 import { createDeploymentWorker } from './deployment';
 import { startDriftDetector } from './drift-detector';
+import { startInfrastructureRemediation } from './infrastructure-remediation';
 import { createMigrationWorker } from './migration';
 import { startPreviewEnvironmentCleanup } from './preview-cleanup';
 import { createProjectInitWorker } from './project-init';
@@ -83,4 +84,8 @@ if (process.env.ENABLE_DRIFT_DETECTOR !== 'false') {
 
 if (process.env.ENABLE_PREVIEW_CLEANUP !== 'false') {
   startPreviewEnvironmentCleanup();
+}
+
+if (process.env.ENABLE_AUTO_REMEDIATION !== 'false') {
+  startInfrastructureRemediation();
 }

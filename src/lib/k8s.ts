@@ -134,6 +134,61 @@ export async function deleteNamespace(name: string): Promise<void> {
   }
 }
 
+export async function deletePod(
+  namespace: string,
+  name: string,
+  options?: {
+    force?: boolean;
+  }
+): Promise<void> {
+  const { core } = getK8sClient();
+
+  try {
+    await core.deleteNamespacedPod({
+      namespace,
+      name,
+      gracePeriodSeconds: options?.force ? 0 : undefined,
+      body: options?.force
+        ? {
+            gracePeriodSeconds: 0,
+            propagationPolicy: 'Background',
+          }
+        : undefined,
+    });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
+      throw e;
+    }
+  }
+}
+
+export async function cleanupStuckTerminatingPods(
+  namespace: string,
+  options?: {
+    olderThanMs?: number;
+  }
+): Promise<string[]> {
+  const thresholdMs = options?.olderThanMs ?? 10 * 60 * 1000;
+  const now = Date.now();
+  const pods = await getPods(namespace);
+  const stuckPods = pods.filter((pod) => {
+    const deletionTimestamp = pod.metadata?.deletionTimestamp;
+    if (!deletionTimestamp || !pod.metadata?.name) {
+      return false;
+    }
+
+    const deletedAt = new Date(deletionTimestamp).getTime();
+    return !Number.isNaN(deletedAt) && now - deletedAt >= thresholdMs;
+  });
+
+  await Promise.all(
+    stuckPods.map((pod) => deletePod(namespace, pod.metadata?.name ?? '', { force: true }))
+  );
+
+  return stuckPods.map((pod) => pod.metadata?.name ?? '').filter(Boolean);
+}
+
 export async function getDeployments(namespace: string): Promise<k8s.V1Deployment[]> {
   const { apps } = getK8sClient();
 
@@ -151,6 +206,22 @@ export async function getPods(namespace: string, labelSelector?: string): Promis
   return response.items;
 }
 
+export async function getPodsAllNamespaces(labelSelector?: string): Promise<k8s.V1Pod[]> {
+  const { core } = getK8sClient();
+
+  const response = await core.listPodForAllNamespaces({
+    labelSelector,
+  });
+  return response.items;
+}
+
+export async function getNodes(): Promise<k8s.V1Node[]> {
+  const { core } = getK8sClient();
+
+  const response = await core.listNode();
+  return response.items;
+}
+
 export async function getServices(namespace: string): Promise<k8s.V1Service[]> {
   const { core } = getK8sClient();
 
@@ -158,18 +229,7 @@ export async function getServices(namespace: string): Promise<k8s.V1Service[]> {
   return response.items;
 }
 
-interface K8sEvent {
-  metadata?: k8s.V1ObjectMeta;
-  reason?: string;
-  message?: string;
-  type?: string;
-  involvedObject?: k8s.V1ObjectReference;
-  firstTimestamp?: Date;
-  lastTimestamp?: Date;
-  count?: number;
-}
-
-export async function getEvents(namespace: string): Promise<K8sEvent[]> {
+export async function getEvents(namespace: string): Promise<k8s.CoreV1Event[]> {
   const { core } = getK8sClient();
 
   const response = await core.listNamespacedEvent({ namespace });

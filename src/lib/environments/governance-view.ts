@@ -19,6 +19,19 @@ export interface EnvironmentPageGovernanceSnapshot {
     allowed: boolean;
     summary: string;
   };
+  cleanupPreviews: {
+    allowed: boolean;
+    summary: string;
+    eligibleCount: number;
+    blockedCount: number;
+    expiredCount: number;
+  };
+  recentEvents: Array<{
+    key: string;
+    label: string;
+    summary: string;
+    createdAtLabel: string | null;
+  }>;
 }
 
 export interface PreviewEnvironmentActionSnapshot {
@@ -42,9 +55,28 @@ function formatRoleLabel(role: TeamRole): string {
 }
 
 export function buildEnvironmentPageGovernanceSnapshot(
-  role: TeamRole
+  role: TeamRole,
+  options?: {
+    cleanup?: {
+      eligibleCount: number;
+      blockedCount: number;
+      expiredCount: number;
+    };
+    recentEvents?: Array<{
+      key: string;
+      label: string;
+      summary: string;
+      createdAtLabel: string | null;
+    }>;
+  }
 ): EnvironmentPageGovernanceSnapshot {
   const canDeletePreview = role === 'owner' || role === 'admin';
+  const cleanup = options?.cleanup ?? {
+    eligibleCount: 0,
+    blockedCount: 0,
+    expiredCount: 0,
+  };
+  const recentEvents = options?.recentEvents ?? [];
 
   return {
     roleLabel: formatRoleLabel(role),
@@ -68,6 +100,18 @@ export function buildEnvironmentPageGovernanceSnapshot(
       allowed: canDeletePreview,
       summary: canDeletePreview ? '可编辑和删除当前环境变量' : '环境变量变更只允许 owner 或 admin',
     },
+    cleanupPreviews: {
+      allowed: canDeletePreview,
+      summary: canDeletePreview
+        ? cleanup.expiredCount > 0
+          ? `共有 ${cleanup.expiredCount} 个过期预览环境，其中 ${cleanup.eligibleCount} 个可立即回收`
+          : '后台每 15 分钟自动清理过期预览环境，也支持这里手动触发'
+        : '预览环境治理只允许 owner 或 admin 执行',
+      eligibleCount: cleanup.eligibleCount,
+      blockedCount: cleanup.blockedCount,
+      expiredCount: cleanup.expiredCount,
+    },
+    recentEvents,
   };
 }
 

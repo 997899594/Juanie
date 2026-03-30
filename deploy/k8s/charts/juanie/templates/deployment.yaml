@@ -8,7 +8,14 @@ metadata:
     app.kubernetes.io/name: {{ .Chart.Name }}
     app.kubernetes.io/component: web
 spec:
+  progressDeadlineSeconds: {{ .Values.deployment.progressDeadlineSeconds }}
   replicas: {{ .Values.replicaCount.web }}
+  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
+  strategy:
+    type: {{ .Values.deployment.web.strategy.type }}
+    rollingUpdate:
+      maxSurge: {{ .Values.deployment.web.strategy.maxSurge }}
+      maxUnavailable: {{ .Values.deployment.web.strategy.maxUnavailable }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ .Chart.Name }}
@@ -74,7 +81,14 @@ metadata:
     app.kubernetes.io/name: {{ .Chart.Name }}
     app.kubernetes.io/component: worker
 spec:
+  progressDeadlineSeconds: {{ .Values.deployment.progressDeadlineSeconds }}
   replicas: {{ .Values.replicaCount.worker }}
+  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
+  strategy:
+    type: {{ .Values.deployment.worker.strategy.type }}
+    rollingUpdate:
+      maxSurge: {{ .Values.deployment.worker.strategy.maxSurge }}
+      maxUnavailable: {{ .Values.deployment.worker.strategy.maxUnavailable }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ .Chart.Name }}
