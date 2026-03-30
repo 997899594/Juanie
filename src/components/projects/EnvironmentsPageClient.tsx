@@ -554,8 +554,19 @@ export function EnvironmentsPageClient({
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-        当前角色：{governance.roleLabel}
+      <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          控制面摘要
+        </div>
+        <div className="mt-2 text-sm text-foreground">
+          {[
+            `当前角色 ${governance.roleLabel}`,
+            governance.createPreview.allowed ? '可创建预览环境' : governance.createPreview.summary,
+            governance.manageEnvVars.allowed ? '可管理环境变量' : governance.manageEnvVars.summary,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </div>
       </div>
 
       {environments.length === 0 ? (
@@ -590,32 +601,33 @@ export function EnvironmentsPageClient({
                         onClick={() => toggleExpanded(environment.id)}
                         className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-secondary/20"
                       >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div
-                            className={cn(
-                              'h-2 w-2 rounded-full',
-                              environment.namespace ? 'bg-success' : 'bg-warning'
-                            )}
-                          />
-                          <span className="text-sm font-semibold capitalize">
-                            {environment.name}
-                          </span>
-                          {environment.namespace ? (
-                            <code className="rounded-xl bg-secondary px-2.5 py-1 text-xs font-mono text-muted-foreground">
-                              {environment.namespace}
-                            </code>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">尚未部署</span>
-                          )}
-                          {environment.isProduction && <Badge>生产</Badge>}
-                          {environment.autoDeploy && !environment.isProduction && (
-                            <Badge variant="secondary">自动部署</Badge>
-                          )}
-                          {environment.latestReleaseCard && (
-                            <Badge variant="outline">
-                              最近发布 {environment.latestReleaseCard.shortCommitSha ?? '最新'}
-                            </Badge>
-                          )}
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div
+                              className={cn(
+                                'h-2 w-2 rounded-full',
+                                environment.namespace ? 'bg-success' : 'bg-warning'
+                              )}
+                            />
+                            <span className="text-sm font-semibold capitalize">
+                              {environment.name}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {[
+                              environment.namespace ?? '尚未部署',
+                              environment.isProduction
+                                ? '生产'
+                                : environment.autoDeploy
+                                  ? '自动部署'
+                                  : null,
+                              environment.latestReleaseCard?.shortCommitSha
+                                ? `最近发布 ${environment.latestReleaseCard.shortCommitSha}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
                         </div>
                         {isExpanded ? (
                           <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -626,15 +638,13 @@ export function EnvironmentsPageClient({
 
                       {isExpanded && (
                         <div className="border-t border-border/70 px-5 py-4">
-                          {environment.platformSignals.primarySummary && (
-                            <div className="mb-4 text-sm text-foreground">
-                              {environment.platformSignals.primarySummary}
-                            </div>
-                          )}
-                          {environment.platformSignals.nextActionLabel && (
-                            <div className="mb-4 text-xs text-muted-foreground">
-                              下一步：{environment.platformSignals.nextActionLabel}
-                            </div>
+                          {(environment.platformSignals.primarySummary ||
+                            environment.platformSignals.nextActionLabel) && (
+                            <PlatformSignalSummary
+                              summary={environment.platformSignals.primarySummary}
+                              nextActionLabel={environment.platformSignals.nextActionLabel}
+                              className="mb-4 border-border bg-background"
+                            />
                           )}
                           <div className="mb-4 flex flex-wrap gap-2">
                             <Button asChild variant="outline" size="sm" className="rounded-xl">
@@ -760,26 +770,19 @@ export function EnvironmentsPageClient({
                             <div className="flex flex-wrap items-center gap-2">
                               <div className="h-2 w-2 rounded-full bg-info" />
                               <span className="text-sm font-semibold">{environment.name}</span>
-                              {environment.scopeLabel && (
-                                <Badge variant="secondary">{environment.scopeLabel}</Badge>
-                              )}
-                              {environment.sourceLabel && (
-                                <Badge variant="outline">{environment.sourceLabel}</Badge>
-                              )}
-                              {environment.expiryLabel && (
-                                <Badge
-                                  variant={
-                                    environment.expiryLabel === '已过期' ? 'warning' : 'outline'
-                                  }
-                                >
-                                  {environment.expiryLabel}
-                                </Badge>
-                              )}
-                              {environment.latestReleaseCard && (
-                                <Badge variant="outline">
-                                  最近发布 {environment.latestReleaseCard.shortCommitSha ?? '最新'}
-                                </Badge>
-                              )}
+                            </div>
+
+                            <div className="text-[11px] text-muted-foreground">
+                              {[
+                                environment.scopeLabel,
+                                environment.sourceLabel,
+                                environment.expiryLabel,
+                                environment.latestReleaseCard?.shortCommitSha
+                                  ? `最近发布 ${environment.latestReleaseCard.shortCommitSha}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">

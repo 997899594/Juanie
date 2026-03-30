@@ -3,7 +3,6 @@
 import { ExternalLink, RefreshCw, ScrollText, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import {
@@ -177,14 +176,13 @@ export function LogsPageClient({
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             环境运行视图
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {selectedEnvironment?.name ?? '选择环境'}
-            </h2>
-            <Badge variant="outline">{initialData.governance.roleLabel}</Badge>
-            {selectedEnvironment?.namespace ? (
-              <Badge variant="secondary">{selectedEnvironment.namespace}</Badge>
-            ) : null}
+          <h2 className="mt-3 text-2xl font-semibold tracking-tight">
+            {selectedEnvironment?.name ?? '选择环境'}
+          </h2>
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            {[initialData.governance.roleLabel, selectedEnvironment?.namespace]
+              .filter(Boolean)
+              .join(' · ')}
           </div>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
             {initialData.governance.logs.summary}
@@ -207,9 +205,9 @@ export function LogsPageClient({
 
         <section className="console-panel px-5 py-5">
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            当前诊断
+            当前状态
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
               <div className="text-xs text-muted-foreground">环境</div>
               <div className="mt-1 text-sm font-medium">
@@ -233,14 +231,12 @@ export function LogsPageClient({
               </div>
             </div>
             <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">日志策略</div>
+              <div className="text-xs text-muted-foreground">实例概况</div>
               <div className="mt-1 text-sm font-medium">
-                最近 {tail} 条 · {follow ? '自动跟随' : '手动浏览'}
+                {pods.length > 0 ? `${runningPodCount} 运行中 / ${readyPodCount} 就绪` : '等待识别'}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {pods.length > 0
-                  ? `${runningPodCount} 个运行中 · ${readyPodCount} 个就绪`
-                  : '等待识别运行实例'}
+                最近 {tail} 条 · {follow ? '自动跟随' : '手动浏览'}
               </div>
             </div>
           </div>
