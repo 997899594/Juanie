@@ -10,11 +10,9 @@ import {
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
-import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { getApprovalsPageData } from '@/lib/approvals/service';
 import {
@@ -82,7 +80,10 @@ export default async function ApprovalsPage({
       </div>
 
       <div className="console-panel px-4 py-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="mr-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            筛选
+          </div>
           <Button asChild variant={filterState === 'all' ? 'default' : 'outline'} size="sm">
             <Link href={buildApprovalsFilterHref('all')}>全部</Link>
           </Button>
@@ -119,13 +120,19 @@ export default async function ApprovalsPage({
                         pulse={statusConfig.pulse}
                         label={formatApprovalStatusLabel(run.status)}
                       />
-                      <Badge variant="secondary">{run.project.name}</Badge>
-                      <Badge variant="outline">{run.environment.name}</Badge>
-                      {run.previewSourceMeta.label && (
-                        <Badge variant="outline">{run.previewSourceMeta.label}</Badge>
-                      )}
-                      <Badge variant="outline">{run.database.name}</Badge>
-                      <Badge variant="outline">{run.specification.phase}</Badge>
+                      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
+                        {run.project.name}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {[
+                          run.environment.name,
+                          run.previewSourceMeta.label,
+                          run.database.name,
+                          run.specification.phase,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
                     </div>
 
                     <div className="space-y-2">
@@ -145,7 +152,6 @@ export default async function ApprovalsPage({
                           <GitBranch className="h-3.5 w-3.5" />
                           <span>{run.branchLabel}</span>
                         </div>
-                        <PreviewSourceSummary meta={run.previewSourceMeta} />
                       </div>
                       {run.platformSignals.primarySummary && (
                         <div className="text-sm text-foreground">

@@ -1,7 +1,6 @@
 'use client';
 
 import { ExternalLink, FolderGit2 } from 'lucide-react';
-import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
@@ -57,16 +56,10 @@ export function IntegrationsControlPlaneClient({
                     {integration.statusLabel}
                   </Badge>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {integration.capabilityLabels.length > 0 ? (
-                    integration.capabilityLabels.map((capability) => (
-                      <Badge key={capability} variant="outline">
-                        {capability}
-                      </Badge>
-                    ))
-                  ) : (
-                    <Badge variant="outline">暂无能力快照</Badge>
-                  )}
+                <div className="mt-3 text-[11px] text-muted-foreground">
+                  {integration.capabilityLabels.length > 0
+                    ? integration.capabilityLabels.join(' · ')
+                    : '暂无能力快照'}
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="rounded-xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
@@ -119,17 +112,9 @@ export function IntegrationsControlPlaneClient({
                     {repository.usageSummary}
                   </div>
                   {repository.projectLinks.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {repository.projectLinks.map((project) => (
-                        <Link
-                          key={project.id}
-                          href={`/projects/${project.id}`}
-                          className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-secondary"
-                        >
-                          {project.name}
-                          {project.teamName ? ` · ${project.teamName}` : ''}
-                        </Link>
-                      ))}
+                    <div className="mt-3 text-[11px] text-muted-foreground">
+                      关联项目：
+                      {repository.projectLinks.map((project) => project.name).join(' · ')}
                     </div>
                   )}
                 </div>
