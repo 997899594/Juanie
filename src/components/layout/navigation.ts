@@ -87,3 +87,13 @@ export function isNavItemActive(pathname: string, href: string): boolean {
 export function buildProjectNavHref(projectId: string, href: string): string {
   return `/projects/${projectId}${href}`;
 }
+
+export function isProjectNavItemActive(pathname: string, projectId: string, href: string): boolean {
+  const fullHref = buildProjectNavHref(projectId, href);
+
+  if (href === '') {
+    return pathname === fullHref;
+  }
+
+  return isNavItemActive(pathname, fullHref);
+}

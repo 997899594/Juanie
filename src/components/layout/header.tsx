@@ -8,7 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
-import { buildProjectNavHref, isNavItemActive, mainNav, projectNav } from './navigation';
+import {
+  buildProjectNavHref,
+  isNavItemActive,
+  isProjectNavItemActive,
+  mainNav,
+  projectNav,
+} from './navigation';
 import { UserMenu } from './user-menu';
 
 interface BreadcrumbItem {
@@ -85,7 +91,13 @@ export function Header() {
             <nav className="flex min-w-max items-center gap-2">
               {mobileProjectTabs.map((item) => {
                 const Icon = item.icon;
-                const isActive = isNavItemActive(pathname, item.href);
+                const isActive = projectId
+                  ? isProjectNavItemActive(
+                      pathname,
+                      projectId,
+                      item.href.replace(`/projects/${projectId}`, '')
+                    )
+                  : false;
 
                 return (
                   <Link
@@ -160,7 +172,13 @@ export function Header() {
                   <nav className="space-y-2">
                     {mobileProjectTabs.map((item) => {
                       const Icon = item.icon;
-                      const isActive = isNavItemActive(pathname, item.href);
+                      const isActive = projectId
+                        ? isProjectNavItemActive(
+                            pathname,
+                            projectId,
+                            item.href.replace(`/projects/${projectId}`, '')
+                          )
+                        : false;
 
                       return (
                         <Link

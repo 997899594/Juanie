@@ -4,7 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { buildProjectNavHref, isNavItemActive, mainNav, projectNav } from './navigation';
+import {
+  buildProjectNavHref,
+  isNavItemActive,
+  isProjectNavItemActive,
+  mainNav,
+  projectNav,
+} from './navigation';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -71,7 +77,7 @@ export function Sidebar() {
               <nav className="space-y-1">
                 {projectNav.map((item) => {
                   const href = buildProjectNavHref(projectId, item.href);
-                  const isActive = isNavItemActive(pathname, href);
+                  const isActive = isProjectNavItemActive(pathname, projectId, item.href);
                   const Icon = item.icon;
                   return (
                     <Link
