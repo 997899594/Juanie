@@ -115,6 +115,36 @@ export async function updateTeamSettings(input: { teamId: string; name: string }
   return readJson<{ id: string; name: string; slug: string }>(response);
 }
 
+export async function updateTeamAISettings(input: {
+  teamId: string;
+  plan: 'free' | 'pro' | 'scale' | 'enterprise';
+  plugins: Array<{
+    pluginId: string;
+    enabled: boolean;
+  }>;
+}) {
+  const response = await fetch(`/api/teams/${input.teamId}/ai`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      plan: input.plan,
+      plugins: input.plugins,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return readJson<{
+    plan: 'free' | 'pro' | 'scale' | 'enterprise';
+    plugins: Array<{
+      id: string;
+      enabled: boolean;
+    }>;
+  }>(response);
+}
+
 export async function deleteTeam(teamId: string) {
   const response = await fetch(`/api/teams/${teamId}`, {
     method: 'DELETE',

@@ -15,6 +15,13 @@
       "when": 1774865447063,
       "tag": "0001_aberrant_black_crow",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774943496548,
+      "tag": "0002_clear_captain_flint",
+      "breakpoints": true
     }
   ]
 }

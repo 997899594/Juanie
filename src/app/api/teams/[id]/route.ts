@@ -25,6 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     slug: pageData.team.slug,
     yourRole: pageData.member.role,
     governance: pageData.overview.governance,
+    aiControlPlane: pageData.aiControlPlane,
     overview: pageData.overview,
   });
 }

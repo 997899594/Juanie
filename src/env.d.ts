@@ -22,6 +22,15 @@ export interface Env {
   // App
   NODE_ENV: 'development' | 'production' | 'test';
   JUANIE_BASE_DOMAIN?: string;
+
+  // AI / 302.ai
+  AI_ENABLED?: 'true' | 'false';
+  AI_302_API_KEY?: string;
+  AI_302_BASE_URL?: string;
+  AI_DEFAULT_PLAN?: 'free' | 'pro' | 'scale' | 'enterprise';
+  AI_MODEL?: string;
+  AI_MODEL_PRO?: string;
+  AI_MODEL_TOOL?: string;
 }
 
 declare global {

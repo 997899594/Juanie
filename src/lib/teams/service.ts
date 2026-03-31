@@ -1,7 +1,9 @@
-import { and, count, desc, eq, gt } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray } from 'drizzle-orm';
+import { getTeamAIControlPlane } from '@/lib/ai/runtime/control-plane';
 import { db } from '@/lib/db';
-import { projects, teamInvitations, teamMembers, teams, users } from '@/lib/db/schema';
+import { auditLogs, projects, teamInvitations, teamMembers, teams, users } from '@/lib/db/schema';
 import {
+  buildTeamAIActivityView,
   buildTeamLayoutView,
   buildTeamMembersView,
   buildTeamOverviewView,
@@ -119,14 +121,38 @@ export async function getTeamSettingsPageData(teamId: string, userId: string) {
     return null;
   }
 
-  const [projectCountResult, memberCountResult] = await Promise.all([
-    db.select({ count: count() }).from(projects).where(eq(projects.teamId, teamId)),
-    db.select({ count: count() }).from(teamMembers).where(eq(teamMembers.teamId, teamId)),
-  ]);
+  const [projectCountResult, memberCountResult, aiControlPlane, aiActivityRows] = await Promise.all(
+    [
+      db.select({ count: count() }).from(projects).where(eq(projects.teamId, teamId)),
+      db.select({ count: count() }).from(teamMembers).where(eq(teamMembers.teamId, teamId)),
+      getTeamAIControlPlane(teamId),
+      db.query.auditLogs.findMany({
+        where: and(
+          eq(auditLogs.teamId, teamId),
+          inArray(auditLogs.action, [
+            'team.ai_control_plane_updated',
+            'release.ai_analysis_refreshed',
+          ])
+        ),
+        orderBy: [desc(auditLogs.createdAt)],
+        limit: 6,
+        with: {
+          user: {
+            columns: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      }),
+    ]
+  );
 
   return {
     team: access.team,
     member: access.member,
+    aiControlPlane,
+    aiActivity: buildTeamAIActivityView(aiActivityRows),
     overview: buildTeamSettingsView({
       role: access.member.role,
       projectCount: projectCountResult[0]?.count ?? 0,

@@ -16,12 +16,16 @@ import { notFound, redirect } from 'next/navigation';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
 import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
+import { ReleaseAISnapshotPanel } from '@/components/projects/ReleaseAISnapshotPanel';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { StatusIndicator } from '@/components/ui/status-indicator';
+import { resolveAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
+import type { IncidentAnalysis } from '@/lib/ai/schemas/incident-analysis';
+import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
@@ -55,14 +59,33 @@ export default async function ReleaseDetailPage({
     redirect('/projects');
   }
 
-  const pageData = await getReleaseDetailPageData({
-    projectId: id,
-    releaseId,
-  });
+  const pageData = await getReleaseDetailPageData({ projectId: id, releaseId });
   if (!pageData) {
     notFound();
   }
   const { release, previousReleaseLink } = pageData;
+  const [releasePlanSnapshot, incidentSnapshot] = await Promise.all([
+    resolveAIPluginSnapshot<ReleasePlan>({
+      pluginId: 'release-intelligence',
+      context: {
+        teamId: project.teamId,
+        projectId: id,
+        environmentId: release.environment?.id ?? release.environmentId,
+        releaseId,
+        actorUserId: session.user.id,
+      },
+    }),
+    resolveAIPluginSnapshot<IncidentAnalysis>({
+      pluginId: 'incident-intelligence',
+      context: {
+        teamId: project.teamId,
+        projectId: id,
+        environmentId: release.environment?.id ?? release.environmentId,
+        releaseId,
+        actorUserId: session.user.id,
+      },
+    }),
+  ]);
   const releaseActions = buildReleaseEnvironmentActionSnapshot(member.role, release.environment);
   const environmentId = release.environment?.id ?? release.environmentId;
   const environmentLogsHref = `/projects/${id}/logs?env=${environmentId}`;
@@ -186,6 +209,13 @@ export default async function ReleaseDetailPage({
           className="mt-4"
         />
       </div>
+
+      <ReleaseAISnapshotPanel
+        projectId={id}
+        releaseId={releaseId}
+        releasePlan={releasePlanSnapshot}
+        incidentAnalysis={incidentSnapshot}
+      />
 
       <section className="grid gap-4 xl:grid-cols-[0.78fr_1fr_0.8fr]">
         <div className="console-panel p-5">

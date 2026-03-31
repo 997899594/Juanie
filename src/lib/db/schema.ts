@@ -111,6 +111,12 @@ export type EnvironmentDeploymentStrategy = (typeof environmentDeploymentStrateg
 export const environmentDatabaseStrategies = ['direct', 'inherit', 'isolated_clone'] as const;
 export type EnvironmentDatabaseStrategy = (typeof environmentDatabaseStrategies)[number];
 
+export const aiPlans = ['free', 'pro', 'scale', 'enterprise'] as const;
+export type AIPlan = (typeof aiPlans)[number];
+
+export const aiPluginRunStatuses = ['succeeded', 'failed'] as const;
+export type AIPluginRunStatus = (typeof aiPluginRunStatuses)[number];
+
 export const teamRoles = ['owner', 'admin', 'member'] as const;
 export type TeamRole = (typeof teamRoles)[number];
 
@@ -129,6 +135,7 @@ export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuse
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);
 export const integrationCapabilityEnum = pgEnum('integrationCapability', integrationCapabilities);
+export const aiPlanEnum = pgEnum('aiPlan', aiPlans);
 export const migrationToolEnum = pgEnum('migrationTool', migrationTools);
 export const migrationPhaseEnum = pgEnum('migrationPhase', migrationPhases);
 export const migrationRunStatusEnum = pgEnum('migrationRunStatus', migrationRunStatuses);
@@ -150,6 +157,7 @@ export const environmentDatabaseStrategyEnum = pgEnum(
   'environmentDatabaseStrategy',
   environmentDatabaseStrategies
 );
+export const aiPluginRunStatusEnum = pgEnum('aiPluginRunStatus', aiPluginRunStatuses);
 
 // ============================================
 // Auth Tables (NextAuth)
@@ -974,6 +982,139 @@ export const auditLogs = pgTable(
 );
 
 // ============================================
+// AI Plugin Platform
+// ============================================
+
+export const aiPluginInstallations = pgTable(
+  'aiPluginInstallation',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    teamId: uuid('teamId')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    pluginId: varchar('pluginId', { length: 100 }).notNull(),
+    isEnabled: boolean('isEnabled').notNull().default(true),
+    installedByUserId: uuid('installedByUserId').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    config: jsonb('config'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    teamIdIdx: index('aiPluginInstallation_teamId_idx').on(table.teamId),
+    pluginIdIdx: index('aiPluginInstallation_pluginId_idx').on(table.pluginId),
+    teamPluginUnique: unique('aiPluginInstallation_team_plugin_unique').on(
+      table.teamId,
+      table.pluginId
+    ),
+  })
+);
+
+export const aiEntitlements = pgTable(
+  'aiEntitlement',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    teamId: uuid('teamId')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    pluginId: varchar('pluginId', { length: 100 }).notNull().default('*'),
+    plan: aiPlanEnum('plan').notNull().default('free'),
+    isEnabled: boolean('isEnabled').notNull().default(true),
+    startsAt: timestamp('startsAt'),
+    endsAt: timestamp('endsAt'),
+    metadata: jsonb('metadata'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    teamIdIdx: index('aiEntitlement_teamId_idx').on(table.teamId),
+    pluginIdIdx: index('aiEntitlement_pluginId_idx').on(table.pluginId),
+    planIdx: index('aiEntitlement_plan_idx').on(table.plan),
+    teamPluginUnique: unique('aiEntitlement_team_plugin_unique').on(table.teamId, table.pluginId),
+  })
+);
+
+export const aiPluginSnapshots = pgTable(
+  'aiPluginSnapshot',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    pluginId: varchar('pluginId', { length: 100 }).notNull(),
+    teamId: uuid('teamId')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    projectId: uuid('projectId').references(() => projects.id, { onDelete: 'set null' }),
+    environmentId: uuid('environmentId').references(() => environments.id, {
+      onDelete: 'set null',
+    }),
+    releaseId: uuid('releaseId').references(() => releases.id, { onDelete: 'set null' }),
+    resourceType: varchar('resourceType', { length: 50 }).notNull(),
+    resourceId: uuid('resourceId').notNull(),
+    schemaVersion: varchar('schemaVersion', { length: 100 }).notNull(),
+    inputHash: varchar('inputHash', { length: 64 }).notNull(),
+    provider: varchar('provider', { length: 100 }),
+    model: varchar('model', { length: 255 }),
+    degradedReason: varchar('degradedReason', { length: 100 }),
+    output: jsonb('output').notNull(),
+    generatedAt: timestamp('generatedAt').defaultNow().notNull(),
+    lastAccessedAt: timestamp('lastAccessedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    teamIdIdx: index('aiPluginSnapshot_teamId_idx').on(table.teamId),
+    projectIdIdx: index('aiPluginSnapshot_projectId_idx').on(table.projectId),
+    releaseIdIdx: index('aiPluginSnapshot_releaseId_idx').on(table.releaseId),
+    resourceLookupIdx: index('aiPluginSnapshot_resource_lookup_idx').on(
+      table.pluginId,
+      table.resourceType,
+      table.resourceId,
+      table.generatedAt
+    ),
+    schemaInputUnique: unique('aiPluginSnapshot_schema_input_unique').on(
+      table.pluginId,
+      table.resourceType,
+      table.resourceId,
+      table.schemaVersion,
+      table.inputHash
+    ),
+  })
+);
+
+export const aiPluginRuns = pgTable(
+  'aiPluginRun',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    pluginId: varchar('pluginId', { length: 100 }).notNull(),
+    teamId: uuid('teamId')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    projectId: uuid('projectId').references(() => projects.id, { onDelete: 'set null' }),
+    environmentId: uuid('environmentId').references(() => environments.id, {
+      onDelete: 'set null',
+    }),
+    releaseId: uuid('releaseId').references(() => releases.id, { onDelete: 'set null' }),
+    resourceType: varchar('resourceType', { length: 50 }).notNull(),
+    resourceId: uuid('resourceId').notNull(),
+    provider: varchar('provider', { length: 100 }),
+    model: varchar('model', { length: 255 }),
+    inputHash: varchar('inputHash', { length: 64 }),
+    status: aiPluginRunStatusEnum('status').notNull().default('succeeded'),
+    latencyMs: integer('latencyMs'),
+    degradedReason: varchar('degradedReason', { length: 100 }),
+    errorMessage: text('errorMessage'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    teamIdIdx: index('aiPluginRun_teamId_idx').on(table.teamId),
+    projectIdIdx: index('aiPluginRun_projectId_idx').on(table.projectId),
+    releaseIdIdx: index('aiPluginRun_releaseId_idx').on(table.releaseId),
+    pluginIdIdx: index('aiPluginRun_pluginId_idx').on(table.pluginId),
+    createdAtIdx: index('aiPluginRun_createdAt_idx').on(table.createdAt),
+  })
+);
+
+// ============================================
 // Relations
 // ============================================
 
@@ -982,6 +1123,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   gitProviders: many(gitProviders),
   teamMemberships: many(teamMembers),
+  aiPluginInstallations: many(aiPluginInstallations),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -1019,6 +1161,10 @@ export const teamsRelations = relations(teams, ({ many }) => ({
   projects: many(projects),
   invitations: many(teamInvitations),
   auditLogs: many(auditLogs),
+  aiPluginInstallations: many(aiPluginInstallations),
+  aiEntitlements: many(aiEntitlements),
+  aiPluginRuns: many(aiPluginRuns),
+  aiPluginSnapshots: many(aiPluginSnapshots),
 }));
 
 export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
@@ -1056,6 +1202,8 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   releases: many(releases),
   deployments: many(deployments),
   initSteps: many(projectInitSteps),
+  aiPluginRuns: many(aiPluginRuns),
+  aiPluginSnapshots: many(aiPluginSnapshots),
 }));
 
 export const projectInitStepsRelations = relations(projectInitSteps, ({ one }) => ({
@@ -1097,6 +1245,8 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
   deployments: many(deployments),
   environmentVariables: many(environmentVariables),
   databases: many(databases),
+  aiPluginRuns: many(aiPluginRuns),
+  aiPluginSnapshots: many(aiPluginSnapshots),
 }));
 
 export const databasesRelations = relations(databases, ({ one, many }) => ({
@@ -1244,6 +1394,8 @@ export const releasesRelations = relations(releases, ({ one, many }) => ({
   artifacts: many(releaseArtifacts),
   deployments: many(deployments),
   migrationRuns: many(migrationRuns),
+  aiPluginRuns: many(aiPluginRuns),
+  aiPluginSnapshots: many(aiPluginSnapshots),
 }));
 
 export const releaseArtifactsRelations = relations(releaseArtifacts, ({ one }) => ({
@@ -1296,5 +1448,61 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
   user: one(users, {
     fields: [auditLogs.userId],
     references: [users.id],
+  }),
+}));
+
+export const aiPluginInstallationsRelations = relations(aiPluginInstallations, ({ one }) => ({
+  team: one(teams, {
+    fields: [aiPluginInstallations.teamId],
+    references: [teams.id],
+  }),
+  installedByUser: one(users, {
+    fields: [aiPluginInstallations.installedByUserId],
+    references: [users.id],
+  }),
+}));
+
+export const aiEntitlementsRelations = relations(aiEntitlements, ({ one }) => ({
+  team: one(teams, {
+    fields: [aiEntitlements.teamId],
+    references: [teams.id],
+  }),
+}));
+
+export const aiPluginSnapshotsRelations = relations(aiPluginSnapshots, ({ one }) => ({
+  team: one(teams, {
+    fields: [aiPluginSnapshots.teamId],
+    references: [teams.id],
+  }),
+  project: one(projects, {
+    fields: [aiPluginSnapshots.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [aiPluginSnapshots.environmentId],
+    references: [environments.id],
+  }),
+  release: one(releases, {
+    fields: [aiPluginSnapshots.releaseId],
+    references: [releases.id],
+  }),
+}));
+
+export const aiPluginRunsRelations = relations(aiPluginRuns, ({ one }) => ({
+  team: one(teams, {
+    fields: [aiPluginRuns.teamId],
+    references: [teams.id],
+  }),
+  project: one(projects, {
+    fields: [aiPluginRuns.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [aiPluginRuns.environmentId],
+    references: [environments.id],
+  }),
+  release: one(releases, {
+    fields: [aiPluginRuns.releaseId],
+    references: [releases.id],
   }),
 }));

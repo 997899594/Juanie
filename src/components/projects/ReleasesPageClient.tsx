@@ -21,6 +21,7 @@ import { useState } from 'react';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
+import { ReleaseAIRefreshActions } from '@/components/projects/ReleaseAIRefreshActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -325,10 +326,65 @@ interface ReleaseRecord {
     primarySummary: string | null;
     nextActionLabel: string | null;
   };
+  aiReleasePlan?: {
+    summary: string;
+    strategy: 'rolling' | 'controlled' | 'canary' | 'blue_green';
+    riskLevel: 'low' | 'medium' | 'high';
+    confidence: 'low' | 'medium' | 'high';
+    generatedAt: string;
+  } | null;
   actions: {
     canManage: boolean;
     summary: string;
   };
+}
+
+interface PromoteAIRecommendation {
+  summary: string | null;
+  strategy: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
+  confidence: 'low' | 'medium' | 'high' | null;
+  riskLevel: 'low' | 'medium' | 'high' | null;
+  reasons: string[];
+  checks: Array<{
+    key: string;
+    label: string;
+    status: 'pass' | 'warning' | 'blocked';
+    summary: string;
+  }>;
+  stale: boolean;
+  source: 'cache' | 'fresh' | 'none';
+  generatedAt: string | null;
+  errorMessage: string | null;
+}
+
+function getStrategyLabel(
+  strategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null
+): string | null {
+  switch (strategy) {
+    case 'rolling':
+      return '滚动发布';
+    case 'controlled':
+      return '受控放量';
+    case 'canary':
+      return '金丝雀';
+    case 'blue_green':
+      return '蓝绿切换';
+    default:
+      return null;
+  }
+}
+
+function getAILevelLabel(level?: 'low' | 'medium' | 'high' | null): string | null {
+  switch (level) {
+    case 'low':
+      return '低风险';
+    case 'medium':
+      return '中风险';
+    case 'high':
+      return '高风险';
+    default:
+      return null;
+  }
 }
 
 function formatImageLabel(imageUrl: string): string {
@@ -365,6 +421,7 @@ interface ReleasesPageClientProps {
       value: number | string;
     }>;
     promotePlan: PromotePlan | null;
+    promoteAI: PromoteAIRecommendation | null;
     hasStagingProdSplit: boolean;
   };
 }
@@ -471,6 +528,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const stats = initialData.stats.map((stat) =>
     stat.label === '实时' ? { ...stat, value: isConnected ? '在线' : '离线' } : stat
   );
+  const promoteAI = initialData.promoteAI;
 
   return (
     <div className="space-y-6">
@@ -582,9 +640,21 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                         latestRelease.summary ??
                         '打开发布查看详情'}
                     </div>
+                    {latestRelease.aiReleasePlan?.summary && (
+                      <div className="mt-2 rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground">
+                        <span className="font-medium">AI：</span>
+                        {latestRelease.aiReleasePlan.summary}
+                      </div>
+                    )}
                     <div className="mt-2 text-[11px] text-muted-foreground">
                       {[
                         latestRelease.statusDecoration.label,
+                        latestRelease.aiReleasePlan
+                          ? getStrategyLabel(latestRelease.aiReleasePlan.strategy)
+                          : null,
+                        latestRelease.aiReleasePlan
+                          ? getAILevelLabel(latestRelease.aiReleasePlan.riskLevel)
+                          : null,
                         latestRelease.sourceCommitSha
                           ? latestRelease.sourceCommitSha.slice(0, 7)
                           : null,
@@ -692,15 +762,73 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                         nextActionLabel={promotePanel.nextActionLabel}
                       />
 
+                      {promoteAI?.summary && (
+                        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {promoteAI.strategy && (
+                              <Badge variant="outline">
+                                {getStrategyLabel(promoteAI.strategy)}
+                              </Badge>
+                            )}
+                            {promoteAI.riskLevel && (
+                              <Badge variant="outline">
+                                {getAILevelLabel(promoteAI.riskLevel)}
+                              </Badge>
+                            )}
+                            {promoteAI.confidence && (
+                              <Badge variant="outline">{promoteAI.confidence} 置信度</Badge>
+                            )}
+                          </div>
+                          <div className="mt-2 text-sm font-medium text-foreground">
+                            {promoteAI.summary}
+                          </div>
+                          {promoteAI.reasons.length > 0 && (
+                            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                              {promoteAI.reasons.map((reason) => (
+                                <div key={reason}>• {reason}</div>
+                              ))}
+                            </div>
+                          )}
+                          {promoteAI.generatedAt && (
+                            <div className="mt-3 text-[11px] text-muted-foreground">
+                              AI 更新时间：{formatPlatformDateTime(promoteAI.generatedAt) ?? '—'}
+                              {promoteAI.stale ? ' · 使用历史 snapshot' : ''}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {promotePanel.blockingReason && (
                         <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
                           {promotePanel.blockingReason}
                         </div>
                       )}
 
+                      {!promoteAI?.summary && promoteAI?.errorMessage && (
+                        <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                          AI 建议暂不可用：{promoteAI.errorMessage}
+                        </div>
+                      )}
+
                       {!promotePanel.blockingReason && promotePanel.warningChips.length > 0 && (
                         <PlatformSignalChipList chips={promotePanel.warningChips} />
                       )}
+
+                      {promoteAI?.checks.length ? (
+                        <div className="space-y-2 rounded-2xl border border-border bg-background px-4 py-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                            AI 重点检查
+                          </div>
+                          {promoteAI.checks.map((check) => (
+                            <div key={check.key} className="text-sm">
+                              <div className="font-medium text-foreground">{check.label}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {check.summary}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
@@ -903,6 +1031,12 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                                 release.platformSignals.primarySummary}
                             </div>
                           )}
+                          {release.aiReleasePlan?.summary && (
+                            <div className="rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground">
+                              <span className="font-medium">AI 建议：</span>
+                              {release.aiReleasePlan.summary}
+                            </div>
+                          )}
                           <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                             {release.sourceCommitSha && (
                               <div className="flex items-center gap-1.5">
@@ -923,6 +1057,16 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                                 次迁移
                               </span>
                             </div>
+                            {release.aiReleasePlan && (
+                              <div className="flex items-center gap-1.5">
+                                <Rocket className="h-3.5 w-3.5" />
+                                <span>
+                                  {getStrategyLabel(release.aiReleasePlan.strategy)}
+                                  {' · '}
+                                  {getAILevelLabel(release.aiReleasePlan.riskLevel)}
+                                </span>
+                              </div>
+                            )}
                             {release.primaryDomainUrl && (
                               <a
                                 href={release.primaryDomainUrl}
@@ -982,6 +1126,12 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                               <ArrowRight className="h-3.5 w-3.5" />
                             </Link>
                           </Button>
+                          <ReleaseAIRefreshActions
+                            projectId={projectId}
+                            releaseId={release.id}
+                            compact
+                            showMessage={false}
+                          />
                           <Button
                             variant="ghost"
                             size="icon"

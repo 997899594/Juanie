@@ -8,10 +8,12 @@ export type AuditAction =
   | 'project.deleted'
   | 'deployment.triggered'
   | 'deployment.rolled_back'
+  | 'release.ai_analysis_refreshed'
   | 'environment.created'
   | 'environment.preview_deleted'
   | 'environment.preview_cleanup_completed'
   | 'environment.remediation_triggered'
+  | 'team.ai_control_plane_updated'
   | 'team.member_added'
   | 'team.member_removed'
   | 'team.member_role_changed'
@@ -22,6 +24,7 @@ export type AuditAction =
 export type ResourceType =
   | 'project'
   | 'deployment'
+  | 'release'
   | 'environment'
   | 'team'
   | 'member'
@@ -85,10 +88,12 @@ export function formatAuditAction(action: AuditAction): string {
     'project.deleted': 'deleted project',
     'deployment.triggered': 'triggered deployment',
     'deployment.rolled_back': 'rolled back deployment',
+    'release.ai_analysis_refreshed': 'refreshed release AI analysis',
     'environment.created': 'created environment',
     'environment.preview_deleted': 'deleted preview environment',
     'environment.preview_cleanup_completed': 'completed preview cleanup',
     'environment.remediation_triggered': 'triggered environment remediation',
+    'team.ai_control_plane_updated': 'updated AI control plane',
     'team.member_added': 'added team member',
     'team.member_removed': 'removed team member',
     'team.member_role_changed': 'changed member role',

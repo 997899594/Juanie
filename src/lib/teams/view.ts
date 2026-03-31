@@ -6,6 +6,7 @@ import {
   type TeamGovernanceSnapshot,
   type TeamMemberActionSnapshot,
 } from '@/lib/teams/governance-view';
+import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
 interface TeamLike {
   id: string;
@@ -126,6 +127,125 @@ export interface TeamSettingsView {
   canEdit: boolean;
   canDelete: boolean;
   saveSummary: string;
+}
+
+interface TeamAIActivityRowLike {
+  id: string;
+  action: string;
+  resourceId: string | null;
+  metadata: unknown;
+  createdAt: Date | string;
+  user: {
+    name: string | null;
+    email: string;
+  } | null;
+}
+
+export interface TeamAIActivityItem {
+  id: string;
+  title: string;
+  summary: string;
+  actorLabel: string;
+  createdAtLabel: string;
+}
+
+function getPlanLabel(plan?: string | null): string {
+  switch (plan) {
+    case 'free':
+      return 'Free';
+    case 'pro':
+      return 'Pro';
+    case 'scale':
+      return 'Scale';
+    case 'enterprise':
+      return 'Enterprise';
+    default:
+      return '未知套餐';
+  }
+}
+
+function getPluginLabel(pluginId?: string | null): string {
+  switch (pluginId) {
+    case 'release-intelligence':
+      return '发布计划';
+    case 'incident-intelligence':
+      return '故障归因';
+    default:
+      return pluginId ?? '官方插件';
+  }
+}
+
+function getActorLabel(user: TeamAIActivityRowLike['user']): string {
+  if (!user) {
+    return '系统';
+  }
+
+  return user.name?.trim() || user.email;
+}
+
+function parseAIActivityMetadata(metadata: unknown): {
+  plan?: string;
+  enabledPlugins?: number;
+  totalPlugins?: number;
+  pluginId?: string;
+} {
+  if (!metadata || typeof metadata !== 'object') {
+    return {};
+  }
+
+  const payload = metadata as {
+    plan?: string;
+    pluginId?: string;
+    plugins?: Array<{ enabled?: boolean }>;
+  };
+
+  return {
+    plan: typeof payload.plan === 'string' ? payload.plan : undefined,
+    pluginId: typeof payload.pluginId === 'string' ? payload.pluginId : undefined,
+    enabledPlugins: Array.isArray(payload.plugins)
+      ? payload.plugins.filter((plugin) => plugin?.enabled).length
+      : undefined,
+    totalPlugins: Array.isArray(payload.plugins) ? payload.plugins.length : undefined,
+  };
+}
+
+export function buildTeamAIActivityView(rows: TeamAIActivityRowLike[]): TeamAIActivityItem[] {
+  return rows.map((row) => {
+    const metadata = parseAIActivityMetadata(row.metadata);
+
+    if (row.action === 'team.ai_control_plane_updated') {
+      const pluginSummary =
+        typeof metadata.enabledPlugins === 'number' && typeof metadata.totalPlugins === 'number'
+          ? ` · 已启用 ${metadata.enabledPlugins}/${metadata.totalPlugins} 个插件`
+          : '';
+
+      return {
+        id: row.id,
+        title: 'AI Control Plane 已更新',
+        summary: `套餐切换为 ${getPlanLabel(metadata.plan)}${pluginSummary}`,
+        actorLabel: getActorLabel(row.user),
+        createdAtLabel: formatPlatformDateTimeShort(row.createdAt) ?? '—',
+      };
+    }
+
+    if (row.action === 'release.ai_analysis_refreshed') {
+      return {
+        id: row.id,
+        title: '手动刷新 AI 分析',
+        summary: `${getPluginLabel(metadata.pluginId)} snapshot 已重新生成`,
+        actorLabel: getActorLabel(row.user),
+        createdAtLabel: formatPlatformDateTimeShort(row.createdAt) ?? '—',
+      };
+    }
+
+    return {
+      id: row.id,
+      title: row.action,
+      summary: row.resourceId ? `资源 ${row.resourceId}` : 'AI 相关操作',
+      actorLabel: getActorLabel(row.user),
+      createdAtLabel: formatPlatformDateTimeShort(row.createdAt) ?? '—',
+    };
+  });
 }
 
 export function buildTeamLayoutView(team: TeamLike): TeamLayoutView {

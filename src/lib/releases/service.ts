@@ -1,4 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
+import { resolveAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
+import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snapshot-service';
+import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
 import { environments, projects, releases, type TeamRole } from '@/lib/db/schema';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
@@ -20,8 +23,23 @@ import {
 
 export function buildProjectReleaseListData<
   TRelease extends Parameters<typeof decorateReleaseList>[0][number],
->(releases: TRelease[]) {
-  return decorateReleaseList(releases);
+>(
+  releases: TRelease[],
+  aiReleasePlans?: Map<
+    string,
+    {
+      summary: string;
+      strategy: ReleasePlan['recommendation']['strategy'];
+      riskLevel: ReleasePlan['risk']['level'];
+      confidence: ReleasePlan['recommendation']['confidence'];
+      generatedAt: string;
+    }
+  >
+) {
+  return decorateReleaseList(releases).map((release) => ({
+    ...release,
+    aiReleasePlan: aiReleasePlans?.get(release.id) ?? null,
+  }));
 }
 
 export async function getProjectReleaseListData(projectId: string) {
@@ -101,11 +119,45 @@ export async function getProjectReleaseListData(projectId: string) {
       })
     : new Map();
 
+  const aiReleasePlans = project
+    ? await listLatestAIPluginSnapshotsByResourceIds<ReleasePlan>({
+        pluginId: 'release-intelligence',
+        teamId: project.teamId,
+        resourceType: 'release',
+        resourceIds: releaseList.map((release) => release.id),
+      }).then((snapshotMap) => {
+        const result = new Map<
+          string,
+          {
+            summary: string;
+            strategy: ReleasePlan['recommendation']['strategy'];
+            riskLevel: ReleasePlan['risk']['level'];
+            confidence: ReleasePlan['recommendation']['confidence'];
+            generatedAt: string;
+          }
+        >();
+
+        for (const [releaseId, snapshot] of snapshotMap) {
+          const output = snapshot.output;
+          result.set(releaseId, {
+            summary: output.recommendation.summary,
+            strategy: output.recommendation.strategy,
+            riskLevel: output.risk.level,
+            confidence: output.recommendation.confidence,
+            generatedAt: snapshot.generatedAt,
+          });
+        }
+
+        return result;
+      })
+    : new Map();
+
   return buildProjectReleaseListData(
     releaseList.map((release) => ({
       ...release,
       previewReviewMetadata: previewReviewMetadataById.get(release.id) ?? null,
-    }))
+    })),
+    aiReleasePlans
   );
 }
 
@@ -129,11 +181,13 @@ export function buildProjectReleasesPageData<
     expiresAt?: Date | string | null;
   },
   TPromotePlan,
+  TPromoteAI,
 >(input: {
   releases: TRelease[];
   environments: TEnvironment[];
   role: TeamRole;
   promotePlan: TPromotePlan | null;
+  promoteAI?: TPromoteAI | null;
   envFilter?: string | null;
   riskFilter?: string | null;
 }) {
@@ -165,6 +219,7 @@ export function buildProjectReleasesPageData<
     selectedRisk,
     stats: [...buildReleaseListStats(filteredReleases), { label: '实时', value: '离线' as const }],
     promotePlan: input.promotePlan,
+    promoteAI: input.promoteAI ?? null,
     hasStagingProdSplit: input.environments.some((environment) => environment.isProduction),
   };
 }
@@ -175,7 +230,13 @@ export async function getProjectReleasesPageData(input: {
   envFilter?: string | null;
   riskFilter?: string | null;
 }) {
-  const [releaseCards, environmentList, promotePlan] = await Promise.all([
+  const [project, releaseCards, environmentList, promotePlan] = await Promise.all([
+    db.query.projects.findFirst({
+      where: eq(projects.id, input.projectId),
+      columns: {
+        teamId: true,
+      },
+    }),
     getProjectReleaseListData(input.projectId),
     db.query.environments.findMany({
       where: eq(environments.projectId, input.projectId),
@@ -200,11 +261,66 @@ export async function getProjectReleasesPageData(input: {
     buildPromotionPlan(input.projectId).catch(() => null),
   ]);
 
+  const stagingRelease = releaseCards.find(
+    (release) =>
+      release.environment.isProduction !== true &&
+      release.environment.isPreview !== true &&
+      release.status === 'succeeded' &&
+      release.artifacts.length > 0
+  );
+
+  const promoteAI =
+    project && stagingRelease
+      ? await resolveAIPluginSnapshot<ReleasePlan>({
+          pluginId: 'release-intelligence',
+          context: {
+            teamId: project.teamId,
+            projectId: input.projectId,
+            environmentId: stagingRelease.environment.id,
+            releaseId: stagingRelease.id,
+          },
+        }).then((snapshot) => {
+          const output = snapshot.snapshot?.output ?? null;
+
+          return output
+            ? {
+                summary: output.recommendation.summary,
+                strategy: output.recommendation.strategy,
+                confidence: output.recommendation.confidence,
+                riskLevel: output.risk.level,
+                reasons: output.recommendation.why.slice(0, 3),
+                checks: output.checks.slice(0, 3).map((check) => ({
+                  key: check.key,
+                  label: check.label,
+                  status: check.status,
+                  summary: check.summary,
+                })),
+                stale: snapshot.stale,
+                source: snapshot.source,
+                generatedAt: snapshot.snapshot?.generatedAt ?? null,
+                errorMessage: snapshot.errorMessage,
+              }
+            : {
+                summary: null,
+                strategy: null,
+                confidence: null,
+                riskLevel: null,
+                reasons: [],
+                checks: [],
+                stale: snapshot.stale,
+                source: snapshot.source,
+                generatedAt: null,
+                errorMessage: snapshot.errorMessage ?? snapshot.availability.blockedReason,
+              };
+        })
+      : null;
+
   return buildProjectReleasesPageData({
     releases: releaseCards,
     environments: environmentList,
     role: input.role,
     promotePlan,
+    promoteAI,
     envFilter: input.envFilter,
     riskFilter: input.riskFilter,
   });
