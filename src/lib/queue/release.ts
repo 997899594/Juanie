@@ -1,44 +1,15 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { deployments, releases } from '@/lib/db/schema';
+import { releases } from '@/lib/db/schema';
 import {
-  completeReleaseAfterDeployments,
+  continueReleaseFromDeploymentStage,
   failReleaseForCurrentPhase,
   loadReleaseForOrchestration,
-  persistReleaseRecapSafely,
   runReleaseMigrationPhase,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
-import { addDeploymentJob, type ReleaseJobData } from './index';
-
-async function waitForDeployment(
-  deploymentId: string
-): Promise<'running' | 'failed' | 'rolled_back' | 'awaiting_rollout' | 'verification_failed'> {
-  for (let attempts = 0; attempts < 300; attempts++) {
-    const deployment = await db.query.deployments.findFirst({
-      where: eq(deployments.id, deploymentId),
-    });
-
-    if (!deployment) {
-      throw new Error(`Deployment ${deploymentId} not found`);
-    }
-
-    if (
-      deployment.status === 'running' ||
-      deployment.status === 'awaiting_rollout' ||
-      deployment.status === 'verification_failed' ||
-      deployment.status === 'failed' ||
-      deployment.status === 'rolled_back'
-    ) {
-      return deployment.status;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  throw new Error(`Timed out waiting for deployment ${deploymentId}`);
-}
+import type { ReleaseJobData } from './index';
 
 export async function processRelease(job: Job<ReleaseJobData>) {
   const release = await loadReleaseForOrchestration(job.data.releaseId);
@@ -56,78 +27,7 @@ export async function processRelease(job: Job<ReleaseJobData>) {
     await updateReleaseStatus(release.id, 'planning');
     await updateReleaseStatus(release.id, 'migration_pre_running');
     await runReleaseMigrationPhase(release, 'preDeploy');
-
-    await updateReleaseStatus(release.id, 'deploying');
-
-    const existingDeployments = await db.query.deployments.findMany({
-      where: eq(deployments.releaseId, release.id),
-    });
-    const deploymentsByServiceId = new Map(
-      existingDeployments
-        .filter((deployment) => deployment.serviceId)
-        .map((deployment) => [deployment.serviceId!, deployment])
-    );
-
-    const queuedDeployments = [];
-    for (const artifact of release.artifacts) {
-      const existingDeployment = deploymentsByServiceId.get(artifact.serviceId);
-      const deployment =
-        existingDeployment ??
-        (
-          await db
-            .insert(deployments)
-            .values({
-              releaseId: release.id,
-              projectId: release.projectId,
-              environmentId: release.environmentId,
-              serviceId: artifact.serviceId,
-              commitSha: release.sourceCommitSha,
-              commitMessage:
-                release.summary || `Release ${release.sourceCommitSha?.slice(0, 7) ?? ''}`,
-              imageUrl: artifact.imageUrl,
-              status: 'queued',
-              deployedById: release.triggeredByUserId ?? null,
-            })
-            .returning()
-        )[0];
-
-      queuedDeployments.push(deployment);
-      await addDeploymentJob(deployment.id, release.projectId, release.environmentId);
-    }
-
-    let awaitingRollout = false;
-
-    for (const deployment of queuedDeployments) {
-      const result = await waitForDeployment(deployment.id);
-      if (result === 'awaiting_rollout') {
-        awaitingRollout = true;
-        continue;
-      }
-
-      if (result === 'verification_failed') {
-        await updateReleaseStatus(
-          release.id,
-          'verification_failed',
-          `Deployment ${deployment.id} ended with status ${result}`
-        );
-        await persistReleaseRecapSafely(release.id);
-        throw new Error(`Deployment ${deployment.id} ended with status ${result}`);
-      }
-
-      if (result !== 'running') {
-        throw new Error(`Deployment ${deployment.id} ended with status ${result}`);
-      }
-    }
-
-    if (awaitingRollout) {
-      await updateReleaseStatus(release.id, 'awaiting_rollout');
-      await persistReleaseRecapSafely(release.id);
-      return { success: true, awaitingRollout: true };
-    }
-
-    await completeReleaseAfterDeployments(release.id);
-
-    return { success: true };
+    return await continueReleaseFromDeploymentStage(release.id, release);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const current = await db.query.releases.findFirst({

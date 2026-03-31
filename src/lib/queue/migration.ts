@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
 import { executeMigrationRun } from '@/lib/migrations/runner';
+import { resumeReleaseAfterSuccessfulMigration } from '@/lib/releases/orchestration';
 import type { MigrationJobData } from './index';
 
 export async function processMigration(job: Job<MigrationJobData>) {
@@ -53,6 +54,7 @@ export async function processMigration(job: Job<MigrationJobData>) {
       sourceCommitSha:
         run.release?.configCommitSha ?? run.release?.sourceCommitSha ?? run.sourceCommitSha,
     });
+    await resumeReleaseAfterSuccessfulMigration(run.id);
   } catch (error) {
     const latestRun = await db.query.migrationRuns.findFirst({
       where: (table, { eq }) => eq(table.id, run.id),
