@@ -319,7 +319,14 @@ export async function executeDeploymentWorkload(
       try {
         await updateDeployment(targetEnvironment.namespace, stableName, {
           image: imageName,
+          port: service.port ?? 3000,
           envFrom,
+          imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+          healthcheckPath: service.healthcheckPath ?? undefined,
+          cpuRequest: service.cpuRequest ?? undefined,
+          cpuLimit: service.cpuLimit ?? undefined,
+          memoryRequest: service.memoryRequest ?? undefined,
+          memoryLimit: service.memoryLimit ?? undefined,
         });
         await logDeployment(deploymentId, `Updated ${stableName} → ${imageName}`);
       } catch (_updateError) {
@@ -330,6 +337,7 @@ export async function executeDeploymentWorkload(
           replicas: service.replicas ?? 1,
           envFrom,
           imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+          healthcheckPath: service.healthcheckPath ?? undefined,
           cpuRequest: service.cpuRequest ?? undefined,
           cpuLimit: service.cpuLimit ?? undefined,
           memoryRequest: service.memoryRequest ?? undefined,
@@ -370,7 +378,14 @@ export async function executeDeploymentWorkload(
     try {
       await updateDeployment(targetEnvironment.namespace, candidateName, {
         image: imageName,
+        port: service.port ?? 3000,
         envFrom,
+        imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+        healthcheckPath: service.healthcheckPath ?? undefined,
+        cpuRequest: service.cpuRequest ?? undefined,
+        cpuLimit: service.cpuLimit ?? undefined,
+        memoryRequest: service.memoryRequest ?? undefined,
+        memoryLimit: service.memoryLimit ?? undefined,
       });
       await logDeployment(deploymentId, `Updated ${candidateName} → ${imageName}`);
     } catch (_updateError) {
@@ -384,6 +399,7 @@ export async function executeDeploymentWorkload(
         replicas: service.replicas ?? 1,
         envFrom,
         imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+        healthcheckPath: service.healthcheckPath ?? undefined,
         cpuRequest: service.cpuRequest ?? undefined,
         cpuLimit: service.cpuLimit ?? undefined,
         memoryRequest: service.memoryRequest ?? undefined,

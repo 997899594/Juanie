@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { migrationRuns, projects, teamMembers } from '@/lib/db/schema';
-import { createMigrationRun, getMigrationRunById } from '@/lib/migrations';
+import { createMigrationRun, findActiveMigrationRun, getMigrationRunById } from '@/lib/migrations';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { addMigrationJob } from '@/lib/queue';
 
@@ -97,6 +97,21 @@ export async function POST(
   if (action === 'retry') {
     if (!['failed', 'canceled'].includes(run.status)) {
       return NextResponse.json({ error: '只有失败或已取消的迁移才能重试' }, { status: 400 });
+    }
+
+    const activeRun = await findActiveMigrationRun({
+      databaseId: run.databaseId,
+      environmentId: run.environmentId,
+    });
+
+    if (activeRun) {
+      return NextResponse.json(
+        {
+          error: `已有迁移正在处理中（${activeRun.status}）`,
+          runId: activeRun.id,
+        },
+        { status: 409 }
+      );
     }
 
     const retryRun = await createMigrationRun(buildResolvedSpec(run), {

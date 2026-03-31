@@ -624,6 +624,7 @@ export async function createDeployment(
     imagePullSecrets?: string[];
     command?: string[];
     args?: string[];
+    healthcheckPath?: string;
     cpuRequest?: string;
     cpuLimit?: string;
     memoryRequest?: string;
@@ -659,13 +660,13 @@ export async function createDeployment(
                 command: spec.command,
                 args: spec.args,
                 readinessProbe: {
-                  httpGet: { path: '/api/health/ready', port: spec.port },
+                  httpGet: { path: spec.healthcheckPath || '/api/health/ready', port: spec.port },
                   initialDelaySeconds: 15,
                   periodSeconds: 10,
                   failureThreshold: 6, // 15 + 6*10 = 75s before giving up
                 },
                 livenessProbe: {
-                  httpGet: { path: '/api/health/live', port: spec.port },
+                  httpGet: { path: spec.healthcheckPath || '/api/health/live', port: spec.port },
                   initialDelaySeconds: 30,
                   periodSeconds: 20,
                   failureThreshold: 3,
@@ -695,8 +696,15 @@ export async function updateDeployment(
   spec: {
     image?: string;
     replicas?: number;
+    port?: number;
     env?: Record<string, string>;
     envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
+    imagePullSecrets?: string[];
+    healthcheckPath?: string;
+    cpuRequest?: string;
+    cpuLimit?: string;
+    memoryRequest?: string;
+    memoryLimit?: string;
   }
 ): Promise<void> {
   const { apps } = getK8sClient();
@@ -707,11 +715,47 @@ export async function updateDeployment(
   const updatedContainers = containers.map((container) => ({
     ...container,
     image: spec.image ?? container.image,
+    ports:
+      spec.port !== undefined
+        ? [{ containerPort: spec.port, name: 'http', protocol: 'TCP' }]
+        : container.ports,
     env: spec.env
       ? Object.entries(spec.env).map(([name, value]) => ({ name, value }))
       : container.env,
     // If envFrom is provided, always apply it so stale/missing envFrom refs get fixed.
     ...(spec.envFrom !== undefined ? { envFrom: spec.envFrom } : {}),
+    ...(spec.healthcheckPath
+      ? {
+          readinessProbe: {
+            httpGet: {
+              path: spec.healthcheckPath,
+              port: spec.port ?? container.ports?.[0]?.containerPort ?? 3000,
+            },
+            initialDelaySeconds: 15,
+            periodSeconds: 10,
+            failureThreshold: 6,
+          },
+          livenessProbe: {
+            httpGet: {
+              path: spec.healthcheckPath,
+              port: spec.port ?? container.ports?.[0]?.containerPort ?? 3000,
+            },
+            initialDelaySeconds: 30,
+            periodSeconds: 20,
+            failureThreshold: 3,
+          },
+        }
+      : {}),
+    resources: {
+      requests: {
+        cpu: spec.cpuRequest ?? container.resources?.requests?.cpu ?? '100m',
+        memory: spec.memoryRequest ?? container.resources?.requests?.memory ?? '256Mi',
+      },
+      limits: {
+        cpu: spec.cpuLimit ?? container.resources?.limits?.cpu ?? '500m',
+        memory: spec.memoryLimit ?? container.resources?.limits?.memory ?? '512Mi',
+      },
+    },
   }));
 
   // Always bump restartedAt so the pod rolls even when the image tag is unchanged.
@@ -734,6 +778,11 @@ export async function updateDeployment(
         },
         spec: {
           ...current.spec?.template?.spec,
+          ...(spec.imagePullSecrets
+            ? {
+                imagePullSecrets: spec.imagePullSecrets.map((secretName) => ({ name: secretName })),
+              }
+            : {}),
           containers: updatedContainers,
         },
       },

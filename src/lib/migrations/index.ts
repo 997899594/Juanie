@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
 import {
@@ -140,6 +140,22 @@ export async function getMigrationRunById(runId: string) {
       specification: true,
       items: true,
     },
+  });
+}
+
+export async function findActiveMigrationRun(input: {
+  databaseId: string;
+  environmentId: string;
+  excludeRunId?: string;
+}) {
+  return db.query.migrationRuns.findFirst({
+    where: and(
+      eq(migrationRuns.databaseId, input.databaseId),
+      eq(migrationRuns.environmentId, input.environmentId),
+      inArray(migrationRuns.status, ['queued', 'planning', 'running', 'awaiting_approval']),
+      input.excludeRunId ? ne(migrationRuns.id, input.excludeRunId) : undefined
+    ),
+    orderBy: (run, { desc }) => [desc(run.createdAt)],
   });
 }
 

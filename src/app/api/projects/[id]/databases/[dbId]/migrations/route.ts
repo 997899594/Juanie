@@ -12,6 +12,7 @@ import {
 import {
   buildMigrationExecutionPlan,
   createMigrationRun,
+  findActiveMigrationRun,
   getMigrationRunById,
 } from '@/lib/migrations';
 import { syncMigrationSpecificationsFromRepo } from '@/lib/migrations/resolver';
@@ -211,6 +212,21 @@ export async function POST(
         return NextResponse.json({ error: '只有失败或已取消的迁移才能重试' }, { status: 400 });
       }
 
+      const activeRun = await findActiveMigrationRun({
+        databaseId: previousRun.databaseId,
+        environmentId: previousRun.environmentId,
+      });
+
+      if (activeRun) {
+        return NextResponse.json(
+          {
+            error: `已有迁移正在处理中（${activeRun.status}）`,
+            runId: activeRun.id,
+          },
+          { status: 409 }
+        );
+      }
+
       const retryRun = await createMigrationRun(resolvedSpec, {
         triggeredBy: 'manual',
         triggeredByUserId: session.user.id,
@@ -239,6 +255,21 @@ export async function POST(
           error: `确认文本不匹配，应输入 ${expectedConfirmationValue}`,
         },
         { status: 400 }
+      );
+    }
+
+    const activeRun = await findActiveMigrationRun({
+      databaseId: resolvedSpec.database.id,
+      environmentId: resolvedSpec.environment.id,
+    });
+
+    if (activeRun) {
+      return NextResponse.json(
+        {
+          error: `已有迁移正在处理中（${activeRun.status}）`,
+          runId: activeRun.id,
+        },
+        { status: 409 }
       );
     }
 
