@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { V1EnvVar, V1Job } from '@kubernetes/client-node';
+import type { V1EnvVar, V1Job, V1Pod } from '@kubernetes/client-node';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
@@ -20,6 +20,9 @@ function sleep(ms: number): Promise<void> {
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
+
+const MIGRATION_STARTUP_TIMEOUT_MS = 15 * 60 * 1000;
+const MIGRATION_EXECUTION_TIMEOUT_MS = 20 * 60 * 1000;
 
 function buildDatabaseEnvVars(spec: ResolvedMigrationSpec): V1EnvVar[] {
   const envVars: V1EnvVar[] = [];
@@ -82,6 +85,37 @@ async function tryGetPodLogs(
 
     throw error;
   }
+}
+
+function getMigrationPodPhase(pod?: V1Pod) {
+  return pod?.status?.phase ?? 'Pending';
+}
+
+function getMigrationContainerStatus(pod?: V1Pod) {
+  return pod?.status?.containerStatuses?.[0];
+}
+
+function getMigrationPodIssue(pod?: V1Pod): string | null {
+  const containerStatus = getMigrationContainerStatus(pod);
+  const waiting = containerStatus?.state?.waiting;
+  const terminated = containerStatus?.state?.terminated;
+
+  if (
+    waiting?.reason &&
+    ['ErrImagePull', 'ImagePullBackOff', 'CrashLoopBackOff'].includes(waiting.reason)
+  ) {
+    return waiting.message ? `${waiting.reason}: ${waiting.message}` : waiting.reason;
+  }
+
+  if (terminated?.reason) {
+    return terminated.message ? `${terminated.reason}: ${terminated.message}` : terminated.reason;
+  }
+
+  return null;
+}
+
+function isMigrationContainerRunning(pod?: V1Pod): boolean {
+  return Boolean(getMigrationContainerStatus(pod)?.state?.running);
 }
 
 async function getRunStartedAt(runId: string): Promise<Date | null> {
@@ -262,18 +296,45 @@ async function runCommandMigration(
   await createJob(namespace!, job);
 
   let finalLogs = '';
+  let executionStartedAt: number | null = null;
   try {
-    for (let attempts = 0; attempts < 120; attempts++) {
+    while (true) {
       const currentJob = await getJob(namespace!, jobName);
       const conditions = currentJob.status?.conditions ?? [];
       const pods = await getPods(namespace!, `job-name=${jobName}`);
-      const podName = pods[0]?.metadata?.name;
+      const pod = pods[0];
+      const podName = pod?.metadata?.name;
+
+      const podIssue = getMigrationPodIssue(pod);
+      if (podIssue) {
+        await db
+          .update(migrationRunItems)
+          .set({
+            status: 'failed',
+            error: podIssue,
+            output: finalLogs,
+            finishedAt: new Date(),
+          })
+          .where(eq(migrationRunItems.id, item.id));
+        await markRunFailed(runId, 'MIGRATION_POD_UNHEALTHY', podIssue);
+      }
+
+      if (isMigrationContainerRunning(pod) && executionStartedAt === null) {
+        executionStartedAt = Date.now();
+        await appendRunLog(
+          runId,
+          `迁移容器已启动，进入执行阶段（phase=${getMigrationPodPhase(pod)}）`
+        );
+      }
+
       if (podName) {
         const podLogs = await tryGetPodLogs(namespace!, podName, runId);
         if (podLogs) {
           finalLogs = podLogs;
           await appendRunLog(runId, podLogs);
         }
+      } else {
+        await appendRunLog(runId, '等待迁移 Pod 被调度...');
       }
 
       if (
@@ -317,10 +378,25 @@ async function runCommandMigration(
         await markRunFailed(runId, 'MIGRATION_COMMAND_FAILED', finalLogs || 'Migration job failed');
       }
 
+      const now = Date.now();
+      const startedAtTime = (await getRunStartedAt(runId))?.getTime() ?? now;
+      if (executionStartedAt === null && now - startedAtTime > MIGRATION_STARTUP_TIMEOUT_MS) {
+        await markRunFailed(
+          runId,
+          'MIGRATION_STARTUP_TIMEOUT',
+          `Migration job startup timed out (phase=${getMigrationPodPhase(pod)})`
+        );
+      }
+
+      if (
+        executionStartedAt !== null &&
+        now - executionStartedAt > MIGRATION_EXECUTION_TIMEOUT_MS
+      ) {
+        await markRunFailed(runId, 'MIGRATION_RUN_TIMEOUT', 'Migration job execution timed out');
+      }
+
       await sleep(2000);
     }
-
-    await markRunFailed(runId, 'MIGRATION_RUN_TIMEOUT', 'Migration job timed out');
   } finally {
     await deleteJob(namespace!, jobName).catch(() => undefined);
   }

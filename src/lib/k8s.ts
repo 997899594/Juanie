@@ -1130,6 +1130,156 @@ export interface DeploymentSnapshot {
   memoryLimit?: string;
 }
 
+function getContainerWaitingMessage(containerStatus?: k8s.V1ContainerStatus): string | null {
+  const waiting = containerStatus?.state?.waiting;
+  if (!waiting) {
+    return null;
+  }
+
+  return waiting.message
+    ? `${waiting.reason ?? 'Waiting'}: ${waiting.message}`
+    : (waiting.reason ?? 'Waiting');
+}
+
+function getContainerTerminatedMessage(containerStatus?: k8s.V1ContainerStatus): string | null {
+  const terminated = containerStatus?.state?.terminated;
+  if (!terminated) {
+    return null;
+  }
+
+  return terminated.message
+    ? `${terminated.reason ?? 'Terminated'}: ${terminated.message}`
+    : (terminated.reason ?? 'Terminated');
+}
+
+function describeDeploymentPodIssues(pods: k8s.V1Pod[]): string | null {
+  for (const pod of pods) {
+    const statuses = pod.status?.containerStatuses ?? [];
+
+    for (const status of statuses) {
+      const waitingMessage = getContainerWaitingMessage(status);
+      if (
+        waitingMessage &&
+        ['ImagePullBackOff', 'ErrImagePull', 'CrashLoopBackOff', 'CreateContainerConfigError'].some(
+          (reason) => waitingMessage.includes(reason)
+        )
+      ) {
+        return `${pod.metadata?.name ?? 'pod'} · ${waitingMessage}`;
+      }
+
+      const terminatedMessage = getContainerTerminatedMessage(status);
+      if (terminatedMessage) {
+        return `${pod.metadata?.name ?? 'pod'} · ${terminatedMessage}`;
+      }
+    }
+  }
+
+  return null;
+}
+
+export async function waitForDeploymentReady(input: {
+  namespace: string;
+  name: string;
+  timeoutMs?: number;
+  pollMs?: number;
+}) {
+  const timeoutMs = input.timeoutMs ?? 10 * 60 * 1000;
+  const pollMs = input.pollMs ?? 3000;
+  const deadline = Date.now() + timeoutMs;
+  const { apps } = getK8sClient();
+  let lastObservedIssue: string | null = null;
+
+  while (Date.now() < deadline) {
+    const deployment = await apps.readNamespacedDeployment({
+      namespace: input.namespace,
+      name: input.name,
+    });
+
+    const desiredReplicas = deployment.spec?.replicas ?? 1;
+    const readyReplicas = deployment.status?.readyReplicas ?? 0;
+    const updatedReplicas = deployment.status?.updatedReplicas ?? 0;
+    const availableReplicas = deployment.status?.availableReplicas ?? 0;
+    const progressingCondition = deployment.status?.conditions?.find(
+      (condition) => condition.type === 'Progressing'
+    );
+
+    if (progressingCondition?.status === 'False') {
+      throw new Error(progressingCondition.message ?? 'Deployment rollout failed');
+    }
+
+    const pods = await getPods(input.namespace, `app=${input.name}`);
+    const podIssue = describeDeploymentPodIssues(pods);
+    if (podIssue) {
+      throw new Error(podIssue);
+    }
+
+    if (
+      desiredReplicas > 0 &&
+      readyReplicas >= desiredReplicas &&
+      updatedReplicas >= desiredReplicas &&
+      availableReplicas >= desiredReplicas
+    ) {
+      return;
+    }
+
+    lastObservedIssue =
+      podIssue ??
+      progressingCondition?.message ??
+      `ready ${readyReplicas}/${desiredReplicas}, updated ${updatedReplicas}/${desiredReplicas}`;
+
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+
+  throw new Error(lastObservedIssue ?? `Deployment ${input.name} rollout timed out`);
+}
+
+function normalizeServiceVerificationPath(path: string): string {
+  if (!path.startsWith('/')) {
+    return `/${path}`;
+  }
+
+  return path;
+}
+
+export async function verifyServiceReachability(input: {
+  namespace: string;
+  serviceName: string;
+  port: number;
+  paths: string[];
+  timeoutMs?: number;
+}) {
+  const timeoutMs = input.timeoutMs ?? 8000;
+
+  for (const rawPath of input.paths) {
+    const path = normalizeServiceVerificationPath(rawPath);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(
+        `http://${input.serviceName}.${input.namespace}.svc.cluster.local:${input.port}${path}`,
+        {
+          method: 'GET',
+          redirect: 'manual',
+          signal: controller.signal,
+        }
+      );
+
+      if (response.status >= 500) {
+        throw new Error(`${path} returned ${response.status}`);
+      }
+    } catch (error) {
+      throw new Error(
+        `Service verify failed for ${input.serviceName}${path}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+
 export async function getDeploymentSnapshot(
   namespace: string,
   name: string

@@ -10,6 +10,8 @@ import {
   getDeploymentSnapshot,
   getIsConnected,
   updateDeployment,
+  verifyServiceReachability,
+  waitForDeploymentReady,
 } from '@/lib/k8s';
 import {
   buildCandidateDeploymentName,
@@ -35,6 +37,29 @@ function getStrategyLabel(strategy: ProgressiveDeploymentStrategy): string {
     case 'blue_green':
       return '蓝绿切换';
   }
+}
+
+function buildRolloutVerificationPaths(service: {
+  type: string;
+  isPublic?: boolean | null;
+  healthcheckPath?: string | null;
+}) {
+  if (service.type !== 'web') {
+    return [];
+  }
+
+  const paths = new Set<string>();
+  if (service.healthcheckPath) {
+    paths.add(service.healthcheckPath);
+  } else {
+    paths.add('/api/health/ready');
+  }
+
+  if (service.isPublic !== false) {
+    paths.add('/');
+  }
+
+  return Array.from(paths);
 }
 
 async function appendDeploymentLog(deploymentId: string, message: string) {
@@ -264,8 +289,15 @@ export async function finalizeDeploymentRollout(input: {
   if (rollout.deployment.stableExists) {
     await updateDeployment(namespace, stableName, {
       image: candidateSnapshot.image,
+      port: candidateSnapshot.port,
       envFrom: candidateSnapshot.envFrom,
       replicas: candidateSnapshot.replicas,
+      imagePullSecrets: candidateSnapshot.imagePullSecrets,
+      healthcheckPath: service.healthcheckPath ?? undefined,
+      cpuRequest: candidateSnapshot.cpuRequest,
+      cpuLimit: candidateSnapshot.cpuLimit,
+      memoryRequest: candidateSnapshot.memoryRequest,
+      memoryLimit: candidateSnapshot.memoryLimit,
     });
   } else {
     try {
@@ -283,10 +315,26 @@ export async function finalizeDeploymentRollout(input: {
       replicas: candidateSnapshot.replicas,
       envFrom: candidateSnapshot.envFrom,
       imagePullSecrets: candidateSnapshot.imagePullSecrets,
+      healthcheckPath: service.healthcheckPath ?? undefined,
       cpuRequest: candidateSnapshot.cpuRequest,
       cpuLimit: candidateSnapshot.cpuLimit,
       memoryRequest: candidateSnapshot.memoryRequest,
       memoryLimit: candidateSnapshot.memoryLimit,
+    });
+  }
+
+  await waitForDeploymentReady({
+    namespace,
+    name: stableName,
+  });
+
+  const verificationPaths = buildRolloutVerificationPaths(service);
+  if (verificationPaths.length > 0) {
+    await verifyServiceReachability({
+      namespace,
+      serviceName: stableName,
+      port: service.port ?? candidateSnapshot.port,
+      paths: verificationPaths,
     });
   }
 

@@ -33,6 +33,8 @@ import {
   GHCR_PULL_SECRET_NAME,
   getIsConnected,
   updateDeployment,
+  verifyServiceReachability,
+  waitForDeploymentReady,
 } from '@/lib/k8s';
 
 function buildServiceResourceName(projectSlug: string, serviceName: string): string {
@@ -41,6 +43,30 @@ function buildServiceResourceName(projectSlug: string, serviceName: string): str
 
 function buildCandidateResourceName(baseName: string): string {
   return `${baseName}-candidate`.slice(0, 63);
+}
+
+function buildServiceVerificationPaths(service: {
+  type: string;
+  isPublic?: boolean | null;
+  healthcheckPath?: string | null;
+}) {
+  if (service.type !== 'web') {
+    return [];
+  }
+
+  const paths = new Set<string>();
+
+  if (service.healthcheckPath) {
+    paths.add(service.healthcheckPath);
+  } else {
+    paths.add('/api/health/ready');
+  }
+
+  if (service.isPublic !== false) {
+    paths.add('/');
+  }
+
+  return Array.from(paths);
 }
 
 function isProgressiveStrategy(
@@ -314,6 +340,7 @@ export async function executeDeploymentWorkload(
 
     const stableName = buildServiceResourceName(project.slug, service.name);
     const candidateName = buildCandidateResourceName(stableName);
+    const verificationPaths = buildServiceVerificationPaths(service);
 
     if (!isProgressiveStrategy(deploymentStrategy)) {
       try {
@@ -344,6 +371,24 @@ export async function executeDeploymentWorkload(
           memoryLimit: service.memoryLimit ?? undefined,
         });
         await logDeployment(deploymentId, `Created ${stableName} → ${imageName}`);
+      }
+
+      await waitForDeploymentReady({
+        namespace: targetEnvironment.namespace,
+        name: stableName,
+      });
+
+      if (verificationPaths.length > 0) {
+        await verifyServiceReachability({
+          namespace: targetEnvironment.namespace,
+          serviceName: stableName,
+          port: service.port ?? 3000,
+          paths: verificationPaths,
+        });
+        await logDeployment(
+          deploymentId,
+          `Verified ${stableName} on ${verificationPaths.join(', ')}`
+        );
       }
 
       await cleanupCandidateResources(targetEnvironment.namespace, candidateName);
@@ -406,6 +451,24 @@ export async function executeDeploymentWorkload(
         memoryLimit: service.memoryLimit ?? undefined,
       });
       await logDeployment(deploymentId, `Created ${candidateName} → ${imageName}`);
+    }
+
+    await waitForDeploymentReady({
+      namespace: targetEnvironment.namespace,
+      name: candidateName,
+    });
+
+    if (verificationPaths.length > 0) {
+      await verifyServiceReachability({
+        namespace: targetEnvironment.namespace,
+        serviceName: candidateName,
+        port: service.port ?? 3000,
+        paths: verificationPaths,
+      });
+      await logDeployment(
+        deploymentId,
+        `Verified ${candidateName} on ${verificationPaths.join(', ')}`
+      );
     }
 
     const backends = buildTrafficBackends({
