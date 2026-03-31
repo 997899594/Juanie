@@ -540,6 +540,51 @@ function getTimelineTone(
   return 'neutral';
 }
 
+function buildMigrationRetryTimelineItems(
+  release: ReleaseViewLike,
+  releaseHref: string | null
+): Array<ReleaseTimelineItem & { sortValue: number }> {
+  const items: Array<ReleaseTimelineItem & { sortValue: number }> = [];
+  const historyByTarget = new Map<string, ReleaseViewLike['migrationRuns']>();
+  const orderedRuns = [...release.migrationRuns].sort((left, right) => {
+    const leftAt = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+    const rightAt = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+    return leftAt - rightAt;
+  });
+
+  for (const run of orderedRuns) {
+    const targetKey = [
+      run.serviceId ?? run.service?.id ?? 'service',
+      run.databaseId ?? run.database?.id ?? 'database',
+      run.specification?.phase ?? 'manual',
+      run.specification?.command ?? 'command',
+    ].join(':');
+    const history = historyByTarget.get(targetKey) ?? [];
+
+    if (history.length > 0) {
+      const priorFailed = history.some((candidate) =>
+        ['failed', 'canceled'].includes(candidate.status)
+      );
+      const attemptNumber = history.length + 1;
+
+      items.push({
+        key: `migration-retry-${run.id ?? `${targetKey}-${attemptNumber}`}`,
+        at: formatTimelineTimestamp(run.createdAt),
+        title: priorFailed ? '迁移已重试' : '迁移再次执行',
+        description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · 第 ${attemptNumber} 次尝试`,
+        tone: priorFailed ? 'info' : 'neutral',
+        href: releaseHref,
+        sortValue: run.createdAt ? new Date(run.createdAt).getTime() : 0,
+      });
+    }
+
+    history.push(run);
+    historyByTarget.set(targetKey, history);
+  }
+
+  return items;
+}
+
 function buildReleaseTimeline(input: {
   release: ReleaseViewLike;
   statusDecoration: ReleaseStatusDecoration;
@@ -552,7 +597,9 @@ function buildReleaseTimeline(input: {
   const releaseHref = release.projectId
     ? `/projects/${release.projectId}/releases/${release.id}`
     : null;
-  const items: Array<ReleaseTimelineItem & { sortValue: number }> = [];
+  const items: Array<ReleaseTimelineItem & { sortValue: number }> = [
+    ...buildMigrationRetryTimelineItems(release, releaseHref),
+  ];
 
   items.push({
     key: 'release-created',

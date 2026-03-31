@@ -34,6 +34,16 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
         errorMessage: message,
       })
       .where(eq(deployments.id, deployment.id));
+
+    if (status === 'verification_failed') {
+      await logDeployment(
+        deployment.id,
+        'Verification failed; deployment is marked terminal and will not be auto-retried',
+        'warn'
+      );
+      return { success: false, terminal: true };
+    }
+
     throw error;
   }
 }

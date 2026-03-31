@@ -1241,6 +1241,72 @@ function normalizeServiceVerificationPath(path: string): string {
   return path;
 }
 
+const SERVICE_VERIFY_IMAGE = 'curlimages/curl:8.7.1';
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function buildVerificationPodName(serviceName: string): string {
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${serviceName}-verify-${suffix}`.replace(/[^a-z0-9-]/g, '-').slice(0, 63);
+}
+
+function getPodStatusMessage(pod: k8s.V1Pod): string | null {
+  const statuses = [
+    ...(pod.status?.initContainerStatuses ?? []),
+    ...(pod.status?.containerStatuses ?? []),
+  ];
+
+  for (const status of statuses) {
+    const waitingMessage = getContainerWaitingMessage(status);
+    if (waitingMessage) {
+      return waitingMessage;
+    }
+
+    const terminatedMessage = getContainerTerminatedMessage(status);
+    if (terminatedMessage) {
+      return terminatedMessage;
+    }
+  }
+
+  return pod.status?.message ?? pod.status?.reason ?? null;
+}
+
+async function waitForPodCompletion(input: {
+  namespace: string;
+  name: string;
+  timeoutMs: number;
+  pollMs: number;
+}): Promise<k8s.V1Pod> {
+  const { core } = getK8sClient();
+  const deadline = Date.now() + input.timeoutMs;
+  let lastObservedIssue: string | null = null;
+
+  while (Date.now() < deadline) {
+    const pod = await core.readNamespacedPod({
+      namespace: input.namespace,
+      name: input.name,
+    });
+
+    const phase = pod.status?.phase;
+    if (phase === 'Succeeded' || phase === 'Failed') {
+      return pod;
+    }
+
+    lastObservedIssue = getPodStatusMessage(pod) ?? lastObservedIssue;
+    await sleep(input.pollMs);
+  }
+
+  throw new Error(
+    lastObservedIssue ?? `Verification pod ${input.namespace}/${input.name} timed out`
+  );
+}
+
 export async function verifyServiceReachability(input: {
   namespace: string;
   serviceName: string;
@@ -1253,48 +1319,78 @@ export async function verifyServiceReachability(input: {
   const timeoutMs = input.timeoutMs ?? 30000;
   const pollMs = input.pollMs ?? 2000;
   const requestTimeoutMs = Math.min(input.requestTimeoutMs ?? 8000, timeoutMs);
+  const { core } = getK8sClient();
+  const podName = buildVerificationPodName(input.serviceName);
+  const attemptCount = Math.max(1, Math.ceil(timeoutMs / pollMs));
+  const sleepSeconds = Math.max(1, Math.ceil(pollMs / 1000));
+  const requestTimeoutSeconds = Math.max(1, Math.ceil(requestTimeoutMs / 1000));
+  const normalizedPaths = input.paths.map(normalizeServiceVerificationPath);
+  const verificationCommands = normalizedPaths.map((path) =>
+    [
+      `last_error=''`,
+      `attempt=1`,
+      `while [ "$attempt" -le ${attemptCount} ]; do`,
+      `  if code=$(curl --silent --show-error --output /tmp/verify-body --write-out '%{http_code}' --max-time ${requestTimeoutSeconds} ${shellQuote(`http://${input.serviceName}:${input.port}${path}`)} 2>/tmp/verify-error); then`,
+      `    if [ "$code" -lt 400 ]; then`,
+      `      break`,
+      `    fi`,
+      `    last_error=${shellQuote(`${path} returned `)}"$code"`,
+      `  else`,
+      `    last_error=$(cat /tmp/verify-error 2>/dev/null || true)`,
+      `    [ -n "$last_error" ] || last_error='request failed'`,
+      `  fi`,
+      `  if [ "$attempt" -eq ${attemptCount} ]; then`,
+      `    echo "$last_error" >&2`,
+      `    exit 1`,
+      `  fi`,
+      `  attempt=$((attempt + 1))`,
+      `  sleep ${sleepSeconds}`,
+      `done`,
+    ].join('\n')
+  );
+  const script = ['set -eu', ...verificationCommands, 'echo verification_ok'].join('\n');
 
-  for (const rawPath of input.paths) {
-    const path = normalizeServiceVerificationPath(rawPath);
-    const deadline = Date.now() + timeoutMs;
-    let lastError: string | null = null;
-
-    while (Date.now() < deadline) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
-
-      try {
-        const response = await fetch(
-          `http://${input.serviceName}.${input.namespace}.svc.cluster.local:${input.port}${path}`,
+  await core.createNamespacedPod({
+    namespace: input.namespace,
+    body: {
+      apiVersion: 'v1',
+      kind: 'Pod',
+      metadata: {
+        name: podName,
+        labels: {
+          'app.kubernetes.io/name': 'juanie-service-verify',
+          'juanie.io/service': input.serviceName,
+        },
+      },
+      spec: {
+        restartPolicy: 'Never',
+        containers: [
           {
-            method: 'GET',
-            redirect: 'manual',
-            signal: controller.signal,
-          }
-        );
+            name: 'curl',
+            image: SERVICE_VERIFY_IMAGE,
+            command: ['/bin/sh', '-lc', script],
+          },
+        ],
+      },
+    },
+  });
 
-        if (response.status >= 400) {
-          throw new Error(`${path} returned ${response.status}`);
-        }
+  try {
+    const pod = await waitForPodCompletion({
+      namespace: input.namespace,
+      name: podName,
+      timeoutMs: timeoutMs + requestTimeoutMs + pollMs,
+      pollMs,
+    });
+    const logs = (await getPodLogs(input.namespace, podName, 'curl', 200).catch(() => '')).trim();
 
-        lastError = null;
-        break;
-      } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
-      } finally {
-        clearTimeout(timer);
-      }
-
-      if (Date.now() >= deadline) {
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    if (pod.status?.phase !== 'Succeeded') {
+      throw new Error(
+        `Service verify failed for ${input.serviceName}: ${logs || getPodStatusMessage(pod) || 'verification pod failed'}`
+      );
     }
-
-    if (lastError) {
-      throw new Error(`Service verify failed for ${input.serviceName}${path}: ${lastError}`);
-    }
+  } finally {
+    await deletePod(input.namespace, podName, { force: true }).catch(() => undefined);
   }
 }
 
