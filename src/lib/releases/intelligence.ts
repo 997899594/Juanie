@@ -4,6 +4,8 @@ export type ReleaseIssueCode =
   | 'migration_failed'
   | 'migration_canceled'
   | 'deployment_failed'
+  | 'verification_failed'
+  | 'rollout_pending'
   | 'preview_expired'
   | 'degraded'
   | 'release_failed';
@@ -113,10 +115,18 @@ export function getReleaseFailureSummary(release: ReleaseLike): string | null {
   }
 
   const failedDeployment = release.deployments?.find(
-    (deployment) => deployment.status === 'failed'
+    (deployment) => deployment.status === 'failed' || deployment.status === 'verification_failed'
   );
   if (failedDeployment) {
-    return '部署执行失败';
+    return failedDeployment.status === 'verification_failed' ? '部署校验失败' : '部署执行失败';
+  }
+
+  if (release.status === 'awaiting_rollout') {
+    return '发布等待放量完成';
+  }
+
+  if (release.status === 'verification_failed') {
+    return '发布校验失败';
   }
 
   if (release.status === 'migration_pre_failed') {
@@ -154,6 +164,20 @@ export function getReleaseIssueCode(release: ReleaseLike): ReleaseIssueCode | nu
 
   if (release.deployments?.some((deployment) => deployment.status === 'failed')) {
     return 'deployment_failed';
+  }
+
+  if (
+    release.deployments?.some((deployment) => deployment.status === 'verification_failed') ||
+    release.status === 'verification_failed'
+  ) {
+    return 'verification_failed';
+  }
+
+  if (
+    release.deployments?.some((deployment) => deployment.status === 'awaiting_rollout') ||
+    release.status === 'awaiting_rollout'
+  ) {
+    return 'rollout_pending';
   }
 
   if (previewExpiryState === 'expired') {
@@ -206,6 +230,10 @@ export function getIssueLabel(issueCode: ReleaseIssueCode | null): string | null
       return '迁移取消';
     case 'deployment_failed':
       return '部署失败';
+    case 'verification_failed':
+      return '校验失败';
+    case 'rollout_pending':
+      return '待放量';
     case 'preview_expired':
       return '预览已过期';
     case 'degraded':
@@ -226,6 +254,10 @@ export function getReleaseActionLabel(issueCode: ReleaseIssueCode | null): strin
       return '检查迁移并重试';
     case 'deployment_failed':
       return '检查部署日志';
+    case 'verification_failed':
+      return '检查校验与运行时日志';
+    case 'rollout_pending':
+      return '完成放量';
     case 'preview_expired':
       return '重新创建预览环境';
     case 'degraded':
@@ -245,7 +277,10 @@ export function getIssueKind(issueCode: ReleaseIssueCode | null): ReleaseIssueKi
     case 'migration_canceled':
       return 'migration';
     case 'deployment_failed':
+    case 'verification_failed':
       return 'deployment';
+    case 'rollout_pending':
+      return 'release';
     case 'preview_expired':
       return 'environment';
     case 'degraded':
@@ -266,6 +301,10 @@ export function getIssueSummary(issueCode: ReleaseIssueCode | null): string | nu
       return '发布被取消迁移中断';
     case 'deployment_failed':
       return '发布被失败部署中断';
+    case 'verification_failed':
+      return '发布被校验失败阻断';
+    case 'rollout_pending':
+      return '候选版本已就绪，等待完成放量';
     case 'preview_expired':
       return '预览环境已经过期';
     case 'degraded':
@@ -393,7 +432,10 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
     (run) => run.specification?.approvalPolicy === 'manual_in_production' && isProduction
   );
   const hasFailedDeployment = release.deployments?.some(
-    (deployment) => deployment.status === 'failed'
+    (deployment) => deployment.status === 'failed' || deployment.status === 'verification_failed'
+  );
+  const hasAwaitingRollout = release.deployments?.some(
+    (deployment) => deployment.status === 'awaiting_rollout'
   );
 
   if (isProduction) {
@@ -437,6 +479,11 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
     reasons.push('存在失败部署');
   }
 
+  if (hasAwaitingRollout && riskLevel !== 'high') {
+    riskLevel = 'medium';
+    reasons.push('存在待完成放量的候选版本');
+  }
+
   if (hasManualProdGate && riskLevel !== 'high') {
     riskLevel = 'medium';
     reasons.push('生产迁移需要人工审批');
@@ -447,7 +494,7 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
     reasons.push('发布处于降级状态');
   }
 
-  if (['migration_pre_failed', 'failed'].includes(release.status)) {
+  if (['migration_pre_failed', 'failed', 'verification_failed'].includes(release.status)) {
     riskLevel = 'high';
   }
 

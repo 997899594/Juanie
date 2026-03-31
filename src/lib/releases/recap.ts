@@ -143,8 +143,12 @@ function getReleaseStatusLabel(status: string): string {
       return '前置迁移失败';
     case 'deploying':
       return '发布中';
+    case 'awaiting_rollout':
+      return '待放量';
     case 'verifying':
       return '校验中';
+    case 'verification_failed':
+      return '校验失败';
     case 'migration_post_running':
       return '后置迁移';
     case 'degraded':
@@ -271,6 +275,25 @@ function buildReleaseBlockingReason(input: {
       label: '迁移取消',
       summary: '发布链路在迁移阶段被中断，需要先确认取消原因。',
       nextActionLabel: '恢复迁移后再继续发布',
+    };
+  }
+
+  if (input.release.status === 'awaiting_rollout') {
+    return {
+      label: '待放量',
+      summary: '候选版本已经通过部署与校验，但当前仍在等待人工完成放量或切换。',
+      nextActionLabel: '完成放量后再收口发布',
+    };
+  }
+
+  if (
+    input.release.status === 'verification_failed' ||
+    input.release.deployments.some((deployment) => deployment.status === 'verification_failed')
+  ) {
+    return {
+      label: '校验失败',
+      summary: '镜像已经部署，但运行态校验没有通过，因此平台不会把这次发布记为成功。',
+      nextActionLabel: '检查校验路径、应用日志和环境入口',
     };
   }
 

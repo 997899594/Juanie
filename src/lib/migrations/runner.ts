@@ -108,6 +108,10 @@ function getMigrationPodIssue(pod?: V1Pod): string | null {
   }
 
   if (terminated?.reason) {
+    if (terminated.reason === 'Completed' || terminated.exitCode === 0) {
+      return null;
+    }
+
     return terminated.message ? `${terminated.reason}: ${terminated.message}` : terminated.reason;
   }
 
@@ -305,6 +309,42 @@ async function runCommandMigration(
       const pod = pods[0];
       const podName = pod?.metadata?.name;
 
+      if (
+        conditions.some((condition) => condition.type === 'Complete' && condition.status === 'True')
+      ) {
+        if (podName) {
+          const podLogs = await tryGetPodLogs(namespace!, podName, runId);
+          if (podLogs) {
+            finalLogs = podLogs;
+            await appendRunLog(runId, podLogs);
+          }
+        }
+
+        const finishedAt = new Date();
+        const startedAt = await getRunStartedAt(runId);
+        await db
+          .update(migrationRunItems)
+          .set({
+            status: 'success',
+            output: finalLogs,
+            finishedAt,
+          })
+          .where(eq(migrationRunItems.id, item.id));
+        await db
+          .update(migrationRuns)
+          .set({
+            status: 'success',
+            appliedCount: 1,
+            finishedAt,
+            durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
+            updatedAt: finishedAt,
+            errorCode: null,
+            errorMessage: null,
+          })
+          .where(eq(migrationRuns.id, runId));
+        return;
+      }
+
       const podIssue = getMigrationPodIssue(pod);
       if (podIssue) {
         await db
@@ -335,32 +375,6 @@ async function runCommandMigration(
         }
       } else {
         await appendRunLog(runId, '等待迁移 Pod 被调度...');
-      }
-
-      if (
-        conditions.some((condition) => condition.type === 'Complete' && condition.status === 'True')
-      ) {
-        const finishedAt = new Date();
-        const startedAt = await getRunStartedAt(runId);
-        await db
-          .update(migrationRunItems)
-          .set({
-            status: 'success',
-            output: finalLogs,
-            finishedAt,
-          })
-          .where(eq(migrationRunItems.id, item.id));
-        await db
-          .update(migrationRuns)
-          .set({
-            status: 'success',
-            appliedCount: 1,
-            finishedAt,
-            durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
-            updatedAt: finishedAt,
-          })
-          .where(eq(migrationRuns.id, runId));
-        return;
       }
 
       if (

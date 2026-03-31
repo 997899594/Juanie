@@ -8,6 +8,7 @@ const activeReleaseStatuses = [
   'planning',
   'migration_pre_running',
   'deploying',
+  'awaiting_rollout',
   'verifying',
   'migration_post_running',
 ] as const;

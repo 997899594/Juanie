@@ -1,71 +1,20 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import type { MigrationRunStatus, ReleaseStatus } from '@/lib/db/schema';
-import { deployments, migrationRuns, releases } from '@/lib/db/schema';
-import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
-import { persistReleaseRecapById } from '@/lib/releases/recap-service';
-import { addDeploymentJob, addMigrationJob, type ReleaseJobData } from './index';
-
-async function loadRelease(releaseId: string) {
-  return db.query.releases.findFirst({
-    where: eq(releases.id, releaseId),
-    with: {
-      project: true,
-      environment: true,
-      artifacts: {
-        with: {
-          service: true,
-        },
-      },
-    },
-  });
-}
-
-async function updateReleaseStatus(
-  releaseId: string,
-  status: ReleaseStatus,
-  errorMessage?: string | null
-) {
-  await db
-    .update(releases)
-    .set({
-      status,
-      errorMessage: errorMessage ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(releases.id, releaseId));
-}
-
-async function waitForMigrationRun(runId: string): Promise<MigrationRunStatus> {
-  for (let attempts = 0; attempts < 300; attempts++) {
-    const run = await db.query.migrationRuns.findFirst({
-      where: eq(migrationRuns.id, runId),
-    });
-
-    if (!run) {
-      throw new Error(`Migration run ${runId} not found`);
-    }
-
-    if (
-      run.status === 'success' ||
-      run.status === 'failed' ||
-      run.status === 'awaiting_approval' ||
-      run.status === 'canceled' ||
-      run.status === 'skipped'
-    ) {
-      return run.status;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  throw new Error(`Timed out waiting for migration run ${runId}`);
-}
+import { deployments, releases } from '@/lib/db/schema';
+import {
+  completeReleaseAfterDeployments,
+  failReleaseForCurrentPhase,
+  loadReleaseForOrchestration,
+  persistReleaseRecapSafely,
+  runReleaseMigrationPhase,
+  updateReleaseStatus,
+} from '@/lib/releases/orchestration';
+import { addDeploymentJob, type ReleaseJobData } from './index';
 
 async function waitForDeployment(
   deploymentId: string
-): Promise<'running' | 'failed' | 'rolled_back'> {
+): Promise<'running' | 'failed' | 'rolled_back' | 'awaiting_rollout' | 'verification_failed'> {
   for (let attempts = 0; attempts < 300; attempts++) {
     const deployment = await db.query.deployments.findFirst({
       where: eq(deployments.id, deploymentId),
@@ -77,6 +26,8 @@ async function waitForDeployment(
 
     if (
       deployment.status === 'running' ||
+      deployment.status === 'awaiting_rollout' ||
+      deployment.status === 'verification_failed' ||
       deployment.status === 'failed' ||
       deployment.status === 'rolled_back'
     ) {
@@ -89,45 +40,8 @@ async function waitForDeployment(
   throw new Error(`Timed out waiting for deployment ${deploymentId}`);
 }
 
-async function runMigrationPhase(
-  release: NonNullable<Awaited<ReturnType<typeof loadRelease>>>,
-  phase: 'preDeploy' | 'postDeploy'
-) {
-  const imageByServiceId = new Map(
-    release.artifacts.map((artifact) => [artifact.serviceId, artifact.imageUrl])
-  );
-  const createdRuns = await resolveAndCreateMigrationRuns(
-    release.projectId,
-    release.environmentId,
-    phase,
-    {
-      releaseId: release.id,
-      triggeredBy: 'deploy',
-      triggeredByUserId: release.triggeredByUserId ?? null,
-      sourceRef: release.sourceRef,
-      sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
-      sourceCommitMessage: release.summary,
-      serviceIds: release.artifacts.map((artifact) => artifact.serviceId),
-      options: {
-        allowApprovalBypass: false,
-      },
-    }
-  );
-
-  for (const run of createdRuns) {
-    await addMigrationJob(run.id, {
-      imageUrl: imageByServiceId.get(run.serviceId) ?? null,
-      allowApprovalBypass: false,
-    });
-    const result = await waitForMigrationRun(run.id);
-    if (result !== 'success') {
-      throw new Error(`Migration run ${run.id} ended with status ${result}`);
-    }
-  }
-}
-
 export async function processRelease(job: Job<ReleaseJobData>) {
-  const release = await loadRelease(job.data.releaseId);
+  const release = await loadReleaseForOrchestration(job.data.releaseId);
 
   if (!release) {
     throw new Error(`Release ${job.data.releaseId} not found`);
@@ -141,7 +55,7 @@ export async function processRelease(job: Job<ReleaseJobData>) {
   try {
     await updateReleaseStatus(release.id, 'planning');
     await updateReleaseStatus(release.id, 'migration_pre_running');
-    await runMigrationPhase(release, 'preDeploy');
+    await runReleaseMigrationPhase(release, 'preDeploy');
 
     await updateReleaseStatus(release.id, 'deploying');
 
@@ -181,20 +95,37 @@ export async function processRelease(job: Job<ReleaseJobData>) {
       await addDeploymentJob(deployment.id, release.projectId, release.environmentId);
     }
 
+    let awaitingRollout = false;
+
     for (const deployment of queuedDeployments) {
       const result = await waitForDeployment(deployment.id);
+      if (result === 'awaiting_rollout') {
+        awaitingRollout = true;
+        continue;
+      }
+
+      if (result === 'verification_failed') {
+        await updateReleaseStatus(
+          release.id,
+          'verification_failed',
+          `Deployment ${deployment.id} ended with status ${result}`
+        );
+        await persistReleaseRecapSafely(release.id);
+        throw new Error(`Deployment ${deployment.id} ended with status ${result}`);
+      }
+
       if (result !== 'running') {
         throw new Error(`Deployment ${deployment.id} ended with status ${result}`);
       }
     }
 
-    await updateReleaseStatus(release.id, 'verifying');
-    await updateReleaseStatus(release.id, 'migration_post_running');
-    await runMigrationPhase(release, 'postDeploy');
-    await updateReleaseStatus(release.id, 'succeeded');
-    await persistReleaseRecapById(release.id).catch((recapError) => {
-      console.error(`[Release] Failed to persist recap for ${release.id}:`, recapError);
-    });
+    if (awaitingRollout) {
+      await updateReleaseStatus(release.id, 'awaiting_rollout');
+      await persistReleaseRecapSafely(release.id);
+      return { success: true, awaitingRollout: true };
+    }
+
+    await completeReleaseAfterDeployments(release.id);
 
     return { success: true };
   } catch (error) {
@@ -204,17 +135,9 @@ export async function processRelease(job: Job<ReleaseJobData>) {
       columns: { status: true },
     });
 
-    if (current?.status === 'migration_post_running') {
-      await updateReleaseStatus(release.id, 'degraded', message);
-    } else if (current?.status === 'migration_pre_running') {
-      await updateReleaseStatus(release.id, 'migration_pre_failed', message);
-    } else {
-      await updateReleaseStatus(release.id, 'failed', message);
+    if (current?.status !== 'verification_failed') {
+      await failReleaseForCurrentPhase(release.id, message);
     }
-
-    await persistReleaseRecapById(release.id).catch((recapError) => {
-      console.error(`[Release] Failed to persist recap for ${release.id}:`, recapError);
-    });
 
     throw error;
   }

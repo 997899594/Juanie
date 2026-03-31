@@ -39,7 +39,9 @@ const releaseStatusColors: Record<string, string> = {
   migration_pre_running: 'bg-warning',
   migration_pre_failed: 'bg-destructive',
   deploying: 'bg-info',
+  awaiting_rollout: 'bg-warning',
   verifying: 'bg-info',
+  verification_failed: 'bg-destructive',
   migration_post_running: 'bg-warning',
   degraded: 'bg-warning',
   succeeded: 'bg-success',
@@ -58,6 +60,8 @@ function formatStatusLabel(value: string): string {
     queued: '排队中',
     awaiting_approval: '待审批',
     planning: '规划中',
+    awaiting_rollout: '待放量',
+    verification_failed: '校验失败',
     success: '成功',
     canceled: '已取消',
   };

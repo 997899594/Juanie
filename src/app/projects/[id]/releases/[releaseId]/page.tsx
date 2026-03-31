@@ -541,7 +541,11 @@ export default async function ReleaseDetailPage({
         <div className="space-y-4">
           {release.environment?.deploymentStrategy &&
             release.environment.deploymentStrategy !== 'rolling' &&
-            release.deploymentItems.length > 0 && (
+            release.deploymentItems.some(
+              (deployment) =>
+                deployment.status === 'awaiting_rollout' ||
+                deployment.status === 'verification_failed'
+            ) && (
               <section className="console-panel p-5">
                 <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
                   <Rocket className="h-4 w-4" />
@@ -635,6 +639,11 @@ export default async function ReleaseDetailPage({
                     {deployment.imageUrl && (
                       <div className="mb-3 break-all text-xs text-muted-foreground">
                         {deployment.imageUrl}
+                      </div>
+                    )}
+                    {deployment.errorMessage && (
+                      <div className="mb-3 rounded-2xl border border-destructive/20 bg-background px-3 py-2 text-xs text-destructive">
+                        {deployment.errorMessage}
                       </div>
                     )}
                     <div className="mb-3 flex flex-wrap gap-2">

@@ -183,6 +183,100 @@ async function cleanupCandidateResources(namespace: string, candidateName: strin
   await deleteService(namespace, candidateName).catch(() => undefined);
 }
 
+async function deployStableWorkload(input: {
+  deploymentId: string;
+  projectId: string;
+  projectSlug: string;
+  environmentId: string;
+  namespace: string;
+  service: {
+    id: string;
+    name: string;
+    type: string;
+    isPublic?: boolean | null;
+    port?: number | null;
+    replicas?: number | null;
+    healthcheckPath?: string | null;
+    cpuRequest?: string | null;
+    cpuLimit?: string | null;
+    memoryRequest?: string | null;
+    memoryLimit?: string | null;
+  };
+  stableName: string;
+  candidateName: string;
+  imageName: string;
+  envFrom: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
+  imagePullSecrets?: string[];
+  verificationPaths: string[];
+}) {
+  try {
+    await updateDeployment(input.namespace, input.stableName, {
+      image: input.imageName,
+      port: input.service.port ?? 3000,
+      envFrom: input.envFrom,
+      imagePullSecrets: input.imagePullSecrets,
+      healthcheckPath: input.service.healthcheckPath ?? undefined,
+      cpuRequest: input.service.cpuRequest ?? undefined,
+      cpuLimit: input.service.cpuLimit ?? undefined,
+      memoryRequest: input.service.memoryRequest ?? undefined,
+      memoryLimit: input.service.memoryLimit ?? undefined,
+    });
+    await logDeployment(input.deploymentId, `Updated ${input.stableName} → ${input.imageName}`);
+  } catch (_updateError) {
+    await logDeployment(
+      input.deploymentId,
+      `${input.stableName} not found, creating new deployment`
+    );
+    await createDeployment(input.namespace, input.stableName, {
+      image: input.imageName,
+      port: input.service.port ?? 3000,
+      replicas: input.service.replicas ?? 1,
+      envFrom: input.envFrom,
+      imagePullSecrets: input.imagePullSecrets,
+      healthcheckPath: input.service.healthcheckPath ?? undefined,
+      cpuRequest: input.service.cpuRequest ?? undefined,
+      cpuLimit: input.service.cpuLimit ?? undefined,
+      memoryRequest: input.service.memoryRequest ?? undefined,
+      memoryLimit: input.service.memoryLimit ?? undefined,
+    });
+    await logDeployment(input.deploymentId, `Created ${input.stableName} → ${input.imageName}`);
+  }
+
+  await waitForDeploymentReady({
+    namespace: input.namespace,
+    name: input.stableName,
+  });
+
+  if (input.verificationPaths.length > 0) {
+    await verifyServiceReachability({
+      namespace: input.namespace,
+      serviceName: input.stableName,
+      port: input.service.port ?? 3000,
+      paths: input.verificationPaths,
+    });
+    await logDeployment(
+      input.deploymentId,
+      `Verified ${input.stableName} on ${input.verificationPaths.join(', ')}`
+    );
+  }
+
+  await cleanupCandidateResources(input.namespace, input.candidateName);
+  await syncServiceTrafficRoutes({
+    projectId: input.projectId,
+    projectSlug: input.projectSlug,
+    environmentId: input.environmentId,
+    namespace: input.namespace,
+    service: input.service,
+    backends: [
+      {
+        serviceName: input.stableName,
+        servicePort: input.service.port ?? 80,
+        weight: 100,
+      },
+    ],
+  });
+}
+
 export async function logDeployment(
   deploymentId: string,
   message: string,
@@ -233,7 +327,10 @@ export async function executeDeploymentWorkload(
   });
 
   await logDeployment(deploymentId, 'Starting deployment process');
-  await db.update(deployments).set({ status: 'building' }).where(eq(deployments.id, deploymentId));
+  await db
+    .update(deployments)
+    .set({ status: 'building', errorMessage: null })
+    .where(eq(deployments.id, deploymentId));
 
   await logDeployment(deploymentId, 'Build phase started — resolving image');
   await progress?.(20);
@@ -321,6 +418,8 @@ export async function executeDeploymentWorkload(
     }
   }
 
+  let awaitingRollout = false;
+
   for (const service of targetServices) {
     await logDeployment(deploymentId, `Deploying service ${service.name}`);
 
@@ -343,73 +442,46 @@ export async function executeDeploymentWorkload(
     const verificationPaths = buildServiceVerificationPaths(service);
 
     if (!isProgressiveStrategy(deploymentStrategy)) {
-      try {
-        await updateDeployment(targetEnvironment.namespace, stableName, {
-          image: imageName,
-          port: service.port ?? 3000,
-          envFrom,
-          imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
-          healthcheckPath: service.healthcheckPath ?? undefined,
-          cpuRequest: service.cpuRequest ?? undefined,
-          cpuLimit: service.cpuLimit ?? undefined,
-          memoryRequest: service.memoryRequest ?? undefined,
-          memoryLimit: service.memoryLimit ?? undefined,
-        });
-        await logDeployment(deploymentId, `Updated ${stableName} → ${imageName}`);
-      } catch (_updateError) {
-        await logDeployment(deploymentId, `${stableName} not found, creating new deployment`);
-        await createDeployment(targetEnvironment.namespace, stableName, {
-          image: imageName,
-          port: service.port ?? 3000,
-          replicas: service.replicas ?? 1,
-          envFrom,
-          imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
-          healthcheckPath: service.healthcheckPath ?? undefined,
-          cpuRequest: service.cpuRequest ?? undefined,
-          cpuLimit: service.cpuLimit ?? undefined,
-          memoryRequest: service.memoryRequest ?? undefined,
-          memoryLimit: service.memoryLimit ?? undefined,
-        });
-        await logDeployment(deploymentId, `Created ${stableName} → ${imageName}`);
-      }
-
-      await waitForDeploymentReady({
-        namespace: targetEnvironment.namespace,
-        name: stableName,
-      });
-
-      if (verificationPaths.length > 0) {
-        await verifyServiceReachability({
-          namespace: targetEnvironment.namespace,
-          serviceName: stableName,
-          port: service.port ?? 3000,
-          paths: verificationPaths,
-        });
-        await logDeployment(
-          deploymentId,
-          `Verified ${stableName} on ${verificationPaths.join(', ')}`
-        );
-      }
-
-      await cleanupCandidateResources(targetEnvironment.namespace, candidateName);
-      await syncServiceTrafficRoutes({
+      await deployStableWorkload({
+        deploymentId,
         projectId: project.id,
         projectSlug: project.slug,
         environmentId: targetEnvironment.id,
         namespace: targetEnvironment.namespace,
         service,
-        backends: [
-          {
-            serviceName: stableName,
-            servicePort: service.port ?? 80,
-            weight: 100,
-          },
-        ],
+        stableName,
+        candidateName,
+        imageName,
+        envFrom,
+        imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+        verificationPaths,
       });
       continue;
     }
 
     const stableExists = await deploymentExists(targetEnvironment.namespace, stableName);
+
+    if (!stableExists) {
+      await logDeployment(
+        deploymentId,
+        `${service.name} has no stable workload yet, promoting directly to stable`
+      );
+      await deployStableWorkload({
+        deploymentId,
+        projectId: project.id,
+        projectSlug: project.slug,
+        environmentId: targetEnvironment.id,
+        namespace: targetEnvironment.namespace,
+        service,
+        stableName,
+        candidateName,
+        imageName,
+        envFrom,
+        imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+        verificationPaths,
+      });
+      continue;
+    }
 
     try {
       await createService(targetEnvironment.namespace, candidateName, {
@@ -494,6 +566,7 @@ export async function executeDeploymentWorkload(
         .map((backend) => `${backend.serviceName}:${backend.weight ?? 100}%`)
         .join(', ')}`
     );
+    awaitingRollout = true;
   }
 
   await progress?.(80);
@@ -501,12 +574,18 @@ export async function executeDeploymentWorkload(
   await db
     .update(deployments)
     .set({
-      status: 'running',
+      status: awaitingRollout ? 'awaiting_rollout' : 'running',
+      errorMessage: null,
       deployedAt: new Date(),
     })
     .where(eq(deployments.id, deploymentId));
 
-  await logDeployment(deploymentId, 'Deployment completed successfully');
+  await logDeployment(
+    deploymentId,
+    awaitingRollout
+      ? 'Candidate verified successfully and is awaiting rollout completion'
+      : 'Deployment completed successfully'
+  );
   await progress?.(100);
 }
 

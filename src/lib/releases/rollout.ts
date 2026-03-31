@@ -14,6 +14,11 @@ import {
   waitForDeploymentReady,
 } from '@/lib/k8s';
 import {
+  completeReleaseAfterRolloutIfReady,
+  persistReleaseRecapSafely,
+  updateReleaseStatus,
+} from '@/lib/releases/orchestration';
+import {
   buildCandidateDeploymentName,
   buildStableDeploymentName,
   syncEnvironmentServiceTrafficRoutes,
@@ -67,6 +72,26 @@ async function appendDeploymentLog(deploymentId: string, message: string) {
     deploymentId,
     message,
     level: 'info',
+  });
+}
+
+async function markDeploymentRolloutFailed(
+  deploymentId: string,
+  message: string,
+  status: 'verification_failed' | 'failed' = 'verification_failed'
+) {
+  await db
+    .update(deployments)
+    .set({
+      status,
+      errorMessage: message,
+    })
+    .where(eq(deployments.id, deploymentId));
+
+  await db.insert(deploymentLogs).values({
+    deploymentId,
+    message: `Rollout failed: ${message}`,
+    level: 'error',
   });
 }
 
@@ -286,84 +311,109 @@ export async function finalizeDeploymentRollout(input: {
     throw new Error('当前环境缺少命名空间，无法推进放量');
   }
 
-  if (rollout.deployment.stableExists) {
-    await updateDeployment(namespace, stableName, {
-      image: candidateSnapshot.image,
-      port: candidateSnapshot.port,
-      envFrom: candidateSnapshot.envFrom,
-      replicas: candidateSnapshot.replicas,
-      imagePullSecrets: candidateSnapshot.imagePullSecrets,
-      healthcheckPath: service.healthcheckPath ?? undefined,
-      cpuRequest: candidateSnapshot.cpuRequest,
-      cpuLimit: candidateSnapshot.cpuLimit,
-      memoryRequest: candidateSnapshot.memoryRequest,
-      memoryLimit: candidateSnapshot.memoryLimit,
-    });
-  } else {
-    try {
-      await createService(namespace, stableName, {
+  try {
+    if (rollout.deployment.stableExists) {
+      await updateDeployment(namespace, stableName, {
+        image: candidateSnapshot.image,
         port: candidateSnapshot.port,
-        targetPort: candidateSnapshot.port,
+        envFrom: candidateSnapshot.envFrom,
+        replicas: candidateSnapshot.replicas,
+        imagePullSecrets: candidateSnapshot.imagePullSecrets,
+        healthcheckPath: service.healthcheckPath ?? undefined,
+        cpuRequest: candidateSnapshot.cpuRequest,
+        cpuLimit: candidateSnapshot.cpuLimit,
+        memoryRequest: candidateSnapshot.memoryRequest,
+        memoryLimit: candidateSnapshot.memoryLimit,
       });
-    } catch {
-      // Ignore existing stable service.
+    } else {
+      try {
+        await createService(namespace, stableName, {
+          port: candidateSnapshot.port,
+          targetPort: candidateSnapshot.port,
+        });
+      } catch {
+        // Ignore existing stable service.
+      }
+
+      await createDeployment(namespace, stableName, {
+        image: candidateSnapshot.image,
+        port: candidateSnapshot.port,
+        replicas: candidateSnapshot.replicas,
+        envFrom: candidateSnapshot.envFrom,
+        imagePullSecrets: candidateSnapshot.imagePullSecrets,
+        healthcheckPath: service.healthcheckPath ?? undefined,
+        cpuRequest: candidateSnapshot.cpuRequest,
+        cpuLimit: candidateSnapshot.cpuLimit,
+        memoryRequest: candidateSnapshot.memoryRequest,
+        memoryLimit: candidateSnapshot.memoryLimit,
+      });
     }
 
-    await createDeployment(namespace, stableName, {
-      image: candidateSnapshot.image,
-      port: candidateSnapshot.port,
-      replicas: candidateSnapshot.replicas,
-      envFrom: candidateSnapshot.envFrom,
-      imagePullSecrets: candidateSnapshot.imagePullSecrets,
-      healthcheckPath: service.healthcheckPath ?? undefined,
-      cpuRequest: candidateSnapshot.cpuRequest,
-      cpuLimit: candidateSnapshot.cpuLimit,
-      memoryRequest: candidateSnapshot.memoryRequest,
-      memoryLimit: candidateSnapshot.memoryLimit,
-    });
-  }
-
-  await waitForDeploymentReady({
-    namespace,
-    name: stableName,
-  });
-
-  const verificationPaths = buildRolloutVerificationPaths(service);
-  if (verificationPaths.length > 0) {
-    await verifyServiceReachability({
+    await waitForDeploymentReady({
       namespace,
-      serviceName: stableName,
-      port: service.port ?? candidateSnapshot.port,
-      paths: verificationPaths,
+      name: stableName,
     });
-  }
 
-  await syncEnvironmentServiceTrafficRoutes({
-    projectSlug: project.slug,
-    environmentId: environment.id,
-    namespace,
-    service,
-    backends: [
-      {
+    const verificationPaths = buildRolloutVerificationPaths(service);
+    if (verificationPaths.length > 0) {
+      await verifyServiceReachability({
+        namespace,
         serviceName: stableName,
-        servicePort: service.port ?? 80,
-        weight: 100,
-      },
-    ],
-  });
+        port: service.port ?? candidateSnapshot.port,
+        paths: verificationPaths,
+      });
+    }
 
-  await deleteDeployment(namespace, candidateName).catch(() => undefined);
-  await deleteService(namespace, candidateName).catch(() => undefined);
+    await syncEnvironmentServiceTrafficRoutes({
+      projectSlug: project.slug,
+      environmentId: environment.id,
+      namespace,
+      service,
+      backends: [
+        {
+          serviceName: stableName,
+          servicePort: service.port ?? 80,
+          weight: 100,
+        },
+      ],
+    });
 
-  await appendDeploymentLog(
-    deployment.id,
-    `Completed ${rollout.plan.strategyLabel ?? '渐进式发布'}: switched ${service.name} to stable ${candidateSnapshot.image}`
-  );
+    await deleteDeployment(namespace, candidateName).catch(() => undefined);
+    await deleteService(namespace, candidateName).catch(() => undefined);
 
-  return {
-    success: true,
-    deploymentId: deployment.id,
-    imageUrl: candidateSnapshot.image,
-    strategyLabel: rollout.plan.strategyLabel,
-  };
+    await db
+      .update(deployments)
+      .set({
+        status: 'running',
+        errorMessage: null,
+        deployedAt: new Date(),
+      })
+      .where(eq(deployments.id, deployment.id));
+
+    if (deployment.releaseId) {
+      await completeReleaseAfterRolloutIfReady(deployment.releaseId);
+    }
+
+    await appendDeploymentLog(
+      deployment.id,
+      `Completed ${rollout.plan.strategyLabel ?? '渐进式发布'}: switched ${service.name} to stable ${candidateSnapshot.image}`
+    );
+
+    return {
+      success: true,
+      deploymentId: deployment.id,
+      imageUrl: candidateSnapshot.image,
+      strategyLabel: rollout.plan.strategyLabel,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await markDeploymentRolloutFailed(deployment.id, message);
+
+    if (deployment.releaseId) {
+      await updateReleaseStatus(deployment.releaseId, 'verification_failed', message);
+      await persistReleaseRecapSafely(deployment.releaseId);
+    }
+
+    throw error;
+  }
 }

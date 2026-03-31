@@ -74,6 +74,8 @@ export async function GET(
 
             if (
               current?.status === 'running' ||
+              current?.status === 'awaiting_rollout' ||
+              current?.status === 'verification_failed' ||
               current?.status === 'failed' ||
               current?.status === 'migration_failed' ||
               current?.status === 'rolled_back'

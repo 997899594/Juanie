@@ -20,7 +20,11 @@ export function DeploymentLogs({ projectId, deploymentId, status }: DeploymentLo
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const isLive = status === 'building' || status === 'deploying' || status === 'queued';
+  const isLive =
+    status === 'building' ||
+    status === 'deploying' ||
+    status === 'queued' ||
+    status === 'verifying';
 
   useEffect(() => {
     if (!isLive) {

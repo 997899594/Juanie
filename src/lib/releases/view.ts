@@ -119,6 +119,7 @@ interface ReleaseViewLike {
     serviceId?: string | null;
     version?: string | null;
     imageUrl?: string | null;
+    errorMessage?: string | null;
     status: string;
   }>;
   infrastructureDiagnostics?: InfrastructureDiagnosticsSnapshot | null;
@@ -201,7 +202,9 @@ export function filterReleaseCards<
       return (
         release.approvalRunsCount > 0 ||
         release.failedMigrationRunsCount > 0 ||
-        ['migration_pre_failed', 'failed', 'degraded'].includes(release.status)
+        ['migration_pre_failed', 'failed', 'degraded', 'verification_failed'].includes(
+          release.status
+        )
       );
     }
 
@@ -211,7 +214,7 @@ export function filterReleaseCards<
 
     return (
       release.failedMigrationRunsCount > 0 ||
-      ['failed', 'migration_pre_failed'].includes(release.status)
+      ['failed', 'migration_pre_failed', 'verification_failed'].includes(release.status)
     );
   });
 }
@@ -296,6 +299,7 @@ export interface ReleaseDetailDecorations {
     serviceId: string | null;
     version: string | null;
     imageUrl: string | null;
+    errorMessage: string | null;
     statusDecoration: ReleaseStatusDecoration;
     serviceName: string;
   }>;
@@ -324,7 +328,9 @@ const releaseStatusConfig: Record<string, ReleaseStatusDecoration> = {
   migration_pre_running: { color: 'warning', pulse: true, label: '前置迁移' },
   migration_pre_failed: { color: 'error', pulse: false, label: '前置迁移失败' },
   deploying: { color: 'info', pulse: true, label: '发布中' },
+  awaiting_rollout: { color: 'warning', pulse: false, label: '待放量' },
   verifying: { color: 'info', pulse: true, label: '校验中' },
+  verification_failed: { color: 'error', pulse: false, label: '校验失败' },
   migration_post_running: { color: 'warning', pulse: true, label: '后置迁移' },
   degraded: { color: 'warning', pulse: false, label: '降级' },
   succeeded: { color: 'success', pulse: false, label: '成功' },
@@ -336,6 +342,8 @@ const deploymentStatusConfig: Record<string, ReleaseStatusDecoration> = {
   queued: { color: 'neutral', pulse: false, label: '排队中' },
   building: { color: 'info', pulse: true, label: '构建中' },
   deploying: { color: 'info', pulse: true, label: '发布中' },
+  awaiting_rollout: { color: 'warning', pulse: false, label: '待放量' },
+  verification_failed: { color: 'error', pulse: false, label: '校验失败' },
   running: { color: 'success', pulse: false, label: '运行中' },
   failed: { color: 'error', pulse: false, label: '失败' },
   rolled_back: { color: 'warning', pulse: false, label: '已回滚' },
@@ -479,6 +487,7 @@ function buildDeploymentItems(
     serviceId: deployment.serviceId ?? null,
     version: deployment.version ?? null,
     imageUrl: deployment.imageUrl ?? null,
+    errorMessage: deployment.errorMessage ?? null,
     statusDecoration: deploymentStatusConfig[deployment.status] ?? deploymentStatusConfig.queued,
     serviceName: deployment.serviceId
       ? (release.artifacts.find((artifact) => artifact.service.id === deployment.serviceId)?.service
@@ -516,9 +525,17 @@ function getTimelineTone(
   kind: 'release' | 'migration' | 'deployment' | 'preview' | 'rollout'
 ): ReleaseTimelineItem['tone'] {
   if (kind === 'preview') return 'success';
-  if (status === 'failed' || status === 'migration_pre_failed') return 'danger';
-  if (status === 'awaiting_approval' || status === 'degraded') return 'warning';
-  if (status === 'running' || status === 'planning' || status === 'deploying') return 'info';
+  if (status === 'failed' || status === 'migration_pre_failed' || status === 'verification_failed')
+    return 'danger';
+  if (status === 'awaiting_approval' || status === 'degraded' || status === 'awaiting_rollout')
+    return 'warning';
+  if (
+    status === 'running' ||
+    status === 'planning' ||
+    status === 'deploying' ||
+    status === 'verifying'
+  )
+    return 'info';
   if (status === 'success' || status === 'succeeded') return 'success';
   return 'neutral';
 }
@@ -577,7 +594,11 @@ function buildReleaseTimeline(input: {
 
   if (
     release.environment?.deploymentStrategy &&
-    release.environment.deploymentStrategy !== 'rolling'
+    release.environment.deploymentStrategy !== 'rolling' &&
+    release.deployments.some(
+      (deployment) =>
+        deployment.status === 'awaiting_rollout' || deployment.status === 'verification_failed'
+    )
   ) {
     items.push({
       key: 'rollout-ready',

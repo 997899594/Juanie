@@ -5,6 +5,10 @@ import { deployments } from '@/lib/db/schema';
 import { executeDeploymentWorkload, logDeployment } from './deployment-executor';
 import type { DeploymentJobData } from './index';
 
+function classifyDeploymentFailureStatus(message: string) {
+  return message.includes('Service verify failed') ? 'verification_failed' : 'failed';
+}
+
 export async function processDeployment(job: Job<DeploymentJobData>) {
   const deployment = await db.query.deployments.findFirst({
     where: eq(deployments.id, job.data.deploymentId),
@@ -21,8 +25,15 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const status = classifyDeploymentFailureStatus(message);
     await logDeployment(deployment.id, `Deployment failed: ${message}`, 'error');
-    await db.update(deployments).set({ status: 'failed' }).where(eq(deployments.id, deployment.id));
+    await db
+      .update(deployments)
+      .set({
+        status,
+        errorMessage: message,
+      })
+      .where(eq(deployments.id, deployment.id));
     throw error;
   }
 }

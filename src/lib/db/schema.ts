@@ -46,7 +46,9 @@ export const releaseStatuses = [
   'migration_pre_running',
   'migration_pre_failed',
   'deploying',
+  'awaiting_rollout',
   'verifying',
+  'verification_failed',
   'migration_post_running',
   'degraded',
   'succeeded',
@@ -62,6 +64,8 @@ export const deploymentStatuses = [
   'migration_failed',
   'building',
   'deploying',
+  'awaiting_rollout',
+  'verification_failed',
   'running',
   'failed',
   'rolled_back',
@@ -897,6 +901,7 @@ export const deployments = pgTable(
 
     imageUrl: varchar('imageUrl', { length: 500 }),
     buildLogs: text('buildLogs'),
+    errorMessage: text('errorMessage'),
 
     deployedById: uuid('deployedById').references(() => users.id, { onDelete: 'set null' }),
     deployedAt: timestamp('deployedAt'),
