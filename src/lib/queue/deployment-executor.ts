@@ -6,8 +6,8 @@ import {
   domains,
   environments,
   projects,
+  releases,
   repositories,
-  services,
 } from '@/lib/db/schema';
 import { buildDomainRouteName } from '@/lib/domains/defaults';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
@@ -36,6 +36,7 @@ import {
   verifyServiceReachability,
   waitForDeploymentReady,
 } from '@/lib/k8s';
+import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 
 function buildServiceResourceName(projectSlug: string, serviceName: string): string {
   return `${projectSlug}-${serviceName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
@@ -322,8 +323,21 @@ export async function executeDeploymentWorkload(
     throw new Error(`Project ${deployment.projectId} not found`);
   }
 
-  const serviceList = await db.query.services.findMany({
-    where: eq(services.projectId, deployment.projectId),
+  const release = deployment.releaseId
+    ? await db.query.releases.findFirst({
+        where: eq(releases.id, deployment.releaseId),
+        columns: {
+          sourceRef: true,
+          sourceCommitSha: true,
+          configCommitSha: true,
+        },
+      })
+    : null;
+
+  const serviceList = await syncProjectServiceRuntimeContractsFromRepo({
+    projectId: deployment.projectId,
+    sourceRef: release?.sourceRef ?? null,
+    sourceCommitSha: release?.configCommitSha ?? release?.sourceCommitSha ?? deployment.commitSha,
   });
 
   await logDeployment(deploymentId, 'Starting deployment process');
