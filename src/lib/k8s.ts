@@ -1247,35 +1247,53 @@ export async function verifyServiceReachability(input: {
   port: number;
   paths: string[];
   timeoutMs?: number;
+  pollMs?: number;
+  requestTimeoutMs?: number;
 }) {
-  const timeoutMs = input.timeoutMs ?? 8000;
+  const timeoutMs = input.timeoutMs ?? 30000;
+  const pollMs = input.pollMs ?? 2000;
+  const requestTimeoutMs = Math.min(input.requestTimeoutMs ?? 8000, timeoutMs);
 
   for (const rawPath of input.paths) {
     const path = normalizeServiceVerificationPath(rawPath);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const deadline = Date.now() + timeoutMs;
+    let lastError: string | null = null;
 
-    try {
-      const response = await fetch(
-        `http://${input.serviceName}.${input.namespace}.svc.cluster.local:${input.port}${path}`,
-        {
-          method: 'GET',
-          redirect: 'manual',
-          signal: controller.signal,
+    while (Date.now() < deadline) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+
+      try {
+        const response = await fetch(
+          `http://${input.serviceName}.${input.namespace}.svc.cluster.local:${input.port}${path}`,
+          {
+            method: 'GET',
+            redirect: 'manual',
+            signal: controller.signal,
+          }
+        );
+
+        if (response.status >= 400) {
+          throw new Error(`${path} returned ${response.status}`);
         }
-      );
 
-      if (response.status >= 500) {
-        throw new Error(`${path} returned ${response.status}`);
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      } finally {
+        clearTimeout(timer);
       }
-    } catch (error) {
-      throw new Error(
-        `Service verify failed for ${input.serviceName}${path}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    } finally {
-      clearTimeout(timer);
+
+      if (Date.now() >= deadline) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+
+    if (lastError) {
+      throw new Error(`Service verify failed for ${input.serviceName}${path}: ${lastError}`);
     }
   }
 }
