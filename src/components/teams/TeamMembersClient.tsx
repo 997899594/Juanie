@@ -43,6 +43,7 @@ import {
   revokeTeamInvitation,
 } from '@/lib/teams/client-actions';
 import type { getTeamMembersPageData } from '@/lib/teams/service';
+import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
 interface TeamMembersClientProps {
   teamId: string;
@@ -70,10 +71,8 @@ function mapInvitation(invitation: InvitationApiResponse): TeamInvitationCard {
     id: invitation.id,
     role: invitation.role,
     roleLabel: invitation.role === 'admin' ? '管理员' : '成员',
-    expiresLabel: invitation.expires ? new Date(invitation.expires).toLocaleDateString() : '—',
-    createdAtLabel: invitation.createdAt
-      ? new Date(invitation.createdAt).toLocaleDateString()
-      : '—',
+    expiresLabel: formatPlatformDateTimeShort(invitation.expires) ?? '—',
+    createdAtLabel: formatPlatformDateTimeShort(invitation.createdAt) ?? '—',
   };
 }
 

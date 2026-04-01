@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { auth, signIn } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { teamInvitations, teamMembers } from '@/lib/db/schema';
+import { formatPlatformDateTime } from '@/lib/time/format';
 
 interface Props {
   params: Promise<{ token: string }>;
@@ -91,7 +92,7 @@ export default async function InvitePage({ params }: Props) {
                     过期时间
                   </div>
                   <div className="mt-3 text-sm font-semibold">
-                    {new Date(invitation.expires).toLocaleDateString()}
+                    {formatPlatformDateTime(invitation.expires) ?? '—'}
                   </div>
                 </div>
               </div>

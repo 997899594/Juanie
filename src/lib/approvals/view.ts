@@ -24,6 +24,7 @@ import {
 } from '@/lib/releases/intelligence';
 import { getMigrationStatusDecoration } from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
+import { formatPlatformDateTime } from '@/lib/time/format';
 
 export interface ApprovalStat {
   label: string;
@@ -166,7 +167,7 @@ export function decorateApprovalRuns<TRun extends ApprovalRunLike>(
       environmentExpiry,
       primaryDomainUrl,
       imageUrl,
-      createdAtLabel: new Date(run.createdAt).toLocaleString(),
+      createdAtLabel: formatPlatformDateTime(run.createdAt) ?? '—',
       branchLabel: run.release?.sourceRef ?? run.environment.branch ?? '未设置',
       previewSourceMeta,
       previewLifecycle,

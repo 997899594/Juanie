@@ -24,6 +24,7 @@ import {
   formatRuntimeStatusLabel,
   getRuntimeStatusDotClass,
 } from '@/lib/runtime/status-presentation';
+import { formatPlatformDateTime } from '@/lib/time/format';
 
 const navItems = [
   { title: '环境', href: 'environments', icon: Globe },
@@ -487,7 +488,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                         </div>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {new Date(run.createdAt).toLocaleDateString()}
+                        {formatPlatformDateTime(run.createdAt, { includeYear: false }) ?? '—'}
                       </div>
                     </Link>
                   ))}
@@ -620,7 +621,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {release.createdAt ? new Date(release.createdAt).toLocaleDateString() : '—'}
+                      {formatPlatformDateTime(release.createdAt, { includeYear: false }) ?? '—'}
                     </div>
                   </Link>
                 ))

@@ -1,5 +1,6 @@
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
+import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
 interface ProjectListEnvironmentLike {
   id: string;
@@ -36,9 +37,7 @@ export interface ProjectListStat {
 }
 
 function formatCreatedAtLabel(value?: Date | string | null): string {
-  if (!value) return '—';
-  const date = typeof value === 'string' ? new Date(value) : value;
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+  return formatPlatformDateTimeShort(value) ?? '—';
 }
 
 export function buildProjectListStats(input: {

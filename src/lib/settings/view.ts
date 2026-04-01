@@ -1,4 +1,5 @@
 import type { Capability } from '@/lib/integrations/domain/models';
+import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
 interface UserProfileLike {
   id: string;
@@ -65,9 +66,7 @@ function formatCapabilityLabel(capability: Capability): string {
 }
 
 function formatDateLabel(value: Date | string | null | undefined): string {
-  if (!value) return '—';
-  const date = typeof value === 'string' ? new Date(value) : value;
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+  return formatPlatformDateTimeShort(value) ?? '—';
 }
 
 export function buildSettingsOverview(

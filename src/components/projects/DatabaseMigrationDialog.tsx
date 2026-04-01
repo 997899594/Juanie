@@ -22,6 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { getDatabaseManualControlSnapshot } from '@/lib/releases/intelligence';
 import { getMigrationStatusDecoration } from '@/lib/releases/status-presentation';
+import { formatPlatformDateTime } from '@/lib/time/format';
 
 interface MigrationRunItem {
   id: string;
@@ -850,7 +851,7 @@ export function DatabaseMigrationDialog({
                             {run.specification.tool}
                           </span>
                           <span className="ml-auto text-xs text-muted-foreground">
-                            {new Date(run.createdAt).toLocaleString()}
+                            {formatPlatformDateTime(run.createdAt) ?? '—'}
                           </span>
                         </div>
                         {run.errorMessage && (

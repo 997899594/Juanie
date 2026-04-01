@@ -25,6 +25,7 @@ import {
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
+import { formatPlatformRelativeTime } from '@/lib/time/format';
 
 export interface HomeStat {
   label: string;
@@ -139,19 +140,7 @@ function needsProjectAttention(status?: string | null): boolean {
 }
 
 export function formatRelativeTime(date: Date | string): string {
-  const now = new Date();
-  const target = typeof date === 'string' ? new Date(date) : date;
-  const diff = now.getTime() - target.getTime();
-
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-
-  if (minutes < 1) return '刚刚';
-  if (minutes < 60) return `${minutes} 分钟前`;
-  if (hours < 24) return `${hours} 小时前`;
-  if (days < 7) return `${days} 天前`;
-  return target.toLocaleDateString();
+  return formatPlatformRelativeTime(date) ?? '—';
 }
 
 export function buildHomeStats(input: {
