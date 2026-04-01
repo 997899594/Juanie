@@ -8,9 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  WEB_IMAGE_NAME: ${{ github.repository_owner }}/juanie-web
-  WORKER_IMAGE_NAME: ${{ github.repository_owner }}/juanie-worker
-  MIGRATE_IMAGE_NAME: ${{ github.repository_owner }}/juanie-migrate
+  IMAGE_NAME: ${{ github.repository_owner }}/juanie
 
 jobs:
   quality:
@@ -53,8 +51,8 @@ jobs:
           target: web
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:web-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:web-latest
           cache-from: type=gha,scope=juanie-images
           cache-to: type=gha,mode=max,scope=juanie-images
 
@@ -65,8 +63,8 @@ jobs:
           target: worker
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:worker-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:worker-latest
           cache-from: type=gha,scope=juanie-images
           cache-to: type=gha,mode=max,scope=juanie-images
 
@@ -77,8 +75,8 @@ jobs:
           target: migrate
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.MIGRATE_IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.MIGRATE_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-latest
           cache-from: type=gha,scope=juanie-images
           cache-to: type=gha,mode=max,scope=juanie-images
 
@@ -122,22 +120,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          WEB_IMAGE="${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}:${GITHUB_SHA}"
-          WORKER_IMAGE="${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:${GITHUB_SHA}"
-          MIGRATE_IMAGE="${{ env.REGISTRY }}/${{ env.MIGRATE_IMAGE_NAME }}:${GITHUB_SHA}"
-          WEB_IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}"
-          WORKER_IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}"
-          MIGRATE_IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.MIGRATE_IMAGE_NAME }}"
-          IMAGE_TAG="${GITHUB_SHA}"
+          IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          WEB_IMAGE="${IMAGE_REPOSITORY}:web-${GITHUB_SHA}"
+          WORKER_IMAGE="${IMAGE_REPOSITORY}:worker-${GITHUB_SHA}"
+          MIGRATE_IMAGE="${IMAGE_REPOSITORY}:migrate-${GITHUB_SHA}"
+          WEB_IMAGE_TAG="web-${GITHUB_SHA}"
+          WORKER_IMAGE_TAG="worker-${GITHUB_SHA}"
+          MIGRATE_IMAGE_TAG="migrate-${GITHUB_SHA}"
           CHART_DIR="/tmp/juanie-deploy-${GITHUB_SHA}/juanie"
           GHCR_PULL_USERNAME_B64="$(printf '%s' "${GHCR_PULL_USERNAME:-}" | base64 | tr -d '\n')"
           GHCR_PULL_TOKEN_B64="$(printf '%s' "${GHCR_PULL_TOKEN:-}" | base64 | tr -d '\n')"
 
           ssh "${SERVER_USER}@${SERVER_HOST}" \
-            "WEB_IMAGE='${WEB_IMAGE}' WORKER_IMAGE='${WORKER_IMAGE}' MIGRATE_IMAGE='${MIGRATE_IMAGE}' WEB_IMAGE_REPOSITORY='${WEB_IMAGE_REPOSITORY}' WORKER_IMAGE_REPOSITORY='${WORKER_IMAGE_REPOSITORY}' MIGRATE_IMAGE_REPOSITORY='${MIGRATE_IMAGE_REPOSITORY}' IMAGE_TAG='${IMAGE_TAG}' CHART_DIR='${CHART_DIR}' GHCR_PULL_USERNAME_B64='${GHCR_PULL_USERNAME_B64}' GHCR_PULL_TOKEN_B64='${GHCR_PULL_TOKEN_B64}' bash -s" <<'REMOTE'
+            "WEB_IMAGE='${WEB_IMAGE}' WORKER_IMAGE='${WORKER_IMAGE}' MIGRATE_IMAGE='${MIGRATE_IMAGE}' IMAGE_REPOSITORY='${IMAGE_REPOSITORY}' WEB_IMAGE_TAG='${WEB_IMAGE_TAG}' WORKER_IMAGE_TAG='${WORKER_IMAGE_TAG}' MIGRATE_IMAGE_TAG='${MIGRATE_IMAGE_TAG}' CHART_DIR='${CHART_DIR}' GHCR_PULL_USERNAME_B64='${GHCR_PULL_USERNAME_B64}' GHCR_PULL_TOKEN_B64='${GHCR_PULL_TOKEN_B64}' bash -s" <<'REMOTE'
           set -euo pipefail
 
-          SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "$IMAGE_TAG" | cut -c1-7)"
+          SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "$WEB_IMAGE_TAG" | cut -d- -f2 | cut -c1-7)"
           GHCR_PULL_USERNAME="$(printf '%s' "$GHCR_PULL_USERNAME_B64" | base64 -d)"
           GHCR_PULL_TOKEN="$(printf '%s' "$GHCR_PULL_TOKEN_B64" | base64 -d)"
 
@@ -289,12 +287,12 @@ jobs:
           helm upgrade --install juanie "${CHART_DIR}" \
             --namespace juanie \
             --reuse-values \
-            --set images.web.repository="${WEB_IMAGE_REPOSITORY}" \
-            --set images.web.tag="${IMAGE_TAG}" \
-            --set images.worker.repository="${WORKER_IMAGE_REPOSITORY}" \
-            --set images.worker.tag="${IMAGE_TAG}" \
-            --set images.migrate.repository="${MIGRATE_IMAGE_REPOSITORY}" \
-            --set images.migrate.tag="${IMAGE_TAG}" \
+            --set images.web.repository="${IMAGE_REPOSITORY}" \
+            --set images.web.tag="${WEB_IMAGE_TAG}" \
+            --set images.worker.repository="${IMAGE_REPOSITORY}" \
+            --set images.worker.tag="${WORKER_IMAGE_TAG}" \
+            --set images.migrate.repository="${IMAGE_REPOSITORY}" \
+            --set images.migrate.tag="${MIGRATE_IMAGE_TAG}" \
             --set-string imagePullSecrets[0]=ghcr-pull-secret \
             --wait \
             --timeout 20m
