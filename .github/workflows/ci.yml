@@ -90,8 +90,8 @@ jobs:
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
-          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME || github.actor }}
-          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN || github.token }}
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -99,8 +99,8 @@ jobs:
           IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           IMAGE_TAG="${GITHUB_SHA}"
           CHART_DIR="/tmp/juanie-deploy-${GITHUB_SHA}/juanie"
-          GHCR_PULL_USERNAME_B64="$(printf '%s' "$GHCR_PULL_USERNAME" | base64 | tr -d '\n')"
-          GHCR_PULL_TOKEN_B64="$(printf '%s' "$GHCR_PULL_TOKEN" | base64 | tr -d '\n')"
+          GHCR_PULL_USERNAME_B64="$(printf '%s' "${GHCR_PULL_USERNAME:-}" | base64 | tr -d '\n')"
+          GHCR_PULL_TOKEN_B64="$(printf '%s' "${GHCR_PULL_TOKEN:-}" | base64 | tr -d '\n')"
 
           ssh "${SERVER_USER}@${SERVER_HOST}" \
             "IMAGE='${IMAGE}' IMAGE_REPOSITORY='${IMAGE_REPOSITORY}' IMAGE_TAG='${IMAGE_TAG}' CHART_DIR='${CHART_DIR}' GHCR_PULL_USERNAME_B64='${GHCR_PULL_USERNAME_B64}' GHCR_PULL_TOKEN_B64='${GHCR_PULL_TOKEN_B64}' bash -s" <<'REMOTE'
@@ -181,13 +181,22 @@ jobs:
 
           echo "🚀 部署 Juanie..."
           echo "   镜像: $IMAGE"
-          echo "🔐 同步 GHCR 拉取凭证..."
-          kubectl create secret docker-registry ghcr-pull-secret \
-            -n juanie \
-            --docker-server=ghcr.io \
-            --docker-username="$GHCR_PULL_USERNAME" \
-            --docker-password="$GHCR_PULL_TOKEN" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          echo "🔐 校验 GHCR 拉取凭证..."
+          if [ -n "$GHCR_PULL_USERNAME" ] && [ -n "$GHCR_PULL_TOKEN" ]; then
+            echo "使用 GitHub Secrets 中的稳定 GHCR 凭证同步集群 secret"
+            kubectl create secret docker-registry ghcr-pull-secret \
+              -n juanie \
+              --docker-server=ghcr.io \
+              --docker-username="$GHCR_PULL_USERNAME" \
+              --docker-password="$GHCR_PULL_TOKEN" \
+              --dry-run=client -o yaml | kubectl apply -f -
+          elif kubectl get secret ghcr-pull-secret -n juanie >/dev/null 2>&1; then
+            echo "未配置 GHCR_PULL_USERNAME / GHCR_PULL_TOKEN，复用集群现有 ghcr-pull-secret"
+          else
+            echo "❌ 缺少稳定 GHCR 拉取凭证，且集群内不存在可复用的 ghcr-pull-secret"
+            echo "   请在 GitHub Actions secrets 中配置 GHCR_PULL_USERNAME / GHCR_PULL_TOKEN，或先在集群中预置 ghcr-pull-secret"
+            exit 1
+          fi
 
           echo "🔄 先执行 Schema Sync Job..."
           kubectl delete job "${SCHEMA_JOB}" -n juanie --ignore-not-found=true
