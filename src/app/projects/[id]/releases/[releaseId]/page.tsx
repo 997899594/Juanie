@@ -17,6 +17,7 @@ import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
 import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { ReleaseAISnapshotPanel } from '@/components/projects/ReleaseAISnapshotPanel';
+import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSync';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
+import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { getReleaseDetailPageData } from '@/lib/releases/service';
@@ -92,9 +94,16 @@ export default async function ReleaseDetailPage({
   const environmentDetailHref = `/projects/${id}/environments?env=${environmentId}`;
   const environmentDiagnosticsHref = `/projects/${id}/environments?env=${environmentId}&panel=diagnostics`;
   const releasesHref = `/projects/${id}/releases`;
+  const releaseStateKey = buildReleaseEventStateKey(release);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      <ReleaseDetailLiveSync
+        projectId={id}
+        releaseId={releaseId}
+        initialStatus={release.status}
+        initialStateKey={releaseStateKey}
+      />
       <PageHeader
         title={getReleaseDisplayTitle(release)}
         description={release.sourceRef}

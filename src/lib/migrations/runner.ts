@@ -1,9 +1,20 @@
 import crypto from 'node:crypto';
-import type { V1EnvVar, V1Job, V1Pod } from '@kubernetes/client-node';
+import type { CoreV1Event, V1EnvVar, V1Job, V1Pod } from '@kubernetes/client-node';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
-import { createJob, deleteJob, getIsConnected, getJob, getPodLogs, getPods } from '@/lib/k8s';
+import { migrationRunItems, migrationRuns, projects } from '@/lib/db/schema';
+import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import {
+  createJob,
+  deleteJob,
+  ensureGhcrPullSecret,
+  GHCR_PULL_SECRET_NAME,
+  getEvents,
+  getIsConnected,
+  getJob,
+  getPodLogs,
+  getPods,
+} from '@/lib/k8s';
 import { executeMigrationsForDatabase } from '@/lib/migrations/executor';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import { resolveMigrationPath } from '@/lib/migrations/path';
@@ -118,6 +129,61 @@ function getMigrationPodIssue(pod?: V1Pod): string | null {
   return null;
 }
 
+function getEventTimestamp(event: CoreV1Event): number {
+  const value =
+    event.eventTime ??
+    (event as { lastTimestamp?: Date | string | null }).lastTimestamp ??
+    (event as { firstTimestamp?: Date | string | null }).firstTimestamp ??
+    event.metadata?.creationTimestamp ??
+    null;
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
+}
+
+function describeMigrationEventIssue(event: CoreV1Event): {
+  errorCode: string;
+  errorMessage: string;
+} | null {
+  const reason = event.reason ?? '';
+  const message = event.message?.trim() ?? '';
+  const normalized = `${reason} ${message}`.toLowerCase();
+
+  if (reason === 'FailedScheduling' || normalized.includes('insufficient')) {
+    return {
+      errorCode: 'MIGRATION_CAPACITY_BLOCKED',
+      errorMessage: `Migration job could not be scheduled: ${message || 'insufficient cluster capacity'}`,
+    };
+  }
+
+  if (
+    normalized.includes('errimagepull') ||
+    normalized.includes('imagepullbackoff') ||
+    normalized.includes('failed to pull image') ||
+    normalized.includes('back-off pulling image')
+  ) {
+    return {
+      errorCode: 'MIGRATION_IMAGE_PULL_FAILED',
+      errorMessage: `Migration job image pull failed: ${message || reason}`,
+    };
+  }
+
+  if (reason === 'Pulling' || normalized.includes('pulling image')) {
+    return {
+      errorCode: 'MIGRATION_IMAGE_PULL_TIMEOUT',
+      errorMessage: `Migration job image pull timed out: ${message || 'image is still being pulled'}`,
+    };
+  }
+
+  if (reason === 'BackOff' || normalized.includes('crashloopbackoff')) {
+    return {
+      errorCode: 'MIGRATION_RUNTIME_UNHEALTHY',
+      errorMessage: `Migration job container failed to start cleanly: ${message || reason}`,
+    };
+  }
+
+  return null;
+}
+
 function isMigrationContainerRunning(pod?: V1Pod): boolean {
   return Boolean(getMigrationContainerStatus(pod)?.state?.running);
 }
@@ -149,6 +215,113 @@ async function markRunFailed(
     })
     .where(eq(migrationRuns.id, runId));
   throw new Error(errorMessage);
+}
+
+async function markRunItemFailed(
+  itemId: string,
+  errorMessage: string,
+  output: string
+): Promise<void> {
+  await db
+    .update(migrationRunItems)
+    .set({
+      status: 'failed',
+      error: errorMessage,
+      output,
+      finishedAt: new Date(),
+    })
+    .where(eq(migrationRunItems.id, itemId));
+}
+
+async function markRunAndItemFailed(input: {
+  runId: string;
+  itemId: string;
+  errorCode: string;
+  errorMessage: string;
+  output: string;
+}): Promise<never> {
+  await markRunItemFailed(input.itemId, input.errorMessage, input.output);
+  return markRunFailed(input.runId, input.errorCode, input.errorMessage);
+}
+
+async function ensureMigrationImagePullSecrets(
+  projectId: string,
+  namespace: string,
+  imageUrl: string
+): Promise<string[] | undefined> {
+  if (!imageUrl.startsWith('ghcr.io/')) {
+    return undefined;
+  }
+
+  try {
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+      columns: {
+        teamId: true,
+      },
+    });
+
+    if (project) {
+      try {
+        const teamSession = await getTeamIntegrationSession({
+          teamId: project.teamId,
+          requiredCapabilities: [],
+        });
+
+        if (teamSession.provider === 'github') {
+          await ensureGhcrPullSecret(namespace, { token: teamSession.accessToken });
+        } else {
+          await ensureGhcrPullSecret(namespace);
+        }
+      } catch {
+        await ensureGhcrPullSecret(namespace);
+      }
+    } else {
+      await ensureGhcrPullSecret(namespace);
+    }
+  } catch {
+    // Keep running even if secret refresh fails. The namespace may already have the secret.
+  }
+
+  return [GHCR_PULL_SECRET_NAME];
+}
+
+async function getMigrationStartupTimeoutFailure(input: {
+  namespace: string;
+  jobName: string;
+  pod?: V1Pod;
+  imageUrl: string;
+}): Promise<{
+  errorCode: string;
+  errorMessage: string;
+}> {
+  const podIssue = getMigrationPodIssue(input.pod);
+  if (podIssue) {
+    return {
+      errorCode: 'MIGRATION_POD_UNHEALTHY',
+      errorMessage: podIssue,
+    };
+  }
+
+  const podName = input.pod?.metadata?.name ?? null;
+  const events = await getEvents(input.namespace).catch(() => [] as CoreV1Event[]);
+  const relevantEvent = events
+    .filter((event) => {
+      const involvedName = event.involvedObject?.name ?? '';
+      return involvedName === input.jobName || (podName ? involvedName === podName : false);
+    })
+    .sort((left, right) => getEventTimestamp(right) - getEventTimestamp(left))
+    .map((event) => describeMigrationEventIssue(event))
+    .find((issue): issue is NonNullable<typeof issue> => issue !== null);
+
+  if (relevantEvent) {
+    return relevantEvent;
+  }
+
+  return {
+    errorCode: 'MIGRATION_STARTUP_TIMEOUT',
+    errorMessage: `Migration job startup timed out while preparing ${input.imageUrl} (phase=${getMigrationPodPhase(input.pod)})`,
+  };
 }
 
 async function runSqlMigration(
@@ -249,6 +422,11 @@ async function runCommandMigration(
     '-lc',
     `cd ${shellQuote(spec.specification.workingDirectory)} && ${spec.specification.command}`,
   ];
+  const imagePullSecrets = await ensureMigrationImagePullSecrets(
+    spec.specification.projectId,
+    namespace!,
+    imageUrl
+  );
 
   const [item] = await db
     .insert(migrationRunItems)
@@ -284,6 +462,11 @@ async function runCommandMigration(
         },
         spec: {
           restartPolicy: 'Never',
+          ...(imagePullSecrets
+            ? {
+                imagePullSecrets: imagePullSecrets.map((secretName) => ({ name: secretName })),
+              }
+            : {}),
           containers: [
             {
               name: 'migration',
@@ -347,16 +530,13 @@ async function runCommandMigration(
 
       const podIssue = getMigrationPodIssue(pod);
       if (podIssue) {
-        await db
-          .update(migrationRunItems)
-          .set({
-            status: 'failed',
-            error: podIssue,
-            output: finalLogs,
-            finishedAt: new Date(),
-          })
-          .where(eq(migrationRunItems.id, item.id));
-        await markRunFailed(runId, 'MIGRATION_POD_UNHEALTHY', podIssue);
+        await markRunAndItemFailed({
+          runId,
+          itemId: item.id,
+          errorCode: 'MIGRATION_POD_UNHEALTHY',
+          errorMessage: podIssue,
+          output: finalLogs,
+        });
       }
 
       if (isMigrationContainerRunning(pod) && executionStartedAt === null) {
@@ -380,33 +560,45 @@ async function runCommandMigration(
       if (
         conditions.some((condition) => condition.type === 'Failed' && condition.status === 'True')
       ) {
-        await db
-          .update(migrationRunItems)
-          .set({
-            status: 'failed',
-            error: finalLogs || 'Migration job failed',
-            output: finalLogs,
-            finishedAt: new Date(),
-          })
-          .where(eq(migrationRunItems.id, item.id));
-        await markRunFailed(runId, 'MIGRATION_COMMAND_FAILED', finalLogs || 'Migration job failed');
+        await markRunAndItemFailed({
+          runId,
+          itemId: item.id,
+          errorCode: 'MIGRATION_COMMAND_FAILED',
+          errorMessage: finalLogs || 'Migration job failed',
+          output: finalLogs,
+        });
       }
 
       const now = Date.now();
       const startedAtTime = (await getRunStartedAt(runId))?.getTime() ?? now;
       if (executionStartedAt === null && now - startedAtTime > MIGRATION_STARTUP_TIMEOUT_MS) {
-        await markRunFailed(
+        const timeoutFailure = await getMigrationStartupTimeoutFailure({
+          namespace: namespace!,
+          jobName,
+          pod,
+          imageUrl,
+        });
+
+        await markRunAndItemFailed({
           runId,
-          'MIGRATION_STARTUP_TIMEOUT',
-          `Migration job startup timed out (phase=${getMigrationPodPhase(pod)})`
-        );
+          itemId: item.id,
+          errorCode: timeoutFailure.errorCode,
+          errorMessage: timeoutFailure.errorMessage,
+          output: finalLogs,
+        });
       }
 
       if (
         executionStartedAt !== null &&
         now - executionStartedAt > MIGRATION_EXECUTION_TIMEOUT_MS
       ) {
-        await markRunFailed(runId, 'MIGRATION_RUN_TIMEOUT', 'Migration job execution timed out');
+        await markRunAndItemFailed({
+          runId,
+          itemId: item.id,
+          errorCode: 'MIGRATION_RUN_TIMEOUT',
+          errorMessage: 'Migration job execution timed out',
+          output: finalLogs,
+        });
       }
 
       await sleep(2000);

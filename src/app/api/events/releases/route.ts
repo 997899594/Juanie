@@ -12,6 +12,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const projectId = url.searchParams.get('projectId');
+  const releaseId = url.searchParams.get('releaseId');
 
   if (!projectId) {
     return new Response('Project ID required', { status: 400 });
@@ -48,18 +49,30 @@ export async function GET(request: Request) {
       const checkReleases = async () => {
         if (!isActive) return;
 
-        const latestRelease = await db.query.releases.findFirst({
-          where: eq(releases.projectId, projectId),
-          orderBy: [desc(releases.createdAt)],
-          with: {
-            environment: true,
-            artifacts: {
+        const latestRelease = releaseId
+          ? await db.query.releases.findFirst({
+              where: and(eq(releases.projectId, projectId), eq(releases.id, releaseId)),
               with: {
-                service: true,
+                environment: true,
+                artifacts: {
+                  with: {
+                    service: true,
+                  },
+                },
               },
-            },
-          },
-        });
+            })
+          : await db.query.releases.findFirst({
+              where: eq(releases.projectId, projectId),
+              orderBy: [desc(releases.createdAt)],
+              with: {
+                environment: true,
+                artifacts: {
+                  with: {
+                    service: true,
+                  },
+                },
+              },
+            });
 
         if (!latestRelease) {
           return;
