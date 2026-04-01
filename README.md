@@ -102,6 +102,10 @@ src/
 - `GET /api/projects/[id]/resources` - Get K8s resources
 - `GET /api/projects/[id]/resources/logs` - Get pod logs
 
+## Architecture Notes
+
+- [Deployment Architecture](./DEPLOYMENT_ARCHITECTURE.md)
+
 ## License
 
 MIT

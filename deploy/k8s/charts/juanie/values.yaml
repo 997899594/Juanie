@@ -1,9 +1,19 @@
 # 默认配置（开发环境）
-image:
-  repository: ghcr.io/997899594/juanie
-  pullPolicy: IfNotPresent
-  tag: "sha-f12feba"
-  pullSecrets: []
+images:
+  web:
+    repository: ghcr.io/997899594/juanie-web
+    pullPolicy: IfNotPresent
+    tag: "sha-f12feba"
+  worker:
+    repository: ghcr.io/997899594/juanie-worker
+    pullPolicy: IfNotPresent
+    tag: "sha-f12feba"
+  migrate:
+    repository: ghcr.io/997899594/juanie-migrate
+    pullPolicy: IfNotPresent
+    tag: "sha-f12feba"
+
+imagePullSecrets: []
 
 namespace: juanie
 

@@ -27,7 +27,7 @@ spec:
         app.kubernetes.io/component: web
     spec:
       serviceAccountName: {{ .Chart.Name }}
-      {{- with .Values.image.pullSecrets }}
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
         - name: {{ . }}
@@ -46,8 +46,8 @@ spec:
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.images.web.repository }}:{{ .Values.images.web.tag }}"
+          imagePullPolicy: {{ .Values.images.web.pullPolicy }}
           ports:
             - name: http
               containerPort: {{ .Values.env.PORT }}
@@ -106,7 +106,7 @@ spec:
         app.kubernetes.io/component: worker
     spec:
       serviceAccountName: {{ .Chart.Name }}
-      {{- with .Values.image.pullSecrets }}
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
         - name: {{ . }}
@@ -125,8 +125,8 @@ spec:
           command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done']
       containers:
         - name: worker
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag }}"
+          imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
           command: ["./worker"]
           env:
             - name: NODE_TLS_REJECT_UNAUTHORIZED

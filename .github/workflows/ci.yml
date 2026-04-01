@@ -8,7 +8,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/juanie
+  WEB_IMAGE_NAME: ${{ github.repository_owner }}/juanie-web
+  WORKER_IMAGE_NAME: ${{ github.repository_owner }}/juanie-worker
+  MIGRATE_IMAGE_NAME: ${{ github.repository_owner }}/juanie-migrate
 
 jobs:
   quality:
@@ -44,16 +46,41 @@ jobs:
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: 构建并推送镜像
+      - name: 构建并推送 Web 镜像
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: web
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}:latest
+          cache-from: type=gha,scope=juanie-images
+          cache-to: type=gha,mode=max,scope=juanie-images
+
+      - name: 构建并推送 Worker 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:latest
+          cache-from: type=gha,scope=juanie-images
+          cache-to: type=gha,mode=max,scope=juanie-images
+
+      - name: 构建并推送 Migrate 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrate
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.MIGRATE_IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.MIGRATE_IMAGE_NAME }}:latest
+          cache-from: type=gha,scope=juanie-images
+          cache-to: type=gha,mode=max,scope=juanie-images
 
   deploy:
     needs: build
@@ -95,15 +122,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA}"
-          IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          WEB_IMAGE="${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}:${GITHUB_SHA}"
+          WORKER_IMAGE="${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}:${GITHUB_SHA}"
+          MIGRATE_IMAGE="${{ env.REGISTRY }}/${{ env.MIGRATE_IMAGE_NAME }}:${GITHUB_SHA}"
+          WEB_IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}"
+          WORKER_IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.WORKER_IMAGE_NAME }}"
+          MIGRATE_IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.MIGRATE_IMAGE_NAME }}"
           IMAGE_TAG="${GITHUB_SHA}"
           CHART_DIR="/tmp/juanie-deploy-${GITHUB_SHA}/juanie"
           GHCR_PULL_USERNAME_B64="$(printf '%s' "${GHCR_PULL_USERNAME:-}" | base64 | tr -d '\n')"
           GHCR_PULL_TOKEN_B64="$(printf '%s' "${GHCR_PULL_TOKEN:-}" | base64 | tr -d '\n')"
 
           ssh "${SERVER_USER}@${SERVER_HOST}" \
-            "IMAGE='${IMAGE}' IMAGE_REPOSITORY='${IMAGE_REPOSITORY}' IMAGE_TAG='${IMAGE_TAG}' CHART_DIR='${CHART_DIR}' GHCR_PULL_USERNAME_B64='${GHCR_PULL_USERNAME_B64}' GHCR_PULL_TOKEN_B64='${GHCR_PULL_TOKEN_B64}' bash -s" <<'REMOTE'
+            "WEB_IMAGE='${WEB_IMAGE}' WORKER_IMAGE='${WORKER_IMAGE}' MIGRATE_IMAGE='${MIGRATE_IMAGE}' WEB_IMAGE_REPOSITORY='${WEB_IMAGE_REPOSITORY}' WORKER_IMAGE_REPOSITORY='${WORKER_IMAGE_REPOSITORY}' MIGRATE_IMAGE_REPOSITORY='${MIGRATE_IMAGE_REPOSITORY}' IMAGE_TAG='${IMAGE_TAG}' CHART_DIR='${CHART_DIR}' GHCR_PULL_USERNAME_B64='${GHCR_PULL_USERNAME_B64}' GHCR_PULL_TOKEN_B64='${GHCR_PULL_TOKEN_B64}' bash -s" <<'REMOTE'
           set -euo pipefail
 
           SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "$IMAGE_TAG" | cut -c1-7)"
@@ -180,7 +211,9 @@ jobs:
           }
 
           echo "🚀 部署 Juanie..."
-          echo "   镜像: $IMAGE"
+          echo "   Web: $WEB_IMAGE"
+          echo "   Worker: $WORKER_IMAGE"
+          echo "   Migrate: $MIGRATE_IMAGE"
           echo "🔐 校验 GHCR 拉取凭证..."
           if [ -n "$GHCR_PULL_USERNAME" ] && [ -n "$GHCR_PULL_TOKEN" ]; then
             echo "使用 GitHub Secrets 中的稳定 GHCR 凭证同步集群 secret"
@@ -233,9 +266,8 @@ jobs:
                     command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
                 containers:
                   - name: schema-sync
-                    image: ${IMAGE}
+                    image: ${MIGRATE_IMAGE}
                     imagePullPolicy: IfNotPresent
-                    command: ['bun', 'run', 'db:push']
                     envFrom:
                       - configMapRef:
                           name: juanie-config
@@ -257,9 +289,13 @@ jobs:
           helm upgrade --install juanie "${CHART_DIR}" \
             --namespace juanie \
             --reuse-values \
-            --set image.repository="${IMAGE_REPOSITORY}" \
-            --set image.tag="${IMAGE_TAG}" \
-            --set-string image.pullSecrets[0]=ghcr-pull-secret \
+            --set images.web.repository="${WEB_IMAGE_REPOSITORY}" \
+            --set images.web.tag="${IMAGE_TAG}" \
+            --set images.worker.repository="${WORKER_IMAGE_REPOSITORY}" \
+            --set images.worker.tag="${IMAGE_TAG}" \
+            --set images.migrate.repository="${MIGRATE_IMAGE_REPOSITORY}" \
+            --set images.migrate.tag="${IMAGE_TAG}" \
+            --set-string imagePullSecrets[0]=ghcr-pull-secret \
             --wait \
             --timeout 20m
 
