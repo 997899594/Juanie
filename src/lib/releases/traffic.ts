@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { domains } from '@/lib/db/schema';
-import { buildDomainRouteName } from '@/lib/domains/defaults';
+import { buildDomainRouteName, buildLegacyProjectRouteName } from '@/lib/domains/defaults';
 import { createCiliumHTTPRoute, deleteCiliumHTTPRoute } from '@/lib/k8s';
 
 export interface TrafficBackendRef {
@@ -46,6 +46,10 @@ export async function syncEnvironmentServiceTrafficRoutes(input: {
 
   for (const domain of serviceDomains) {
     const routeName = buildDomainRouteName(domain.hostname);
+    const legacyRouteName = buildLegacyProjectRouteName(input.projectSlug);
+    if (legacyRouteName !== routeName) {
+      await deleteCiliumHTTPRoute(input.namespace, legacyRouteName).catch(() => undefined);
+    }
     await deleteCiliumHTTPRoute(input.namespace, routeName).catch(() => undefined);
     await createCiliumHTTPRoute({
       name: routeName,

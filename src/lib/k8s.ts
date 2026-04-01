@@ -901,6 +901,62 @@ export async function createService(
   });
 }
 
+export async function upsertService(
+  namespace: string,
+  name: string,
+  spec: {
+    port: number;
+    targetPort: number | string;
+    type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
+    selector?: Record<string, string>;
+  }
+): Promise<void> {
+  const { core } = getK8sClient();
+
+  try {
+    const current = await core.readNamespacedService({ namespace, name });
+
+    await core.replaceNamespacedService({
+      namespace,
+      name,
+      body: {
+        apiVersion: 'v1',
+        kind: 'Service',
+        metadata: {
+          ...current.metadata,
+          name,
+          namespace,
+        },
+        spec: {
+          ...current.spec,
+          type: spec.type || current.spec?.type || 'ClusterIP',
+          selector: spec.selector || current.spec?.selector || { app: name },
+          ports: [
+            {
+              name: 'http',
+              port: spec.port,
+              targetPort: spec.targetPort,
+              protocol: 'TCP',
+            },
+          ],
+        },
+      },
+    });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      await createService(namespace, name, {
+        port: spec.port,
+        targetPort: typeof spec.targetPort === 'number' ? spec.targetPort : spec.port,
+        type: spec.type,
+      });
+      return;
+    }
+
+    throw e;
+  }
+}
+
 export async function deleteService(namespace: string, name: string): Promise<void> {
   const { core } = getK8sClient();
 

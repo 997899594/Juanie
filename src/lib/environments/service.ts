@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { environments, services } from '@/lib/db/schema';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
-import { createNamespace, createService, ensureGhcrPullSecret, getIsConnected } from '@/lib/k8s';
+import { createNamespace, ensureGhcrPullSecret, getIsConnected, upsertService } from '@/lib/k8s';
 import {
   buildPreviewEnvironmentName,
   buildPreviewNamespace,
@@ -27,15 +27,6 @@ async function resolvePreviewBaseEnvironmentId(projectId: string): Promise<strin
     null;
 
   return preferred?.id ?? null;
-}
-
-function isConflictError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-
-  const candidate = error as { code?: number; statusCode?: number; body?: { code?: number } };
-  return candidate.code === 409 || candidate.statusCode === 409 || candidate.body?.code === 409;
 }
 
 export function buildEnvironmentNamespace(
@@ -216,15 +207,10 @@ export async function ensureEnvironmentScaffold(input: {
   for (const service of serviceList) {
     const serviceName = `${input.project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
 
-    try {
-      await createService(namespace, serviceName, {
-        port: service.port || 3000,
-        targetPort: service.port || 3000,
-      });
-    } catch (error) {
-      if (!isConflictError(error)) {
-        throw error;
-      }
-    }
+    await upsertService(namespace, serviceName, {
+      port: service.port || 3000,
+      targetPort: service.port || 3000,
+      selector: { app: serviceName },
+    });
   }
 }

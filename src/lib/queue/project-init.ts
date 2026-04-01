@@ -18,6 +18,7 @@ import {
   services,
   teams,
 } from '@/lib/db/schema';
+import { buildDomainRouteName, pickDefaultPublicService } from '@/lib/domains/defaults';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
 import type { Capability } from '@/lib/integrations/domain/models';
@@ -1773,6 +1774,10 @@ async function configureDns(
   hasK8s: boolean,
   onProgress?: (p: number) => Promise<void>
 ) {
+  const serviceList = await db.query.services.findMany({
+    where: eq(services.projectId, project.id),
+  });
+  const defaultPublicService = pickDefaultPublicService(serviceList);
   const domainList = await db.query.domains.findMany({
     where: eq(domains.projectId, project.id),
     with: {
@@ -1788,12 +1793,13 @@ async function configureDns(
       console.log(`Configuring DNS for ${domain.hostname}`);
 
       // Determine the service name to point to
-      const serviceName = domain.service
-        ? `${project.slug}-${domain.service.name}`
+      const targetService = domain.service ?? defaultPublicService;
+      const serviceName = targetService
+        ? `${project.slug}-${targetService.name}`
         : `${project.slug}-web`;
 
-      const servicePort = domain.service?.port || 80;
-      const routeName = `${project.slug}-route`;
+      const servicePort = targetService?.port || 3000;
+      const routeName = buildDomainRouteName(domain.hostname);
 
       // Create HTTPRoute pointing to shared-gateway (https-wildcard handles *.juanie.art)
       await createCiliumHTTPRoute({

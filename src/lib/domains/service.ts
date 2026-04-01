@@ -9,6 +9,7 @@ import {
 } from '@/lib/k8s';
 import {
   buildDomainRouteName,
+  buildLegacyProjectRouteName,
   buildPreviewEnvironmentHostname,
   pickDefaultPublicService,
 } from './defaults';
@@ -94,6 +95,7 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
     }
 
     const routeName = buildDomainRouteName(domain.hostname);
+    const legacyRouteName = buildLegacyProjectRouteName(input.project.slug);
     const spec = {
       name: routeName,
       namespace: input.environment.namespace,
@@ -105,6 +107,12 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
       servicePort: service.port || 80,
       path: '/',
     };
+
+    if (legacyRouteName !== routeName) {
+      await deleteCiliumHTTPRoute(input.environment.namespace, legacyRouteName).catch(() => {
+        // Ignore missing legacy route errors during canonical route reconciliation.
+      });
+    }
 
     try {
       await createCiliumHTTPRoute(spec);

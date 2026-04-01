@@ -9,7 +9,7 @@ import {
   releases,
   repositories,
 } from '@/lib/db/schema';
-import { buildDomainRouteName } from '@/lib/domains/defaults';
+import { buildDomainRouteName, buildLegacyProjectRouteName } from '@/lib/domains/defaults';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import {
   getK8sConfigMapName,
@@ -24,7 +24,6 @@ import { getTeamIntegrationSession } from '@/lib/integrations/service/integratio
 import {
   createCiliumHTTPRoute,
   createDeployment,
-  createService,
   deleteCiliumHTTPRoute,
   deleteDeployment,
   deleteService,
@@ -33,6 +32,7 @@ import {
   GHCR_PULL_SECRET_NAME,
   getIsConnected,
   updateDeployment,
+  upsertService,
   verifyServiceReachability,
   waitForDeploymentReady,
 } from '@/lib/k8s';
@@ -159,6 +159,7 @@ async function syncServiceTrafficRoutes(input: {
 
   for (const domain of serviceDomains) {
     const routeName = buildDomainRouteName(domain.hostname);
+    const legacyRouteName = buildLegacyProjectRouteName(input.projectSlug);
     const routeSpec = {
       name: routeName,
       namespace: input.namespace,
@@ -174,6 +175,9 @@ async function syncServiceTrafficRoutes(input: {
       path: '/',
     };
 
+    if (legacyRouteName !== routeName) {
+      await deleteCiliumHTTPRoute(input.namespace, legacyRouteName).catch(() => undefined);
+    }
     await deleteCiliumHTTPRoute(input.namespace, routeName).catch(() => undefined);
     await createCiliumHTTPRoute(routeSpec);
   }
@@ -185,14 +189,11 @@ async function cleanupCandidateResources(namespace: string, candidateName: strin
 }
 
 async function ensureServiceResource(namespace: string, name: string, port: number) {
-  try {
-    await createService(namespace, name, {
-      port,
-      targetPort: port,
-    });
-  } catch (_serviceError) {
-    // Service already exists or will be recreated by the next route sync.
-  }
+  await upsertService(namespace, name, {
+    port,
+    targetPort: port,
+    selector: { app: name },
+  });
 }
 
 async function upsertServiceWorkload(input: {

@@ -6,7 +6,9 @@ import { executeDeploymentWorkload, logDeployment } from './deployment-executor'
 import type { DeploymentJobData } from './index';
 
 function classifyDeploymentFailureStatus(message: string) {
-  return message.includes('Service verify failed') ? 'verification_failed' : 'failed';
+  return message.includes('Service verify failed') || message.includes('Verification pod')
+    ? 'verification_failed'
+    : 'failed';
 }
 
 export async function processDeployment(job: Job<DeploymentJobData>) {

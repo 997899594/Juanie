@@ -3,13 +3,13 @@ import { db } from '@/lib/db';
 import { deploymentLogs, deployments, environments, projects, services } from '@/lib/db/schema';
 import {
   createDeployment,
-  createService,
   deleteDeployment,
   deleteService,
   deploymentExists,
   getDeploymentSnapshot,
   getIsConnected,
   updateDeployment,
+  upsertService,
   verifyServiceReachability,
   waitForDeploymentReady,
 } from '@/lib/k8s';
@@ -326,14 +326,11 @@ export async function finalizeDeploymentRollout(input: {
         memoryLimit: candidateSnapshot.memoryLimit,
       });
     } else {
-      try {
-        await createService(namespace, stableName, {
-          port: candidateSnapshot.port,
-          targetPort: candidateSnapshot.port,
-        });
-      } catch {
-        // Ignore existing stable service.
-      }
+      await upsertService(namespace, stableName, {
+        port: candidateSnapshot.port,
+        targetPort: candidateSnapshot.port,
+        selector: { app: stableName },
+      });
 
       await createDeployment(namespace, stableName, {
         image: candidateSnapshot.image,
