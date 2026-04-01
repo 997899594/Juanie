@@ -544,6 +544,60 @@ export function getIsConnected(): boolean {
 export const GHCR_PULL_SECRET_NAME = 'ghcr-pull-secret';
 const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
 
+async function namespacedSecretExists(namespace: string, name: string): Promise<boolean> {
+  const { core } = getK8sClient();
+
+  try {
+    await core.readNamespacedSecret({ namespace, name });
+    return true;
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      return false;
+    }
+    throw e;
+  }
+}
+
+export async function ensureServiceAccountImagePullSecret(
+  namespace: string,
+  serviceAccountName: string,
+  secretName: string
+): Promise<boolean> {
+  const { core } = getK8sClient();
+
+  try {
+    const current = await core.readNamespacedServiceAccount({
+      namespace,
+      name: serviceAccountName,
+    });
+    const imagePullSecrets = current.imagePullSecrets ?? [];
+
+    if (imagePullSecrets.some((entry) => entry.name === secretName)) {
+      return true;
+    }
+
+    const body: k8s.V1ServiceAccount = {
+      ...current,
+      imagePullSecrets: [...imagePullSecrets, { name: secretName }],
+    };
+
+    await core.replaceNamespacedServiceAccount({
+      namespace,
+      name: serviceAccountName,
+      body,
+    });
+
+    return true;
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      return false;
+    }
+    throw e;
+  }
+}
+
 /**
  * 在指定 namespace 创建或更新 GHCR 镜像拉取 Secret。
  * 优先使用传入的 OAuth token（来自用户登录授权），回退到环境变量。
@@ -552,10 +606,12 @@ const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
 export async function ensureGhcrPullSecret(
   namespace: string,
   options?: { token?: string }
-): Promise<void> {
+): Promise<boolean> {
   const token = options?.token || process.env.GHCR_TOKEN;
 
-  if (!token) return;
+  if (!token) {
+    return namespacedSecretExists(namespace, GHCR_PULL_SECRET_NAME);
+  }
 
   // 从 GitHub API 获取用户名（OAuth token 或 PAT 均可）
   let username = process.env.GHCR_USERNAME;
@@ -566,17 +622,19 @@ export async function ensureGhcrPullSecret(
       });
       if (!userRes.ok) {
         console.warn('[ensureGhcrPullSecret] Failed to fetch GitHub user, skipping pull secret');
-        return;
+        return namespacedSecretExists(namespace, GHCR_PULL_SECRET_NAME);
       }
       const userData = (await userRes.json()) as { login: string };
       username = userData.login;
     } catch (e) {
       console.warn('[ensureGhcrPullSecret] GitHub API error, skipping pull secret:', e);
-      return;
+      return namespacedSecretExists(namespace, GHCR_PULL_SECRET_NAME);
     }
   }
 
-  if (!username) return;
+  if (!username) {
+    return namespacedSecretExists(namespace, GHCR_PULL_SECRET_NAME);
+  }
 
   const { core } = getK8sClient();
   const auth = Buffer.from(`${username}:${token}`).toString('base64');
@@ -607,6 +665,40 @@ export async function ensureGhcrPullSecret(
       throw e;
     }
   }
+
+  return true;
+}
+
+export async function ensureGhcrImagePullAccess(
+  namespace: string,
+  options?: {
+    token?: string;
+    serviceAccounts?: string[];
+  }
+): Promise<boolean> {
+  const secretReady = await ensureGhcrPullSecret(namespace, options);
+
+  if (!secretReady) {
+    return false;
+  }
+
+  const serviceAccounts = Array.from(new Set(options?.serviceAccounts ?? ['default']));
+  for (const serviceAccountName of serviceAccounts) {
+    try {
+      await ensureServiceAccountImagePullSecret(
+        namespace,
+        serviceAccountName,
+        GHCR_PULL_SECRET_NAME
+      );
+    } catch (error) {
+      console.warn(
+        `[ensureGhcrImagePullAccess] Failed to patch ServiceAccount ${namespace}/${serviceAccountName}:`,
+        error
+      );
+    }
+  }
+
+  return true;
 }
 
 // ============================================

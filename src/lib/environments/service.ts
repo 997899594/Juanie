@@ -4,7 +4,12 @@ import { db } from '@/lib/db';
 import { environments, services } from '@/lib/db/schema';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
-import { createNamespace, ensureGhcrPullSecret, getIsConnected, upsertService } from '@/lib/k8s';
+import {
+  createNamespace,
+  ensureGhcrImagePullAccess,
+  getIsConnected,
+  upsertService,
+} from '@/lib/k8s';
 import {
   buildPreviewEnvironmentName,
   buildPreviewNamespace,
@@ -190,12 +195,12 @@ export async function ensureEnvironmentScaffold(input: {
     });
 
     if (teamSession.provider === 'github') {
-      await ensureGhcrPullSecret(namespace, { token: teamSession.accessToken });
+      await ensureGhcrImagePullAccess(namespace, { token: teamSession.accessToken });
     } else {
-      await ensureGhcrPullSecret(namespace);
+      await ensureGhcrImagePullAccess(namespace);
     }
   } catch (_error) {
-    await ensureGhcrPullSecret(namespace).catch(() => {
+    await ensureGhcrImagePullAccess(namespace).catch(() => {
       // Ignore pull secret bootstrap failures in non-GitHub environments.
     });
   }

@@ -27,6 +27,12 @@ spec:
         app.kubernetes.io/component: web
     spec:
       serviceAccountName: {{ .Chart.Name }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -100,6 +106,12 @@ spec:
         app.kubernetes.io/component: worker
     spec:
       serviceAccountName: {{ .Chart.Name }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001

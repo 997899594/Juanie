@@ -7,7 +7,7 @@ import { getTeamIntegrationSession } from '@/lib/integrations/service/integratio
 import {
   createJob,
   deleteJob,
-  ensureGhcrPullSecret,
+  ensureGhcrImagePullAccess,
   GHCR_PULL_SECRET_NAME,
   getEvents,
   getIsConnected,
@@ -156,6 +156,17 @@ function describeMigrationEventIssue(event: CoreV1Event): {
   }
 
   if (
+    reason === 'FailedToRetrieveImagePullSecret' ||
+    normalized.includes('pull secret') ||
+    normalized.includes('failedtoretrieveimagepullsecret')
+  ) {
+    return {
+      errorCode: 'MIGRATION_IMAGE_PULL_SECRET_UNAVAILABLE',
+      errorMessage: `Migration job image pull secret is unavailable: ${message || reason}`,
+    };
+  }
+
+  if (
     normalized.includes('errimagepull') ||
     normalized.includes('imagepullbackoff') ||
     normalized.includes('failed to pull image') ||
@@ -269,21 +280,27 @@ async function ensureMigrationImagePullSecrets(
         });
 
         if (teamSession.provider === 'github') {
-          await ensureGhcrPullSecret(namespace, { token: teamSession.accessToken });
+          const secretReady = await ensureGhcrImagePullAccess(namespace, {
+            token: teamSession.accessToken,
+          });
+          return secretReady ? [GHCR_PULL_SECRET_NAME] : undefined;
         } else {
-          await ensureGhcrPullSecret(namespace);
+          const secretReady = await ensureGhcrImagePullAccess(namespace);
+          return secretReady ? [GHCR_PULL_SECRET_NAME] : undefined;
         }
       } catch {
-        await ensureGhcrPullSecret(namespace);
+        const secretReady = await ensureGhcrImagePullAccess(namespace);
+        return secretReady ? [GHCR_PULL_SECRET_NAME] : undefined;
       }
     } else {
-      await ensureGhcrPullSecret(namespace);
+      const secretReady = await ensureGhcrImagePullAccess(namespace);
+      return secretReady ? [GHCR_PULL_SECRET_NAME] : undefined;
     }
   } catch {
     // Keep running even if secret refresh fails. The namespace may already have the secret.
   }
 
-  return [GHCR_PULL_SECRET_NAME];
+  return undefined;
 }
 
 async function getMigrationStartupTimeoutFailure(input: {

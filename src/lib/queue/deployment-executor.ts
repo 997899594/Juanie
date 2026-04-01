@@ -21,7 +21,7 @@ import { ensureEnvironmentScaffold } from '@/lib/environments/service';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import {
   deploymentExists,
-  ensureGhcrPullSecret,
+  ensureGhcrImagePullAccess,
   GHCR_PULL_SECRET_NAME,
   getDeploymentSnapshot,
   getIsConnected,
@@ -184,13 +184,13 @@ export async function executeDeploymentWorkload(
         requiredCapabilities: [],
       });
       if (teamSession.provider === 'github') {
-        await ensureGhcrPullSecret(targetEnvironment.namespace, { token: teamSession.accessToken });
-        useGhcrPullSecret = true;
+        useGhcrPullSecret = await ensureGhcrImagePullAccess(targetEnvironment.namespace, {
+          token: teamSession.accessToken,
+        });
       }
     } catch (error) {
       console.warn('Could not ensure GHCR pull secret, will try env var fallback:', error);
-      await ensureGhcrPullSecret(targetEnvironment.namespace);
-      useGhcrPullSecret = !!process.env.GHCR_TOKEN;
+      useGhcrPullSecret = await ensureGhcrImagePullAccess(targetEnvironment.namespace);
     }
   }
 

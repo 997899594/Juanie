@@ -60,109 +60,209 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
+      - uses: actions/checkout@v4
+
+      - name: 配置 SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+
+      - name: 上传 Helm Chart
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -euo pipefail
+          CHART_ARCHIVE="/tmp/juanie-chart-${GITHUB_SHA}.tgz"
+          REMOTE_DIR="/tmp/juanie-deploy-${GITHUB_SHA}"
+          tar czf "$CHART_ARCHIVE" -C deploy/k8s/charts juanie
+          ssh "${SERVER_USER}@${SERVER_HOST}" "rm -rf '${REMOTE_DIR}' && mkdir -p '${REMOTE_DIR}'"
+          scp "$CHART_ARCHIVE" "${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/chart.tgz"
+          ssh "${SERVER_USER}@${SERVER_HOST}" "tar xzf '${REMOTE_DIR}/chart.tgz' -C '${REMOTE_DIR}'"
+
       - name: 部署到 Kubernetes
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 20m
-          script: |
-            set -e
-            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME || github.actor }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
 
-            dump_rollout_debug() {
-              local deployment_name="$1"
-              echo "⚠️ Rollout 失败，输出 ${deployment_name} 诊断信息..."
-              kubectl describe deployment "${deployment_name}" -n juanie || true
-              kubectl get rs -n juanie -l app.kubernetes.io/name=juanie -o wide || true
-              kubectl get pods -n juanie -o wide || true
-              kubectl get events -n juanie --sort-by=.metadata.creationTimestamp | tail -n 80 || true
-            }
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA}"
+          IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          IMAGE_TAG="${GITHUB_SHA}"
+          CHART_DIR="/tmp/juanie-deploy-${GITHUB_SHA}/juanie"
+          GHCR_PULL_USERNAME_B64="$(printf '%s' "$GHCR_PULL_USERNAME" | base64 | tr -d '\n')"
+          GHCR_PULL_TOKEN_B64="$(printf '%s' "$GHCR_PULL_TOKEN" | base64 | tr -d '\n')"
 
-            dump_schema_debug() {
-              local job_name="$1"
-              echo "⚠️ Schema 同步失败，输出数据库与应用诊断信息..."
-              kubectl describe job "${job_name}" -n juanie || true
-              kubectl logs job/"${job_name}" -n juanie --tail=200 || true
-              kubectl get pods -n juanie -o wide || true
-              kubectl logs deployment/juanie-web -n juanie --tail=120 || true
-              kubectl logs deployment/juanie-worker -n juanie --tail=120 || true
-            }
+          ssh "${SERVER_USER}@${SERVER_HOST}" \
+            "IMAGE='${IMAGE}' IMAGE_REPOSITORY='${IMAGE_REPOSITORY}' IMAGE_TAG='${IMAGE_TAG}' CHART_DIR='${CHART_DIR}' GHCR_PULL_USERNAME_B64='${GHCR_PULL_USERNAME_B64}' GHCR_PULL_TOKEN_B64='${GHCR_PULL_TOKEN_B64}' bash -s" <<'REMOTE'
+          set -euo pipefail
 
-            echo "🚀 部署 Juanie..."
-            echo "   镜像: $IMAGE"
-            SCHEMA_JOB="juanie-schema-sync-$(echo '${{ github.sha }}' | cut -c1-7)"
+          SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "$IMAGE_TAG" | cut -c1-7)"
+          GHCR_PULL_USERNAME="$(printf '%s' "$GHCR_PULL_USERNAME_B64" | base64 -d)"
+          GHCR_PULL_TOKEN="$(printf '%s' "$GHCR_PULL_TOKEN_B64" | base64 -d)"
 
-            # 1. 先用新镜像同步 Schema，避免新 web 代码先启动、数据库后迁移
-            echo "🔄 先执行 Schema Sync Job..."
-            kubectl delete job "${SCHEMA_JOB}" -n juanie --ignore-not-found=true
-            kubectl wait --for=delete job/"${SCHEMA_JOB}" -n juanie --timeout=120s || true
-            cat <<EOF | kubectl apply -f -
-            apiVersion: batch/v1
-            kind: Job
-            metadata:
-              name: ${SCHEMA_JOB}
-              namespace: juanie
-              labels:
-                app.kubernetes.io/name: juanie
-                app.kubernetes.io/component: schema-sync
-            spec:
-              backoffLimit: 0
-              ttlSecondsAfterFinished: 600
-              template:
-                metadata:
-                  labels:
-                    app.kubernetes.io/name: juanie
-                    app.kubernetes.io/component: schema-sync
-                spec:
-                  restartPolicy: Never
-                  serviceAccountName: juanie
-                  securityContext:
-                    runAsNonRoot: true
-                    runAsUser: 1001
-                    fsGroup: 1001
-                  initContainers:
-                    - name: wait-for-postgres
-                      image: busybox:1.36
-                      command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
-                  containers:
-                    - name: schema-sync
-                      image: ${IMAGE}
-                      imagePullPolicy: IfNotPresent
-                      command: ['bun', 'run', 'db:push']
-                      envFrom:
-                        - configMapRef:
-                            name: juanie-config
-                        - secretRef:
-                            name: juanie-secret
-                      securityContext:
-                        allowPrivilegeEscalation: false
-                        capabilities:
-                          drop: ["ALL"]
-            EOF
+          dump_rollout_debug() {
+            local deployment_name="$1"
+            echo "⚠️ Rollout 失败，输出 ${deployment_name} 诊断信息..."
+            kubectl describe deployment "${deployment_name}" -n juanie || true
+            kubectl get rs -n juanie -l app.kubernetes.io/name=juanie -o wide || true
+            kubectl get pods -n juanie -o wide || true
+            kubectl get events -n juanie --sort-by=.metadata.creationTimestamp | tail -n 80 || true
+          }
 
-            if ! kubectl wait --for=condition=complete job/"${SCHEMA_JOB}" -n juanie --timeout=900s; then
-              dump_schema_debug "${SCHEMA_JOB}"
-              exit 1
+          dump_schema_debug() {
+            local job_name="$1"
+            local pod_name
+            pod_name="$(kubectl get pods -n juanie -l job-name="${job_name}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+            echo "⚠️ Schema 同步失败，输出数据库与应用诊断信息..."
+            kubectl describe job "${job_name}" -n juanie || true
+            if [ -n "$pod_name" ]; then
+              kubectl describe pod "${pod_name}" -n juanie || true
             fi
-            kubectl logs job/"${SCHEMA_JOB}" -n juanie --tail=120 || true
+            kubectl logs job/"${job_name}" -n juanie --tail=200 || true
+            kubectl get pods -n juanie -o wide || true
+            kubectl get serviceaccount juanie -n juanie -o yaml || true
+            kubectl get secret ghcr-pull-secret -n juanie -o yaml || true
+            kubectl logs deployment/juanie-web -n juanie --tail=120 || true
+            kubectl logs deployment/juanie-worker -n juanie --tail=120 || true
+          }
 
-            # 2. Schema 成功后再更新镜像并 rollout
-            kubectl set image deployment/juanie-web -n juanie juanie=$IMAGE
-            kubectl set image deployment/juanie-worker -n juanie worker=$IMAGE
+          wait_for_schema_job() {
+            local job_name="$1"
+            local timeout_seconds="$2"
+            local started_at
+            started_at="$(date +%s)"
 
-            # 3. 确保 worker 有 NODE_TLS_REJECT_UNAUTHORIZED=0 (for K8s API self-signed certs)
-            kubectl set env deployment/juanie-worker -n juanie NODE_TLS_REJECT_UNAUTHORIZED=0
+            while true; do
+              if kubectl get job "${job_name}" -n juanie >/dev/null 2>&1; then
+                local complete failed pod_name waiting_reason
+                complete="$(kubectl get job "${job_name}" -n juanie -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || true)"
+                failed="$(kubectl get job "${job_name}" -n juanie -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || true)"
+                pod_name="$(kubectl get pods -n juanie -l job-name="${job_name}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+                waiting_reason=""
 
-            # 4. 等待滚动更新（新 pod 就绪）
-            if ! kubectl rollout status deployment/juanie-web -n juanie --timeout=900s; then
-              dump_rollout_debug juanie-web
-              exit 1
-            fi
-            if ! kubectl rollout status deployment/juanie-worker -n juanie --timeout=900s; then
-              dump_rollout_debug juanie-worker
-              exit 1
-            fi
+                if [ -n "$pod_name" ]; then
+                  waiting_reason="$(kubectl get pod "${pod_name}" -n juanie -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || true)"
+                fi
 
-            echo "✅ 部署完成!"
+                if [ "$complete" = "True" ]; then
+                  return 0
+                fi
+
+                if [ "$failed" = "True" ]; then
+                  return 1
+                fi
+
+                case "$waiting_reason" in
+                  ErrImagePull|ImagePullBackOff|CrashLoopBackOff|CreateContainerConfigError)
+                    echo "❌ Schema job 提前失败: ${waiting_reason}"
+                    return 1
+                    ;;
+                esac
+              fi
+
+              if [ $(( $(date +%s) - started_at )) -ge "$timeout_seconds" ]; then
+                echo "❌ Schema job 等待超时"
+                return 1
+              fi
+
+              sleep 5
+            done
+          }
+
+          echo "🚀 部署 Juanie..."
+          echo "   镜像: $IMAGE"
+          echo "🔐 同步 GHCR 拉取凭证..."
+          kubectl create secret docker-registry ghcr-pull-secret \
+            -n juanie \
+            --docker-server=ghcr.io \
+            --docker-username="$GHCR_PULL_USERNAME" \
+            --docker-password="$GHCR_PULL_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          echo "🔄 先执行 Schema Sync Job..."
+          kubectl delete job "${SCHEMA_JOB}" -n juanie --ignore-not-found=true
+          kubectl wait --for=delete job/"${SCHEMA_JOB}" -n juanie --timeout=120s || true
+          cat <<EOF | kubectl apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${SCHEMA_JOB}
+            namespace: juanie
+            labels:
+              app.kubernetes.io/name: juanie
+              app.kubernetes.io/component: schema-sync
+          spec:
+            backoffLimit: 0
+            ttlSecondsAfterFinished: 600
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: juanie
+                  app.kubernetes.io/component: schema-sync
+              spec:
+                restartPolicy: Never
+                serviceAccountName: juanie
+                imagePullSecrets:
+                  - name: ghcr-pull-secret
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 1001
+                  fsGroup: 1001
+                initContainers:
+                  - name: wait-for-postgres
+                    image: busybox:1.36
+                    command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done']
+                containers:
+                  - name: schema-sync
+                    image: ${IMAGE}
+                    imagePullPolicy: IfNotPresent
+                    command: ['bun', 'run', 'db:push']
+                    envFrom:
+                      - configMapRef:
+                          name: juanie-config
+                      - secretRef:
+                          name: juanie-secret
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop: ["ALL"]
+          EOF
+
+          if ! wait_for_schema_job "${SCHEMA_JOB}" 2700; then
+            dump_schema_debug "${SCHEMA_JOB}"
+            exit 1
+          fi
+          kubectl logs job/"${SCHEMA_JOB}" -n juanie --tail=120 || true
+
+          echo "📦 执行 Helm 升级..."
+          helm upgrade --install juanie "${CHART_DIR}" \
+            --namespace juanie \
+            --reuse-values \
+            --set image.repository="${IMAGE_REPOSITORY}" \
+            --set image.tag="${IMAGE_TAG}" \
+            --set-string image.pullSecrets[0]=ghcr-pull-secret \
+            --wait \
+            --timeout 20m
+
+          if ! kubectl rollout status deployment/juanie-web -n juanie --timeout=1200s; then
+            dump_rollout_debug juanie-web
+            exit 1
+          fi
+          if ! kubectl rollout status deployment/juanie-worker -n juanie --timeout=1200s; then
+            dump_rollout_debug juanie-worker
+            exit 1
+          fi
+
+          rm -rf "$(dirname "${CHART_DIR}")"
+          echo "✅ 部署完成!"
+          REMOTE

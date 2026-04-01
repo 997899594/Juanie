@@ -33,7 +33,7 @@ import {
   createSecret,
   createService,
   createStatefulSet,
-  ensureGhcrPullSecret,
+  ensureGhcrImagePullAccess,
   getIsConnected,
   getK8sClient,
   initK8sClient,
@@ -1314,7 +1314,7 @@ async function setupNamespace(
       }
       if (teamSession?.provider === 'github') {
         try {
-          await ensureGhcrPullSecret(ns, { token: teamSession.accessToken });
+          await ensureGhcrImagePullAccess(ns, { token: teamSession.accessToken });
           console.log(`✅ Created GHCR pull secret in namespace ${ns}`);
         } catch (e) {
           console.warn(`Could not create GHCR pull secret in ${ns}:`, e);
