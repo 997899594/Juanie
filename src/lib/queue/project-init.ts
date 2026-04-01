@@ -37,6 +37,7 @@ import {
   getIsConnected,
   getK8sClient,
   initK8sClient,
+  reconcileCiliumHTTPRoutesForHostname,
 } from '@/lib/k8s';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
@@ -1802,6 +1803,11 @@ async function configureDns(
       const routeName = buildDomainRouteName(domain.hostname);
 
       // Create HTTPRoute pointing to shared-gateway (https-wildcard handles *.juanie.art)
+      await reconcileCiliumHTTPRoutesForHostname({
+        namespace,
+        hostname: domain.hostname,
+        canonicalRouteName: routeName,
+      });
       await createCiliumHTTPRoute({
         name: routeName,
         namespace,

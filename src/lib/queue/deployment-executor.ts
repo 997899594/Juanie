@@ -9,7 +9,7 @@ import {
   releases,
   repositories,
 } from '@/lib/db/schema';
-import { buildDomainRouteName, buildLegacyProjectRouteName } from '@/lib/domains/defaults';
+import { buildDomainRouteName } from '@/lib/domains/defaults';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import {
   getK8sConfigMapName,
@@ -31,6 +31,7 @@ import {
   ensureGhcrPullSecret,
   GHCR_PULL_SECRET_NAME,
   getIsConnected,
+  reconcileCiliumHTTPRoutesForHostname,
   updateDeployment,
   upsertService,
   verifyServiceReachability,
@@ -159,7 +160,6 @@ async function syncServiceTrafficRoutes(input: {
 
   for (const domain of serviceDomains) {
     const routeName = buildDomainRouteName(domain.hostname);
-    const legacyRouteName = buildLegacyProjectRouteName(input.projectSlug);
     const routeSpec = {
       name: routeName,
       namespace: input.namespace,
@@ -175,9 +175,11 @@ async function syncServiceTrafficRoutes(input: {
       path: '/',
     };
 
-    if (legacyRouteName !== routeName) {
-      await deleteCiliumHTTPRoute(input.namespace, legacyRouteName).catch(() => undefined);
-    }
+    await reconcileCiliumHTTPRoutesForHostname({
+      namespace: input.namespace,
+      hostname: domain.hostname,
+      canonicalRouteName: routeName,
+    });
     await deleteCiliumHTTPRoute(input.namespace, routeName).catch(() => undefined);
     await createCiliumHTTPRoute(routeSpec);
   }

@@ -63,10 +63,6 @@ export function buildDomainRouteName(hostname: string): string {
   return shortenDnsLabel(`route-${hostname.replaceAll('.', '-')}`);
 }
 
-export function buildLegacyProjectRouteName(projectSlug: string): string {
-  return shortenDnsLabel(`${projectSlug}-route`);
-}
-
 export function buildEnvironmentAccessUrl(hostname: string): string {
   return `https://${hostname}`;
 }

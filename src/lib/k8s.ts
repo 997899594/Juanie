@@ -1555,6 +1555,35 @@ export async function getCiliumHTTPRoutes(namespace: string): Promise<unknown[]>
   return response.items;
 }
 
+interface HTTPRouteLike {
+  metadata?: {
+    name?: string;
+  };
+  spec?: {
+    hostnames?: string[];
+  };
+}
+
+export async function reconcileCiliumHTTPRoutesForHostname(input: {
+  namespace: string;
+  hostname: string;
+  canonicalRouteName: string;
+}): Promise<void> {
+  const routes = (await getCiliumHTTPRoutes(input.namespace)) as HTTPRouteLike[];
+
+  await Promise.all(
+    routes
+      .filter((route) => {
+        const routeName = route.metadata?.name;
+        const hostnames = route.spec?.hostnames ?? [];
+        return (
+          routeName && routeName !== input.canonicalRouteName && hostnames.includes(input.hostname)
+        );
+      })
+      .map((route) => deleteCiliumHTTPRoute(input.namespace, route.metadata!.name!))
+  );
+}
+
 // ============================================
 // StatefulSet Management (for Databases)
 // ============================================
