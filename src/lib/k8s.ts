@@ -542,6 +542,7 @@ export function getIsConnected(): boolean {
 // ============================================
 
 export const GHCR_PULL_SECRET_NAME = 'ghcr-pull-secret';
+const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
 
 /**
  * 在指定 namespace 创建或更新 GHCR 镜像拉取 Secret。
@@ -645,6 +646,7 @@ export async function createDeployment(
       metadata: { name },
       spec: {
         replicas: spec.replicas,
+        revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
         selector: { matchLabels: { app: name } },
         template: {
           metadata: { labels: { app: name } },
@@ -767,6 +769,7 @@ export async function updateDeployment(
     metadata: current.metadata,
     spec: {
       replicas: spec.replicas ?? current.spec?.replicas,
+      revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
       selector: current.spec?.selector || { matchLabels: { app: name } },
       template: {
         metadata: {
