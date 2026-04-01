@@ -1,0 +1,157 @@
+import type { ReleaseStatusDecoration } from '@/lib/releases/status-presentation';
+import {
+  getDeploymentStatusDecoration,
+  getMigrationStatusDecoration,
+  getReleaseStatusDecoration,
+} from '@/lib/releases/status-presentation';
+import { formatPlatformTimeContext } from '@/lib/time/format';
+
+export interface EnvironmentRecentActivityItem {
+  key: string;
+  kind: 'release' | 'deployment' | 'migration' | 'governance';
+  kindLabel: string;
+  title: string;
+  summary: string;
+  createdAtLabel: string | null;
+  href: string | null;
+  actionLabel: string | null;
+  statusDecoration: ReleaseStatusDecoration | null;
+}
+
+interface RecentReleaseInput {
+  id: string;
+  status: string;
+  title: string;
+  shortCommitSha?: string | null;
+  createdAt?: Date | string | null;
+}
+
+interface RecentDeploymentInput {
+  id: string;
+  status: string;
+  serviceName?: string | null;
+  createdAt?: Date | string | null;
+  releaseId?: string | null;
+}
+
+interface RecentMigrationInput {
+  id: string;
+  status: string;
+  serviceName?: string | null;
+  databaseName?: string | null;
+  createdAt?: Date | string | null;
+  releaseId?: string | null;
+}
+
+interface RecentGovernanceInput {
+  key: string;
+  label: string;
+  summary: string;
+  createdAt?: Date | string | null;
+}
+
+function toTimestamp(value?: Date | string | null): number {
+  if (!value) {
+    return 0;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+export function buildEnvironmentRecentActivity(input: {
+  projectId: string;
+  environmentId: string;
+  latestRelease?: RecentReleaseInput | null;
+  latestDeployment?: RecentDeploymentInput | null;
+  latestMigration?: RecentMigrationInput | null;
+  latestGovernance?: RecentGovernanceInput | null;
+}): EnvironmentRecentActivityItem[] {
+  const items: Array<EnvironmentRecentActivityItem & { timestamp: number }> = [];
+
+  if (input.latestRelease) {
+    const statusDecoration = getReleaseStatusDecoration(input.latestRelease.status);
+    items.push({
+      key: `release:${input.latestRelease.id}`,
+      kind: 'release',
+      kindLabel: '发布',
+      title: '最近发布',
+      summary: [
+        input.latestRelease.title,
+        statusDecoration.label,
+        input.latestRelease.shortCommitSha ? `commit ${input.latestRelease.shortCommitSha}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      createdAtLabel: formatPlatformTimeContext(input.latestRelease.createdAt),
+      href: `/projects/${input.projectId}/releases/${input.latestRelease.id}`,
+      actionLabel: '查看发布',
+      statusDecoration,
+      timestamp: toTimestamp(input.latestRelease.createdAt),
+    });
+  }
+
+  if (input.latestDeployment) {
+    const statusDecoration = getDeploymentStatusDecoration(input.latestDeployment.status);
+    items.push({
+      key: `deployment:${input.latestDeployment.id}`,
+      kind: 'deployment',
+      kindLabel: '部署',
+      title: '最近部署',
+      summary: [input.latestDeployment.serviceName ?? '服务', statusDecoration.label]
+        .filter(Boolean)
+        .join(' · '),
+      createdAtLabel: formatPlatformTimeContext(input.latestDeployment.createdAt),
+      href: input.latestDeployment.releaseId
+        ? `/projects/${input.projectId}/releases/${input.latestDeployment.releaseId}`
+        : `/projects/${input.projectId}/logs?env=${input.environmentId}`,
+      actionLabel: input.latestDeployment.releaseId ? '查看发布' : '查看日志',
+      statusDecoration,
+      timestamp: toTimestamp(input.latestDeployment.createdAt),
+    });
+  }
+
+  if (input.latestMigration) {
+    const statusDecoration = getMigrationStatusDecoration(input.latestMigration.status);
+    items.push({
+      key: `migration:${input.latestMigration.id}`,
+      kind: 'migration',
+      kindLabel: '迁移',
+      title: '最近迁移',
+      summary: [
+        input.latestMigration.serviceName ?? '服务',
+        input.latestMigration.databaseName ?? '数据库',
+        statusDecoration.label,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      createdAtLabel: formatPlatformTimeContext(input.latestMigration.createdAt),
+      href: input.latestMigration.releaseId
+        ? `/projects/${input.projectId}/releases/${input.latestMigration.releaseId}`
+        : `/projects/${input.projectId}/logs?env=${input.environmentId}`,
+      actionLabel: input.latestMigration.releaseId ? '查看发布' : '查看日志',
+      statusDecoration,
+      timestamp: toTimestamp(input.latestMigration.createdAt),
+    });
+  }
+
+  if (input.latestGovernance) {
+    items.push({
+      key: input.latestGovernance.key,
+      kind: 'governance',
+      kindLabel: '治理',
+      title: input.latestGovernance.label,
+      summary: input.latestGovernance.summary,
+      createdAtLabel: formatPlatformTimeContext(input.latestGovernance.createdAt),
+      href: null,
+      actionLabel: null,
+      statusDecoration: null,
+      timestamp: toTimestamp(input.latestGovernance.createdAt),
+    });
+  }
+
+  return items
+    .sort((left, right) => right.timestamp - left.timestamp)
+    .slice(0, 3)
+    .map(({ timestamp: _timestamp, ...item }) => item);
+}

@@ -16,7 +16,12 @@ import {
 import { isPreviewEnvironmentExpired } from '@/lib/environments/preview';
 import { type EnvironmentPolicySnapshot, evaluateEnvironmentPolicy } from '@/lib/policies/delivery';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import {
+  getReleaseStatusDecoration,
+  type ReleaseStatusDecoration,
+} from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
+import { formatPlatformTimeContext } from '@/lib/time/format';
 
 interface EnvironmentViewLike {
   id: string;
@@ -75,6 +80,7 @@ export interface EnvironmentListDecorations {
     title: string;
     shortCommitSha: string | null;
     createdAtLabel: string | null;
+    statusDecoration: ReleaseStatusDecoration;
   } | null;
   cleanupState: {
     state: 'active' | 'expired_ready' | 'expired_blocked';
@@ -110,7 +116,8 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
           id: environment.latestRelease.id,
           title: getReleaseDisplayTitle(environment.latestRelease),
           shortCommitSha: environment.latestRelease.sourceCommitSha?.slice(0, 7) ?? null,
-          createdAtLabel: formatEnvironmentTimestamp(environment.latestRelease.createdAt),
+          createdAtLabel: formatPlatformTimeContext(environment.latestRelease.createdAt),
+          statusDecoration: getReleaseStatusDecoration(environment.latestRelease.status),
         }
       : null;
     const policy = evaluateEnvironmentPolicy(environment);

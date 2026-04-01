@@ -57,6 +57,24 @@ import {
 } from '@/lib/environments/client-actions';
 import { cn } from '@/lib/utils';
 
+interface ActivityStatusDecoration {
+  color: 'success' | 'warning' | 'error' | 'info' | 'neutral';
+  pulse: boolean;
+  label: string;
+}
+
+interface EnvironmentActivityItem {
+  key: string;
+  kind: 'release' | 'deployment' | 'migration' | 'governance';
+  kindLabel: string;
+  title: string;
+  summary: string;
+  createdAtLabel: string | null;
+  href: string | null;
+  actionLabel: string | null;
+  statusDecoration: ActivityStatusDecoration | null;
+}
+
 interface EnvironmentRecord {
   id: string;
   name: string;
@@ -118,7 +136,9 @@ interface EnvironmentRecord {
     title: string;
     shortCommitSha: string | null;
     createdAtLabel: string | null;
+    statusDecoration: ActivityStatusDecoration;
   } | null;
+  recentActivity: EnvironmentActivityItem[];
   cleanupState: {
     state: 'active' | 'expired_ready' | 'expired_blocked';
     label: string;
@@ -320,6 +340,118 @@ function PreviewEnvironmentDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function statusToneClass(color: ActivityStatusDecoration['color']): string {
+  switch (color) {
+    case 'success':
+      return 'bg-success';
+    case 'warning':
+      return 'bg-warning';
+    case 'error':
+      return 'bg-destructive';
+    case 'info':
+      return 'bg-info';
+    default:
+      return 'bg-muted-foreground';
+  }
+}
+
+function EnvironmentQuickActions({
+  projectId,
+  environment,
+  diagnosticOpen,
+  onToggleDiagnostics,
+}: {
+  projectId: string;
+  environment: EnvironmentRecord;
+  diagnosticOpen: boolean;
+  onToggleDiagnostics: () => void;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {environment.primaryDomainUrl && (
+        <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+            打开环境
+          </a>
+        </Button>
+      )}
+      <Button asChild variant="outline" size="sm" className="rounded-xl">
+        <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>查看日志</Link>
+      </Button>
+      {environment.latestReleaseCard && (
+        <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <Link href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}>
+            打开发布
+          </Link>
+        </Button>
+      )}
+      <Button
+        variant={diagnosticOpen ? 'default' : 'outline'}
+        size="sm"
+        className="rounded-xl"
+        onClick={onToggleDiagnostics}
+      >
+        {diagnosticOpen ? '收起容量与异常' : '容量与异常'}
+      </Button>
+    </div>
+  );
+}
+
+function EnvironmentRecentActivityPanel({ items }: { items: EnvironmentRecord['recentActivity'] }) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">最近活动</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            把发布、迁移、部署和治理收敛到同一条主链里。
+          </div>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {items.map((item) => (
+          <div
+            key={item.key}
+            className="flex flex-col gap-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3 lg:flex-row lg:items-start lg:justify-between"
+          >
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{item.kindLabel}</Badge>
+                <div className="text-sm font-medium text-foreground">{item.title}</div>
+                {item.statusDecoration && (
+                  <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        'h-2 w-2 rounded-full',
+                        statusToneClass(item.statusDecoration.color),
+                        item.statusDecoration.pulse && 'animate-pulse'
+                      )}
+                    />
+                    <span>{item.statusDecoration.label}</span>
+                  </div>
+                )}
+                {item.createdAtLabel && (
+                  <div className="text-xs text-muted-foreground">{item.createdAtLabel}</div>
+                )}
+              </div>
+              <div className="text-sm text-muted-foreground">{item.summary}</div>
+            </div>
+            {item.href && item.actionLabel && (
+              <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl px-3 lg:shrink-0">
+                <Link href={item.href}>{item.actionLabel}</Link>
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -742,30 +874,13 @@ export function EnvironmentsPageClient({
                               className="mb-4 border-border bg-background"
                             />
                           )}
-                          <div className="mb-4 flex flex-wrap gap-2">
-                            <Button asChild variant="outline" size="sm" className="rounded-xl">
-                              <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>
-                                查看日志
-                              </Link>
-                            </Button>
-                            {environment.latestReleaseCard && (
-                              <Button asChild variant="outline" size="sm" className="rounded-xl">
-                                <Link
-                                  href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}
-                                >
-                                  打开发布
-                                </Link>
-                              </Button>
-                            )}
-                            <Button
-                              variant={diagnosticEnvId === environment.id ? 'default' : 'outline'}
-                              size="sm"
-                              className="rounded-xl"
-                              onClick={() => toggleDiagnostics(environment.id)}
-                            >
-                              {diagnosticEnvId === environment.id ? '收起容量与异常' : '容量与异常'}
-                            </Button>
-                          </div>
+                          <EnvironmentQuickActions
+                            projectId={projectId}
+                            environment={environment}
+                            diagnosticOpen={diagnosticEnvId === environment.id}
+                            onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
+                          />
+                          <EnvironmentRecentActivityPanel items={environment.recentActivity} />
                           <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
                             <div className="mb-3 flex items-start justify-between gap-3">
                               <div>
@@ -800,20 +915,6 @@ export function EnvironmentsPageClient({
                               </SelectContent>
                             </Select>
                           </div>
-                          {environment.latestReleaseCard && (
-                            <div className="mb-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="space-y-1">
-                                  <div className="text-sm font-medium">
-                                    {environment.latestReleaseCard.title}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {environment.latestReleaseCard.createdAtLabel ?? '最近发布'}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
                           {diagnosticEnvId === environment.id && (
                             <div className="mb-4">
                               <EnvironmentResourcePanel
@@ -991,30 +1092,13 @@ export function EnvironmentsPageClient({
                               className="mb-4 border-border bg-background"
                             />
                           )}
-                          <div className="mb-4 flex flex-wrap gap-2">
-                            <Button asChild variant="outline" size="sm" className="rounded-xl">
-                              <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>
-                                查看日志
-                              </Link>
-                            </Button>
-                            {environment.latestReleaseCard && (
-                              <Button asChild variant="outline" size="sm" className="rounded-xl">
-                                <Link
-                                  href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}
-                                >
-                                  打开发布
-                                </Link>
-                              </Button>
-                            )}
-                            <Button
-                              variant={diagnosticEnvId === environment.id ? 'default' : 'outline'}
-                              size="sm"
-                              className="rounded-xl"
-                              onClick={() => toggleDiagnostics(environment.id)}
-                            >
-                              {diagnosticEnvId === environment.id ? '收起容量与异常' : '容量与异常'}
-                            </Button>
-                          </div>
+                          <EnvironmentQuickActions
+                            projectId={projectId}
+                            environment={environment}
+                            diagnosticOpen={diagnosticEnvId === environment.id}
+                            onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
+                          />
+                          <EnvironmentRecentActivityPanel items={environment.recentActivity} />
                           <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
                             <div className="mb-3 flex items-start justify-between gap-3">
                               <div>
@@ -1052,20 +1136,6 @@ export function EnvironmentsPageClient({
                               </SelectContent>
                             </Select>
                           </div>
-                          {environment.latestReleaseCard && (
-                            <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-3">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="space-y-1">
-                                  <div className="text-sm font-medium">
-                                    {environment.latestReleaseCard.title}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {environment.latestReleaseCard.createdAtLabel ?? '最近发布'}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
                           {diagnosticEnvId === environment.id && (
                             <div className="mb-4">
                               <EnvironmentResourcePanel
