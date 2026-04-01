@@ -342,8 +342,9 @@ async function promoteStableWorkload(input: {
   imageName: string;
   envFrom: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
   imagePullSecrets?: string[];
-  verificationPaths: string[];
+  candidateVerified: boolean;
 }) {
+  await ensureServiceResource(input.namespace, input.stableName, input.service.port ?? 3000);
   await upsertServiceWorkload({
     deploymentId: input.deploymentId,
     namespace: input.namespace,
@@ -353,13 +354,12 @@ async function promoteStableWorkload(input: {
     envFrom: input.envFrom,
     imagePullSecrets: input.imagePullSecrets,
   });
-  await verifyServiceWorkload({
-    deploymentId: input.deploymentId,
-    namespace: input.namespace,
-    resourceName: input.stableName,
-    port: input.service.port ?? 3000,
-    verificationPaths: input.verificationPaths,
-  });
+  if (input.candidateVerified) {
+    await logDeployment(
+      input.deploymentId,
+      `Promoted verified candidate to ${input.stableName} without redundant post-promote HTTP verification`
+    );
+  }
   await cleanupCandidateResources(input.namespace, input.candidateName);
   await syncServiceTrafficRoutes({
     projectId: input.projectId,
@@ -570,7 +570,7 @@ export async function executeDeploymentWorkload(
         imageName,
         envFrom,
         imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
-        verificationPaths,
+        candidateVerified: false,
       });
       continue;
     }
@@ -605,7 +605,7 @@ export async function executeDeploymentWorkload(
         imageName,
         envFrom,
         imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
-        verificationPaths,
+        candidateVerified: true,
       });
       continue;
     }
