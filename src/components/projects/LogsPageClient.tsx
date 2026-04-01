@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { ObservabilityPageData } from '@/lib/observability/page-data';
+import { formatPlatformDateTime, formatPlatformRelativeTime } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
 
 interface Pod {
@@ -59,6 +60,8 @@ export function LogsPageClient({
   const [lines, setLines] = useState<LogLine[]>([]);
   const [status, setStatus] = useState<StreamStatus>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null);
+  const [lastLineAt, setLastLineAt] = useState<string | null>(null);
 
   const lineIdRef = useRef(0);
   const esRef = useRef<EventSource | null>(null);
@@ -86,6 +89,9 @@ export function LogsPageClient({
     setLines([]);
     setErrorMsg(null);
     setStatus('connecting');
+    const now = new Date().toISOString();
+    setSessionStartedAt(now);
+    setLastLineAt(null);
 
     const url = new URL(`/api/projects/${projectId}/logs/stream`, window.location.origin);
     url.searchParams.set('envId', envId);
@@ -108,6 +114,7 @@ export function LogsPageClient({
           break;
         case 'line':
           setLines((prev) => [...prev, { id: lineIdRef.current++, text: data.text ?? '' }]);
+          setLastLineAt(new Date().toISOString());
           break;
         case 'end':
           setStatus('ended');
@@ -166,6 +173,8 @@ export function LogsPageClient({
   const readyPodCount = pods.filter((pod) =>
     pod.status.containerStatuses?.every((container) => container.ready)
   ).length;
+  const sessionStartedLabel = formatPlatformDateTime(sessionStartedAt) ?? null;
+  const lastLineLabel = formatPlatformRelativeTime(lastLineAt) ?? null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -317,6 +326,15 @@ export function LogsPageClient({
               </div>
               <div className="mt-1 font-mono text-sm text-zinc-200">
                 {selectedPod?.metadata.name ?? '等待选择 Pod'}
+              </div>
+              <div className="mt-1 text-[11px] text-zinc-500">
+                {[
+                  sessionStartedLabel ? `会话开始 ${sessionStartedLabel}` : null,
+                  lastLineLabel ? `最后更新 ${lastLineLabel}` : null,
+                  lines.length > 0 ? `${lines.length} 行` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || '等待日志会话建立'}
               </div>
             </div>
             <StatusIndicator

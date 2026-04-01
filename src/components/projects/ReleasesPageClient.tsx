@@ -40,7 +40,7 @@ import { StatusIndicator } from '@/components/ui/status-indicator';
 import { buildReleaseEventStateKey, useReleases } from '@/hooks/useReleases';
 import { createProductionRelease } from '@/lib/releases/client-actions';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
-import { formatPlatformDateTime } from '@/lib/time/format';
+import { formatPlatformDateTime, formatPlatformTimeContext } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
 
 interface Environment {
@@ -1100,7 +1100,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                       <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center xl:items-end">
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="h-3.5 w-3.5" />
-                          <span>{formatPlatformDateTime(release.createdAt) ?? '—'}</span>
+                          <span>{formatPlatformTimeContext(release.createdAt) ?? '—'}</span>
                         </div>
                         <div className="flex w-full items-center gap-2 sm:w-auto">
                           <Button

@@ -93,3 +93,17 @@ export function formatPlatformRelativeTime(value?: Date | string | null): string
 
   return formatPlatformDateTime(date, { includeSeconds: true });
 }
+
+export function formatPlatformTimeContext(value?: Date | string | null): string | null {
+  const absolute = formatPlatformDateTime(value, { includeSeconds: true });
+  if (!absolute) {
+    return null;
+  }
+
+  const relative = formatPlatformRelativeTime(value);
+  if (!relative || relative === absolute) {
+    return absolute;
+  }
+
+  return `${relative} · ${absolute}`;
+}

@@ -45,7 +45,7 @@ import {
   type ReleaseStatusDecoration,
 } from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
-import { formatPlatformDateTime } from '@/lib/time/format';
+import { formatPlatformDateTime, formatPlatformTimeContext } from '@/lib/time/format';
 
 interface ReleaseViewLike {
   id: string;
@@ -328,8 +328,7 @@ function formatReleaseMetadataValue(value?: Date | string | null): string {
 }
 
 function formatTimelineTimestamp(value?: Date | string | null): string | null {
-  const label = formatReleaseMetadataValue(value);
-  return label === '—' ? null : label;
+  return formatPlatformTimeContext(value);
 }
 
 function getReleaseRiskLabel(riskLevel: ReleaseIntelligenceSnapshot['riskLevel']): string {
@@ -476,7 +475,7 @@ function buildMigrationItems(
     imageUrl:
       release.artifacts.find((artifact) => artifact.service.id === run.serviceId)?.imageUrl ?? null,
     serviceName: run.service?.name ?? '服务',
-    createdAtLabel: formatReleaseMetadataValue(run.createdAt),
+    createdAtLabel: formatPlatformTimeContext(run.createdAt) ?? '—',
   }));
 }
 
