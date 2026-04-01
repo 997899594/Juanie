@@ -16,6 +16,11 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { getProjectOverviewPageData } from '@/lib/projects/service';
+import {
+  findMigrationStatusLabel,
+  findReleaseStatusLabel,
+  getStatusDotClass,
+} from '@/lib/releases/status-presentation';
 
 const navItems = [
   { title: '环境', href: 'environments', icon: Globe },
@@ -33,22 +38,6 @@ const statusColors: Record<string, string> = {
   archived: 'bg-muted-foreground',
 };
 
-const releaseStatusColors: Record<string, string> = {
-  queued: 'bg-muted-foreground',
-  planning: 'bg-info',
-  migration_pre_running: 'bg-warning',
-  migration_pre_failed: 'bg-destructive',
-  deploying: 'bg-info',
-  awaiting_rollout: 'bg-warning',
-  verifying: 'bg-info',
-  verification_failed: 'bg-destructive',
-  migration_post_running: 'bg-warning',
-  degraded: 'bg-warning',
-  succeeded: 'bg-success',
-  failed: 'bg-destructive',
-  canceled: 'bg-muted-foreground',
-};
-
 function formatStatusLabel(value: string): string {
   const labels: Record<string, string> = {
     active: '运行中',
@@ -57,15 +46,8 @@ function formatStatusLabel(value: string): string {
     pending: '待处理',
     failed: '失败',
     archived: '已归档',
-    queued: '排队中',
-    awaiting_approval: '待审批',
-    planning: '规划中',
-    awaiting_rollout: '待放量',
-    verification_failed: '校验失败',
-    success: '成功',
-    canceled: '已取消',
   };
-  return labels[value] ?? value;
+  return labels[value] ?? findMigrationStatusLabel(value) ?? findReleaseStatusLabel(value) ?? value;
 }
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -636,7 +618,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`h-2 w-2 rounded-full ${releaseStatusColors[release.status ?? ''] ?? 'bg-muted-foreground'}`}
+                          className={`h-2 w-2 rounded-full ${getStatusDotClass(release.status ?? '', 'release')}`}
                         />
                         <span className="truncate text-sm font-medium">{release.title}</span>
                         <Badge variant="secondary" className="capitalize">

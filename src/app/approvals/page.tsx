@@ -22,20 +22,7 @@ import {
 } from '@/lib/approvals/view';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-
-const migrationStatusConfig: Record<
-  string,
-  { color: 'success' | 'warning' | 'error' | 'info' | 'neutral'; pulse: boolean }
-> = {
-  queued: { color: 'neutral', pulse: false },
-  awaiting_approval: { color: 'warning', pulse: false },
-  planning: { color: 'info', pulse: true },
-  running: { color: 'info', pulse: true },
-  success: { color: 'success', pulse: false },
-  failed: { color: 'error', pulse: false },
-  canceled: { color: 'neutral', pulse: false },
-  skipped: { color: 'neutral', pulse: false },
-};
+import { getMigrationStatusDecoration } from '@/lib/releases/status-presentation';
 
 export default async function ApprovalsPage({
   searchParams,
@@ -108,7 +95,7 @@ export default async function ApprovalsPage({
       ) : (
         <div className="space-y-3">
           {attentionRuns.map((run) => {
-            const statusConfig = migrationStatusConfig[run.status] || migrationStatusConfig.queued;
+            const statusConfig = getMigrationStatusDecoration(run.status);
 
             return (
               <div key={run.id} className="console-panel overflow-hidden">

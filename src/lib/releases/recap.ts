@@ -23,6 +23,7 @@ import {
   type ReleaseIntelligenceSnapshot,
 } from '@/lib/releases/intelligence';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import { getReleaseStatusLabel } from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 
 export interface ReleaseSummarySnapshot {
@@ -129,39 +130,6 @@ function getReleaseRiskLabel(riskLevel: ReleaseIntelligenceSnapshot['riskLevel']
   }
 
   return '低风险';
-}
-
-function getReleaseStatusLabel(status: string): string {
-  switch (status) {
-    case 'queued':
-      return '排队中';
-    case 'planning':
-      return '规划中';
-    case 'migration_pre_running':
-      return '前置迁移';
-    case 'migration_pre_failed':
-      return '前置迁移失败';
-    case 'deploying':
-      return '发布中';
-    case 'awaiting_rollout':
-      return '待放量';
-    case 'verifying':
-      return '校验中';
-    case 'verification_failed':
-      return '校验失败';
-    case 'migration_post_running':
-      return '后置迁移';
-    case 'degraded':
-      return '降级';
-    case 'succeeded':
-      return '成功';
-    case 'failed':
-      return '失败';
-    case 'canceled':
-      return '已取消';
-    default:
-      return status;
-  }
 }
 
 function buildReleaseNarrativeSummary(input: {

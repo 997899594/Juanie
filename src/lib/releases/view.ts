@@ -37,6 +37,13 @@ import {
   type ReleaseRecapRecord,
   type ReleaseSummarySnapshot,
 } from '@/lib/releases/recap';
+import {
+  getDeploymentStatusDecoration,
+  getMigrationStatusDecoration,
+  getReleaseStatusDecoration,
+  getTimelineTone,
+  type ReleaseStatusDecoration,
+} from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 import { formatPlatformDateTime } from '@/lib/time/format';
 
@@ -235,12 +242,6 @@ export function buildReleaseListStats<T extends ReleaseListDecorations>(
   ];
 }
 
-export interface ReleaseStatusDecoration {
-  color: 'success' | 'warning' | 'error' | 'info' | 'neutral';
-  pulse: boolean;
-  label: string;
-}
-
 export interface ReleaseDetailStat {
   label: string;
   value: number;
@@ -321,47 +322,6 @@ export interface ReleaseDetailDecorations {
     serviceName: string;
   }>;
 }
-
-const releaseStatusConfig: Record<string, ReleaseStatusDecoration> = {
-  queued: { color: 'neutral', pulse: false, label: '排队中' },
-  planning: { color: 'info', pulse: true, label: '规划中' },
-  migration_pre_running: { color: 'warning', pulse: true, label: '前置迁移' },
-  migration_pre_failed: { color: 'error', pulse: false, label: '前置迁移失败' },
-  deploying: { color: 'info', pulse: true, label: '发布中' },
-  awaiting_rollout: { color: 'warning', pulse: false, label: '待放量' },
-  verifying: { color: 'info', pulse: true, label: '校验中' },
-  verification_failed: { color: 'error', pulse: false, label: '校验失败' },
-  migration_post_running: { color: 'warning', pulse: true, label: '后置迁移' },
-  degraded: { color: 'warning', pulse: false, label: '降级' },
-  succeeded: { color: 'success', pulse: false, label: '成功' },
-  failed: { color: 'error', pulse: false, label: '失败' },
-  canceled: { color: 'neutral', pulse: false, label: '已取消' },
-};
-
-const deploymentStatusConfig: Record<string, ReleaseStatusDecoration> = {
-  queued: { color: 'neutral', pulse: false, label: '排队中' },
-  building: { color: 'info', pulse: true, label: '构建中' },
-  deploying: { color: 'info', pulse: true, label: '发布中' },
-  awaiting_rollout: { color: 'warning', pulse: false, label: '待放量' },
-  verification_failed: { color: 'error', pulse: false, label: '校验失败' },
-  running: { color: 'success', pulse: false, label: '运行中' },
-  failed: { color: 'error', pulse: false, label: '失败' },
-  rolled_back: { color: 'warning', pulse: false, label: '已回滚' },
-};
-
-const migrationStatusConfig: Record<
-  string,
-  Omit<ReleaseStatusDecoration, 'label'> & { label: string }
-> = {
-  queued: { color: 'neutral', pulse: false, label: '排队中' },
-  awaiting_approval: { color: 'warning', pulse: false, label: '待审批' },
-  planning: { color: 'info', pulse: true, label: '规划中' },
-  running: { color: 'info', pulse: true, label: '执行中' },
-  success: { color: 'success', pulse: false, label: '成功' },
-  failed: { color: 'error', pulse: false, label: '失败' },
-  canceled: { color: 'neutral', pulse: false, label: '已取消' },
-  skipped: { color: 'neutral', pulse: false, label: '已跳过' },
-};
 
 function formatReleaseMetadataValue(value?: Date | string | null): string {
   return formatPlatformDateTime(value) ?? '—';
@@ -488,7 +448,7 @@ function buildDeploymentItems(
     version: deployment.version ?? null,
     imageUrl: deployment.imageUrl ?? null,
     errorMessage: deployment.errorMessage ?? null,
-    statusDecoration: deploymentStatusConfig[deployment.status] ?? deploymentStatusConfig.queued,
+    statusDecoration: getDeploymentStatusDecoration(deployment.status),
     serviceName: deployment.serviceId
       ? (release.artifacts.find((artifact) => artifact.service.id === deployment.serviceId)?.service
           .name ?? '服务')
@@ -512,32 +472,12 @@ function buildMigrationItems(
       phase: run.specification?.phase ?? 'manual',
       command: run.specification?.command ?? '未提供命令',
     },
-    statusDecoration: migrationStatusConfig[run.status] ?? migrationStatusConfig.queued,
+    statusDecoration: getMigrationStatusDecoration(run.status),
     imageUrl:
       release.artifacts.find((artifact) => artifact.service.id === run.serviceId)?.imageUrl ?? null,
     serviceName: run.service?.name ?? '服务',
     createdAtLabel: formatReleaseMetadataValue(run.createdAt),
   }));
-}
-
-function getTimelineTone(
-  status: string,
-  kind: 'release' | 'migration' | 'deployment' | 'preview' | 'rollout'
-): ReleaseTimelineItem['tone'] {
-  if (kind === 'preview') return 'success';
-  if (status === 'failed' || status === 'migration_pre_failed' || status === 'verification_failed')
-    return 'danger';
-  if (status === 'awaiting_approval' || status === 'degraded' || status === 'awaiting_rollout')
-    return 'warning';
-  if (
-    status === 'running' ||
-    status === 'planning' ||
-    status === 'deploying' ||
-    status === 'verifying'
-  )
-    return 'info';
-  if (status === 'success' || status === 'succeeded') return 'success';
-  return 'neutral';
 }
 
 function buildMigrationRetryTimelineItems(
@@ -615,7 +555,7 @@ function buildReleaseTimeline(input: {
     items.push({
       key: `migration-${run.id ?? `${run.serviceId ?? 'service'}-${run.status}`}`,
       at: formatTimelineTimestamp(run.createdAt),
-      title: `迁移${migrationStatusConfig[run.status]?.label ?? run.status}`,
+      title: `迁移${getMigrationStatusDecoration(run.status).label ?? run.status}`,
       description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · ${run.specification?.phase ?? 'manual'}`,
       tone: getTimelineTone(run.status, 'migration'),
       href: releaseHref,
@@ -631,7 +571,7 @@ function buildReleaseTimeline(input: {
     items.push({
       key: `deployment-${deployment.id ?? `${deployment.serviceId ?? 'service'}-${deployment.status}`}`,
       at: formatTimelineTimestamp(deployment.createdAt),
-      title: `部署${deploymentStatusConfig[deployment.status]?.label ?? deployment.status}`,
+      title: `部署${getDeploymentStatusDecoration(deployment.status).label ?? deployment.status}`,
       description: serviceName,
       tone: getTimelineTone(deployment.status, 'deployment'),
       href: releaseHref,
@@ -816,7 +756,7 @@ export function decorateReleaseList<T extends ReleaseViewLike>(
       intelligence,
       policy,
       riskLabel: getReleaseRiskLabel(intelligence.riskLevel),
-      statusDecoration: releaseStatusConfig[release.status] ?? releaseStatusConfig.queued,
+      statusDecoration: getReleaseStatusDecoration(release.status),
       environmentScope: getEnvironmentScopeLabel(release.environment ?? {}),
       environmentSource,
       environmentStrategy,
@@ -962,7 +902,7 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
     environmentInheritance: environmentInheritance?.label ?? null,
     environmentExpiry,
     primaryDomainUrl,
-    statusDecoration: releaseStatusConfig[release.status] ?? releaseStatusConfig.queued,
+    statusDecoration: getReleaseStatusDecoration(release.status),
     approvalRunsCount,
     retryableRunsCount,
     stats: [
@@ -974,7 +914,7 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
     blockingReason: recap.blockingReason,
     timeline: buildReleaseTimeline({
       release,
-      statusDecoration: releaseStatusConfig[release.status] ?? releaseStatusConfig.queued,
+      statusDecoration: getReleaseStatusDecoration(release.status),
       primaryDomainUrl,
       environmentStrategy,
       infrastructureDiagnostics: release.infrastructureDiagnostics,
