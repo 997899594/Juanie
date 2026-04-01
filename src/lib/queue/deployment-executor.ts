@@ -3,13 +3,11 @@ import { db } from '@/lib/db';
 import {
   deploymentLogs,
   deployments,
-  domains,
   environments,
   projects,
   releases,
   repositories,
 } from '@/lib/db/schema';
-import { buildDomainRouteName } from '@/lib/domains/defaults';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import {
   getK8sConfigMapName,
@@ -22,360 +20,25 @@ import {
 import { ensureEnvironmentScaffold } from '@/lib/environments/service';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import {
-  createCiliumHTTPRoute,
-  createDeployment,
-  deleteCiliumHTTPRoute,
-  deleteDeployment,
-  deleteService,
   deploymentExists,
   ensureGhcrPullSecret,
   GHCR_PULL_SECRET_NAME,
+  getDeploymentSnapshot,
   getIsConnected,
-  reconcileCiliumHTTPRoutesForHostname,
-  updateDeployment,
-  upsertService,
-  verifyServiceReachability,
-  waitForDeploymentReady,
 } from '@/lib/k8s';
+import {
+  buildCandidateDeploymentName,
+  buildStableDeploymentName,
+  syncEnvironmentServiceTrafficRoutes,
+} from '@/lib/releases/traffic';
+import {
+  buildServiceVerificationPaths,
+  buildTrafficBackends,
+  deployCandidateWorkload,
+  isProgressiveStrategy,
+  promoteCandidateSnapshotToStable,
+} from '@/lib/releases/workloads';
 import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
-
-function buildServiceResourceName(projectSlug: string, serviceName: string): string {
-  return `${projectSlug}-${serviceName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
-}
-
-function buildCandidateResourceName(baseName: string): string {
-  return `${baseName}-candidate`.slice(0, 63);
-}
-
-function buildServiceVerificationPaths(service: {
-  type: string;
-  isPublic?: boolean | null;
-  healthcheckPath?: string | null;
-}) {
-  if (service.type !== 'web') {
-    return [];
-  }
-
-  const paths = new Set<string>();
-
-  if (service.healthcheckPath) {
-    paths.add(service.healthcheckPath);
-  } else {
-    paths.add('/api/health/ready');
-  }
-
-  if (service.isPublic !== false) {
-    paths.add('/');
-  }
-
-  return Array.from(paths);
-}
-
-function isProgressiveStrategy(
-  strategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null
-): strategy is 'controlled' | 'canary' | 'blue_green' {
-  return strategy === 'controlled' || strategy === 'canary' || strategy === 'blue_green';
-}
-
-function buildTrafficBackends(input: {
-  strategy: 'controlled' | 'canary' | 'blue_green';
-  stableExists: boolean;
-  stableName: string;
-  candidateName: string;
-  servicePort: number;
-}) {
-  if (!input.stableExists) {
-    return [
-      {
-        serviceName: input.candidateName,
-        servicePort: input.servicePort,
-        weight: 100,
-      },
-    ];
-  }
-
-  if (input.strategy === 'canary') {
-    return [
-      {
-        serviceName: input.stableName,
-        servicePort: input.servicePort,
-        weight: 90,
-      },
-      {
-        serviceName: input.candidateName,
-        servicePort: input.servicePort,
-        weight: 10,
-      },
-    ];
-  }
-
-  if (input.strategy === 'blue_green') {
-    return [
-      {
-        serviceName: input.candidateName,
-        servicePort: input.servicePort,
-        weight: 100,
-      },
-    ];
-  }
-
-  return [
-    {
-      serviceName: input.stableName,
-      servicePort: input.servicePort,
-      weight: 100,
-    },
-  ];
-}
-
-async function syncServiceTrafficRoutes(input: {
-  projectId: string;
-  projectSlug: string;
-  environmentId: string;
-  namespace: string;
-  service: {
-    id: string;
-    name: string;
-    type: string;
-    isPublic?: boolean | null;
-    port?: number | null;
-  };
-  backends: Array<{
-    serviceName: string;
-    servicePort: number;
-    weight?: number;
-  }>;
-}) {
-  if (input.service.type !== 'web' || input.service.isPublic === false) {
-    return;
-  }
-
-  const domainList = await db.query.domains.findMany({
-    where: eq(domains.environmentId, input.environmentId),
-  });
-
-  const serviceDomains = domainList.filter(
-    (domain) => domain.serviceId === input.service.id || domain.serviceId === null
-  );
-
-  for (const domain of serviceDomains) {
-    const routeName = buildDomainRouteName(domain.hostname);
-    const routeSpec = {
-      name: routeName,
-      namespace: input.namespace,
-      gatewayName: 'shared-gateway',
-      gatewayNamespace: 'juanie',
-      sectionName: 'https-wildcard',
-      hostnames: [domain.hostname],
-      serviceName:
-        input.backends[0]?.serviceName ??
-        buildServiceResourceName(input.projectSlug, input.service.name),
-      servicePort: input.backends[0]?.servicePort ?? input.service.port ?? 80,
-      backendRefs: input.backends,
-      path: '/',
-    };
-
-    await reconcileCiliumHTTPRoutesForHostname({
-      namespace: input.namespace,
-      hostname: domain.hostname,
-      canonicalRouteName: routeName,
-    });
-    await deleteCiliumHTTPRoute(input.namespace, routeName).catch(() => undefined);
-    await createCiliumHTTPRoute(routeSpec);
-  }
-}
-
-async function cleanupCandidateResources(namespace: string, candidateName: string) {
-  await deleteDeployment(namespace, candidateName).catch(() => undefined);
-  await deleteService(namespace, candidateName).catch(() => undefined);
-}
-
-async function ensureServiceResource(namespace: string, name: string, port: number) {
-  await upsertService(namespace, name, {
-    port,
-    targetPort: port,
-    selector: { app: name },
-  });
-}
-
-async function upsertServiceWorkload(input: {
-  deploymentId: string;
-  namespace: string;
-  resourceName: string;
-  imageName: string;
-  service: {
-    name: string;
-    port?: number | null;
-    replicas?: number | null;
-    healthcheckPath?: string | null;
-    cpuRequest?: string | null;
-    cpuLimit?: string | null;
-    memoryRequest?: string | null;
-    memoryLimit?: string | null;
-  };
-  envFrom: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
-  imagePullSecrets?: string[];
-  creationLabel?: string;
-}) {
-  try {
-    await updateDeployment(input.namespace, input.resourceName, {
-      image: input.imageName,
-      port: input.service.port ?? 3000,
-      envFrom: input.envFrom,
-      imagePullSecrets: input.imagePullSecrets,
-      healthcheckPath: input.service.healthcheckPath ?? undefined,
-      cpuRequest: input.service.cpuRequest ?? undefined,
-      cpuLimit: input.service.cpuLimit ?? undefined,
-      memoryRequest: input.service.memoryRequest ?? undefined,
-      memoryLimit: input.service.memoryLimit ?? undefined,
-    });
-    await logDeployment(input.deploymentId, `Updated ${input.resourceName} → ${input.imageName}`);
-  } catch (_updateError) {
-    await logDeployment(
-      input.deploymentId,
-      `${input.resourceName} not found, creating ${input.creationLabel ?? 'deployment'}`
-    );
-    await createDeployment(input.namespace, input.resourceName, {
-      image: input.imageName,
-      port: input.service.port ?? 3000,
-      replicas: input.service.replicas ?? 1,
-      envFrom: input.envFrom,
-      imagePullSecrets: input.imagePullSecrets,
-      healthcheckPath: input.service.healthcheckPath ?? undefined,
-      cpuRequest: input.service.cpuRequest ?? undefined,
-      cpuLimit: input.service.cpuLimit ?? undefined,
-      memoryRequest: input.service.memoryRequest ?? undefined,
-      memoryLimit: input.service.memoryLimit ?? undefined,
-    });
-    await logDeployment(input.deploymentId, `Created ${input.resourceName} → ${input.imageName}`);
-  }
-
-  await waitForDeploymentReady({
-    namespace: input.namespace,
-    name: input.resourceName,
-  });
-}
-
-async function verifyServiceWorkload(input: {
-  deploymentId: string;
-  namespace: string;
-  resourceName: string;
-  port: number;
-  verificationPaths: string[];
-}) {
-  if (input.verificationPaths.length === 0) {
-    return;
-  }
-
-  await verifyServiceReachability({
-    namespace: input.namespace,
-    serviceName: input.resourceName,
-    port: input.port,
-    paths: input.verificationPaths,
-  });
-  await logDeployment(
-    input.deploymentId,
-    `Verified ${input.resourceName} on ${input.verificationPaths.join(', ')}`
-  );
-}
-
-async function deployCandidateWorkload(input: {
-  deploymentId: string;
-  namespace: string;
-  candidateName: string;
-  imageName: string;
-  service: {
-    name: string;
-    port?: number | null;
-    replicas?: number | null;
-    healthcheckPath?: string | null;
-    cpuRequest?: string | null;
-    cpuLimit?: string | null;
-    memoryRequest?: string | null;
-    memoryLimit?: string | null;
-  };
-  envFrom: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
-  imagePullSecrets?: string[];
-  verificationPaths: string[];
-}) {
-  await ensureServiceResource(input.namespace, input.candidateName, input.service.port ?? 3000);
-  await upsertServiceWorkload({
-    deploymentId: input.deploymentId,
-    namespace: input.namespace,
-    resourceName: input.candidateName,
-    imageName: input.imageName,
-    service: input.service,
-    envFrom: input.envFrom,
-    imagePullSecrets: input.imagePullSecrets,
-    creationLabel: 'candidate deployment',
-  });
-  await verifyServiceWorkload({
-    deploymentId: input.deploymentId,
-    namespace: input.namespace,
-    resourceName: input.candidateName,
-    port: input.service.port ?? 3000,
-    verificationPaths: input.verificationPaths,
-  });
-}
-
-async function promoteStableWorkload(input: {
-  deploymentId: string;
-  projectId: string;
-  projectSlug: string;
-  environmentId: string;
-  namespace: string;
-  service: {
-    id: string;
-    name: string;
-    type: string;
-    isPublic?: boolean | null;
-    port?: number | null;
-    replicas?: number | null;
-    healthcheckPath?: string | null;
-    cpuRequest?: string | null;
-    cpuLimit?: string | null;
-    memoryRequest?: string | null;
-    memoryLimit?: string | null;
-  };
-  stableName: string;
-  candidateName: string;
-  imageName: string;
-  envFrom: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
-  imagePullSecrets?: string[];
-  candidateVerified: boolean;
-}) {
-  await ensureServiceResource(input.namespace, input.stableName, input.service.port ?? 3000);
-  await upsertServiceWorkload({
-    deploymentId: input.deploymentId,
-    namespace: input.namespace,
-    resourceName: input.stableName,
-    imageName: input.imageName,
-    service: input.service,
-    envFrom: input.envFrom,
-    imagePullSecrets: input.imagePullSecrets,
-  });
-  if (input.candidateVerified) {
-    await logDeployment(
-      input.deploymentId,
-      `Promoted verified candidate to ${input.stableName} without redundant post-promote HTTP verification`
-    );
-  }
-  await cleanupCandidateResources(input.namespace, input.candidateName);
-  await syncServiceTrafficRoutes({
-    projectId: input.projectId,
-    projectSlug: input.projectSlug,
-    environmentId: input.environmentId,
-    namespace: input.namespace,
-    service: input.service,
-    backends: [
-      {
-        serviceName: input.stableName,
-        servicePort: input.service.port ?? 80,
-        weight: 100,
-      },
-    ],
-  });
-}
 
 export async function logDeployment(
   deploymentId: string,
@@ -550,33 +213,40 @@ export async function executeDeploymentWorkload(
       ...(svcEnv.hasSecrets ? [{ secretRef: { name: getK8sSvcSecretName(service.id) } }] : []),
     ];
 
-    const stableName = buildServiceResourceName(project.slug, service.name);
-    const candidateName = buildCandidateResourceName(stableName);
+    const stableName = buildStableDeploymentName(project.slug, service.name);
+    const candidateName = buildCandidateDeploymentName(stableName);
     const verificationPaths = buildServiceVerificationPaths(service);
     const stableExists = await deploymentExists(targetEnvironment.namespace, stableName);
     const canShiftTraffic = service.type === 'web' && service.isPublic !== false;
     const shouldVerifyCandidateFirst = verificationPaths.length > 0;
 
     if (!shouldVerifyCandidateFirst) {
-      await promoteStableWorkload({
-        deploymentId,
-        projectId: project.id,
+      await promoteCandidateSnapshotToStable({
+        namespace: targetEnvironment.namespace,
         projectSlug: project.slug,
         environmentId: targetEnvironment.id,
-        namespace: targetEnvironment.namespace,
         service,
         stableName,
         candidateName,
-        imageName,
-        envFrom,
-        imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+        snapshot: {
+          image: imageName,
+          port: service.port ?? 3000,
+          replicas: service.replicas ?? 1,
+          envFrom,
+          imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+          cpuRequest: service.cpuRequest ?? undefined,
+          cpuLimit: service.cpuLimit ?? undefined,
+          memoryRequest: service.memoryRequest ?? undefined,
+          memoryLimit: service.memoryLimit ?? undefined,
+        },
+        stableExists,
         candidateVerified: false,
+        onLog: (message) => logDeployment(deploymentId, message),
       });
       continue;
     }
 
     await deployCandidateWorkload({
-      deploymentId,
       namespace: targetEnvironment.namespace,
       candidateName,
       imageName,
@@ -584,6 +254,7 @@ export async function executeDeploymentWorkload(
       envFrom,
       imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
       verificationPaths,
+      onLog: (message) => logDeployment(deploymentId, message),
     });
 
     if (!isProgressiveStrategy(deploymentStrategy) || !stableExists || !canShiftTraffic) {
@@ -593,19 +264,26 @@ export async function executeDeploymentWorkload(
           ? `Promoting verified candidate for ${service.name} to stable`
           : `${service.name} has no stable workload yet, promoting verified candidate to stable`
       );
-      await promoteStableWorkload({
-        deploymentId,
-        projectId: project.id,
+      const candidateSnapshot = await getDeploymentSnapshot(
+        targetEnvironment.namespace,
+        candidateName
+      );
+
+      if (!candidateSnapshot?.image) {
+        throw new Error(`Candidate snapshot missing for ${candidateName}`);
+      }
+
+      await promoteCandidateSnapshotToStable({
+        namespace: targetEnvironment.namespace,
         projectSlug: project.slug,
         environmentId: targetEnvironment.id,
-        namespace: targetEnvironment.namespace,
         service,
         stableName,
         candidateName,
-        imageName,
-        envFrom,
-        imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+        snapshot: candidateSnapshot,
+        stableExists,
         candidateVerified: true,
+        onLog: (message) => logDeployment(deploymentId, message),
       });
       continue;
     }
@@ -618,8 +296,7 @@ export async function executeDeploymentWorkload(
       servicePort: service.port ?? 80,
     });
 
-    await syncServiceTrafficRoutes({
-      projectId: project.id,
+    await syncEnvironmentServiceTrafficRoutes({
       projectSlug: project.slug,
       environmentId: targetEnvironment.id,
       namespace: targetEnvironment.namespace,

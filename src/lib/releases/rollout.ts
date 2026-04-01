@@ -1,37 +1,19 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deploymentLogs, deployments, environments, projects, services } from '@/lib/db/schema';
-import {
-  createDeployment,
-  deleteDeployment,
-  deleteService,
-  deploymentExists,
-  getDeploymentSnapshot,
-  getIsConnected,
-  updateDeployment,
-  upsertService,
-  verifyServiceReachability,
-  waitForDeploymentReady,
-} from '@/lib/k8s';
+import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
 import {
   completeReleaseAfterRolloutIfReady,
   persistReleaseRecapSafely,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
+import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
 import {
-  buildCandidateDeploymentName,
-  buildStableDeploymentName,
-  syncEnvironmentServiceTrafficRoutes,
-} from '@/lib/releases/traffic';
+  isProgressiveStrategy,
+  type ProgressiveDeploymentStrategy,
+  promoteCandidateSnapshotToStable,
+} from '@/lib/releases/workloads';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
-
-type ProgressiveDeploymentStrategy = 'controlled' | 'canary' | 'blue_green';
-
-function isProgressiveStrategy(
-  strategy?: string | null
-): strategy is ProgressiveDeploymentStrategy {
-  return strategy === 'controlled' || strategy === 'canary' || strategy === 'blue_green';
-}
 
 function getStrategyLabel(strategy: ProgressiveDeploymentStrategy): string {
   switch (strategy) {
@@ -42,29 +24,6 @@ function getStrategyLabel(strategy: ProgressiveDeploymentStrategy): string {
     case 'blue_green':
       return '蓝绿切换';
   }
-}
-
-function buildRolloutVerificationPaths(service: {
-  type: string;
-  isPublic?: boolean | null;
-  healthcheckPath?: string | null;
-}) {
-  if (service.type !== 'web') {
-    return [];
-  }
-
-  const paths = new Set<string>();
-  if (service.healthcheckPath) {
-    paths.add(service.healthcheckPath);
-  } else {
-    paths.add('/api/health/ready');
-  }
-
-  if (service.isPublic !== false) {
-    paths.add('/');
-  }
-
-  return Array.from(paths);
 }
 
 async function appendDeploymentLog(deploymentId: string, message: string) {
@@ -312,71 +271,18 @@ export async function finalizeDeploymentRollout(input: {
   }
 
   try {
-    if (rollout.deployment.stableExists) {
-      await updateDeployment(namespace, stableName, {
-        image: candidateSnapshot.image,
-        port: candidateSnapshot.port,
-        envFrom: candidateSnapshot.envFrom,
-        replicas: candidateSnapshot.replicas,
-        imagePullSecrets: candidateSnapshot.imagePullSecrets,
-        healthcheckPath: service.healthcheckPath ?? undefined,
-        cpuRequest: candidateSnapshot.cpuRequest,
-        cpuLimit: candidateSnapshot.cpuLimit,
-        memoryRequest: candidateSnapshot.memoryRequest,
-        memoryLimit: candidateSnapshot.memoryLimit,
-      });
-    } else {
-      await upsertService(namespace, stableName, {
-        port: candidateSnapshot.port,
-        targetPort: candidateSnapshot.port,
-        selector: { app: stableName },
-      });
-
-      await createDeployment(namespace, stableName, {
-        image: candidateSnapshot.image,
-        port: candidateSnapshot.port,
-        replicas: candidateSnapshot.replicas,
-        envFrom: candidateSnapshot.envFrom,
-        imagePullSecrets: candidateSnapshot.imagePullSecrets,
-        healthcheckPath: service.healthcheckPath ?? undefined,
-        cpuRequest: candidateSnapshot.cpuRequest,
-        cpuLimit: candidateSnapshot.cpuLimit,
-        memoryRequest: candidateSnapshot.memoryRequest,
-        memoryLimit: candidateSnapshot.memoryLimit,
-      });
-    }
-
-    await waitForDeploymentReady({
+    await promoteCandidateSnapshotToStable({
       namespace,
-      name: stableName,
-    });
-
-    const verificationPaths = buildRolloutVerificationPaths(service);
-    if (verificationPaths.length > 0) {
-      await verifyServiceReachability({
-        namespace,
-        serviceName: stableName,
-        port: service.port ?? candidateSnapshot.port,
-        paths: verificationPaths,
-      });
-    }
-
-    await syncEnvironmentServiceTrafficRoutes({
       projectSlug: project.slug,
       environmentId: environment.id,
-      namespace,
       service,
-      backends: [
-        {
-          serviceName: stableName,
-          servicePort: service.port ?? 80,
-          weight: 100,
-        },
-      ],
+      stableName,
+      candidateName,
+      snapshot: candidateSnapshot,
+      stableExists: rollout.deployment.stableExists,
+      candidateVerified: true,
+      onLog: (message) => appendDeploymentLog(deployment.id, message),
     });
-
-    await deleteDeployment(namespace, candidateName).catch(() => undefined);
-    await deleteService(namespace, candidateName).catch(() => undefined);
 
     await db
       .update(deployments)
