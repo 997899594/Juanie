@@ -20,7 +20,7 @@ ARG DATABASE_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV DATABASE_URL=${DATABASE_URL}
 
-RUN bun run build
+RUN mkdir -p public && bun run build
 
 # ============================================
 # Stage 3: Worker Builder (编译独立可执行文件)
