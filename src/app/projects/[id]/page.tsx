@@ -17,10 +17,13 @@ import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { getProjectOverviewPageData } from '@/lib/projects/service';
 import {
-  findMigrationStatusLabel,
-  findReleaseStatusLabel,
+  getMigrationStatusDecoration,
   getStatusDotClass,
 } from '@/lib/releases/status-presentation';
+import {
+  formatRuntimeStatusLabel,
+  getRuntimeStatusDotClass,
+} from '@/lib/runtime/status-presentation';
 
 const navItems = [
   { title: '环境', href: 'environments', icon: Globe },
@@ -28,27 +31,6 @@ const navItems = [
   { title: '日志', href: 'logs', icon: ScrollText },
   { title: '设置', href: 'settings', icon: Settings },
 ];
-
-const statusColors: Record<string, string> = {
-  active: 'bg-success',
-  running: 'bg-success',
-  initializing: 'bg-warning',
-  pending: 'bg-warning',
-  failed: 'bg-destructive',
-  archived: 'bg-muted-foreground',
-};
-
-function formatStatusLabel(value: string): string {
-  const labels: Record<string, string> = {
-    active: '运行中',
-    running: '运行中',
-    initializing: '初始化中',
-    pending: '待处理',
-    failed: '失败',
-    archived: '已归档',
-  };
-  return labels[value] ?? findMigrationStatusLabel(value) ?? findReleaseStatusLabel(value) ?? value;
-}
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -407,7 +389,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-sm font-medium capitalize">
                     <div
-                      className={`h-2 w-2 rounded-full ${statusColors[project.status ?? ''] ?? 'bg-muted-foreground'}`}
+                      className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(project.status)}`}
                     />
                     {overview.statusLabel}
                   </div>
@@ -431,7 +413,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                         className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/20 px-3 py-1.5"
                       >
                         <div
-                          className={`h-2 w-2 rounded-full ${statusColors[svc.status ?? ''] ?? 'bg-muted-foreground'}`}
+                          className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(svc.status)}`}
                         />
                         <span className="text-sm font-medium">{svc.name}</span>
                         <span className="text-xs text-muted-foreground capitalize">{svc.type}</span>
@@ -472,9 +454,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <div
-                          className={`h-2 w-2 rounded-full ${
-                            run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
-                          }`}
+                          className={`h-2 w-2 rounded-full ${getStatusDotClass(run.status, 'migration')}`}
                         />
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium">
@@ -534,7 +514,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                               {dbItem.type}
                             </Badge>
                             <Badge variant="outline" className="capitalize">
-                              {formatStatusLabel(dbItem.status ?? 'pending')}
+                              {formatRuntimeStatusLabel(dbItem.status)}
                             </Badge>
                             {dbItem.scope === 'service' && dbItem.serviceId && (
                               <Badge variant="outline">{dbItem.serviceName ?? '服务'}</Badge>
@@ -544,7 +524,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                           <div className="space-y-1 text-xs text-muted-foreground">
                             <div>
                               {dbItem.latestMigration
-                                ? `最近迁移：${formatStatusLabel(dbItem.latestMigration.status)}`
+                                ? `最近迁移：${getMigrationStatusDecoration(dbItem.latestMigration.status).label}`
                                 : '暂无迁移记录'}
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5">

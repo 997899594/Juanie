@@ -1,4 +1,5 @@
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
+import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 
 interface ProjectListEnvironmentLike {
   id: string;
@@ -34,19 +35,6 @@ export interface ProjectListStat {
   value: number;
 }
 
-function formatProjectStatusLabel(value?: string | null): string {
-  const labels: Record<string, string> = {
-    active: '运行中',
-    running: '运行中',
-    initializing: '初始化中',
-    pending: '待处理',
-    failed: '失败',
-    archived: '已归档',
-  };
-
-  return value ? (labels[value] ?? value) : '待处理';
-}
-
 function formatCreatedAtLabel(value?: Date | string | null): string {
   if (!value) return '—';
   const date = typeof value === 'string' ? new Date(value) : value;
@@ -76,7 +64,7 @@ export function decorateProjectListCards<TProject extends ProjectListItemLike>(
       id: project.id,
       name: project.name,
       status: project.status ?? null,
-      statusLabel: formatProjectStatusLabel(project.status),
+      statusLabel: formatRuntimeStatusLabel(project.status),
       teamName: project.teamName,
       repositoryLabel: project.repositoryFullName ?? null,
       createdAtLabel: formatCreatedAtLabel(project.createdAt),

@@ -1,7 +1,10 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { deployments } from '@/lib/db/schema';
+import { deployments, environments, projects, services } from '@/lib/db/schema';
+import { getIsConnected } from '@/lib/k8s';
+import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
+import { cleanupCandidateResources } from '@/lib/releases/workloads';
 import { executeDeploymentWorkload, logDeployment } from './deployment-executor';
 import type { DeploymentJobData } from './index';
 
@@ -9,6 +12,42 @@ function classifyDeploymentFailureStatus(message: string) {
   return message.includes('Service verify failed') || message.includes('Verification pod')
     ? 'verification_failed'
     : 'failed';
+}
+
+async function cleanupFailedCandidateResources(deploymentId: string): Promise<boolean> {
+  if (!getIsConnected()) {
+    return false;
+  }
+
+  const deployment = await db.query.deployments.findFirst({
+    where: eq(deployments.id, deploymentId),
+  });
+
+  if (!deployment?.serviceId) {
+    return false;
+  }
+
+  const [project, environment, service] = await Promise.all([
+    db.query.projects.findFirst({
+      where: eq(projects.id, deployment.projectId),
+    }),
+    db.query.environments.findFirst({
+      where: eq(environments.id, deployment.environmentId),
+    }),
+    db.query.services.findFirst({
+      where: eq(services.id, deployment.serviceId),
+    }),
+  ]);
+
+  if (!project || !environment?.namespace || !service) {
+    return false;
+  }
+
+  const stableName = buildStableDeploymentName(project.slug, service.name);
+  const candidateName = buildCandidateDeploymentName(stableName);
+  await cleanupCandidateResources(environment.namespace, candidateName);
+  await logDeployment(deploymentId, `Cleaned up candidate workload ${candidateName} after failure`);
+  return true;
 }
 
 export async function processDeployment(job: Job<DeploymentJobData>) {
@@ -36,6 +75,16 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
         errorMessage: message,
       })
       .where(eq(deployments.id, deployment.id));
+
+    await cleanupFailedCandidateResources(deployment.id).catch(async (cleanupError) => {
+      const cleanupMessage =
+        cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      await logDeployment(
+        deployment.id,
+        `Candidate cleanup skipped after failure: ${cleanupMessage}`,
+        'warn'
+      );
+    });
 
     if (status === 'verification_failed') {
       await logDeployment(

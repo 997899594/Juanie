@@ -21,6 +21,7 @@ import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { Separator } from '@/components/ui/separator';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { getDatabaseManualControlSnapshot } from '@/lib/releases/intelligence';
+import { getMigrationStatusDecoration } from '@/lib/releases/status-presentation';
 
 interface MigrationRunItem {
   id: string;
@@ -283,30 +284,21 @@ interface DatabaseMigrationDialogProps {
   } | null;
 }
 
-const statusTone: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  success: 'default',
-  running: 'secondary',
-  queued: 'secondary',
-  planning: 'secondary',
-  awaiting_approval: 'outline',
-  failed: 'destructive',
-  canceled: 'outline',
-  skipped: 'outline',
-};
+function getMigrationBadgeVariant(
+  status: string
+): 'default' | 'secondary' | 'destructive' | 'outline' {
+  const decoration = getMigrationStatusDecoration(status);
 
-function formatRunStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    success: '成功',
-    running: '执行中',
-    queued: '排队中',
-    planning: '规划中',
-    awaiting_approval: '待审批',
-    failed: '失败',
-    canceled: '已取消',
-    skipped: '已跳过',
-  };
-
-  return labels[status] ?? status;
+  switch (decoration.color) {
+    case 'success':
+      return 'default';
+    case 'info':
+      return 'secondary';
+    case 'error':
+      return 'destructive';
+    default:
+      return 'outline';
+  }
 }
 
 function formatCompatibilityLabel(value: string): string {
@@ -526,8 +518,8 @@ export function DatabaseMigrationDialog({
               <Badge variant="secondary">{databaseType}</Badge>
               {latestStatus && <Badge variant="outline">数据库：{latestStatus}</Badge>}
               {latestRun && (
-                <Badge variant={statusTone[latestRun.status] ?? 'outline'}>
-                  最近：{formatRunStatusLabel(latestRun.status)}
+                <Badge variant={getMigrationBadgeVariant(latestRun.status)}>
+                  最近：{getMigrationStatusDecoration(latestRun.status).label}
                 </Badge>
               )}
             </div>
@@ -850,8 +842,8 @@ export function DatabaseMigrationDialog({
                     {runs.map((run) => (
                       <div key={run.id} className="space-y-2 px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <Badge variant={statusTone[run.status] ?? 'outline'}>
-                            {formatRunStatusLabel(run.status)}
+                          <Badge variant={getMigrationBadgeVariant(run.status)}>
+                            {getMigrationStatusDecoration(run.status).label}
                           </Badge>
                           <span className="text-xs text-muted-foreground">{run.service.name}</span>
                           <span className="text-xs text-muted-foreground">

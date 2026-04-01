@@ -23,6 +23,7 @@ import {
   type ReleaseIssueSnapshot,
 } from '@/lib/releases/intelligence';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 export interface HomeStat {
@@ -133,19 +134,6 @@ export interface HomeAttentionRunDecorations {
   previewLifecycle: PreviewLifecycleSummary | null;
 }
 
-function formatProjectStatusLabel(value?: string | null): string {
-  const labels: Record<string, string> = {
-    active: '运行中',
-    running: '运行中',
-    initializing: '初始化中',
-    pending: '待处理',
-    failed: '失败',
-    archived: '已归档',
-  };
-
-  return value ? (labels[value] ?? value) : '待处理';
-}
-
 function needsProjectAttention(status?: string | null): boolean {
   return status === 'initializing' || status === 'pending' || status === 'failed';
 }
@@ -205,7 +193,7 @@ export function decorateHomeProjects<TProject extends HomeProjectLike>(
       };
     })(),
     ...project,
-    statusLabel: formatProjectStatusLabel(project.status),
+    statusLabel: formatRuntimeStatusLabel(project.status),
     repositoryLabel: project.repository?.fullName || '未绑定仓库',
   }));
 }

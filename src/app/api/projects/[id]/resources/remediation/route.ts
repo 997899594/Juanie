@@ -7,8 +7,12 @@ import { environments, projects, teamMembers } from '@/lib/db/schema';
 import { cleanupStuckTerminatingPods, rolloutRestartDeployments } from '@/lib/k8s';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { persistLatestEnvironmentReleaseRecap } from '@/lib/releases/recap-service';
+import { cleanupRedundantCandidateResources } from '@/lib/releases/workloads';
 
-type RemediationAction = 'restart_deployments' | 'cleanup_terminating_pods';
+type RemediationAction =
+  | 'restart_deployments'
+  | 'cleanup_terminating_pods'
+  | 'cleanup_candidate_workloads';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -113,6 +117,41 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           podNames.length > 0
             ? `已清理 ${podNames.length} 个长时间 Terminating 的 Pod`
             : '当前没有需要清理的长时间 Terminating Pod',
+      });
+    }
+
+    if (action === 'cleanup_candidate_workloads') {
+      const candidateNames = await cleanupRedundantCandidateResources(environment.namespace);
+
+      await createAuditLog({
+        teamId: project.teamId,
+        userId: session.user.id,
+        action: 'environment.remediation_triggered',
+        resourceType: 'environment',
+        resourceId: environment.id,
+        metadata: {
+          projectId: id,
+          environmentId: environment.id,
+          environmentName: environment.name,
+          action,
+          mode: 'manual',
+          candidateNames,
+          candidateCount: candidateNames.length,
+        },
+      });
+      await persistLatestEnvironmentReleaseRecap({
+        projectId: id,
+        environmentId: environment.id,
+      }).catch(() => null);
+
+      return NextResponse.json({
+        success: true,
+        action,
+        candidateNames,
+        summary:
+          candidateNames.length > 0
+            ? `已清理 ${candidateNames.length} 个冗余 candidate 工作负载`
+            : '当前没有需要清理的冗余 candidate 工作负载',
       });
     }
 

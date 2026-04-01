@@ -3,6 +3,9 @@ import {
   type DeploymentSnapshot,
   deleteDeployment,
   deleteService,
+  getCiliumHTTPRoutes,
+  getDeployments,
+  getServices,
   updateDeployment,
   upsertService,
   verifyServiceReachability,
@@ -129,6 +132,91 @@ export async function ensureServiceResource(namespace: string, name: string, por
 export async function cleanupCandidateResources(namespace: string, candidateName: string) {
   await deleteDeployment(namespace, candidateName).catch(() => undefined);
   await deleteService(namespace, candidateName).catch(() => undefined);
+}
+
+interface HTTPRouteBackendRefLike {
+  name?: string;
+}
+
+interface HTTPRouteRuleLike {
+  backendRefs?: HTTPRouteBackendRefLike[];
+}
+
+interface HTTPRouteWithBackendsLike {
+  spec?: {
+    rules?: HTTPRouteRuleLike[];
+  };
+}
+
+function getDeploymentImageName(deployment: {
+  spec?: {
+    template?: {
+      spec?: {
+        containers?: Array<{
+          image?: string;
+        }>;
+      };
+    };
+  };
+}): string | null {
+  return deployment.spec?.template?.spec?.containers?.[0]?.image ?? null;
+}
+
+export async function cleanupRedundantCandidateResources(namespace: string): Promise<string[]> {
+  const [deployments, services, routes] = await Promise.all([
+    getDeployments(namespace),
+    getServices(namespace),
+    getCiliumHTTPRoutes(namespace),
+  ]);
+
+  const deploymentByName = new Map(
+    deployments
+      .map((deployment) => [deployment.metadata?.name, deployment] as const)
+      .filter((entry): entry is [string, (typeof deployments)[number]] => Boolean(entry[0]))
+  );
+  const serviceNames = new Set(
+    services
+      .map((service) => service.metadata?.name)
+      .filter((name): name is string => Boolean(name))
+  );
+  const activeRouteBackends = new Set(
+    (routes as HTTPRouteWithBackendsLike[])
+      .flatMap((route) => route.spec?.rules ?? [])
+      .flatMap((rule) => rule.backendRefs ?? [])
+      .map((backend) => backend.name)
+      .filter((name): name is string => Boolean(name))
+  );
+  const candidateNames = new Set(
+    [...deploymentByName.keys(), ...serviceNames].filter((name) => name.endsWith('-candidate'))
+  );
+  const cleanedNames: string[] = [];
+
+  for (const candidateName of candidateNames) {
+    if (activeRouteBackends.has(candidateName)) {
+      continue;
+    }
+
+    const stableName = candidateName.slice(0, -'-candidate'.length);
+    const stableDeployment = deploymentByName.get(stableName);
+    const candidateDeployment = deploymentByName.get(candidateName);
+    const stableServiceExists = serviceNames.has(stableName);
+
+    if (!stableDeployment && !stableServiceExists) {
+      continue;
+    }
+
+    const stableImage = stableDeployment ? getDeploymentImageName(stableDeployment) : null;
+    const candidateImage = candidateDeployment ? getDeploymentImageName(candidateDeployment) : null;
+
+    if (stableImage && candidateImage && stableImage !== candidateImage) {
+      continue;
+    }
+
+    await cleanupCandidateResources(namespace, candidateName);
+    cleanedNames.push(candidateName);
+  }
+
+  return cleanedNames;
 }
 
 export async function upsertServiceWorkload(input: {

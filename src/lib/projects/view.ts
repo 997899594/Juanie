@@ -25,6 +25,7 @@ import {
   type ReleaseIssueSnapshot,
 } from '@/lib/releases/intelligence';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 import { formatPlatformDate } from '@/lib/time/format';
 
@@ -219,19 +220,6 @@ export interface ProjectDomainDecorations {
 
 function getScopeKey(environmentId?: string | null, serviceId?: string | null): string {
   return `${environmentId ?? 'global'}:${serviceId ?? 'project'}`;
-}
-
-function formatProjectStatusLabel(value?: string | null): string {
-  const labels: Record<string, string> = {
-    active: '运行中',
-    running: '运行中',
-    initializing: '初始化中',
-    pending: '待处理',
-    failed: '失败',
-    archived: '已归档',
-  };
-
-  return value ? (labels[value] ?? value) : '待处理';
 }
 
 export function decorateProjectDatabaseCards<
@@ -463,7 +451,7 @@ export function buildProjectOverviewDetails(
   project: ProjectOverviewProjectLike
 ): ProjectOverviewDetails {
   return {
-    headerDescription: `${teamName ?? '团队'} · ${formatProjectStatusLabel(project.status)}`,
+    headerDescription: `${teamName ?? '团队'} · ${formatRuntimeStatusLabel(project.status)}`,
     repository: project.repository
       ? {
           fullName: project.repository.fullName,
@@ -472,7 +460,7 @@ export function buildProjectOverviewDetails(
       : null,
     productionBranch: project.productionBranch ?? null,
     description: project.description ?? null,
-    statusLabel: formatProjectStatusLabel(project.status),
+    statusLabel: formatRuntimeStatusLabel(project.status),
     createdDateLabel: formatPlatformDate(project.createdAt) ?? '—',
   };
 }
@@ -482,7 +470,7 @@ export function decorateProjectServices<TService extends ProjectServiceLike>(
 ): Array<TService & ProjectServiceDecorations> {
   return services.map((service) => ({
     ...service,
-    statusLabel: formatProjectStatusLabel(service.status),
+    statusLabel: formatRuntimeStatusLabel(service.status),
     portLabel: service.port ? `:${service.port}` : null,
   }));
 }

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { getHomePageData } from '@/lib/home/service';
+import { getStatusDotClass } from '@/lib/releases/status-presentation';
 
 export default async function HomePage() {
   const session = await auth();
@@ -236,9 +237,7 @@ export default async function HomePage() {
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div
-                        className={`h-2 w-2 rounded-full ${
-                          run.status === 'awaiting_approval' ? 'bg-warning' : 'bg-destructive'
-                        }`}
+                        className={`h-2 w-2 rounded-full ${getStatusDotClass(run.status, 'migration')}`}
                       />
                       <div className="min-w-0">
                         <div className="truncate text-sm font-medium">

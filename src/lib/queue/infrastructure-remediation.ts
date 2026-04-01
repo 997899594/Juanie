@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { cleanupStuckTerminatingPods } from '@/lib/k8s';
 import { persistLatestEnvironmentReleaseRecap } from '@/lib/releases/recap-service';
+import { cleanupRedundantCandidateResources } from '@/lib/releases/workloads';
 
 let infrastructureRemediationRunning = false;
 
@@ -57,33 +58,61 @@ async function remediateInfrastructure(): Promise<void> {
 
       try {
         const podNames = await cleanupStuckTerminatingPods(environment.namespace);
-        if (podNames.length === 0) {
-          continue;
+        const candidateNames = await cleanupRedundantCandidateResources(environment.namespace);
+
+        if (podNames.length > 0) {
+          await createAuditLog({
+            teamId: project.teamId,
+            action: 'environment.remediation_triggered',
+            resourceType: 'environment',
+            resourceId: environment.id,
+            metadata: {
+              projectId: project.id,
+              environmentId: environment.id,
+              environmentName: environment.name,
+              action: 'cleanup_terminating_pods',
+              mode: 'auto',
+              podNames,
+              podCount: podNames.length,
+            },
+          });
         }
 
-        await createAuditLog({
-          teamId: project.teamId,
-          action: 'environment.remediation_triggered',
-          resourceType: 'environment',
-          resourceId: environment.id,
-          metadata: {
+        if (candidateNames.length > 0) {
+          await createAuditLog({
+            teamId: project.teamId,
+            action: 'environment.remediation_triggered',
+            resourceType: 'environment',
+            resourceId: environment.id,
+            metadata: {
+              projectId: project.id,
+              environmentId: environment.id,
+              environmentName: environment.name,
+              action: 'cleanup_candidate_workloads',
+              mode: 'auto',
+              candidateNames,
+              candidateCount: candidateNames.length,
+            },
+          });
+        }
+
+        if (podNames.length > 0 || candidateNames.length > 0) {
+          await persistLatestEnvironmentReleaseRecap({
             projectId: project.id,
             environmentId: environment.id,
-            environmentName: environment.name,
-            action: 'cleanup_terminating_pods',
-            mode: 'auto',
-            podNames,
-            podCount: podNames.length,
-          },
-        });
-        await persistLatestEnvironmentReleaseRecap({
-          projectId: project.id,
-          environmentId: environment.id,
-        }).catch(() => null);
+          }).catch(() => null);
+        }
 
-        console.log(
-          `[InfraRemediation] auto-cleaned ${podNames.length} terminating pod(s) in ${environment.namespace}`
-        );
+        if (podNames.length > 0) {
+          console.log(
+            `[InfraRemediation] auto-cleaned ${podNames.length} terminating pod(s) in ${environment.namespace}`
+          );
+        }
+        if (candidateNames.length > 0) {
+          console.log(
+            `[InfraRemediation] auto-cleaned ${candidateNames.length} redundant candidate workload(s) in ${environment.namespace}`
+          );
+        }
       } catch (error) {
         console.error(`[InfraRemediation] Failed to remediate ${environment.namespace}:`, error);
       }
