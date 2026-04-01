@@ -2,19 +2,10 @@ import { and, eq, isNotNull, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { databases, domains, environments, environmentVariables } from '@/lib/db/schema';
 import { deleteNamespace, getIsConnected, initK8sClient } from '@/lib/k8s';
-
-const activeReleaseStatuses = [
-  'queued',
-  'planning',
-  'migration_pre_running',
-  'deploying',
-  'awaiting_rollout',
-  'verifying',
-  'migration_post_running',
-] as const;
+import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
 
 export function isActivePreviewReleaseStatus(status: string): boolean {
-  return activeReleaseStatuses.includes(status as (typeof activeReleaseStatuses)[number]);
+  return isActiveReleaseStatus(status);
 }
 
 export async function deletePreviewEnvironmentById(environmentId: string): Promise<{

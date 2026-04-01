@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
-  type DeploymentStatus,
   deployments,
   type MigrationRunStatus,
   migrationRuns,
@@ -11,6 +10,13 @@ import {
 import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
 import { addDeploymentJob, addMigrationJob } from '@/lib/queue';
 import { persistReleaseRecapById } from '@/lib/releases/recap-service';
+import {
+  getObservedDeploymentTerminalStatus,
+  type ObservedDeploymentTerminalStatus,
+  postDeploymentReleaseStatuses,
+  resolveReleaseDeploymentResolution,
+  resolveReleaseFailureStatus,
+} from '@/lib/releases/state-machine';
 
 type OrchestratedRelease = NonNullable<Awaited<ReturnType<typeof loadReleaseForOrchestration>>>;
 
@@ -76,9 +82,7 @@ export async function waitForMigrationRun(runId: string): Promise<MigrationRunSt
   throw new Error(`Timed out waiting for migration run ${runId}`);
 }
 
-async function waitForDeployment(
-  deploymentId: string
-): Promise<'running' | 'failed' | 'rolled_back' | 'awaiting_rollout' | 'verification_failed'> {
+async function waitForDeployment(deploymentId: string): Promise<ObservedDeploymentTerminalStatus> {
   for (let attempts = 0; attempts < 300; attempts++) {
     const deployment = await db.query.deployments.findFirst({
       where: eq(deployments.id, deploymentId),
@@ -88,36 +92,15 @@ async function waitForDeployment(
       throw new Error(`Deployment ${deploymentId} not found`);
     }
 
-    if (
-      deployment.status === 'running' ||
-      deployment.status === 'awaiting_rollout' ||
-      deployment.status === 'verification_failed' ||
-      deployment.status === 'failed' ||
-      deployment.status === 'rolled_back'
-    ) {
-      return deployment.status;
+    const observed = getObservedDeploymentTerminalStatus(deployment.status);
+    if (observed) {
+      return observed;
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   throw new Error(`Timed out waiting for deployment ${deploymentId}`);
-}
-
-function getObservedDeploymentStatus(
-  status: DeploymentStatus
-): 'running' | 'failed' | 'rolled_back' | 'awaiting_rollout' | 'verification_failed' | null {
-  if (
-    status === 'running' ||
-    status === 'failed' ||
-    status === 'rolled_back' ||
-    status === 'awaiting_rollout' ||
-    status === 'verification_failed'
-  ) {
-    return status;
-  }
-
-  return null;
 }
 
 export async function runReleaseMigrationPhase(
@@ -213,33 +196,28 @@ export async function continueReleaseFromDeploymentStage(
     releaseDeployments.push(deployment);
   }
 
-  let awaitingRollout = false;
+  const deploymentResults = [];
 
   for (const deployment of releaseDeployments) {
     const result =
-      getObservedDeploymentStatus(deployment.status) ?? (await waitForDeployment(deployment.id));
-
-    if (result === 'awaiting_rollout') {
-      awaitingRollout = true;
-      continue;
-    }
-
-    if (result === 'verification_failed') {
-      await updateReleaseStatus(
-        release.id,
-        'verification_failed',
-        `Deployment ${deployment.id} ended with status ${result}`
-      );
-      await persistReleaseRecapSafely(release.id);
-      throw new Error(`Deployment ${deployment.id} ended with status ${result}`);
-    }
-
-    if (result !== 'running') {
-      throw new Error(`Deployment ${deployment.id} ended with status ${result}`);
-    }
+      getObservedDeploymentTerminalStatus(deployment.status) ??
+      (await waitForDeployment(deployment.id));
+    deploymentResults.push({ id: deployment.id, status: result });
   }
 
-  if (awaitingRollout) {
+  const resolution = resolveReleaseDeploymentResolution(deploymentResults);
+
+  if (resolution.kind === 'failed') {
+    await updateReleaseStatus(
+      release.id,
+      resolution.failureStatus ?? 'failed',
+      resolution.message ?? 'Deployment phase failed'
+    );
+    await persistReleaseRecapSafely(release.id);
+    throw new Error(resolution.message ?? 'Deployment phase failed');
+  }
+
+  if (resolution.kind === 'awaiting_rollout') {
     await updateReleaseStatus(release.id, 'awaiting_rollout');
     await persistReleaseRecapSafely(release.id);
     return { success: true, awaitingRollout: true };
@@ -255,15 +233,7 @@ export async function failReleaseForCurrentPhase(releaseId: string, errorMessage
     columns: { status: true },
   });
 
-  if (current?.status === 'migration_post_running') {
-    await updateReleaseStatus(releaseId, 'degraded', errorMessage);
-  } else if (current?.status === 'migration_pre_running') {
-    await updateReleaseStatus(releaseId, 'migration_pre_failed', errorMessage);
-  } else if (current?.status === 'verifying') {
-    await updateReleaseStatus(releaseId, 'verification_failed', errorMessage);
-  } else {
-    await updateReleaseStatus(releaseId, 'failed', errorMessage);
-  }
+  await updateReleaseStatus(releaseId, resolveReleaseFailureStatus(current?.status), errorMessage);
 
   await persistReleaseRecapSafely(releaseId);
 }
@@ -275,10 +245,11 @@ export async function completeReleaseAfterDeployments(releaseId: string) {
     throw new Error(`Release ${releaseId} not found`);
   }
 
-  await updateReleaseStatus(releaseId, 'verifying');
-  await updateReleaseStatus(releaseId, 'migration_post_running');
+  for (const status of postDeploymentReleaseStatuses.slice(0, 2)) {
+    await updateReleaseStatus(releaseId, status);
+  }
   await runReleaseMigrationPhase(release, 'postDeploy');
-  await updateReleaseStatus(releaseId, 'succeeded');
+  await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[2]);
   await persistReleaseRecapSafely(releaseId);
 }
 
