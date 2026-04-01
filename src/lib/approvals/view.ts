@@ -22,6 +22,7 @@ import {
   type ReleaseIssueCode,
   type ReleaseIssueSnapshot,
 } from '@/lib/releases/intelligence';
+import { getMigrationStatusDecoration } from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 export interface ApprovalStat {
@@ -90,19 +91,8 @@ export interface ApprovalItemDecorations {
   previewLifecycle: PreviewLifecycleSummary | null;
 }
 
-const migrationStatusLabels: Record<string, string> = {
-  queued: '排队中',
-  awaiting_approval: '待审批',
-  planning: '规划中',
-  running: '执行中',
-  success: '成功',
-  failed: '失败',
-  canceled: '已取消',
-  skipped: '已跳过',
-};
-
 export function formatApprovalStatusLabel(value: string): string {
-  return migrationStatusLabels[value] ?? value;
+  return getMigrationStatusDecoration(value).label ?? value;
 }
 
 export function buildApprovalsFilterHref(state: string): string {

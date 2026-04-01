@@ -77,6 +77,71 @@ function uniqueReasons(reasons: string[]): string[] {
   return [...new Set(reasons)];
 }
 
+const releaseIssueConfig: Record<
+  ReleaseIssueCode,
+  {
+    kind: ReleaseIssueKind;
+    label: string;
+    summary: string;
+    nextActionLabel: string;
+  }
+> = {
+  approval_blocked: {
+    kind: 'approval',
+    label: '审批阻塞',
+    summary: '发布被待审批迁移阻塞',
+    nextActionLabel: '处理迁移审批',
+  },
+  migration_failed: {
+    kind: 'migration',
+    label: '迁移失败',
+    summary: '发布被失败迁移阻塞',
+    nextActionLabel: '检查迁移并重试',
+  },
+  migration_canceled: {
+    kind: 'migration',
+    label: '迁移取消',
+    summary: '发布被取消迁移中断',
+    nextActionLabel: '检查迁移并重试',
+  },
+  deployment_failed: {
+    kind: 'deployment',
+    label: '部署失败',
+    summary: '发布被失败部署中断',
+    nextActionLabel: '检查部署日志',
+  },
+  verification_failed: {
+    kind: 'deployment',
+    label: '校验失败',
+    summary: '发布被校验失败阻断',
+    nextActionLabel: '检查校验与运行时日志',
+  },
+  rollout_pending: {
+    kind: 'release',
+    label: '待放量',
+    summary: '候选版本已就绪，等待完成放量',
+    nextActionLabel: '完成放量',
+  },
+  preview_expired: {
+    kind: 'environment',
+    label: '预览已过期',
+    summary: '预览环境已经过期',
+    nextActionLabel: '重新创建预览环境',
+  },
+  degraded: {
+    kind: 'release',
+    label: '发布降级',
+    summary: '发布已完成但处于降级状态',
+    nextActionLabel: '检查后置迁移',
+  },
+  release_failed: {
+    kind: 'release',
+    label: '发布失败',
+    summary: '发布流程执行失败',
+    nextActionLabel: '检查发布日志',
+  },
+};
+
 function getPreviewExpiryState(expiresAt?: Date | string | null): 'expired' | 'soon' | 'active' {
   if (!expiresAt) {
     return 'active';
@@ -221,99 +286,19 @@ export function getMigrationAttentionIssueCode(
 }
 
 export function getIssueLabel(issueCode: ReleaseIssueCode | null): string | null {
-  switch (issueCode) {
-    case 'approval_blocked':
-      return '审批阻塞';
-    case 'migration_failed':
-      return '迁移失败';
-    case 'migration_canceled':
-      return '迁移取消';
-    case 'deployment_failed':
-      return '部署失败';
-    case 'verification_failed':
-      return '校验失败';
-    case 'rollout_pending':
-      return '待放量';
-    case 'preview_expired':
-      return '预览已过期';
-    case 'degraded':
-      return '发布降级';
-    case 'release_failed':
-      return '发布失败';
-    default:
-      return null;
-  }
+  return issueCode ? (releaseIssueConfig[issueCode]?.label ?? null) : null;
 }
 
 export function getReleaseActionLabel(issueCode: ReleaseIssueCode | null): string | null {
-  switch (issueCode) {
-    case 'approval_blocked':
-      return '处理迁移审批';
-    case 'migration_failed':
-    case 'migration_canceled':
-      return '检查迁移并重试';
-    case 'deployment_failed':
-      return '检查部署日志';
-    case 'verification_failed':
-      return '检查校验与运行时日志';
-    case 'rollout_pending':
-      return '完成放量';
-    case 'preview_expired':
-      return '重新创建预览环境';
-    case 'degraded':
-      return '检查后置迁移';
-    case 'release_failed':
-      return '检查发布日志';
-    default:
-      return null;
-  }
+  return issueCode ? (releaseIssueConfig[issueCode]?.nextActionLabel ?? null) : null;
 }
 
 export function getIssueKind(issueCode: ReleaseIssueCode | null): ReleaseIssueKind | null {
-  switch (issueCode) {
-    case 'approval_blocked':
-      return 'approval';
-    case 'migration_failed':
-    case 'migration_canceled':
-      return 'migration';
-    case 'deployment_failed':
-    case 'verification_failed':
-      return 'deployment';
-    case 'rollout_pending':
-      return 'release';
-    case 'preview_expired':
-      return 'environment';
-    case 'degraded':
-    case 'release_failed':
-      return 'release';
-    default:
-      return null;
-  }
+  return issueCode ? (releaseIssueConfig[issueCode]?.kind ?? null) : null;
 }
 
 export function getIssueSummary(issueCode: ReleaseIssueCode | null): string | null {
-  switch (issueCode) {
-    case 'approval_blocked':
-      return '发布被待审批迁移阻塞';
-    case 'migration_failed':
-      return '发布被失败迁移阻塞';
-    case 'migration_canceled':
-      return '发布被取消迁移中断';
-    case 'deployment_failed':
-      return '发布被失败部署中断';
-    case 'verification_failed':
-      return '发布被校验失败阻断';
-    case 'rollout_pending':
-      return '候选版本已就绪，等待完成放量';
-    case 'preview_expired':
-      return '预览环境已经过期';
-    case 'degraded':
-      return '发布已完成但处于降级状态';
-    case 'release_failed':
-      return '发布流程执行失败';
-    default:
-      return null;
-  }
+  return issueCode ? (releaseIssueConfig[issueCode]?.summary ?? null) : null;
 }
 
 export function buildIssueSnapshot(
