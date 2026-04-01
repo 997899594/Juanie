@@ -1,6 +1,7 @@
 import { initK8sClient } from '@/lib/k8s';
 import { createDeploymentWorker } from './deployment';
 import { startDriftDetector } from './drift-detector';
+import { startHistoryRetention } from './history-retention';
 import { startInfrastructureRemediation } from './infrastructure-remediation';
 import { createMigrationWorker } from './migration';
 import { startPreviewEnvironmentCleanup } from './preview-cleanup';
@@ -88,4 +89,8 @@ if (process.env.ENABLE_PREVIEW_CLEANUP !== 'false') {
 
 if (process.env.ENABLE_AUTO_REMEDIATION !== 'false') {
   startInfrastructureRemediation();
+}
+
+if (process.env.ENABLE_HISTORY_RETENTION !== 'false') {
+  startHistoryRetention();
 }
