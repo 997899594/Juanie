@@ -89,7 +89,7 @@ helm upgrade --install juanie "${CHART_DIR}" \
   --set images.migrate.tag="${MIGRATE_IMAGE_TAG}" \
   --set-string imagePullSecrets[0]=ghcr-pull-secret
 
-for deployment in juanie-web juanie-worker juanie-scheduler; do
+for deployment in juanie-web juanie-worker; do
   echo "Waiting for ${deployment} rollout..."
   if ! kubectl rollout status deployment/"${deployment}" -n juanie --timeout=20m; then
     show_failure deployment "${deployment}"
