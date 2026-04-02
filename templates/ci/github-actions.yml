@@ -103,30 +103,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push (Bake Target)
-        if: ${{ (steps.juanie.outputs.build_strategy == 'bake' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition != '')) && steps.juanie.outputs.build_target != '' }}
-        uses: docker/bake-action@v5
-        with:
-          files: ${{ steps.juanie.outputs.build_definition }}
-          targets: ${{ steps.juanie.outputs.build_target }}
-          push: true
-          set: |
-            *.tags=${{ env.IMAGE_TAG }}
-            *.args.GIT_SHA=${{ github.sha }}
-            *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
+      - name: Build and Push (Bake)
+        if: ${{ steps.juanie.outputs.build_strategy == 'bake' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition != '') }}
+        run: |
+          set -euo pipefail
 
-      - name: Build and Push (Bake Default)
-        if: ${{ (steps.juanie.outputs.build_strategy == 'bake' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition != '')) && steps.juanie.outputs.build_target == '' }}
-        uses: docker/bake-action@v5
-        with:
-          files: ${{ steps.juanie.outputs.build_definition }}
-          push: true
-          set: |
-            *.tags=${{ env.IMAGE_TAG }}
-            *.args.GIT_SHA=${{ github.sha }}
-            *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
+          if [ -n "${{ steps.juanie.outputs.build_target }}" ]; then
+            docker buildx bake \
+              --file "${{ steps.juanie.outputs.build_definition }}" \
+              "${{ steps.juanie.outputs.build_target }}" \
+              --set "${{ steps.juanie.outputs.build_target }}.tags=${{ env.IMAGE_TAG }}" \
+              --set "${{ steps.juanie.outputs.build_target }}.args.GIT_SHA=${{ github.sha }}" \
+              --set "${{ steps.juanie.outputs.build_target }}.cache-from=type=gha" \
+              --set "${{ steps.juanie.outputs.build_target }}.cache-to=type=gha,mode=max" \
+              --push \
+              --progress plain
+          else
+            docker buildx bake \
+              --file "${{ steps.juanie.outputs.build_definition }}" \
+              --set "*.tags=${{ env.IMAGE_TAG }}" \
+              --set "*.args.GIT_SHA=${{ github.sha }}" \
+              --set "*.cache-from=type=gha" \
+              --set "*.cache-to=type=gha,mode=max" \
+              --push \
+              --progress plain
+          fi
 
       - name: Build and Push (Dockerfile)
         if: ${{ steps.juanie.outputs.build_strategy == 'dockerfile' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition == '' && steps.juanie.outputs.build_dockerfile != '') }}
