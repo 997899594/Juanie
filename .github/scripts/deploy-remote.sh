@@ -14,6 +14,9 @@ show_failure() {
 
 echo "Checking GHCR pull secret..."
 kubectl get secret ghcr-pull-secret -n juanie >/dev/null
+echo "Checking deployment baseline resources..."
+kubectl get configmap juanie-config -n juanie >/dev/null
+kubectl get secret juanie-secret -n juanie >/dev/null
 
 echo "Running schema sync job..."
 kubectl delete job "${SCHEMA_JOB}" -n juanie --ignore-not-found=true
