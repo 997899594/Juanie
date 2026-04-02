@@ -29,6 +29,7 @@ export const deploymentStatusDecorations: Record<string, ReleaseStatusDecoration
   awaiting_rollout: { color: 'warning', pulse: false, label: '待放量' },
   verification_failed: { color: 'error', pulse: false, label: '校验失败' },
   running: { color: 'success', pulse: false, label: '运行中' },
+  canceled: { color: 'neutral', pulse: false, label: '已取消' },
   failed: { color: 'error', pulse: false, label: '失败' },
   rolled_back: { color: 'warning', pulse: false, label: '已回滚' },
 };

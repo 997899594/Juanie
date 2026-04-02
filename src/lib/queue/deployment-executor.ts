@@ -26,6 +26,7 @@ import {
   getDeploymentSnapshot,
   getIsConnected,
 } from '@/lib/k8s';
+import { assertDeploymentIsCurrent } from '@/lib/releases/deployment-coordination';
 import {
   buildCandidateDeploymentName,
   buildStableDeploymentName,
@@ -65,6 +66,8 @@ export async function executeDeploymentWorkload(
   if (!deployment) {
     throw new Error(`Deployment ${deploymentId} not found`);
   }
+
+  await assertDeploymentIsCurrent(deploymentId);
 
   const environment = await db.query.environments.findFirst({
     where: eq(environments.id, deployment.environmentId),
@@ -197,6 +200,7 @@ export async function executeDeploymentWorkload(
   let awaitingRollout = false;
 
   for (const service of targetServices) {
+    await assertDeploymentIsCurrent(deploymentId);
     await logDeployment(deploymentId, `Deploying service ${service.name}`);
 
     if (!getIsConnected() || !targetEnvironment.namespace) {
@@ -315,6 +319,8 @@ export async function executeDeploymentWorkload(
   }
 
   await progress?.(80);
+
+  await assertDeploymentIsCurrent(deploymentId);
 
   await db
     .update(deployments)

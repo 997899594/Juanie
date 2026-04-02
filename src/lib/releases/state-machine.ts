@@ -14,13 +14,14 @@ export type ActiveReleaseStatus = (typeof activeReleaseStatuses)[number];
 
 export type ObservedDeploymentTerminalStatus =
   | 'running'
+  | 'canceled'
   | 'failed'
   | 'rolled_back'
   | 'awaiting_rollout'
   | 'verification_failed';
 
 export interface ReleaseDeploymentResolution {
-  kind: 'ready' | 'awaiting_rollout' | 'failed';
+  kind: 'ready' | 'awaiting_rollout' | 'failed' | 'canceled';
   failureStatus?: ReleaseStatus;
   message?: string;
 }
@@ -34,6 +35,7 @@ export function getObservedDeploymentTerminalStatus(
 ): ObservedDeploymentTerminalStatus | null {
   if (
     status === 'running' ||
+    status === 'canceled' ||
     status === 'failed' ||
     status === 'rolled_back' ||
     status === 'awaiting_rollout' ||
@@ -69,6 +71,15 @@ export function resolveReleaseDeploymentResolution(
     status: ObservedDeploymentTerminalStatus;
   }>
 ): ReleaseDeploymentResolution {
+  const canceled = deployments.find((deployment) => deployment.status === 'canceled');
+  if (canceled) {
+    return {
+      kind: 'canceled',
+      failureStatus: 'canceled',
+      message: `Deployment ${canceled.id} ended with status canceled`,
+    };
+  }
+
   const verificationFailed = deployments.find(
     (deployment) => deployment.status === 'verification_failed'
   );

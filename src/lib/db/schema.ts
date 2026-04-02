@@ -67,6 +67,7 @@ export const deploymentStatuses = [
   'awaiting_rollout',
   'verification_failed',
   'running',
+  'canceled',
   'failed',
   'rolled_back',
 ] as const;

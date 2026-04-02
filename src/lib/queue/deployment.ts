@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
 import { getIsConnected } from '@/lib/k8s';
+import { SupersededDeploymentError } from '@/lib/releases/deployment-coordination';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
 import { cleanupCandidateResources } from '@/lib/releases/workloads';
 import { executeDeploymentWorkload, logDeployment } from './deployment-executor';
@@ -66,6 +67,19 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
+    if (error instanceof SupersededDeploymentError) {
+      await logDeployment(deployment.id, message, 'warn');
+      await db
+        .update(deployments)
+        .set({
+          status: 'canceled',
+          errorMessage: message,
+        })
+        .where(eq(deployments.id, deployment.id));
+      return { success: false, terminal: true, canceled: true };
+    }
+
     const status = classifyDeploymentFailureStatus(message);
     await logDeployment(deployment.id, `Deployment failed: ${message}`, 'error');
     await db

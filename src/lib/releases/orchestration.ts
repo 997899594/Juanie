@@ -9,6 +9,7 @@ import {
 } from '@/lib/db/schema';
 import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
 import { addDeploymentJob, addMigrationJob } from '@/lib/queue';
+import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
 import { persistReleaseRecapById } from '@/lib/releases/recap-service';
 import {
   getObservedDeploymentTerminalStatus,
@@ -189,6 +190,8 @@ export async function continueReleaseFromDeploymentStage(
           .returning()
       )[0];
 
+    await cancelSupersededDeployments(deployment);
+
     if (deployment.status === 'queued') {
       await addDeploymentJob(deployment.id, release.projectId, release.environmentId);
     }
@@ -215,6 +218,16 @@ export async function continueReleaseFromDeploymentStage(
     );
     await persistReleaseRecapSafely(release.id);
     throw new Error(resolution.message ?? 'Deployment phase failed');
+  }
+
+  if (resolution.kind === 'canceled') {
+    await updateReleaseStatus(
+      release.id,
+      resolution.failureStatus ?? 'canceled',
+      resolution.message ?? 'Deployment phase canceled'
+    );
+    await persistReleaseRecapSafely(release.id);
+    return { success: false, awaitingRollout: false, canceled: true };
   }
 
   if (resolution.kind === 'awaiting_rollout') {

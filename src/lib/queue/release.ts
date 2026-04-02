@@ -35,7 +35,7 @@ export async function processRelease(job: Job<ReleaseJobData>) {
       columns: { status: true },
     });
 
-    if (current?.status !== 'verification_failed') {
+    if (current?.status !== 'verification_failed' && current?.status !== 'canceled') {
       await failReleaseForCurrentPhase(release.id, message);
     }
 

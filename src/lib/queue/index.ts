@@ -91,11 +91,7 @@ export async function addDeploymentJob(
     'deploy',
     { deploymentId, projectId, environmentId },
     {
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 5000,
-      },
+      attempts: 1,
     }
   );
 }
