@@ -104,12 +104,13 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
           set -euo pipefail
+          SSH_OPTS="-o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o TCPKeepAlive=yes"
           CHART_ARCHIVE="/tmp/juanie-chart-${GITHUB_SHA}.tgz"
           REMOTE_DIR="/tmp/juanie-deploy-${GITHUB_SHA}"
           tar czf "$CHART_ARCHIVE" -C deploy/k8s/charts juanie
-          ssh "${SERVER_USER}@${SERVER_HOST}" "rm -rf '${REMOTE_DIR}' && mkdir -p '${REMOTE_DIR}'"
-          scp "$CHART_ARCHIVE" "${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/chart.tgz"
-          ssh "${SERVER_USER}@${SERVER_HOST}" "tar xzf '${REMOTE_DIR}/chart.tgz' -C '${REMOTE_DIR}'"
+          ssh ${SSH_OPTS} "${SERVER_USER}@${SERVER_HOST}" "rm -rf '${REMOTE_DIR}' && mkdir -p '${REMOTE_DIR}'"
+          scp ${SSH_OPTS} "$CHART_ARCHIVE" "${SERVER_USER}@${SERVER_HOST}:${REMOTE_DIR}/chart.tgz"
+          ssh ${SSH_OPTS} "${SERVER_USER}@${SERVER_HOST}" "tar xzf '${REMOTE_DIR}/chart.tgz' -C '${REMOTE_DIR}'"
 
       - name: 部署到 Kubernetes
         env:
@@ -119,6 +120,7 @@ jobs:
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         run: |
           set -euo pipefail
+          SSH_OPTS="-o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o TCPKeepAlive=yes"
 
           IMAGE_REPOSITORY="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           WEB_IMAGE="${IMAGE_REPOSITORY}:web-${GITHUB_SHA}"
@@ -131,13 +133,17 @@ jobs:
           GHCR_PULL_USERNAME_B64="$(printf '%s' "${GHCR_PULL_USERNAME:-}" | base64 | tr -d '\n')"
           GHCR_PULL_TOKEN_B64="$(printf '%s' "${GHCR_PULL_TOKEN:-}" | base64 | tr -d '\n')"
 
-          ssh "${SERVER_USER}@${SERVER_HOST}" \
+          ssh ${SSH_OPTS} "${SERVER_USER}@${SERVER_HOST}" \
             "WEB_IMAGE='${WEB_IMAGE}' WORKER_IMAGE='${WORKER_IMAGE}' MIGRATE_IMAGE='${MIGRATE_IMAGE}' IMAGE_REPOSITORY='${IMAGE_REPOSITORY}' WEB_IMAGE_TAG='${WEB_IMAGE_TAG}' WORKER_IMAGE_TAG='${WORKER_IMAGE_TAG}' MIGRATE_IMAGE_TAG='${MIGRATE_IMAGE_TAG}' CHART_DIR='${CHART_DIR}' GHCR_PULL_USERNAME_B64='${GHCR_PULL_USERNAME_B64}' GHCR_PULL_TOKEN_B64='${GHCR_PULL_TOKEN_B64}' bash -s" <<'REMOTE'
           set -euo pipefail
 
           SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "$WEB_IMAGE_TAG" | cut -d- -f2 | cut -c1-7)"
           GHCR_PULL_USERNAME="$(printf '%s' "$GHCR_PULL_USERNAME_B64" | base64 -d)"
           GHCR_PULL_TOKEN="$(printf '%s' "$GHCR_PULL_TOKEN_B64" | base64 -d)"
+
+          timestamp() {
+            date '+%Y-%m-%d %H:%M:%S'
+          }
 
           dump_rollout_debug() {
             local deployment_name="$1"
@@ -163,6 +169,72 @@ jobs:
             kubectl get secret ghcr-pull-secret -n juanie -o yaml || true
             kubectl logs deployment/juanie-web -n juanie --tail=120 || true
             kubectl logs deployment/juanie-worker -n juanie --tail=120 || true
+          }
+
+          rollback_release() {
+            local current_revision previous_revision
+            current_revision="$(helm history juanie -n juanie | awk 'NR>1 {print $1}' | tail -n 1)"
+            previous_revision="$(helm history juanie -n juanie | awk 'NR>1 {print $1}' | tail -n 2 | head -n 1)"
+
+            if [ -z "$previous_revision" ] || [ "$previous_revision" = "$current_revision" ]; then
+              echo "⚠️ 无可回滚的上一版本，跳过 helm rollback"
+              return 0
+            fi
+
+            echo "↩️ 回滚 juanie 到 revision ${previous_revision}..."
+            helm rollback juanie "${previous_revision}" -n juanie --wait --timeout 10m || true
+          }
+
+          wait_for_deployment_rollout() {
+            local deployment_name="$1"
+            local component="$2"
+            local timeout_seconds="$3"
+            local label_selector="app.kubernetes.io/name=juanie,app.kubernetes.io/component=${component}"
+            local started_at
+            started_at="$(date +%s)"
+
+            while true; do
+              local desired updated ready available progressing_reason available_status pod_lines waiting_reasons
+              desired="$(kubectl get deployment "${deployment_name}" -n juanie -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)"
+              updated="$(kubectl get deployment "${deployment_name}" -n juanie -o jsonpath='{.status.updatedReplicas}' 2>/dev/null || echo 0)"
+              ready="$(kubectl get deployment "${deployment_name}" -n juanie -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo 0)"
+              available="$(kubectl get deployment "${deployment_name}" -n juanie -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo 0)"
+              progressing_reason="$(kubectl get deployment "${deployment_name}" -n juanie -o jsonpath='{.status.conditions[?(@.type=="Progressing")].reason}' 2>/dev/null || true)"
+              available_status="$(kubectl get deployment "${deployment_name}" -n juanie -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)"
+              pod_lines="$(kubectl get pods -n juanie -l "${label_selector}" --no-headers 2>/dev/null || true)"
+              waiting_reasons="$(kubectl get pods -n juanie -l "${label_selector}" -o jsonpath='{range .items[*]}{range .status.containerStatuses[*]}{.state.waiting.reason}{"\n"}{end}{end}' 2>/dev/null || true)"
+
+              echo "[$(timestamp)] ${deployment_name}: ready ${ready:-0}/${desired:-0}, updated ${updated:-0}/${desired:-0}, available ${available:-0}/${desired:-0}, progressing=${progressing_reason:-unknown}, availableCondition=${available_status:-unknown}"
+              if [ -n "$pod_lines" ]; then
+                echo "$pod_lines"
+              fi
+
+              if [ "${desired:-0}" -gt 0 ] && \
+                [ "${updated:-0}" -ge "${desired:-0}" ] && \
+                [ "${ready:-0}" -ge "${desired:-0}" ] && \
+                [ "${available:-0}" -ge "${desired:-0}" ]; then
+                return 0
+              fi
+
+              case "$waiting_reasons" in
+                *ErrImagePull*|*ImagePullBackOff*|*CrashLoopBackOff*|*CreateContainerConfigError*)
+                  echo "❌ ${deployment_name} 检测到不可恢复等待状态"
+                  return 1
+                  ;;
+              esac
+
+              if [ "$progressing_reason" = "ProgressDeadlineExceeded" ]; then
+                echo "❌ ${deployment_name} rollout exceeded progress deadline"
+                return 1
+              fi
+
+              if [ $(( $(date +%s) - started_at )) -ge "$timeout_seconds" ]; then
+                echo "❌ ${deployment_name} rollout 等待超时"
+                return 1
+              fi
+
+              sleep 10
+            done
           }
 
           wait_for_schema_job() {
@@ -197,6 +269,12 @@ jobs:
                     return 1
                     ;;
                 esac
+
+                if [ -n "$pod_name" ]; then
+                  local pod_phase
+                  pod_phase="$(kubectl get pod "${pod_name}" -n juanie -o jsonpath='{.status.phase}' 2>/dev/null || true)"
+                  echo "[$(timestamp)] schema job ${job_name}: phase=${pod_phase:-unknown}, waiting=${waiting_reason:-none}"
+                fi
               fi
 
               if [ $(( $(date +%s) - started_at )) -ge "$timeout_seconds" ]; then
@@ -293,16 +371,16 @@ jobs:
             --set images.worker.tag="${WORKER_IMAGE_TAG}" \
             --set images.migrate.repository="${IMAGE_REPOSITORY}" \
             --set images.migrate.tag="${MIGRATE_IMAGE_TAG}" \
-            --set-string imagePullSecrets[0]=ghcr-pull-secret \
-            --wait \
-            --timeout 20m
+            --set-string imagePullSecrets[0]=ghcr-pull-secret
 
-          if ! kubectl rollout status deployment/juanie-web -n juanie --timeout=1200s; then
+          if ! wait_for_deployment_rollout juanie-web web 1200; then
             dump_rollout_debug juanie-web
+            rollback_release
             exit 1
           fi
-          if ! kubectl rollout status deployment/juanie-worker -n juanie --timeout=1200s; then
+          if ! wait_for_deployment_rollout juanie-worker worker 1200; then
             dump_rollout_debug juanie-worker
+            rollback_release
             exit 1
           fi
 

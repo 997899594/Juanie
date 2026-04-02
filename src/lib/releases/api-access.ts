@@ -46,12 +46,16 @@ export function getRepositoryAccessDeniedMessage(
     : 'Token does not have access to this GitLab repository';
 }
 
-export async function verifyRepositoryAccess(repository: string, authHeader: string | null) {
+export function requireBearerToken(authHeader: string | null): string {
   if (!authHeader?.startsWith('Bearer ')) {
-    return;
+    throw new Error('Missing bearer token');
   }
 
-  const token = authHeader.substring(7);
+  return authHeader.substring(7);
+}
+
+export async function verifyRepositoryAccess(repository: string, authHeader: string | null) {
+  const token = requireBearerToken(authHeader);
   const repo = await db.query.repositories.findFirst({
     where: eq(repositories.fullName, repository),
   });

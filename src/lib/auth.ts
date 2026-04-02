@@ -9,6 +9,8 @@ import { type GitProviderType, users } from '@/lib/db/schema';
 import { revokeActiveGrants, upsertGrantFromOAuth } from '@/lib/integrations/service/grant-service';
 
 const isDev = process.env.NODE_ENV === 'development';
+const hasGitHubOAuth = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
+const hasGitLabOAuth = Boolean(process.env.GITLAB_CLIENT_ID && process.env.GITLAB_CLIENT_SECRET);
 
 export const onOAuthGrantPersist = async ({
   userId,
@@ -57,25 +59,33 @@ const nextAuth = NextAuth({
           }),
         ]
       : []),
-    GitHub({
-      clientId: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          scope: 'read:user user:email repo workflow read:packages',
-          prompt: 'consent',
-        },
-      },
-    }),
-    GitLab({
-      clientId: process.env.GITLAB_CLIENT_ID!,
-      clientSecret: process.env.GITLAB_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          scope: 'read_user read_repository api',
-        },
-      },
-    }),
+    ...(hasGitHubOAuth
+      ? [
+          GitHub({
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+            authorization: {
+              params: {
+                scope: 'read:user user:email repo workflow read:packages',
+                prompt: 'consent',
+              },
+            },
+          }),
+        ]
+      : []),
+    ...(hasGitLabOAuth
+      ? [
+          GitLab({
+            clientId: process.env.GITLAB_CLIENT_ID!,
+            clientSecret: process.env.GITLAB_CLIENT_SECRET!,
+            authorization: {
+              params: {
+                scope: 'read_user read_repository api',
+              },
+            },
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     async jwt({ token, user, account }) {

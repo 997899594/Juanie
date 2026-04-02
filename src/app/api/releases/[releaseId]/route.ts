@@ -5,8 +5,11 @@ import { db } from '@/lib/db';
 import { releases, teamMembers } from '@/lib/db/schema';
 import { getReleaseById } from '@/lib/releases';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ releaseId: string }> }
+) {
+  const { releaseId } = await params;
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -14,7 +17,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   const release = await db.query.releases.findFirst({
-    where: eq(releases.id, id),
+    where: eq(releases.id, releaseId),
     with: {
       project: true,
     },
@@ -35,6 +38,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const fullRelease = await getReleaseById(id);
+  const fullRelease = await getReleaseById(releaseId);
   return NextResponse.json(fullRelease);
 }

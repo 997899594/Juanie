@@ -1358,7 +1358,11 @@ export async function waitForDeploymentReady(input: {
       throw new Error(progressingCondition.message ?? 'Deployment rollout failed');
     }
 
-    const pods = await getPods(input.namespace, `app=${input.name}`);
+    const selectorLabels = deployment.spec?.selector?.matchLabels ?? {};
+    const labelSelector = Object.entries(selectorLabels)
+      .map(([key, value]) => `${key}=${value}`)
+      .join(',');
+    const pods = await getPods(input.namespace, labelSelector || undefined);
     const podIssue = describeDeploymentPodIssues(pods);
     if (podIssue) {
       throw new Error(podIssue);

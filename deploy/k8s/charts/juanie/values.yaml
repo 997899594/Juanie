@@ -76,10 +76,10 @@ redis:
 
 # 敏感配置
 secret:
-  existingSecret: ""
-  databasePassword: "postgres"
-  nextauthSecret: "juanie-nextauth-secret-2024"
-  githubClientId: "Ov23li5kloVVHQeOSefR"
-  githubClientSecret: "d7f645240f72ef1362c831e5bfa5c667ee5b1b33"
+  existingSecret: "juanie-secret"
+  databasePassword: ""
+  nextauthSecret: ""
+  githubClientId: ""
+  githubClientSecret: ""
   gitlabClientId: ""
   gitlabClientSecret: ""

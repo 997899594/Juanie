@@ -1,3 +1,5 @@
-import { GET } from '../route';
+import { getReadinessResponse } from '../route';
 
-export { GET };
+export async function GET() {
+  return getReadinessResponse();
+}

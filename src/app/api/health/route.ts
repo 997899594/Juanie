@@ -7,9 +7,10 @@
  * GET /api/health/startup - 启动检查
  */
 
+import Redis from 'ioredis';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getIsConnected, initK8sClient } from '@/lib/k8s';
+import { getIsConnected, getK8sClient, initK8sClient } from '@/lib/k8s';
 
 // ============================================
 // Health Check Response
@@ -32,6 +33,104 @@ interface HealthCheck {
   latency?: number;
 }
 
+function createBaseResponse(): HealthResponse {
+  return {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    checks: {
+      database: { status: 'pass' },
+    },
+  };
+}
+
+async function checkDatabase(): Promise<HealthCheck> {
+  const start = Date.now();
+  await db.execute('SELECT 1');
+
+  return {
+    status: 'pass',
+    latency: Date.now() - start,
+  };
+}
+
+async function checkRedis(): Promise<HealthCheck> {
+  const start = Date.now();
+  const redis = process.env.REDIS_URL
+    ? new Redis(process.env.REDIS_URL, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+      })
+    : new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD,
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+      });
+
+  try {
+    await redis.connect();
+    await redis.ping();
+
+    return {
+      status: 'pass',
+      latency: Date.now() - start,
+    };
+  } finally {
+    redis.disconnect();
+  }
+}
+
+async function checkKubernetes(): Promise<HealthCheck> {
+  const start = Date.now();
+  initK8sClient();
+
+  if (!getIsConnected()) {
+    return {
+      status: 'warn',
+      message: 'Kubernetes client not available',
+      latency: Date.now() - start,
+    };
+  }
+
+  const { core } = getK8sClient();
+  await core.listNamespace({ limit: 1 });
+
+  return {
+    status: 'pass',
+    latency: Date.now() - start,
+  };
+}
+
+function okJson(body: unknown, startTime?: number) {
+  return NextResponse.json(body, {
+    status: 200,
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      ...(typeof startTime === 'number'
+        ? {
+            'X-Health-Check-Latency': `${Date.now() - startTime}ms`,
+          }
+        : {}),
+    },
+  });
+}
+
+function failJson(body: unknown, startTime?: number) {
+  return NextResponse.json(body, {
+    status: 503,
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      ...(typeof startTime === 'number'
+        ? {
+            'X-Health-Check-Latency': `${Date.now() - startTime}ms`,
+          }
+        : {}),
+    },
+  });
+}
+
 // ============================================
 // Main Health Check
 // GET /api/health
@@ -47,12 +146,7 @@ export async function GET() {
 
   // 检查数据库连接
   try {
-    const start = Date.now();
-    await db.execute('SELECT 1');
-    checks.database = {
-      status: 'pass',
-      latency: Date.now() - start,
-    };
+    checks.database = await checkDatabase();
   } catch (error) {
     checks.database = {
       status: 'fail',
@@ -65,13 +159,7 @@ export async function GET() {
   const redisEnabled = process.env.REDIS_HOST || process.env.REDIS_URL;
   if (redisEnabled) {
     try {
-      const start = Date.now();
-      // 简单的 PING 检查
-      // TODO: 实现实际的 Redis 检查
-      checks.redis = {
-        status: 'pass',
-        latency: Date.now() - start,
-      };
+      checks.redis = await checkRedis();
     } catch (error) {
       checks.redis = {
         status: 'fail',
@@ -83,16 +171,11 @@ export async function GET() {
   }
 
   // 检查 Kubernetes (可选)
-  const k8sEnabled = process.env.KUBECONFIG || process.env.KUBECONFIG_CONTENT;
+  const k8sEnabled =
+    process.env.KUBECONFIG || process.env.KUBECONFIG_CONTENT || process.env.KUBERNETES_SERVICE_HOST;
   if (k8sEnabled) {
     try {
-      const start = Date.now();
-      initK8sClient();
-      const connected = getIsConnected();
-      checks.kubernetes = {
-        status: connected ? 'pass' : 'warn',
-        latency: Date.now() - start,
-      };
+      checks.kubernetes = await checkKubernetes();
     } catch (error) {
       checks.kubernetes = {
         status: 'warn',
@@ -117,5 +200,40 @@ export async function GET() {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'X-Health-Check-Latency': `${Date.now() - startTime}ms`,
     },
+  });
+}
+
+export async function getReadinessResponse() {
+  const startTime = Date.now();
+  const response = createBaseResponse();
+
+  try {
+    response.checks.database = await checkDatabase();
+  } catch (error) {
+    response.status = 'unhealthy';
+    response.checks.database = {
+      status: 'fail',
+      message: error instanceof Error ? error.message : 'Database connection failed',
+    };
+
+    return failJson(response, startTime);
+  }
+
+  return okJson(response, startTime);
+}
+
+export function getLivenessResponse() {
+  return okJson({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+  });
+}
+
+export function getStartupResponse() {
+  return okJson({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
   });
 }

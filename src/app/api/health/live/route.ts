@@ -1,3 +1,5 @@
-import { GET } from '../route';
+import { getLivenessResponse } from '../route';
 
-export { GET };
+export async function GET() {
+  return getLivenessResponse();
+}
