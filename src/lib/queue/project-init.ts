@@ -970,6 +970,9 @@ async function pushCicdConfig(
       ? renderGitHubCIMonorepo(project, monorepoType)
       : renderGitHubCI(project, renderContext);
     files['.github/workflows/juanie-ci.yml'] = ciTemplate;
+    if (!isMonorepo) {
+      files['.github/scripts/juanie-release.sh'] = renderGitHubCIScript();
+    }
   } else if (session.provider === 'gitlab' || session.provider === 'gitlab-self-hosted') {
     const ciTemplate = isMonorepo
       ? renderGitLabCIMonorepo(project, monorepoType)
@@ -1028,6 +1031,18 @@ function renderGitHubCI(
   // Fallback: should not normally be reached in production (template file is bundled in Docker image)
   throw new Error(
     `CI template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
+}
+
+function renderGitHubCIScript(): string {
+  const templatePath = join(TEMPLATES_DIR, 'ci', 'github-release.sh');
+
+  if (existsSync(templatePath)) {
+    return readFileSync(templatePath, 'utf-8');
+  }
+
+  throw new Error(
+    `CI script template file not found at ${templatePath}. Ensure templates are bundled correctly.`
   );
 }
 
