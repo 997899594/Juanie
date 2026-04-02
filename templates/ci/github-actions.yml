@@ -103,54 +103,72 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push (Bake)
-        if: ${{ steps.juanie.outputs.build_strategy == 'bake' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition != '') }}
+      - name: Build and Push Image
         run: |
           set -euo pipefail
 
-          if [ -n "${{ steps.juanie.outputs.build_target }}" ]; then
-            docker buildx bake \
-              --file "${{ steps.juanie.outputs.build_definition }}" \
-              "${{ steps.juanie.outputs.build_target }}" \
-              --set "${{ steps.juanie.outputs.build_target }}.tags=${{ env.IMAGE_TAG }}" \
-              --set "${{ steps.juanie.outputs.build_target }}.args.GIT_SHA=${{ github.sha }}" \
-              --set "${{ steps.juanie.outputs.build_target }}.cache-from=type=gha" \
-              --set "${{ steps.juanie.outputs.build_target }}.cache-to=type=gha,mode=max" \
-              --push \
-              --progress plain
-          else
-            docker buildx bake \
-              --file "${{ steps.juanie.outputs.build_definition }}" \
-              --set "*.tags=${{ env.IMAGE_TAG }}" \
-              --set "*.args.GIT_SHA=${{ github.sha }}" \
-              --set "*.cache-from=type=gha" \
-              --set "*.cache-to=type=gha,mode=max" \
-              --push \
-              --progress plain
+          BUILD_STRATEGY="${{ steps.juanie.outputs.build_strategy }}"
+          BUILD_DEFINITION="${{ steps.juanie.outputs.build_definition }}"
+          BUILD_TARGET="${{ steps.juanie.outputs.build_target }}"
+          BUILD_DOCKERFILE="${{ steps.juanie.outputs.build_dockerfile }}"
+          BUILD_CONTEXT="${{ steps.juanie.outputs.build_context }}"
+
+          if [ "$BUILD_STRATEGY" = "auto" ]; then
+            if [ -n "$BUILD_DEFINITION" ]; then
+              BUILD_STRATEGY="bake"
+            elif [ -n "$BUILD_DOCKERFILE" ]; then
+              BUILD_STRATEGY="dockerfile"
+            else
+              BUILD_STRATEGY="buildpacks"
+            fi
           fi
 
-      - name: Build and Push (Dockerfile)
-        if: ${{ steps.juanie.outputs.build_strategy == 'dockerfile' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition == '' && steps.juanie.outputs.build_dockerfile != '') }}
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ steps.juanie.outputs.build_context }}
-          file: ${{ steps.juanie.outputs.build_dockerfile }}
-          push: true
-          tags: ${{ env.IMAGE_TAG }}
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build and Push (Buildpacks)
-        if: ${{ steps.juanie.outputs.build_strategy == 'buildpacks' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition == '' && steps.juanie.outputs.build_dockerfile == '') }}
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            buildpacksio/pack \
-            pack build "${{ env.IMAGE_TAG }}" --builder paketobuildpacks/builder-jammy-full --publish
+          case "$BUILD_STRATEGY" in
+            bake)
+              if [ -n "$BUILD_TARGET" ]; then
+                docker buildx bake \
+                  --file "$BUILD_DEFINITION" \
+                  "$BUILD_TARGET" \
+                  --set "$BUILD_TARGET.tags=${{ env.IMAGE_TAG }}" \
+                  --set "$BUILD_TARGET.args.GIT_SHA=${{ github.sha }}" \
+                  --set "$BUILD_TARGET.cache-from=type=gha" \
+                  --set "$BUILD_TARGET.cache-to=type=gha,mode=max" \
+                  --push \
+                  --progress plain
+              else
+                docker buildx bake \
+                  --file "$BUILD_DEFINITION" \
+                  --set "*.tags=${{ env.IMAGE_TAG }}" \
+                  --set "*.args.GIT_SHA=${{ github.sha }}" \
+                  --set "*.cache-from=type=gha" \
+                  --set "*.cache-to=type=gha,mode=max" \
+                  --push \
+                  --progress plain
+              fi
+              ;;
+            dockerfile)
+              docker buildx build \
+                --file "$BUILD_DOCKERFILE" \
+                --tag "${{ env.IMAGE_TAG }}" \
+                --build-arg "GIT_SHA=${{ github.sha }}" \
+                --cache-from "type=gha" \
+                --cache-to "type=gha,mode=max" \
+                --push \
+                "$BUILD_CONTEXT"
+              ;;
+            buildpacks)
+              docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v "$PWD:/workspace" \
+                -w /workspace \
+                buildpacksio/pack \
+                pack build "${{ env.IMAGE_TAG }}" --builder paketobuildpacks/builder-jammy-full --publish
+              ;;
+            *)
+              echo "Unsupported build strategy: $BUILD_STRATEGY"
+              exit 1
+              ;;
+          esac
 
       - name: Verify Published Image
         if: success()
