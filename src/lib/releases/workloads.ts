@@ -32,6 +32,11 @@ export interface WorkloadEnvFromRef {
   configMapRef?: { name: string };
 }
 
+export interface ServiceVerificationPlan {
+  blockingPaths: string[];
+  observedPaths: string[];
+}
+
 export type ProgressiveDeploymentStrategy = 'controlled' | 'canary' | 'blue_green';
 
 export interface TrafficBackendRef {
@@ -40,28 +45,39 @@ export interface TrafficBackendRef {
   weight?: number;
 }
 
-export function buildServiceVerificationPaths(service: {
+export function buildServiceVerificationPlan(service: {
   type: string;
   isPublic?: boolean | null;
   healthcheckPath?: string | null;
-}) {
+}): ServiceVerificationPlan {
   if (service.type !== 'web') {
-    return [];
+    return {
+      blockingPaths: [],
+      observedPaths: [],
+    };
   }
 
-  const paths = new Set<string>();
+  const blockingPaths = new Set<string>();
+  const observedPaths = new Set<string>();
 
   if (service.healthcheckPath) {
-    paths.add(service.healthcheckPath);
+    blockingPaths.add(service.healthcheckPath);
   } else {
-    paths.add('/api/health/ready');
+    blockingPaths.add('/api/health/ready');
   }
 
   if (service.isPublic !== false) {
-    paths.add('/');
+    observedPaths.add('/');
   }
 
-  return Array.from(paths);
+  for (const path of blockingPaths) {
+    observedPaths.delete(path);
+  }
+
+  return {
+    blockingPaths: Array.from(blockingPaths),
+    observedPaths: Array.from(observedPaths),
+  };
 }
 
 export function isProgressiveStrategy(
@@ -271,10 +287,11 @@ export async function verifyServiceWorkload(input: {
   namespace: string;
   resourceName: string;
   port: number;
-  verificationPaths: string[];
+  verificationPlan: ServiceVerificationPlan;
   onLog?: (message: string) => Promise<void>;
+  onWarn?: (message: string) => Promise<void>;
 }) {
-  if (input.verificationPaths.length === 0) {
+  if (input.verificationPlan.blockingPaths.length === 0) {
     return;
   }
 
@@ -282,9 +299,31 @@ export async function verifyServiceWorkload(input: {
     namespace: input.namespace,
     serviceName: input.resourceName,
     port: input.port,
-    paths: input.verificationPaths,
+    paths: input.verificationPlan.blockingPaths,
   });
-  await input.onLog?.(`Verified ${input.resourceName} on ${input.verificationPaths.join(', ')}`);
+  await input.onLog?.(
+    `Verified ${input.resourceName} on blocking checks ${input.verificationPlan.blockingPaths.join(', ')}`
+  );
+
+  if (input.verificationPlan.observedPaths.length === 0) {
+    return;
+  }
+
+  try {
+    await verifyServiceReachability({
+      namespace: input.namespace,
+      serviceName: input.resourceName,
+      port: input.port,
+      paths: input.verificationPlan.observedPaths,
+    });
+    await input.onLog?.(
+      `Observed ${input.resourceName} entry checks ${input.verificationPlan.observedPaths.join(', ')}`
+    );
+  } catch (error) {
+    await input.onWarn?.(
+      `Observed entry checks failed for ${input.resourceName}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }
 
 export async function deployCandidateWorkload(input: {
@@ -294,8 +333,9 @@ export async function deployCandidateWorkload(input: {
   service: ReleaseWorkloadServiceLike;
   envFrom: WorkloadEnvFromRef[];
   imagePullSecrets?: string[];
-  verificationPaths: string[];
+  verificationPlan: ServiceVerificationPlan;
   onLog?: (message: string) => Promise<void>;
+  onWarn?: (message: string) => Promise<void>;
 }) {
   await ensureServiceResource(input.namespace, input.candidateName, input.service.port ?? 3000);
   await upsertServiceWorkload({
@@ -312,8 +352,9 @@ export async function deployCandidateWorkload(input: {
     namespace: input.namespace,
     resourceName: input.candidateName,
     port: input.service.port ?? 3000,
-    verificationPaths: input.verificationPaths,
+    verificationPlan: input.verificationPlan,
     onLog: input.onLog,
+    onWarn: input.onWarn,
   });
 }
 

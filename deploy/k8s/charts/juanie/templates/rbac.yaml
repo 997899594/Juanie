@@ -30,6 +30,10 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "statefulsets", "replicasets"]
     verbs: ["get", "list", "create", "update", "patch", "delete"]
+  # Batch workloads (migration / schema jobs)
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
   # Gateway API (Cilium HTTPRoute)
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["httproutes", "gateways"]

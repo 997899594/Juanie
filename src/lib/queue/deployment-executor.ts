@@ -32,7 +32,7 @@ import {
   syncEnvironmentServiceTrafficRoutes,
 } from '@/lib/releases/traffic';
 import {
-  buildServiceVerificationPaths,
+  buildServiceVerificationPlan,
   buildTrafficBackends,
   deployCandidateWorkload,
   isProgressiveStrategy,
@@ -215,10 +215,10 @@ export async function executeDeploymentWorkload(
 
     const stableName = buildStableDeploymentName(project.slug, service.name);
     const candidateName = buildCandidateDeploymentName(stableName);
-    const verificationPaths = buildServiceVerificationPaths(service);
+    const verificationPlan = buildServiceVerificationPlan(service);
     const stableExists = await deploymentExists(targetEnvironment.namespace, stableName);
     const canShiftTraffic = service.type === 'web' && service.isPublic !== false;
-    const shouldVerifyCandidateFirst = verificationPaths.length > 0;
+    const shouldVerifyCandidateFirst = verificationPlan.blockingPaths.length > 0;
 
     if (!shouldVerifyCandidateFirst) {
       await promoteCandidateSnapshotToStable({
@@ -253,8 +253,9 @@ export async function executeDeploymentWorkload(
       service,
       envFrom,
       imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
-      verificationPaths,
+      verificationPlan,
       onLog: (message) => logDeployment(deploymentId, message),
+      onWarn: (message) => logDeployment(deploymentId, message, 'warn'),
     });
 
     if (!isProgressiveStrategy(deploymentStrategy) || !stableExists || !canShiftTraffic) {

@@ -682,7 +682,7 @@ export async function ensureGhcrImagePullAccess(
     return false;
   }
 
-  const serviceAccounts = Array.from(new Set(options?.serviceAccounts ?? ['default']));
+  const serviceAccounts = Array.from(new Set(options?.serviceAccounts ?? []));
   for (const serviceAccountName of serviceAccounts) {
     try {
       await ensureServiceAccountImagePullSecret(

@@ -106,6 +106,67 @@ function getMigrationContainerStatus(pod?: V1Pod) {
   return pod?.status?.containerStatuses?.[0];
 }
 
+function getKubernetesApiErrorDetails(error: unknown): {
+  statusCode: number | null;
+  message: string;
+} {
+  const statusCode =
+    typeof error === 'object' && error !== null
+      ? Number(
+          (error as { statusCode?: number; code?: number }).statusCode ??
+            (error as { statusCode?: number; code?: number }).code ??
+            NaN
+        )
+      : NaN;
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : JSON.stringify(error);
+
+  return {
+    statusCode: Number.isFinite(statusCode) ? statusCode : null,
+    message,
+  };
+}
+
+function classifyMigrationJobCreateError(error: unknown): {
+  errorCode: string;
+  errorMessage: string;
+} {
+  const details = getKubernetesApiErrorDetails(error);
+  const normalized = details.message.toLowerCase();
+
+  if (
+    details.statusCode === 403 ||
+    normalized.includes('forbidden') ||
+    normalized.includes('cannot create resource "jobs"')
+  ) {
+    return {
+      errorCode: 'MIGRATION_RUNNER_RBAC_DENIED',
+      errorMessage:
+        'Platform service account cannot create migration jobs in the target namespace. Check Juanie RBAC for batch/jobs.',
+    };
+  }
+
+  if (
+    details.statusCode === 404 ||
+    (normalized.includes('namespaces') && normalized.includes('not found'))
+  ) {
+    return {
+      errorCode: 'MIGRATION_NAMESPACE_NOT_FOUND',
+      errorMessage: 'Target namespace for migration job does not exist yet.',
+    };
+  }
+
+  return {
+    errorCode: 'MIGRATION_JOB_CREATE_FAILED',
+    errorMessage: details.message || 'Failed to create migration job',
+  };
+}
+
 function getMigrationPodIssue(pod?: V1Pod): string | null {
   const containerStatus = getMigrationContainerStatus(pod);
   const waiting = containerStatus?.state?.waiting;
@@ -497,7 +558,18 @@ async function runCommandMigration(
     },
   };
 
-  await createJob(namespace!, job);
+  try {
+    await createJob(namespace!, job);
+  } catch (error) {
+    const failure = classifyMigrationJobCreateError(error);
+    await markRunAndItemFailed({
+      runId,
+      itemId: item.id,
+      errorCode: failure.errorCode,
+      errorMessage: failure.errorMessage,
+      output: failure.errorMessage,
+    });
+  }
 
   let finalLogs = '';
   let executionStartedAt: number | null = null;
