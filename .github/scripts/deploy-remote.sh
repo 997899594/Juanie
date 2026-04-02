@@ -3,8 +3,6 @@
 set -euo pipefail
 
 SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "$WEB_IMAGE_TAG" | cut -d- -f2 | cut -c1-7)"
-GHCR_PULL_USERNAME="$(printf '%s' "${GHCR_PULL_USERNAME_B64:?}" | base64 -d)"
-GHCR_PULL_TOKEN="$(printf '%s' "${GHCR_PULL_TOKEN_B64:?}" | base64 -d)"
 
 show_failure() {
   local kind="$1"
@@ -14,13 +12,8 @@ show_failure() {
   kubectl get events -n juanie --sort-by=.metadata.creationTimestamp | tail -n 60 || true
 }
 
-echo "Syncing GHCR pull secret..."
-kubectl create secret docker-registry ghcr-pull-secret \
-  -n juanie \
-  --docker-server=ghcr.io \
-  --docker-username="$GHCR_PULL_USERNAME" \
-  --docker-password="$GHCR_PULL_TOKEN" \
-  --dry-run=client -o yaml | kubectl apply -f -
+echo "Checking GHCR pull secret..."
+kubectl get secret ghcr-pull-secret -n juanie >/dev/null
 
 echo "Running schema sync job..."
 kubectl delete job "${SCHEMA_JOB}" -n juanie --ignore-not-found=true
