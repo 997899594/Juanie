@@ -108,6 +108,18 @@ Juanie 会校验：
 3. 仓库已在 Juanie 内登记
 4. 仓库已绑定 project
 
+从 2026-04-02 开始，Juanie 生成的 GitHub / GitLab CI 模板默认不会在 `POST /api/releases` 后立即结束，而是会继续轮询：
+
+- `GET /api/releases/{releaseId}/status`
+
+直到 release 进入 terminal status。
+
+这意味着：
+
+- 仓库 CI 的成功，代表平台 release 最终成功
+- 仓库 CI 的失败，代表平台 release 最终失败或超时
+- 新项目默认不会再出现“CI 绿了，但平台里的 release 其实还没完成”的旧链路问题
+
 ### 4.2 release 创建
 
 `createRepositoryRelease()` 负责：

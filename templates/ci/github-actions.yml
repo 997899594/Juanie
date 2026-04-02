@@ -63,7 +63,7 @@ jobs:
       - name: Trigger Juanie Release
         if: success()
         run: |
-          curl -fsSX POST "https://juanie.art/api/releases" \
+          RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -d '{
@@ -71,4 +71,37 @@ jobs:
               "sha": "${{ github.sha }}",
               "ref": "${{ github.ref }}",
               "services": {{RELEASE_SERVICES_JSON}}
-            }'
+            }')
+
+          RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "Juanie did not return a release id"
+            echo "$RELEASE_RESPONSE"
+            exit 1
+          fi
+
+          for attempt in $(seq 1 180); do
+            STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/${RELEASE_ID}/status" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}")
+
+            TERMINAL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.terminal')
+            SUCCEEDED=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.succeeded')
+            STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
+            ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
+
+            echo "Juanie release ${RELEASE_ID}: status=${STATUS}"
+
+            if [ "$TERMINAL" = "true" ]; then
+              if [ "$SUCCEEDED" = "true" ]; then
+                exit 0
+              fi
+
+              echo "Juanie release failed: ${ERROR_MESSAGE:-unknown error}"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for Juanie release ${RELEASE_ID}"
+          exit 1

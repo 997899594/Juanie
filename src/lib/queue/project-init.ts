@@ -1034,7 +1034,7 @@ jobs:
         if: success()
         run: |
           IMAGE_TAG=\${{ env.REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
-          curl -fsSX POST "https://juanie.art/api/releases" \
+          RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}" \
             -d '{
@@ -1047,7 +1047,40 @@ jobs:
                   "image": "'"$IMAGE_TAG"'"
                 }
               ]
-            }'
+            }')
+
+          RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "Juanie did not return a release id"
+            echo "$RELEASE_RESPONSE"
+            exit 1
+          fi
+
+          for attempt in $(seq 1 180); do
+            STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/$RELEASE_ID/status" \
+              -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}")
+
+            TERMINAL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.terminal')
+            SUCCEEDED=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.succeeded')
+            STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
+            ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
+
+            echo "Juanie release $RELEASE_ID: status=$STATUS"
+
+            if [ "$TERMINAL" = "true" ]; then
+              if [ "$SUCCEEDED" = "true" ]; then
+                exit 0
+              fi
+
+              echo "Juanie release failed: \${ERROR_MESSAGE:-unknown error}"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for Juanie release $RELEASE_ID"
+          exit 1
 `;
 }
 
@@ -1092,7 +1125,7 @@ build:
   services:
     - docker:24-dind
   before_script:
-    - apk add --no-cache jq
+    - apk add --no-cache curl jq
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
@@ -1101,7 +1134,7 @@ build:
         docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
         docker push $IMAGE_TAG
 
-        curl -fsSX POST "https://juanie.art/api/releases" \
+        RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer $CI_JOB_TOKEN" \
           -d "{
@@ -1114,7 +1147,37 @@ build:
                 \\"image\\": \\"$IMAGE_TAG\\"
               }
             ]
-          }"
+          }")
+
+        RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
+        if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+          echo "Juanie did not return a release id"
+          echo "$RELEASE_RESPONSE"
+          exit 1
+        fi
+
+        for attempt in $(seq 1 180); do
+          STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/$RELEASE_ID/status" \
+            -H "Authorization: Bearer $CI_JOB_TOKEN")
+
+          TERMINAL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.terminal')
+          SUCCEEDED=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.succeeded')
+          STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
+          ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
+
+          echo "Juanie release $RELEASE_ID: status=$STATUS"
+
+          if [ "$TERMINAL" = "true" ]; then
+            if [ "$SUCCEEDED" = "true" ]; then
+              break
+            fi
+
+            echo "Juanie release failed: \${ERROR_MESSAGE:-unknown error}"
+            exit 1
+          fi
+
+          sleep 10
+        done
       done
   rules:
     - if: $SERVICES != '[]'
