@@ -20,6 +20,79 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve Juanie Build Plan
+        id: juanie
+        run: |
+          set -euo pipefail
+
+          ruby <<'RUBY' "$GITHUB_OUTPUT"
+          require 'json'
+          require 'yaml'
+
+          output_path = ARGV.fetch(0)
+          config = YAML.load_file('juanie.yaml') || {}
+          services = Array(config['services'])
+
+          raise 'juanie.yaml must define at least one service' if services.empty?
+
+          release_services = services.map do |service|
+            name = service['name'].to_s.strip
+            raise 'service.name is required' if name.empty?
+
+            {
+              name: name,
+              image: ENV.fetch('IMAGE_TAG'),
+            }
+          end
+
+          build_descriptors = services.map do |service|
+            build = service['build'] || {}
+
+            {
+              'name' => service['name'].to_s,
+              'strategy' => (build['strategy'] || 'auto').to_s,
+              'context' => (build['context'] || '.').to_s,
+              'dockerfile' => build['dockerfile']&.to_s,
+              'target' => build['target']&.to_s,
+              'definition' => build['definition']&.to_s,
+            }
+          end
+
+          canonical = build_descriptors.first
+          conflicting = build_descriptors.find do |descriptor|
+            %w[strategy context dockerfile target definition].any? do |key|
+              descriptor[key] != canonical[key]
+            end
+          end
+
+          if conflicting
+            raise(
+              "single-repo Juanie CI requires all services to share one build config; conflicting service=#{conflicting['name']}"
+            )
+          end
+
+          if canonical['definition'].nil? || canonical['definition'].empty?
+            canonical['definition'] = './docker-bake.hcl' if File.file?('docker-bake.hcl')
+            canonical['definition'] ||= './docker-bake.json' if File.file?('docker-bake.json')
+          end
+
+          if canonical['dockerfile'].nil? || canonical['dockerfile'].empty?
+            canonical['dockerfile'] = 'Dockerfile' if File.file?('Dockerfile')
+          end
+
+          File.open(output_path, 'a') do |file|
+            file.puts('release_services_json<<EOF')
+            file.puts(JSON.generate(release_services))
+            file.puts('EOF')
+
+            file.puts("build_strategy=#{canonical['strategy']}")
+            file.puts("build_context=#{canonical['context']}")
+            file.puts("build_dockerfile=#{canonical['dockerfile'] || ''}")
+            file.puts("build_target=#{canonical['target'] || ''}")
+            file.puts("build_definition=#{canonical['definition'] || ''}")
+          end
+          RUBY
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -30,39 +103,79 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push (Bake)
-        if: ${{ hashFiles('docker-bake.hcl', 'docker-bake.json') != '' }}
+      - name: Build and Push (Bake Target)
+        if: ${{ (steps.juanie.outputs.build_strategy == 'bake' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition != '')) && steps.juanie.outputs.build_target != '' }}
         uses: docker/bake-action@v5
         with:
+          files: ${{ steps.juanie.outputs.build_definition }}
+          targets: ${{ steps.juanie.outputs.build_target }}
           push: true
           set: |
             *.tags=${{ env.IMAGE_TAG }}
+            *.args.GIT_SHA=${{ github.sha }}
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+
+      - name: Build and Push (Bake Default)
+        if: ${{ (steps.juanie.outputs.build_strategy == 'bake' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition != '')) && steps.juanie.outputs.build_target == '' }}
+        uses: docker/bake-action@v5
+        with:
+          files: ${{ steps.juanie.outputs.build_definition }}
+          push: true
+          set: |
+            *.tags=${{ env.IMAGE_TAG }}
+            *.args.GIT_SHA=${{ github.sha }}
             *.cache-from=type=gha
             *.cache-to=type=gha,mode=max
 
       - name: Build and Push (Dockerfile)
-        if: ${{ hashFiles('docker-bake.hcl', 'docker-bake.json') == '' && hashFiles('Dockerfile') != '' }}
+        if: ${{ steps.juanie.outputs.build_strategy == 'dockerfile' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition == '' && steps.juanie.outputs.build_dockerfile != '') }}
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ steps.juanie.outputs.build_context }}
+          file: ${{ steps.juanie.outputs.build_dockerfile }}
           push: true
           tags: ${{ env.IMAGE_TAG }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Build and Push (Buildpacks)
-        if: ${{ hashFiles('docker-bake.hcl', 'docker-bake.json') == '' && hashFiles('Dockerfile') == '' }}
+        if: ${{ steps.juanie.outputs.build_strategy == 'buildpacks' || (steps.juanie.outputs.build_strategy == 'auto' && steps.juanie.outputs.build_definition == '' && steps.juanie.outputs.build_dockerfile == '') }}
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            -v $PWD:/workspace \
+            -v "$PWD:/workspace" \
             -w /workspace \
             buildpacksio/pack \
-            pack build ${{ env.IMAGE_TAG }} --builder paketobuildpacks/builder-jammy-full --publish
+            pack build "${{ env.IMAGE_TAG }}" --builder paketobuildpacks/builder-jammy-full --publish
+
+      - name: Verify Published Image
+        if: success()
+        run: |
+          set -euo pipefail
+
+          deadline=$(( $(date +%s) + 180 ))
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            if docker buildx imagetools inspect "${{ env.IMAGE_TAG }}" >/dev/null 2>&1; then
+              echo "Published image is available: ${{ env.IMAGE_TAG }}"
+              exit 0
+            fi
+
+            echo "Waiting for image manifest to become visible: ${{ env.IMAGE_TAG }}"
+            sleep 5
+          done
+
+          echo "Image manifest was not available in registry before release trigger"
+          exit 1
 
       - name: Trigger Juanie Release
         if: success()
         run: |
+          set -euo pipefail
+
           RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -70,7 +183,7 @@ jobs:
               "repository": "${{ github.repository }}",
               "sha": "${{ github.sha }}",
               "ref": "${{ github.ref }}",
-              "services": {{RELEASE_SERVICES_JSON}}
+              "services": ${{ steps.juanie.outputs.release_services_json }}
             }')
 
           RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
@@ -80,6 +193,11 @@ jobs:
             exit 1
           fi
 
+          RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
+          if [ -n "$RELEASE_PATH" ]; then
+            echo "Release detail: https://juanie.art${RELEASE_PATH}"
+          fi
+
           for attempt in $(seq 1 180); do
             STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/${RELEASE_ID}/status" \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}")
@@ -87,9 +205,10 @@ jobs:
             TERMINAL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.terminal')
             SUCCEEDED=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.succeeded')
             STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
+            STATUS_LABEL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.statusLabel')
             ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
 
-            echo "Juanie release ${RELEASE_ID}: status=${STATUS}"
+            echo "Juanie release ${RELEASE_ID}: ${STATUS} (${STATUS_LABEL})"
 
             if [ "$TERMINAL" = "true" ]; then
               if [ "$SUCCEEDED" = "true" ]; then

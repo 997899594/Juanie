@@ -12,24 +12,122 @@ build:
   services:
     - docker:24-dind
   before_script:
-    - apk add --no-cache curl jq
+    - apk add --no-cache curl jq ruby
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
-      if [ -f docker-bake.hcl ] || [ -f docker-bake.json ]; then
-        docker buildx bake --set "*.tags=$IMAGE_TAG" --push
-      elif [ -f Dockerfile ]; then
-        docker build -t $IMAGE_TAG .
-        docker push $IMAGE_TAG
+      set -euo pipefail
+
+      ruby <<'RUBY' > juanie-ci-meta.json
+      require 'json'
+      require 'yaml'
+
+      config = YAML.load_file('juanie.yaml') || {}
+      services = Array(config['services'])
+
+      raise 'juanie.yaml must define at least one service' if services.empty?
+
+      release_services = services.map do |service|
+        name = service['name'].to_s.strip
+        raise 'service.name is required' if name.empty?
+
+        {
+          name: name,
+          image: ENV.fetch('IMAGE_TAG'),
+        }
+      end
+
+      build_descriptors = services.map do |service|
+        build = service['build'] || {}
+
+        {
+          'name' => service['name'].to_s,
+          'strategy' => (build['strategy'] || 'auto').to_s,
+          'context' => (build['context'] || '.').to_s,
+          'dockerfile' => build['dockerfile']&.to_s,
+          'target' => build['target']&.to_s,
+          'definition' => build['definition']&.to_s,
+        }
+      end
+
+      canonical = build_descriptors.first
+      conflicting = build_descriptors.find do |descriptor|
+        %w[strategy context dockerfile target definition].any? do |key|
+          descriptor[key] != canonical[key]
+        end
+      end
+
+      if conflicting
+        raise(
+          "single-repo Juanie CI requires all services to share one build config; conflicting service=#{conflicting['name']}"
+        )
+      end
+
+      if canonical['definition'].nil? || canonical['definition'].empty?
+        canonical['definition'] = './docker-bake.hcl' if File.file?('docker-bake.hcl')
+        canonical['definition'] ||= './docker-bake.json' if File.file?('docker-bake.json')
+      end
+
+      if canonical['dockerfile'].nil? || canonical['dockerfile'].empty?
+        canonical['dockerfile'] = 'Dockerfile' if File.file?('Dockerfile')
+      end
+
+      puts JSON.generate(
+        {
+          releaseServices: release_services,
+          build: canonical,
+        }
+      )
+      RUBY
+
+      BUILD_STRATEGY=$(jq -r '.build.strategy' juanie-ci-meta.json)
+      BUILD_CONTEXT=$(jq -r '.build.context' juanie-ci-meta.json)
+      BUILD_DOCKERFILE=$(jq -r '.build.dockerfile // ""' juanie-ci-meta.json)
+      BUILD_TARGET=$(jq -r '.build.target // ""' juanie-ci-meta.json)
+      BUILD_DEFINITION=$(jq -r '.build.definition // ""' juanie-ci-meta.json)
+      RELEASE_SERVICES_JSON=$(jq -c '.releaseServices' juanie-ci-meta.json)
+
+      if [ "$BUILD_STRATEGY" = "bake" ] || { [ "$BUILD_STRATEGY" = "auto" ] && [ -n "$BUILD_DEFINITION" ]; }; then
+        if [ -n "$BUILD_TARGET" ]; then
+          docker buildx bake --file "$BUILD_DEFINITION" "$BUILD_TARGET" \
+            --set "*.tags=$IMAGE_TAG" \
+            --set "*.args.GIT_SHA=$CI_COMMIT_SHA" \
+            --push
+        else
+          docker buildx bake --file "$BUILD_DEFINITION" \
+            --set "*.tags=$IMAGE_TAG" \
+            --set "*.args.GIT_SHA=$CI_COMMIT_SHA" \
+            --push
+        fi
+      elif [ "$BUILD_STRATEGY" = "dockerfile" ] || { [ "$BUILD_STRATEGY" = "auto" ] && [ -z "$BUILD_DEFINITION" ] && [ -n "$BUILD_DOCKERFILE" ]; }; then
+        docker build -t "$IMAGE_TAG" -f "$BUILD_DOCKERFILE" "$BUILD_CONTEXT"
+        docker push "$IMAGE_TAG"
       else
         docker run --rm \
           -v /var/run/docker.sock:/var/run/docker.sock \
-          -v $PWD:/workspace \
+          -v "$PWD:/workspace" \
           -w /workspace \
           buildpacksio/pack \
-          pack build $IMAGE_TAG --builder paketobuildpacks/builder-jammy-full --publish
+          pack build "$IMAGE_TAG" --builder paketobuildpacks/builder-jammy-full --publish
       fi
     - |
+      set -euo pipefail
+
+      deadline=$(( $(date +%s) + 180 ))
+      while [ "$(date +%s)" -lt "$deadline" ]; do
+        if docker buildx imagetools inspect "$IMAGE_TAG" >/dev/null 2>&1; then
+          echo "Published image is available: $IMAGE_TAG"
+          break
+        fi
+
+        echo "Waiting for image manifest to become visible: $IMAGE_TAG"
+        sleep 5
+      done
+
+      docker buildx imagetools inspect "$IMAGE_TAG" >/dev/null 2>&1
+    - |
+      set -euo pipefail
+
       RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $CI_JOB_TOKEN" \
@@ -37,7 +135,7 @@ build:
           \"repository\": \"$CI_PROJECT_PATH\",
           \"sha\": \"$CI_COMMIT_SHA\",
           \"ref\": \"$CI_COMMIT_REF_NAME\",
-          \"services\": {{RELEASE_SERVICES_JSON}}
+          \"services\": $RELEASE_SERVICES_JSON
         }")
 
       RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
@@ -47,6 +145,11 @@ build:
         exit 1
       fi
 
+      RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
+      if [ -n "$RELEASE_PATH" ]; then
+        echo "Release detail: https://juanie.art${RELEASE_PATH}"
+      fi
+
       for attempt in $(seq 1 180); do
         STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/${RELEASE_ID}/status" \
           -H "Authorization: Bearer $CI_JOB_TOKEN")
@@ -54,9 +157,10 @@ build:
         TERMINAL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.terminal')
         SUCCEEDED=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.succeeded')
         STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
+        STATUS_LABEL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.statusLabel')
         ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
 
-        echo "Juanie release ${RELEASE_ID}: status=${STATUS}"
+        echo "Juanie release ${RELEASE_ID}: ${STATUS} (${STATUS_LABEL})"
 
         if [ "$TERMINAL" = "true" ]; then
           if [ "$SUCCEEDED" = "true" ]; then

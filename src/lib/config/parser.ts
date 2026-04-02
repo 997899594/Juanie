@@ -34,9 +34,12 @@ export const serviceSchema = z.object({
 
   build: z
     .object({
+      strategy: z.enum(['auto', 'dockerfile', 'bake', 'buildpacks']).optional(),
       command: z.string().optional(),
       dockerfile: z.string().optional(),
       context: z.string().optional(),
+      target: z.string().optional(),
+      definition: z.string().optional(),
     })
     .optional(),
 

@@ -506,6 +506,8 @@ interface RepoAutomationContext {
   monorepoType: MonorepoType;
   rootFiles: string[];
   packageManager: PackageManager;
+  bakeDefinition: string | null;
+  bakeTargets: string[];
   packageJson: {
     packageManager?: string;
     scripts?: Record<string, string>;
@@ -516,6 +518,22 @@ interface RepoAutomationContext {
 
 function supportsGeneratedMigration(dbType: typeof databases.$inferSelect.type): boolean {
   return dbType === 'postgresql' || dbType === 'mysql';
+}
+
+function parseDockerBakeTargets(content: string): string[] {
+  const targets: string[] = [];
+  const targetRegex = /target\s+["']?([\w-]+)["']?\s*\{/g;
+  let match: RegExpExecArray | null = targetRegex.exec(content);
+
+  while (match !== null) {
+    const targetName = match[1];
+    if (targetName && !['default', 'multi'].includes(targetName)) {
+      targets.push(targetName);
+    }
+    match = targetRegex.exec(content);
+  }
+
+  return [...new Set(targets)];
 }
 
 export function detectPackageManager(
@@ -608,22 +626,71 @@ export function inferMigrationCommand(
   return null;
 }
 
-function buildGitHubReleaseServicesJson(serviceList: Array<typeof services.$inferSelect>): string {
-  const entries = serviceList.map(
-    (service) =>
-      `                {\n                  "name": "${service.name}",\n                  "image": "\${{ env.IMAGE_TAG }}"\n                }`
-  );
+function resolveBakeTarget(
+  service: typeof services.$inferSelect,
+  automation: RepoAutomationContext
+): string | null {
+  const bakeTargets = automation.bakeTargets ?? [];
 
-  return `[\n${entries.join(',\n')}\n              ]`;
+  if (bakeTargets.length === 0) {
+    return null;
+  }
+
+  const directMatch = bakeTargets.find((target) => target === service.name);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  if (bakeTargets.length === 1) {
+    return bakeTargets[0] ?? null;
+  }
+
+  return null;
 }
 
-function buildGitLabReleaseServicesJson(serviceList: Array<typeof services.$inferSelect>): string {
-  const entries = serviceList.map(
-    (service) =>
-      `            {\n              "name": "${service.name}",\n              "image": "$IMAGE_TAG"\n            }`
-  );
+function buildServiceBuildLines(
+  service: typeof services.$inferSelect,
+  automation: RepoAutomationContext
+): string[] {
+  const lines = ['    build:'];
+  const buildCommand = service.buildCommand ?? 'npm run build';
+  const dockerContext = service.dockerContext ?? '.';
+  const dockerfile = service.dockerfile?.trim();
+  const bakeDefinition = automation.bakeDefinition ?? null;
+  const bakeTarget =
+    automation.monorepoType === 'none' ? resolveBakeTarget(service, automation) : null;
 
-  return `[\n${entries.join(',\n')}\n          ]`;
+  lines.push(`      command: ${buildCommand}`);
+
+  if (bakeDefinition) {
+    lines.push(
+      '      strategy: bake',
+      `      definition: ${bakeDefinition}`,
+      `      context: ${dockerContext}`
+    );
+
+    if (bakeTarget) {
+      lines.push(`      target: ${bakeTarget}`);
+    }
+
+    if (dockerfile) {
+      lines.push(`      dockerfile: ${dockerfile}`);
+    }
+
+    return lines;
+  }
+
+  if (dockerfile) {
+    lines.push(
+      '      strategy: dockerfile',
+      `      dockerfile: ${dockerfile}`,
+      `      context: ${dockerContext}`
+    );
+    return lines;
+  }
+
+  lines.push('      strategy: buildpacks', `      context: ${dockerContext}`);
+  return lines;
 }
 
 export function buildMigrationConfigLines(
@@ -717,8 +784,7 @@ export function renderJuanieConfig(
     lines.push(
       `  - name: ${service.name}`,
       `    type: ${service.type}`,
-      '    build:',
-      `      command: ${service.buildCommand ?? 'npm run build'}`,
+      ...buildServiceBuildLines(service, automation),
       '    run:',
       `      command: ${service.startCommand ?? 'npm start'}`
     );
@@ -816,6 +882,8 @@ async function pushCicdConfig(
   // Detect monorepo type from repository root files using gateway
   let monorepoType: MonorepoType = 'none';
   let rootFiles: string[] = [];
+  let bakeDefinition: string | null = null;
+  let bakeTargets: string[] = [];
   let packageJson: RepoAutomationContext['packageJson'] = null;
 
   try {
@@ -838,6 +906,33 @@ async function pushCicdConfig(
         packageJson = packageJsonContent ? JSON.parse(packageJsonContent) : null;
       } catch (error) {
         console.warn('Failed to parse package.json, falling back to migration skeleton:', error);
+      }
+    }
+
+    const bakeDefinitionPath = rootFiles.includes('docker-bake.hcl')
+      ? 'docker-bake.hcl'
+      : rootFiles.includes('docker-bake.json')
+        ? 'docker-bake.json'
+        : null;
+
+    if (bakeDefinitionPath) {
+      bakeDefinition = bakeDefinitionPath;
+
+      try {
+        const bakeContent = await gateway.getFileContent(
+          session,
+          project.repository.fullName,
+          bakeDefinitionPath,
+          project.productionBranch || 'main'
+        );
+        if (bakeContent) {
+          bakeTargets = parseDockerBakeTargets(bakeContent);
+        }
+      } catch (error) {
+        console.warn(
+          'Failed to inspect docker-bake definition, continuing without targets:',
+          error
+        );
       }
     }
   } catch (error) {
@@ -863,6 +958,8 @@ async function pushCicdConfig(
     monorepoType,
     rootFiles,
     packageManager: detectPackageManager(rootFiles, packageJson),
+    bakeDefinition,
+    bakeTargets,
     packageJson,
   };
   const files: Record<string, string> = {};
@@ -915,7 +1012,7 @@ function renderGitHubCI(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   },
-  context: ProjectInitRenderContext
+  _context: ProjectInitRenderContext
 ): string {
   const templatePath = join(TEMPLATES_DIR, 'ci', 'github-actions.yml');
 
@@ -924,8 +1021,7 @@ function renderGitHubCI(
     // Replace template variables
     content = content
       .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
-      .replace(/\{\{RELEASE_SERVICES_JSON\}\}/g, buildGitHubReleaseServicesJson(context.services));
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
     return content;
   }
 
@@ -939,7 +1035,7 @@ function renderGitLabCI(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   },
-  context: ProjectInitRenderContext
+  _context: ProjectInitRenderContext
 ): string {
   const templatePath = join(TEMPLATES_DIR, 'ci', 'gitlab-ci.yml');
 
@@ -947,8 +1043,7 @@ function renderGitLabCI(
     let content = readFileSync(templatePath, 'utf-8');
     content = content
       .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
-      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
-      .replace(/\{\{RELEASE_SERVICES_JSON\}\}/g, buildGitLabReleaseServicesJson(context.services));
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug);
     return content;
   }
 
