@@ -13,7 +13,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import type { ReleaseRecapRecord } from '@/lib/releases/recap';
+import type { ReleaseRecapRecord } from '@/lib/releases/recap-record';
 
 // ============================================
 // Enums

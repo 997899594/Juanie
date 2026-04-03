@@ -86,6 +86,10 @@ run_schema_sync_job() {
 wait_for_rollout() {
   local deployment="$1"
 
+  if ! kubectl get deployment/"${deployment}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    return 0
+  fi
+
   echo "Waiting for ${deployment} rollout..."
   if ! kubectl rollout status deployment/"${deployment}" -n "${NAMESPACE}" --timeout=20m; then
     show_failure deployment "${deployment}"
@@ -115,7 +119,7 @@ helm upgrade --install "${RELEASE_NAME}" "${CHART_DIR}" \
   --set images.migrate.tag="${MIGRATE_IMAGE_TAG}" \
   --set-string imagePullSecrets[0]=ghcr-pull-secret
 
-for deployment in juanie-web juanie-worker; do
+for deployment in juanie-web juanie-worker juanie-scheduler; do
   wait_for_rollout "${deployment}"
 done
 

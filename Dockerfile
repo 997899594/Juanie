@@ -8,12 +8,17 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # ============================================
-# Stage 2: Builder (Next.js)
+# Stage 2: Source
 # ============================================
-FROM deps AS builder
+FROM deps AS source
 WORKDIR /app
 
 COPY . .
+
+# ============================================
+# Stage 3: Builder (Next.js)
+# ============================================
+FROM source AS builder
 
 ARG NEXT_PUBLIC_API_URL
 ARG DATABASE_URL
@@ -23,18 +28,39 @@ ENV DATABASE_URL=${DATABASE_URL}
 RUN mkdir -p public && bun run build
 
 # ============================================
-# Stage 3: Worker Builder (编译独立可执行文件)
+# Stage 4: Worker Builder (编译独立可执行文件)
 # ============================================
-FROM deps AS worker-builder
-WORKDIR /app
-
-COPY . .
+FROM source AS worker-builder
 
 # 编译 worker 为独立可执行文件 (约62MB, 包含所有依赖)
 RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
+RUN bun build ./src/lib/queue/scheduler.ts --compile --outfile=scheduler
 
 # ============================================
-# Stage 4: Web Runner
+# Stage 5: Migration Builder
+# ============================================
+FROM oven/bun:1 AS migrate-deps
+WORKDIR /migrate
+
+RUN cat <<'EOF' > package.json
+{
+  "name": "juanie-migrate",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "drizzle-kit": "0.30.6",
+    "drizzle-orm": "0.38.4",
+    "pg": "8.20.0",
+    "postgres": "3.4.8",
+    "typescript": "5.9.3"
+  }
+}
+EOF
+
+RUN bun install --production
+
+# ============================================
+# Stage 6: Web Runner
 # ============================================
 FROM node:20-bookworm-slim AS web
 WORKDIR /app
@@ -57,7 +83,7 @@ EXPOSE 3001
 CMD ["node", "server.js"]
 
 # ============================================
-# Stage 5: Worker Runner
+# Stage 7: Worker Runner
 # ============================================
 FROM oven/bun:1 AS worker
 WORKDIR /app
@@ -68,28 +94,28 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=worker-builder /app/worker ./worker
-COPY --from=builder /app/templates ./templates
+COPY --from=worker-builder /app/scheduler ./scheduler
+COPY --from=source /app/templates ./templates
 
-RUN chmod +x ./worker
+RUN chmod +x ./worker ./scheduler
 
 CMD ["./worker"]
 
 # ============================================
-# Stage 6: Migration Runner
+# Stage 8: Migration Runner
 # ============================================
 FROM oven/bun:1 AS migrate
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/bun.lock ./bun.lock
-COPY --from=builder /app/drizzle ./drizzle
-COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=builder /app/tsconfig.json ./tsconfig.json
+COPY --from=migrate-deps /migrate/package.json ./package.json
+COPY --from=migrate-deps /migrate/node_modules ./node_modules
+COPY --from=source /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=source /app/tsconfig.json ./tsconfig.json
 
-RUN mkdir -p ./src/lib/db
-COPY --from=builder /app/src/lib/db/schema.ts ./src/lib/db/schema.ts
+RUN mkdir -p ./src/lib/db ./src/lib/releases
+COPY --from=source /app/src/lib/db/schema.ts ./src/lib/db/schema.ts
+COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/recap-record.ts
 
-CMD ["bun", "run", "db:push"]
+CMD ["bunx", "drizzle-kit", "push", "--config", "./drizzle.config.ts"]
