@@ -44,12 +44,27 @@ function resolveReleaseErrorMessage(
     );
   }
 
+  const canceledDeployment = release.deployments.find(
+    (deployment) => deployment.status === 'canceled'
+  );
+  if (canceledDeployment) {
+    if (canceledDeployment.errorMessage?.includes('Superseded by deployment')) {
+      return 'Release was superseded by a newer deployment';
+    }
+
+    return canceledDeployment.errorMessage ?? 'Release was canceled';
+  }
+
   if (release.status === 'degraded') {
     return 'Release completed in degraded state';
   }
 
   if (release.status === 'canceled') {
-    return 'Release was canceled';
+    if (release.errorMessage?.includes('Superseded by deployment')) {
+      return 'Release was superseded by a newer deployment';
+    }
+
+    return release.errorMessage ?? 'Release was canceled';
   }
 
   return null;

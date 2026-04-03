@@ -69,6 +69,7 @@ export function resolveReleaseDeploymentResolution(
   deployments: Array<{
     id: string;
     status: ObservedDeploymentTerminalStatus;
+    errorMessage?: string | null;
   }>
 ): ReleaseDeploymentResolution {
   const canceled = deployments.find((deployment) => deployment.status === 'canceled');
@@ -76,7 +77,7 @@ export function resolveReleaseDeploymentResolution(
     return {
       kind: 'canceled',
       failureStatus: 'canceled',
-      message: `Deployment ${canceled.id} ended with status canceled`,
+      message: canceled.errorMessage ?? `Deployment ${canceled.id} ended with status canceled`,
     };
   }
 

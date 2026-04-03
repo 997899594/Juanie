@@ -2,34 +2,33 @@
 
 set -euo pipefail
 
+NAMESPACE="${NAMESPACE:-juanie}"
+RELEASE_NAME="${RELEASE_NAME:-juanie}"
 SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "$WEB_IMAGE_TAG" | cut -d- -f2 | cut -c1-7)"
 
 show_failure() {
   local kind="$1"
   local name="$2"
-  kubectl describe "$kind" "$name" -n juanie || true
-  kubectl get pods -n juanie -o wide || true
-  kubectl get events -n juanie --sort-by=.metadata.creationTimestamp | tail -n 60 || true
+  kubectl describe "$kind" "$name" -n "${NAMESPACE}" || true
+  kubectl get pods -n "${NAMESPACE}" -o wide || true
+  kubectl get events -n "${NAMESPACE}" --sort-by=.metadata.creationTimestamp | tail -n 60 || true
 }
 
-echo "Checking GHCR pull secret..."
-kubectl get secret ghcr-pull-secret -n juanie >/dev/null
-echo "Checking deployment baseline resources..."
-kubectl get configmap juanie-config -n juanie >/dev/null
-kubectl get secret juanie-secret -n juanie >/dev/null
+require_resource() {
+  local kind="$1"
+  local name="$2"
+  kubectl get "${kind}" "${name}" -n "${NAMESPACE}" >/dev/null
+}
 
-echo "Running schema sync job..."
-kubectl delete job "${SCHEMA_JOB}" -n juanie --ignore-not-found=true
-kubectl wait --for=delete job/"${SCHEMA_JOB}" -n juanie --timeout=120s || true
-
-cat <<EOF | kubectl apply -f -
+apply_schema_sync_job() {
+  cat <<EOF | kubectl apply -f -
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: ${SCHEMA_JOB}
-  namespace: juanie
+  namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: juanie
+    app.kubernetes.io/name: ${RELEASE_NAME}
     app.kubernetes.io/component: schema-sync
 spec:
   backoffLimit: 0
@@ -37,11 +36,11 @@ spec:
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: juanie
+        app.kubernetes.io/name: ${RELEASE_NAME}
         app.kubernetes.io/component: schema-sync
     spec:
       restartPolicy: Never
-      serviceAccountName: juanie
+      serviceAccountName: ${RELEASE_NAME}
       imagePullSecrets:
         - name: ghcr-pull-secret
       securityContext:
@@ -66,18 +65,45 @@ spec:
             capabilities:
               drop: ["ALL"]
 EOF
+}
 
-if ! kubectl wait --for=condition=complete job/"${SCHEMA_JOB}" -n juanie --timeout=45m; then
-  show_failure job "${SCHEMA_JOB}"
-  kubectl logs job/"${SCHEMA_JOB}" -n juanie --tail=200 || true
-  exit 1
-fi
+run_schema_sync_job() {
+  echo "Running schema sync job..."
+  kubectl delete job "${SCHEMA_JOB}" -n "${NAMESPACE}" --ignore-not-found=true
+  kubectl wait --for=delete job/"${SCHEMA_JOB}" -n "${NAMESPACE}" --timeout=120s || true
 
-kubectl logs job/"${SCHEMA_JOB}" -n juanie --tail=120 || true
+  apply_schema_sync_job
+
+  if ! kubectl wait --for=condition=complete job/"${SCHEMA_JOB}" -n "${NAMESPACE}" --timeout=45m; then
+    show_failure job "${SCHEMA_JOB}"
+    kubectl logs job/"${SCHEMA_JOB}" -n "${NAMESPACE}" --tail=200 || true
+    exit 1
+  fi
+
+  kubectl logs job/"${SCHEMA_JOB}" -n "${NAMESPACE}" --tail=120 || true
+}
+
+wait_for_rollout() {
+  local deployment="$1"
+
+  echo "Waiting for ${deployment} rollout..."
+  if ! kubectl rollout status deployment/"${deployment}" -n "${NAMESPACE}" --timeout=20m; then
+    show_failure deployment "${deployment}"
+    exit 1
+  fi
+}
+
+echo "Checking GHCR pull secret..."
+require_resource secret ghcr-pull-secret
+echo "Checking deployment baseline resources..."
+require_resource configmap juanie-config
+require_resource secret juanie-secret
+
+run_schema_sync_job
 
 echo "Deploying Helm release..."
-helm upgrade --install juanie "${CHART_DIR}" \
-  --namespace juanie \
+helm upgrade --install "${RELEASE_NAME}" "${CHART_DIR}" \
+  --namespace "${NAMESPACE}" \
   --create-namespace \
   --reset-values \
   -f "${CHART_DIR}/values-prod.yaml" \
@@ -90,11 +116,7 @@ helm upgrade --install juanie "${CHART_DIR}" \
   --set-string imagePullSecrets[0]=ghcr-pull-secret
 
 for deployment in juanie-web juanie-worker; do
-  echo "Waiting for ${deployment} rollout..."
-  if ! kubectl rollout status deployment/"${deployment}" -n juanie --timeout=20m; then
-    show_failure deployment "${deployment}"
-    exit 1
-  fi
+  wait_for_rollout "${deployment}"
 done
 
 rm -rf "$(dirname "${CHART_DIR}")"

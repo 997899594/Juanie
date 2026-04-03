@@ -3,6 +3,7 @@ export type ReleaseIssueCode =
   | 'approval_blocked'
   | 'migration_failed'
   | 'migration_canceled'
+  | 'release_canceled'
   | 'deployment_failed'
   | 'verification_failed'
   | 'rollout_pending'
@@ -21,6 +22,7 @@ interface ReleaseLike {
   } | null;
   deployments?: Array<{
     status: string;
+    errorMessage?: string | null;
   }>;
   migrationRuns?: Array<{
     status: string;
@@ -77,6 +79,27 @@ function uniqueReasons(reasons: string[]): string[] {
   return [...new Set(reasons)];
 }
 
+function isSupersededMessage(message?: string | null): boolean {
+  return message?.includes('Superseded by deployment') ?? false;
+}
+
+function getCanceledReleaseMessage(release: ReleaseLike): string | null {
+  const canceledDeployment = release.deployments?.find(
+    (deployment) => deployment.status === 'canceled'
+  );
+  const canceledMessage = canceledDeployment?.errorMessage ?? release.errorMessage ?? null;
+
+  if (!canceledDeployment && release.status !== 'canceled') {
+    return null;
+  }
+
+  if (isSupersededMessage(canceledMessage)) {
+    return '发布已被更新版本接管';
+  }
+
+  return '发布已取消';
+}
+
 const releaseIssueConfig: Record<
   ReleaseIssueCode,
   {
@@ -103,6 +126,12 @@ const releaseIssueConfig: Record<
     label: '迁移取消',
     summary: '发布被取消迁移中断',
     nextActionLabel: '检查迁移并重试',
+  },
+  release_canceled: {
+    kind: 'release',
+    label: '发布取消',
+    summary: '当前发布已被取消，通常是因为同环境有更新版本接管',
+    nextActionLabel: '查看最新 release',
   },
   deployment_failed: {
     kind: 'deployment',
@@ -165,6 +194,11 @@ function getPreviewExpiryState(expiresAt?: Date | string | null): 'expired' | 's
 }
 
 export function getReleaseFailureSummary(release: ReleaseLike): string | null {
+  const canceledReleaseMessage = getCanceledReleaseMessage(release);
+  if (canceledReleaseMessage) {
+    return canceledReleaseMessage;
+  }
+
   if (release.errorMessage) {
     return release.errorMessage;
   }
@@ -225,6 +259,13 @@ export function getReleaseIssueCode(release: ReleaseLike): ReleaseIssueCode | nu
 
   if (release.migrationRuns?.some((run) => run.status === 'canceled')) {
     return 'migration_canceled';
+  }
+
+  if (
+    release.status === 'canceled' ||
+    release.deployments?.some((deployment) => deployment.status === 'canceled')
+  ) {
+    return 'release_canceled';
   }
 
   if (release.deployments?.some((deployment) => deployment.status === 'failed')) {
@@ -419,6 +460,9 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   const hasFailedDeployment = release.deployments?.some(
     (deployment) => deployment.status === 'failed' || deployment.status === 'verification_failed'
   );
+  const hasCanceledRelease =
+    release.status === 'canceled' ||
+    release.deployments?.some((deployment) => deployment.status === 'canceled');
   const hasAwaitingRollout = release.deployments?.some(
     (deployment) => deployment.status === 'awaiting_rollout'
   );
@@ -462,6 +506,10 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   if (hasFailedDeployment) {
     riskLevel = 'high';
     reasons.push('存在失败部署');
+  }
+
+  if (hasCanceledRelease) {
+    reasons.push('有发布被更新版本接管');
   }
 
   if (hasAwaitingRollout && riskLevel !== 'high') {

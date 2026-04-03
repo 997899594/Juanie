@@ -115,6 +115,7 @@ export interface ReleaseRecapSourceLike {
   }>;
   deployments: Array<{
     status: string;
+    errorMessage?: string | null;
   }>;
   infrastructureDiagnostics?: InfrastructureDiagnosticsSnapshot | null;
   governanceEvents?: ReleaseGovernanceEvent[] | null;
@@ -243,6 +244,23 @@ function buildReleaseBlockingReason(input: {
       label: '迁移取消',
       summary: '发布链路在迁移阶段被中断，需要先确认取消原因。',
       nextActionLabel: '恢复迁移后再继续发布',
+    };
+  }
+
+  if (
+    input.release.status === 'canceled' ||
+    input.release.deployments.some((deployment) => deployment.status === 'canceled')
+  ) {
+    const superseded = input.release.deployments.some((deployment) =>
+      deployment.errorMessage?.includes('Superseded by deployment')
+    );
+
+    return {
+      label: superseded ? '发布已被接管' : '发布已取消',
+      summary: superseded
+        ? '同一环境有更新的发布接管了这次部署，因此当前链路被主动收口，不再继续推进。'
+        : '这次发布已经被取消，不会再继续推进后续部署环节。',
+      nextActionLabel: superseded ? '查看最新 release' : '确认取消原因',
     };
   }
 

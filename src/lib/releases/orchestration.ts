@@ -205,7 +205,17 @@ export async function continueReleaseFromDeploymentStage(
     const result =
       getObservedDeploymentTerminalStatus(deployment.status) ??
       (await waitForDeployment(deployment.id));
-    deploymentResults.push({ id: deployment.id, status: result });
+    const latestDeployment = await db.query.deployments.findFirst({
+      where: eq(deployments.id, deployment.id),
+      columns: {
+        errorMessage: true,
+      },
+    });
+    deploymentResults.push({
+      id: deployment.id,
+      status: result,
+      errorMessage: latestDeployment?.errorMessage ?? null,
+    });
   }
 
   const resolution = resolveReleaseDeploymentResolution(deploymentResults);
