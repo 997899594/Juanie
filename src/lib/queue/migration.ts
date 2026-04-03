@@ -20,6 +20,10 @@ export async function processMigration(job: Job<MigrationJobData>) {
     throw new Error(`Migration run ${job.data.runId} not found`);
   }
 
+  if (['success', 'failed', 'canceled', 'skipped'].includes(run.status)) {
+    return { success: run.status === 'success', skipped: true };
+  }
+
   const specs = await resolveMigrationSpecifications(
     run.projectId,
     run.environmentId,

@@ -132,6 +132,16 @@ function getKubernetesApiErrorDetails(error: unknown): {
   };
 }
 
+function isKubernetesApiStatus(error: unknown, expectedStatus: number): boolean {
+  const details = getKubernetesApiErrorDetails(error);
+  return details.statusCode === expectedStatus;
+}
+
+function isJobAlreadyExistsError(error: unknown): boolean {
+  const details = getKubernetesApiErrorDetails(error);
+  return details.statusCode === 409 || details.message.toLowerCase().includes('already exists');
+}
+
 function classifyMigrationJobCreateError(error: unknown): {
   errorCode: string;
   errorMessage: string;
@@ -165,6 +175,75 @@ function classifyMigrationJobCreateError(error: unknown): {
     errorCode: 'MIGRATION_JOB_CREATE_FAILED',
     errorMessage: details.message || 'Failed to create migration job',
   };
+}
+
+async function getExistingJob(namespace: string, jobName: string): Promise<V1Job | null> {
+  try {
+    return await getJob(namespace, jobName);
+  } catch (error) {
+    if (isKubernetesApiStatus(error, 404)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function ensureCommandMigrationItem(
+  runId: string,
+  command: string,
+  checksum: string
+): Promise<typeof migrationRunItems.$inferSelect> {
+  const existing = await db.query.migrationRunItems.findFirst({
+    where: eq(migrationRunItems.migrationRunId, runId),
+    orderBy: (table, { desc }) => [desc(table.createdAt)],
+  });
+
+  if (
+    existing &&
+    existing.name === command &&
+    existing.checksum === checksum &&
+    ['queued', 'planning', 'running'].includes(existing.status)
+  ) {
+    const startedAt = existing.startedAt ?? new Date();
+    if (
+      existing.status !== 'running' ||
+      !existing.startedAt ||
+      existing.finishedAt ||
+      existing.error
+    ) {
+      await db
+        .update(migrationRunItems)
+        .set({
+          status: 'running',
+          startedAt,
+          finishedAt: null,
+          error: null,
+        })
+        .where(eq(migrationRunItems.id, existing.id));
+    }
+
+    return {
+      ...existing,
+      status: 'running',
+      startedAt,
+      finishedAt: null,
+      error: null,
+    };
+  }
+
+  const [item] = await db
+    .insert(migrationRunItems)
+    .values({
+      migrationRunId: runId,
+      name: command,
+      checksum,
+      status: 'running',
+      startedAt: new Date(),
+    })
+    .returning();
+
+  return item;
 }
 
 function getMigrationPodIssue(pod?: V1Pod): string | null {
@@ -506,16 +585,7 @@ async function runCommandMigration(
     imageUrl
   );
 
-  const [item] = await db
-    .insert(migrationRunItems)
-    .values({
-      migrationRunId: runId,
-      name: spec.specification.command,
-      checksum,
-      status: 'running',
-      startedAt: new Date(),
-    })
-    .returning();
+  const item = await ensureCommandMigrationItem(runId, spec.specification.command, checksum);
 
   const job: V1Job = {
     apiVersion: 'batch/v1',
@@ -558,17 +628,27 @@ async function runCommandMigration(
     },
   };
 
-  try {
-    await createJob(namespace!, job);
-  } catch (error) {
-    const failure = classifyMigrationJobCreateError(error);
-    await markRunAndItemFailed({
-      runId,
-      itemId: item.id,
-      errorCode: failure.errorCode,
-      errorMessage: failure.errorMessage,
-      output: failure.errorMessage,
-    });
+  const existingJob = await getExistingJob(namespace!, jobName);
+  if (existingJob) {
+    await appendRunLog(runId, `检测到已有迁移 Job ${jobName}，恢复监控。`);
+  } else {
+    try {
+      await createJob(namespace!, job);
+      await appendRunLog(runId, `已创建迁移 Job ${jobName}。`);
+    } catch (error) {
+      if (isJobAlreadyExistsError(error)) {
+        await appendRunLog(runId, `迁移 Job ${jobName} 已存在，继续接管执行。`);
+      } else {
+        const failure = classifyMigrationJobCreateError(error);
+        await markRunAndItemFailed({
+          runId,
+          itemId: item.id,
+          errorCode: failure.errorCode,
+          errorMessage: failure.errorMessage,
+          output: failure.errorMessage,
+        });
+      }
+    }
   }
 
   let finalLogs = '';
@@ -708,6 +788,7 @@ export async function executeMigrationRun(
       eq(migrationRuns.environmentId, spec.environment.id)
     ),
   });
+  const currentRun = activeRuns.find((run) => run.id === runId) ?? null;
 
   const conflictingRun = activeRuns.find(
     (run) => run.id !== runId && ['queued', 'planning', 'running'].includes(run.status)
@@ -739,15 +820,25 @@ export async function executeMigrationRun(
     throw new Error(policyDecision.approvalReason ?? '生产环境迁移需要人工审批');
   }
 
-  const startedAt = new Date();
+  const startedAt = currentRun?.startedAt ?? new Date();
+  const updatedAt = new Date();
+  const resumed = currentRun?.status === 'running' && Boolean(currentRun?.startedAt);
   await db
     .update(migrationRuns)
     .set({
       status: 'running',
       startedAt,
-      updatedAt: startedAt,
+      finishedAt: null,
+      durationMs: null,
+      errorCode: null,
+      errorMessage: null,
+      updatedAt,
     })
     .where(eq(migrationRuns.id, runId));
+
+  if (resumed) {
+    await appendRunLog(runId, '检测到迁移任务已在运行，恢复监控现有执行。');
+  }
 
   if (spec.specification.tool === 'sql') {
     await runSqlMigration(runId, spec, options);
