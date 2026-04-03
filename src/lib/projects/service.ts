@@ -15,7 +15,10 @@ import {
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import { decorateEnvironmentList } from '@/lib/environments/view';
 import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
-import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
+import {
+  buildProjectGovernanceSnapshot,
+  type ProjectGovernanceCapability,
+} from '@/lib/projects/settings-view';
 import {
   buildProjectOverviewDetails,
   buildProjectOverviewStats,
@@ -45,7 +48,7 @@ export function buildProjectOverviewPageData<
   TDeployment extends ProjectDeploymentLike,
 >(input: {
   project: TProject;
-  governance: ReturnType<typeof buildProjectGovernanceSnapshot> | null;
+  manualMigrationCapability?: ProjectGovernanceCapability | null;
   team: TTeam;
   projectEnvironments: Array<{
     id: string;
@@ -83,12 +86,9 @@ export function buildProjectOverviewPageData<
 }) {
   const attentionRuns = filterAttentionRuns(input.recentMigrationRuns);
   const attentionStats = getAttentionStats(attentionRuns);
-  const manualMigrationCapability =
-    input.governance?.capabilities.find((item) => item.key === 'manual_migration') ?? null;
 
   return {
     project: input.project,
-    governance: input.governance,
     overview: buildProjectOverviewDetails(input.team?.name, input.project),
     stats: buildProjectOverviewStats({
       serviceCount: input.projectServices.length,
@@ -125,7 +125,7 @@ export function buildProjectOverviewPageData<
       recentMigrationRuns: input.recentMigrationRuns,
       recentReleases: input.recentReleases,
       deploymentImageCandidates: input.deploymentImageCandidates,
-      manualMigrationCapability,
+      manualMigrationCapability: input.manualMigrationCapability,
     }),
     recentReleaseCards: decorateProjectRecentReleases(input.recentReleases),
   };
@@ -253,10 +253,11 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
 
   return buildProjectOverviewPageData({
     project,
-    governance: buildProjectGovernanceSnapshot({
-      role: member.role,
-      environments: projectEnvironments,
-    }),
+    manualMigrationCapability:
+      buildProjectGovernanceSnapshot({
+        role: member.role,
+        environments: projectEnvironments,
+      }).capabilities.find((item) => item.key === 'manual_migration') ?? null,
     team,
     projectEnvironments,
     projectServices,

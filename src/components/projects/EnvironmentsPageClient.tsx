@@ -3,7 +3,6 @@
 import {
   ChevronDown,
   ChevronUp,
-  Clock3,
   GitBranch,
   Globe,
   Plus,
@@ -379,7 +378,7 @@ function EnvironmentQuickActions({
         </Button>
       )}
       <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>查看日志</Link>
+        <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>打开日志</Link>
       </Button>
       {environment.latestReleaseCard && (
         <Button asChild variant="outline" size="sm" className="rounded-xl">
@@ -450,6 +449,336 @@ function EnvironmentRecentActivityPanel({ items }: { items: EnvironmentRecord['r
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function buildEnvironmentHeaderMeta(environment: EnvironmentRecord): string {
+  return [
+    environment.namespace ?? '尚未部署',
+    environment.isPreview
+      ? environment.scopeLabel
+      : environment.isProduction
+        ? '生产'
+        : environment.autoDeploy
+          ? '自动部署'
+          : null,
+    environment.sourceLabel,
+    environment.expiryLabel,
+    environment.latestReleaseCard?.shortCommitSha
+      ? `最近发布 ${environment.latestReleaseCard.shortCommitSha}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function EnvironmentCardHeader({
+  environment,
+  expanded,
+  onToggle,
+}: {
+  environment: EnvironmentRecord;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-secondary/20"
+    >
+      <div className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className={cn(
+              'h-2 w-2 rounded-full',
+              environment.isPreview
+                ? 'bg-info'
+                : environment.namespace
+                  ? 'bg-success'
+                  : 'bg-warning'
+            )}
+          />
+          <span className="text-sm font-semibold capitalize">{environment.name}</span>
+          {environment.isProduction && <Badge variant="outline">生产</Badge>}
+          {environment.isPreview && <Badge variant="outline">预览</Badge>}
+          {environment.previewLifecycle && (
+            <Badge variant="secondary">{environment.previewLifecycle.stateLabel}</Badge>
+          )}
+        </div>
+        <div className="text-[11px] text-muted-foreground">
+          {buildEnvironmentHeaderMeta(environment)}
+        </div>
+      </div>
+      {expanded ? (
+        <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+      )}
+    </button>
+  );
+}
+
+function EnvironmentRuntimePanel({
+  projectId,
+  environment,
+  diagnosticOpen,
+  onToggleDiagnostics,
+}: {
+  projectId: string;
+  environment: EnvironmentRecord;
+  diagnosticOpen: boolean;
+  onToggleDiagnostics: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-background px-4 py-4">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">当前链路</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            用环境视角看当前可访问状态、最近发布和运行入口。
+          </div>
+        </div>
+        {environment.previewLifecycle && (
+          <Badge variant="outline">{environment.previewLifecycle.stateLabel}</Badge>
+        )}
+      </div>
+
+      {(environment.platformSignals.primarySummary ||
+        environment.platformSignals.nextActionLabel) && (
+        <PlatformSignalSummary
+          summary={environment.platformSignals.primarySummary}
+          nextActionLabel={environment.platformSignals.nextActionLabel}
+          className="border-border bg-secondary/20"
+        />
+      )}
+
+      {environment.latestReleaseCard && (
+        <div className="mt-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">最近发布</Badge>
+            <Badge variant="outline">{environment.latestReleaseCard.statusDecoration.label}</Badge>
+            {environment.latestReleaseCard.shortCommitSha && (
+              <code className="rounded bg-background px-2 py-1 text-[11px] font-mono">
+                {environment.latestReleaseCard.shortCommitSha}
+              </code>
+            )}
+          </div>
+          <div className="mt-2 text-sm font-medium text-foreground">
+            {environment.latestReleaseCard.title}
+          </div>
+          {environment.latestReleaseCard.createdAtLabel && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              {environment.latestReleaseCard.createdAtLabel}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4">
+        <EnvironmentQuickActions
+          projectId={projectId}
+          environment={environment}
+          diagnosticOpen={diagnosticOpen}
+          onToggleDiagnostics={onToggleDiagnostics}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EnvironmentPolicyPanel({
+  environment,
+  savingStrategy,
+  onStrategyChange,
+}: {
+  environment: EnvironmentRecord;
+  savingStrategy: boolean;
+  onStrategyChange: (
+    deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
+  ) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-background px-4 py-4">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">策略与生命周期</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            长期状态、发布方式和预览治理都在这里统一管理。
+          </div>
+        </div>
+        <div className="max-w-[220px] text-right text-xs text-muted-foreground">
+          {environment.actions.configureStrategySummary}
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            环境定位
+          </div>
+          <div className="mt-2 text-sm text-foreground">
+            {[environment.scopeLabel, environment.sourceLabel].filter(Boolean).join(' · ') ||
+              '固定环境'}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            数据库策略
+          </div>
+          <div className="mt-2 text-sm text-foreground">
+            {[environment.databaseStrategyLabel, environment.inheritanceLabel]
+              .filter(Boolean)
+              .join(' · ') || '使用默认数据库策略'}
+          </div>
+        </div>
+      </div>
+
+      {(environment.previewLifecycle || environment.cleanupState) && (
+        <div className="mt-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            生命周期
+          </div>
+          <div className="mt-2 text-sm text-foreground">
+            {environment.previewLifecycle?.summary ??
+              (environment.cleanupState
+                ? `${environment.cleanupState.label} · ${environment.cleanupState.summary}`
+                : '当前生命周期稳定')}
+          </div>
+          {(environment.previewLifecycle?.nextActionLabel || environment.expiryLabel) && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              {[environment.previewLifecycle?.nextActionLabel, environment.expiryLabel]
+                .filter(Boolean)
+                .join(' · ')}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          发布策略
+        </div>
+        <Select
+          value={environment.deploymentStrategy ?? 'rolling'}
+          onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
+            onStrategyChange(value)
+          }
+          disabled={savingStrategy || !environment.actions.canConfigureStrategy}
+        >
+          <SelectTrigger className="max-w-sm">
+            <SelectValue placeholder="选择发布策略" />
+          </SelectTrigger>
+          <SelectContent>
+            {deploymentStrategyOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+function EnvironmentAdvancedPanel({
+  projectId,
+  environment,
+  governance,
+  diagnosticOpen,
+}: {
+  projectId: string;
+  environment: EnvironmentRecord;
+  governance: EnvironmentsPageClientProps['initialData']['governance'];
+  diagnosticOpen: boolean;
+}) {
+  return (
+    <details className="rounded-2xl border border-border bg-background px-4 py-4">
+      <summary className="cursor-pointer list-none text-sm font-medium">环境细节</summary>
+      <div className="mt-4 space-y-4">
+        {diagnosticOpen && (
+          <EnvironmentResourcePanel
+            projectId={projectId}
+            environmentId={environment.id}
+            environmentName={environment.name}
+            canManage={environment.actions.canConfigureStrategy}
+            manageSummary={environment.actions.configureStrategySummary}
+          />
+        )}
+        {environment.domains.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {environment.domains.map((domain) => (
+              <a
+                key={domain.id}
+                href={`https://${domain.hostname}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                <span>{domain.hostname}</span>
+                {domain.service?.name && <Badge variant="secondary">{domain.service.name}</Badge>}
+              </a>
+            ))}
+          </div>
+        )}
+        <EnvVarManager
+          projectId={projectId}
+          environmentId={environment.id}
+          environmentName={environment.name}
+          canManage={governance.manageEnvVars.allowed}
+          disabledSummary={governance.manageEnvVars.summary}
+        />
+      </div>
+    </details>
+  );
+}
+
+function EnvironmentExpandedContent({
+  projectId,
+  environment,
+  governance,
+  diagnosticOpen,
+  savingStrategy,
+  onToggleDiagnostics,
+  onStrategyChange,
+}: {
+  projectId: string;
+  environment: EnvironmentRecord;
+  governance: EnvironmentsPageClientProps['initialData']['governance'];
+  diagnosticOpen: boolean;
+  savingStrategy: boolean;
+  onToggleDiagnostics: () => void;
+  onStrategyChange: (
+    deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
+  ) => void;
+}) {
+  return (
+    <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="space-y-4">
+        <EnvironmentRuntimePanel
+          projectId={projectId}
+          environment={environment}
+          diagnosticOpen={diagnosticOpen}
+          onToggleDiagnostics={onToggleDiagnostics}
+        />
+        <EnvironmentRecentActivityPanel items={environment.recentActivity} />
+      </div>
+      <div className="space-y-4">
+        <EnvironmentPolicyPanel
+          environment={environment}
+          savingStrategy={savingStrategy}
+          onStrategyChange={onStrategyChange}
+        />
+        <EnvironmentAdvancedPanel
+          projectId={projectId}
+          environment={environment}
+          governance={governance}
+          diagnosticOpen={diagnosticOpen}
+        />
       </div>
     </div>
   );
@@ -690,13 +1019,13 @@ export function EnvironmentsPageClient({
             <Button asChild variant="outline">
               <Link href={`/projects/${projectId}/releases`}>
                 <Rocket className="h-4 w-4" />
-                查看发布
+                打开发布
               </Link>
             </Button>
             <Button asChild variant="outline">
               <Link href={`/projects/${projectId}/logs`}>
                 <ScrollText className="h-4 w-4" />
-                查看日志
+                打开日志
               </Link>
             </Button>
             <Button
@@ -733,69 +1062,76 @@ export function EnvironmentsPageClient({
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          控制面摘要
-        </div>
-        <div className="mt-2 text-sm text-foreground">
-          {[
-            `当前角色 ${governance.roleLabel}`,
-            governance.createPreview.allowed ? '可创建预览环境' : governance.createPreview.summary,
-            governance.manageEnvVars.allowed ? '可管理环境变量' : governance.manageEnvVars.summary,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-background px-4 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              预览环境治理
-            </div>
-            <div className="mt-2 text-sm text-foreground">{governance.cleanupPreviews.summary}</div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              可回收 {governance.cleanupPreviews.eligibleCount} · 被阻塞{' '}
-              {governance.cleanupPreviews.blockedCount} · 过期总数{' '}
-              {governance.cleanupPreviews.expiredCount}
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-xl"
-            onClick={handleCleanupExpiredPreviews}
-            disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
-          >
-            {cleaningExpired ? '治理中...' : '立即治理'}
-          </Button>
-        </div>
-      </div>
-
-      {governance.recentEvents.length > 0 && (
-        <div className="rounded-2xl border border-border bg-background px-4 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            最近治理事件
-          </div>
-          <div className="mt-3 grid gap-3 xl:grid-cols-2">
-            {governance.recentEvents.map((event) => (
-              <div
-                key={event.key}
-                className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-sm font-medium">{event.label}</div>
-                  {event.createdAtLabel && (
-                    <div className="text-xs text-muted-foreground">{event.createdAtLabel}</div>
-                  )}
-                </div>
-                <div className="mt-1 text-sm text-muted-foreground">{event.summary}</div>
+      <details className="rounded-2xl border border-border bg-background px-4 py-4">
+        <summary className="cursor-pointer list-none text-sm font-semibold">控制面</summary>
+        <div className="mt-4 space-y-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                摘要
               </div>
-            ))}
+              <div className="mt-2 text-sm text-foreground">
+                {[
+                  `当前角色 ${governance.roleLabel}`,
+                  governance.createPreview.allowed
+                    ? '可创建预览环境'
+                    : governance.createPreview.summary,
+                  governance.manageEnvVars.allowed
+                    ? '可管理环境变量'
+                    : governance.manageEnvVars.summary,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                预览治理
+              </div>
+              <div className="mt-2 text-sm text-foreground">
+                可回收 {governance.cleanupPreviews.eligibleCount} · 被阻塞{' '}
+                {governance.cleanupPreviews.blockedCount}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                过期总数 {governance.cleanupPreviews.expiredCount}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 rounded-xl"
+                onClick={handleCleanupExpiredPreviews}
+                disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
+              >
+                {cleaningExpired ? '治理中...' : '立即治理'}
+              </Button>
+            </div>
           </div>
+
+          {governance.recentEvents.length > 0 && (
+            <div className="rounded-2xl border border-border bg-background px-4 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                最近治理事件
+              </div>
+              <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                {governance.recentEvents.map((event) => (
+                  <div
+                    key={event.key}
+                    className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-medium">{event.label}</div>
+                      {event.createdAtLabel && (
+                        <div className="text-xs text-muted-foreground">{event.createdAtLabel}</div>
+                      )}
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">{event.summary}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </details>
 
       {environments.length === 0 ? (
         <EmptyState
@@ -824,114 +1160,24 @@ export function EnvironmentsPageClient({
                   const isExpanded = !!expanded[environment.id];
                   return (
                     <div key={environment.id} className="console-panel overflow-hidden">
-                      <button
-                        type="button"
-                        onClick={() => toggleExpanded(environment.id)}
-                        className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-secondary/20"
-                      >
-                        <div className="min-w-0 space-y-2">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div
-                              className={cn(
-                                'h-2 w-2 rounded-full',
-                                environment.namespace ? 'bg-success' : 'bg-warning'
-                              )}
-                            />
-                            <span className="text-sm font-semibold capitalize">
-                              {environment.name}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {[
-                              environment.namespace ?? '尚未部署',
-                              environment.isProduction
-                                ? '生产'
-                                : environment.autoDeploy
-                                  ? '自动部署'
-                                  : null,
-                              environment.latestReleaseCard?.shortCommitSha
-                                ? `最近发布 ${environment.latestReleaseCard.shortCommitSha}`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </div>
-                        </div>
-                        {isExpanded ? (
-                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </button>
+                      <EnvironmentCardHeader
+                        environment={environment}
+                        expanded={isExpanded}
+                        onToggle={() => toggleExpanded(environment.id)}
+                      />
 
                       {isExpanded && (
                         <div className="border-t border-border/70 px-5 py-4">
-                          {(environment.platformSignals.primarySummary ||
-                            environment.platformSignals.nextActionLabel) && (
-                            <PlatformSignalSummary
-                              summary={environment.platformSignals.primarySummary}
-                              nextActionLabel={environment.platformSignals.nextActionLabel}
-                              className="mb-4 border-border bg-background"
-                            />
-                          )}
-                          <EnvironmentQuickActions
+                          <EnvironmentExpandedContent
                             projectId={projectId}
                             environment={environment}
+                            governance={governance}
                             diagnosticOpen={diagnosticEnvId === environment.id}
+                            savingStrategy={savingStrategyId === environment.id}
                             onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
-                          />
-                          <EnvironmentRecentActivityPanel items={environment.recentActivity} />
-                          <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
-                            <div className="mb-3 flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-medium">发布策略</div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  控制这个环境如何切换新版本。
-                                </div>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {environment.actions.configureStrategySummary}
-                              </div>
-                            </div>
-                            <Select
-                              value={environment.deploymentStrategy ?? 'rolling'}
-                              onValueChange={(
-                                value: 'rolling' | 'controlled' | 'canary' | 'blue_green'
-                              ) => handleStrategyChange(environment.id, value)}
-                              disabled={
-                                savingStrategyId === environment.id ||
-                                !environment.actions.canConfigureStrategy
-                              }
-                            >
-                              <SelectTrigger className="max-w-sm">
-                                <SelectValue placeholder="选择发布策略" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {deploymentStrategyOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          {diagnosticEnvId === environment.id && (
-                            <div className="mb-4">
-                              <EnvironmentResourcePanel
-                                projectId={projectId}
-                                environmentId={environment.id}
-                                environmentName={environment.name}
-                                canManage={environment.actions.canConfigureStrategy}
-                                manageSummary={environment.actions.configureStrategySummary}
-                              />
-                            </div>
-                          )}
-                          <EnvVarManager
-                            projectId={projectId}
-                            environmentId={environment.id}
-                            environmentName={environment.name}
-                            canManage={governance.manageEnvVars.allowed}
-                            disabledSummary={governance.manageEnvVars.summary}
+                            onStrategyChange={(value) =>
+                              handleStrategyChange(environment.id, value)
+                            }
                           />
                         </div>
                       )}
@@ -960,77 +1206,13 @@ export function EnvironmentsPageClient({
                   return (
                     <div key={environment.id} className="console-panel overflow-hidden">
                       <div className="flex items-start justify-between gap-3 px-5 py-4">
-                        <button
-                          type="button"
-                          onClick={() => toggleExpanded(environment.id)}
-                          className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left transition-colors hover:text-foreground"
-                        >
-                          <div className="min-w-0 space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="h-2 w-2 rounded-full bg-info" />
-                              <span className="text-sm font-semibold">{environment.name}</span>
-                            </div>
-
-                            <div className="text-[11px] text-muted-foreground">
-                              {[
-                                environment.scopeLabel,
-                                environment.sourceLabel,
-                                environment.expiryLabel,
-                                environment.latestReleaseCard?.shortCommitSha
-                                  ? `最近发布 ${environment.latestReleaseCard.shortCommitSha}`
-                                  : null,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                              {environment.namespace ? (
-                                <code className="rounded-xl bg-secondary px-2.5 py-1 font-mono">
-                                  {environment.namespace}
-                                </code>
-                              ) : (
-                                <span>尚未分配命名空间</span>
-                              )}
-                              {environment.primaryDomainUrl && (
-                                <a
-                                  href={environment.primaryDomainUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1.5 text-foreground underline underline-offset-4"
-                                >
-                                  <Globe className="h-3.5 w-3.5" />
-                                  <span>
-                                    {environment.primaryDomainUrl.replace('https://', '')}
-                                  </span>
-                                </a>
-                              )}
-                              {environment.expiryTimestamp && (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Clock3 className="h-3.5 w-3.5" />
-                                  <span>{environment.expiryTimestamp}</span>
-                                </span>
-                              )}
-                            </div>
-                            {environment.platformSignals.primarySummary && (
-                              <div className="text-xs text-muted-foreground">
-                                {environment.platformSignals.primarySummary}
-                              </div>
-                            )}
-                            {environment.cleanupState && (
-                              <div className="text-xs text-muted-foreground">
-                                {environment.cleanupState.label} ·{' '}
-                                {environment.cleanupState.summary}
-                              </div>
-                            )}
-                          </div>
-
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          )}
-                        </button>
+                        <div className="min-w-0 flex-1">
+                          <EnvironmentCardHeader
+                            environment={environment}
+                            expanded={isExpanded}
+                            onToggle={() => toggleExpanded(environment.id)}
+                          />
+                        </div>
 
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -1045,13 +1227,13 @@ export function EnvironmentsPageClient({
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                               {environment.cleanupState?.state === 'expired_ready'
-                                ? '回收'
-                                : '删除'}
+                                ? '立即回收'
+                                : '结束环境'}
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>删除预览环境？</AlertDialogTitle>
+                              <AlertDialogTitle>结束预览环境？</AlertDialogTitle>
                               <AlertDialogDescription>
                                 <span className="font-medium text-foreground">
                                   {environment.name}
@@ -1075,7 +1257,7 @@ export function EnvironmentsPageClient({
                                   deletingId === environment.id || !environment.actions?.canDelete
                                 }
                               >
-                                {deletingId === environment.id ? '删除中...' : '确认删除'}
+                                {deletingId === environment.id ? '处理中...' : '确认结束'}
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -1084,94 +1266,16 @@ export function EnvironmentsPageClient({
 
                       {isExpanded && (
                         <div className="border-t border-border/70 px-5 py-4">
-                          {(environment.platformSignals.primarySummary ||
-                            environment.platformSignals.nextActionLabel) && (
-                            <PlatformSignalSummary
-                              summary={environment.platformSignals.primarySummary}
-                              nextActionLabel={environment.platformSignals.nextActionLabel}
-                              className="mb-4 border-border bg-background"
-                            />
-                          )}
-                          <EnvironmentQuickActions
+                          <EnvironmentExpandedContent
                             projectId={projectId}
                             environment={environment}
+                            governance={governance}
                             diagnosticOpen={diagnosticEnvId === environment.id}
+                            savingStrategy={savingStrategyId === environment.id}
                             onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
-                          />
-                          <EnvironmentRecentActivityPanel items={environment.recentActivity} />
-                          <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
-                            <div className="mb-3 flex items-start justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-medium">发布策略</div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  {environment.databaseStrategyLabel}
-                                  {environment.inheritanceLabel
-                                    ? ` · ${environment.inheritanceLabel}`
-                                    : ''}
-                                </div>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {environment.actions.configureStrategySummary}
-                              </div>
-                            </div>
-                            <Select
-                              value={environment.deploymentStrategy ?? 'rolling'}
-                              onValueChange={(
-                                value: 'rolling' | 'controlled' | 'canary' | 'blue_green'
-                              ) => handleStrategyChange(environment.id, value)}
-                              disabled={
-                                savingStrategyId === environment.id ||
-                                !environment.actions.canConfigureStrategy
-                              }
-                            >
-                              <SelectTrigger className="max-w-sm">
-                                <SelectValue placeholder="选择发布策略" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {deploymentStrategyOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    {option.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          {diagnosticEnvId === environment.id && (
-                            <div className="mb-4">
-                              <EnvironmentResourcePanel
-                                projectId={projectId}
-                                environmentId={environment.id}
-                                environmentName={environment.name}
-                                canManage={environment.actions.canConfigureStrategy}
-                                manageSummary={environment.actions.configureStrategySummary}
-                              />
-                            </div>
-                          )}
-                          {environment.domains.length > 0 && (
-                            <div className="mb-4 flex flex-wrap gap-2">
-                              {environment.domains.map((domain) => (
-                                <a
-                                  key={domain.id}
-                                  href={`https://${domain.hostname}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground"
-                                >
-                                  <Globe className="h-3.5 w-3.5" />
-                                  <span>{domain.hostname}</span>
-                                  {domain.service?.name && (
-                                    <Badge variant="secondary">{domain.service.name}</Badge>
-                                  )}
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                          <EnvVarManager
-                            projectId={projectId}
-                            environmentId={environment.id}
-                            environmentName={environment.name}
-                            canManage={governance.manageEnvVars.allowed}
-                            disabledSummary={governance.manageEnvVars.summary}
+                            onStrategyChange={(value) =>
+                              handleStrategyChange(environment.id, value)
+                            }
                           />
                         </div>
                       )}

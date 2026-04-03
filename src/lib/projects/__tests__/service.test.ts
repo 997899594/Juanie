@@ -18,7 +18,7 @@ describe('project overview service', () => {
           webUrl: 'https://github.com/juanie/demo',
         },
       } as never,
-      governance: null,
+      manualMigrationCapability: null,
       team: { id: 'team-1', name: '平台团队' } as never,
       projectEnvironments: [
         {

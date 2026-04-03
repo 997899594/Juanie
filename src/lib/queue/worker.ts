@@ -1,10 +1,6 @@
 import { initK8sClient } from '@/lib/k8s';
 import { createDeploymentWorker } from './deployment';
-import { startDriftDetector } from './drift-detector';
-import { startHistoryRetention } from './history-retention';
-import { startInfrastructureRemediation } from './infrastructure-remediation';
 import { createMigrationWorker } from './migration';
-import { startPreviewEnvironmentCleanup } from './preview-cleanup';
 import { createProjectInitWorker } from './project-init';
 import { createReleaseWorker } from './release';
 
@@ -77,20 +73,3 @@ console.log('  - Project init worker: listening to "project-init" queue');
 console.log('  - Release worker: listening to "release" queue');
 console.log('  - Deployment worker: listening to "deployment" queue');
 console.log('  - Migration worker: listening to "migration" queue');
-
-// 启动漂移检测
-if (process.env.ENABLE_DRIFT_DETECTOR !== 'false') {
-  startDriftDetector();
-}
-
-if (process.env.ENABLE_PREVIEW_CLEANUP !== 'false') {
-  startPreviewEnvironmentCleanup();
-}
-
-if (process.env.ENABLE_AUTO_REMEDIATION !== 'false') {
-  startInfrastructureRemediation();
-}
-
-if (process.env.ENABLE_HISTORY_RETENTION !== 'false') {
-  startHistoryRetention();
-}

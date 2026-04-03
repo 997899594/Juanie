@@ -9,23 +9,262 @@ env:
   IMAGE_TAG: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
 
 jobs:
-  build:
+  quality-gate:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+
+  release:
+    needs: quality-gate
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: docker/setup-buildx-action@v3
+      - name: Resolve Juanie Build Plan
+        id: plan
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: |
+          set -euo pipefail
 
-      - uses: docker/login-action@v3
+          ruby <<'RUBY'
+          require 'json'
+          require 'yaml'
+
+          output_path = ENV.fetch('GITHUB_OUTPUT')
+          config = YAML.load_file('juanie.yaml') || {}
+          services = Array(config['services'])
+
+          raise 'juanie.yaml must define at least one service' if services.empty?
+
+          release_services = services.map do |service|
+            name = service['name'].to_s.strip
+            raise 'service.name is required' if name.empty?
+
+            {
+              name: name,
+              image: ENV.fetch('IMAGE_TAG'),
+            }
+          end
+
+          build_descriptors = services.map do |service|
+            build = service['build'] || {}
+
+            {
+              'name' => service['name'].to_s.strip,
+              'strategy' => (build['strategy'] || 'auto').to_s.strip,
+              'context' => (build['context'] || '.').to_s.strip,
+              'dockerfile' => build['dockerfile']&.to_s&.strip,
+              'target' => build['target']&.to_s&.strip,
+              'definition' => build['definition']&.to_s&.strip,
+            }
+          end
+
+          canonical = build_descriptors.first
+          conflicting = build_descriptors.find do |descriptor|
+            %w[strategy context dockerfile target definition].any? do |key|
+              descriptor[key] != canonical[key]
+            end
+          end
+
+          if conflicting
+            raise(
+              "single-repo Juanie CI requires all services to share one build config; conflicting service=#{conflicting['name']}"
+            )
+          end
+
+          definition = canonical['definition']
+          if definition.nil? || definition.empty?
+            definition = './docker-bake.hcl' if File.file?('docker-bake.hcl')
+            definition ||= './docker-bake.json' if File.file?('docker-bake.json')
+          end
+
+          dockerfile = canonical['dockerfile']
+          if dockerfile.nil? || dockerfile.empty?
+            dockerfile = 'Dockerfile' if File.file?('Dockerfile')
+          end
+
+          strategy = canonical['strategy']
+          if strategy.empty? || strategy == 'auto'
+            strategy =
+              if definition && !definition.empty?
+                'bake'
+              elsif dockerfile && !dockerfile.empty?
+                'dockerfile'
+              else
+                'buildpacks'
+              end
+          end
+
+          build_kind =
+            case strategy
+            when 'bake'
+              raise 'build.definition is required when build.strategy=bake' if definition.nil? || definition.empty?
+              canonical['target'].to_s.empty? ? 'bake_default' : 'bake_target'
+            when 'dockerfile'
+              raise 'build.dockerfile is required when build.strategy=dockerfile' if dockerfile.nil? || dockerfile.empty?
+              'dockerfile'
+            when 'buildpacks'
+              'buildpacks'
+            else
+              raise "Unsupported build strategy: #{strategy}"
+            end
+
+          File.open(output_path, 'a') do |file|
+            file.puts("release_services_json=#{JSON.generate(release_services)}")
+            file.puts("build_kind=#{build_kind}")
+            file.puts("build_context=#{canonical['context']}")
+            file.puts("build_dockerfile=#{dockerfile || ''}")
+            file.puts("build_target=#{canonical['target'] || ''}")
+            file.puts("build_definition=#{definition || ''}")
+          end
+          RUBY
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build, Verify, and Release
+      - name: Build and Push (Bake Target)
+        if: ${{ steps.plan.outputs.build_kind == 'bake_target' }}
+        uses: docker/bake-action@v7
+        with:
+          source: .
+          files: ${{ steps.plan.outputs.build_definition }}
+          targets: ${{ steps.plan.outputs.build_target }}
+          push: true
+          set: |
+            ${{ steps.plan.outputs.build_target }}.tags=${{ env.IMAGE_TAG }}
+            ${{ steps.plan.outputs.build_target }}.args.GIT_SHA=${{ github.sha }}
+            ${{ steps.plan.outputs.build_target }}.cache-from=type=gha
+            ${{ steps.plan.outputs.build_target }}.cache-to=type=gha,mode=max
+
+      - name: Build and Push (Bake Default)
+        if: ${{ steps.plan.outputs.build_kind == 'bake_default' }}
+        uses: docker/bake-action@v7
+        with:
+          source: .
+          files: ${{ steps.plan.outputs.build_definition }}
+          push: true
+          set: |
+            *.tags=${{ env.IMAGE_TAG }}
+            *.args.GIT_SHA=${{ github.sha }}
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+
+      - name: Build and Push (Dockerfile)
+        if: ${{ steps.plan.outputs.build_kind == 'dockerfile' }}
+        uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_SUMMARY: true
+        with:
+          context: ${{ steps.plan.outputs.build_context }}
+          file: ${{ steps.plan.outputs.build_dockerfile }}
+          push: true
+          tags: ${{ env.IMAGE_TAG }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and Push (Buildpacks)
+        if: ${{ steps.plan.outputs.build_kind == 'buildpacks' }}
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            buildpacksio/pack \
+            pack build "${IMAGE_TAG}" --builder paketobuildpacks/builder-jammy-full --publish
+
+      - name: Verify Published Image
+        run: |
+          set -euo pipefail
+
+          deadline=$(( $(date +%s) + 180 ))
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            if docker buildx imagetools inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
+              echo "Published image is available: ${IMAGE_TAG}"
+              exit 0
+            fi
+
+            echo "Waiting for image manifest to become visible: ${IMAGE_TAG}"
+            sleep 5
+          done
+
+          echo "Image manifest was not available in registry before release trigger"
+          exit 1
+
+      - name: Trigger Juanie Release
         env:
           JUANIE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash .github/scripts/juanie-release.sh
+        run: |
+          set -euo pipefail
+
+          release_response="$(
+            curl -fsSX POST "https://juanie.art/api/releases" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${JUANIE_TOKEN}" \
+              -d "{
+                \"repository\": \"${GITHUB_REPOSITORY}\",
+                \"sha\": \"${GITHUB_SHA}\",
+                \"ref\": \"${GITHUB_REF}\",
+                \"services\": ${{ steps.plan.outputs.release_services_json }}
+              }"
+          )"
+
+          echo "$release_response"
+
+          release_id="$(printf '%s' "$release_response" | jq -r '.release.id')"
+          release_path="$(printf '%s' "$release_response" | jq -r '.release.releasePath // empty')"
+
+          [ -n "$release_id" ] && [ "$release_id" != "null" ] || {
+            echo "Juanie did not return a release id"
+            exit 1
+          }
+
+          if [ -n "$release_path" ]; then
+            echo "Release detail: https://juanie.art${release_path}"
+          fi
+
+          for _ in $(seq 1 270); do
+            status_response="$(
+              curl -fsSL "https://juanie.art/api/releases/${release_id}/status" \
+                -H "Authorization: Bearer ${JUANIE_TOKEN}"
+            )"
+
+            status="$(printf '%s' "$status_response" | jq -r '.release.status')"
+            status_label="$(printf '%s' "$status_response" | jq -r '.release.statusLabel')"
+            terminal="$(printf '%s' "$status_response" | jq -r '.release.terminal')"
+            succeeded="$(printf '%s' "$status_response" | jq -r '.release.succeeded')"
+            error_message="$(printf '%s' "$status_response" | jq -r '.release.error // empty')"
+
+            echo "Juanie release ${release_id}: ${status} (${status_label})"
+
+            if [ "$terminal" = "true" ]; then
+              [ "$succeeded" = "true" ] && exit 0
+              [ -n "$error_message" ] && echo "Juanie release failed: ${error_message}"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for Juanie release ${release_id}"
+          exit 1

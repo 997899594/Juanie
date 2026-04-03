@@ -21,6 +21,7 @@ namespace: juanie
 replicaCount:
   web: 1
   worker: 1
+  scheduler: 1
 
 deployment:
   progressDeadlineSeconds: 900
@@ -35,6 +36,9 @@ deployment:
       type: RollingUpdate
       maxSurge: 0
       maxUnavailable: 1
+  scheduler:
+    strategy:
+      type: Recreate
 
 # 资源配置
 resources:
@@ -52,6 +56,13 @@ resources:
     limits:
       cpu: 500m
       memory: 512Mi
+  scheduler:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
 
 # 环境变量（非敏感）
 env:

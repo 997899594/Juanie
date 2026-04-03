@@ -68,15 +68,25 @@ Child App CI -> `POST /api/releases` -> `release` queue -> pre-deploy migrations
 6. `helm upgrade --install`
 7. 等待 `juanie-web` rollout
 8. 等待 `juanie-worker` rollout
-9. 任一 rollout 失败则打印 deployment / pod / event 诊断并尝试 `helm rollback`
+9. 等待 `juanie-scheduler` rollout
+10. 任一 rollout 失败则打印 deployment / pod / event 诊断并尝试 `helm rollback`
 
 ### 3.2 当前约束
 
 - 平台 Secret 默认走集群现有 `juanie-secret`
 - chart 不再依赖仓库内真实敏感默认值
+- 控制面拆成 `web / worker / scheduler` 三个职责
+  - `web`: 只提供 API / UI，对外接流量
+  - `worker`: 只消费 BullMQ 队列
+  - `scheduler`: 只跑周期治理任务（drift detection / preview cleanup / infra remediation / history retention）
 - `web` 与 `worker` 在生产环境使用更保守的 rolling update
   - `maxSurge: 1`
   - `maxUnavailable: 0`
+- `scheduler` 使用单副本 `Recreate`
+- 生产环境当前副本策略：
+  - `web: 2`
+  - `worker: 1`
+  - `scheduler: 1`
 
 ### 3.3 当前探针语义
 
@@ -244,7 +254,7 @@ Juanie 会校验：
 
 ## 9. 当前仍需持续治理的方向
 
-1. 平台自身最终应升级到双副本控制面，而不是长期单副本
+1. `worker` 如需扩到多副本，现在已经没有重复跑周期治理任务的问题，但仍应根据队列并发与资源占用独立评估
 2. 平台 Secret 注入还应进一步统一成集群密钥管理，而不是 chart fallback
 3. 需要继续增强 infra signals 对 K8s 事件的产品化翻译
 4. `awaiting_rollout` 的人工推进和自动总结还可以继续做强

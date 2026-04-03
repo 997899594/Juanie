@@ -6,18 +6,13 @@ import { db } from '@/lib/db';
 import { environments, projects, releases, type TeamRole } from '@/lib/db/schema';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
-import {
-  buildReleaseEnvironmentActionSnapshot,
-  buildReleasePageGovernanceSnapshot,
-} from '@/lib/releases/governance-view';
+import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
 import { buildPromotionPlan } from '@/lib/releases/planning';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { getReleaseOperationalContext } from '@/lib/releases/runtime-context';
 import {
-  buildReleaseListStats,
   decorateReleaseDetail,
   decorateReleaseList,
-  filterReleaseCards,
   normalizeReleaseRiskFilterState,
 } from '@/lib/releases/view';
 
@@ -40,6 +35,107 @@ export function buildProjectReleaseListData<
     ...release,
     aiReleasePlan: aiReleasePlans?.get(release.id) ?? null,
   }));
+}
+
+function buildManualReleaseSources<
+  TRelease extends ReturnType<typeof buildProjectReleaseListData>[number],
+>(releases: TRelease[]) {
+  return releases.map((release) => ({
+    id: release.id,
+    sourceRef: release.sourceRef ?? '',
+    sourceCommitSha: release.sourceCommitSha ?? null,
+    summary: release.recap?.primarySummary ?? null,
+    artifacts: release.artifacts,
+  }));
+}
+
+function buildProjectReleaseListItems<
+  TRelease extends ReturnType<typeof buildProjectReleaseListData>[number],
+>(releases: TRelease[]) {
+  return releases.map((release) => ({
+    id: release.id,
+    displayTitle: release.displayTitle,
+    status: release.status,
+    statusDecoration: release.statusDecoration,
+    riskLabel: release.riskLabel,
+    sourceRef: release.sourceRef,
+    sourceCommitSha: release.sourceCommitSha,
+    createdAt: release.createdAt,
+    recap: release.recap,
+    approvalRunsCount: release.approvalRunsCount,
+    failedMigrationRunsCount: release.failedMigrationRunsCount,
+    previewSourceMeta: release.previewSourceMeta,
+    platformSignals: release.platformSignals,
+    primaryDomainUrl: release.primaryDomainUrl,
+    environmentScope: release.environmentScope,
+    environment: {
+      id: release.environment.id,
+      name: release.environment.name,
+      isProduction: release.environment.isProduction,
+      isPreview: release.environment.isPreview,
+    },
+    artifacts: release.artifacts.map((artifact) => ({
+      id: artifact.id ?? `${release.id}-${artifact.service.id}`,
+      imageUrl: artifact.imageUrl,
+      service: artifact.service,
+    })),
+  }));
+}
+
+function filterLightweightReleaseItems(
+  releases: ReturnType<typeof buildProjectReleaseListItems>,
+  filters: {
+    env?: string | null;
+    risk?: ReturnType<typeof normalizeReleaseRiskFilterState>;
+  }
+) {
+  const envFilter = filters.env && filters.env !== 'all' ? filters.env : 'all';
+  const riskFilter = filters.risk ?? 'all';
+
+  return releases.filter((release) => {
+    if (envFilter !== 'all' && (release.environment.name ?? '环境') !== envFilter) {
+      return false;
+    }
+
+    if (riskFilter === 'all') {
+      return true;
+    }
+
+    if (riskFilter === 'attention') {
+      return (
+        release.approvalRunsCount > 0 ||
+        release.failedMigrationRunsCount > 0 ||
+        ['migration_pre_failed', 'failed', 'degraded', 'verification_failed'].includes(
+          release.status
+        )
+      );
+    }
+
+    if (riskFilter === 'approval') {
+      return release.approvalRunsCount > 0;
+    }
+
+    return (
+      release.failedMigrationRunsCount > 0 ||
+      ['failed', 'migration_pre_failed', 'verification_failed'].includes(release.status)
+    );
+  });
+}
+
+function buildLightweightReleaseListStats(
+  releases: ReturnType<typeof buildProjectReleaseListItems>
+) {
+  return [
+    { label: '发布', value: releases.length },
+    {
+      label: '待审批',
+      value: releases.filter((release) => release.approvalRunsCount > 0).length,
+    },
+    {
+      label: '失败',
+      value: releases.filter((release) => release.failedMigrationRunsCount > 0).length,
+    },
+  ];
 }
 
 export async function getProjectReleaseListData(projectId: string) {
@@ -161,33 +257,52 @@ export async function getProjectReleaseListData(projectId: string) {
   );
 }
 
-export function buildProjectReleasesPageData<
-  TRelease extends ReturnType<typeof buildProjectReleaseListData>[number] & {
-    status: string;
-    environment: {
-      id: string;
-      name?: string;
-      isProduction?: boolean | null;
-    };
-  },
-  TEnvironment extends {
+export function buildProjectReleasesPageData(input: {
+  releaseItems: ReturnType<typeof buildProjectReleaseListItems>;
+  manualReleaseSources: Array<{
+    id: string;
+    sourceRef: string;
+    sourceCommitSha: string | null;
+    summary: string | null;
+    artifacts: Array<{
+      service: {
+        id: string;
+        name: string;
+      };
+      imageUrl: string;
+      imageDigest?: string | null;
+    }>;
+  }>;
+  environments: Array<{
     id: string;
     name: string;
     autoDeploy: boolean;
     isProduction: boolean;
     isPreview?: boolean | null;
+    deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
     previewPrNumber?: number | null;
     branch?: string | null;
     expiresAt?: Date | string | null;
-  },
-  TPromotePlan,
-  TPromoteAI,
->(input: {
-  releases: TRelease[];
-  environments: TEnvironment[];
+  }>;
   role: TeamRole;
-  promotePlan: TPromotePlan | null;
-  promoteAI?: TPromoteAI | null;
+  promotePlan: Awaited<ReturnType<typeof buildPromotionPlan>> | null;
+  promoteAI?: {
+    summary: string | null;
+    strategy: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
+    confidence: 'low' | 'medium' | 'high' | null;
+    riskLevel: 'low' | 'medium' | 'high' | null;
+    reasons: string[];
+    checks: Array<{
+      key: string;
+      label: string;
+      status: 'pass' | 'warning' | 'blocked';
+      summary: string;
+    }>;
+    stale: boolean;
+    source: 'cache' | 'fresh' | 'none';
+    generatedAt: string | null;
+    errorMessage: string | null;
+  } | null;
   envFilter?: string | null;
   riskFilter?: string | null;
 }) {
@@ -195,29 +310,29 @@ export function buildProjectReleasesPageData<
     role: input.role,
     environments: input.environments,
   });
-  const releases = input.releases.map((release) => ({
-    ...release,
-    actions: buildReleaseEnvironmentActionSnapshot(input.role, release.environment),
-  }));
   const selectedEnv = input.envFilter && input.envFilter.length > 0 ? input.envFilter : 'all';
   const selectedRisk = normalizeReleaseRiskFilterState(input.riskFilter);
-  const filteredReleases = filterReleaseCards(releases, {
+  const filteredReleaseItems = filterLightweightReleaseItems(input.releaseItems, {
     env: selectedEnv,
     risk: selectedRisk,
   });
 
   return {
-    releases,
-    filteredReleases,
+    releaseItems: input.releaseItems,
+    filteredReleaseItems,
+    manualReleaseSources: input.manualReleaseSources,
     environments: input.environments,
     governance,
     environmentOptions: [
       'all',
-      ...new Set(releases.map((release) => release.environment.name ?? '环境')),
+      ...new Set(input.releaseItems.map((release) => release.environment.name ?? '环境')),
     ],
     selectedEnv,
     selectedRisk,
-    stats: [...buildReleaseListStats(filteredReleases), { label: '实时', value: '离线' as const }],
+    stats: [
+      ...buildLightweightReleaseListStats(filteredReleaseItems),
+      { label: '实时', value: '离线' as const },
+    ],
     promotePlan: input.promotePlan,
     promoteAI: input.promoteAI ?? null,
     hasStagingProdSplit: input.environments.some((environment) => environment.isProduction),
@@ -316,7 +431,8 @@ export async function getProjectReleasesPageData(input: {
       : null;
 
   return buildProjectReleasesPageData({
-    releases: releaseCards,
+    releaseItems: buildProjectReleaseListItems(releaseCards),
+    manualReleaseSources: buildManualReleaseSources(releaseCards),
     environments: environmentList,
     role: input.role,
     promotePlan,

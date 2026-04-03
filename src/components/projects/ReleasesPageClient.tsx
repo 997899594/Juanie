@@ -1,430 +1,28 @@
 'use client';
 
-import {
-  AlertTriangle,
-  ArrowRight,
-  ArrowUpCircle,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Filter,
-  GitBranch,
-  GitCommit,
-  Globe,
-  Layers3,
-  Rocket,
-  ScrollText,
-} from 'lucide-react';
+import { ArrowUpCircle, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
-import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
-import { ReleaseAIRefreshActions } from '@/components/projects/ReleaseAIRefreshActions';
-import { Badge } from '@/components/ui/badge';
+import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
+import { ReleaseEnvironmentCenter } from '@/components/projects/ReleaseEnvironmentCenter';
+import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar';
+import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
-import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { createProductionRelease } from '@/lib/releases/client-actions';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
-import { formatPlatformDateTime, formatPlatformTimeContext } from '@/lib/time/format';
+import type { getProjectReleasesPageData } from '@/lib/releases/service';
 import { cn } from '@/lib/utils';
-
-interface Environment {
-  id: string;
-  name: string;
-  autoDeploy: boolean;
-  isProduction: boolean;
-  isPreview?: boolean | null;
-  deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
-  previewPrNumber?: number | null;
-  branch?: string | null;
-  expiresAt?: string | Date | null;
-}
-
-interface PromotePlan {
-  sourceRelease: {
-    id: string;
-    summary: string | null;
-    sourceCommitSha: string | null;
-  } | null;
-  plan: {
-    canCreate: boolean;
-    blockingReason: string | null;
-    summary: string | null;
-    issue: {
-      code: string;
-      kind: 'approval' | 'migration' | 'deployment' | 'environment' | 'release';
-      label: string;
-      summary: string;
-      nextActionLabel: string;
-    } | null;
-    platformSignals: {
-      chips: Array<{
-        key: string;
-        label: string;
-        tone: 'danger' | 'neutral';
-      }>;
-      primarySummary: string | null;
-      nextActionLabel: string | null;
-    };
-    environmentPolicy: {
-      level: 'normal' | 'protected' | 'preview';
-      reasons: string[];
-      summary: string | null;
-      primarySignal: {
-        code: string;
-        kind: 'environment' | 'release';
-        level: 'protected' | 'preview' | 'approval_required' | 'progressive';
-        label: string;
-        summary: string;
-        nextActionLabel: string | null;
-      } | null;
-    };
-    releasePolicy: {
-      level: 'normal' | 'protected' | 'approval_required';
-      reasons: string[];
-      summary: string | null;
-      requiresApproval: boolean;
-      primarySignal: {
-        code: string;
-        kind: 'environment' | 'release';
-        level: 'protected' | 'preview' | 'approval_required' | 'progressive';
-        label: string;
-        summary: string;
-        nextActionLabel: string | null;
-      } | null;
-    };
-    migration: {
-      preDeployCount: number;
-      postDeployCount: number;
-      warnings: string[];
-      primarySignal: {
-        code: string;
-        kind: 'migration';
-        level: 'warning' | 'approval_required';
-        label: string;
-        summary: string;
-        nextActionLabel: string | null;
-      } | null;
-      requiresApproval: boolean;
-    };
-  };
-}
-
-interface ReleaseRecord {
-  id: string;
-  displayTitle: string;
-  status: string;
-  sourceRef: string;
-  sourceCommitSha: string | null;
-  summary: string | null;
-  recap: {
-    version: 1;
-    generatedAt: string;
-    statusLabel: string;
-    headline: string;
-    primarySummary: string;
-    narrative: {
-      changed: string;
-      risk: string;
-      result: string;
-      governance: string | null;
-      nextAction: string | null;
-    };
-    blockingReason: {
-      label: string;
-      summary: string;
-      nextActionLabel: string | null;
-    } | null;
-  } | null;
-  errorMessage: string | null;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-  triggeredBy: string;
-  environment: {
-    id: string;
-    name: string;
-    isProduction: boolean;
-    isPreview?: boolean | null;
-    deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
-    previewPrNumber?: number | null;
-    branch?: string | null;
-    expiresAt?: string | Date | null;
-    domains?: Array<{
-      id: string;
-      hostname: string;
-      isCustom?: boolean | null;
-      isVerified?: boolean | null;
-      service?: {
-        id: string;
-        name: string;
-      } | null;
-    }>;
-  };
-  artifacts: Array<{
-    id: string;
-    imageUrl: string;
-    imageDigest: string | null;
-    service: {
-      id: string;
-      name: string;
-    };
-  }>;
-  deployments: Array<{
-    id: string;
-    status: string;
-    version: string | null;
-    imageUrl: string | null;
-    createdAt: string | Date;
-    serviceId: string | null;
-  }>;
-  migrationRuns: Array<{
-    id: string;
-    status: string;
-    createdAt: string | Date;
-    startedAt: string | Date | null;
-    finishedAt: string | Date | null;
-    service: {
-      id: string;
-      name: string;
-    } | null;
-    database: {
-      id: string;
-      name: string;
-    };
-    specification?: {
-      tool?: string;
-      phase?: string;
-      command?: string;
-      compatibility: string;
-      approvalPolicy: string;
-    } | null;
-  }>;
-  intelligence: {
-    riskLevel: 'low' | 'medium' | 'high';
-    reasons: string[];
-    failureSummary: string | null;
-    issueCode: string | null;
-    actionLabel: string | null;
-    issue: {
-      code: string;
-      kind: 'approval' | 'migration' | 'deployment' | 'environment' | 'release';
-      label: string;
-      summary: string;
-      nextActionLabel: string;
-    } | null;
-  };
-  policy: {
-    level: 'normal' | 'protected' | 'approval_required';
-    reasons: string[];
-    summary: string | null;
-    requiresApproval: boolean;
-    primarySignal: {
-      code: string;
-      kind: 'environment' | 'release';
-      level: 'protected' | 'preview' | 'approval_required' | 'progressive';
-      label: string;
-      summary: string;
-      nextActionLabel: string | null;
-    } | null;
-  };
-  riskLabel: string;
-  statusDecoration: {
-    color: 'success' | 'warning' | 'error' | 'info' | 'neutral';
-    pulse: boolean;
-    label: string;
-  };
-  environmentScope: string | null;
-  environmentSource: string | null;
-  environmentStrategy: string | null;
-  environmentDatabaseStrategy: string | null;
-  environmentInheritance: string | null;
-  environmentExpiry: string | null;
-  primaryDomainUrl: string | null;
-  approvalRunsCount: number;
-  failedMigrationRunsCount: number;
-  signalChips: Array<{
-    key: string;
-    label: string;
-    tone: 'danger' | 'neutral';
-  }>;
-  deploymentItems: Array<{
-    id: string;
-    status: string;
-    serviceId: string | null;
-    version: string | null;
-    imageUrl: string | null;
-    statusDecoration: {
-      color: 'success' | 'warning' | 'error' | 'info' | 'neutral';
-      pulse: boolean;
-      label: string;
-    };
-    serviceName: string;
-  }>;
-  migrationItems: Array<{
-    id: string;
-    status: string;
-    serviceId: string | null;
-    database: {
-      id: string;
-      name: string;
-    };
-    specification: {
-      tool: string;
-      phase: string;
-      command: string;
-    };
-    statusDecoration: {
-      color: 'success' | 'warning' | 'error' | 'info' | 'neutral';
-      pulse: boolean;
-      label: string;
-    };
-    imageUrl: string | null;
-    serviceName: string;
-    createdAtLabel: string;
-  }>;
-  diffSummary: {
-    isFirstRelease: boolean;
-    artifactChanges: number;
-    migrationChanges: number;
-  };
-  previewSourceMeta: {
-    kind: 'pr' | 'branch' | 'standard';
-    label: string | null;
-    title: string | null;
-    reference: string | null;
-    detail: string | null;
-    stateLabel: string | null;
-    authorName: string | null;
-    webUrl: string | null;
-  };
-  previewLifecycle: {
-    stateLabel: string;
-    summary: string | null;
-    nextActionLabel: string;
-  } | null;
-  platformSignals: {
-    chips: Array<{
-      key: string;
-      label: string;
-      tone: 'danger' | 'neutral';
-    }>;
-    primarySummary: string | null;
-    nextActionLabel: string | null;
-  };
-  aiReleasePlan?: {
-    summary: string;
-    strategy: 'rolling' | 'controlled' | 'canary' | 'blue_green';
-    riskLevel: 'low' | 'medium' | 'high';
-    confidence: 'low' | 'medium' | 'high';
-    generatedAt: string;
-  } | null;
-  actions: {
-    canManage: boolean;
-    summary: string;
-  };
-}
-
-interface PromoteAIRecommendation {
-  summary: string | null;
-  strategy: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
-  confidence: 'low' | 'medium' | 'high' | null;
-  riskLevel: 'low' | 'medium' | 'high' | null;
-  reasons: string[];
-  checks: Array<{
-    key: string;
-    label: string;
-    status: 'pass' | 'warning' | 'blocked';
-    summary: string;
-  }>;
-  stale: boolean;
-  source: 'cache' | 'fresh' | 'none';
-  generatedAt: string | null;
-  errorMessage: string | null;
-}
-
-function getStrategyLabel(
-  strategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null
-): string | null {
-  switch (strategy) {
-    case 'rolling':
-      return '滚动发布';
-    case 'controlled':
-      return '受控放量';
-    case 'canary':
-      return '金丝雀';
-    case 'blue_green':
-      return '蓝绿切换';
-    default:
-      return null;
-  }
-}
-
-function getAILevelLabel(level?: 'low' | 'medium' | 'high' | null): string | null {
-  switch (level) {
-    case 'low':
-      return '低风险';
-    case 'medium':
-      return '中风险';
-    case 'high':
-      return '高风险';
-    default:
-      return null;
-  }
-}
-
-function formatImageLabel(imageUrl: string): string {
-  const imageName = imageUrl.split('/').pop() ?? imageUrl;
-  const [repository, tag] = imageName.split(':');
-  if (!tag) return repository;
-  return `${repository}:${tag}`;
-}
 
 interface ReleasesPageClientProps {
   projectId: string;
-  initialData: {
-    releases: ReleaseRecord[];
-    filteredReleases: ReleaseRecord[];
-    environments: Environment[];
-    governance: {
-      roleLabel: string;
-      primarySummary: string;
-      manageableEnvironmentIds: string[];
-      promoteToProduction: {
-        allowed: boolean;
-        summary: string;
-      };
-      manualMigration: {
-        allowed: boolean;
-        summary: string;
-      };
-    };
-    environmentOptions: string[];
-    selectedEnv: string;
-    selectedRisk: 'all' | 'attention' | 'approval' | 'failed';
-    stats: Array<{
-      label: string;
-      value: number | string;
-    }>;
-    promotePlan: PromotePlan | null;
-    promoteAI: PromoteAIRecommendation | null;
-    hasStagingProdSplit: boolean;
-  };
+  initialData: Awaited<ReturnType<typeof getProjectReleasesPageData>>;
 }
 
 export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClientProps) {
@@ -434,8 +32,22 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const [promoting, setPromoting] = useState(false);
   const [promoteResult, setPromoteResult] = useState<string | null>(null);
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
-  const [expandedReleases, setExpandedReleases] = useState<Set<string>>(new Set());
-  const initialLatestReleaseState = buildReleaseEventStateKey(initialData.releases[0] ?? null);
+  const initialLatestRelease = initialData.releaseItems[0];
+  const initialLatestReleaseState = buildReleaseEventStateKey(
+    initialLatestRelease
+      ? {
+          id: initialLatestRelease.id,
+          status: initialLatestRelease.status,
+          sourceCommitSha: initialLatestRelease.sourceCommitSha ?? null,
+          updatedAt: initialLatestRelease.createdAt ?? new Date(0).toISOString(),
+          recap: initialLatestRelease.recap
+            ? {
+                generatedAt: initialLatestRelease.recap.generatedAt ?? null,
+              }
+            : null,
+        }
+      : null
+  );
 
   const { isConnected, error } = useReleases({
     projectId,
@@ -482,19 +94,19 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
-  const releases = initialData.releases;
+  const releaseItems = initialData.releaseItems;
   const environments = initialData.environments;
   const governance = initialData.governance;
   const filter = initialData.selectedEnv;
   const riskFilter = initialData.selectedRisk;
-  const filtered = initialData.filteredReleases;
+  const filtered = initialData.filteredReleaseItems;
   const promotePlan = initialData.promotePlan;
   const manageableEnvironments = environments.filter((environment) =>
     governance.manageableEnvironmentIds.includes(environment.id)
   );
   const environmentReleaseCenter = environments.map((environment) => {
     const latestRelease =
-      releases.find((release) => release.environment.id === environment.id) ?? null;
+      releaseItems.find((release) => release.environment.id === environment.id) ?? null;
 
     return {
       environment,
@@ -506,7 +118,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     (environment) => environment.autoDeploy && !environment.isProduction
   );
   const latestStagingRelease = stagingEnv
-    ? releases.find(
+    ? releaseItems.find(
         (release) =>
           release.environment.id === stagingEnv.id &&
           release.status === 'succeeded' &&
@@ -530,6 +142,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     stat.label === '实时' ? { ...stat, value: isConnected ? '在线' : '离线' } : stat
   );
   const promoteAI = initialData.promoteAI;
+  const manualReleaseSources = initialData.manualReleaseSources.map((release) => ({
+    ...release,
+    sourceRef: release.sourceRef ?? '',
+    sourceCommitSha: release.sourceCommitSha ?? null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -546,13 +163,13 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
               <Link href={`/projects/${projectId}/logs`}>
                 <ScrollText className="h-3.5 w-3.5" />
-                查看日志
+                打开日志
               </Link>
             </Button>
             <ManualReleaseDialog
               projectId={projectId}
               environments={manageableEnvironments}
-              releases={releases}
+              releases={manualReleaseSources}
               disabledSummary={governance.primarySummary}
               onCreated={async () => {
                 router.refresh();
@@ -593,272 +210,36 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         </div>
       )}
 
-      <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-        当前角色：{governance.roleLabel}。{governance.primarySummary}。
-        {governance.promoteToProduction.summary}。
-      </div>
-
-      <section className="console-panel px-4 py-4">
-        <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
-          <Globe className="h-4 w-4" />
-          环境发布中心
+      <details className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+        <summary className="cursor-pointer list-none font-medium text-foreground">
+          发布控制面
+        </summary>
+        <div className="mt-2">
+          当前角色：{governance.roleLabel}。{governance.primarySummary}。
+          {governance.promoteToProduction.summary}。
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {environmentReleaseCenter.map(({ environment, latestRelease }) => (
-            <div key={environment.id} className="console-card bg-secondary/20 px-4 py-4">
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    'h-2 w-2 rounded-full',
-                    latestRelease?.status === 'succeeded'
-                      ? 'bg-success'
-                      : latestRelease?.status === 'failed' ||
-                          latestRelease?.status === 'migration_pre_failed'
-                        ? 'bg-destructive'
-                        : latestRelease
-                          ? 'bg-warning'
-                          : 'bg-muted-foreground'
-                  )}
-                />
-                <span className="text-sm font-medium">{environment.name}</span>
-              </div>
-              <div className="mt-2 text-[11px] text-muted-foreground">
-                {[
-                  environment.isProduction ? '生产' : environment.isPreview ? '预览' : '非生产',
-                  environment.deploymentStrategy,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </div>
+      </details>
 
-              <div className="mt-3">
-                {latestRelease ? (
-                  <>
-                    <div className="text-sm font-medium">{latestRelease.displayTitle}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {latestRelease.recap?.primarySummary ??
-                        latestRelease.platformSignals.primarySummary ??
-                        latestRelease.summary ??
-                        '打开发布查看详情'}
-                    </div>
-                    {latestRelease.aiReleasePlan?.summary && (
-                      <div className="mt-2 rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground">
-                        <span className="font-medium">AI：</span>
-                        {latestRelease.aiReleasePlan.summary}
-                      </div>
-                    )}
-                    <div className="mt-2 text-[11px] text-muted-foreground">
-                      {[
-                        latestRelease.statusDecoration.label,
-                        latestRelease.aiReleasePlan
-                          ? getStrategyLabel(latestRelease.aiReleasePlan.strategy)
-                          : null,
-                        latestRelease.aiReleasePlan
-                          ? getAILevelLabel(latestRelease.aiReleasePlan.riskLevel)
-                          : null,
-                        latestRelease.sourceCommitSha
-                          ? latestRelease.sourceCommitSha.slice(0, 7)
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-sm font-medium">还没有发布</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      从这个环境发第一版后，这里会显示当前 live release。
-                    </div>
-                  </>
-                )}
-              </div>
+      <ReleaseEnvironmentCenter
+        projectId={projectId}
+        items={environmentReleaseCenter}
+        onShowRecords={(environmentName) =>
+          updateFilters({
+            env: environmentName,
+            risk: 'all',
+          })
+        }
+      />
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button asChild variant="outline" size="sm" className="rounded-xl">
-                  <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>查看日志</Link>
-                </Button>
-                {latestRelease ? (
-                  <Button asChild size="sm" className="rounded-xl">
-                    <Link href={`/projects/${projectId}/releases/${latestRelease.id}`}>
-                      打开发布
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    className="rounded-xl"
-                    onClick={() =>
-                      updateFilters({
-                        env: environment.name,
-                        risk: 'all',
-                      })
-                    }
-                  >
-                    查看记录
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
-        <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
-          <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
-            <DialogTitle>发布到生产</DialogTitle>
-            <DialogDescription>
-              平台会先沿用 staging 成功版本，再按 preflight 结果创建生产 release。
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
-              <div className="space-y-4">
-                <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
-                  <div className="space-y-1">
-                    <div className="text-sm font-semibold text-foreground">提升来源</div>
-                    <div className="text-xs leading-5 text-muted-foreground">
-                      生产发布会直接沿用 staging 成功版本，避免重复构建和环境偏差。
-                    </div>
-                  </div>
-
-                  {promotePlan?.sourceRelease ? (
-                    <div className="mt-4 space-y-3 text-sm">
-                      <div className="rounded-2xl border border-border bg-background px-4 py-3">
-                        <div className="text-xs text-muted-foreground">来源 release</div>
-                        <div className="mt-1 text-foreground">
-                          {promotePlan.sourceRelease.summary ?? '沿用最近一次 staging 成功版本'}
-                        </div>
-                        {promotePlan.sourceRelease.sourceCommitSha && (
-                          <code className="mt-2 inline-flex rounded-lg bg-secondary px-2 py-1 text-xs text-muted-foreground">
-                            {promotePlan.sourceRelease.sourceCommitSha.slice(0, 12)}
-                          </code>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-4 rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-sm text-muted-foreground">
-                      当前没有可提升到生产的 staging 成功版本。
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                  <div className="mb-3 space-y-1">
-                    <div className="text-sm font-semibold text-foreground">生产预检</div>
-                    <div className="text-xs leading-5 text-muted-foreground">
-                      平台会先检查审批、环境保护和迁移风险，再决定是否允许创建生产 release。
-                    </div>
-                  </div>
-
-                  {promotePanel ? (
-                    <div className="space-y-3">
-                      <PlatformSignalChipList chips={promotePanel.chips} />
-                      <PlatformSignalSummary
-                        summary={promotePanel.issueSummary}
-                        nextActionLabel={promotePanel.nextActionLabel}
-                      />
-
-                      {promoteAI?.summary && (
-                        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {promoteAI.strategy && (
-                              <Badge variant="outline">
-                                {getStrategyLabel(promoteAI.strategy)}
-                              </Badge>
-                            )}
-                            {promoteAI.riskLevel && (
-                              <Badge variant="outline">
-                                {getAILevelLabel(promoteAI.riskLevel)}
-                              </Badge>
-                            )}
-                            {promoteAI.confidence && (
-                              <Badge variant="outline">{promoteAI.confidence} 置信度</Badge>
-                            )}
-                          </div>
-                          <div className="mt-2 text-sm font-medium text-foreground">
-                            {promoteAI.summary}
-                          </div>
-                          {promoteAI.reasons.length > 0 && (
-                            <div className="mt-3 space-y-2 text-xs text-muted-foreground">
-                              {promoteAI.reasons.map((reason) => (
-                                <div key={reason}>• {reason}</div>
-                              ))}
-                            </div>
-                          )}
-                          {promoteAI.generatedAt && (
-                            <div className="mt-3 text-[11px] text-muted-foreground">
-                              AI 更新时间：{formatPlatformDateTime(promoteAI.generatedAt) ?? '—'}
-                              {promoteAI.stale ? ' · 使用历史 snapshot' : ''}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {promotePanel.blockingReason && (
-                        <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
-                          {promotePanel.blockingReason}
-                        </div>
-                      )}
-
-                      {!promoteAI?.summary && promoteAI?.errorMessage && (
-                        <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                          AI 建议暂不可用：{promoteAI.errorMessage}
-                        </div>
-                      )}
-
-                      {!promotePanel.blockingReason && promotePanel.warningChips.length > 0 && (
-                        <PlatformSignalChipList chips={promotePanel.warningChips} />
-                      )}
-
-                      {promoteAI?.checks.length ? (
-                        <div className="space-y-2 rounded-2xl border border-border bg-background px-4 py-3">
-                          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                            AI 重点检查
-                          </div>
-                          {promoteAI.checks.map((check) => (
-                            <div key={check.key} className="text-sm">
-                              <div className="font-medium text-foreground">{check.label}</div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                {check.summary}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
-                      正在加载发布预检...
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
-            <Button
-              variant="outline"
-              className="w-full rounded-xl sm:w-auto"
-              onClick={() => setPromoteDialogOpen(false)}
-            >
-              关闭
-            </Button>
-            <Button
-              className="w-full rounded-xl sm:w-auto"
-              onClick={handlePromote}
-              disabled={promoting || !canPromote}
-            >
-              {promoting ? '发布中...' : '确认发布'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ReleasePromoteDialog
+        open={promoteDialogOpen}
+        onOpenChange={setPromoteDialogOpen}
+        promotePlan={promotePlan}
+        promoteAI={promoteAI}
+        canPromote={canPromote}
+        promoting={promoting}
+        onPromote={handlePromote}
+      />
 
       {hasStagingProdSplit && promotePanel && (
         <div className="console-panel px-4 py-4">
@@ -893,379 +274,14 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         ))}
       </div>
 
-      <div className="console-panel space-y-4 px-4 py-4">
-        <div className="overflow-x-auto pb-1">
-          <div className="flex min-w-max items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            {initialData.environmentOptions.map((env) => (
-              <Button
-                key={env}
-                variant={filter === env ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => updateFilters({ env })}
-                className="capitalize"
-              >
-                {env}
-              </Button>
-            ))}
-          </div>
-        </div>
+      <ReleaseFilterToolbar
+        environmentOptions={initialData.environmentOptions}
+        filter={filter}
+        riskFilter={riskFilter}
+        onChange={updateFilters}
+      />
 
-        <div className="overflow-x-auto pb-1">
-          <div className="flex min-w-max items-center gap-2">
-            <Button
-              variant={riskFilter === 'all' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => updateFilters({ risk: 'all' })}
-            >
-              全部状态
-            </Button>
-            <Button
-              variant={riskFilter === 'attention' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => updateFilters({ risk: 'attention' })}
-            >
-              <AlertTriangle className="h-3.5 w-3.5" />
-              待处理
-            </Button>
-            <Button
-              variant={riskFilter === 'approval' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => updateFilters({ risk: 'approval' })}
-            >
-              待审批
-            </Button>
-            <Button
-              variant={riskFilter === 'failed' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => updateFilters({ risk: 'failed' })}
-            >
-              失败迁移
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={<Rocket className="h-12 w-12" />}
-          title="还没有发布"
-          description="镜像入库或手动触发后，这里会显示完整记录。"
-        />
-      ) : (
-        <div className="space-y-3">
-          {filtered.map((release) => {
-            const expanded = expandedReleases.has(release.id);
-            const intelligence = release.intelligence;
-            const policy = release.policy;
-            const riskTone =
-              intelligence.riskLevel === 'high'
-                ? 'border-destructive/15 bg-background text-destructive'
-                : intelligence.riskLevel === 'medium'
-                  ? 'border-border bg-secondary/30 text-foreground'
-                  : 'border-border bg-background text-muted-foreground';
-
-            return (
-              <div key={release.id} className="console-panel overflow-hidden">
-                <div className="flex">
-                  <div
-                    className={cn(
-                      'w-1 shrink-0 self-stretch',
-                      release.statusDecoration.color === 'success'
-                        ? 'bg-success'
-                        : release.statusDecoration.color === 'warning'
-                          ? 'bg-warning'
-                          : release.statusDecoration.color === 'error'
-                            ? 'bg-destructive'
-                            : release.statusDecoration.color === 'info'
-                              ? 'bg-info'
-                              : 'bg-muted-foreground/30'
-                    )}
-                  />
-                  <div className="min-w-0 flex-1 px-5 py-4">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="min-w-0 flex-1 space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <StatusIndicator
-                            status={release.statusDecoration.color}
-                            pulse={release.statusDecoration.pulse}
-                            label={release.statusDecoration.label}
-                          />
-                          <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
-                            {release.environment.name}
-                          </span>
-                          <span
-                            className={cn(
-                              'rounded-full border px-2.5 py-1 text-xs font-medium',
-                              riskTone
-                            )}
-                          >
-                            {release.riskLabel}
-                          </span>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="text-base font-semibold">{release.displayTitle}</div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {[
-                              release.environmentScope,
-                              release.previewSourceMeta.label,
-                              `${release.artifacts.length} 个服务`,
-                              policy.primarySignal?.label
-                                ? policy.primarySignal.label
-                                : policy.level !== 'normal'
-                                  ? policy.level === 'approval_required'
-                                    ? '受保护 / 待审批'
-                                    : '受保护'
-                                  : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </div>
-                          {release.previewSourceMeta.title && (
-                            <PreviewSourceSummary meta={release.previewSourceMeta} />
-                          )}
-                          {(release.recap?.primarySummary ||
-                            release.platformSignals.primarySummary) && (
-                            <div className="text-xs text-muted-foreground">
-                              {release.recap?.primarySummary ??
-                                release.platformSignals.primarySummary}
-                            </div>
-                          )}
-                          {release.aiReleasePlan?.summary && (
-                            <div className="rounded-2xl border border-border bg-background px-3 py-2 text-xs text-foreground">
-                              <span className="font-medium">AI 建议：</span>
-                              {release.aiReleasePlan.summary}
-                            </div>
-                          )}
-                          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                            {release.sourceCommitSha && (
-                              <div className="flex items-center gap-1.5">
-                                <GitCommit className="h-3.5 w-3.5" />
-                                <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
-                                  {release.sourceCommitSha.slice(0, 7)}
-                                </code>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-1.5">
-                              <GitBranch className="h-3.5 w-3.5" />
-                              <span>{release.sourceRef}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Layers3 className="h-3.5 w-3.5" />
-                              <span>
-                                {release.deployments.length} 次部署 / {release.migrationRuns.length}{' '}
-                                次迁移
-                              </span>
-                            </div>
-                            {release.aiReleasePlan && (
-                              <div className="flex items-center gap-1.5">
-                                <Rocket className="h-3.5 w-3.5" />
-                                <span>
-                                  {getStrategyLabel(release.aiReleasePlan.strategy)}
-                                  {' · '}
-                                  {getAILevelLabel(release.aiReleasePlan.riskLevel)}
-                                </span>
-                              </div>
-                            )}
-                            {release.primaryDomainUrl && (
-                              <a
-                                href={release.primaryDomainUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 text-foreground underline underline-offset-4"
-                              >
-                                <Rocket className="h-3.5 w-3.5" />
-                                <span>打开</span>
-                              </a>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          {release.artifacts.map((artifact) => (
-                            <Badge
-                              key={artifact.id}
-                              variant="secondary"
-                              className="gap-1 rounded-full px-2.5 py-1 font-normal"
-                            >
-                              <span className="font-medium">{artifact.service.name}</span>
-                              <span className="text-muted-foreground">
-                                {formatImageLabel(artifact.imageUrl)}
-                              </span>
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center xl:items-end">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3.5 w-3.5" />
-                          <span>{formatPlatformTimeContext(release.createdAt) ?? '—'}</span>
-                        </div>
-                        <div className="flex w-full items-center gap-2 sm:w-auto">
-                          <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="min-w-0 flex-1 rounded-xl sm:flex-none"
-                          >
-                            <Link
-                              href={`/projects/${projectId}/logs?env=${release.environment.id}`}
-                            >
-                              日志
-                            </Link>
-                          </Button>
-                          <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="min-w-0 flex-1 rounded-xl sm:flex-none"
-                          >
-                            <Link href={`/projects/${projectId}/releases/${release.id}`}>
-                              打开
-                              <ArrowRight className="h-3.5 w-3.5" />
-                            </Link>
-                          </Button>
-                          <ReleaseAIRefreshActions
-                            projectId={projectId}
-                            releaseId={release.id}
-                            compact
-                            showMessage={false}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 rounded-xl"
-                            onClick={() =>
-                              setExpandedReleases((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(release.id)) next.delete(release.id);
-                                else next.add(release.id);
-                                return next;
-                              })
-                            }
-                          >
-                            {expanded ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {expanded && (
-                      <div className="mt-4 grid gap-4 border-t border-border pt-4 xl:grid-cols-[1.1fr_1fr]">
-                        <div className="space-y-4">
-                          <div className="console-card bg-secondary/20 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                              <Rocket className="h-4 w-4" />
-                              服务镜像
-                            </div>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              {release.artifacts.map((artifact) => (
-                                <div
-                                  key={artifact.id}
-                                  className="rounded-2xl border border-border bg-background px-4 py-3"
-                                >
-                                  <div className="mb-1 text-sm font-medium">
-                                    {artifact.service.name}
-                                  </div>
-                                  <div className="break-all text-xs text-muted-foreground">
-                                    {artifact.imageUrl}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="console-card bg-secondary/20 p-4">
-                            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-                              <ScrollText className="h-4 w-4" />
-                              部署进度
-                            </div>
-                            <div className="space-y-3">
-                              {release.deploymentItems.map((deployment) => (
-                                <div
-                                  key={deployment.id}
-                                  className="rounded-2xl border border-border bg-background px-4 py-3"
-                                >
-                                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                                    <StatusIndicator
-                                      status={deployment.statusDecoration.color}
-                                      pulse={deployment.statusDecoration.pulse}
-                                      label={deployment.statusDecoration.label}
-                                    />
-                                    <Badge variant="outline">{deployment.serviceName}</Badge>
-                                    {deployment.version && (
-                                      <Badge variant="secondary">v{deployment.version}</Badge>
-                                    )}
-                                  </div>
-                                  {deployment.imageUrl && (
-                                    <div className="mb-3 break-all text-xs text-muted-foreground">
-                                      {deployment.imageUrl}
-                                    </div>
-                                  )}
-                                  <div className="mb-3 flex flex-wrap gap-2">
-                                    <DeploymentRollbackAction
-                                      projectId={projectId}
-                                      deploymentId={deployment.id}
-                                      disabled={!release.actions.canManage}
-                                      disabledSummary={release.actions.summary}
-                                    />
-                                  </div>
-                                  <DeploymentLogs
-                                    projectId={projectId}
-                                    deploymentId={deployment.id}
-                                    status={deployment.status}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="console-card bg-secondary/20 p-4">
-                          <div className="mb-3 text-sm font-semibold">迁移记录</div>
-                          <div className="space-y-3">
-                            {release.migrationRuns.length === 0 ? (
-                              <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-center text-sm text-muted-foreground">
-                                没有自动迁移记录
-                              </div>
-                            ) : (
-                              release.migrationItems.map((run) => (
-                                <div
-                                  key={run.id}
-                                  className="rounded-2xl border border-border bg-background px-4 py-3"
-                                >
-                                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                                    <StatusIndicator
-                                      status={run.statusDecoration.color}
-                                      pulse={run.statusDecoration.pulse}
-                                      label={run.statusDecoration.label}
-                                    />
-                                    <Badge variant="outline">{run.database.name}</Badge>
-                                  </div>
-                                  <div className="text-sm font-medium">{run.serviceName}</div>
-                                  <div className="mt-1 text-xs text-muted-foreground">
-                                    {run.createdAtLabel}
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <ReleaseCardList projectId={projectId} releases={filtered} />
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
         <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -1278,7 +294,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           <ManualReleaseDialog
             projectId={projectId}
             environments={manageableEnvironments}
-            releases={releases}
+            releases={manualReleaseSources}
             disabledSummary={governance.primarySummary}
             onCreated={async () => {
               router.refresh();
