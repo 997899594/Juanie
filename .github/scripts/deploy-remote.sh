@@ -119,7 +119,7 @@ helm upgrade --install "${RELEASE_NAME}" "${CHART_DIR}" \
   --set images.migrate.tag="${MIGRATE_IMAGE_TAG}" \
   --set-string imagePullSecrets[0]=ghcr-pull-secret
 
-for deployment in juanie-web juanie-worker juanie-scheduler; do
+for deployment in juanie-web juanie-worker; do
   wait_for_rollout "${deployment}"
 done
 

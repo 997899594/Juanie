@@ -29,16 +29,15 @@ ENV DATABASE_URL=${DATABASE_URL}
 RUN mkdir -p public && bun run build
 
 # ============================================
-# Stage 4: Worker Builder (编译独立可执行文件)
+# Stage 4: Worker Builder
 # ============================================
 FROM deps AS worker-builder
 WORKDIR /app
 
 COPY --from=source /app ./
 
-# 编译 worker 为独立可执行文件 (约62MB, 包含所有依赖)
+# 编译队列 worker 为独立可执行文件
 RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
-RUN bun build ./src/lib/queue/scheduler.ts --compile --outfile=scheduler
 
 # ============================================
 # Stage 5: Migration Builder
@@ -96,10 +95,9 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=worker-builder /app/worker ./worker
-COPY --from=worker-builder /app/scheduler ./scheduler
 COPY --from=source /app/templates ./templates
 
-RUN chmod +x ./worker ./scheduler
+RUN chmod +x ./worker
 
 CMD ["./worker"]
 
