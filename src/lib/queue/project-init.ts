@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import postgres from 'postgres';
 import { encrypt } from '@/lib/crypto';
+import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
 import {
@@ -1746,6 +1747,7 @@ async function provisionSharedPostgreSQL(
     await adminConn.unsafe(
       `GRANT ALL PRIVILEGES ON DATABASE "${dbIdentifier}" TO "${dbIdentifier}"`
     );
+    await adminConn.unsafe(`ALTER DATABASE "${dbIdentifier}" OWNER TO "${dbIdentifier}"`);
 
     const parsedUrl = new URL(adminUrl);
     const host = toFqdn(parsedUrl.hostname);
@@ -1764,6 +1766,16 @@ async function provisionSharedPostgreSQL(
         password: dbPassword,
       })
       .where(eq(databases.id, database.id));
+
+    await ensureManagedPostgresOwnership({
+      type: 'postgresql',
+      provisionType: 'shared',
+      host,
+      port,
+      databaseName: dbIdentifier,
+      username: dbIdentifier,
+      connectionString: connStr,
+    });
 
     console.log(`✅ Provisioned shared PostgreSQL database ${dbIdentifier}`);
   } finally {

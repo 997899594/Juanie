@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { CoreV1Event, V1EnvVar, V1Job, V1Pod } from '@kubernetes/client-node';
 import { and, eq } from 'drizzle-orm';
+import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
 import { migrationRunItems, migrationRuns, projects } from '@/lib/db/schema';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
@@ -841,6 +842,7 @@ export async function executeMigrationRun(
   }
 
   if (spec.specification.tool === 'sql') {
+    await ensureManagedPostgresOwnership(spec.database);
     await runSqlMigration(runId, spec, options);
     return;
   }
@@ -862,5 +864,6 @@ export async function executeMigrationRun(
     );
   }
 
+  await ensureManagedPostgresOwnership(spec.database);
   await runCommandMigration(runId, spec, options.imageUrl!);
 }
