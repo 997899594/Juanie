@@ -14,14 +14,10 @@ variable "CACHE_SCOPE" {
   default = "juanie-images"
 }
 
-variable "PLATFORM" {
-  default = "linux/amd64"
-}
-
 target "_common" {
   context    = "."
   dockerfile = "Dockerfile"
-  platforms  = [PLATFORM]
+  platforms  = ["linux/amd64"]
   cache-from = ["type=gha,scope=${CACHE_SCOPE}"]
   cache-to   = ["type=gha,mode=max,scope=${CACHE_SCOPE}"]
 }
