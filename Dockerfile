@@ -92,8 +92,6 @@ CMD ["node", "server.js"]
 FROM oven/bun:1 AS worker
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y procps && rm -rf /var/lib/apt/lists/*
-
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 

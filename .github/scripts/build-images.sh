@@ -2,21 +2,11 @@
 
 set -euo pipefail
 
-IMAGE_REPOSITORY="${REGISTRY:?REGISTRY is required}/${IMAGE_NAME:?IMAGE_NAME is required}"
-CACHE_SCOPE="${CACHE_SCOPE:-juanie-images}"
+export REGISTRY="${REGISTRY:?REGISTRY is required}"
+export IMAGE_NAME="${IMAGE_NAME:?IMAGE_NAME is required}"
+export GITHUB_SHA="${GITHUB_SHA:?GITHUB_SHA is required}"
+export CACHE_SCOPE="${CACHE_SCOPE:-juanie-images}"
+export PLATFORM="${PLATFORM:-linux/amd64}"
 
-for target in web worker migrate; do
-  image_tag="${IMAGE_REPOSITORY}:${target}-${GITHUB_SHA}"
-  latest_tag="${IMAGE_REPOSITORY}:${target}-latest"
-
-  echo "Building ${target} -> ${image_tag}"
-
-  docker buildx build \
-    --target "$target" \
-    --tag "$image_tag" \
-    --tag "$latest_tag" \
-    --cache-from "type=gha,scope=${CACHE_SCOPE}" \
-    --cache-to "type=gha,mode=max,scope=${CACHE_SCOPE}" \
-    --push \
-    .
-done
+echo "Building release images via bake graph..."
+docker buildx bake --file docker-bake.hcl --push
