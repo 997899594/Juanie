@@ -1,5 +1,11 @@
 # ============================================
-# Stage 1: Dependencies
+# Stage 1: Source
+# ============================================
+FROM scratch AS source
+COPY . /app
+
+# ============================================
+# Stage 2: Dependencies
 # ============================================
 FROM oven/bun:1 AS deps
 WORKDIR /app
@@ -8,17 +14,12 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # ============================================
-# Stage 2: Source
-# ============================================
-FROM deps AS source
-WORKDIR /app
-
-COPY . .
-
-# ============================================
 # Stage 3: Builder (Next.js)
 # ============================================
-FROM source AS builder
+FROM deps AS builder
+WORKDIR /app
+
+COPY --from=source /app ./
 
 ARG NEXT_PUBLIC_API_URL
 ARG DATABASE_URL
@@ -30,7 +31,10 @@ RUN mkdir -p public && bun run build
 # ============================================
 # Stage 4: Worker Builder (编译独立可执行文件)
 # ============================================
-FROM source AS worker-builder
+FROM deps AS worker-builder
+WORKDIR /app
+
+COPY --from=source /app ./
 
 # 编译 worker 为独立可执行文件 (约62MB, 包含所有依赖)
 RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
