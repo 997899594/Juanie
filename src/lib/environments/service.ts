@@ -3,10 +3,9 @@ import { syncPreviewEnvironmentDatabases } from '@/lib/databases/preview';
 import { db } from '@/lib/db';
 import { environments, services } from '@/lib/db/schema';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
-import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import {
   createNamespace,
-  ensureGhcrImagePullAccess,
+  ensureDeployRegistryImagePullAccess,
   getIsConnected,
   upsertService,
 } from '@/lib/k8s';
@@ -188,22 +187,10 @@ export async function ensureEnvironmentScaffold(input: {
 
   await createNamespace(namespace);
 
-  try {
-    const teamSession = await getTeamIntegrationSession({
-      teamId: input.project.teamId,
-      requiredCapabilities: [],
-    });
-
-    if (teamSession.provider === 'github') {
-      await ensureGhcrImagePullAccess(namespace, { token: teamSession.accessToken });
-    } else {
-      await ensureGhcrImagePullAccess(namespace);
-    }
-  } catch (_error) {
-    await ensureGhcrImagePullAccess(namespace).catch(() => {
-      // Ignore pull secret bootstrap failures in non-GitHub environments.
-    });
-  }
+  await ensureDeployRegistryImagePullAccess(namespace).catch(() => {
+    // Ignore pull secret bootstrap failures when the deploy registry is public
+    // or credentials are managed outside the platform process.
+  });
 
   const serviceList = await db.query.services.findMany({
     where: eq(services.projectId, input.project.id),

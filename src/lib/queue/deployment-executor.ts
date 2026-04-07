@@ -1,13 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { deploymentLogs, deployments, environments, projects, releases } from '@/lib/db/schema';
 import {
-  deploymentLogs,
-  deployments,
-  environments,
-  projects,
-  releases,
-  repositories,
-} from '@/lib/db/schema';
+  buildDeployImageReference,
+  getDeployRegistryPullSecretName,
+  usesDeployRegistryImage,
+} from '@/lib/deploy-registry';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import {
   getK8sConfigMapName,
@@ -18,11 +16,9 @@ import {
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
 import { ensureEnvironmentScaffold } from '@/lib/environments/service';
-import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import {
   deploymentExists,
-  ensureGhcrImagePullAccess,
-  GHCR_PULL_SECRET_NAME,
+  ensureDeployRegistryImagePullAccess,
   getDeploymentSnapshot,
   getIsConnected,
 } from '@/lib/k8s';
@@ -187,21 +183,14 @@ export async function executeDeploymentWorkload(
     );
   }
 
-  let useGhcrPullSecret = false;
-  if (getIsConnected() && targetEnvironment.namespace) {
+  let useDeployRegistryPullSecret = false;
+  if (getIsConnected() && targetEnvironment.namespace && usesDeployRegistryImage(imageName)) {
     try {
-      const teamSession = await getTeamIntegrationSession({
-        teamId: project.teamId,
-        requiredCapabilities: [],
-      });
-      if (teamSession.provider === 'github') {
-        useGhcrPullSecret = await ensureGhcrImagePullAccess(targetEnvironment.namespace, {
-          token: teamSession.accessToken,
-        });
-      }
+      useDeployRegistryPullSecret = await ensureDeployRegistryImagePullAccess(
+        targetEnvironment.namespace
+      );
     } catch (error) {
-      console.warn('Could not ensure GHCR pull secret, will try env var fallback:', error);
-      useGhcrPullSecret = await ensureGhcrImagePullAccess(targetEnvironment.namespace);
+      console.warn('Could not ensure deploy registry pull secret:', error);
     }
   }
 
@@ -245,7 +234,9 @@ export async function executeDeploymentWorkload(
           port: service.port ?? 3000,
           replicas: service.replicas ?? 1,
           envFrom,
-          imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+          imagePullSecrets: useDeployRegistryPullSecret
+            ? [getDeployRegistryPullSecretName()]
+            : undefined,
           cpuRequest: service.cpuRequest ?? undefined,
           cpuLimit: service.cpuLimit ?? undefined,
           memoryRequest: service.memoryRequest ?? undefined,
@@ -264,7 +255,9 @@ export async function executeDeploymentWorkload(
       imageName,
       service,
       envFrom,
-      imagePullSecrets: useGhcrPullSecret ? [GHCR_PULL_SECRET_NAME] : undefined,
+      imagePullSecrets: useDeployRegistryPullSecret
+        ? [getDeployRegistryPullSecretName()]
+        : undefined,
       verificationPlan,
       onLog: (message) => logDeployment(deploymentId, message),
       onWarn: (message) => logDeployment(deploymentId, message, 'warn'),
@@ -349,31 +342,30 @@ export async function executeDeploymentWorkload(
 }
 
 function buildImageName(
-  project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
+  project: typeof projects.$inferSelect & {
+    repository: {
+      fullName: string;
+    } | null;
+  },
   commitSha: string | null | undefined
 ): string | null {
-  if (!project.repository || !commitSha || !project.repository.webUrl) {
+  if (!commitSha) {
     return null;
   }
 
-  const webUrl = project.repository.webUrl;
-  const githubMatch = webUrl.match(/github\.com\/([^/]+\/[^/]+)/);
-  const gitlabMatch = webUrl.match(/gitlab[^/]*\/([^/]+\/[^/]+)/);
+  const config =
+    project.configJson && typeof project.configJson === 'object'
+      ? (project.configJson as Record<string, unknown>)
+      : null;
+  const configuredImageName = typeof config?.imageName === 'string' ? config.imageName.trim() : '';
 
-  const repoPath = githubMatch?.[1] || gitlabMatch?.[1];
-  if (!repoPath) {
+  if (configuredImageName) {
+    return `${configuredImageName}:sha-${commitSha}`;
+  }
+
+  if (!project.repository?.fullName) {
     return null;
   }
 
-  const tag = `sha-${commitSha.slice(0, 7)}`;
-
-  if (githubMatch) {
-    return `ghcr.io/${repoPath.toLowerCase()}:${tag}`;
-  }
-
-  if (gitlabMatch) {
-    return `registry.gitlab.com/${repoPath}:${tag}`;
-  }
-
-  return null;
+  return buildDeployImageReference(project.repository.fullName, commitSha);
 }

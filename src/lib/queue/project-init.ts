@@ -13,7 +13,6 @@ import {
 } from '@/lib/databases/capabilities';
 import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
-import type { GitProviderType } from '@/lib/db/schema';
 import {
   databases,
   domains,
@@ -25,6 +24,7 @@ import {
   services,
   teams,
 } from '@/lib/db/schema';
+import { buildDeployImageRepository } from '@/lib/deploy-registry';
 import { buildDomainRouteName, pickDefaultPublicService } from '@/lib/domains/defaults';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
@@ -40,7 +40,7 @@ import {
   createSecret,
   createService,
   createStatefulSet,
-  ensureGhcrImagePullAccess,
+  ensureDeployRegistryImagePullAccess,
   getIsConnected,
   getK8sClient,
   initK8sClient,
@@ -1084,7 +1084,7 @@ on:
     branches: [main, master]
 
 env:
-  REGISTRY: ghcr.io
+  DEPLOY_REGISTRY: \${{ vars.DEPLOY_REGISTRY || 'ghcr.io' }}
 
 jobs:
   detect:
@@ -1119,23 +1119,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to GHCR
+      - name: Log in to Deploy Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: \${{ github.actor }}
-          password: \${{ secrets.GITHUB_TOKEN }}
+          registry: \${{ env.DEPLOY_REGISTRY }}
+          username: \${{ secrets.DEPLOY_REGISTRY_USERNAME || github.actor }}
+          password: \${{ secrets.DEPLOY_REGISTRY_PASSWORD || secrets.GITHUB_TOKEN }}
 
       - name: Build and push \${{ matrix.service }}
         run: |
-          IMAGE_TAG=\${{ env.REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
+          export REGISTRY="\${{ env.DEPLOY_REGISTRY }}"
+          IMAGE_TAG=$REGISTRY/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
           docker build -t $IMAGE_TAG -f apps/\${{ matrix.service }}/Dockerfile .
           docker push $IMAGE_TAG
 
       - name: Trigger Juanie Release
         if: success()
         run: |
-          IMAGE_TAG=\${{ env.REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
+          IMAGE_TAG=\${{ env.DEPLOY_REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
           RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}" \
@@ -1393,15 +1394,9 @@ async function configureReleaseTrigger(
     return;
   }
 
-  // Obtain integration session to get provider info
-  const session = await getTeamIntegrationSession({
-    teamId: project.teamId,
-    requiredCapabilities: ['read_repo'],
-  });
-
   // Update project config with image name
   const config = (project.configJson as Record<string, unknown>) || {};
-  const imageName = buildImageName(session.provider, project.repository);
+  const imageName = buildImageName(project.repository);
 
   await db
     .update(projects)
@@ -1421,19 +1416,8 @@ async function configureReleaseTrigger(
 /**
  * Build the container image name based on git provider type.
  */
-function buildImageName(
-  providerType: GitProviderType,
-  repo: typeof repositories.$inferSelect
-): string {
-  switch (providerType) {
-    case 'github':
-      return `ghcr.io/${repo.owner}/${repo.name}`;
-    case 'gitlab':
-    case 'gitlab-self-hosted':
-      return `registry.gitlab.com/${repo.fullName}`;
-    default:
-      return '';
-  }
+function buildImageName(repo: typeof repositories.$inferSelect): string {
+  return buildDeployImageRepository(repo.fullName);
 }
 
 async function setupNamespace(
@@ -1460,16 +1444,6 @@ async function setupNamespace(
     : [stagingNamespace];
 
   if (hasK8s) {
-    let teamSession: Awaited<ReturnType<typeof getTeamIntegrationSession>> | null = null;
-    try {
-      teamSession = await getTeamIntegrationSession({
-        teamId: project.teamId,
-        requiredCapabilities: [],
-      });
-    } catch (e) {
-      console.warn('Could not get team session for GHCR pull secret:', e);
-    }
-
     for (const ns of namespacesToCreate) {
       try {
         await createNamespace(ns);
@@ -1477,13 +1451,11 @@ async function setupNamespace(
         console.error(`Failed to create namespace ${ns}:`, error);
         throw error;
       }
-      if (teamSession?.provider === 'github') {
-        try {
-          await ensureGhcrImagePullAccess(ns, { token: teamSession.accessToken });
-          console.log(`✅ Created GHCR pull secret in namespace ${ns}`);
-        } catch (e) {
-          console.warn(`Could not create GHCR pull secret in ${ns}:`, e);
-        }
+      try {
+        await ensureDeployRegistryImagePullAccess(ns);
+        console.log(`✅ Ensured deploy registry pull secret in namespace ${ns}`);
+      } catch (e) {
+        console.warn(`Could not ensure deploy registry pull secret in ${ns}:`, e);
       }
     }
     await onProgress?.(85);

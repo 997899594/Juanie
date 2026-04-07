@@ -5,8 +5,8 @@ on:
     branches: [main, master]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_TAG: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+  DEPLOY_REGISTRY: ${{ vars.DEPLOY_REGISTRY || 'ghcr.io' }}
+  IMAGE_TAG: ${{ format('{0}/{1}:sha-{2}', vars.DEPLOY_REGISTRY || 'ghcr.io', github.repository, github.sha) }}
 
 jobs:
   quality-gate:
@@ -136,13 +136,15 @@ jobs:
 
       - uses: docker/login-action@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.DEPLOY_REGISTRY }}
+          username: ${{ secrets.DEPLOY_REGISTRY_USERNAME || github.actor }}
+          password: ${{ secrets.DEPLOY_REGISTRY_PASSWORD || secrets.GITHUB_TOKEN }}
 
       - name: Build and Push (Bake Target)
         if: ${{ steps.plan.outputs.build_kind == 'bake_target' }}
         uses: docker/bake-action@v7
+        env:
+          REGISTRY: ${{ env.DEPLOY_REGISTRY }}
         with:
           source: .
           files: ${{ steps.plan.outputs.build_definition }}
@@ -157,6 +159,8 @@ jobs:
       - name: Build and Push (Bake Default)
         if: ${{ steps.plan.outputs.build_kind == 'bake_default' }}
         uses: docker/bake-action@v7
+        env:
+          REGISTRY: ${{ env.DEPLOY_REGISTRY }}
         with:
           source: .
           files: ${{ steps.plan.outputs.build_definition }}

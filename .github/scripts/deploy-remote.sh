@@ -4,6 +4,7 @@ set -euo pipefail
 
 NAMESPACE="${NAMESPACE:-juanie}"
 RELEASE_NAME="${RELEASE_NAME:-juanie}"
+IMAGE_PULL_SECRET_NAME="${IMAGE_PULL_SECRET_NAME:-ghcr-pull-secret}"
 SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "$WEB_IMAGE_TAG" | cut -d- -f2 | cut -c1-7)"
 
 show_failure() {
@@ -42,7 +43,7 @@ spec:
       restartPolicy: Never
       serviceAccountName: ${RELEASE_NAME}
       imagePullSecrets:
-        - name: ghcr-pull-secret
+        - name: ${IMAGE_PULL_SECRET_NAME}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -97,8 +98,8 @@ wait_for_rollout() {
   fi
 }
 
-echo "Checking GHCR pull secret..."
-require_resource secret ghcr-pull-secret
+echo "Checking image pull secret..."
+require_resource secret "${IMAGE_PULL_SECRET_NAME}"
 echo "Checking deployment baseline resources..."
 require_resource configmap juanie-config
 require_resource secret juanie-secret
@@ -117,7 +118,7 @@ helm upgrade --install "${RELEASE_NAME}" "${CHART_DIR}" \
   --set images.worker.tag="${WORKER_IMAGE_TAG}" \
   --set images.migrate.repository="${IMAGE_REPOSITORY}" \
   --set images.migrate.tag="${MIGRATE_IMAGE_TAG}" \
-  --set-string imagePullSecrets[0]=ghcr-pull-secret
+  --set-string imagePullSecrets[0]="${IMAGE_PULL_SECRET_NAME}"
 
 for deployment in juanie-web juanie-worker; do
   wait_for_rollout "${deployment}"

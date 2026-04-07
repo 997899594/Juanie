@@ -74,6 +74,8 @@ env:
   DATABASE_PORT: 5432
   DATABASE_NAME: "juanie"
   AUTH_TRUST_HOST: "true"
+  DEPLOY_REGISTRY: "ghcr.io"
+  DEPLOY_REGISTRY_PULL_SECRET_NAME: "ghcr-pull-secret"
 
 # Gateway 配置
 hostname: "juanie.art"

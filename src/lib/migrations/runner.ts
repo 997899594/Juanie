@@ -7,13 +7,12 @@ import {
 } from '@/lib/databases/capabilities';
 import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
-import { migrationRunItems, migrationRuns, projects } from '@/lib/db/schema';
-import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
+import { getDeployRegistryPullSecretName, usesDeployRegistryImage } from '@/lib/deploy-registry';
 import {
   createJob,
   deleteJob,
-  ensureGhcrImagePullAccess,
-  GHCR_PULL_SECRET_NAME,
+  ensureDeployRegistryImagePullAccess,
   getEvents,
   getIsConnected,
   getJob,
@@ -491,46 +490,16 @@ async function markRunAndItemFailed(input: {
 }
 
 async function ensureMigrationImagePullSecrets(
-  projectId: string,
   namespace: string,
   imageUrl: string
 ): Promise<string[] | undefined> {
-  if (!imageUrl.startsWith('ghcr.io/')) {
+  if (!usesDeployRegistryImage(imageUrl)) {
     return undefined;
   }
 
   try {
-    const project = await db.query.projects.findFirst({
-      where: eq(projects.id, projectId),
-      columns: {
-        teamId: true,
-      },
-    });
-
-    if (project) {
-      try {
-        const teamSession = await getTeamIntegrationSession({
-          teamId: project.teamId,
-          requiredCapabilities: [],
-        });
-
-        if (teamSession.provider === 'github') {
-          const secretReady = await ensureGhcrImagePullAccess(namespace, {
-            token: teamSession.accessToken,
-          });
-          return secretReady ? [GHCR_PULL_SECRET_NAME] : undefined;
-        } else {
-          const secretReady = await ensureGhcrImagePullAccess(namespace);
-          return secretReady ? [GHCR_PULL_SECRET_NAME] : undefined;
-        }
-      } catch {
-        const secretReady = await ensureGhcrImagePullAccess(namespace);
-        return secretReady ? [GHCR_PULL_SECRET_NAME] : undefined;
-      }
-    } else {
-      const secretReady = await ensureGhcrImagePullAccess(namespace);
-      return secretReady ? [GHCR_PULL_SECRET_NAME] : undefined;
-    }
+    const secretReady = await ensureDeployRegistryImagePullAccess(namespace);
+    return secretReady ? [getDeployRegistryPullSecretName()] : undefined;
   } catch {
     // Keep running even if secret refresh fails. The namespace may already have the secret.
   }
@@ -674,11 +643,7 @@ async function runCommandMigration(
     '-lc',
     `cd ${shellQuote(spec.specification.workingDirectory)} && ${spec.specification.command}`,
   ];
-  const imagePullSecrets = await ensureMigrationImagePullSecrets(
-    spec.specification.projectId,
-    namespace!,
-    imageUrl
-  );
+  const imagePullSecrets = await ensureMigrationImagePullSecrets(namespace!, imageUrl);
 
   const item = await ensureCommandMigrationItem(runId, spec.specification.command, checksum);
 

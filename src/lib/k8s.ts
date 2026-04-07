@@ -1,6 +1,11 @@
 import { existsSync } from 'node:fs';
 import { Writable } from 'node:stream';
 import * as k8s from '@kubernetes/client-node';
+import {
+  getDeployRegistryCredentials,
+  getDeployRegistryHost,
+  getDeployRegistryPullSecretName,
+} from '@/lib/deploy-registry';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
 let k8sAppsApi: k8s.AppsV1Api | null = null;
@@ -541,7 +546,6 @@ export function getIsConnected(): boolean {
 // Image Pull Secret Management
 // ============================================
 
-export const GHCR_PULL_SECRET_NAME = 'ghcr-pull-secret';
 const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
 
 async function namespacedSecretExists(namespace: string, name: string): Promise<boolean> {
@@ -598,50 +602,25 @@ export async function ensureServiceAccountImagePullSecret(
   }
 }
 
-/**
- * 在指定 namespace 创建或更新 GHCR 镜像拉取 Secret。
- * 优先使用传入的 OAuth token（来自用户登录授权），回退到环境变量。
- * 若两者均未配置则静默跳过（开发环境或公开镜像无需此 secret）。
- */
-export async function ensureGhcrPullSecret(
-  namespace: string,
-  options?: { token?: string }
-): Promise<boolean> {
-  const token = options?.token || process.env.GHCR_TOKEN;
+export async function ensureDeployRegistryPullSecret(namespace: string): Promise<boolean> {
+  const secretName = getDeployRegistryPullSecretName();
+  const credentials = getDeployRegistryCredentials();
 
-  if (!token) {
-    return namespacedSecretExists(namespace, GHCR_PULL_SECRET_NAME);
-  }
-
-  // 从 GitHub API 获取用户名（OAuth token 或 PAT 均可）
-  let username = process.env.GHCR_USERNAME;
-  if (!username) {
-    try {
-      const userRes = await fetch('https://api.github.com/user', {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
-      });
-      if (!userRes.ok) {
-        console.warn('[ensureGhcrPullSecret] Failed to fetch GitHub user, skipping pull secret');
-        return namespacedSecretExists(namespace, GHCR_PULL_SECRET_NAME);
-      }
-      const userData = (await userRes.json()) as { login: string };
-      username = userData.login;
-    } catch (e) {
-      console.warn('[ensureGhcrPullSecret] GitHub API error, skipping pull secret:', e);
-      return namespacedSecretExists(namespace, GHCR_PULL_SECRET_NAME);
-    }
-  }
-
-  if (!username) {
-    return namespacedSecretExists(namespace, GHCR_PULL_SECRET_NAME);
+  if (!credentials) {
+    return namespacedSecretExists(namespace, secretName);
   }
 
   const { core } = getK8sClient();
-  const auth = Buffer.from(`${username}:${token}`).toString('base64');
+  const server = getDeployRegistryHost();
+  const auth = Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64');
   const dockerConfigJson = Buffer.from(
     JSON.stringify({
       auths: {
-        'ghcr.io': { username, password: token, auth },
+        [server]: {
+          username: credentials.username,
+          password: credentials.password,
+          auth,
+        },
       },
     })
   ).toString('base64');
@@ -649,14 +628,14 @@ export async function ensureGhcrPullSecret(
   const body = {
     apiVersion: 'v1',
     kind: 'Secret',
-    metadata: { name: GHCR_PULL_SECRET_NAME, namespace },
+    metadata: { name: secretName, namespace },
     type: 'kubernetes.io/dockerconfigjson',
     data: { '.dockerconfigjson': dockerConfigJson },
   };
 
   try {
-    await core.readNamespacedSecret({ namespace, name: GHCR_PULL_SECRET_NAME });
-    await core.replaceNamespacedSecret({ namespace, name: GHCR_PULL_SECRET_NAME, body });
+    await core.readNamespacedSecret({ namespace, name: secretName });
+    await core.replaceNamespacedSecret({ namespace, name: secretName, body });
   } catch (e: unknown) {
     const error = e as { code?: number; statusCode?: number };
     if ((error.code ?? error.statusCode) === 404) {
@@ -669,14 +648,14 @@ export async function ensureGhcrPullSecret(
   return true;
 }
 
-export async function ensureGhcrImagePullAccess(
+export async function ensureDeployRegistryImagePullAccess(
   namespace: string,
   options?: {
-    token?: string;
     serviceAccounts?: string[];
   }
 ): Promise<boolean> {
-  const secretReady = await ensureGhcrPullSecret(namespace, options);
+  const secretName = getDeployRegistryPullSecretName();
+  const secretReady = await ensureDeployRegistryPullSecret(namespace);
 
   if (!secretReady) {
     return false;
@@ -685,14 +664,10 @@ export async function ensureGhcrImagePullAccess(
   const serviceAccounts = Array.from(new Set(options?.serviceAccounts ?? []));
   for (const serviceAccountName of serviceAccounts) {
     try {
-      await ensureServiceAccountImagePullSecret(
-        namespace,
-        serviceAccountName,
-        GHCR_PULL_SECRET_NAME
-      );
+      await ensureServiceAccountImagePullSecret(namespace, serviceAccountName, secretName);
     } catch (error) {
       console.warn(
-        `[ensureGhcrImagePullAccess] Failed to patch ServiceAccount ${namespace}/${serviceAccountName}:`,
+        `[ensureDeployRegistryImagePullAccess] Failed to patch ServiceAccount ${namespace}/${serviceAccountName}:`,
         error
       );
     }
