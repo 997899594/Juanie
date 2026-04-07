@@ -160,6 +160,8 @@ jobs:
         if: ${{ steps.plan.outputs.build_kind == 'bake_default' }}
         uses: docker/bake-action@v7
         env:
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
           REGISTRY: ${{ env.DEPLOY_REGISTRY }}
         with:
           source: .
@@ -173,7 +175,8 @@ jobs:
         if: ${{ steps.plan.outputs.build_kind == 'dockerfile' }}
         uses: docker/build-push-action@v7
         env:
-          DOCKER_BUILD_SUMMARY: true
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: ${{ steps.plan.outputs.build_context }}
           file: ${{ steps.plan.outputs.build_dockerfile }}
