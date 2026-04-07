@@ -1,4 +1,8 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
+import {
+  formatDatabaseCapabilityIssues,
+  verifyDeclaredDatabaseCapabilities,
+} from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
 import {
@@ -189,6 +193,13 @@ export async function buildMigrationExecutionPlan(
   let filePreviewError: string | null = null;
   let sqlFiles: Array<{ name: string }> = [];
   const commandSafety = assessMigrationCommandSafety(spec.specification);
+  const capabilityCheck = await verifyDeclaredDatabaseCapabilities(spec.database);
+
+  if (!capabilityCheck.satisfied) {
+    canRun = false;
+    blockingReason = formatDatabaseCapabilityIssues(spec.database, capabilityCheck.issues);
+    warnings.push(...capabilityCheck.issues.map((issue) => issue.message));
+  }
 
   if (spec.specification.tool === 'sql') {
     try {

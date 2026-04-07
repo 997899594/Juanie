@@ -1,5 +1,5 @@
 import type { V1Job } from '@kubernetes/client-node';
-import { managedPostgresImage } from '@/lib/databases/images';
+import { resolveManagedPostgresImage } from '@/lib/databases/capabilities';
 import {
   createJob,
   createNamespace,
@@ -29,6 +29,7 @@ export async function clonePostgreSQLDatabase(input: {
     name: string;
     type: string;
     connectionString: string | null;
+    capabilities?: string[] | null;
   };
 }): Promise<string> {
   if (!getIsConnected() || !input.namespace) {
@@ -75,7 +76,7 @@ export async function clonePostgreSQLDatabase(input: {
           containers: [
             {
               name: 'clone',
-              image: managedPostgresImage,
+              image: resolveManagedPostgresImage(input.target.capabilities),
               command: ['/bin/sh', '-lc'],
               args: [
                 [

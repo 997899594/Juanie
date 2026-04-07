@@ -1,7 +1,9 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
+import { assertDeclaredDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
+import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import {
   continueReleaseFromDeploymentStage,
   failReleaseForCurrentPhase,
@@ -9,6 +11,7 @@ import {
   runReleaseMigrationPhase,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
+import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 import type { ReleaseJobData } from './index';
 
 export async function processRelease(job: Job<ReleaseJobData>) {
@@ -24,6 +27,22 @@ export async function processRelease(job: Job<ReleaseJobData>) {
   }
 
   try {
+    await syncProjectDatabaseRuntimeContractsFromRepo({
+      projectId: release.projectId,
+      sourceRef: release.sourceRef,
+      sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
+      strict: true,
+    });
+
+    const environmentDatabases = await getDatabasesForEnvironment({
+      projectId: release.projectId,
+      environmentId: release.environmentId,
+    });
+
+    for (const database of environmentDatabases) {
+      await assertDeclaredDatabaseCapabilities(database);
+    }
+
     await updateReleaseStatus(release.id, 'planning');
     await updateReleaseStatus(release.id, 'migration_pre_running');
     await runReleaseMigrationPhase(release, 'preDeploy');

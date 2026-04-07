@@ -1,4 +1,5 @@
 import { and, eq, isNotNull } from 'drizzle-orm';
+import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { clonePostgreSQLDatabase } from '@/lib/databases/clone';
 import { db } from '@/lib/db';
 import { databases, environments, projects } from '@/lib/db/schema';
@@ -78,14 +79,28 @@ export async function syncPreviewEnvironmentDatabases(input: {
       connectionString: true,
       type: true,
       name: true,
+      capabilities: true,
     },
   });
-  const existingSourceIds = new Set(
-    existingClones.map((database) => database.sourceDatabaseId).filter(Boolean) as string[]
-  );
-
   for (const source of sourceDatabases) {
-    if (existingSourceIds.has(source.id)) {
+    const existingClone = existingClones.find(
+      (database) => database.sourceDatabaseId === source.id
+    );
+
+    if (existingClone) {
+      const nextCapabilities = normalizeDatabaseCapabilities(source.capabilities);
+      const currentCapabilities = normalizeDatabaseCapabilities(existingClone.capabilities);
+
+      if (JSON.stringify(nextCapabilities) !== JSON.stringify(currentCapabilities)) {
+        await db
+          .update(databases)
+          .set({
+            capabilities: nextCapabilities,
+            updatedAt: new Date(),
+          })
+          .where(eq(databases.id, existingClone.id));
+      }
+
       continue;
     }
 
@@ -102,6 +117,7 @@ export async function syncPreviewEnvironmentDatabases(input: {
         provisionType: source.provisionType,
         scope: source.scope,
         role: source.role,
+        capabilities: source.capabilities,
         status: 'pending',
       })
       .returning();

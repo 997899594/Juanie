@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
   boolean,
@@ -13,6 +13,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+import type { DatabaseCapability } from '@/lib/databases/capabilities';
 import type { ReleaseRecapRecord } from '@/lib/releases/recap-record';
 
 // ============================================
@@ -561,6 +562,10 @@ export const databases = pgTable(
     provisionType: varchar('provisionType', { length: 20 }).notNull().default('shared'),
     scope: databaseScopeEnum('scope').notNull().default('project'),
     role: databaseRoleEnum('role').notNull().default('primary'),
+    capabilities: jsonb('capabilities')
+      .$type<DatabaseCapability[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
 
     connectionString: text('connectionString'),
     host: varchar('host', { length: 255 }),

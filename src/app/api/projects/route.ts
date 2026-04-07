@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import type { DatabaseConfig, ServiceConfig } from '@/lib/config/parser';
+import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
 import type { InitStepStatus } from '@/lib/db/schema';
 import {
@@ -249,6 +250,7 @@ export async function POST(request: Request) {
         provisionType,
         scope: dbConfig.scope || (dbConfig.service ? 'service' : 'project'),
         role: dbConfig.role || 'primary',
+        capabilities: normalizeDatabaseCapabilities(dbConfig.capabilities),
         connectionString: provisionType === 'external' ? (dbConfig.externalUrl ?? null) : null,
         status: 'pending',
       });

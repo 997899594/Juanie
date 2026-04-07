@@ -1,6 +1,10 @@
 import crypto from 'node:crypto';
 import type { CoreV1Event, V1EnvVar, V1Job, V1Pod } from '@kubernetes/client-node';
 import { and, eq } from 'drizzle-orm';
+import {
+  formatDatabaseCapabilityIssues,
+  verifyDeclaredDatabaseCapabilities,
+} from '@/lib/databases/capabilities';
 import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
 import { migrationRunItems, migrationRuns, projects } from '@/lib/db/schema';
@@ -839,6 +843,15 @@ export async function executeMigrationRun(
 
   if (resumed) {
     await appendRunLog(runId, '检测到迁移任务已在运行，恢复监控现有执行。');
+  }
+
+  const capabilityCheck = await verifyDeclaredDatabaseCapabilities(spec.database);
+  if (!capabilityCheck.satisfied) {
+    await markRunFailed(
+      runId,
+      'MIGRATION_DATABASE_CAPABILITY_UNAVAILABLE',
+      formatDatabaseCapabilityIssues(spec.database, capabilityCheck.issues)
+    );
   }
 
   if (spec.specification.tool === 'sql') {

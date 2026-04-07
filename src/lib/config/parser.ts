@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { databaseCapabilities } from '@/lib/databases/capabilities';
 
 const migrationConfigSchema = z.object({
   tool: z.enum(['drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom']),
@@ -82,20 +83,31 @@ export const serviceSchema = z.object({
     .optional(),
 });
 
-export const databaseSchema = z.object({
-  name: z.string().min(1).max(100),
-  type: z.enum(['postgresql', 'mysql', 'redis', 'mongodb']),
-  scope: z.enum(['project', 'service']).optional().default('project'),
-  service: z.string().min(1).max(100).optional(),
-  role: z
-    .enum(['primary', 'readonly', 'cache', 'queue', 'analytics'])
-    .optional()
-    .default('primary'),
-  plan: z.enum(['starter', 'standard', 'premium']).optional(),
-  provisionType: z.enum(['shared', 'standalone', 'external']).optional().default('standalone'),
-  externalUrl: z.string().optional(),
-  environments: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
-});
+export const databaseSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    type: z.enum(['postgresql', 'mysql', 'redis', 'mongodb']),
+    scope: z.enum(['project', 'service']).optional().default('project'),
+    service: z.string().min(1).max(100).optional(),
+    role: z
+      .enum(['primary', 'readonly', 'cache', 'queue', 'analytics'])
+      .optional()
+      .default('primary'),
+    plan: z.enum(['starter', 'standard', 'premium']).optional(),
+    provisionType: z.enum(['shared', 'standalone', 'external']).optional().default('standalone'),
+    externalUrl: z.string().optional(),
+    capabilities: z.array(z.enum(databaseCapabilities)).max(20).optional().default([]),
+    environments: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  })
+  .superRefine((database, ctx) => {
+    if (database.capabilities.length > 0 && database.type !== 'postgresql') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'database capabilities 目前只支持 postgresql',
+        path: ['capabilities'],
+      });
+    }
+  });
 
 export const environmentSchema = z.object({
   branch: z.string().optional(),
@@ -260,7 +272,8 @@ export function generateDefaultConfig(
       `    type: ${options.database}`,
       `    plan: starter`,
       `    scope: project`,
-      `    role: primary`
+      `    role: primary`,
+      ...(options.database === 'postgresql' ? [`    capabilities: []`] : [])
     );
   }
 

@@ -5,7 +5,12 @@ import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import postgres from 'postgres';
 import { encrypt } from '@/lib/crypto';
-import { managedPostgresImage } from '@/lib/databases/images';
+import {
+  formatDatabaseCapabilityIssues,
+  reconcileDeclaredDatabaseCapabilities,
+  resolveManagedPostgresImage,
+  verifyDeclaredDatabaseCapabilities,
+} from '@/lib/databases/capabilities';
 import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
@@ -1577,7 +1582,14 @@ export async function provisionDatabase(
 
   if (provisionType === 'external') {
     // connectionString was set at insert time; just mark running
-    await db.update(databases).set({ status: 'running' }).where(eq(databases.id, database.id));
+    const capabilityCheck = await verifyDeclaredDatabaseCapabilities(database);
+    await db
+      .update(databases)
+      .set({ status: capabilityCheck.satisfied ? 'running' : 'failed' })
+      .where(eq(databases.id, database.id));
+    if (!capabilityCheck.satisfied) {
+      throw new Error(formatDatabaseCapabilityIssues(database, capabilityCheck.issues));
+    }
     console.log(`✅ Database ${database.name} marked running (external)`);
     return;
   }
@@ -1641,7 +1653,13 @@ export async function provisionDatabase(
   await createSecret(namespace, secretName, { password: dbPassword });
 
   if (database.type === 'postgresql') {
-    await createPostgreSQLStatefulSet(namespace, resourceName, database.name, secretName);
+    await createPostgreSQLStatefulSet(
+      namespace,
+      resourceName,
+      database.name,
+      secretName,
+      database.capabilities
+    );
     await createService(namespace, resourceName, { port: 5432, targetPort: 5432 });
   } else if (database.type === 'redis') {
     await createRedisDeployment(namespace, resourceName, secretName);
@@ -1662,13 +1680,30 @@ export async function provisionDatabase(
   await db
     .update(databases)
     .set({
-      status: 'running',
       connectionString,
       host: `${resourceName}.${namespace}.svc.cluster.local`,
       serviceName: resourceName,
       namespace,
     })
     .where(eq(databases.id, database.id));
+
+  const latestDatabase = await db.query.databases.findFirst({
+    where: eq(databases.id, database.id),
+  });
+  if (!latestDatabase) {
+    throw new Error(`数据库 ${database.name} 在供应完成后丢失，无法兑现能力`);
+  }
+
+  const capabilityCheck = await reconcileDeclaredDatabaseCapabilities(latestDatabase);
+
+  await db
+    .update(databases)
+    .set({ status: capabilityCheck.satisfied ? 'running' : 'failed' })
+    .where(eq(databases.id, database.id));
+
+  if (!capabilityCheck.satisfied) {
+    throw new Error(formatDatabaseCapabilityIssues(database, capabilityCheck.issues));
+  }
 
   console.log(`✅ Provisioned standalone database ${database.name}`);
 }
@@ -1758,7 +1793,6 @@ async function provisionSharedPostgreSQL(
     await db
       .update(databases)
       .set({
-        status: 'running',
         connectionString: connStr,
         host,
         port,
@@ -1777,6 +1811,24 @@ async function provisionSharedPostgreSQL(
       username: dbIdentifier,
       connectionString: connStr,
     });
+
+    const latestDatabase = await db.query.databases.findFirst({
+      where: eq(databases.id, database.id),
+    });
+    if (!latestDatabase) {
+      throw new Error(`数据库 ${database.name} 在共享库初始化后丢失，无法兑现能力`);
+    }
+
+    const capabilityCheck = await reconcileDeclaredDatabaseCapabilities(latestDatabase);
+
+    await db
+      .update(databases)
+      .set({ status: capabilityCheck.satisfied ? 'running' : 'failed' })
+      .where(eq(databases.id, database.id));
+
+    if (!capabilityCheck.satisfied) {
+      throw new Error(formatDatabaseCapabilityIssues(database, capabilityCheck.issues));
+    }
 
     console.log(`✅ Provisioned shared PostgreSQL database ${dbIdentifier}`);
   } finally {
@@ -1825,10 +1877,11 @@ async function createPostgreSQLStatefulSet(
   namespace: string,
   name: string,
   dbName: string,
-  secretName: string
+  secretName: string,
+  capabilities: readonly string[] | null | undefined
 ): Promise<void> {
   await createStatefulSet(namespace, name, {
-    image: managedPostgresImage,
+    image: resolveManagedPostgresImage(capabilities),
     serviceName: name,
     port: 5432,
     replicas: 1,

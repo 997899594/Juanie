@@ -39,7 +39,10 @@ import {
   isProgressiveStrategy,
   promoteCandidateSnapshotToStable,
 } from '@/lib/releases/workloads';
-import { syncProjectServiceRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
+import {
+  syncProjectDatabaseRuntimeContractsFromRepo,
+  syncProjectServiceRuntimeContractsFromRepo,
+} from '@/lib/services/runtime-contract';
 
 export async function logDeployment(
   deploymentId: string,
@@ -100,6 +103,11 @@ export async function executeDeploymentWorkload(
     : null;
 
   const serviceList = await syncProjectServiceRuntimeContractsFromRepo({
+    projectId: deployment.projectId,
+    sourceRef: release?.sourceRef ?? null,
+    sourceCommitSha: release?.configCommitSha ?? release?.sourceCommitSha ?? deployment.commitSha,
+  });
+  await syncProjectDatabaseRuntimeContractsFromRepo({
     projectId: deployment.projectId,
     sourceRef: release?.sourceRef ?? null,
     sourceCommitSha: release?.configCommitSha ?? release?.sourceCommitSha ?? deployment.commitSha,

@@ -1,23 +1,37 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
+import type { DatabaseConfig, ParsedConfig } from '@/lib/config/parser';
 import { parseJuanieConfig } from '@/lib/config/parser';
+import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
-import { projects, repositories, services } from '@/lib/db/schema';
+import { databases, projects, repositories, services } from '@/lib/db/schema';
 import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 
-export async function syncProjectServiceRuntimeContractsFromRepo(input: {
+interface RuntimeContractSyncInput {
   projectId: string;
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
-}) {
-  const currentServices = await db.query.services.findMany({
-    where: eq(services.projectId, input.projectId),
-  });
+  strict?: boolean;
+}
 
-  if (currentServices.length === 0) {
-    return currentServices;
+async function loadProjectConfigFromRepo(input: RuntimeContractSyncInput): Promise<{
+  parsed: ParsedConfig;
+  currentServices: Awaited<ReturnType<typeof db.query.services.findMany>>;
+  currentDatabases: Awaited<ReturnType<typeof db.query.databases.findMany>>;
+}> {
+  const [currentServices, currentDatabases] = await Promise.all([
+    db.query.services.findMany({
+      where: eq(services.projectId, input.projectId),
+    }),
+    db.query.databases.findMany({
+      where: and(eq(databases.projectId, input.projectId), isNull(databases.sourceDatabaseId)),
+    }),
+  ]);
+
+  if (currentServices.length === 0 && currentDatabases.length === 0) {
+    throw new Error('No runtime contracts to sync');
   }
 
   const project = await db.query.projects.findFirst({
@@ -30,7 +44,7 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: {
   });
 
   if (!project?.repositoryId) {
-    return currentServices;
+    throw new Error('Project has no repository');
   }
 
   const repository = await db.query.repositories.findFirst({
@@ -38,7 +52,7 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: {
   });
 
   if (!repository) {
-    return currentServices;
+    throw new Error('Repository not found');
   }
 
   let session: Awaited<ReturnType<typeof getTeamIntegrationSession>>;
@@ -52,7 +66,7 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: {
       `[Deployment] Could not load integration session for project ${input.projectId}:`,
       error
     );
-    return currentServices;
+    throw error;
   }
 
   const configRef = input.sourceCommitSha || input.sourceRef || repository.defaultBranch || 'main';
@@ -76,13 +90,44 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: {
   }
 
   if (!configContent) {
-    return currentServices;
+    throw new Error('Config not found');
   }
 
   const parsed = parseJuanieConfig(configContent);
   if (!parsed.isValid) {
     throw new Error(`Invalid juanie.yaml: ${parsed.errors.join('; ')}`);
   }
+
+  return {
+    parsed,
+    currentServices,
+    currentDatabases,
+  };
+}
+
+function buildDatabaseContractKey(input: {
+  name: string;
+  scope?: string | null;
+  serviceName?: string | null;
+}) {
+  return `${input.scope ?? 'project'}:${input.serviceName ?? '-'}:${input.name}`;
+}
+
+export async function syncProjectServiceRuntimeContractsFromRepo(input: RuntimeContractSyncInput) {
+  let loaded: Awaited<ReturnType<typeof loadProjectConfigFromRepo>> | null = null;
+
+  try {
+    loaded = await loadProjectConfigFromRepo(input);
+  } catch (error) {
+    if (input.strict) {
+      throw error;
+    }
+    return db.query.services.findMany({
+      where: eq(services.projectId, input.projectId),
+    });
+  }
+
+  const { parsed, currentServices } = loaded;
 
   const configServices = new Map(parsed.services.map((service) => [service.name, service]));
   const byId = new Map(currentServices.map((service) => [service.id, service]));
@@ -133,4 +178,88 @@ export async function syncProjectServiceRuntimeContractsFromRepo(input: {
   }
 
   return currentServices.map((service) => byId.get(service.id) ?? service);
+}
+
+export async function syncProjectDatabaseRuntimeContractsFromRepo(input: RuntimeContractSyncInput) {
+  let loaded: Awaited<ReturnType<typeof loadProjectConfigFromRepo>> | null = null;
+
+  try {
+    loaded = await loadProjectConfigFromRepo(input);
+  } catch (error) {
+    if (input.strict) {
+      throw error;
+    }
+    return db.query.databases.findMany({
+      where: and(eq(databases.projectId, input.projectId), isNull(databases.sourceDatabaseId)),
+    });
+  }
+
+  const { parsed, currentServices, currentDatabases } = loaded;
+  const configDatabases = parsed.databases ?? [];
+  if (configDatabases.length === 0 || currentDatabases.length === 0) {
+    return currentDatabases;
+  }
+
+  const serviceById = new Map(currentServices.map((service) => [service.id, service]));
+  const serviceByName = new Map(currentServices.map((service) => [service.name, service]));
+  const configByKey = new Map<string, DatabaseConfig>();
+  const configByName = new Map<string, DatabaseConfig[]>();
+
+  for (const config of configDatabases) {
+    const scope = config.scope ?? (config.service ? 'service' : 'project');
+    const key = buildDatabaseContractKey({
+      name: config.name,
+      scope,
+      serviceName: config.service ?? null,
+    });
+    configByKey.set(key, config);
+    configByName.set(config.name, [...(configByName.get(config.name) ?? []), config]);
+  }
+
+  const byId = new Map(currentDatabases.map((database) => [database.id, database]));
+
+  for (const databaseRecord of currentDatabases) {
+    const currentServiceName = databaseRecord.serviceId
+      ? (serviceById.get(databaseRecord.serviceId)?.name ?? null)
+      : null;
+    const exact = configByKey.get(
+      buildDatabaseContractKey({
+        name: databaseRecord.name,
+        scope: databaseRecord.scope,
+        serviceName: currentServiceName,
+      })
+    );
+    const fallbackCandidates = configByName.get(databaseRecord.name) ?? [];
+    const config =
+      exact ?? (fallbackCandidates.length === 1 ? (fallbackCandidates[0] ?? null) : null);
+
+    if (!config) {
+      continue;
+    }
+
+    const nextScope = config.scope ?? (config.service ? 'service' : 'project');
+    const nextServiceId =
+      nextScope === 'service' && config.service
+        ? (serviceByName.get(config.service)?.id ?? databaseRecord.serviceId)
+        : null;
+
+    const [updated] = await db
+      .update(databases)
+      .set({
+        type: config.type,
+        plan: config.plan ?? databaseRecord.plan,
+        provisionType: config.provisionType ?? databaseRecord.provisionType,
+        scope: nextScope,
+        role: config.role ?? databaseRecord.role,
+        serviceId: nextServiceId,
+        capabilities: normalizeDatabaseCapabilities(config.capabilities),
+        updatedAt: new Date(),
+      })
+      .where(eq(databases.id, databaseRecord.id))
+      .returning();
+
+    byId.set(databaseRecord.id, updated);
+  }
+
+  return currentDatabases.map((database) => byId.get(database.id) ?? database);
 }

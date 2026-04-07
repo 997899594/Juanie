@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { databaseCapabilities, normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
 import { databases, environments, projects, services, teamMembers } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
@@ -95,6 +96,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     serviceId,
     scope = serviceId ? 'service' : 'project',
     role = 'primary',
+    capabilities = [],
   } = body;
 
   if (!name || !type) {
@@ -105,6 +107,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const validProvisionTypes = ['shared', 'standalone', 'external'];
   const validScopes = ['project', 'service'];
   const validRoles = ['primary', 'readonly', 'cache', 'queue', 'analytics'];
+  const normalizedCapabilities = normalizeDatabaseCapabilities(capabilities);
   if (!validTypes.includes(type)) {
     return NextResponse.json(
       { error: `Invalid type. Must be one of: ${validTypes.join(', ')}` },
@@ -126,6 +129,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!validRoles.includes(role)) {
     return NextResponse.json(
       { error: `Invalid role. Must be one of: ${validRoles.join(', ')}` },
+      { status: 400 }
+    );
+  }
+  if (!Array.isArray(capabilities)) {
+    return NextResponse.json({ error: 'capabilities must be an array' }, { status: 400 });
+  }
+  if (normalizedCapabilities.length !== capabilities.length) {
+    return NextResponse.json(
+      {
+        error: `Invalid capabilities. Must be one of: ${databaseCapabilities.join(', ')}`,
+      },
+      { status: 400 }
+    );
+  }
+  if (normalizedCapabilities.length > 0 && type !== 'postgresql') {
+    return NextResponse.json(
+      { error: 'database capabilities 目前只支持 postgresql' },
       { status: 400 }
     );
   }
@@ -179,6 +199,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         provisionType,
         scope,
         role,
+        capabilities: normalizedCapabilities,
         connectionString: provisionType === 'external' ? externalUrl : null,
         status: 'pending',
       })

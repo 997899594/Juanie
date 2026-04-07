@@ -18,6 +18,7 @@ import {
 import { syncMigrationSpecificationsFromRepo } from '@/lib/migrations/resolver';
 import type { MigrationResolutionInfo, ResolvedMigrationSpec } from '@/lib/migrations/types';
 import { addMigrationJob } from '@/lib/queue';
+import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 
 function getExpectedConfirmationValue(databaseName: string, environmentName: string): string {
   return `${databaseName}/${environmentName}`;
@@ -97,6 +98,11 @@ export async function POST(
   if (!member || !['owner', 'admin'].includes(member.role)) {
     return NextResponse.json({ error: '没有权限执行这个操作' }, { status: 403 });
   }
+
+  await syncProjectDatabaseRuntimeContractsFromRepo({
+    projectId,
+    strict: true,
+  });
 
   // 2. 获取数据库
   const database = await db.query.databases.findFirst({
