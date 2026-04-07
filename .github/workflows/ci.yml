@@ -47,20 +47,56 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      - name: Build and Push Images
-        uses: docker/bake-action@v7
+      - name: Build and Push Web Image
+        uses: docker/build-push-action@v7
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: 1
-          REGISTRY: ${{ env.DEPLOY_REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          GITHUB_SHA: ${{ github.sha }}
-          CACHE_SCOPE: juanie-images
         with:
-          source: .
-          files: docker-bake.hcl
+          context: .
+          file: Dockerfile
+          target: web
           push: true
+          tags: |
+            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:web-${{ github.sha }}
+            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:web-latest
           provenance: false
           sbom: false
+          cache-from: type=gha,scope=juanie-web
+          cache-to: type=gha,mode=max,scope=juanie-web
+
+      - name: Build and Push Worker Image
+        uses: docker/build-push-action@v7
+        env:
+          BUILDX_NO_DEFAULT_ATTESTATIONS: 1
+        with:
+          context: .
+          file: Dockerfile
+          target: worker
+          push: true
+          tags: |
+            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:worker-${{ github.sha }}
+            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:worker-latest
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=juanie-worker
+          cache-to: type=gha,mode=max,scope=juanie-worker
+
+      - name: Build and Push Migrate Image
+        uses: docker/build-push-action@v7
+        env:
+          BUILDX_NO_DEFAULT_ATTESTATIONS: 1
+        with:
+          context: .
+          file: Dockerfile
+          target: migrate
+          push: true
+          tags: |
+            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-${{ github.sha }}
+            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-latest
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=juanie-migrate
+          cache-to: type=gha,mode=max,scope=juanie-migrate
 
   deploy:
     needs: build
