@@ -48,52 +48,46 @@ jobs:
       - uses: docker/setup-buildx-action@v4
 
       - name: Build and Push Web Image
-        uses: docker/build-push-action@v7
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: 1
-          DOCKER_BUILD_SUMMARY: false
-          DOCKER_BUILD_RECORD_UPLOAD: false
-        with:
-          context: .
-          file: Dockerfile
-          target: web
-          push: true
-          tags: |
-            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:web-${{ github.sha }}
-          provenance: false
-          sbom: false
+        run: |
+          docker buildx build \
+            --progress=plain \
+            --file Dockerfile \
+            --target web \
+            --push \
+            --provenance=false \
+            --sbom=false \
+            --tag "${DEPLOY_REGISTRY}/${IMAGE_NAME}:web-${GITHUB_SHA}" \
+            .
 
       - name: Build and Push Worker Image
-        uses: docker/build-push-action@v7
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: 1
-          DOCKER_BUILD_SUMMARY: false
-          DOCKER_BUILD_RECORD_UPLOAD: false
-        with:
-          context: .
-          file: Dockerfile
-          target: worker
-          push: true
-          tags: |
-            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:worker-${{ github.sha }}
-          provenance: false
-          sbom: false
+        run: |
+          docker buildx build \
+            --progress=plain \
+            --file Dockerfile \
+            --target worker \
+            --push \
+            --provenance=false \
+            --sbom=false \
+            --tag "${DEPLOY_REGISTRY}/${IMAGE_NAME}:worker-${GITHUB_SHA}" \
+            .
 
       - name: Build and Push Migrate Image
-        uses: docker/build-push-action@v7
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: 1
-          DOCKER_BUILD_SUMMARY: false
-          DOCKER_BUILD_RECORD_UPLOAD: false
-        with:
-          context: .
-          file: Dockerfile
-          target: migrate
-          push: true
-          tags: |
-            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-${{ github.sha }}
-          provenance: false
-          sbom: false
+        run: |
+          docker buildx build \
+            --progress=plain \
+            --file Dockerfile \
+            --target migrate \
+            --push \
+            --provenance=false \
+            --sbom=false \
+            --tag "${DEPLOY_REGISTRY}/${IMAGE_NAME}:migrate-${GITHUB_SHA}" \
+            .
 
   deploy:
     needs: build
