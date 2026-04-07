@@ -36,8 +36,9 @@ WORKDIR /app
 
 COPY --from=source /app ./
 
-# 编译队列 worker 为独立可执行文件
+# 编译队列 worker/scheduler 为独立可执行文件
 RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
+RUN bun build ./src/lib/queue/scheduler.ts --compile --outfile=scheduler
 
 # ============================================
 # Stage 5: Migration Builder
@@ -95,9 +96,11 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=worker-builder /app/worker ./worker
+COPY --from=worker-builder /app/scheduler ./scheduler
 COPY --from=source /app/templates ./templates
 
 RUN chmod +x ./worker
+RUN chmod +x ./scheduler
 
 CMD ["./worker"]
 

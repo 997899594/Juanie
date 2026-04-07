@@ -149,11 +149,6 @@ spec:
                 name: {{ include "juanie.secretName" . }}
           resources:
             {{- toYaml .Values.resources.worker | nindent 12 }}
-          livenessProbe:
-            exec:
-              command: ["sh", "-c", "pgrep -f worker"]
-            initialDelaySeconds: 30
-            periodSeconds: 30
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -215,11 +210,6 @@ spec:
                 name: {{ include "juanie.secretName" . }}
           resources:
             {{- toYaml .Values.resources.scheduler | nindent 12 }}
-          livenessProbe:
-            exec:
-              command: ["sh", "-c", "pgrep -f scheduler"]
-            initialDelaySeconds: 30
-            periodSeconds: 30
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
