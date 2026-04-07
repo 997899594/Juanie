@@ -12,7 +12,6 @@ concurrency:
 
 env:
   DEPLOY_REGISTRY: ${{ vars.DEPLOY_REGISTRY || 'ghcr.io' }}
-  DEPLOY_REGISTRY_PULL_SECRET_NAME: ${{ vars.DEPLOY_REGISTRY_PULL_SECRET_NAME || 'ghcr-pull-secret' }}
   IMAGE_NAME: ${{ github.repository_owner }}/juanie
 
 jobs:
@@ -26,7 +25,7 @@ jobs:
           bun-version: latest
 
       - run: bun install --frozen-lockfile
-      - run: bunx biome check --write
+      - run: bunx biome check
       - run: bun run lint
       - run: bun run build
 
@@ -75,20 +74,6 @@ jobs:
             --tag "${DEPLOY_REGISTRY}/${IMAGE_NAME}:worker-${GITHUB_SHA}" \
             .
 
-      - name: Build and Push Migrate Image
-        env:
-          BUILDX_NO_DEFAULT_ATTESTATIONS: 1
-        run: |
-          docker buildx build \
-            --progress=plain \
-            --file Dockerfile \
-            --target migrate \
-            --push \
-            --provenance=false \
-            --sbom=false \
-            --tag "${DEPLOY_REGISTRY}/${IMAGE_NAME}:migrate-${GITHUB_SHA}" \
-            .
-
   deploy:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -102,16 +87,9 @@ jobs:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
         run: bash .github/scripts/configure-ssh.sh
 
-      - name: Upload Helm Chart
-        env:
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-        run: bash .github/scripts/upload-chart.sh
-
       - name: Deploy to Kubernetes
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           DEPLOY_REGISTRY: ${{ env.DEPLOY_REGISTRY }}
-          DEPLOY_REGISTRY_PULL_SECRET_NAME: ${{ env.DEPLOY_REGISTRY_PULL_SECRET_NAME }}
         run: bash .github/scripts/deploy.sh
