@@ -58,11 +58,8 @@ jobs:
           push: true
           tags: |
             ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:web-${{ github.sha }}
-            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:web-latest
           provenance: false
           sbom: false
-          cache-from: type=gha,scope=juanie-web
-          cache-to: type=gha,mode=max,scope=juanie-web
 
       - name: Build and Push Worker Image
         uses: docker/build-push-action@v7
@@ -75,11 +72,8 @@ jobs:
           push: true
           tags: |
             ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:worker-${{ github.sha }}
-            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:worker-latest
           provenance: false
           sbom: false
-          cache-from: type=gha,scope=juanie-worker
-          cache-to: type=gha,mode=max,scope=juanie-worker
 
       - name: Build and Push Migrate Image
         uses: docker/build-push-action@v7
@@ -92,11 +86,8 @@ jobs:
           push: true
           tags: |
             ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-${{ github.sha }}
-            ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-latest
           provenance: false
           sbom: false
-          cache-from: type=gha,scope=juanie-migrate
-          cache-to: type=gha,mode=max,scope=juanie-migrate
 
   deploy:
     needs: build

@@ -168,8 +168,6 @@ jobs:
           set: |
             *.tags=${{ env.IMAGE_TAG }}
             *.args.GIT_SHA=${{ github.sha }}
-            *.cache-from=type=gha
-            *.cache-to=type=gha,mode=max
 
       - name: Build and Push (Dockerfile)
         if: ${{ steps.plan.outputs.build_kind == 'dockerfile' }}
@@ -183,8 +181,6 @@ jobs:
           tags: ${{ env.IMAGE_TAG }}
           build-args: |
             GIT_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Build and Push (Buildpacks)
         if: ${{ steps.plan.outputs.build_kind == 'buildpacks' }}
