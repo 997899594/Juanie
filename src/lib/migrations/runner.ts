@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { CoreV1Event, V1EnvVar, V1Job, V1Pod } from '@kubernetes/client-node';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   formatDatabaseCapabilityIssues,
   verifyDeclaredDatabaseCapabilities,
@@ -27,6 +27,8 @@ import { evaluateMigrationPolicy } from '@/lib/policies/delivery';
 import { assessMigrationCommandSafety } from './command-safety';
 import type { ExecuteMigrationRunOptions, ResolvedMigrationSpec } from './types';
 
+type MigrationRunRecord = typeof migrationRuns.$inferSelect;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -39,6 +41,8 @@ function shellQuote(value: string): string {
 
 const MIGRATION_STARTUP_TIMEOUT_MS = 15 * 60 * 1000;
 const MIGRATION_EXECUTION_TIMEOUT_MS = 20 * 60 * 1000;
+const ACTIVE_MIGRATION_RUN_STATUSES = ['queued', 'planning', 'running'] as const;
+const ACTIVE_MIGRATION_ITEM_STATUSES = ['queued', 'planning', 'running'] as const;
 
 function buildDatabaseEnvVars(spec: ResolvedMigrationSpec): V1EnvVar[] {
   const envVars: V1EnvVar[] = [];
@@ -350,6 +354,92 @@ async function getRunStartedAt(runId: string): Promise<Date | null> {
     columns: { startedAt: true },
   });
   return run?.startedAt ?? null;
+}
+
+async function failDetachedK8sMigrationRun(
+  runId: string,
+  errorCode: string,
+  errorMessage: string
+): Promise<void> {
+  const finishedAt = new Date();
+  const startedAt = await getRunStartedAt(runId);
+
+  await db
+    .update(migrationRunItems)
+    .set({
+      status: 'failed',
+      error: errorMessage,
+      output: errorMessage,
+      finishedAt,
+    })
+    .where(
+      and(
+        eq(migrationRunItems.migrationRunId, runId),
+        inArray(migrationRunItems.status, [...ACTIVE_MIGRATION_ITEM_STATUSES])
+      )
+    );
+
+  await db
+    .update(migrationRuns)
+    .set({
+      status: 'failed',
+      errorCode,
+      errorMessage,
+      finishedAt,
+      durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
+      updatedAt: finishedAt,
+    })
+    .where(eq(migrationRuns.id, runId));
+
+  await appendRunLog(runId, errorMessage);
+}
+
+async function reconcileDetachedK8sMigrationRun(
+  run: MigrationRunRecord,
+  namespace: string | null | undefined
+): Promise<boolean> {
+  if (run.runnerType !== 'k8s_job') {
+    return false;
+  }
+
+  if (
+    !ACTIVE_MIGRATION_RUN_STATUSES.includes(
+      run.status as (typeof ACTIVE_MIGRATION_RUN_STATUSES)[number]
+    )
+  ) {
+    return false;
+  }
+
+  if (!namespace) {
+    return false;
+  }
+
+  const jobName = `migration-${run.id.slice(0, 8)}`;
+  const job = await getExistingJob(namespace, jobName);
+
+  if (!job) {
+    await failDetachedK8sMigrationRun(
+      run.id,
+      'MIGRATION_RUNNER_JOB_MISSING',
+      `Migration job ${jobName} no longer exists in namespace ${namespace}`
+    );
+    return true;
+  }
+
+  const failed = (job.status?.conditions ?? []).some(
+    (condition) => condition.type === 'Failed' && condition.status === 'True'
+  );
+
+  if (!failed) {
+    return false;
+  }
+
+  await failDetachedK8sMigrationRun(
+    run.id,
+    'MIGRATION_RUNNER_JOB_FAILED',
+    `Migration job ${jobName} ended with status failed`
+  );
+  return true;
 }
 
 async function markRunFailed(
@@ -787,7 +877,22 @@ export async function executeMigrationRun(
   spec: ResolvedMigrationSpec,
   options: ExecuteMigrationRunOptions = {}
 ): Promise<void> {
-  const activeRuns = await db.query.migrationRuns.findMany({
+  let activeRuns = await db.query.migrationRuns.findMany({
+    where: and(
+      eq(migrationRuns.databaseId, spec.database.id),
+      eq(migrationRuns.environmentId, spec.environment.id)
+    ),
+  });
+
+  for (const run of activeRuns) {
+    if (run.id === runId) {
+      continue;
+    }
+
+    await reconcileDetachedK8sMigrationRun(run, spec.environment.namespace);
+  }
+
+  activeRuns = await db.query.migrationRuns.findMany({
     where: and(
       eq(migrationRuns.databaseId, spec.database.id),
       eq(migrationRuns.environmentId, spec.environment.id)
@@ -796,7 +901,11 @@ export async function executeMigrationRun(
   const currentRun = activeRuns.find((run) => run.id === runId) ?? null;
 
   const conflictingRun = activeRuns.find(
-    (run) => run.id !== runId && ['queued', 'planning', 'running'].includes(run.status)
+    (run) =>
+      run.id !== runId &&
+      ACTIVE_MIGRATION_RUN_STATUSES.includes(
+        run.status as (typeof ACTIVE_MIGRATION_RUN_STATUSES)[number]
+      )
   );
   if (conflictingRun) {
     await markRunFailed(
