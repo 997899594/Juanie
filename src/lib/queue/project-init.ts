@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import postgres from 'postgres';
 import { encrypt } from '@/lib/crypto';
+import { managedPostgresImage } from '@/lib/databases/images';
 import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
 import type { GitProviderType } from '@/lib/db/schema';
@@ -1827,7 +1828,7 @@ async function createPostgreSQLStatefulSet(
   secretName: string
 ): Promise<void> {
   await createStatefulSet(namespace, name, {
-    image: 'postgres:16-alpine',
+    image: managedPostgresImage,
     serviceName: name,
     port: 5432,
     replicas: 1,

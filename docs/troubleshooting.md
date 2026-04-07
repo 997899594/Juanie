@@ -93,7 +93,7 @@ kubectl rollout restart deployment/juanie-web -n juanie
 kubectl logs deployment/juanie-web -n juanie --tail=50
 
 # 检查数据库连接
-kubectl run test-db --rm -it --restart=Never --image=postgres:16-alpine -n juanie -- \
+kubectl run test-db --rm -it --restart=Never --image=pgvector/pgvector:pg16 -n juanie -- \
   psql "postgres://postgres:postgres@postgres:5432/juanie" -c 'SELECT 1'
 ```
 

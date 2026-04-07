@@ -1,4 +1,5 @@
 import type { V1Job } from '@kubernetes/client-node';
+import { managedPostgresImage } from '@/lib/databases/images';
 import {
   createJob,
   createNamespace,
@@ -74,7 +75,7 @@ export async function clonePostgreSQLDatabase(input: {
           containers: [
             {
               name: 'clone',
-              image: 'postgres:16-alpine',
+              image: managedPostgresImage,
               command: ['/bin/sh', '-lc'],
               args: [
                 [

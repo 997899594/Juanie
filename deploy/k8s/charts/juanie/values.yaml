@@ -80,6 +80,7 @@ hostname: "juanie.art"
 
 # 数据库配置
 postgres:
+  image: "pgvector/pgvector:pg16"
   storage: "10Gi"
 
 redis:
