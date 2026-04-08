@@ -1152,6 +1152,7 @@ jobs:
             }')
 
           RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
+          RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
           if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
             echo "Juanie did not return a release id"
             echo "$RELEASE_RESPONSE"
@@ -1162,21 +1163,27 @@ jobs:
             STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/$RELEASE_ID/status" \
               -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}")
 
-            TERMINAL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.terminal')
-            SUCCEEDED=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.succeeded')
+            RESOLUTION=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.resolution')
             STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
             ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
 
             echo "Juanie release $RELEASE_ID: status=$STATUS"
 
-            if [ "$TERMINAL" = "true" ]; then
-              if [ "$SUCCEEDED" = "true" ]; then
+            case "$RESOLUTION" in
+              succeeded)
                 exit 0
-              fi
-
-              echo "Juanie release failed: \${ERROR_MESSAGE:-unknown error}"
-              exit 1
-            fi
+                ;;
+              action_required)
+                if [ -n "$RELEASE_PATH" ]; then
+                  echo "Juanie release requires manual action: https://juanie.art$RELEASE_PATH"
+                fi
+                exit 0
+                ;;
+              failed)
+                echo "Juanie release failed: \${ERROR_MESSAGE:-unknown error}"
+                exit 1
+                ;;
+            esac
 
             sleep 10
           done
@@ -1252,6 +1259,7 @@ build:
           }")
 
         RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
+        RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
         if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
           echo "Juanie did not return a release id"
           echo "$RELEASE_RESPONSE"
@@ -1262,21 +1270,27 @@ build:
           STATUS_RESPONSE=$(curl -fsS "https://juanie.art/api/releases/$RELEASE_ID/status" \
             -H "Authorization: Bearer $CI_JOB_TOKEN")
 
-          TERMINAL=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.terminal')
-          SUCCEEDED=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.succeeded')
+          RESOLUTION=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.resolution')
           STATUS=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.status')
           ERROR_MESSAGE=$(printf '%s' "$STATUS_RESPONSE" | jq -r '.release.error // empty')
 
           echo "Juanie release $RELEASE_ID: status=$STATUS"
 
-          if [ "$TERMINAL" = "true" ]; then
-            if [ "$SUCCEEDED" = "true" ]; then
+          case "$RESOLUTION" in
+            succeeded)
               break
-            fi
-
-            echo "Juanie release failed: \${ERROR_MESSAGE:-unknown error}"
-            exit 1
-          fi
+              ;;
+            action_required)
+              if [ -n "$RELEASE_PATH" ]; then
+                echo "Juanie release requires manual action: https://juanie.art$RELEASE_PATH"
+              fi
+              break
+              ;;
+            failed)
+              echo "Juanie release failed: \${ERROR_MESSAGE:-unknown error}"
+              exit 1
+              ;;
+          esac
 
           sleep 10
         done

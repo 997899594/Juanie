@@ -5,12 +5,14 @@ import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
 import { getReleaseStatusLabel } from '@/lib/releases/status-presentation';
 
 function resolveReleaseOutcome(status: string): {
+  resolution: 'running' | 'succeeded' | 'failed' | 'action_required';
   terminal: boolean;
   succeeded: boolean;
   failed: boolean;
 } {
-  if (status === 'awaiting_approval') {
+  if (status === 'awaiting_approval' || status === 'awaiting_rollout') {
     return {
+      resolution: 'action_required',
       terminal: true,
       succeeded: false,
       failed: false,
@@ -20,8 +22,9 @@ function resolveReleaseOutcome(status: string): {
   const terminal = !isActiveReleaseStatus(status);
   const succeeded = status === 'succeeded';
   const failed = terminal && !succeeded;
+  const resolution = succeeded ? 'succeeded' : failed ? 'failed' : 'running';
 
-  return { terminal, succeeded, failed };
+  return { resolution, terminal, succeeded, failed };
 }
 
 function resolveReleaseErrorMessage(
@@ -35,6 +38,14 @@ function resolveReleaseErrorMessage(
   if (approvalRun) {
     const targetName = approvalRun.service?.name ?? approvalRun.database?.name ?? approvalRun.id;
     return `Migration ${targetName} is awaiting approval`;
+  }
+
+  const rolloutDeployment = release.deployments.find(
+    (deployment) => deployment.status === 'awaiting_rollout'
+  );
+  if (rolloutDeployment) {
+    const targetName = rolloutDeployment.serviceId ?? rolloutDeployment.id;
+    return `Deployment ${targetName} is awaiting rollout`;
   }
 
   if (release.errorMessage) {
@@ -111,6 +122,7 @@ export async function GET(
         environmentId: release.environmentId,
         status: release.status,
         statusLabel: getReleaseStatusLabel(release.status),
+        resolution: outcome.resolution,
         terminal: outcome.terminal,
         succeeded: outcome.succeeded,
         failed: outcome.failed,
