@@ -15,9 +15,9 @@ permissions:
   packages: write
 
 env:
-  DEPLOY_REGISTRY: ghcr.io
-  DEPLOY_REGISTRY_PULL_SECRET_NAME: ghcr-pull-secret
-  IMAGE_NAME: ${{ github.repository_owner }}/juanie
+  IMAGE_REGISTRY: ghcr.io
+  IMAGE_REPOSITORY: ${{ github.repository_owner }}/juanie
+  IMAGE_PULL_SECRET_NAME: ghcr-pull-secret
 
 jobs:
   quality:
@@ -34,10 +34,13 @@ jobs:
       - run: bun run lint
       - run: bun run build
 
-  deploy:
+  build-images:
     needs: quality
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [web, worker, migrate]
     steps:
       - uses: actions/checkout@v4
 
@@ -49,44 +52,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build And Push Web Image
+      - name: Build And Push ${{ matrix.target }} Image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          target: web
+          target: ${{ matrix.target }}
           push: true
           provenance: false
           sbom: false
-          tags: ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:web-${{ github.sha }}
-          cache-from: type=gha,scope=juanie-docker
-          cache-to: type=gha,mode=max,scope=juanie-docker
+          tags: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ matrix.target }}-${{ github.sha }}
+          cache-from: type=gha,scope=juanie-docker-${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=juanie-docker-${{ matrix.target }}
 
-      - name: Build And Push Worker Image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: worker
-          push: true
-          provenance: false
-          sbom: false
-          tags: ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:worker-${{ github.sha }}
-          cache-from: type=gha,scope=juanie-docker
-          cache-to: type=gha,mode=max,scope=juanie-docker
-
-      - name: Build And Push Migrate Image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          target: migrate
-          push: true
-          provenance: false
-          sbom: false
-          tags: ${{ env.DEPLOY_REGISTRY }}/${{ env.IMAGE_NAME }}:migrate-${{ github.sha }}
-          cache-from: type=gha,scope=juanie-docker
-          cache-to: type=gha,mode=max,scope=juanie-docker
+  deploy:
+    needs: build-images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Configure SSH
         env:
@@ -98,8 +82,9 @@ jobs:
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
-          DEPLOY_REGISTRY: ${{ env.DEPLOY_REGISTRY }}
-          DEPLOY_REGISTRY_PULL_SECRET_NAME: ${{ env.DEPLOY_REGISTRY_PULL_SECRET_NAME }}
-          DEPLOY_REGISTRY_USERNAME: ${{ secrets.DEPLOY_REGISTRY_USERNAME }}
-          DEPLOY_REGISTRY_PASSWORD: ${{ secrets.DEPLOY_REGISTRY_PASSWORD }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
+          IMAGE_PULL_SECRET_NAME: ${{ env.IMAGE_PULL_SECRET_NAME }}
+          IMAGE_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          IMAGE_PULL_PASSWORD: ${{ secrets.GHCR_PULL_TOKEN }}
         run: bash .github/scripts/deploy.sh
