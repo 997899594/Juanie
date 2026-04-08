@@ -28,11 +28,11 @@ spec:
                   key: REGISTRY_HTTP_SECRET
           resources:
             requests:
-              cpu: 200m
-              memory: 256Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: '1'
-              memory: 1Gi
+              cpu: 250m
+              memory: 256Mi
           volumeMounts:
             - name: registry-data
               mountPath: /var/lib/registry

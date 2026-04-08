@@ -1,6 +1,6 @@
 # 生产环境覆盖配置
 replicaCount:
-  web: 2
+  web: 1
   worker: 1
   scheduler: 1
 
@@ -9,9 +9,7 @@ deployment:
   revisionHistoryLimit: 3
   web:
     strategy:
-      type: RollingUpdate
-      maxSurge: 1
-      maxUnavailable: 0
+      type: Recreate
   worker:
     strategy:
       type: RollingUpdate
@@ -25,21 +23,21 @@ resources:
   web:
     requests:
       cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-  worker:
-    requests:
-      cpu: 100m
-      memory: 256Mi
+      memory: 192Mi
     limits:
       cpu: 500m
       memory: 512Mi
+  worker:
+    requests:
+      cpu: 75m
+      memory: 192Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
   scheduler:
     requests:
-      cpu: 50m
-      memory: 128Mi
+      cpu: 25m
+      memory: 96Mi
     limits:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 150m
+      memory: 192Mi
