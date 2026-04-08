@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
+import { BrandLockup } from './brand';
 import {
   buildProjectNavHref,
   isNavItemActive,
@@ -76,9 +77,19 @@ export function Header() {
               <Menu className="h-4 w-4" />
             </Button>
             <div className="min-w-0">
-              <div className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                {project ? project.projectName : 'Juanie'}
-              </div>
+              {project ? (
+                <div className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  {project.projectName}
+                </div>
+              ) : (
+                <BrandLockup
+                  href="/"
+                  size={24}
+                  className="gap-2"
+                  markClassName="rounded-xl"
+                  nameClassName="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+                />
+              )}
               <div className="truncate text-sm font-semibold">{currentTitle}</div>
             </div>
           </div>
@@ -125,9 +136,13 @@ export function Header() {
           <DialogTitle className="sr-only">移动端导航</DialogTitle>
           <div className="flex h-full flex-col bg-background">
             <div className="border-b border-border px-5 py-5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Juanie
-              </div>
+              <BrandLockup
+                href="/"
+                size={36}
+                className="gap-2.5"
+                markClassName="rounded-xl"
+                nameClassName="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+              />
               <div className="mt-2 text-2xl font-semibold tracking-tight">导航</div>
               <div className="mt-1 text-sm text-muted-foreground">
                 先进入主链路，再展开具体诊断与操作。

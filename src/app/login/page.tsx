@@ -1,5 +1,6 @@
 import { Github } from 'lucide-react';
 import { redirect } from 'next/navigation';
+import { BrandLockup } from '@/components/layout/brand';
 import { Button } from '@/components/ui/button';
 import { auth, signIn } from '@/lib/auth';
 import { devSignIn } from './actions';
@@ -17,9 +18,7 @@ export default async function LoginPage() {
         <div className="console-panel flex items-center justify-center px-8 py-10">
           <div className="w-full max-w-sm space-y-8">
             <div className="space-y-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-foreground text-lg font-semibold text-background">
-                J
-              </div>
+              <BrandLockup href="/" size={52} priority />
               <div className="space-y-1">
                 <h1 className="text-2xl font-semibold tracking-tight">登录</h1>
                 <p className="text-sm text-muted-foreground">
@@ -72,9 +71,13 @@ export default async function LoginPage() {
 
         <div className="hidden console-panel overflow-hidden lg:flex lg:flex-col lg:justify-between">
           <div className="border-b border-border/70 px-8 py-8">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Juanie
-            </div>
+            <BrandLockup
+              href="/"
+              size={40}
+              className="gap-2.5"
+              markClassName="rounded-xl"
+              nameClassName="text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
+            />
             <div className="mt-4 text-4xl font-semibold leading-tight tracking-tight">
               面向现代应用团队的发布控制台。
             </div>
