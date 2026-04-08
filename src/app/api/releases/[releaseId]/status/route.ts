@@ -2,13 +2,24 @@ import { NextResponse } from 'next/server';
 import { getReleaseById } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
 import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
-import { getReleaseStatusLabel } from '@/lib/releases/status-presentation';
+import {
+  getReleaseStatusLabel,
+  resolveReleasePresentationStatus,
+} from '@/lib/releases/status-presentation';
 
 function resolveReleaseOutcome(status: string): {
   terminal: boolean;
   succeeded: boolean;
   failed: boolean;
 } {
+  if (status === 'awaiting_approval') {
+    return {
+      terminal: true,
+      succeeded: false,
+      failed: false,
+    };
+  }
+
   const terminal = !isActiveReleaseStatus(status);
   const succeeded = status === 'succeeded';
   const failed = terminal && !succeeded;
@@ -21,6 +32,12 @@ function resolveReleaseErrorMessage(
 ): string | null {
   if (!release) {
     return null;
+  }
+
+  const approvalRun = release.migrationRuns.find((run) => run.status === 'awaiting_approval');
+  if (approvalRun) {
+    const targetName = approvalRun.service?.name ?? approvalRun.database?.name ?? approvalRun.id;
+    return `Migration ${targetName} is awaiting approval`;
   }
 
   if (release.errorMessage) {
@@ -87,7 +104,8 @@ export async function GET(
       request.headers.get('authorization')
     );
 
-    const outcome = resolveReleaseOutcome(release.status);
+    const presentationStatus = resolveReleasePresentationStatus(release);
+    const outcome = resolveReleaseOutcome(presentationStatus);
 
     return NextResponse.json({
       success: true,
@@ -95,8 +113,8 @@ export async function GET(
         id: release.id,
         projectId: release.projectId,
         environmentId: release.environmentId,
-        status: release.status,
-        statusLabel: getReleaseStatusLabel(release.status),
+        status: presentationStatus,
+        statusLabel: getReleaseStatusLabel(presentationStatus),
         terminal: outcome.terminal,
         succeeded: outcome.succeeded,
         failed: outcome.failed,

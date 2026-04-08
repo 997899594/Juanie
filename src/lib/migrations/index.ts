@@ -138,6 +138,12 @@ export async function getMigrationRunById(runId: string) {
   return db.query.migrationRuns.findFirst({
     where: eq(migrationRuns.id, runId),
     with: {
+      release: {
+        columns: {
+          id: true,
+          status: true,
+        },
+      },
       environment: true,
       database: true,
       service: true,

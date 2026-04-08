@@ -7,6 +7,7 @@ import {
   migrationRuns,
   migrationSpecifications,
   projects,
+  releases,
   teamMembers,
 } from '@/lib/db/schema';
 import {
@@ -190,6 +191,26 @@ export async function POST(
           updatedAt: new Date(),
         })
         .where(eq(migrationRuns.id, run.id));
+
+      if (run.releaseId && run.release) {
+        const nextReleaseStatus =
+          run.specification.phase === 'preDeploy' && run.release.status === 'migration_pre_failed'
+            ? 'migration_pre_running'
+            : run.specification.phase === 'postDeploy' && run.release.status === 'degraded'
+              ? 'migration_post_running'
+              : null;
+
+        if (nextReleaseStatus) {
+          await db
+            .update(releases)
+            .set({
+              status: nextReleaseStatus,
+              errorMessage: null,
+              updatedAt: new Date(),
+            })
+            .where(eq(releases.id, run.releaseId));
+        }
+      }
 
       await addMigrationJob(run.id, {
         imageUrl: imageUrl ?? null,

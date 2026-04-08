@@ -8,6 +8,8 @@ import {
   continueReleaseFromDeploymentStage,
   failReleaseForCurrentPhase,
   loadReleaseForOrchestration,
+  persistReleaseRecapSafely,
+  ReleaseApprovalRequiredError,
   runReleaseMigrationPhase,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
@@ -48,6 +50,17 @@ export async function processRelease(job: Job<ReleaseJobData>) {
     await runReleaseMigrationPhase(release, 'preDeploy');
     return await continueReleaseFromDeploymentStage(release.id, release);
   } catch (error) {
+    if (error instanceof ReleaseApprovalRequiredError) {
+      await persistReleaseRecapSafely(release.id);
+      return {
+        success: false,
+        terminal: true,
+        approvalRequired: true,
+        runId: error.runId,
+        phase: error.phase,
+      };
+    }
+
     const message = error instanceof Error ? error.message : String(error);
     const current = await db.query.releases.findFirst({
       where: eq(releases.id, release.id),

@@ -23,6 +23,7 @@ import {
   getMigrationStatusDecoration,
   getReleaseStatusDecoration,
   getTimelineTone,
+  resolveReleasePresentationStatus,
 } from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 import { formatPlatformDateTime, formatPlatformTimeContext } from '@/lib/time/format';
@@ -212,18 +213,22 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
   release: T,
   previousRelease: ReleaseDiffComparableLike | null
 ): T & ReleaseDetailDecorations {
+  const presentationRelease = {
+    ...release,
+    status: resolveReleasePresentationStatus(release),
+  };
   const diff = buildReleaseDiff(release, previousRelease);
-  const approvalRunsCount = countApprovalRuns(release);
-  const retryableRunsCount = countRetryableRuns(release);
-  const failedMigrationRunsCount = countFailedMigrationRuns(release);
-  const presentation = buildReleasePresentationBase(release);
-  const effectiveIssue = release.infrastructureDiagnostics?.primaryIssue
+  const approvalRunsCount = countApprovalRuns(presentationRelease);
+  const retryableRunsCount = countRetryableRuns(presentationRelease);
+  const failedMigrationRunsCount = countFailedMigrationRuns(presentationRelease);
+  const presentation = buildReleasePresentationBase(presentationRelease);
+  const effectiveIssue = presentationRelease.infrastructureDiagnostics?.primaryIssue
     ? {
-        code: release.infrastructureDiagnostics.primaryIssue.code,
+        code: presentationRelease.infrastructureDiagnostics.primaryIssue.code,
         kind: 'release' as const,
-        label: release.infrastructureDiagnostics.primaryIssue.label,
-        summary: release.infrastructureDiagnostics.primaryIssue.summary,
-        nextActionLabel: release.infrastructureDiagnostics.primaryIssue.nextActionLabel,
+        label: presentationRelease.infrastructureDiagnostics.primaryIssue.label,
+        summary: presentationRelease.infrastructureDiagnostics.primaryIssue.summary,
+        nextActionLabel: presentationRelease.infrastructureDiagnostics.primaryIssue.nextActionLabel,
       }
     : presentation.intelligence.issue;
   const platformSignals = buildPlatformSignalSnapshot({
@@ -246,12 +251,14 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
             },
           ]
         : []),
-      ...(release.infrastructureDiagnostics?.signalChips ?? []),
+      ...(presentationRelease.infrastructureDiagnostics?.signalChips ?? []),
     ],
     customSummary:
-      release.infrastructureDiagnostics?.summary ?? presentation.previewDatabase?.summary ?? null,
+      presentationRelease.infrastructureDiagnostics?.summary ??
+      presentation.previewDatabase?.summary ??
+      null,
     customNextActionLabel:
-      release.infrastructureDiagnostics?.nextActionLabel ??
+      presentationRelease.infrastructureDiagnostics?.nextActionLabel ??
       presentation.previewDatabase?.nextActionLabel ??
       null,
     issue: effectiveIssue,
@@ -262,13 +269,14 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
     previewLifecycle: presentation.previewLifecycle,
   });
   const recap =
-    release.infrastructureDiagnostics || (release.governanceEvents?.length ?? 0) > 0
-      ? buildReleaseRecap(release)
-      : (release.recap ?? buildReleaseRecap(release));
-  const statusDecoration = getReleaseStatusDecoration(release.status);
+    presentationRelease.infrastructureDiagnostics ||
+    (presentationRelease.governanceEvents?.length ?? 0) > 0
+      ? buildReleaseRecap(presentationRelease)
+      : (presentationRelease.recap ?? buildReleaseRecap(presentationRelease));
+  const statusDecoration = getReleaseStatusDecoration(presentationRelease.status);
 
   return {
-    ...release,
+    ...presentationRelease,
     recap,
     previewSourceMeta: presentation.previewSourceMeta,
     previewLifecycle: presentation.previewLifecycle,
@@ -277,7 +285,7 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
     policy: presentation.policy,
     diff,
     riskLabel: getReleaseRiskLabel(presentation.intelligence.riskLevel),
-    environmentScope: getEnvironmentScopeLabelForRelease(release),
+    environmentScope: getEnvironmentScopeLabelForRelease(presentationRelease),
     environmentSource: presentation.environmentSource,
     environmentStrategy: presentation.environmentStrategy,
     environmentDatabaseStrategy: presentation.environmentDatabaseStrategy,
@@ -295,7 +303,7 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
     narrativeSummary: recap.narrative,
     blockingReason: recap.blockingReason,
     timeline: buildReleaseTimeline({
-      release,
+      release: presentationRelease,
       statusLabel: statusDecoration.label,
       primaryDomainUrl: presentation.primaryDomainUrl,
       environmentStrategy: presentation.environmentStrategy,
@@ -307,10 +315,10 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
       diff,
       failedMigrationRunsCount,
       approvalRunsCount,
-      infrastructureDiagnostics: release.infrastructureDiagnostics,
+      infrastructureDiagnostics: presentationRelease.infrastructureDiagnostics,
     }),
-    infrastructureDiagnostics: release.infrastructureDiagnostics ?? null,
-    governanceEvents: release.governanceEvents ?? [],
+    infrastructureDiagnostics: presentationRelease.infrastructureDiagnostics ?? null,
+    governanceEvents: presentationRelease.governanceEvents ?? [],
     metadataItems: [
       {
         label: '配置提交',
@@ -342,7 +350,7 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
         mono: true,
       },
     ],
-    deploymentItems: buildDeploymentItems(release),
-    migrationItems: buildMigrationItems(release),
+    deploymentItems: buildDeploymentItems(presentationRelease),
+    migrationItems: buildMigrationItems(presentationRelease),
   };
 }

@@ -21,6 +21,16 @@ import {
 
 type OrchestratedRelease = NonNullable<Awaited<ReturnType<typeof loadReleaseForOrchestration>>>;
 
+export class ReleaseApprovalRequiredError extends Error {
+  constructor(
+    readonly runId: string,
+    readonly phase: 'preDeploy' | 'postDeploy'
+  ) {
+    super(`Migration run ${runId} is awaiting approval`);
+    this.name = 'ReleaseApprovalRequiredError';
+  }
+}
+
 export async function loadReleaseForOrchestration(releaseId: string) {
   return db.query.releases.findFirst({
     where: eq(releases.id, releaseId),
@@ -135,6 +145,10 @@ export async function runReleaseMigrationPhase(
       allowApprovalBypass: false,
     });
     const result = await waitForMigrationRun(run.id);
+    if (result === 'awaiting_approval') {
+      throw new ReleaseApprovalRequiredError(run.id, phase);
+    }
+
     if (result !== 'success') {
       throw new Error(`Migration run ${run.id} ended with status ${result}`);
     }
@@ -334,7 +348,11 @@ export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
     return { resumed: false, reason: 'release_missing' as const };
   }
 
-  if (run.specification.phase === 'preDeploy' && run.release.status === 'migration_pre_failed') {
+  if (
+    run.specification.phase === 'preDeploy' &&
+    (run.release.status === 'migration_pre_failed' ||
+      run.release.status === 'migration_pre_running')
+  ) {
     const latestRuns = await loadLatestReleaseMigrationRuns(run.releaseId, 'preDeploy');
     if (latestRuns.length === 0 || latestRuns.some((candidate) => candidate.status !== 'success')) {
       return { resumed: false, reason: 'predeploy_not_ready' as const };
@@ -344,7 +362,10 @@ export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
     return { resumed: true, reason: 'predeploy_resumed' as const };
   }
 
-  if (run.specification.phase === 'postDeploy' && run.release.status === 'degraded') {
+  if (
+    run.specification.phase === 'postDeploy' &&
+    (run.release.status === 'degraded' || run.release.status === 'migration_post_running')
+  ) {
     const latestRuns = await loadLatestReleaseMigrationRuns(run.releaseId, 'postDeploy');
     if (latestRuns.length === 0 || latestRuns.some((candidate) => candidate.status !== 'success')) {
       return { resumed: false, reason: 'postdeploy_not_ready' as const };
