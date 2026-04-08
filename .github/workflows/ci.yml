@@ -17,7 +17,6 @@ permissions:
 env:
   IMAGE_REGISTRY: ghcr.io
   IMAGE_REPOSITORY: ${{ github.repository_owner }}/juanie
-  IMAGE_PULL_SECRET_NAME: ghcr-pull-secret
 
 jobs:
   quality:
@@ -84,7 +83,4 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
-          IMAGE_PULL_SECRET_NAME: ${{ env.IMAGE_PULL_SECRET_NAME }}
-          IMAGE_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
-          IMAGE_PULL_PASSWORD: ${{ secrets.GHCR_PULL_TOKEN }}
         run: bash .github/scripts/deploy.sh

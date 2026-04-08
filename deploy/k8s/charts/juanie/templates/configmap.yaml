@@ -12,5 +12,3 @@ data:
   DATABASE_PORT: {{ .Values.env.DATABASE_PORT | quote }}
   DATABASE_NAME: {{ .Values.env.DATABASE_NAME | quote }}
   AUTH_TRUST_HOST: {{ .Values.env.AUTH_TRUST_HOST | default "true" | quote }}
-  DEPLOY_REGISTRY: {{ .Values.env.DEPLOY_REGISTRY | default "ghcr.io" | quote }}
-  DEPLOY_REGISTRY_PULL_SECRET_NAME: {{ .Values.env.DEPLOY_REGISTRY_PULL_SECRET_NAME | default "ghcr-pull-secret" | quote }}

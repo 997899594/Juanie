@@ -24,7 +24,7 @@ import {
   services,
   teams,
 } from '@/lib/db/schema';
-import { buildDeployImageRepository } from '@/lib/deploy-registry';
+import { buildDeployImageRepository } from '@/lib/deploy-images';
 import { buildDomainRouteName, pickDefaultPublicService } from '@/lib/domains/defaults';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
@@ -40,7 +40,6 @@ import {
   createSecret,
   createService,
   createStatefulSet,
-  ensureDeployRegistryImagePullAccess,
   getIsConnected,
   getK8sClient,
   initK8sClient,
@@ -1084,7 +1083,7 @@ on:
     branches: [main, master]
 
 env:
-  DEPLOY_REGISTRY: \${{ vars.DEPLOY_REGISTRY || 'ghcr.io' }}
+  IMAGE_REGISTRY: ghcr.io
 
 jobs:
   detect:
@@ -1119,16 +1118,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to Deploy Registry
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: \${{ env.DEPLOY_REGISTRY }}
-          username: \${{ secrets.DEPLOY_REGISTRY_USERNAME || github.actor }}
-          password: \${{ secrets.DEPLOY_REGISTRY_PASSWORD || secrets.GITHUB_TOKEN }}
+          registry: \${{ env.IMAGE_REGISTRY }}
+          username: \${{ github.actor }}
+          password: \${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push \${{ matrix.service }}
         run: |
-          export REGISTRY="\${{ env.DEPLOY_REGISTRY }}"
+          export REGISTRY="\${{ env.IMAGE_REGISTRY }}"
           IMAGE_TAG=$REGISTRY/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
           docker build -t $IMAGE_TAG -f apps/\${{ matrix.service }}/Dockerfile .
           docker push $IMAGE_TAG
@@ -1136,7 +1135,7 @@ jobs:
       - name: Trigger Juanie Release
         if: success()
         run: |
-          IMAGE_TAG=\${{ env.DEPLOY_REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
+          IMAGE_TAG=\${{ env.IMAGE_REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
           RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}" \
@@ -1450,12 +1449,6 @@ async function setupNamespace(
       } catch (error) {
         console.error(`Failed to create namespace ${ns}:`, error);
         throw error;
-      }
-      try {
-        await ensureDeployRegistryImagePullAccess(ns);
-        console.log(`✅ Ensured deploy registry pull secret in namespace ${ns}`);
-      } catch (e) {
-        console.warn(`Could not ensure deploy registry pull secret in ${ns}:`, e);
       }
     }
     await onProgress?.(85);

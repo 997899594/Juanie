@@ -3,12 +3,7 @@ import { syncPreviewEnvironmentDatabases } from '@/lib/databases/preview';
 import { db } from '@/lib/db';
 import { environments, services } from '@/lib/db/schema';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
-import {
-  createNamespace,
-  ensureDeployRegistryImagePullAccess,
-  getIsConnected,
-  upsertService,
-} from '@/lib/k8s';
+import { createNamespace, getIsConnected, upsertService } from '@/lib/k8s';
 import {
   buildPreviewEnvironmentName,
   buildPreviewNamespace,
@@ -186,11 +181,6 @@ export async function ensureEnvironmentScaffold(input: {
   }
 
   await createNamespace(namespace);
-
-  await ensureDeployRegistryImagePullAccess(namespace).catch(() => {
-    // Ignore pull secret bootstrap failures when the deploy registry is public
-    // or credentials are managed outside the platform process.
-  });
 
   const serviceList = await db.query.services.findMany({
     where: eq(services.projectId, input.project.id),

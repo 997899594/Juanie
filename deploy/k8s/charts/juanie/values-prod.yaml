@@ -9,7 +9,9 @@ deployment:
   revisionHistoryLimit: 3
   web:
     strategy:
-      type: Recreate
+      type: RollingUpdate
+      maxSurge: 1
+      maxUnavailable: 0
   worker:
     strategy:
       type: RollingUpdate

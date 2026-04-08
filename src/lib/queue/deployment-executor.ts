@@ -1,11 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deploymentLogs, deployments, environments, projects, releases } from '@/lib/db/schema';
-import {
-  buildDeployImageReference,
-  getDeployRegistryPullSecretName,
-  usesDeployRegistryImage,
-} from '@/lib/deploy-registry';
+import { buildDeployImageReference } from '@/lib/deploy-images';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import {
   getK8sConfigMapName,
@@ -16,12 +12,7 @@ import {
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
 import { ensureEnvironmentScaffold } from '@/lib/environments/service';
-import {
-  deploymentExists,
-  ensureDeployRegistryImagePullAccess,
-  getDeploymentSnapshot,
-  getIsConnected,
-} from '@/lib/k8s';
+import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
 import { assertDeploymentIsCurrent } from '@/lib/releases/deployment-coordination';
 import {
   buildCandidateDeploymentName,
@@ -183,17 +174,6 @@ export async function executeDeploymentWorkload(
     );
   }
 
-  let useDeployRegistryPullSecret = false;
-  if (getIsConnected() && targetEnvironment.namespace && usesDeployRegistryImage(imageName)) {
-    try {
-      useDeployRegistryPullSecret = await ensureDeployRegistryImagePullAccess(
-        targetEnvironment.namespace
-      );
-    } catch (error) {
-      console.warn('Could not ensure deploy registry pull secret:', error);
-    }
-  }
-
   let awaitingRollout = false;
 
   for (const service of targetServices) {
@@ -234,9 +214,6 @@ export async function executeDeploymentWorkload(
           port: service.port ?? 3000,
           replicas: service.replicas ?? 1,
           envFrom,
-          imagePullSecrets: useDeployRegistryPullSecret
-            ? [getDeployRegistryPullSecretName()]
-            : undefined,
           cpuRequest: service.cpuRequest ?? undefined,
           cpuLimit: service.cpuLimit ?? undefined,
           memoryRequest: service.memoryRequest ?? undefined,
@@ -255,9 +232,6 @@ export async function executeDeploymentWorkload(
       imageName,
       service,
       envFrom,
-      imagePullSecrets: useDeployRegistryPullSecret
-        ? [getDeployRegistryPullSecretName()]
-        : undefined,
       verificationPlan,
       onLog: (message) => logDeployment(deploymentId, message),
       onWarn: (message) => logDeployment(deploymentId, message, 'warn'),

@@ -10,15 +10,12 @@ SSH_OPTS=(
 )
 IMAGE_REGISTRY="${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}"
 IMAGE_REPOSITORY="${IMAGE_REPOSITORY:?IMAGE_REPOSITORY is required}"
-IMAGE_PULL_SECRET_NAME="${IMAGE_PULL_SECRET_NAME:?IMAGE_PULL_SECRET_NAME is required}"
 FULL_IMAGE_REPOSITORY="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}"
 WEB_IMAGE_TAG="web-${GITHUB_SHA}"
 WORKER_IMAGE_TAG="worker-${GITHUB_SHA}"
 REMOTE_DIR="/root/juanie-deploy-${GITHUB_SHA}"
 REMOTE_CHART_ARCHIVE="${REMOTE_DIR}/juanie-chart.tgz"
 LOCAL_CHART_ARCHIVE="$(mktemp /tmp/juanie-chart-${GITHUB_SHA}.XXXXXX.tgz)"
-REGISTRY_USERNAME="${IMAGE_PULL_USERNAME:-}"
-REGISTRY_PASSWORD="${IMAGE_PULL_PASSWORD:-}"
 
 trap 'rm -f "${LOCAL_CHART_ARCHIVE}"' EXIT
 
@@ -51,7 +48,7 @@ retry 6 scp "${SSH_OPTS[@]}" "${LOCAL_CHART_ARCHIVE}" \
   "${SERVER_USER}@${SERVER_HOST}:${REMOTE_CHART_ARCHIVE}"
 
 retry 6 ssh "${SSH_OPTS[@]}" "${SERVER_USER:?SERVER_USER is required}@${SERVER_HOST:?SERVER_HOST is required}" \
-  "IMAGE_REGISTRY_B64='$(encode_env "${IMAGE_REGISTRY}")' FULL_IMAGE_REPOSITORY_B64='$(encode_env "${FULL_IMAGE_REPOSITORY}")' WEB_IMAGE_TAG_B64='$(encode_env "${WEB_IMAGE_TAG}")' WORKER_IMAGE_TAG_B64='$(encode_env "${WORKER_IMAGE_TAG}")' IMAGE_PULL_SECRET_NAME_B64='$(encode_env "${IMAGE_PULL_SECRET_NAME}")' REGISTRY_USERNAME_B64='$(encode_env "${REGISTRY_USERNAME}")' REGISTRY_PASSWORD_B64='$(encode_env "${REGISTRY_PASSWORD}")' REMOTE_DIR_B64='$(encode_env "${REMOTE_DIR}")' bash -s" <<'EOF'
+  "IMAGE_REGISTRY_B64='$(encode_env "${IMAGE_REGISTRY}")' FULL_IMAGE_REPOSITORY_B64='$(encode_env "${FULL_IMAGE_REPOSITORY}")' WEB_IMAGE_TAG_B64='$(encode_env "${WEB_IMAGE_TAG}")' WORKER_IMAGE_TAG_B64='$(encode_env "${WORKER_IMAGE_TAG}")' REMOTE_DIR_B64='$(encode_env "${REMOTE_DIR}")' bash -s" <<'EOF'
 set -euo pipefail
 
 NAMESPACE="${NAMESPACE:-juanie}"
@@ -107,27 +104,6 @@ ensure_namespace() {
   kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 }
 
-ensure_image_pull_secret() {
-  if [[ -n "${REGISTRY_USERNAME}" && -n "${REGISTRY_PASSWORD}" ]]; then
-    kubectl create secret docker-registry "${IMAGE_PULL_SECRET_NAME}" \
-      -n "${NAMESPACE}" \
-      --docker-server="${IMAGE_REGISTRY}" \
-      --docker-username="${REGISTRY_USERNAME}" \
-      --docker-password="${REGISTRY_PASSWORD}" \
-      --dry-run=client \
-      -o yaml | kubectl apply -f -
-    return
-  fi
-
-  if kubectl get secret "${IMAGE_PULL_SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
-    return
-  fi
-
-  echo "Missing image pull secret ${IMAGE_PULL_SECRET_NAME} in namespace ${NAMESPACE}"
-  echo "Provide IMAGE_PULL_USERNAME/IMAGE_PULL_PASSWORD or pre-provision the secret."
-  exit 1
-}
-
 wait_for_rollout() {
   local deployment="$1"
 
@@ -164,8 +140,6 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: ${RELEASE_NAME}
-      imagePullSecrets:
-        - name: ${IMAGE_PULL_SECRET_NAME}
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -215,9 +189,6 @@ IMAGE_REGISTRY="$(decode_env IMAGE_REGISTRY_B64)"
 FULL_IMAGE_REPOSITORY="$(decode_env FULL_IMAGE_REPOSITORY_B64)"
 WEB_IMAGE_TAG="$(decode_env WEB_IMAGE_TAG_B64)"
 WORKER_IMAGE_TAG="$(decode_env WORKER_IMAGE_TAG_B64)"
-IMAGE_PULL_SECRET_NAME="$(decode_env IMAGE_PULL_SECRET_NAME_B64)"
-REGISTRY_USERNAME="$(decode_optional_env REGISTRY_USERNAME_B64)"
-REGISTRY_PASSWORD="$(decode_optional_env REGISTRY_PASSWORD_B64)"
 REMOTE_DIR="$(decode_env REMOTE_DIR_B64)"
 CHART_ARCHIVE="${REMOTE_DIR}/juanie-chart.tgz"
 CHART_DIR="${REMOTE_DIR}/chart"
@@ -238,20 +209,22 @@ if [[ ! -d "${CHART_PATH}" ]]; then
 fi
 
 ensure_namespace
-ensure_image_pull_secret
 run_schema_sync_job
 
 echo "Deploying Helm release..."
-helm upgrade --install "${RELEASE_NAME}" "${CHART_PATH}" \
-  --namespace "${NAMESPACE}" \
-  --create-namespace \
-  --reset-values \
-  -f "${CHART_PATH}/values-prod.yaml" \
-  --set images.web.repository="${FULL_IMAGE_REPOSITORY}" \
-  --set images.web.tag="${WEB_IMAGE_TAG}" \
-  --set images.worker.repository="${FULL_IMAGE_REPOSITORY}" \
-  --set images.worker.tag="${WORKER_IMAGE_TAG}" \
-  --set-string imagePullSecrets[0]="${IMAGE_PULL_SECRET_NAME}"
+helm_args=(
+  upgrade --install "${RELEASE_NAME}" "${CHART_PATH}"
+  --namespace "${NAMESPACE}"
+  --create-namespace
+  --reset-values
+  -f "${CHART_PATH}/values-prod.yaml"
+  --set "images.web.repository=${FULL_IMAGE_REPOSITORY}"
+  --set "images.web.tag=${WEB_IMAGE_TAG}"
+  --set "images.worker.repository=${FULL_IMAGE_REPOSITORY}"
+  --set "images.worker.tag=${WORKER_IMAGE_TAG}"
+)
+
+helm "${helm_args[@]}"
 
 for deployment in "${WEB_DEPLOYMENT}" "${WORKER_DEPLOYMENT}" "${SCHEDULER_DEPLOYMENT}"; do
   wait_for_rollout "${deployment}"

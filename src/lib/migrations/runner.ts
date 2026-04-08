@@ -8,11 +8,9 @@ import {
 import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
 import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
-import { getDeployRegistryPullSecretName, usesDeployRegistryImage } from '@/lib/deploy-registry';
 import {
   createJob,
   deleteJob,
-  ensureDeployRegistryImagePullAccess,
   getEvents,
   getIsConnected,
   getJob,
@@ -523,24 +521,6 @@ async function markRunAndItemFailed(input: {
   return markRunFailed(input.runId, input.errorCode, input.errorMessage);
 }
 
-async function ensureMigrationImagePullSecrets(
-  namespace: string,
-  imageUrl: string
-): Promise<string[] | undefined> {
-  if (!usesDeployRegistryImage(imageUrl)) {
-    return undefined;
-  }
-
-  try {
-    const secretReady = await ensureDeployRegistryImagePullAccess(namespace);
-    return secretReady ? [getDeployRegistryPullSecretName()] : undefined;
-  } catch {
-    // Keep running even if secret refresh fails. The namespace may already have the secret.
-  }
-
-  return undefined;
-}
-
 async function getMigrationStartupTimeoutFailure(input: {
   namespace: string;
   jobName: string;
@@ -677,7 +657,6 @@ async function runCommandMigration(
     '-lc',
     `cd ${shellQuote(spec.specification.workingDirectory)} && ${spec.specification.command}`,
   ];
-  const imagePullSecrets = await ensureMigrationImagePullSecrets(namespace!, imageUrl);
 
   const item = await ensureCommandMigrationItem(runId, spec.specification.command, checksum);
 
@@ -704,11 +683,6 @@ async function runCommandMigration(
         },
         spec: {
           restartPolicy: 'Never',
-          ...(imagePullSecrets
-            ? {
-                imagePullSecrets: imagePullSecrets.map((secretName) => ({ name: secretName })),
-              }
-            : {}),
           containers: [
             {
               name: 'migration',
