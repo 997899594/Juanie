@@ -116,15 +116,18 @@ build_and_push_image() {
   local target="$1"
   local tag="$2"
   echo "Building ${target} image..."
-  docker buildx build \
-    --progress=plain \
-    --file "${SOURCE_DIR}/Dockerfile" \
-    --target "${target}" \
-    --push \
-    --provenance=false \
-    --sbom=false \
-    --tag "${IMAGE_REPOSITORY}:${tag}" \
-    "${SOURCE_DIR}"
+  (
+    cd "${SOURCE_DIR}"
+    docker buildx build \
+      --progress=plain \
+      --file Dockerfile \
+      --target "${target}" \
+      --push \
+      --provenance=false \
+      --sbom=false \
+      --tag "${IMAGE_REPOSITORY}:${tag}" \
+      .
+  )
 }
 
 require_command docker
@@ -188,5 +191,6 @@ echo "Current pods:"
 kubectl -n "${NAMESPACE}" get pods -o wide
 
 docker logout "${DEPLOY_REGISTRY}" >/dev/null 2>&1 || true
+rm -rf "$(dirname "${SOURCE_DIR}")"
 
 echo "Deploy finished."

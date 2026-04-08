@@ -4,7 +4,7 @@ set -euo pipefail
 
 SSH_OPTS="-o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o TCPKeepAlive=yes"
 SOURCE_ARCHIVE="/tmp/juanie-source-${GITHUB_SHA}.tgz"
-REMOTE_DIR="/tmp/juanie-deploy-${GITHUB_SHA}"
+REMOTE_DIR="/root/juanie-deploy-${GITHUB_SHA}"
 
 git archive --format=tar.gz --output="${SOURCE_ARCHIVE}" HEAD
 

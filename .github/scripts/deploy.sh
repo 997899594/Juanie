@@ -8,7 +8,7 @@ IMAGE_REPOSITORY="${DEPLOY_REGISTRY:?DEPLOY_REGISTRY is required}/${IMAGE_NAME:?
 WEB_IMAGE_TAG="web-${GITHUB_SHA}"
 WORKER_IMAGE_TAG="worker-${GITHUB_SHA}"
 MIGRATE_IMAGE_TAG="migrate-${GITHUB_SHA}"
-REMOTE_DIR="/tmp/juanie-deploy-${GITHUB_SHA}"
+REMOTE_DIR="/root/juanie-deploy-${GITHUB_SHA}"
 SOURCE_DIR="${REMOTE_DIR}/source"
 CHART_DIR="${SOURCE_DIR}/deploy/k8s/charts/juanie"
 
