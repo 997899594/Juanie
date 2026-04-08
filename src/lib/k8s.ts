@@ -538,6 +538,10 @@ export function getIsConnected(): boolean {
 }
 
 const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
+const LEGACY_DEPLOYMENT_ANNOTATIONS_TO_CLEAR = [
+  'juanie.dev/last-applied-configuration',
+  'juanie.dev/last-applied-spec',
+] as const;
 
 export async function createDeployment(
   namespace: string,
@@ -638,6 +642,11 @@ export async function updateDeployment(
   const { apps } = getK8sClient();
 
   const current = await apps.readNamespacedDeployment({ namespace, name });
+  const currentMetadataAnnotations = { ...(current.metadata?.annotations ?? {}) };
+
+  for (const annotationKey of LEGACY_DEPLOYMENT_ANNOTATIONS_TO_CLEAR) {
+    delete currentMetadataAnnotations[annotationKey];
+  }
 
   const containers = current.spec?.template?.spec?.containers || [];
   const updatedContainers = containers.map((container) => ({
@@ -692,7 +701,10 @@ export async function updateDeployment(
   const updated: k8s.V1Deployment = {
     apiVersion: 'apps/v1',
     kind: 'Deployment',
-    metadata: current.metadata,
+    metadata: {
+      ...current.metadata,
+      annotations: currentMetadataAnnotations,
+    },
     spec: {
       replicas: spec.replicas ?? current.spec?.replicas,
       revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
@@ -707,7 +719,7 @@ export async function updateDeployment(
         },
         spec: {
           ...current.spec?.template?.spec,
-          ...(spec.imagePullSecrets
+          ...(spec.imagePullSecrets !== undefined
             ? {
                 imagePullSecrets: spec.imagePullSecrets.map((secretName) => ({ name: secretName })),
               }

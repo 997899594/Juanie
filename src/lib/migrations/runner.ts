@@ -58,14 +58,31 @@ function buildDatabaseEnvVars(spec: ResolvedMigrationSpec): V1EnvVar[] {
   return envVars;
 }
 
-async function appendRunLog(runId: string, message: string): Promise<void> {
+async function appendRunLog(
+  runId: string,
+  message: string,
+  options?: {
+    touchUpdatedAt?: boolean;
+    dedupeConsecutive?: boolean;
+  }
+): Promise<void> {
   const existing = await db.query.migrationRuns.findFirst({
     where: eq(migrationRuns.id, runId),
   });
+  const currentExcerpt = existing?.logExcerpt ?? '';
+  const previousLine = currentExcerpt.trimEnd().split('\n').at(-1) ?? '';
+
+  if (options?.dedupeConsecutive && previousLine === message) {
+    return;
+  }
+
   const next = [existing?.logExcerpt ?? '', message].filter(Boolean).join('\n').slice(-8000);
   await db
     .update(migrationRuns)
-    .set({ logExcerpt: next, updatedAt: new Date() })
+    .set({
+      logExcerpt: next,
+      ...(options?.touchUpdatedAt === false ? {} : { updatedAt: new Date() }),
+    })
     .where(eq(migrationRuns.id, runId));
 }
 
@@ -97,7 +114,10 @@ async function tryGetPodLogs(
     return await getPodLogs(namespace, podName, undefined, 200);
   } catch (error) {
     if (isRetryablePodLogError(error)) {
-      await appendRunLog(runId, '迁移容器仍在启动，等待日志可读...');
+      await appendRunLog(runId, '迁移容器仍在启动，等待日志可读...', {
+        touchUpdatedAt: false,
+        dedupeConsecutive: true,
+      });
       return null;
     }
 
@@ -734,7 +754,7 @@ async function runCommandMigration(
       ) {
         if (podName) {
           const podLogs = await tryGetPodLogs(namespace!, podName, runId);
-          if (podLogs) {
+          if (podLogs && podLogs !== finalLogs) {
             finalLogs = podLogs;
             await appendRunLog(runId, podLogs);
           }
@@ -786,12 +806,15 @@ async function runCommandMigration(
 
       if (podName) {
         const podLogs = await tryGetPodLogs(namespace!, podName, runId);
-        if (podLogs) {
+        if (podLogs && podLogs !== finalLogs) {
           finalLogs = podLogs;
           await appendRunLog(runId, podLogs);
         }
       } else {
-        await appendRunLog(runId, '等待迁移 Pod 被调度...');
+        await appendRunLog(runId, '等待迁移 Pod 被调度...', {
+          touchUpdatedAt: false,
+          dedupeConsecutive: true,
+        });
       }
 
       if (
