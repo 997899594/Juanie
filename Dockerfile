@@ -98,27 +98,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=worker-builder /app/worker ./worker
 COPY --from=worker-builder /app/scheduler ./scheduler
 COPY --from=source /app/templates ./templates
+COPY --from=migrate-deps /migrate/package.json ./package.json
+COPY --from=migrate-deps /migrate/node_modules ./node_modules
+COPY --from=source /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=source /app/tsconfig.json ./tsconfig.json
+RUN mkdir -p ./src/lib/db ./src/lib/releases
+COPY --from=source /app/src/lib/db/schema.ts ./src/lib/db/schema.ts
+COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/recap-record.ts
 
 RUN chmod +x ./worker
 RUN chmod +x ./scheduler
 
 CMD ["./worker"]
-
-# ============================================
-# Stage 8: Migration Runner
-# ============================================
-FROM oven/bun:1 AS migrate
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-COPY --from=migrate-deps /migrate/package.json ./package.json
-COPY --from=migrate-deps /migrate/node_modules ./node_modules
-COPY --from=source /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=source /app/tsconfig.json ./tsconfig.json
-
-RUN mkdir -p ./src/lib/db ./src/lib/releases
-COPY --from=source /app/src/lib/db/schema.ts ./src/lib/db/schema.ts
-COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/recap-record.ts
-
-CMD ["bunx", "drizzle-kit", "push", "--config", "./drizzle.config.ts"]

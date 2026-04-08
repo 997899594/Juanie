@@ -14,7 +14,6 @@ IMAGE_PULL_SECRET_NAME="${IMAGE_PULL_SECRET_NAME:?IMAGE_PULL_SECRET_NAME is requ
 FULL_IMAGE_REPOSITORY="${IMAGE_REGISTRY}/${IMAGE_REPOSITORY}"
 WEB_IMAGE_TAG="web-${GITHUB_SHA}"
 WORKER_IMAGE_TAG="worker-${GITHUB_SHA}"
-MIGRATE_IMAGE_TAG="migrate-${GITHUB_SHA}"
 REMOTE_DIR="/root/juanie-deploy-${GITHUB_SHA}"
 REMOTE_CHART_ARCHIVE="${REMOTE_DIR}/juanie-chart.tgz"
 LOCAL_CHART_ARCHIVE="$(mktemp /tmp/juanie-chart-${GITHUB_SHA}.XXXXXX.tgz)"
@@ -52,7 +51,7 @@ retry 6 scp "${SSH_OPTS[@]}" "${LOCAL_CHART_ARCHIVE}" \
   "${SERVER_USER}@${SERVER_HOST}:${REMOTE_CHART_ARCHIVE}"
 
 retry 6 ssh "${SSH_OPTS[@]}" "${SERVER_USER:?SERVER_USER is required}@${SERVER_HOST:?SERVER_HOST is required}" \
-  "IMAGE_REGISTRY_B64='$(encode_env "${IMAGE_REGISTRY}")' FULL_IMAGE_REPOSITORY_B64='$(encode_env "${FULL_IMAGE_REPOSITORY}")' WEB_IMAGE_TAG_B64='$(encode_env "${WEB_IMAGE_TAG}")' WORKER_IMAGE_TAG_B64='$(encode_env "${WORKER_IMAGE_TAG}")' MIGRATE_IMAGE_TAG_B64='$(encode_env "${MIGRATE_IMAGE_TAG}")' IMAGE_PULL_SECRET_NAME_B64='$(encode_env "${IMAGE_PULL_SECRET_NAME}")' REGISTRY_USERNAME_B64='$(encode_env "${REGISTRY_USERNAME}")' REGISTRY_PASSWORD_B64='$(encode_env "${REGISTRY_PASSWORD}")' REMOTE_DIR_B64='$(encode_env "${REMOTE_DIR}")' bash -s" <<'EOF'
+  "IMAGE_REGISTRY_B64='$(encode_env "${IMAGE_REGISTRY}")' FULL_IMAGE_REPOSITORY_B64='$(encode_env "${FULL_IMAGE_REPOSITORY}")' WEB_IMAGE_TAG_B64='$(encode_env "${WEB_IMAGE_TAG}")' WORKER_IMAGE_TAG_B64='$(encode_env "${WORKER_IMAGE_TAG}")' IMAGE_PULL_SECRET_NAME_B64='$(encode_env "${IMAGE_PULL_SECRET_NAME}")' REGISTRY_USERNAME_B64='$(encode_env "${REGISTRY_USERNAME}")' REGISTRY_PASSWORD_B64='$(encode_env "${REGISTRY_PASSWORD}")' REMOTE_DIR_B64='$(encode_env "${REMOTE_DIR}")' bash -s" <<'EOF'
 set -euo pipefail
 
 NAMESPACE="${NAMESPACE:-juanie}"
@@ -177,8 +176,9 @@ spec:
           command: ['sh', '-c', 'until nc -z postgres 5432; do sleep 2; done']
       containers:
         - name: schema-sync
-          image: ${FULL_IMAGE_REPOSITORY}:${MIGRATE_IMAGE_TAG}
+          image: ${FULL_IMAGE_REPOSITORY}:${WORKER_IMAGE_TAG}
           imagePullPolicy: IfNotPresent
+          command: ["bun", "./node_modules/drizzle-kit/bin.cjs", "push", "--config", "./drizzle.config.ts"]
           envFrom:
             - configMapRef:
                 name: juanie-config
@@ -215,7 +215,6 @@ IMAGE_REGISTRY="$(decode_env IMAGE_REGISTRY_B64)"
 FULL_IMAGE_REPOSITORY="$(decode_env FULL_IMAGE_REPOSITORY_B64)"
 WEB_IMAGE_TAG="$(decode_env WEB_IMAGE_TAG_B64)"
 WORKER_IMAGE_TAG="$(decode_env WORKER_IMAGE_TAG_B64)"
-MIGRATE_IMAGE_TAG="$(decode_env MIGRATE_IMAGE_TAG_B64)"
 IMAGE_PULL_SECRET_NAME="$(decode_env IMAGE_PULL_SECRET_NAME_B64)"
 REGISTRY_USERNAME="$(decode_optional_env REGISTRY_USERNAME_B64)"
 REGISTRY_PASSWORD="$(decode_optional_env REGISTRY_PASSWORD_B64)"
@@ -252,8 +251,6 @@ helm upgrade --install "${RELEASE_NAME}" "${CHART_PATH}" \
   --set images.web.tag="${WEB_IMAGE_TAG}" \
   --set images.worker.repository="${FULL_IMAGE_REPOSITORY}" \
   --set images.worker.tag="${WORKER_IMAGE_TAG}" \
-  --set images.migrate.repository="${FULL_IMAGE_REPOSITORY}" \
-  --set images.migrate.tag="${MIGRATE_IMAGE_TAG}" \
   --set-string imagePullSecrets[0]="${IMAGE_PULL_SECRET_NAME}"
 
 for deployment in "${WEB_DEPLOYMENT}" "${WORKER_DEPLOYMENT}" "${SCHEDULER_DEPLOYMENT}"; do
