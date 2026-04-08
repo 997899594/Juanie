@@ -13,9 +13,11 @@ spec:
   revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
   strategy:
     type: {{ .Values.deployment.web.strategy.type }}
+    {{- if eq .Values.deployment.web.strategy.type "RollingUpdate" }}
     rollingUpdate:
       maxSurge: {{ .Values.deployment.web.strategy.maxSurge }}
       maxUnavailable: {{ .Values.deployment.web.strategy.maxUnavailable }}
+    {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ .Chart.Name }}
@@ -103,9 +105,11 @@ spec:
   revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
   strategy:
     type: {{ .Values.deployment.worker.strategy.type }}
+    {{- if eq .Values.deployment.worker.strategy.type "RollingUpdate" }}
     rollingUpdate:
       maxSurge: {{ .Values.deployment.worker.strategy.maxSurge }}
       maxUnavailable: {{ .Values.deployment.worker.strategy.maxUnavailable }}
+    {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ .Chart.Name }}
