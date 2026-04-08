@@ -40,6 +40,7 @@ function shellQuote(value: string): string {
 
 const MIGRATION_STARTUP_TIMEOUT_MS = 15 * 60 * 1000;
 const MIGRATION_EXECUTION_TIMEOUT_MS = 20 * 60 * 1000;
+const MIGRATION_STALE_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 const ACTIVE_MIGRATION_RUN_STATUSES = ['queued', 'planning', 'running'] as const;
 const ACTIVE_MIGRATION_ITEM_STATUSES = ['queued', 'planning', 'running'] as const;
 
@@ -355,7 +356,7 @@ async function getRunStartedAt(runId: string): Promise<Date | null> {
   return run?.startedAt ?? null;
 }
 
-async function failDetachedK8sMigrationRun(
+async function failRunWithoutThrow(
   runId: string,
   errorCode: string,
   errorMessage: string
@@ -417,7 +418,7 @@ async function reconcileDetachedK8sMigrationRun(
   const job = await getExistingJob(namespace, jobName);
 
   if (!job) {
-    await failDetachedK8sMigrationRun(
+    await failRunWithoutThrow(
       run.id,
       'MIGRATION_RUNNER_JOB_MISSING',
       `Migration job ${jobName} no longer exists in namespace ${namespace}`
@@ -433,10 +434,43 @@ async function reconcileDetachedK8sMigrationRun(
     return false;
   }
 
-  await failDetachedK8sMigrationRun(
+  await failRunWithoutThrow(
     run.id,
     'MIGRATION_RUNNER_JOB_FAILED',
     `Migration job ${jobName} ended with status failed`
+  );
+  return true;
+}
+
+async function reconcileStaleActiveMigrationRun(
+  run: MigrationRunRecord,
+  namespace: string | null | undefined
+): Promise<boolean> {
+  if (
+    !ACTIVE_MIGRATION_RUN_STATUSES.includes(
+      run.status as (typeof ACTIVE_MIGRATION_RUN_STATUSES)[number]
+    )
+  ) {
+    return false;
+  }
+
+  const referenceTime = run.updatedAt ?? run.startedAt ?? run.createdAt;
+  const staleForMs = Date.now() - referenceTime.getTime();
+
+  if (staleForMs < MIGRATION_STALE_RUN_TIMEOUT_MS) {
+    return false;
+  }
+
+  if (run.runnerType === 'k8s_job' && namespace) {
+    const jobName = `migration-${run.id.slice(0, 8)}`;
+    await deleteJob(namespace, jobName).catch(() => undefined);
+  }
+
+  const staleMinutes = Math.floor(staleForMs / 60000);
+  await failRunWithoutThrow(
+    run.id,
+    'MIGRATION_RUN_STALE',
+    `Migration run became stale after ${staleMinutes} minutes without progress updates`
   );
   return true;
 }
@@ -854,7 +888,14 @@ export async function executeMigrationRun(
       continue;
     }
 
-    await reconcileDetachedK8sMigrationRun(run, spec.environment.namespace);
+    const detachedRunReconciled = await reconcileDetachedK8sMigrationRun(
+      run,
+      spec.environment.namespace
+    );
+
+    if (!detachedRunReconciled) {
+      await reconcileStaleActiveMigrationRun(run, spec.environment.namespace);
+    }
   }
 
   activeRuns = await db.query.migrationRuns.findMany({

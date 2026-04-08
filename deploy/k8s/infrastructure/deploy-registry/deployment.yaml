@@ -19,30 +19,29 @@ spec:
           ports:
             - containerPort: 5000
           env:
-            - name: REGISTRY_HTTP_ADDR
-              value: 0.0.0.0:5000
-            - name: REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY
-              value: /var/lib/registry
-            - name: REGISTRY_STORAGE_DELETE_ENABLED
-              value: 'true'
-            - name: REGISTRY_AUTH
-              value: htpasswd
-            - name: REGISTRY_AUTH_HTPASSWD_REALM
-              value: Juanie Deploy Registry
-            - name: REGISTRY_AUTH_HTPASSWD_PATH
-              value: /auth/htpasswd
+            - name: OTEL_TRACES_EXPORTER
+              value: none
+            - name: REGISTRY_HTTP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: deploy-registry-auth
+                  key: REGISTRY_HTTP_SECRET
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 200m
+              memory: 256Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: '1'
+              memory: 1Gi
           volumeMounts:
             - name: registry-data
               mountPath: /var/lib/registry
             - name: registry-auth
               mountPath: /auth
+              readOnly: true
+            - name: registry-config
+              mountPath: /etc/distribution/config.yml
+              subPath: config.yml
               readOnly: true
       volumes:
         - name: registry-data
@@ -51,3 +50,6 @@ spec:
         - name: registry-auth
           secret:
             secretName: deploy-registry-auth
+        - name: registry-config
+          configMap:
+            name: deploy-registry-config
