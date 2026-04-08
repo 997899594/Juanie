@@ -224,6 +224,10 @@ export function getReleaseFailureSummary(release: ReleaseLike): string | null {
     return '发布等待放量完成';
   }
 
+  if (release.status === 'awaiting_approval') {
+    return '发布等待迁移审批';
+  }
+
   if (release.status === 'verification_failed') {
     return '发布校验失败';
   }
@@ -248,6 +252,10 @@ export function getReleaseIssueCode(release: ReleaseLike): ReleaseIssueCode | nu
   const previewExpiryState = isPreview
     ? getPreviewExpiryState(release.environment?.expiresAt)
     : null;
+
+  if (release.status === 'awaiting_approval') {
+    return 'approval_blocked';
+  }
 
   if (release.migrationRuns?.some((run) => run.status === 'awaiting_approval')) {
     return 'approval_blocked';
@@ -447,7 +455,9 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   const previewExpiryState = isPreview
     ? getPreviewExpiryState(release.environment?.expiresAt)
     : null;
-  const hasApproval = release.migrationRuns?.some((run) => run.status === 'awaiting_approval');
+  const hasApproval =
+    release.status === 'awaiting_approval' ||
+    release.migrationRuns?.some((run) => run.status === 'awaiting_approval');
   const hasFailedMigration = release.migrationRuns?.some((run) =>
     ['failed', 'canceled'].includes(run.status)
   );

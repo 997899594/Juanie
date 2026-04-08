@@ -102,9 +102,10 @@ COPY --from=migrate-deps /migrate/package.json ./package.json
 COPY --from=migrate-deps /migrate/node_modules ./node_modules
 COPY --from=source /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=source /app/tsconfig.json ./tsconfig.json
-RUN mkdir -p ./src/lib/db ./src/lib/releases
+RUN mkdir -p ./src/lib/db ./src/lib/releases ./scripts
 COPY --from=source /app/src/lib/db/schema.ts ./src/lib/db/schema.ts
 COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/recap-record.ts
+COPY --from=source /app/scripts/db-push.ts ./scripts/db-push.ts
 
 RUN chmod +x ./worker
 RUN chmod +x ./scheduler

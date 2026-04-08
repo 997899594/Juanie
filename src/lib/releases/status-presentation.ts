@@ -6,19 +6,6 @@ export interface ReleaseStatusDecoration {
 
 export type ReleaseTimelineTone = 'danger' | 'warning' | 'info' | 'success' | 'neutral';
 
-export function resolveReleasePresentationStatus(input: {
-  status: string;
-  migrationRuns?: Array<{
-    status: string;
-  }> | null;
-}): string {
-  if (input.migrationRuns?.some((run) => run.status === 'awaiting_approval')) {
-    return 'awaiting_approval';
-  }
-
-  return input.status;
-}
-
 export const releaseStatusDecorations: Record<string, ReleaseStatusDecoration> = {
   queued: { color: 'neutral', pulse: false, label: '排队中' },
   planning: { color: 'info', pulse: true, label: '规划中' },

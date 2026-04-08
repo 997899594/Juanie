@@ -23,7 +23,6 @@ import {
 import {
   getReleaseStatusDecoration,
   type ReleaseStatusDecoration,
-  resolveReleasePresentationStatus,
 } from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
@@ -146,15 +145,11 @@ export function decorateReleaseList<T extends ReleaseViewLike>(
   }
 
   return releases.map((release) => {
-    const presentationRelease = {
-      ...release,
-      status: resolveReleasePresentationStatus(release),
-    };
     const previousRelease = previousReleaseById.get(release.id) ?? null;
     const diff = buildReleaseDiff(release, previousRelease);
-    const approvalRunsCount = countApprovalRuns(presentationRelease);
-    const failedMigrationRunsCount = countFailedMigrationRuns(presentationRelease);
-    const presentation = buildReleasePresentationBase(presentationRelease);
+    const approvalRunsCount = countApprovalRuns(release);
+    const failedMigrationRunsCount = countFailedMigrationRuns(release);
+    const presentation = buildReleasePresentationBase(release);
     const platformSignals = buildPlatformSignalSnapshot({
       customSignals: [
         ...(presentation.environmentInheritance
@@ -185,20 +180,20 @@ export function decorateReleaseList<T extends ReleaseViewLike>(
       releasePolicySignal: presentation.policy.primarySignal,
       previewLifecycle: presentation.previewLifecycle,
     });
-    const recap = presentationRelease.recap ?? buildReleaseRecap(presentationRelease);
+    const recap = release.recap ?? buildReleaseRecap(release);
 
     return {
-      ...presentationRelease,
+      ...release,
       recap,
-      displayTitle: getReleaseDisplayTitle(presentationRelease),
+      displayTitle: getReleaseDisplayTitle(release),
       previewSourceMeta: presentation.previewSourceMeta,
       previewLifecycle: presentation.previewLifecycle,
       platformSignals,
       intelligence: presentation.intelligence,
       policy: presentation.policy,
       riskLabel: getReleaseRiskLabel(presentation.intelligence.riskLevel),
-      statusDecoration: getReleaseStatusDecoration(presentationRelease.status),
-      environmentScope: getEnvironmentScopeLabelForRelease(presentationRelease),
+      statusDecoration: getReleaseStatusDecoration(release.status),
+      environmentScope: getEnvironmentScopeLabelForRelease(release),
       environmentSource: presentation.environmentSource,
       environmentStrategy: presentation.environmentStrategy,
       environmentDatabaseStrategy: presentation.environmentDatabaseStrategy,
@@ -224,8 +219,8 @@ export function decorateReleaseList<T extends ReleaseViewLike>(
         failedMigrationRunsCount,
         approvalRunsCount,
       }),
-      deploymentItems: buildDeploymentItems(presentationRelease),
-      migrationItems: buildMigrationItems(presentationRelease),
+      deploymentItems: buildDeploymentItems(release),
+      migrationItems: buildMigrationItems(release),
     };
   });
 }

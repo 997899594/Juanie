@@ -45,6 +45,7 @@ export const releaseStatuses = [
   'queued',
   'planning',
   'migration_pre_running',
+  'awaiting_approval',
   'migration_pre_failed',
   'deploying',
   'awaiting_rollout',

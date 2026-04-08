@@ -1,4 +1,4 @@
-import type { DeploymentStatus, ReleaseStatus } from '@/lib/db/schema';
+import type { DeploymentStatus, MigrationPhase, ReleaseStatus } from '@/lib/db/schema';
 
 export const activeReleaseStatuses = [
   'queued',
@@ -63,6 +63,20 @@ export function resolveReleaseFailureStatus(
   }
 
   return 'failed';
+}
+
+export function getReleaseRunningStatusForMigrationPhase(
+  phase: MigrationPhase
+): Extract<ReleaseStatus, 'migration_pre_running' | 'migration_post_running'> | null {
+  if (phase === 'preDeploy') {
+    return 'migration_pre_running';
+  }
+
+  if (phase === 'postDeploy') {
+    return 'migration_post_running';
+  }
+
+  return null;
 }
 
 export function resolveReleaseDeploymentResolution(

@@ -19,6 +19,7 @@ import {
 import { syncMigrationSpecificationsFromRepo } from '@/lib/migrations/resolver';
 import type { MigrationResolutionInfo, ResolvedMigrationSpec } from '@/lib/migrations/types';
 import { addMigrationJob } from '@/lib/queue';
+import { getReleaseRunningStatusForMigrationPhase } from '@/lib/releases/state-machine';
 import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
 
 function getExpectedConfirmationValue(databaseName: string, environmentName: string): string {
@@ -193,12 +194,7 @@ export async function POST(
         .where(eq(migrationRuns.id, run.id));
 
       if (run.releaseId && run.release) {
-        const nextReleaseStatus =
-          run.specification.phase === 'preDeploy' && run.release.status === 'migration_pre_failed'
-            ? 'migration_pre_running'
-            : run.specification.phase === 'postDeploy' && run.release.status === 'degraded'
-              ? 'migration_post_running'
-              : null;
+        const nextReleaseStatus = getReleaseRunningStatusForMigrationPhase(run.specification.phase);
 
         if (nextReleaseStatus) {
           await db

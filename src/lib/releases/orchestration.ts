@@ -146,6 +146,7 @@ export async function runReleaseMigrationPhase(
     });
     const result = await waitForMigrationRun(run.id);
     if (result === 'awaiting_approval') {
+      await updateReleaseStatus(release.id, 'awaiting_approval');
       throw new ReleaseApprovalRequiredError(run.id, phase);
     }
 
@@ -350,8 +351,7 @@ export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
 
   if (
     run.specification.phase === 'preDeploy' &&
-    (run.release.status === 'migration_pre_failed' ||
-      run.release.status === 'migration_pre_running')
+    (run.release.status === 'awaiting_approval' || run.release.status === 'migration_pre_running')
   ) {
     const latestRuns = await loadLatestReleaseMigrationRuns(run.releaseId, 'preDeploy');
     if (latestRuns.length === 0 || latestRuns.some((candidate) => candidate.status !== 'success')) {
@@ -364,7 +364,7 @@ export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
 
   if (
     run.specification.phase === 'postDeploy' &&
-    (run.release.status === 'degraded' || run.release.status === 'migration_post_running')
+    (run.release.status === 'awaiting_approval' || run.release.status === 'migration_post_running')
   ) {
     const latestRuns = await loadLatestReleaseMigrationRuns(run.releaseId, 'postDeploy');
     if (latestRuns.length === 0 || latestRuns.some((candidate) => candidate.status !== 'success')) {

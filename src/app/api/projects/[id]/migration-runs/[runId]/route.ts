@@ -6,6 +6,7 @@ import { migrationRuns, projects, releases, teamMembers } from '@/lib/db/schema'
 import { createMigrationRun, findActiveMigrationRun, getMigrationRunById } from '@/lib/migrations';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { addMigrationJob } from '@/lib/queue';
+import { getReleaseRunningStatusForMigrationPhase } from '@/lib/releases/state-machine';
 
 function buildResolvedSpec(run: NonNullable<Awaited<ReturnType<typeof getMigrationRunById>>>) {
   return {
@@ -81,12 +82,7 @@ export async function POST(
       .where(eq(migrationRuns.id, run.id));
 
     if (run.releaseId && run.release) {
-      const nextReleaseStatus =
-        run.specification.phase === 'preDeploy' && run.release.status === 'migration_pre_failed'
-          ? 'migration_pre_running'
-          : run.specification.phase === 'postDeploy' && run.release.status === 'degraded'
-            ? 'migration_post_running'
-            : null;
+      const nextReleaseStatus = getReleaseRunningStatusForMigrationPhase(run.specification.phase);
 
       if (nextReleaseStatus) {
         await db

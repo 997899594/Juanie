@@ -29,10 +29,7 @@ import type {
   ReleaseRecapRecord,
   ReleaseSummarySnapshot,
 } from '@/lib/releases/recap-record';
-import {
-  getReleaseStatusLabel,
-  resolveReleasePresentationStatus,
-} from '@/lib/releases/status-presentation';
+import { getReleaseStatusLabel } from '@/lib/releases/status-presentation';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 
 export type {
@@ -308,47 +305,39 @@ function buildRecapHeadline(input: {
 }
 
 export function buildReleaseRecap(release: ReleaseRecapSourceLike): ReleaseRecapRecord {
-  const presentationRelease = {
-    ...release,
-    status: resolveReleasePresentationStatus(release),
-  };
-  const intelligence = getReleaseIntelligenceSnapshot(presentationRelease);
-  const policy: ReleasePolicySnapshot = evaluateReleasePolicy(presentationRelease);
-  const environmentPolicy = evaluateEnvironmentPolicy(presentationRelease.environment);
-  const approvalRunsCount = presentationRelease.migrationRuns.filter(
+  const intelligence = getReleaseIntelligenceSnapshot(release);
+  const policy: ReleasePolicySnapshot = evaluateReleasePolicy(release);
+  const environmentPolicy = evaluateEnvironmentPolicy(release.environment);
+  const approvalRunsCount = release.migrationRuns.filter(
     (run) => run.status === 'awaiting_approval'
   ).length;
-  const retryableRunsCount = presentationRelease.migrationRuns.filter((run) =>
+  const retryableRunsCount = release.migrationRuns.filter((run) =>
     ['failed', 'canceled'].includes(run.status)
   ).length;
   const previewSourceMeta = buildPreviewSourceMetadata({
-    sourceRef: presentationRelease.sourceRef,
-    environment: presentationRelease.environment,
-    reviewRequest: presentationRelease.previewReviewMetadata ?? null,
+    sourceRef: release.sourceRef,
+    environment: release.environment,
+    reviewRequest: release.previewReviewMetadata ?? null,
   });
-  const primaryDomain = pickPrimaryEnvironmentDomain(
-    presentationRelease.environment?.domains ?? []
-  );
+  const primaryDomain = pickPrimaryEnvironmentDomain(release.environment?.domains ?? []);
   const primaryDomainUrl = primaryDomain ? buildEnvironmentAccessUrl(primaryDomain.hostname) : null;
-  const environmentSource = getEnvironmentSourceLabel(presentationRelease.environment ?? {});
+  const environmentSource = getEnvironmentSourceLabel(release.environment ?? {});
   const environmentStrategy = getEnvironmentDeploymentStrategyLabel(
-    presentationRelease.environment?.deploymentStrategy
+    release.environment?.deploymentStrategy
   );
-  const environmentInheritance = getEnvironmentInheritancePresentation(
-    presentationRelease.environment
-  );
+  const environmentInheritance = getEnvironmentInheritancePresentation(release.environment);
   const previewDatabase = getPreviewDatabasePresentation({
-    environment: presentationRelease.environment,
+    environment: release.environment,
   });
-  const environmentExpiry = formatEnvironmentExpiry(presentationRelease.environment?.expiresAt);
-  const previewLifecycle = presentationRelease.environment?.isPreview
+  const environmentExpiry = formatEnvironmentExpiry(release.environment?.expiresAt);
+  const previewLifecycle = release.environment?.isPreview
     ? buildPreviewLifecycleSummary({
         sourceLabel: previewSourceMeta.label ?? environmentSource,
         expiryLabel: environmentExpiry,
         primaryDomainUrl,
         latestRelease: {
-          id: presentationRelease.id,
-          title: getReleaseDisplayTitle(presentationRelease),
+          id: release.id,
+          title: getReleaseDisplayTitle(release),
         },
       })
     : null;
@@ -385,7 +374,7 @@ export function buildReleaseRecap(release: ReleaseRecapSourceLike): ReleaseRecap
   });
 
   const narrative = buildReleaseNarrativeSummary({
-    release: presentationRelease,
+    release,
     intelligence,
     platformSignals,
     riskLabel: getReleaseRiskLabel(intelligence.riskLevel),
@@ -393,12 +382,12 @@ export function buildReleaseRecap(release: ReleaseRecapSourceLike): ReleaseRecap
     retryableRunsCount,
     environmentStrategy,
     previewLifecycle,
-    governanceEvents: presentationRelease.governanceEvents,
+    governanceEvents: release.governanceEvents,
   });
   const blockingReason = buildReleaseBlockingReason({
-    release: presentationRelease,
+    release,
     intelligence,
-    governanceEvents: presentationRelease.governanceEvents,
+    governanceEvents: release.governanceEvents,
   });
   const headline = buildRecapHeadline({
     blockingReason,
@@ -408,7 +397,7 @@ export function buildReleaseRecap(release: ReleaseRecapSourceLike): ReleaseRecap
   return {
     version: 1,
     generatedAt: new Date().toISOString(),
-    statusLabel: getReleaseStatusLabel(presentationRelease.status),
+    statusLabel: getReleaseStatusLabel(release.status),
     headline,
     primarySummary:
       blockingReason?.summary ??

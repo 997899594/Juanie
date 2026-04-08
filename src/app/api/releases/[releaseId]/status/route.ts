@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server';
 import { getReleaseById } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
 import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
-import {
-  getReleaseStatusLabel,
-  resolveReleasePresentationStatus,
-} from '@/lib/releases/status-presentation';
+import { getReleaseStatusLabel } from '@/lib/releases/status-presentation';
 
 function resolveReleaseOutcome(status: string): {
   terminal: boolean;
@@ -104,8 +101,7 @@ export async function GET(
       request.headers.get('authorization')
     );
 
-    const presentationStatus = resolveReleasePresentationStatus(release);
-    const outcome = resolveReleaseOutcome(presentationStatus);
+    const outcome = resolveReleaseOutcome(release.status);
 
     return NextResponse.json({
       success: true,
@@ -113,8 +109,8 @@ export async function GET(
         id: release.id,
         projectId: release.projectId,
         environmentId: release.environmentId,
-        status: presentationStatus,
-        statusLabel: getReleaseStatusLabel(presentationStatus),
+        status: release.status,
+        statusLabel: getReleaseStatusLabel(release.status),
         terminal: outcome.terminal,
         succeeded: outcome.succeeded,
         failed: outcome.failed,

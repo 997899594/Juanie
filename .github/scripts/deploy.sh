@@ -152,7 +152,7 @@ spec:
         - name: schema-sync
           image: ${FULL_IMAGE_REPOSITORY}:${WORKER_IMAGE_TAG}
           imagePullPolicy: IfNotPresent
-          command: ["bun", "./node_modules/drizzle-kit/bin.cjs", "push", "--config", "./drizzle.config.ts"]
+          command: ["bun", "./scripts/db-push.ts"]
           envFrom:
             - configMapRef:
                 name: juanie-config
