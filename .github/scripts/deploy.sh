@@ -9,13 +9,24 @@ WEB_IMAGE_TAG="web-${GITHUB_SHA}"
 WORKER_IMAGE_TAG="worker-${GITHUB_SHA}"
 MIGRATE_IMAGE_TAG="migrate-${GITHUB_SHA}"
 REMOTE_DIR="/root/juanie-deploy-${GITHUB_SHA}"
-SOURCE_DIR="${REMOTE_DIR}/source"
-CHART_DIR="${SOURCE_DIR}/deploy/k8s/charts/juanie"
+REMOTE_CHART_ARCHIVE="${REMOTE_DIR}/juanie-chart.tgz"
+LOCAL_CHART_ARCHIVE="$(mktemp /tmp/juanie-chart-${GITHUB_SHA}.XXXXXX.tgz)"
+REGISTRY_USERNAME="${DEPLOY_REGISTRY_USERNAME:-}"
+REGISTRY_PASSWORD="${DEPLOY_REGISTRY_PASSWORD:-}"
+
+trap 'rm -f "${LOCAL_CHART_ARCHIVE}"' EXIT
 
 encode_env() {
   printf '%s' "$1" | base64 | tr -d '\n'
 }
 
+tar -czf "${LOCAL_CHART_ARCHIVE}" -C deploy/k8s/charts juanie
+
 ssh ${SSH_OPTS} "${SERVER_USER:?SERVER_USER is required}@${SERVER_HOST:?SERVER_HOST is required}" \
-  "DEPLOY_REGISTRY_B64='$(encode_env "${DEPLOY_REGISTRY}")' IMAGE_REPOSITORY_B64='$(encode_env "${IMAGE_REPOSITORY}")' WEB_IMAGE_TAG_B64='$(encode_env "${WEB_IMAGE_TAG}")' WORKER_IMAGE_TAG_B64='$(encode_env "${WORKER_IMAGE_TAG}")' MIGRATE_IMAGE_TAG_B64='$(encode_env "${MIGRATE_IMAGE_TAG}")' IMAGE_PULL_SECRET_NAME_B64='$(encode_env "${IMAGE_PULL_SECRET_NAME}")' REGISTRY_USERNAME_B64='$(encode_env "${DEPLOY_REGISTRY_USERNAME:?DEPLOY_REGISTRY_USERNAME is required}")' REGISTRY_PASSWORD_B64='$(encode_env "${DEPLOY_REGISTRY_PASSWORD:?DEPLOY_REGISTRY_PASSWORD is required}")' SOURCE_DIR_B64='$(encode_env "${SOURCE_DIR}")' CHART_DIR_B64='$(encode_env "${CHART_DIR}")' bash -s" \
+  "rm -rf '${REMOTE_DIR}' && mkdir -p '${REMOTE_DIR}'"
+scp ${SSH_OPTS} "${LOCAL_CHART_ARCHIVE}" \
+  "${SERVER_USER}@${SERVER_HOST}:${REMOTE_CHART_ARCHIVE}"
+
+ssh ${SSH_OPTS} "${SERVER_USER:?SERVER_USER is required}@${SERVER_HOST:?SERVER_HOST is required}" \
+  "DEPLOY_REGISTRY_B64='$(encode_env "${DEPLOY_REGISTRY}")' IMAGE_REPOSITORY_B64='$(encode_env "${IMAGE_REPOSITORY}")' WEB_IMAGE_TAG_B64='$(encode_env "${WEB_IMAGE_TAG}")' WORKER_IMAGE_TAG_B64='$(encode_env "${WORKER_IMAGE_TAG}")' MIGRATE_IMAGE_TAG_B64='$(encode_env "${MIGRATE_IMAGE_TAG}")' IMAGE_PULL_SECRET_NAME_B64='$(encode_env "${IMAGE_PULL_SECRET_NAME}")' REGISTRY_USERNAME_B64='$(encode_env "${REGISTRY_USERNAME}")' REGISTRY_PASSWORD_B64='$(encode_env "${REGISTRY_PASSWORD}")' REMOTE_DIR_B64='$(encode_env "${REMOTE_DIR}")' bash -s" \
   < .github/scripts/deploy-remote.sh

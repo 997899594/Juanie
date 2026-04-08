@@ -8,6 +8,14 @@ WEB_DEPLOYMENT="${RELEASE_NAME}-web"
 WORKER_DEPLOYMENT="${RELEASE_NAME}-worker"
 SCHEDULER_DEPLOYMENT="${RELEASE_NAME}-scheduler"
 
+cleanup() {
+  if [[ -n "${REMOTE_DIR:-}" ]]; then
+    rm -rf "${REMOTE_DIR}" >/dev/null 2>&1 || true
+  fi
+}
+
+trap cleanup EXIT
+
 require_command() {
   local command_name="$1"
   if ! command -v "${command_name}" >/dev/null 2>&1; then
@@ -26,12 +34,46 @@ decode_env() {
   printf '%s' "${encoded}" | base64 -d
 }
 
+decode_optional_env() {
+  local name="$1"
+  local encoded="${!name:-}"
+  if [[ -z "${encoded}" ]]; then
+    return 0
+  fi
+  printf '%s' "${encoded}" | base64 -d
+}
+
 show_failure() {
   local kind="$1"
   local name="$2"
   kubectl describe "$kind" "$name" -n "${NAMESPACE}" || true
   kubectl get pods -n "${NAMESPACE}" -o wide || true
   kubectl get events -n "${NAMESPACE}" --sort-by=.metadata.creationTimestamp | tail -n 60 || true
+}
+
+ensure_namespace() {
+  kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+}
+
+ensure_image_pull_secret() {
+  if [[ -n "${REGISTRY_USERNAME}" && -n "${REGISTRY_PASSWORD}" ]]; then
+    kubectl create secret docker-registry "${IMAGE_PULL_SECRET_NAME}" \
+      -n "${NAMESPACE}" \
+      --docker-server="${DEPLOY_REGISTRY}" \
+      --docker-username="${REGISTRY_USERNAME}" \
+      --docker-password="${REGISTRY_PASSWORD}" \
+      --dry-run=client \
+      -o yaml | kubectl apply -f -
+    return
+  fi
+
+  if kubectl get secret "${IMAGE_PULL_SECRET_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "Missing image pull secret ${IMAGE_PULL_SECRET_NAME} in namespace ${NAMESPACE}"
+  echo "Provide DEPLOY_REGISTRY_USERNAME/DEPLOY_REGISTRY_PASSWORD or pre-provision the secret."
+  exit 1
 }
 
 wait_for_rollout() {
@@ -112,27 +154,9 @@ run_schema_sync_job() {
   kubectl logs job/"${SCHEMA_JOB}" -n "${NAMESPACE}" --tail=120 || true
 }
 
-build_and_push_image() {
-  local target="$1"
-  local tag="$2"
-  echo "Building ${target} image..."
-  (
-    cd "${SOURCE_DIR}"
-    docker buildx build \
-      --progress=plain \
-      --file Dockerfile \
-      --target "${target}" \
-      --push \
-      --provenance=false \
-      --sbom=false \
-      --tag "${IMAGE_REPOSITORY}:${tag}" \
-      .
-  )
-}
-
-require_command docker
 require_command helm
 require_command kubectl
+require_command tar
 
 DEPLOY_REGISTRY="$(decode_env DEPLOY_REGISTRY_B64)"
 IMAGE_REPOSITORY="$(decode_env IMAGE_REPOSITORY_B64)"
@@ -140,37 +164,37 @@ WEB_IMAGE_TAG="$(decode_env WEB_IMAGE_TAG_B64)"
 WORKER_IMAGE_TAG="$(decode_env WORKER_IMAGE_TAG_B64)"
 MIGRATE_IMAGE_TAG="$(decode_env MIGRATE_IMAGE_TAG_B64)"
 IMAGE_PULL_SECRET_NAME="$(decode_env IMAGE_PULL_SECRET_NAME_B64)"
-REGISTRY_USERNAME="$(decode_env REGISTRY_USERNAME_B64)"
-REGISTRY_PASSWORD="$(decode_env REGISTRY_PASSWORD_B64)"
-SOURCE_DIR="$(decode_env SOURCE_DIR_B64)"
-CHART_DIR="$(decode_env CHART_DIR_B64)"
+REGISTRY_USERNAME="$(decode_optional_env REGISTRY_USERNAME_B64)"
+REGISTRY_PASSWORD="$(decode_optional_env REGISTRY_PASSWORD_B64)"
+REMOTE_DIR="$(decode_env REMOTE_DIR_B64)"
+CHART_ARCHIVE="${REMOTE_DIR}/juanie-chart.tgz"
+CHART_DIR="${REMOTE_DIR}/chart"
+CHART_PATH="${CHART_DIR}/juanie"
 SCHEMA_JOB="juanie-schema-sync-$(printf '%s' "${WEB_IMAGE_TAG}" | cut -d- -f2 | cut -c1-7)"
 
-if [[ ! -d "${SOURCE_DIR}" ]]; then
-  echo "Source directory not found: ${SOURCE_DIR}"
+if [[ ! -f "${CHART_ARCHIVE}" ]]; then
+  echo "Chart archive not found: ${CHART_ARCHIVE}"
   exit 1
 fi
 
-if [[ ! -d "${CHART_DIR}" ]]; then
-  echo "Chart directory not found: ${CHART_DIR}"
+mkdir -p "${CHART_DIR}"
+tar xzf "${CHART_ARCHIVE}" -C "${CHART_DIR}"
+
+if [[ ! -d "${CHART_PATH}" ]]; then
+  echo "Chart path not found after extraction: ${CHART_PATH}"
   exit 1
 fi
 
-echo "Logging into deploy registry..."
-printf '%s' "${REGISTRY_PASSWORD}" | docker login "${DEPLOY_REGISTRY}" -u "${REGISTRY_USERNAME}" --password-stdin
-
-build_and_push_image web "${WEB_IMAGE_TAG}"
-build_and_push_image worker "${WORKER_IMAGE_TAG}"
-build_and_push_image migrate "${MIGRATE_IMAGE_TAG}"
-
+ensure_namespace
+ensure_image_pull_secret
 run_schema_sync_job
 
 echo "Deploying Helm release..."
-helm upgrade --install "${RELEASE_NAME}" "${CHART_DIR}" \
+helm upgrade --install "${RELEASE_NAME}" "${CHART_PATH}" \
   --namespace "${NAMESPACE}" \
   --create-namespace \
   --reset-values \
-  -f "${CHART_DIR}/values-prod.yaml" \
+  -f "${CHART_PATH}/values-prod.yaml" \
   --set images.web.repository="${IMAGE_REPOSITORY}" \
   --set images.web.tag="${WEB_IMAGE_TAG}" \
   --set images.worker.repository="${IMAGE_REPOSITORY}" \
@@ -189,8 +213,5 @@ echo "Current deployments:"
 kubectl -n "${NAMESPACE}" get deploy -o wide
 echo "Current pods:"
 kubectl -n "${NAMESPACE}" get pods -o wide
-
-docker logout "${DEPLOY_REGISTRY}" >/dev/null 2>&1 || true
-rm -rf "$(dirname "${SOURCE_DIR}")"
 
 echo "Deploy finished."
