@@ -220,8 +220,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          release_response="$(
-            curl -fsSX POST "https://juanie.art/api/releases" \
+          release_response_file="$(mktemp)"
+          release_status="$(
+            curl -sS -o "$release_response_file" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer ${JUANIE_TOKEN}" \
               -d "{
@@ -231,8 +232,15 @@ jobs:
                 \"services\": ${{ steps.plan.outputs.release_services_json }}
               }"
           )"
+          release_response="$(cat "$release_response_file")"
+          rm -f "$release_response_file"
 
           echo "$release_response"
+
+          if [ "$release_status" -lt 200 ] || [ "$release_status" -ge 300 ]; then
+            echo "Juanie release request failed with HTTP ${release_status}"
+            exit 1
+          fi
 
           release_id="$(printf '%s' "$release_response" | jq -r '.release.id')"
           release_path="$(printf '%s' "$release_response" | jq -r '.release.releasePath // empty')"

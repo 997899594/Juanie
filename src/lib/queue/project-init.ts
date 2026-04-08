@@ -1136,7 +1136,8 @@ jobs:
         if: success()
         run: |
           IMAGE_TAG=\${{ env.IMAGE_REGISTRY }}/\${{ github.repository }}/\${{ matrix.service }}:sha-\${{ github.sha }}
-          RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
+          RELEASE_RESPONSE_FILE=$(mktemp)
+          RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer \${{ secrets.GITHUB_TOKEN }}" \
             -d '{
@@ -1150,6 +1151,15 @@ jobs:
                 }
               ]
             }')
+          RELEASE_RESPONSE=$(cat "$RELEASE_RESPONSE_FILE")
+          rm -f "$RELEASE_RESPONSE_FILE"
+
+          echo "$RELEASE_RESPONSE"
+
+          if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
+            echo "Juanie release request failed with HTTP $RELEASE_STATUS"
+            exit 1
+          fi
 
           RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
           RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
@@ -1243,7 +1253,8 @@ build:
         docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
         docker push $IMAGE_TAG
 
-        RELEASE_RESPONSE=$(curl -fsSX POST "https://juanie.art/api/releases" \
+        RELEASE_RESPONSE_FILE=$(mktemp)
+        RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer $CI_JOB_TOKEN" \
           -d "{
@@ -1257,6 +1268,15 @@ build:
               }
             ]
           }")
+        RELEASE_RESPONSE=$(cat "$RELEASE_RESPONSE_FILE")
+        rm -f "$RELEASE_RESPONSE_FILE"
+
+        echo "$RELEASE_RESPONSE"
+
+        if [ "$RELEASE_STATUS" -lt 200 ] || [ "$RELEASE_STATUS" -ge 300 ]; then
+          echo "Juanie release request failed with HTTP $RELEASE_STATUS"
+          exit 1
+        fi
 
         RELEASE_ID=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.id')
         RELEASE_PATH=$(printf '%s' "$RELEASE_RESPONSE" | jq -r '.release.releasePath // empty')
