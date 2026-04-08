@@ -220,17 +220,26 @@ jobs:
         run: |
           set -euo pipefail
 
+          release_payload="$(
+            jq -cn \
+              --arg repository "${GITHUB_REPOSITORY}" \
+              --arg sha "${GITHUB_SHA}" \
+              --arg ref "${GITHUB_REF}" \
+              --argjson services '${{ steps.plan.outputs.release_services_json }}' \
+              '{
+                repository: $repository,
+                sha: $sha,
+                ref: $ref,
+                services: $services
+              }'
+          )"
+
           release_response_file="$(mktemp)"
           release_status="$(
             curl -sS -o "$release_response_file" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer ${JUANIE_TOKEN}" \
-              -d "{
-                \"repository\": \"${GITHUB_REPOSITORY}\",
-                \"sha\": \"${GITHUB_SHA}\",
-                \"ref\": \"${GITHUB_REF}\",
-                \"services\": ${{ steps.plan.outputs.release_services_json }}
-              }"
+              -d "$release_payload"
           )"
           release_response="$(cat "$release_response_file")"
           rm -f "$release_response_file"

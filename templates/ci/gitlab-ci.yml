@@ -128,16 +128,23 @@ build:
     - |
       set -euo pipefail
 
+      RELEASE_PAYLOAD=$(jq -cn \
+        --arg repository "$CI_PROJECT_PATH" \
+        --arg sha "$CI_COMMIT_SHA" \
+        --arg ref "$CI_COMMIT_REF_NAME" \
+        --argjson services "$RELEASE_SERVICES_JSON" \
+        '{
+          repository: $repository,
+          sha: $sha,
+          ref: $ref,
+          services: $services
+        }')
+
       RELEASE_RESPONSE_FILE="$(mktemp)"
       RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $CI_JOB_TOKEN" \
-        -d "{
-          \"repository\": \"$CI_PROJECT_PATH\",
-          \"sha\": \"$CI_COMMIT_SHA\",
-          \"ref\": \"$CI_COMMIT_REF_NAME\",
-          \"services\": $RELEASE_SERVICES_JSON
-        }")
+        -d "$RELEASE_PAYLOAD")
       RELEASE_RESPONSE="$(cat "$RELEASE_RESPONSE_FILE")"
       rm -f "$RELEASE_RESPONSE_FILE"
 
