@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   getRepositoryAccessDeniedMessage,
   resolveRepositoryVerificationTarget,
-} from '@/app/api/releases/route';
+} from '@/lib/releases/api-access';
 
 describe('release API repository verification helpers', () => {
   it('builds the GitHub verification endpoint', () => {

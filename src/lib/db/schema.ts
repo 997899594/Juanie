@@ -129,6 +129,8 @@ export type TeamRole = (typeof teamRoles)[number];
 
 export const integrationCapabilities = ['read_repo', 'write_repo', 'write_workflow'] as const;
 export type IntegrationCapability = (typeof integrationCapabilities)[number];
+export const integrationAuthModes = ['personal', 'service'] as const;
+export type IntegrationAuthMode = (typeof integrationAuthModes)[number];
 
 export const gitProviderTypeEnum = pgEnum('gitProviderType', gitProviderTypes);
 export const serviceTypeEnum = pgEnum('serviceType', serviceTypes);
@@ -142,6 +144,7 @@ export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuse
 export const initStepStatusEnum = pgEnum('initStepStatus', initStepStatuses);
 export const teamRoleEnum = pgEnum('teamRole', teamRoles);
 export const integrationCapabilityEnum = pgEnum('integrationCapability', integrationCapabilities);
+export const integrationAuthModeEnum = pgEnum('integrationAuthMode', integrationAuthModes);
 export const aiPlanEnum = pgEnum('aiPlan', aiPlans);
 export const migrationToolEnum = pgEnum('migrationTool', migrationTools);
 export const migrationPhaseEnum = pgEnum('migrationPhase', migrationPhases);
@@ -385,6 +388,32 @@ export const teamInvitations = pgTable('teamInvitation', {
   expires: timestamp('expires').notNull(),
   createdAt: timestamp('createdAt').defaultNow().notNull(),
 });
+
+export const teamIntegrationBindings = pgTable(
+  'teamIntegrationBinding',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    teamId: uuid('teamId')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    integrationIdentityId: uuid('integrationIdentityId')
+      .notNull()
+      .references(() => integrationIdentities.id, { onDelete: 'cascade' }),
+    createdByUserId: uuid('createdByUserId').references(() => users.id, { onDelete: 'set null' }),
+    authMode: integrationAuthModeEnum('authMode').notNull().default('personal'),
+    label: varchar('label', { length: 255 }),
+    isDefault: boolean('isDefault').notNull().default(false),
+    revokedAt: timestamp('revokedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    teamIdIdx: index('teamIntegrationBinding_teamId_idx').on(table.teamId),
+    identityIdIdx: index('teamIntegrationBinding_identityId_idx').on(table.integrationIdentityId),
+    defaultIdx: index('teamIntegrationBinding_default_idx').on(table.teamId, table.isDefault),
+    revokedAtIdx: index('teamIntegrationBinding_revokedAt_idx').on(table.revokedAt),
+  })
+);
 
 // ============================================
 // Project Tables
@@ -1135,6 +1164,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   gitProviders: many(gitProviders),
   teamMemberships: many(teamMembers),
+  teamIntegrationBindings: many(teamIntegrationBindings),
   aiPluginInstallations: many(aiPluginInstallations),
 }));
 
@@ -1172,6 +1202,7 @@ export const teamsRelations = relations(teams, ({ many }) => ({
   members: many(teamMembers),
   projects: many(projects),
   invitations: many(teamInvitations),
+  integrationBindings: many(teamIntegrationBindings),
   auditLogs: many(auditLogs),
   aiPluginInstallations: many(aiPluginInstallations),
   aiEntitlements: many(aiEntitlements),
@@ -1194,6 +1225,21 @@ export const teamInvitationsRelations = relations(teamInvitations, ({ one }) => 
   team: one(teams, {
     fields: [teamInvitations.teamId],
     references: [teams.id],
+  }),
+}));
+
+export const teamIntegrationBindingsRelations = relations(teamIntegrationBindings, ({ one }) => ({
+  team: one(teams, {
+    fields: [teamIntegrationBindings.teamId],
+    references: [teams.id],
+  }),
+  integrationIdentity: one(integrationIdentities, {
+    fields: [teamIntegrationBindings.integrationIdentityId],
+    references: [integrationIdentities.id],
+  }),
+  createdByUser: one(users, {
+    fields: [teamIntegrationBindings.createdByUserId],
+    references: [users.id],
   }),
 }));
 

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 const tabs = [
   { label: '概览', href: '' },
   { label: '成员', href: '/members' },
+  { label: '集成', href: '/integrations' },
   { label: '设置', href: '/settings' },
 ];
 

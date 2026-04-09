@@ -51,8 +51,10 @@ describe('release detail view', () => {
     expect(release.diff.changedArtifacts.length).toBe(1);
     expect(release.approvalRunsCount).toBe(1);
     expect(release.stats.map((item) => item.label)).toEqual(['服务', '部署', '迁移']);
-    expect(release.signalChips.some((item) => item.label.includes('下一步'))).toBe(true);
-    expect(release.metadataItems[2]?.mono).toBe(true);
+    expect(release.platformSignals.nextActionLabel).toBe('处理迁移审批');
+    expect(
+      release.metadataItems.some((item) => item.label === '发布 ID' && item.mono === true)
+    ).toBe(true);
     expect(release.deploymentItems[0]?.serviceName).toBe('web');
     expect(release.migrationItems[0]?.imageUrl).toBe('ghcr.io/demo/web:2');
   });

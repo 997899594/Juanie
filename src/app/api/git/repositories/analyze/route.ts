@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireSession } from '@/lib/api/access';
 import {
   gateway,
   getTeamIntegrationSession,
   mapProviderError,
   normalizeApiError,
+  statusByCode,
 } from '@/lib/integrations/service/integration-control-plane';
 import { detectMonorepoType, type MonorepoType } from '@/lib/monorepo';
 
@@ -28,24 +29,6 @@ type NormalizableError = {
   message?: string;
   capability?: string;
   status?: number;
-};
-
-const statusByCode = (code?: string) => {
-  if (!code) return 500;
-  if (code.startsWith('MISSING_CAPABILITY')) return 403;
-
-  switch (code) {
-    case 'INTEGRATION_NOT_BOUND':
-      return 404;
-    case 'GRANT_EXPIRED':
-    case 'GRANT_REVOKED':
-    case 'PROVIDER_ACCESS_DENIED':
-      return 403;
-    case 'PROVIDER_RESOURCE_NOT_FOUND':
-      return 404;
-    default:
-      return 500;
-  }
 };
 
 const toApiError = (error: unknown) => {
@@ -100,28 +83,24 @@ function parseStartCommand(
 }
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const repositoryFullName = searchParams.get('repositoryFullName');
-  const teamId = searchParams.get('teamId');
-  const branch = searchParams.get('branch') || 'main';
-
-  if (!repositoryFullName) {
-    return NextResponse.json({ error: 'repositoryFullName is required' }, { status: 400 });
-  }
-
-  if (!teamId) {
-    return NextResponse.json({ error: 'teamId is required' }, { status: 400 });
-  }
-
   try {
+    const session = await requireSession();
+    const { searchParams } = new URL(request.url);
+    const repositoryFullName = searchParams.get('repositoryFullName');
+    const teamId = searchParams.get('teamId');
+    const branch = searchParams.get('branch') || 'main';
+
+    if (!repositoryFullName) {
+      return NextResponse.json({ error: 'repositoryFullName is required' }, { status: 400 });
+    }
+
+    if (!teamId) {
+      return NextResponse.json({ error: 'teamId is required' }, { status: 400 });
+    }
+
     const integrationSession = await getTeamIntegrationSession({
       teamId,
+      actingUserId: session.user.id,
       requiredCapabilities: ['read_repo'],
     });
 

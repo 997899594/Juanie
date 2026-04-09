@@ -1,11 +1,12 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
+  type IntegrationAuthMode,
   integrationCapabilitySnapshots,
   integrationGrants,
   integrationIdentities,
 } from '@/lib/db/schema';
-import { integrationErrors } from '@/lib/integrations/domain/errors';
+import { integrationErrors, toIntegrationError } from '@/lib/integrations/domain/errors';
 import type { Capability } from '@/lib/integrations/domain/models';
 
 export type IntegrationSession = {
@@ -15,6 +16,9 @@ export type IntegrationSession = {
   grantId: string;
   accessToken: string;
   capabilities: Capability[];
+  bindingId?: string;
+  bindingAuthMode?: IntegrationAuthMode;
+  bindingLabel?: string | null;
 };
 
 export const assertCapabilities = (
@@ -25,7 +29,7 @@ export const assertCapabilities = (
 
   for (const capability of required) {
     if (!grantedSet.has(capability)) {
-      throw new Error(integrationErrors.missingCapability(capability).message);
+      throw toIntegrationError(integrationErrors.missingCapability(capability));
     }
   }
 };
@@ -34,17 +38,23 @@ export const createIntegrationSession = async ({
   integrationId,
   teamId,
   requiredCapabilities,
+  binding,
 }: {
   integrationId: string;
   teamId: string;
   requiredCapabilities: Capability[];
+  binding?: {
+    id: string;
+    authMode: IntegrationAuthMode;
+    label?: string | null;
+  };
 }): Promise<IntegrationSession> => {
   const identity = await db.query.integrationIdentities.findFirst({
     where: eq(integrationIdentities.id, integrationId),
   });
 
   if (!identity) {
-    throw new Error(integrationErrors.notBound().message);
+    throw toIntegrationError(integrationErrors.notBound());
   }
 
   const grant = await db.query.integrationGrants.findFirst({
@@ -56,11 +66,11 @@ export const createIntegrationSession = async ({
   });
 
   if (!grant) {
-    throw new Error(integrationErrors.grantRevoked().message);
+    throw toIntegrationError(integrationErrors.grantRevoked());
   }
 
   if (grant.expiresAt && grant.expiresAt < new Date()) {
-    throw new Error(integrationErrors.grantExpired().message);
+    throw toIntegrationError(integrationErrors.grantExpired());
   }
 
   const snapshotRows = await db.query.integrationCapabilitySnapshots.findMany({
@@ -77,5 +87,8 @@ export const createIntegrationSession = async ({
     grantId: grant.id,
     accessToken: grant.accessToken,
     capabilities,
+    bindingId: binding?.id,
+    bindingAuthMode: binding?.authMode,
+    bindingLabel: binding?.label ?? null,
   };
 };

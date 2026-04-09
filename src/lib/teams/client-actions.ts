@@ -156,3 +156,56 @@ export async function deleteTeam(teamId: string) {
 
   return response;
 }
+
+export async function fetchTeamIntegrationsSnapshot(teamId: string) {
+  const response = await fetch(`/api/teams/${teamId}/integrations`);
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return readJson<{
+    headerDescription: string;
+    stats: Array<{ label: string; value: string }>;
+    canManage: boolean;
+    bindings: Array<{
+      id: string;
+      label: string;
+      provider: string;
+      authMode: 'personal' | 'service';
+      authModeLabel: string;
+      identityOwner: string;
+      isDefault: boolean;
+      isRevoked: boolean;
+      revokedAtLabel: string | null;
+      statusTone: 'success' | 'warning' | 'danger' | 'neutral';
+      statusSummary: string;
+    }>;
+  }>(response);
+}
+
+export async function setDefaultTeamIntegration(input: { teamId: string; bindingId: string }) {
+  const response = await fetch(`/api/teams/${input.teamId}/integrations/${input.bindingId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'set_default' }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response;
+}
+
+export async function revokeTeamIntegration(input: { teamId: string; bindingId: string }) {
+  const response = await fetch(`/api/teams/${input.teamId}/integrations/${input.bindingId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  return response;
+}

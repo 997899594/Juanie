@@ -8,95 +8,86 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { auth } from '@/lib/auth';
+import {
+  getProjectAccessOrThrow,
+  getProjectAccessWithRoleOrThrow,
+  getProjectEnvironmentOrThrow,
+  getProjectServiceOrThrow,
+  requireSession,
+} from '@/lib/api/access';
+import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
-import { environments, environmentVariables, projects, teamMembers } from '@/lib/db/schema';
+import { environmentVariables } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { getIsConnected, rolloutRestartDeployments } from '@/lib/k8s';
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 // ============================================
-// 鉴权辅助：验证用户是否为项目所属团队成员
-// ============================================
-
-async function authorizeProjectAccess(projectId: string, userId: string) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-  });
-
-  if (!project) {
-    return { error: 'Project not found', status: 404, project: null };
-  }
-
-  const member = await db.query.teamMembers.findFirst({
-    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
-  });
-
-  if (!member) {
-    return { error: 'Forbidden', status: 403, project: null };
-  }
-
-  return { error: null, status: 200, project, member };
-}
-
-// ============================================
 // GET - 列出环境变量
 // ============================================
 
 export async function GET(request: Request, { params }: RouteParams) {
-  const { id: projectId } = await params;
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const { id: projectId } = await params;
+    const session = await requireSession();
+    await getProjectAccessOrThrow(projectId, session.user.id);
+
+    const url = new URL(request.url);
+    const environmentId = url.searchParams.get('environmentId');
+    const serviceId = url.searchParams.get('serviceId');
+
+    if (environmentId) {
+      await getProjectEnvironmentOrThrow(projectId, environmentId);
+    }
+    if (serviceId) {
+      await getProjectServiceOrThrow(projectId, serviceId);
+    }
+
+    const conditions = [eq(environmentVariables.projectId, projectId)];
+    if (environmentId) {
+      conditions.push(eq(environmentVariables.environmentId, environmentId));
+    } else {
+      conditions.push(isNull(environmentVariables.environmentId));
+    }
+    if (serviceId) {
+      conditions.push(eq(environmentVariables.serviceId, serviceId));
+    } else {
+      conditions.push(isNull(environmentVariables.serviceId));
+    }
+
+    const vars = await db.query.environmentVariables.findMany({
+      where: and(...conditions),
+      columns: {
+        id: true,
+        key: true,
+        value: true,
+        isSecret: true,
+        environmentId: true,
+        serviceId: true,
+        createdAt: true,
+        updatedAt: true,
+        encryptedValue: false,
+        iv: false,
+        authTag: false,
+      },
+    });
+
+    const safeVars = vars.map((v) => ({
+      ...v,
+      value: v.isSecret ? null : v.value,
+    }));
+
+    return NextResponse.json(safeVars);
+  } catch (error) {
+    if (isAccessError(error)) {
+      return toAccessErrorResponse(error);
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
-
-  const { error, status } = await authorizeProjectAccess(projectId, session.user.id);
-  if (error) return NextResponse.json({ error }, { status });
-
-  const url = new URL(request.url);
-  const environmentId = url.searchParams.get('environmentId');
-  const serviceId = url.searchParams.get('serviceId');
-
-  // 构造查询条件
-  const conditions = [eq(environmentVariables.projectId, projectId)];
-  if (environmentId) {
-    conditions.push(eq(environmentVariables.environmentId, environmentId));
-  } else {
-    conditions.push(isNull(environmentVariables.environmentId));
-  }
-  if (serviceId) {
-    conditions.push(eq(environmentVariables.serviceId, serviceId));
-  } else {
-    conditions.push(isNull(environmentVariables.serviceId));
-  }
-
-  const vars = await db.query.environmentVariables.findMany({
-    where: and(...conditions),
-    columns: {
-      id: true,
-      key: true,
-      value: true,
-      isSecret: true,
-      environmentId: true,
-      serviceId: true,
-      createdAt: true,
-      updatedAt: true,
-      // 不返回加密字段
-      encryptedValue: false,
-      iv: false,
-      authTag: false,
-    },
-  });
-
-  // Secret 变量的 value 置为 null（只写不读）
-  const safeVars = vars.map((v) => ({
-    ...v,
-    value: v.isSecret ? null : v.value,
-  }));
-
-  return NextResponse.json(safeVars);
 }
 
 // ============================================
@@ -116,133 +107,138 @@ const createEnvVarSchema = z.object({
 });
 
 export async function POST(request: Request, { params }: RouteParams) {
-  const { id: projectId } = await params;
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { error, status, member } = await authorizeProjectAccess(projectId, session.user.id);
-  if (error) return NextResponse.json({ error }, { status });
-  if (!member || !['owner', 'admin'].includes(member.role)) {
-    return NextResponse.json({ error: '环境变量变更只允许 owner 或 admin' }, { status: 403 });
-  }
-
-  let body: z.infer<typeof createEnvVarSchema>;
   try {
-    body = createEnvVarSchema.parse(await request.json());
-  } catch (e) {
-    return NextResponse.json({ error: 'Invalid request body', details: e }, { status: 400 });
-  }
-
-  const { key, value, isSecret, environmentId = null, serviceId = null } = body;
-
-  // 检查同一作用域内是否已有同名变量
-  const existing = await db.query.environmentVariables.findFirst({
-    where: and(
-      eq(environmentVariables.projectId, projectId),
-      eq(environmentVariables.key, key),
-      environmentId
-        ? eq(environmentVariables.environmentId, environmentId)
-        : isNull(environmentVariables.environmentId),
-      serviceId
-        ? eq(environmentVariables.serviceId, serviceId)
-        : isNull(environmentVariables.serviceId)
-    ),
-  });
-
-  if (existing) {
-    return NextResponse.json(
-      { error: `Variable "${key}" already exists in this scope` },
-      { status: 409 }
+    const { id: projectId } = await params;
+    const session = await requireSession();
+    await getProjectAccessWithRoleOrThrow(
+      projectId,
+      session.user.id,
+      ['owner', 'admin'] as const,
+      '环境变量变更只允许 owner 或 admin'
     );
-  }
 
-  // 加密 or 明文存储
-  let insertData: Parameters<typeof db.insert>[0] extends never
-    ? never
-    : {
-        projectId: string;
-        key: string;
-        value: string | null;
-        isSecret: boolean;
-        environmentId: string | null;
-        serviceId: string | null;
-        encryptedValue?: string | null;
-        iv?: string | null;
-        authTag?: string | null;
-      };
-
-  if (isSecret) {
-    let encryptedValue: string;
-    let iv: string;
-    let authTag: string;
+    let body: z.infer<typeof createEnvVarSchema>;
     try {
-      ({ encryptedValue, iv, authTag } = await encrypt(value));
+      body = createEnvVarSchema.parse(await request.json());
     } catch (e) {
-      console.error('Failed to encrypt secret value:', e);
-      return NextResponse.json(
-        {
-          error: 'Encryption unavailable',
-          details:
-            e instanceof Error
-              ? e.message
-              : 'Master key not configured. Check K8s Secret juanie/juanie-master-key or ENCRYPTION_MASTER_KEY env var.',
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Invalid request body', details: e }, { status: 400 });
     }
-    insertData = {
-      projectId,
-      key,
-      value: null,
-      isSecret: true,
-      environmentId: environmentId ?? null,
-      serviceId: serviceId ?? null,
-      encryptedValue,
-      iv,
-      authTag,
-    };
-  } else {
-    insertData = {
-      projectId,
-      key,
-      value,
-      isSecret: false,
-      environmentId: environmentId ?? null,
-      serviceId: serviceId ?? null,
-      encryptedValue: null,
-      iv: null,
-      authTag: null,
-    };
-  }
 
-  const [created] = await db.insert(environmentVariables).values(insertData).returning({
-    id: environmentVariables.id,
-    key: environmentVariables.key,
-    isSecret: environmentVariables.isSecret,
-    environmentId: environmentVariables.environmentId,
-    serviceId: environmentVariables.serviceId,
-    createdAt: environmentVariables.createdAt,
-  });
+    const { key, value, isSecret, environmentId = null, serviceId = null } = body;
+    const scopedEnvironment = environmentId
+      ? await getProjectEnvironmentOrThrow(projectId, environmentId)
+      : null;
 
-  // 立即同步到 K8s（environmentId 存在时），然后触发滚动重启使 Pod 读取新值
-  if (environmentId) {
-    await syncEnvVarsToK8s(projectId, environmentId).catch((e) => {
-      console.error('Failed to sync env vars to K8s after create', e);
+    if (serviceId) {
+      await getProjectServiceOrThrow(projectId, serviceId);
+    }
+
+    const existing = await db.query.environmentVariables.findFirst({
+      where: and(
+        eq(environmentVariables.projectId, projectId),
+        eq(environmentVariables.key, key),
+        environmentId
+          ? eq(environmentVariables.environmentId, environmentId)
+          : isNull(environmentVariables.environmentId),
+        serviceId
+          ? eq(environmentVariables.serviceId, serviceId)
+          : isNull(environmentVariables.serviceId)
+      ),
     });
 
-    if (getIsConnected()) {
-      const env = await db.query.environments.findFirst({
-        where: eq(environments.id, environmentId),
+    if (existing) {
+      return NextResponse.json(
+        { error: `Variable "${key}" already exists in this scope` },
+        { status: 409 }
+      );
+    }
+
+    let insertData: Parameters<typeof db.insert>[0] extends never
+      ? never
+      : {
+          projectId: string;
+          key: string;
+          value: string | null;
+          isSecret: boolean;
+          environmentId: string | null;
+          serviceId: string | null;
+          encryptedValue?: string | null;
+          iv?: string | null;
+          authTag?: string | null;
+        };
+
+    if (isSecret) {
+      let encryptedValue: string;
+      let iv: string;
+      let authTag: string;
+      try {
+        ({ encryptedValue, iv, authTag } = await encrypt(value));
+      } catch (e) {
+        console.error('Failed to encrypt secret value:', e);
+        return NextResponse.json(
+          {
+            error: 'Encryption unavailable',
+            details:
+              e instanceof Error
+                ? e.message
+                : 'Master key not configured. Check K8s Secret juanie/juanie-master-key or ENCRYPTION_MASTER_KEY env var.',
+          },
+          { status: 500 }
+        );
+      }
+      insertData = {
+        projectId,
+        key,
+        value: null,
+        isSecret: true,
+        environmentId: environmentId ?? null,
+        serviceId: serviceId ?? null,
+        encryptedValue,
+        iv,
+        authTag,
+      };
+    } else {
+      insertData = {
+        projectId,
+        key,
+        value,
+        isSecret: false,
+        environmentId: environmentId ?? null,
+        serviceId: serviceId ?? null,
+        encryptedValue: null,
+        iv: null,
+        authTag: null,
+      };
+    }
+
+    const [created] = await db.insert(environmentVariables).values(insertData).returning({
+      id: environmentVariables.id,
+      key: environmentVariables.key,
+      isSecret: environmentVariables.isSecret,
+      environmentId: environmentVariables.environmentId,
+      serviceId: environmentVariables.serviceId,
+      createdAt: environmentVariables.createdAt,
+    });
+
+    if (environmentId) {
+      await syncEnvVarsToK8s(projectId, environmentId).catch((e) => {
+        console.error('Failed to sync env vars to K8s after create', e);
       });
-      if (env?.namespace) {
-        await rolloutRestartDeployments(env.namespace).catch((e) => {
+
+      if (getIsConnected() && scopedEnvironment?.namespace) {
+        await rolloutRestartDeployments(scopedEnvironment.namespace).catch((e) => {
           console.warn('Failed to trigger rolling restart after env var create', e);
         });
       }
     }
-  }
 
-  return NextResponse.json(created, { status: 201 });
+    return NextResponse.json(created, { status: 201 });
+  } catch (error) {
+    if (isAccessError(error)) {
+      return toAccessErrorResponse(error);
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
 }

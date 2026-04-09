@@ -18,15 +18,14 @@ describe('environment list view', () => {
       },
     ]);
 
-    expect(environments[0]?.policy).toEqual({
-      level: 'protected',
-      reasons: ['生产环境已启用保护'],
-      summary: '生产环境已启用保护',
-    });
-    expect(environments[1]?.policy).toEqual({
-      level: 'preview',
-      reasons: ['预览环境会自动回收'],
-      summary: '预览环境会自动回收',
-    });
+    expect(environments[0]?.policy.level).toBe('protected');
+    expect(environments[0]?.policy.reasons).toEqual(['生产环境已启用保护']);
+    expect(environments[0]?.policy.summary).toBe('生产环境已启用保护');
+    expect(environments[0]?.policy.signals[0]?.code).toBe('production_protected');
+
+    expect(environments[1]?.policy.level).toBe('preview');
+    expect(environments[1]?.policy.reasons).toEqual(['预览环境会自动回收']);
+    expect(environments[1]?.policy.summary).toBe('预览环境会自动回收');
+    expect(environments[1]?.policy.signals[0]?.code).toBe('preview_auto_cleanup');
   });
 });

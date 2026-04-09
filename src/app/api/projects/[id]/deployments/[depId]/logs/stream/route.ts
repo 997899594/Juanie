@@ -1,110 +1,116 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
+import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
+import { isAccessError } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import { deploymentLogs, deployments, projects, teamMembers } from '@/lib/db/schema';
+import { deploymentLogs, deployments } from '@/lib/db/schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; depId: string }> }
 ) {
-  const session = await auth();
+  try {
+    const session = await requireSession();
+    const { id, depId } = await params;
+    await getProjectAccessOrThrow(id, session.user.id);
 
-  if (!session?.user?.id) {
-    return new Response('Unauthorized', { status: 401 });
-  }
+    const deployment = await db.query.deployments.findFirst({
+      where: and(eq(deployments.id, depId), eq(deployments.projectId, id)),
+    });
 
-  const { id, depId } = await params;
+    if (!deployment) {
+      return new Response('Deployment not found', { status: 404 });
+    }
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, id),
-  });
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let closed = false;
 
-  if (!project) {
-    return new Response('Project not found', { status: 404 });
-  }
+        const sendEvent = (data: object) => {
+          if (closed) return;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        };
 
-  const member = await db.query.teamMembers.findFirst({
-    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, session.user.id)),
-  });
+        const close = () => {
+          if (closed) return;
+          closed = true;
+          controller.close();
+        };
 
-  if (!member) {
-    return new Response('Forbidden', { status: 403 });
-  }
+        let sentCount = 0;
+        let done = false;
+        const onAbort = () => {
+          done = true;
+          close();
+        };
+        request.signal.addEventListener('abort', onAbort);
 
-  const deployment = await db.query.deployments.findFirst({
-    where: and(eq(deployments.id, depId), eq(deployments.projectId, id)),
-  });
-
-  if (!deployment) {
-    return new Response('Deployment not found', { status: 404 });
-  }
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-
-      const sendEvent = (data: object) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-      };
-
-      let sentCount = 0;
-      let done = false;
-
-      const poll = async () => {
-        while (!done) {
+        const poll = async () => {
           try {
-            const allLogs = await db.query.deploymentLogs.findMany({
-              where: eq(deploymentLogs.deploymentId, depId),
-              orderBy: [asc(deploymentLogs.createdAt)],
-            });
+            while (!done) {
+              try {
+                const allLogs = await db.query.deploymentLogs.findMany({
+                  where: eq(deploymentLogs.deploymentId, depId),
+                  orderBy: [asc(deploymentLogs.createdAt)],
+                });
 
-            if (allLogs.length > sentCount) {
-              const newLogs = allLogs.slice(sentCount);
-              sentCount = allLogs.length;
-              sendEvent({ type: 'logs', logs: newLogs });
+                if (allLogs.length > sentCount) {
+                  const newLogs = allLogs.slice(sentCount);
+                  sentCount = allLogs.length;
+                  sendEvent({ type: 'logs', logs: newLogs });
+                }
+
+                const current = await db.query.deployments.findFirst({
+                  where: eq(deployments.id, depId),
+                });
+
+                if (
+                  current?.status === 'running' ||
+                  current?.status === 'awaiting_rollout' ||
+                  current?.status === 'verification_failed' ||
+                  current?.status === 'failed' ||
+                  current?.status === 'migration_failed' ||
+                  current?.status === 'rolled_back'
+                ) {
+                  sendEvent({ type: 'complete', status: current.status });
+                  done = true;
+                  return;
+                }
+
+                await new Promise((r) => setTimeout(r, 1000));
+              } catch (err) {
+                console.error('Log stream poll error:', err);
+                sendEvent({ type: 'error', message: 'Failed to fetch logs' });
+                done = true;
+              }
             }
-
-            const current = await db.query.deployments.findFirst({
-              where: eq(deployments.id, depId),
-            });
-
-            if (
-              current?.status === 'running' ||
-              current?.status === 'awaiting_rollout' ||
-              current?.status === 'verification_failed' ||
-              current?.status === 'failed' ||
-              current?.status === 'migration_failed' ||
-              current?.status === 'rolled_back'
-            ) {
-              sendEvent({ type: 'complete', status: current.status });
-              done = true;
-              controller.close();
-              return;
-            }
-
-            await new Promise((r) => setTimeout(r, 1000));
-          } catch (err) {
-            console.error('Log stream poll error:', err);
-            sendEvent({ type: 'error', message: 'Failed to fetch logs' });
-            done = true;
-            controller.close();
+          } finally {
+            request.signal.removeEventListener('abort', onAbort);
+            close();
           }
-        }
-      };
+        };
 
-      poll();
-    },
-  });
+        void poll();
+      },
+    });
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
-  });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      },
+    });
+  } catch (error) {
+    if (isAccessError(error)) {
+      return new Response(error.message, { status: error.status });
+    }
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(errorMessage, { status: 500 });
+  }
 }

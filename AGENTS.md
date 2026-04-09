@@ -17,12 +17,13 @@ Juanie is a modern AI-driven DevOps platform built with:
 ## Build/Lint/Test Commands
 
 ```bash
-# Development (同时启动 Web + Worker)
-bun run dev              # 启动开发服务器 (web:3001) + 队列 worker
+# Development (同时启动 Web + Worker + Scheduler)
+bun run dev              # 启动开发服务器 (web:3001) + 队列 worker + scheduler
 
 # 单独启动
 bun run dev:web          # 只启动 Next.js 开发服务器
 bun run dev:worker       # 只启动队列 worker (热重载)
+bun run dev:scheduler    # 只启动 cron scheduler (热重载)
 bun run dev:redis        # 启动 Redis Docker 容器
 
 # Build
@@ -31,10 +32,14 @@ bun run build            # Build for production
 # Production
 bun run start            # 启动 Next.js 生产服务器
 bun run start:worker     # 启动队列 worker (生产模式)
+bun run start:scheduler  # 启动 cron scheduler (生产模式)
 
 # Linting & Formatting
 bun run lint             # Run Biome linter
 bun run format           # Format code with Biome
+
+# Tests
+bun run test             # Run Bun test suite
 
 # Database
 bun run db:generate      # Generate Drizzle migrations
@@ -42,8 +47,6 @@ bun run db:push          # Push schema changes to database
 bun run db:studio        # Open Drizzle Studio
 bun run db:seed          # Run seed script
 ```
-
-**Note**: No test framework is currently configured. When adding tests, prefer Vitest and update this document.
 
 ## Architecture
 
@@ -155,22 +158,20 @@ import { Button } from '../../../components/ui/button'
 ### API Routes (Next.js App Router)
 
 - Export async functions for HTTP methods: `GET`, `POST`, `PUT`, `DELETE`
-- Always authenticate requests using `auth()` from `@/lib/auth`
+- Always authenticate requests with `requireSession()` from `@/lib/api/access`
+- Resolve scope through access helpers (`getTeamAccessOrThrow`, `getProjectAccessOrThrow`, `getReleaseAccessOrThrow`) instead of inline membership queries
 - Return `NextResponse.json()` for JSON responses
 - Include proper HTTP status codes
 
 ```typescript
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const session = await auth()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const session = await requireSession()
+  const { project } = await getProjectAccessOrThrow(id, session.user.id)
 
   // ... logic
 
-  return NextResponse.json(data)
+  return NextResponse.json(project)
 }
 ```
 
@@ -199,6 +200,7 @@ const result = await db
 - Project init processor: `src/lib/queue/project-init.ts`
 - Deployment processor: `src/lib/queue/deployment.ts`
 - Worker entry point: `src/lib/queue/worker.ts`
+- Scheduler entry point: `src/lib/queue/scheduler.ts`
 
 ```typescript
 // Add job to queue
@@ -207,6 +209,15 @@ import { addProjectInitJob, addDeploymentJob } from '@/lib/queue'
 await addProjectInitJob(projectId, 'import')
 await addDeploymentJob(deploymentId, projectId, environmentId)
 ```
+
+### 团队集成绑定（Team Integration Binding）
+
+- 数据模型：`teamIntegrationBindings`（见 `src/lib/db/schema.ts`）
+- 服务层：`src/lib/integrations/service/team-binding-service.ts`
+- 控制面默认通过团队默认 binding 解析执行身份，不再依赖 owner 个人身份 fallback
+- 成员移除离职保护：`src/lib/teams/offboarding-service.ts`
+  - 若成员持有团队默认 `personal` binding，移除操作返回 `409`
+  - 若成员仅持有非默认 `personal` binding，移除时自动撤销对应 binding
 
 ### Kubernetes Client
 
@@ -235,23 +246,24 @@ await createKustomization(name, namespace, {
 })
 ```
 
-### API 中间件与错误处理
+### API 访问控制与错误处理
 
 `src/lib/api/` 提供生产级 API 工具：
 
+- `access.ts` — 统一 session + team/project/release 作用域校验 helper
 - `errors.ts` — 标准化错误格式与错误码枚举，含请求 ID 追踪
-- `middleware.ts` — 可组合的认证/授权/限流中间件，类型安全的 handler 创建
-- `rate-limit.ts` / `rate-limit-redis.ts` — Redis 支持的限流（含内存降级），预设规则：strict / medium / loose / api
-- `validation.ts` — 基于 Zod 的请求体校验工具
 
 ```typescript
-import { createApiHandler } from '@/lib/api/middleware'
-import { ApiError, ErrorCode } from '@/lib/api/errors'
+import { requireSession, getProjectAccessOrThrow } from '@/lib/api/access'
+import { isAccessError } from '@/lib/api/errors'
 
-// 构建带认证 + 限流的 handler
-export const GET = createApiHandler({ auth: true, rateLimit: 'api' }, async (req, ctx) => {
-  // ctx.session 已注入
-})
+const session = await requireSession()
+const { project } = await getProjectAccessOrThrow(projectId, session.user.id)
+
+// 在 route handler 中统一处理 AccessError
+if (isAccessError(error)) {
+  return NextResponse.json({ error: error.message }, { status: error.statusCode })
+}
 ```
 
 ### 日志与可观测性
@@ -327,11 +339,9 @@ src/
 │   │   ├── transaction.ts # 事务封装（含重试逻辑）
 │   │   └── transaction-helpers.ts # 批量操作工具
 │   ├── api/               # 生产级 API 工具
+│   │   ├── access.ts      # session + scope access helpers
 │   │   ├── errors.ts      # 标准化错误处理
-│   │   ├── middleware.ts  # 可组合中间件
-│   │   ├── rate-limit.ts  # 限流（内存）
-│   │   ├── rate-limit-redis.ts # 限流（Redis）
-│   │   └── validation.ts  # 请求校验工具
+│   │   └── __tests__/     # access/error 边界测试
 │   ├── logger/            # 可观测性日志系统
 │   │   ├── index.ts       # 基础 logger
 │   │   ├── logger-http.ts # HTTP 日志
@@ -342,6 +352,7 @@ src/
 │   │   ├── index.ts       # 统一接口
 │   │   ├── github.ts      # GitHub 实现
 │   │   └── gitlab.ts      # GitLab 实现（含自托管）
+│   ├── integrations/      # OAuth/Grant/团队绑定控制面
 │   ├── config/
 │   │   └── parser.ts      # juanie.yaml 解析器（Zod 校验）
 │   ├── queue/             # BullMQ 队列
@@ -411,11 +422,11 @@ SMTP_PASS=xxx
    - Run `bun run dev:redis` to start Redis (首次需要)
    - Run `bun run db:push` to sync database schema
 
-2. **Development**: Run `bun run dev` (启动 Web + Worker)
+2. **Development**: Run `bun run dev` (启动 Web + Worker + Scheduler)
 
 3. **Database changes**: Edit `src/lib/db/schema.ts`, then run `bun run db:push`
 
-4. **Before committing**: Run `bun run lint` to check for issues
+4. **Before committing**: Run `bun run test` and `bun run lint` to check for issues
 
 ## juanie.yaml 项目配置格式
 

@@ -23,6 +23,8 @@ describe('project init migration inference', () => {
         monorepoType: 'none',
         rootFiles: ['package.json', 'bun.lockb'],
         packageManager: 'bun',
+        bakeDefinition: null,
+        bakeTargets: [],
         packageJson: {
           scripts: {
             'db:migrate': 'drizzle-kit migrate',
@@ -53,6 +55,8 @@ describe('project init migration inference', () => {
         monorepoType: 'none',
         rootFiles: ['package.json', 'pnpm-lock.yaml'],
         packageManager: 'pnpm',
+        bakeDefinition: null,
+        bakeTargets: [],
         packageJson: {
           scripts: {
             'db:push': 'drizzle-kit push',
@@ -122,6 +126,8 @@ describe('project init migration inference', () => {
         monorepoType: 'none',
         rootFiles: ['package.json', 'bun.lockb'],
         packageManager: 'bun',
+        bakeDefinition: null,
+        bakeTargets: [],
         packageJson: {
           scripts: {
             'db:migrate': 'drizzle-kit migrate',
@@ -182,6 +188,8 @@ describe('project init migration inference', () => {
         monorepoType: 'turborepo',
         rootFiles: ['package.json', 'turbo.json'],
         packageManager: 'bun',
+        bakeDefinition: null,
+        bakeTargets: [],
         packageJson: {
           scripts: {
             'db:migrate': 'turbo run db:migrate',

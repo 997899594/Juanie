@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { integrationIdentities, teamMembers } from '@/lib/db/schema';
+import { teamMembers } from '@/lib/db/schema';
 import type { CreateRepoOptions, GitRepository, GitReviewRequest, PushOptions } from '@/lib/git';
 import { githubAdapter } from '@/lib/integrations/adapters/github-adapter';
 import { gitlabAdapter } from '@/lib/integrations/adapters/gitlab-adapter';
@@ -8,12 +8,18 @@ import {
   type IntegrationError,
   type IntegrationErrorCode,
   integrationErrors,
+  toIntegrationError,
 } from '@/lib/integrations/domain/errors';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
   createIntegrationSession,
   type IntegrationSession,
 } from '@/lib/integrations/service/session-service';
+import {
+  backfillOwnerBindingForTeam,
+  chooseDefaultBinding,
+  listTeamIntegrationBindings,
+} from '@/lib/integrations/service/team-binding-service';
 
 export type { IntegrationSession };
 
@@ -62,47 +68,113 @@ export const normalizeApiError = (
   };
 };
 
+export const statusByCode = (code?: string) => {
+  if (!code) return 500;
+  if (code.startsWith('MISSING_CAPABILITY')) return 403;
+
+  switch (code) {
+    case 'INTEGRATION_NOT_BOUND':
+      return 404;
+    case 'TEAM_ACCESS_DENIED':
+    case 'GRANT_EXPIRED':
+    case 'GRANT_REVOKED':
+    case 'PROVIDER_ACCESS_DENIED':
+      return 403;
+    case 'PROVIDER_RESOURCE_NOT_FOUND':
+      return 404;
+    default:
+      return 500;
+  }
+};
+
+const resolveBoundIdentity = async (input: {
+  teamId: string;
+  integrationId?: string;
+  bindingId?: string;
+}) => {
+  const pickCandidate = async () => {
+    const bindings = await listTeamIntegrationBindings(input.teamId);
+    if (bindings.length === 0) {
+      return null;
+    }
+
+    if (input.bindingId) {
+      return bindings.find((binding) => binding.id === input.bindingId) ?? null;
+    }
+
+    if (input.integrationId) {
+      const scoped = bindings.filter(
+        (binding) => binding.integrationIdentityId === input.integrationId
+      );
+      return chooseDefaultBinding(scoped);
+    }
+
+    return chooseDefaultBinding(bindings);
+  };
+
+  let candidate = await pickCandidate();
+  if (!candidate) {
+    await backfillOwnerBindingForTeam(input.teamId);
+    candidate = await pickCandidate();
+  }
+
+  if (!candidate) {
+    return null;
+  }
+
+  if (input.bindingId && candidate.id !== input.bindingId) {
+    return null;
+  }
+
+  if (input.integrationId && candidate.integrationIdentityId !== input.integrationId) {
+    return null;
+  }
+
+  return candidate;
+};
+
 export const getTeamIntegrationSession = async ({
   integrationId,
+  bindingId,
   teamId,
+  actingUserId,
   requiredCapabilities,
 }: {
   integrationId?: string;
+  bindingId?: string;
   teamId: string;
+  actingUserId?: string | null;
   requiredCapabilities: Capability[];
 }): Promise<IntegrationSession> => {
-  const owner = await db.query.teamMembers.findFirst({
-    where: and(eq(teamMembers.teamId, teamId), eq(teamMembers.role, 'owner')),
+  if (actingUserId) {
+    const actingMember = await db.query.teamMembers.findFirst({
+      where: and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, actingUserId)),
+    });
+
+    if (!actingMember) {
+      throw toIntegrationError(integrationErrors.teamAccessDenied());
+    }
+  }
+
+  const binding = await resolveBoundIdentity({
+    teamId,
+    integrationId: integrationId || undefined,
+    bindingId: bindingId || undefined,
   });
 
-  if (!owner) {
-    throw new Error(integrationErrors.notBound().message);
-  }
-
-  let identity: typeof integrationIdentities.$inferSelect | undefined;
-
-  if (integrationId) {
-    identity = await db.query.integrationIdentities.findFirst({
-      where: and(
-        eq(integrationIdentities.id, integrationId),
-        eq(integrationIdentities.userId, owner.userId)
-      ),
-    });
-  } else {
-    // If no integrationId provided, find the first integration for the team owner
-    identity = await db.query.integrationIdentities.findFirst({
-      where: eq(integrationIdentities.userId, owner.userId),
-    });
-  }
-
-  if (!identity) {
-    throw new Error(integrationErrors.notBound().message);
+  if (!binding) {
+    throw toIntegrationError(integrationErrors.notBound());
   }
 
   return createIntegrationSession({
-    integrationId: identity.id,
+    integrationId: binding.integrationIdentityId,
     teamId,
     requiredCapabilities,
+    binding: {
+      id: binding.id,
+      authMode: binding.authMode,
+      label: binding.label,
+    },
   });
 };
 

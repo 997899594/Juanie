@@ -65,6 +65,10 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
     where: eq(environments.id, environmentId),
   });
 
+  if (environment && environment.projectId !== projectId) {
+    throw new Error(`Environment ${environmentId} does not belong to project ${projectId}`);
+  }
+
   if (!environment?.namespace) {
     logger.debug('Environment has no namespace, skipping env var sync', { environmentId });
     return;

@@ -41,20 +41,24 @@ describe('delivery policy', () => {
   });
 
   it('evaluates environment policy consistently', () => {
-    expect(evaluateEnvironmentPolicy({ isProduction: true })).toEqual({
-      level: 'protected',
-      reasons: ['生产环境已启用保护'],
-      summary: '生产环境已启用保护',
-    });
-    expect(evaluateEnvironmentPolicy({ isPreview: true })).toEqual({
-      level: 'preview',
-      reasons: ['预览环境会自动回收'],
-      summary: '预览环境会自动回收',
-    });
+    const productionPolicy = evaluateEnvironmentPolicy({ isProduction: true });
+    expect(productionPolicy.level).toBe('protected');
+    expect(productionPolicy.reasons).toEqual(['生产环境已启用保护']);
+    expect(productionPolicy.summary).toBe('生产环境已启用保护');
+    expect(productionPolicy.signals[0]?.code).toBe('production_protected');
+
+    const previewPolicy = evaluateEnvironmentPolicy({ isPreview: true });
+    expect(previewPolicy.level).toBe('preview');
+    expect(previewPolicy.reasons).toEqual(['预览环境会自动回收']);
+    expect(previewPolicy.summary).toBe('预览环境会自动回收');
+    expect(previewPolicy.signals[0]?.code).toBe('preview_auto_cleanup');
+
     expect(evaluateEnvironmentPolicy({ isProduction: false, isPreview: false })).toEqual({
       level: 'normal',
       reasons: [],
       summary: null,
+      signals: [],
+      primarySignal: null,
     });
   });
 

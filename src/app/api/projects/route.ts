@@ -121,6 +121,7 @@ export async function POST(request: Request) {
       try {
         integrationSession = await getTeamIntegrationSession({
           teamId,
+          actingUserId: session.user.id,
           requiredCapabilities: ['read_repo'],
         });
       } catch {
@@ -135,6 +136,7 @@ export async function POST(request: Request) {
       try {
         await getTeamIntegrationSession({
           teamId,
+          actingUserId: session.user.id,
           requiredCapabilities: ['write_repo'],
         });
       } catch {
@@ -149,129 +151,6 @@ export async function POST(request: Request) {
     let dbRepositoryId: string | null = null;
     if (mode === 'import' && repositoryId && repositoryFullName && integrationSession) {
       dbRepositoryId = await ensureRepository(repositoryId, repositoryFullName, integrationSession);
-    }
-
-    const [project] = await db
-      .insert(projects)
-      .values({
-        teamId,
-        name,
-        slug: uniqueSlug,
-        description,
-        repositoryId: dbRepositoryId,
-        productionBranch,
-        autoDeploy,
-        configJson: {
-          projectInit: {
-            mode,
-            template: template ?? null,
-            isPrivate: Boolean(isPrivate),
-          },
-          creationDefaults: {
-            runtimeProfile: runtimeProfile ?? 'standard',
-            productionDeploymentStrategy: productionDeploymentStrategy ?? 'controlled',
-            previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
-          },
-        },
-        status: 'initializing',
-      })
-      .returning();
-
-    // Create staging (auto-deploy on push) + production (manual promote only)
-    const [stagingEnv] = await db
-      .insert(environments)
-      .values({
-        projectId: project.id,
-        name: 'staging',
-        branch: productionBranch,
-        autoDeploy,
-        isProduction: false,
-        databaseStrategy: 'direct',
-        deploymentStrategy: 'rolling',
-      })
-      .returning();
-
-    await db.insert(environments).values({
-      projectId: project.id,
-      name: 'production',
-      autoDeploy: false,
-      isProduction: true,
-      databaseStrategy: 'direct',
-      deploymentStrategy: productionDeploymentStrategy ?? 'controlled',
-    });
-
-    const createdServices = new Map<string, string>();
-    for (const serviceConfig of serviceConfigs) {
-      const scaling = serviceConfig.scaling ?? null;
-      const resources = serviceConfig.resources ?? null;
-      const [service] = await db
-        .insert(services)
-        .values({
-          projectId: project.id,
-          name: serviceConfig.name,
-          type: serviceConfig.type,
-          buildCommand: serviceConfig.build?.command,
-          dockerfile: serviceConfig.build?.dockerfile,
-          dockerContext: serviceConfig.build?.context,
-          startCommand: serviceConfig.run?.command,
-          port: serviceConfig.run?.port,
-          cronSchedule: serviceConfig.type === 'cron' ? serviceConfig.schedule : null,
-          replicas: scaling?.min ?? 1,
-          healthcheckPath: serviceConfig.healthcheck?.path ?? null,
-          healthcheckInterval: serviceConfig.healthcheck?.interval ?? 30,
-          cpuRequest: resources?.cpuRequest ?? '100m',
-          cpuLimit: resources?.cpuLimit ?? '500m',
-          memoryRequest: resources?.memoryRequest ?? '256Mi',
-          memoryLimit: resources?.memoryLimit ?? '512Mi',
-          autoscaling:
-            scaling && ((scaling.max ?? 0) > (scaling.min ?? 0) || Boolean(scaling.cpu))
-              ? {
-                  min: scaling.min ?? 1,
-                  max: scaling.max ?? scaling.min ?? 1,
-                  cpu: scaling.cpu ?? 80,
-                }
-              : null,
-          isPublic: serviceConfig.isPublic ?? true,
-          status: 'pending',
-        })
-        .returning();
-      createdServices.set(serviceConfig.name, service.id);
-    }
-
-    for (const dbConfig of databaseConfigs) {
-      const provisionType = dbConfig.provisionType || 'standalone';
-      await db.insert(databases).values({
-        projectId: project.id,
-        environmentId: stagingEnv.id,
-        serviceId: dbConfig.service ? (createdServices.get(dbConfig.service) ?? null) : null,
-        name: dbConfig.name,
-        type: dbConfig.type,
-        plan: dbConfig.plan || 'starter',
-        provisionType,
-        scope: dbConfig.scope || (dbConfig.service ? 'service' : 'project'),
-        role: dbConfig.role || 'primary',
-        capabilities: normalizeDatabaseCapabilities(dbConfig.capabilities),
-        connectionString: provisionType === 'external' ? (dbConfig.externalUrl ?? null) : null,
-        status: 'pending',
-      });
-    }
-
-    if (useCustomDomain && domain) {
-      await db.insert(domains).values({
-        projectId: project.id,
-        environmentId: stagingEnv.id,
-        hostname: domain,
-        isCustom: true,
-        isVerified: false,
-      });
-    } else {
-      await db.insert(domains).values({
-        projectId: project.id,
-        environmentId: stagingEnv.id,
-        hostname: buildPrimaryEnvironmentHostname(slug),
-        isCustom: false,
-        isVerified: true,
-      });
     }
 
     const importSteps: { step: string; status: InitStepStatus; progress: number }[] = [
@@ -297,14 +176,152 @@ export async function POST(request: Request) {
 
     const initStepsData = mode === 'import' ? importSteps : createSteps;
 
-    await db.insert(projectInitSteps).values(
-      initStepsData.map((s) => ({
-        projectId: project.id,
-        step: s.step,
-        status: s.status,
-        progress: s.progress,
-      }))
-    );
+    const project = await db.transaction(async (tx) => {
+      const [createdProject] = await tx
+        .insert(projects)
+        .values({
+          teamId,
+          name,
+          slug: uniqueSlug,
+          description,
+          repositoryId: dbRepositoryId,
+          productionBranch,
+          autoDeploy,
+          configJson: {
+            projectInit: {
+              mode,
+              template: template ?? null,
+              isPrivate: Boolean(isPrivate),
+            },
+            creationDefaults: {
+              runtimeProfile: runtimeProfile ?? 'standard',
+              productionDeploymentStrategy: productionDeploymentStrategy ?? 'controlled',
+              previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
+            },
+          },
+          status: 'initializing',
+        })
+        .returning();
+
+      if (!createdProject) {
+        throw new Error('Failed to create project');
+      }
+
+      const [stagingEnv] = await tx
+        .insert(environments)
+        .values({
+          projectId: createdProject.id,
+          name: 'staging',
+          branch: productionBranch,
+          autoDeploy,
+          isProduction: false,
+          databaseStrategy: 'direct',
+          deploymentStrategy: 'rolling',
+        })
+        .returning();
+
+      if (!stagingEnv) {
+        throw new Error('Failed to create staging environment');
+      }
+
+      await tx.insert(environments).values({
+        projectId: createdProject.id,
+        name: 'production',
+        autoDeploy: false,
+        isProduction: true,
+        databaseStrategy: 'direct',
+        deploymentStrategy: productionDeploymentStrategy ?? 'controlled',
+      });
+
+      const createdServices = new Map<string, string>();
+      for (const serviceConfig of serviceConfigs) {
+        const scaling = serviceConfig.scaling ?? null;
+        const resources = serviceConfig.resources ?? null;
+        const [service] = await tx
+          .insert(services)
+          .values({
+            projectId: createdProject.id,
+            name: serviceConfig.name,
+            type: serviceConfig.type,
+            buildCommand: serviceConfig.build?.command,
+            dockerfile: serviceConfig.build?.dockerfile,
+            dockerContext: serviceConfig.build?.context,
+            startCommand: serviceConfig.run?.command,
+            port: serviceConfig.run?.port,
+            cronSchedule: serviceConfig.type === 'cron' ? serviceConfig.schedule : null,
+            replicas: scaling?.min ?? 1,
+            healthcheckPath: serviceConfig.healthcheck?.path ?? null,
+            healthcheckInterval: serviceConfig.healthcheck?.interval ?? 30,
+            cpuRequest: resources?.cpuRequest ?? '100m',
+            cpuLimit: resources?.cpuLimit ?? '500m',
+            memoryRequest: resources?.memoryRequest ?? '256Mi',
+            memoryLimit: resources?.memoryLimit ?? '512Mi',
+            autoscaling:
+              scaling && ((scaling.max ?? 0) > (scaling.min ?? 0) || Boolean(scaling.cpu))
+                ? {
+                    min: scaling.min ?? 1,
+                    max: scaling.max ?? scaling.min ?? 1,
+                    cpu: scaling.cpu ?? 80,
+                  }
+                : null,
+            isPublic: serviceConfig.isPublic ?? true,
+            status: 'pending',
+          })
+          .returning();
+
+        if (!service) {
+          throw new Error(`Failed to create service: ${serviceConfig.name}`);
+        }
+        createdServices.set(serviceConfig.name, service.id);
+      }
+
+      for (const dbConfig of databaseConfigs) {
+        const provisionType = dbConfig.provisionType || 'standalone';
+        await tx.insert(databases).values({
+          projectId: createdProject.id,
+          environmentId: stagingEnv.id,
+          serviceId: dbConfig.service ? (createdServices.get(dbConfig.service) ?? null) : null,
+          name: dbConfig.name,
+          type: dbConfig.type,
+          plan: dbConfig.plan || 'starter',
+          provisionType,
+          scope: dbConfig.scope || (dbConfig.service ? 'service' : 'project'),
+          role: dbConfig.role || 'primary',
+          capabilities: normalizeDatabaseCapabilities(dbConfig.capabilities),
+          connectionString: provisionType === 'external' ? (dbConfig.externalUrl ?? null) : null,
+          status: 'pending',
+        });
+      }
+
+      if (useCustomDomain && domain) {
+        await tx.insert(domains).values({
+          projectId: createdProject.id,
+          environmentId: stagingEnv.id,
+          hostname: domain,
+          isCustom: true,
+          isVerified: false,
+        });
+      } else {
+        await tx.insert(domains).values({
+          projectId: createdProject.id,
+          environmentId: stagingEnv.id,
+          hostname: buildPrimaryEnvironmentHostname(slug),
+          isCustom: false,
+          isVerified: true,
+        });
+      }
+
+      await tx.insert(projectInitSteps).values(
+        initStepsData.map((s) => ({
+          projectId: createdProject.id,
+          step: s.step,
+          status: s.status,
+          progress: s.progress,
+        }))
+      );
+
+      return createdProject;
+    });
 
     try {
       await addProjectInitJob(project.id, mode, template);

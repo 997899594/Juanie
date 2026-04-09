@@ -1,4 +1,4 @@
-import type { TeamRole } from '@/lib/db/schema';
+import type { IntegrationAuthMode, TeamRole } from '@/lib/db/schema';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 import {
   buildTeamGovernanceSnapshot,
@@ -120,6 +120,27 @@ export interface TeamSettingsView {
   canEdit: boolean;
   canDelete: boolean;
   saveSummary: string;
+}
+
+export interface TeamIntegrationBindingCard {
+  id: string;
+  label: string;
+  provider: string;
+  authMode: IntegrationAuthMode;
+  authModeLabel: string;
+  identityOwner: string;
+  isDefault: boolean;
+  isRevoked: boolean;
+  revokedAtLabel: string | null;
+  statusTone: 'success' | 'warning' | 'danger' | 'neutral';
+  statusSummary: string;
+}
+
+export interface TeamIntegrationsView {
+  headerDescription: string;
+  stats: TeamOverviewStat[];
+  canManage: boolean;
+  bindings: TeamIntegrationBindingCard[];
 }
 
 interface TeamAIActivityRowLike {
@@ -330,5 +351,127 @@ export function buildTeamSettingsView(input: {
     canEdit,
     canDelete,
     saveSummary: canEdit ? '可修改团队名称和删除团队' : '当前角色只能查看团队治理和成员边界',
+  };
+}
+
+function getAuthModeLabel(mode: IntegrationAuthMode): string {
+  if (mode === 'service') {
+    return '服务账号';
+  }
+
+  return '个人授权';
+}
+
+function getBindingStatus(input: {
+  revokedAt: Date | string | null;
+  grantRevokedAt: Date | string | null;
+  grantExpiresAt: Date | string | null;
+  authMode: IntegrationAuthMode;
+  ownerStillMember: boolean;
+}) {
+  if (input.revokedAt) {
+    return {
+      tone: 'neutral' as const,
+      summary: `已撤销（${formatDateLabel(input.revokedAt)}）`,
+    };
+  }
+
+  if (input.grantRevokedAt) {
+    return {
+      tone: 'danger' as const,
+      summary: '授权已撤销，需要重新授权',
+    };
+  }
+
+  if (input.grantExpiresAt) {
+    const expiresAt = new Date(input.grantExpiresAt);
+    if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() < Date.now()) {
+      return {
+        tone: 'warning' as const,
+        summary: `授权已过期（${formatDateLabel(input.grantExpiresAt)}）`,
+      };
+    }
+  }
+
+  if (input.authMode === 'personal' && !input.ownerStillMember) {
+    return {
+      tone: 'danger' as const,
+      summary: '绑定用户已不在团队，建议尽快替换为服务账号',
+    };
+  }
+
+  if (input.authMode === 'personal') {
+    return {
+      tone: 'warning' as const,
+      summary: '个人授权存在离职风险，建议迁移到服务账号',
+    };
+  }
+
+  return {
+    tone: 'success' as const,
+    summary: '绑定健康',
+  };
+}
+
+export function buildTeamIntegrationsView(input: {
+  role: TeamRole;
+  bindings: Array<{
+    id: string;
+    label: string | null;
+    provider: string;
+    authMode: IntegrationAuthMode;
+    isDefault: boolean;
+    revokedAt: Date | string | null;
+    grantRevokedAt: Date | string | null;
+    grantExpiresAt: Date | string | null;
+    identityOwner: string | null;
+    ownerStillMember: boolean;
+  }>;
+}): TeamIntegrationsView {
+  const canManage = input.role === 'owner' || input.role === 'admin';
+  const activeCount = input.bindings.filter((binding) => !binding.revokedAt).length;
+  const degradedCount = input.bindings.filter((binding) => {
+    const status = getBindingStatus({
+      revokedAt: binding.revokedAt,
+      grantRevokedAt: binding.grantRevokedAt,
+      grantExpiresAt: binding.grantExpiresAt,
+      authMode: binding.authMode,
+      ownerStillMember: binding.ownerStillMember,
+    });
+
+    return status.tone === 'danger' || status.tone === 'warning';
+  }).length;
+
+  return {
+    headerDescription: canManage ? '可管理团队默认执行身份' : '只读查看团队执行身份',
+    stats: [
+      { label: '活跃绑定', value: activeCount.toString() },
+      { label: '异常提醒', value: degradedCount.toString() },
+      { label: '当前角色', value: formatRoleLabel(input.role) },
+    ],
+    canManage,
+    bindings: input.bindings.map((binding) => {
+      const status = getBindingStatus({
+        revokedAt: binding.revokedAt,
+        grantRevokedAt: binding.grantRevokedAt,
+        grantExpiresAt: binding.grantExpiresAt,
+        authMode: binding.authMode,
+        ownerStillMember: binding.ownerStillMember,
+      });
+
+      return {
+        id: binding.id,
+        label: binding.label ?? `${binding.provider}:${binding.id.slice(0, 8)}`,
+        provider: binding.provider,
+        authMode: binding.authMode,
+        authModeLabel: getAuthModeLabel(binding.authMode),
+        identityOwner: binding.identityOwner ?? '未知用户',
+        isDefault: binding.isDefault,
+        isRevoked: Boolean(binding.revokedAt),
+        revokedAtLabel: binding.revokedAt ? formatDateLabel(binding.revokedAt) : null,
+        statusTone: status.tone,
+        statusSummary: status.summary,
+      };
+    }),
   };
 }

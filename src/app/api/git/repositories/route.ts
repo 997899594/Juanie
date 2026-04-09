@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireSession } from '@/lib/api/access';
 import {
   gateway,
   getTeamIntegrationSession,
   mapProviderError,
   normalizeApiError,
+  statusByCode,
 } from '@/lib/integrations/service/integration-control-plane';
 
 type NormalizableError = {
@@ -12,24 +13,6 @@ type NormalizableError = {
   message?: string;
   capability?: string;
   status?: number;
-};
-
-const statusByCode = (code?: string) => {
-  if (!code) return 500;
-  if (code.startsWith('MISSING_CAPABILITY')) return 403;
-
-  switch (code) {
-    case 'INTEGRATION_NOT_BOUND':
-      return 404;
-    case 'GRANT_EXPIRED':
-    case 'GRANT_REVOKED':
-    case 'PROVIDER_ACCESS_DENIED':
-      return 403;
-    case 'PROVIDER_RESOURCE_NOT_FOUND':
-      return 404;
-    default:
-      return 500;
-  }
 };
 
 const toApiError = (error: unknown) => {
@@ -50,25 +33,21 @@ const toApiError = (error: unknown) => {
 };
 
 export async function GET(request: Request) {
-  const session = await auth();
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(request.url);
-  const integrationId = searchParams.get('integrationId');
-  const teamId = searchParams.get('teamId');
-  const search = searchParams.get('search');
-
-  if (!teamId) {
-    return NextResponse.json({ error: 'teamId is required' }, { status: 400 });
-  }
-
   try {
+    const session = await requireSession();
+    const { searchParams } = new URL(request.url);
+    const integrationId = searchParams.get('integrationId');
+    const teamId = searchParams.get('teamId');
+    const search = searchParams.get('search');
+
+    if (!teamId) {
+      return NextResponse.json({ error: 'teamId is required' }, { status: 400 });
+    }
+
     const integrationSession = await getTeamIntegrationSession({
       integrationId: integrationId || undefined,
       teamId,
+      actingUserId: session.user.id,
       requiredCapabilities: ['read_repo'],
     });
 

@@ -18,7 +18,7 @@ describe('AppBuilder', () => {
 
   it('should build deployment with correct name', () => {
     const resources = AppBuilder.build(baseSpec);
-    expect(resources.deployment.metadata.name).toBe('my-app-web');
+    expect(resources.deployment.metadata.name).toBe('my-app');
   });
 
   it('should build deployment with correct replicas', () => {
@@ -34,7 +34,7 @@ describe('AppBuilder', () => {
 
   it('should build service with correct name', () => {
     const resources = AppBuilder.build(baseSpec);
-    expect(resources.service.metadata.name).toBe('my-app-web');
+    expect(resources.service.metadata.name).toBe('my-app');
   });
 
   it('should not build configMap when no env', () => {
