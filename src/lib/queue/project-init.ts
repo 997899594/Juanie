@@ -589,7 +589,7 @@ export function inferMigrationCommand(
   comment: string;
   tool: 'drizzle' | 'prisma' | 'knex' | 'typeorm' | 'custom';
   command: string;
-  autoRun: boolean;
+  executionMode: 'automatic' | 'manual_platform';
   approvalPolicy?: 'manual_in_production';
 } | null {
   if (!supportsGeneratedMigration(databaseType) || automation.monorepoType !== 'none') {
@@ -604,7 +604,7 @@ export function inferMigrationCommand(
       comment: 'Auto-generated from package.json script db:migrate',
       tool,
       command: buildRunScriptCommand(automation.packageManager, 'db:migrate'),
-      autoRun: true,
+      executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     };
   }
@@ -614,17 +614,18 @@ export function inferMigrationCommand(
       comment: 'Auto-generated from package.json script db:deploy',
       tool,
       command: buildRunScriptCommand(automation.packageManager, 'db:deploy'),
-      autoRun: true,
+      executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     };
   }
 
   if (scripts['db:push']) {
     return {
-      comment: 'Auto-generated from package.json script db:push; review before enabling auto-run',
+      comment:
+        'Auto-generated from package.json script db:push; review before approving it in Juanie',
       tool,
       command: buildRunScriptCommand(automation.packageManager, 'db:push'),
-      autoRun: false,
+      executionMode: 'manual_platform',
       approvalPolicy: 'manual_in_production',
     };
   }
@@ -704,13 +705,13 @@ export function buildMigrationConfigLines(
   inferred: ReturnType<typeof inferMigrationCommand>
 ): string[] {
   const lines = [
-    `${indent}# ${inferred?.comment ?? "TODO: replace with the repository's real migration command before enabling auto-run"}`,
+    `${indent}# ${inferred?.comment ?? "TODO: replace with the repository's real migration command before running it from Juanie"}`,
     `${indent}migrate:`,
     `${indent}  tool: ${inferred?.tool ?? 'custom'}`,
     `${indent}  workingDirectory: .`,
     `${indent}  command: ${inferred?.command ?? 'npm run db:migrate'}`,
     `${indent}  phase: preDeploy`,
-    `${indent}  autoRun: ${inferred?.autoRun ?? false}`,
+    `${indent}  executionMode: ${inferred?.executionMode ?? 'manual_platform'}`,
   ];
 
   if (inferred?.approvalPolicy) {

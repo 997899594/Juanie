@@ -1,6 +1,7 @@
 export type ReleaseRiskLevel = 'low' | 'medium' | 'high';
 export type ReleaseIssueCode =
   | 'approval_blocked'
+  | 'external_completion_blocked'
   | 'migration_failed'
   | 'migration_canceled'
   | 'release_canceled'
@@ -48,6 +49,7 @@ export interface DatabaseManualControlInput {
   } | null;
   hasLatestRelease: boolean;
   hasLatestImage: boolean;
+  executionMode?: 'automatic' | 'manual_platform' | 'external' | null;
   planBlockingReason?: string | null;
 }
 
@@ -114,6 +116,12 @@ const releaseIssueConfig: Record<
     label: '审批阻塞',
     summary: '发布被待审批迁移阻塞',
     nextActionLabel: '处理迁移审批',
+  },
+  external_completion_blocked: {
+    kind: 'migration',
+    label: '外部迁移阻塞',
+    summary: '发布正在等待外部迁移完成确认',
+    nextActionLabel: '标记外部迁移结果',
   },
   migration_failed: {
     kind: 'migration',
@@ -228,6 +236,17 @@ export function getReleaseFailureSummary(release: ReleaseLike): string | null {
     return '发布等待迁移审批';
   }
 
+  if (release.status === 'awaiting_external_completion') {
+    return '发布等待外部迁移完成';
+  }
+
+  const externalMigration = release.migrationRuns?.find(
+    (run) => run.status === 'awaiting_external_completion'
+  );
+  if (externalMigration) {
+    return '迁移等待外部完成确认';
+  }
+
   if (release.status === 'verification_failed') {
     return '发布校验失败';
   }
@@ -257,8 +276,16 @@ export function getReleaseIssueCode(release: ReleaseLike): ReleaseIssueCode | nu
     return 'approval_blocked';
   }
 
+  if (release.status === 'awaiting_external_completion') {
+    return 'external_completion_blocked';
+  }
+
   if (release.migrationRuns?.some((run) => run.status === 'awaiting_approval')) {
     return 'approval_blocked';
+  }
+
+  if (release.migrationRuns?.some((run) => run.status === 'awaiting_external_completion')) {
+    return 'external_completion_blocked';
   }
 
   if (release.migrationRuns?.some((run) => run.status === 'failed')) {
@@ -314,6 +341,10 @@ export function getMigrationAttentionIssueCode(
 ): ReleaseIssueCode | null {
   if (run.status === 'awaiting_approval') {
     return 'approval_blocked';
+  }
+
+  if (run.status === 'awaiting_external_completion') {
+    return 'external_completion_blocked';
   }
 
   if (run.status === 'failed') {
@@ -402,6 +433,17 @@ export function getDatabaseManualControlSnapshot(
     };
   }
 
+  if (input.latestMigration?.status === 'awaiting_external_completion') {
+    return {
+      issueCode,
+      issueLabel: getIssueLabel(issueCode),
+      actionLabel: input.latestMigration.releaseId ? '去 release 标记结果' : '标记外部结果',
+      reason: input.latestMigration.releaseId
+        ? '最近一次迁移正在等待外部完成确认；常规处理应回到关联 release。'
+        : '最近一次迁移正在等待外部完成确认；需要人工标记成功或失败。',
+    };
+  }
+
   if (input.latestMigration?.status === 'canceled') {
     return {
       issueCode,
@@ -420,12 +462,21 @@ export function getDatabaseManualControlSnapshot(
     };
   }
 
-  if (!input.hasLatestImage) {
+  if (input.executionMode !== 'external' && !input.hasLatestImage) {
     return {
       issueCode: null,
       issueLabel: null,
       actionLabel: input.hasLatestRelease ? '补齐镜像来源' : '先创建 release',
       reason: '命令式迁移依赖最近一次可用 release 镜像；当前没有可用镜像。',
+    };
+  }
+
+  if (input.executionMode === 'external') {
+    return {
+      issueCode: null,
+      issueLabel: null,
+      actionLabel: input.hasLatestRelease ? '登记外部结果' : '创建外部门禁',
+      reason: '当前迁移由外部系统执行，Juanie 只负责追踪门禁状态和恢复 release。',
     };
   }
 
@@ -458,6 +509,9 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   const hasApproval =
     release.status === 'awaiting_approval' ||
     release.migrationRuns?.some((run) => run.status === 'awaiting_approval');
+  const hasExternalCompletion =
+    release.status === 'awaiting_external_completion' ||
+    release.migrationRuns?.some((run) => run.status === 'awaiting_external_completion');
   const hasFailedMigration = release.migrationRuns?.some((run) =>
     ['failed', 'canceled'].includes(run.status)
   );
@@ -501,6 +555,11 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   if (hasApproval) {
     riskLevel = 'high';
     reasons.push('存在待审批迁移');
+  }
+
+  if (hasExternalCompletion) {
+    riskLevel = 'high';
+    reasons.push('存在待外部完成迁移');
   }
 
   if (hasFailedMigration) {

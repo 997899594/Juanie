@@ -2,10 +2,15 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { migrationRuns, projects, releases, teamMembers } from '@/lib/db/schema';
+import { migrationRuns, projects, type ReleaseStatus, teamMembers } from '@/lib/db/schema';
 import { createMigrationRun, findActiveMigrationRun, getMigrationRunById } from '@/lib/migrations';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { addMigrationJob } from '@/lib/queue';
+import {
+  persistReleaseRecapSafely,
+  resumeReleaseAfterSuccessfulMigration,
+  updateReleaseStatus,
+} from '@/lib/releases/orchestration';
 import { getReleaseRunningStatusForMigrationPhase } from '@/lib/releases/state-machine';
 
 function buildResolvedSpec(run: NonNullable<Awaited<ReturnType<typeof getMigrationRunById>>>) {
@@ -23,6 +28,51 @@ function buildResolvedSpec(run: NonNullable<Awaited<ReturnType<typeof getMigrati
       },
     },
   };
+}
+
+function getInitialStatusForExecutionMode(
+  executionMode: NonNullable<
+    NonNullable<Awaited<ReturnType<typeof getMigrationRunById>>>['specification']
+  >['executionMode']
+) {
+  if (executionMode === 'manual_platform') {
+    return 'awaiting_approval' as const;
+  }
+
+  if (executionMode === 'external') {
+    return 'awaiting_external_completion' as const;
+  }
+
+  return 'queued' as const;
+}
+
+function getReleaseStatusForPendingRun(
+  phase: NonNullable<
+    NonNullable<Awaited<ReturnType<typeof getMigrationRunById>>>['specification']
+  >['phase'],
+  runStatus: 'queued' | 'awaiting_approval' | 'awaiting_external_completion'
+): ReleaseStatus | null {
+  if (runStatus === 'awaiting_approval') {
+    return 'awaiting_approval';
+  }
+
+  if (runStatus === 'awaiting_external_completion') {
+    return 'awaiting_external_completion';
+  }
+
+  return getReleaseRunningStatusForMigrationPhase(phase);
+}
+
+function getRetryMessage(status: 'queued' | 'awaiting_approval' | 'awaiting_external_completion') {
+  if (status === 'awaiting_approval') {
+    return '迁移重试已创建，等待审批';
+  }
+
+  if (status === 'awaiting_external_completion') {
+    return '迁移重试已创建，等待外部完成确认';
+  }
+
+  return '迁移重试已加入队列';
 }
 
 export async function POST(
@@ -64,7 +114,7 @@ export async function POST(
     );
   }
 
-  const { action, imageUrl } = await request.json().catch(() => ({}));
+  const { action, imageUrl, errorMessage } = await request.json().catch(() => ({}));
 
   if (action === 'approve') {
     if (run.status !== 'awaiting_approval') {
@@ -85,14 +135,7 @@ export async function POST(
       const nextReleaseStatus = getReleaseRunningStatusForMigrationPhase(run.specification.phase);
 
       if (nextReleaseStatus) {
-        await db
-          .update(releases)
-          .set({
-            status: nextReleaseStatus,
-            errorMessage: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(releases.id, run.releaseId));
+        await updateReleaseStatus(run.releaseId, nextReleaseStatus);
       }
     }
 
@@ -107,6 +150,77 @@ export async function POST(
         runId: run.id,
       },
       { status: 202 }
+    );
+  }
+
+  if (action === 'mark_external_complete') {
+    if (run.status !== 'awaiting_external_completion') {
+      return NextResponse.json({ error: '当前迁移不在待外部完成状态' }, { status: 400 });
+    }
+
+    const finishedAt = new Date();
+    const startedAt = run.startedAt ?? finishedAt;
+
+    await db
+      .update(migrationRuns)
+      .set({
+        status: 'success',
+        errorCode: null,
+        errorMessage: null,
+        startedAt,
+        finishedAt,
+        durationMs: Math.max(finishedAt.getTime() - startedAt.getTime(), 0),
+        updatedAt: finishedAt,
+      })
+      .where(eq(migrationRuns.id, run.id));
+
+    if (run.releaseId) {
+      await resumeReleaseAfterSuccessfulMigration(run.id);
+    }
+
+    return NextResponse.json(
+      {
+        message: '已标记外部迁移完成',
+        runId: run.id,
+      },
+      { status: 200 }
+    );
+  }
+
+  if (action === 'mark_external_failed') {
+    if (run.status !== 'awaiting_external_completion') {
+      return NextResponse.json({ error: '当前迁移不在待外部完成状态' }, { status: 400 });
+    }
+
+    const failureMessage =
+      typeof errorMessage === 'string' && errorMessage.trim().length > 0
+        ? errorMessage.trim()
+        : '外部迁移被人工标记为失败';
+
+    await db
+      .update(migrationRuns)
+      .set({
+        status: 'failed',
+        errorCode: 'external_marked_failed',
+        errorMessage: failureMessage,
+        finishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(migrationRuns.id, run.id));
+
+    if (run.releaseId) {
+      const failureStatus: ReleaseStatus =
+        run.specification.phase === 'postDeploy' ? 'degraded' : 'migration_pre_failed';
+      await updateReleaseStatus(run.releaseId, failureStatus, failureMessage);
+      await persistReleaseRecapSafely(run.releaseId);
+    }
+
+    return NextResponse.json(
+      {
+        message: '已标记外部迁移失败',
+        runId: run.id,
+      },
+      { status: 200 }
     );
   }
 
@@ -130,6 +244,7 @@ export async function POST(
       );
     }
 
+    const initialStatus = getInitialStatusForExecutionMode(run.specification.executionMode);
     const retryRun = await createMigrationRun(buildResolvedSpec(run), {
       releaseId: run.releaseId,
       deploymentId: run.deploymentId,
@@ -137,17 +252,30 @@ export async function POST(
       triggeredByUserId: session.user.id,
       sourceCommitSha: run.sourceCommitSha,
       sourceCommitMessage: run.sourceCommitMessage,
-      runnerType: imageUrl ? 'k8s_job' : 'worker',
+      runnerType: initialStatus === 'queued' && imageUrl ? 'k8s_job' : 'worker',
+      initialStatus,
     });
 
-    await addMigrationJob(retryRun.id, {
-      imageUrl: imageUrl ?? null,
-      allowApprovalBypass: false,
-    });
+    if (run.releaseId) {
+      const nextReleaseStatus = getReleaseStatusForPendingRun(
+        run.specification.phase,
+        initialStatus
+      );
+      if (nextReleaseStatus) {
+        await updateReleaseStatus(run.releaseId, nextReleaseStatus);
+      }
+    }
+
+    if (initialStatus === 'queued') {
+      await addMigrationJob(retryRun.id, {
+        imageUrl: imageUrl ?? null,
+        allowApprovalBypass: false,
+      });
+    }
 
     return NextResponse.json(
       {
-        message: '迁移重试已加入队列',
+        message: getRetryMessage(initialStatus),
         runId: retryRun.id,
       },
       { status: 202 }

@@ -46,6 +46,7 @@ export const releaseStatuses = [
   'planning',
   'migration_pre_running',
   'awaiting_approval',
+  'awaiting_external_completion',
   'migration_pre_failed',
   'deploying',
   'awaiting_rollout',
@@ -81,9 +82,13 @@ export type MigrationTool = (typeof migrationTools)[number];
 export const migrationPhases = ['preDeploy', 'postDeploy', 'manual'] as const;
 export type MigrationPhase = (typeof migrationPhases)[number];
 
+export const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
+export type MigrationExecutionMode = (typeof migrationExecutionModes)[number];
+
 export const migrationRunStatuses = [
   'queued',
   'awaiting_approval',
+  'awaiting_external_completion',
   'planning',
   'running',
   'success',
@@ -148,6 +153,7 @@ export const integrationAuthModeEnum = pgEnum('integrationAuthMode', integration
 export const aiPlanEnum = pgEnum('aiPlan', aiPlans);
 export const migrationToolEnum = pgEnum('migrationTool', migrationTools);
 export const migrationPhaseEnum = pgEnum('migrationPhase', migrationPhases);
+export const migrationExecutionModeEnum = pgEnum('migrationExecutionMode', migrationExecutionModes);
 export const migrationRunStatusEnum = pgEnum('migrationRunStatus', migrationRunStatuses);
 export const migrationRunnerTypeEnum = pgEnum('migrationRunnerType', migrationRunnerTypes);
 export const migrationLockStrategyEnum = pgEnum('migrationLockStrategy', migrationLockStrategies);
@@ -642,7 +648,7 @@ export const migrationSpecifications = pgTable(
 
     tool: migrationToolEnum('tool').notNull(),
     phase: migrationPhaseEnum('phase').notNull().default('preDeploy'),
-    autoRun: boolean('autoRun').notNull().default(true),
+    executionMode: migrationExecutionModeEnum('executionMode').notNull(),
 
     workingDirectory: varchar('workingDirectory', { length: 500 }).notNull(),
     migrationPath: varchar('migrationPath', { length: 500 }),

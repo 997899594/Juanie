@@ -92,7 +92,11 @@ interface ManualReleasePlan {
   migration: {
     preDeployCount: number;
     postDeployCount: number;
+    automaticCount: number;
+    manualPlatformCount: number;
+    externalCount: number;
     warnings: string[];
+    requiresExternalCompletion?: boolean;
     primarySignal: {
       code: string;
       kind: 'migration';

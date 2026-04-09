@@ -138,7 +138,7 @@ function buildReleaseNarrativeSummary(input: {
     `${input.riskLabel}${input.environmentStrategy ? ` · ${input.environmentStrategy}` : ''}`;
 
   const resultParts = [getReleaseStatusLabel(input.release.status)];
-  if (input.approvalRunsCount > 0) resultParts.push(`${input.approvalRunsCount} 个待审批`);
+  if (input.approvalRunsCount > 0) resultParts.push(`${input.approvalRunsCount} 个待处理门禁`);
   if (input.retryableRunsCount > 0) resultParts.push(`${input.retryableRunsCount} 个可重试`);
   if (input.previewLifecycle?.stateLabel) resultParts.push(input.previewLifecycle.stateLabel);
   if ((input.governanceEvents?.length ?? 0) > 0) {
@@ -204,6 +204,14 @@ function buildReleaseBlockingReason(input: {
       label: '迁移审批阻塞',
       summary: '这次发布已经进入迁移环节，但存在待审批的迁移步骤，因此不会继续推进部署。',
       nextActionLabel: '先处理迁移审批，再继续发布',
+    };
+  }
+
+  if (input.release.migrationRuns.some((run) => run.status === 'awaiting_external_completion')) {
+    return {
+      label: '外部迁移阻塞',
+      summary: '这次发布已经进入迁移环节，但还在等待外部迁移完成确认，因此不会继续推进部署。',
+      nextActionLabel: '先标记外部迁移结果，再继续发布',
     };
   }
 
@@ -309,7 +317,7 @@ export function buildReleaseRecap(release: ReleaseRecapSourceLike): ReleaseRecap
   const policy: ReleasePolicySnapshot = evaluateReleasePolicy(release);
   const environmentPolicy = evaluateEnvironmentPolicy(release.environment);
   const approvalRunsCount = release.migrationRuns.filter(
-    (run) => run.status === 'awaiting_approval'
+    (run) => run.status === 'awaiting_approval' || run.status === 'awaiting_external_completion'
   ).length;
   const retryableRunsCount = release.migrationRuns.filter((run) =>
     ['failed', 'canceled'].includes(run.status)

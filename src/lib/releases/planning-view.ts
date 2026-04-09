@@ -42,7 +42,11 @@ export interface ReleasePlanningViewLike {
   migration: {
     preDeployCount: number;
     postDeployCount: number;
+    automaticCount: number;
+    manualPlatformCount: number;
+    externalCount: number;
     warnings: string[];
+    requiresExternalCompletion?: boolean;
     primarySignal: {
       code: string;
       kind: 'migration';
@@ -94,6 +98,22 @@ export function buildReleasePlanningPanel(input: {
       key: 'post-deploy',
       label: `后置迁移 ${input.plan.migration.postDeployCount} 项`,
       tone: 'neutral',
+    });
+  }
+
+  if (input.plan.migration.manualPlatformCount > 0) {
+    chips.push({
+      key: 'manual-platform',
+      label: `平台手动 ${input.plan.migration.manualPlatformCount} 项`,
+      tone: 'danger',
+    });
+  }
+
+  if (input.plan.migration.externalCount > 0) {
+    chips.push({
+      key: 'external-completion',
+      label: `外部确认 ${input.plan.migration.externalCount} 项`,
+      tone: 'danger',
     });
   }
 

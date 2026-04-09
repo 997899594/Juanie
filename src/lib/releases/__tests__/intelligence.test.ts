@@ -136,6 +136,14 @@ describe('release intelligence', () => {
 
     expect(
       getReleaseIssueCode({
+        status: 'awaiting_external_completion',
+        deployments: [],
+        migrationRuns: [],
+      })
+    ).toBe('external_completion_blocked');
+
+    expect(
+      getReleaseIssueCode({
         status: 'succeeded',
         environment: {
           isPreview: true,
@@ -149,6 +157,7 @@ describe('release intelligence', () => {
 
   it('maps issue codes to next actions', () => {
     expect(getReleaseActionLabel('migration_failed')).toBe('检查迁移并重试');
+    expect(getReleaseActionLabel('external_completion_blocked')).toBe('标记外部迁移结果');
     expect(getReleaseActionLabel('preview_expired')).toBe('重新创建预览环境');
   });
 
@@ -158,6 +167,12 @@ describe('release intelligence', () => {
         status: 'awaiting_approval',
       })
     ).toBe('approval_blocked');
+
+    expect(
+      getMigrationAttentionIssueCode({
+        status: 'awaiting_external_completion',
+      })
+    ).toBe('external_completion_blocked');
 
     expect(
       getMigrationAttentionIssueCode({
@@ -184,7 +199,37 @@ describe('release intelligence', () => {
 
   it('maps issue codes to user-facing labels', () => {
     expect(getIssueLabel('approval_blocked')).toBe('审批阻塞');
+    expect(getIssueLabel('external_completion_blocked')).toBe('外部迁移阻塞');
     expect(getIssueLabel('migration_failed')).toBe('迁移失败');
     expect(getIssueLabel('preview_expired')).toBe('预览已过期');
+  });
+
+  it('escalates to high risk for external migration gates', () => {
+    const snapshot = getReleaseIntelligenceSnapshot({
+      status: 'awaiting_external_completion',
+      environment: { isProduction: true },
+      deployments: [],
+      migrationRuns: [
+        {
+          status: 'awaiting_external_completion',
+          specification: {
+            compatibility: 'backward_compatible',
+            approvalPolicy: 'auto',
+          },
+        },
+      ],
+    });
+
+    expect(snapshot.riskLevel).toBe('high');
+    expect(snapshot.reasons).toContain('存在待外部完成迁移');
+    expect(snapshot.issueCode).toBe('external_completion_blocked');
+    expect(snapshot.actionLabel).toBe('标记外部迁移结果');
+    expect(
+      getReleaseFailureSummary({
+        status: 'awaiting_external_completion',
+        deployments: [],
+        migrationRuns: [],
+      })
+    ).toBe('发布等待外部迁移完成');
   });
 });

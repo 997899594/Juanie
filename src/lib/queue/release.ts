@@ -10,6 +10,7 @@ import {
   loadReleaseForOrchestration,
   persistReleaseRecapSafely,
   ReleaseApprovalRequiredError,
+  ReleaseExternalCompletionRequiredError,
   runReleaseMigrationPhase,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
@@ -56,6 +57,17 @@ export async function processRelease(job: Job<ReleaseJobData>) {
         success: false,
         terminal: true,
         approvalRequired: true,
+        runId: error.runId,
+        phase: error.phase,
+      };
+    }
+
+    if (error instanceof ReleaseExternalCompletionRequiredError) {
+      await persistReleaseRecapSafely(release.id);
+      return {
+        success: false,
+        terminal: true,
+        externalCompletionRequired: true,
         runId: error.runId,
         phase: error.phase,
       };

@@ -60,7 +60,7 @@ export interface MigrationExecutionPlan {
   environmentPolicy: EnvironmentPolicySnapshot;
   migrationPolicy: MigrationPolicyDecision;
   releasePolicy: ReleasePolicySnapshot;
-  runnerType: 'k8s_job' | 'worker';
+  runnerType: 'k8s_job' | 'worker' | 'external';
   imageUrl: string | null;
   database: {
     id: string;
@@ -82,13 +82,13 @@ export interface MigrationExecutionPlan {
     id: string;
     tool: MigrationSpecificationRecord['tool'];
     phase: MigrationSpecificationRecord['phase'];
+    executionMode: MigrationSpecificationRecord['executionMode'];
     workingDirectory: string;
     migrationPath: string | null;
     command: string;
     compatibility: MigrationSpecificationRecord['compatibility'];
     approvalPolicy: MigrationSpecificationRecord['approvalPolicy'];
     lockStrategy: MigrationSpecificationRecord['lockStrategy'];
-    autoRun: boolean;
   };
   resolution: MigrationResolutionInfo;
   envVars: string[];

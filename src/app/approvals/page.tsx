@@ -53,9 +53,9 @@ export default async function ApprovalsPage({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="审批" description="需要人工处理的迁移" />
+      <PageHeader title="迁移门禁" description="需要人工处理或外部确认的迁移" />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {stats.map((stat) => (
           <div key={stat.label} className="console-panel px-5 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -76,6 +76,9 @@ export default async function ApprovalsPage({
           </Button>
           <Button asChild variant={filterState === 'approval' ? 'default' : 'outline'} size="sm">
             <Link href={buildApprovalsFilterHref('approval')}>待审批</Link>
+          </Button>
+          <Button asChild variant={filterState === 'external' ? 'default' : 'outline'} size="sm">
+            <Link href={buildApprovalsFilterHref('external')}>待外部完成</Link>
           </Button>
           <Button asChild variant={filterState === 'failed' ? 'default' : 'outline'} size="sm">
             <Link href={buildApprovalsFilterHref('failed')}>失败</Link>

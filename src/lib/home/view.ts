@@ -345,7 +345,12 @@ export function buildHomeCommandCenter<
       (item) =>
         ({
           id: item.id,
-          eyebrow: item.status === 'awaiting_approval' ? '待审批' : '待处理',
+          eyebrow:
+            item.status === 'awaiting_approval'
+              ? '待审批'
+              : item.status === 'awaiting_external_completion'
+                ? '待外部完成'
+                : '待处理',
           title: item.releaseTitle ?? item.issueLabel ?? item.databaseName,
           description:
             item.platformSignals.primarySummary ??

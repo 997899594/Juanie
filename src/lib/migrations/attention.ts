@@ -1,7 +1,12 @@
-export const attentionMigrationStatuses = ['awaiting_approval', 'failed', 'canceled'] as const;
+export const attentionMigrationStatuses = [
+  'awaiting_approval',
+  'awaiting_external_completion',
+  'failed',
+  'canceled',
+] as const;
 
 export type AttentionMigrationStatus = (typeof attentionMigrationStatuses)[number];
-export type AttentionFilterState = 'all' | 'approval' | 'failed' | 'canceled';
+export type AttentionFilterState = 'all' | 'approval' | 'external' | 'failed' | 'canceled';
 
 interface MigrationRunLike {
   status: string;
@@ -24,6 +29,10 @@ export function matchesAttentionFilter(status: string, filterState: AttentionFil
     return status === 'awaiting_approval';
   }
 
+  if (filterState === 'external') {
+    return status === 'awaiting_external_completion';
+  }
+
   return status === filterState;
 }
 
@@ -39,12 +48,14 @@ export function getAttentionStats<T extends MigrationRunLike>(
 ): {
   total: number;
   approval: number;
+  external: number;
   failed: number;
   canceled: number;
 } {
   return {
     total: runs.filter((run) => isAttentionMigrationRun(run)).length,
     approval: runs.filter((run) => run.status === 'awaiting_approval').length,
+    external: runs.filter((run) => run.status === 'awaiting_external_completion').length,
     failed: runs.filter((run) => run.status === 'failed').length,
     canceled: runs.filter((run) => run.status === 'canceled').length,
   };

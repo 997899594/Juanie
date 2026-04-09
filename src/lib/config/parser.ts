@@ -1,20 +1,24 @@
 import { z } from 'zod';
 import { databaseCapabilities } from '@/lib/databases/capabilities';
 
-const migrationConfigSchema = z.object({
-  tool: z.enum(['drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom']),
-  workingDirectory: z.string().min(1),
-  path: z.string().min(1).optional(),
-  command: z.string().min(1),
-  phase: z.enum(['preDeploy', 'postDeploy', 'manual']).optional().default('preDeploy'),
-  autoRun: z.boolean().optional().default(true),
-  lockStrategy: z.enum(['platform', 'db_advisory']).optional().default('platform'),
-  compatibility: z
-    .enum(['backward_compatible', 'breaking'])
-    .optional()
-    .default('backward_compatible'),
-  approvalPolicy: z.enum(['auto', 'manual_in_production']).optional().default('auto'),
-});
+const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
+
+const migrationConfigSchema = z
+  .object({
+    tool: z.enum(['drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom']),
+    workingDirectory: z.string().min(1),
+    path: z.string().min(1).optional(),
+    command: z.string().min(1),
+    phase: z.enum(['preDeploy', 'postDeploy', 'manual']).optional().default('preDeploy'),
+    executionMode: z.enum(migrationExecutionModes),
+    lockStrategy: z.enum(['platform', 'db_advisory']).optional().default('platform'),
+    compatibility: z
+      .enum(['backward_compatible', 'breaking'])
+      .optional()
+      .default('backward_compatible'),
+    approvalPolicy: z.enum(['auto', 'manual_in_production']).optional().default('auto'),
+  })
+  .strict();
 
 const serviceDatabaseBindingSchema = z.object({
   binding: z.string().min(1).max(100).optional(),
@@ -241,13 +245,13 @@ export function generateDefaultConfig(
 
   if (options?.database === 'postgresql' || options?.database === 'mysql') {
     lines.push(
-      `    # TODO: replace with the repository's real migration command before enabling auto-run`,
+      `    # TODO: replace with the repository's real migration command before running it from Juanie`,
       `    migrate:`,
       `      tool: custom`,
       `      workingDirectory: .`,
       `      command: npm run db:migrate`,
       `      phase: preDeploy`,
-      `      autoRun: false`
+      `      executionMode: manual_platform`
     );
   }
 

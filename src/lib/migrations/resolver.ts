@@ -26,7 +26,7 @@ interface ServiceDatabaseBindingConfig {
     path?: string;
     command: string;
     phase?: 'preDeploy' | 'postDeploy' | 'manual';
-    autoRun?: boolean;
+    executionMode: 'automatic' | 'manual_platform' | 'external';
     lockStrategy?: 'platform' | 'db_advisory';
     compatibility?: 'backward_compatible' | 'breaking';
     approvalPolicy?: 'auto' | 'manual_in_production';
@@ -289,7 +289,7 @@ export async function syncMigrationSpecificationsFromRepo(
           databaseId: databaseRecord.id,
           tool: binding.migrate.tool,
           phase: binding.migrate.phase ?? 'preDeploy',
-          autoRun: binding.migrate.autoRun ?? true,
+          executionMode: binding.migrate.executionMode,
           workingDirectory: binding.migrate.workingDirectory,
           migrationPath: binding.migrate.path,
           command: binding.migrate.command,
@@ -306,7 +306,7 @@ export async function syncMigrationSpecificationsFromRepo(
           set: {
             tool: binding.migrate.tool,
             phase: binding.migrate.phase ?? 'preDeploy',
-            autoRun: binding.migrate.autoRun ?? true,
+            executionMode: binding.migrate.executionMode,
             workingDirectory: binding.migrate.workingDirectory,
             migrationPath: binding.migrate.path ?? null,
             command: binding.migrate.command,

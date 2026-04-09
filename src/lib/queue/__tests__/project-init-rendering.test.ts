@@ -44,7 +44,7 @@ describe('project init migration inference', () => {
       comment: 'Auto-generated from package.json script db:migrate',
       tool: 'drizzle',
       command: 'bun run db:migrate',
-      autoRun: true,
+      executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     });
   });
@@ -73,7 +73,7 @@ describe('project init migration inference', () => {
     );
 
     expect(inferred?.command).toBe('pnpm run db:push');
-    expect(inferred?.autoRun).toBe(false);
+    expect(inferred?.executionMode).toBe('manual_platform');
     expect(inferred?.approvalPolicy).toBe('manual_in_production');
   });
 
@@ -145,7 +145,7 @@ describe('project init migration inference', () => {
     expect(config).toContain('migrate:');
     expect(config).toContain('tool: drizzle');
     expect(config).toContain('command: bun run db:migrate');
-    expect(config).toContain('autoRun: true');
+    expect(config).toContain('executionMode: automatic');
     expect(config).not.toContain('databases:\n      - role:');
   });
 
@@ -200,7 +200,7 @@ describe('project init migration inference', () => {
 
     expect(config).toContain("TODO: replace with the repository's real migration command");
     expect(config).toContain('command: npm run db:migrate');
-    expect(config).toContain('autoRun: false');
+    expect(config).toContain('executionMode: manual_platform');
   });
 
   it('builds yarn commands without run', () => {

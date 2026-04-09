@@ -27,8 +27,8 @@ interface PlanningServiceLike {
 
 interface PlanningMigrationSpecLike {
   specification: {
-    autoRun: boolean;
     phase: 'preDeploy' | 'postDeploy' | 'manual';
+    executionMode: 'automatic' | 'manual_platform' | 'external';
     compatibility?: string | null;
     approvalPolicy?: string | null;
   };
@@ -60,10 +60,14 @@ export interface ReleasePlanningSnapshot {
   migration: {
     preDeployCount: number;
     postDeployCount: number;
+    automaticCount: number;
+    manualPlatformCount: number;
+    externalCount: number;
     warnings: string[];
     signals: MigrationPolicySignalSnapshot[];
     primarySignal: MigrationPolicySignalSnapshot | null;
     requiresApproval: boolean;
+    requiresExternalCompletion: boolean;
   };
   environmentInheritance: string | null;
   environmentDatabaseStrategy: string | null;
@@ -103,10 +107,14 @@ function buildStaticPlanningSnapshot(input: {
     migration: {
       preDeployCount: 0,
       postDeployCount: 0,
+      automaticCount: 0,
+      manualPlatformCount: 0,
+      externalCount: 0,
       warnings: [],
       signals: [],
       primarySignal: null,
       requiresApproval: false,
+      requiresExternalCompletion: false,
     },
     environmentInheritance: environmentInheritance?.label ?? null,
     environmentDatabaseStrategy,
@@ -179,10 +187,28 @@ export function summarizeReleasePlan(input: {
   services: PlanningServiceLike[];
   migrationSpecs: PlanningMigrationSpecLike[];
 }): ReleasePlanningSnapshot {
-  const autoRunSpecs = input.migrationSpecs.filter((spec) => spec.specification.autoRun);
-  const preDeploySpecs = autoRunSpecs.filter((spec) => spec.specification.phase === 'preDeploy');
-  const postDeploySpecs = autoRunSpecs.filter((spec) => spec.specification.phase === 'postDeploy');
-  const migrationDecisions = autoRunSpecs.map((spec) =>
+  const preDeploySpecs = input.migrationSpecs.filter(
+    (spec) => spec.specification.phase === 'preDeploy'
+  );
+  const postDeploySpecs = input.migrationSpecs.filter(
+    (spec) => spec.specification.phase === 'postDeploy'
+  );
+  const automaticSpecs = input.migrationSpecs.filter(
+    (spec) => spec.specification.executionMode === 'automatic'
+  );
+  const manualPlatformSpecs = input.migrationSpecs.filter(
+    (spec) => spec.specification.executionMode === 'manual_platform'
+  );
+  const externalSpecs = input.migrationSpecs.filter(
+    (spec) => spec.specification.executionMode === 'external'
+  );
+  const preDeployManualPlatformCount = preDeploySpecs.filter(
+    (spec) => spec.specification.executionMode === 'manual_platform'
+  ).length;
+  const preDeployExternalCount = preDeploySpecs.filter(
+    (spec) => spec.specification.executionMode === 'external'
+  ).length;
+  const migrationDecisions = input.migrationSpecs.map((spec) =>
     evaluateMigrationPolicy({
       environment: spec.environment,
       specification: spec.specification,
@@ -195,12 +221,17 @@ export function summarizeReleasePlan(input: {
   const environmentPolicy = evaluateEnvironmentPolicy(input.environment);
   const releasePolicy = evaluateReleasePolicy({
     environment: input.environment,
-    migrationRuns: autoRunSpecs.map((spec) => ({
+    migrationRuns: input.migrationSpecs.map((spec) => ({
       specification: spec.specification,
     })),
   });
+  const requiresExternalCompletion = preDeployExternalCount > 0;
+  const blockingReason =
+    preDeployManualPlatformCount > 0 || preDeployExternalCount > 0
+      ? '存在未满足的前置迁移门禁'
+      : null;
   const issue = releasePolicy.requiresApproval ? buildIssueSnapshot('approval_blocked') : null;
-  const totalAutoRun = preDeploySpecs.length + postDeploySpecs.length;
+  const totalAutomatic = automaticSpecs.length;
   const environmentInheritance = getEnvironmentInheritancePresentation(input.environment);
   const environmentDatabaseStrategy = getEnvironmentDatabaseStrategyLabel(
     input.environment.databaseStrategy
@@ -226,7 +257,7 @@ export function summarizeReleasePlan(input: {
 
   return {
     canCreate: true,
-    blockingReason: null,
+    blockingReason,
     services: input.services,
     environmentPolicy,
     releasePolicy,
@@ -235,18 +266,23 @@ export function summarizeReleasePlan(input: {
     migration: {
       preDeployCount: preDeploySpecs.length,
       postDeployCount: postDeploySpecs.length,
+      automaticCount: automaticSpecs.length,
+      manualPlatformCount: manualPlatformSpecs.length,
+      externalCount: externalSpecs.length,
       warnings,
       signals: migrationSignals,
       primarySignal: migrationSignals[0] ?? null,
       requiresApproval: releasePolicy.requiresApproval,
+      requiresExternalCompletion,
     },
     environmentInheritance: environmentInheritance?.label ?? null,
     environmentDatabaseStrategy,
     summary:
+      blockingReason ??
       releasePolicy.summary ??
       environmentPolicy.summary ??
       environmentInheritance?.summary ??
-      (totalAutoRun > 0 ? `包含 ${totalAutoRun} 项自动迁移` : null),
+      (totalAutomatic > 0 ? `包含 ${totalAutomatic} 项自动迁移` : null),
   };
 }
 

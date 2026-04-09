@@ -101,18 +101,22 @@ export function buildApprovalsFilterHref(state: string): string {
 }
 
 export function normalizeApprovalFilterState(state?: string): AttentionFilterState {
-  return state === 'approval' || state === 'failed' || state === 'canceled' ? state : 'all';
+  return state === 'approval' || state === 'external' || state === 'failed' || state === 'canceled'
+    ? state
+    : 'all';
 }
 
 export function buildApprovalStats(input: {
   total: number;
   approval: number;
+  external: number;
   failed: number;
   canceled: number;
 }): ApprovalStat[] {
   return [
     { label: '待处理', value: input.total },
     { label: '待审批', value: input.approval },
+    { label: '待外部完成', value: input.external },
     { label: '失败', value: input.failed },
     { label: '已取消', value: input.canceled },
   ];

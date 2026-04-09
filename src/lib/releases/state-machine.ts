@@ -54,7 +54,11 @@ export function resolveReleaseFailureStatus(
     return 'degraded';
   }
 
-  if (status === 'migration_pre_running') {
+  if (
+    status === 'migration_pre_running' ||
+    status === 'awaiting_approval' ||
+    status === 'awaiting_external_completion'
+  ) {
     return 'migration_pre_failed';
   }
 

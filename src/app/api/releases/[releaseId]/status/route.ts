@@ -10,7 +10,11 @@ function resolveReleaseOutcome(status: string): {
   succeeded: boolean;
   failed: boolean;
 } {
-  if (status === 'awaiting_approval' || status === 'awaiting_rollout') {
+  if (
+    status === 'awaiting_approval' ||
+    status === 'awaiting_external_completion' ||
+    status === 'awaiting_rollout'
+  ) {
     return {
       resolution: 'action_required',
       terminal: true,
@@ -38,6 +42,14 @@ function resolveReleaseErrorMessage(
   if (approvalRun) {
     const targetName = approvalRun.service?.name ?? approvalRun.database?.name ?? approvalRun.id;
     return `Migration ${targetName} is awaiting approval`;
+  }
+
+  const externalRun = release.migrationRuns.find(
+    (run) => run.status === 'awaiting_external_completion'
+  );
+  if (externalRun) {
+    const targetName = externalRun.service?.name ?? externalRun.database?.name ?? externalRun.id;
+    return `Migration ${targetName} is awaiting external completion`;
   }
 
   const rolloutDeployment = release.deployments.find(

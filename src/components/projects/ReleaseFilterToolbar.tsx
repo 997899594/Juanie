@@ -57,7 +57,7 @@ export function ReleaseFilterToolbar({
             size="sm"
             onClick={() => onChange({ risk: 'approval' })}
           >
-            待审批
+            待处理门禁
           </Button>
           <Button
             variant={riskFilter === 'failed' ? 'default' : 'outline'}

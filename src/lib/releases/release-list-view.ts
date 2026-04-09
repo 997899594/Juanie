@@ -96,9 +96,13 @@ export function filterReleaseCards<
       return (
         release.approvalRunsCount > 0 ||
         release.failedMigrationRunsCount > 0 ||
-        ['migration_pre_failed', 'failed', 'degraded', 'verification_failed'].includes(
-          release.status
-        )
+        [
+          'awaiting_external_completion',
+          'migration_pre_failed',
+          'failed',
+          'degraded',
+          'verification_failed',
+        ].includes(release.status)
       );
     }
 
@@ -119,7 +123,7 @@ export function buildReleaseListStats<T extends ReleaseListDecorations>(
   return [
     { label: '发布', value: releases.length },
     {
-      label: '待审批',
+      label: '待处理',
       value: releases.filter((release) => release.approvalRunsCount > 0).length,
     },
     {

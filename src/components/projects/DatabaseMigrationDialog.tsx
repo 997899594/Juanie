@@ -3,6 +3,7 @@
 import { AlertTriangle, Database, Loader2, Play, RefreshCw, TerminalSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,6 +43,7 @@ interface MigrationRun {
   specification: {
     tool: string;
     phase: string;
+    executionMode: 'automatic' | 'manual_platform' | 'external';
     command: string;
     workingDirectory: string;
     migrationPath: string | null;
@@ -115,7 +117,7 @@ interface MigrationPlan {
       nextActionLabel: string | null;
     } | null;
   };
-  runnerType: 'k8s_job' | 'worker';
+  runnerType: 'k8s_job' | 'worker' | 'external';
   imageUrl: string | null;
   database: {
     id: string;
@@ -137,13 +139,13 @@ interface MigrationPlan {
     id: string;
     tool: string;
     phase: string;
+    executionMode: 'automatic' | 'manual_platform' | 'external';
     workingDirectory: string;
     migrationPath: string | null;
     command: string;
     compatibility: string;
     approvalPolicy: string;
     lockStrategy: string;
-    autoRun: boolean;
   };
   resolution: {
     strategy: string;
@@ -209,6 +211,12 @@ function buildPlanDiff(
           previous: normalizePlanValue(previousSpec.command),
         }
       : null,
+    {
+      key: 'executionMode',
+      label: '执行模式',
+      current: formatExecutionModeLabel(plan.specification.executionMode),
+      previous: formatExecutionModeLabel(previousSpec.executionMode),
+    },
     {
       key: 'workingDirectory',
       label: '工作目录',
@@ -325,6 +333,18 @@ function formatLockStrategyLabel(value: string): string {
   return labels[value] ?? value;
 }
 
+function formatExecutionModeLabel(value: 'automatic' | 'manual_platform' | 'external'): string {
+  if (value === 'manual_platform') {
+    return '平台手动';
+  }
+
+  if (value === 'external') {
+    return '外部执行';
+  }
+
+  return '自动执行';
+}
+
 function formatResolutionStrategyLabel(value: string): string {
   const labels: Record<string, string> = {
     binding_name: '按显式绑定名解析',
@@ -415,7 +435,13 @@ export function DatabaseMigrationDialog({
   useEffect(() => {
     if (!open) return;
     const hasActiveRuns = runs.some((run) =>
-      ['queued', 'planning', 'running', 'awaiting_approval'].includes(run.status)
+      [
+        'queued',
+        'planning',
+        'running',
+        'awaiting_approval',
+        'awaiting_external_completion',
+      ].includes(run.status)
     );
     if (!hasActiveRuns) return;
     const interval = setInterval(() => {
@@ -467,7 +493,9 @@ export function DatabaseMigrationDialog({
   const displayMigrationPath = plan ? getDisplayMigrationPath(plan) : null;
   const confirmationMatches = plan ? confirmationText.trim() === plan.confirmationValue : false;
   const hasActiveRuns = runs.some((run) =>
-    ['queued', 'planning', 'running', 'awaiting_approval'].includes(run.status)
+    ['queued', 'planning', 'running', 'awaiting_approval', 'awaiting_external_completion'].includes(
+      run.status
+    )
   );
   const manualControl = getDatabaseManualControlSnapshot({
     latestMigration: latestMigration
@@ -483,6 +511,7 @@ export function DatabaseMigrationDialog({
         : null,
     hasLatestRelease: Boolean(latestRelease),
     hasLatestImage: Boolean(latestImageUrl),
+    executionMode: plan?.specification.executionMode ?? null,
     planBlockingReason: plan?.blockingReason,
   });
 
@@ -504,7 +533,7 @@ export function DatabaseMigrationDialog({
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>{databaseName} 手动迁移控制台</DialogTitle>
           <DialogDescription>
-            自动迁移应通过 release 执行。这里会先展示执行前对比，再决定是否手动执行。
+            平台会先解析迁移配置，再按 execution mode 执行、审批，或等待外部确认。
           </DialogDescription>
         </DialogHeader>
 
@@ -590,11 +619,13 @@ export function DatabaseMigrationDialog({
                             <div>当前没有关联 release，手动迁移会直接走控制面队列。</div>
                           )}
                           <div>
-                            {plan.runnerType === 'k8s_job'
-                              ? latestImageUrl
-                                ? '命令式迁移会使用最近一次可用 release 镜像执行。'
-                                : '命令式迁移需要最近一次可用 release 镜像；当前没有可用镜像。'
-                              : '当前迁移由控制面 worker 直接执行，不依赖 release 镜像。'}
+                            {plan.runnerType === 'external'
+                              ? '当前迁移由外部系统执行，平台只记录 gate 并等待你标记结果。'
+                              : plan.runnerType === 'k8s_job'
+                                ? latestImageUrl
+                                  ? '命令式迁移会使用最近一次可用 release 镜像执行。'
+                                  : '命令式迁移需要最近一次可用 release 镜像；当前没有可用镜像。'
+                                : '当前迁移由控制面 worker 直接执行，不依赖 release 镜像。'}
                           </div>
                         </div>
                       </div>
@@ -604,6 +635,9 @@ export function DatabaseMigrationDialog({
                         <Badge variant="outline">{plan.service.name}</Badge>
                         <Badge variant="outline">{plan.specification.tool}</Badge>
                         <Badge variant="outline">{plan.specification.phase}</Badge>
+                        <Badge variant="outline">
+                          {formatExecutionModeLabel(plan.specification.executionMode)}
+                        </Badge>
                         {plan.specification.compatibility === 'breaking' && (
                           <Badge variant="destructive">破坏性变更</Badge>
                         )}
@@ -633,12 +667,27 @@ export function DatabaseMigrationDialog({
                           </div>
                         </div>
                         <div className="rounded-2xl border border-border bg-secondary/10 p-3">
+                          <div className="text-xs text-muted-foreground">执行模式</div>
+                          <div className="mt-1 font-medium">
+                            {formatExecutionModeLabel(plan.specification.executionMode)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {plan.specification.executionMode === 'automatic'
+                              ? '平台会直接排队并执行迁移。'
+                              : plan.specification.executionMode === 'manual_platform'
+                                ? '平台先创建待审批记录，审批后再执行。'
+                                : '平台不执行命令，只等待外部结果回填。'}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-border bg-secondary/10 p-3">
                           <div className="text-xs text-muted-foreground">执行器</div>
                           <div className="mt-1 font-medium">{plan.runnerType}</div>
                           <div className="break-all text-xs text-muted-foreground">
-                            {plan.runnerType === 'k8s_job'
-                              ? (plan.imageUrl ?? '没有可用镜像')
-                              : '由控制面 worker 执行'}
+                            {plan.runnerType === 'external'
+                              ? '由外部系统执行，平台只追踪结果'
+                              : plan.runnerType === 'k8s_job'
+                                ? (plan.imageUrl ?? '没有可用镜像')
+                                : '由控制面 worker 执行'}
                           </div>
                         </div>
                         <div className="rounded-2xl border border-border bg-secondary/10 p-3">
@@ -796,7 +845,11 @@ export function DatabaseMigrationDialog({
                       <div className="rounded-[24px] border border-border bg-background p-4">
                         <div className="text-sm font-semibold text-foreground">执行确认</div>
                         <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                          输入确认短语后才允许执行，避免误触发。正在运行的迁移会自动刷新最近记录。
+                          {plan.specification.executionMode === 'automatic'
+                            ? '输入确认短语后才允许执行，避免误触发。正在运行的迁移会自动刷新最近记录。'
+                            : plan.specification.executionMode === 'manual_platform'
+                              ? '输入确认短语后会先创建待审批记录，审批通过后平台才会真正执行。'
+                              : '输入确认短语后会先创建外部迁移 gate，后续需要人工标记完成或失败。'}
                         </div>
                         <Separator className="my-4" />
                         <div className="space-y-2">
@@ -842,17 +895,38 @@ export function DatabaseMigrationDialog({
                   <div className="divide-y divide-border/70">
                     {runs.map((run) => (
                       <div key={run.id} className="space-y-2 px-5 py-4">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={getMigrationBadgeVariant(run.status)}>
-                            {getMigrationStatusDecoration(run.status).label}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">{run.service.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {run.specification.tool}
-                          </span>
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {formatPlatformDateTime(run.createdAt) ?? '—'}
-                          </span>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={getMigrationBadgeVariant(run.status)}>
+                                {getMigrationStatusDecoration(run.status).label}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {run.service.name}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {run.specification.tool}
+                              </span>
+                              <Badge variant="outline" className="text-[11px]">
+                                {formatExecutionModeLabel(run.specification.executionMode)}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {run.specification.phase}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {formatPlatformDateTime(run.createdAt) ?? '—'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {run.specification.command}
+                            </div>
+                          </div>
+                          <ReleaseMigrationActions
+                            projectId={projectId}
+                            runId={run.id}
+                            status={run.status}
+                            imageUrl={latestImageUrl}
+                          />
                         </div>
                         {run.errorMessage && (
                           <div className="text-xs text-destructive">{run.errorMessage}</div>
@@ -865,13 +939,6 @@ export function DatabaseMigrationDialog({
                             >
                               打开发布详情
                             </Link>
-                            {(run.status === 'awaiting_approval' ||
-                              run.status === 'failed' ||
-                              run.status === 'canceled') && (
-                              <span className="text-xs text-muted-foreground">
-                                审批和重试都在发布页处理。
-                              </span>
-                            )}
                           </div>
                         )}
                         {run.items.length > 0 && (
@@ -903,7 +970,11 @@ export function DatabaseMigrationDialog({
               ? '当前计划被平台安全策略拦截，需先修正命令或配置。'
               : hasActiveRuns
                 ? '检测到迁移仍在执行中，最近运行列表会自动刷新。'
-                : '确认短语完全匹配后，平台才会允许执行迁移。'}
+                : plan?.specification.executionMode === 'manual_platform'
+                  ? '确认短语完全匹配后，平台会先创建待审批迁移记录。'
+                  : plan?.specification.executionMode === 'external'
+                    ? '确认短语完全匹配后，平台会创建外部迁移 gate 并等待结果回填。'
+                    : '确认短语完全匹配后，平台才会允许执行迁移。'}
           </div>
           <DialogClose asChild>
             <Button variant="outline" className="w-full rounded-xl sm:w-auto">
@@ -922,7 +993,11 @@ export function DatabaseMigrationDialog({
             ) : (
               <Play className="h-4 w-4" />
             )}
-            确认执行迁移
+            {plan?.specification.executionMode === 'manual_platform'
+              ? '创建待审批迁移'
+              : plan?.specification.executionMode === 'external'
+                ? '创建外部迁移 gate'
+                : '确认执行迁移'}
           </Button>
         </DialogFooter>
       </DialogContent>

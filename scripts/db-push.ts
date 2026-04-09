@@ -28,23 +28,29 @@ const sql = postgres(databaseUrl, {
 try {
   const updatedReleases = await sql<{ id: string }[]>`
     with blocked_release as (
-      select distinct "releaseId"
+      select
+        "releaseId",
+        case
+          when bool_or(status = 'awaiting_external_completion') then 'awaiting_external_completion'
+          else 'awaiting_approval'
+        end as status
       from "migrationRun"
       where "releaseId" is not null
-        and status = 'awaiting_approval'
+        and status in ('awaiting_approval', 'awaiting_external_completion')
+      group by "releaseId"
     )
     update "release" as release
-    set status = 'awaiting_approval',
+    set status = blocked_release.status::"releaseStatus",
         "errorMessage" = null,
         recap = null,
         "updatedAt" = now()
     from blocked_release
     where release.id = blocked_release."releaseId"
-      and release.status <> 'awaiting_approval'
+      and release.status <> blocked_release.status::"releaseStatus"
     returning release.id
   `;
 
-  console.log(`[db:push] normalized ${updatedReleases.length} approval-blocked release(s)`);
+  console.log(`[db:push] normalized ${updatedReleases.length} gated release(s)`);
 } finally {
   await sql.end();
 }

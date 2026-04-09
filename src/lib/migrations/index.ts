@@ -4,7 +4,7 @@ import {
   verifyDeclaredDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
-import { migrationRuns } from '@/lib/db/schema';
+import { type MigrationRunStatus, migrationRuns } from '@/lib/db/schema';
 import {
   evaluateEnvironmentPolicy,
   evaluateMigrationPolicy,
@@ -46,6 +46,7 @@ export async function createMigrationRun(
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     runnerType?: 'k8s_job' | 'ci_job' | 'worker';
+    initialStatus?: MigrationRunStatus;
   }
 ) {
   const lockKey = `${spec.database.id}:${spec.environment.id}`;
@@ -64,7 +65,7 @@ export async function createMigrationRun(
       triggeredByUserId: input.triggeredByUserId ?? null,
       sourceCommitSha: input.sourceCommitSha ?? null,
       sourceCommitMessage: input.sourceCommitMessage ?? null,
-      status: 'queued',
+      status: input.initialStatus ?? 'queued',
       runnerType: input.runnerType ?? 'worker',
       lockKey,
     })
@@ -116,9 +117,17 @@ export async function resolveAndCreateMigrationRuns(
   });
   const runs = [];
 
-  for (const spec of specs.filter(
-    (candidate) => candidate.specification.autoRun || phase === 'manual'
-  )) {
+  for (const spec of specs) {
+    let initialStatus: MigrationRunStatus = 'queued';
+
+    if (phase !== 'manual') {
+      if (spec.specification.executionMode === 'manual_platform') {
+        initialStatus = 'awaiting_approval';
+      } else if (spec.specification.executionMode === 'external') {
+        initialStatus = 'awaiting_external_completion';
+      }
+    }
+
     const run = await createMigrationRun(spec, {
       releaseId: input.releaseId,
       deploymentId: input.deploymentId,
@@ -126,12 +135,25 @@ export async function resolveAndCreateMigrationRuns(
       triggeredByUserId: input.triggeredByUserId,
       sourceCommitSha: input.sourceCommitSha,
       sourceCommitMessage: input.sourceCommitMessage,
-      runnerType: input.options?.imageUrl ? 'k8s_job' : 'worker',
+      runnerType: initialStatus === 'queued' && input.options?.imageUrl ? 'k8s_job' : 'worker',
+      initialStatus,
     });
     runs.push(run);
   }
 
-  return runs;
+  const statusRank: Record<MigrationRunStatus, number> = {
+    queued: 0,
+    awaiting_approval: 1,
+    awaiting_external_completion: 2,
+    planning: 3,
+    running: 4,
+    success: 5,
+    failed: 6,
+    canceled: 7,
+    skipped: 8,
+  };
+
+  return runs.sort((left, right) => statusRank[left.status] - statusRank[right.status]);
 }
 
 export async function getMigrationRunById(runId: string) {
@@ -162,7 +184,13 @@ export async function findActiveMigrationRun(input: {
     where: and(
       eq(migrationRuns.databaseId, input.databaseId),
       eq(migrationRuns.environmentId, input.environmentId),
-      inArray(migrationRuns.status, ['queued', 'planning', 'running', 'awaiting_approval']),
+      inArray(migrationRuns.status, [
+        'queued',
+        'planning',
+        'running',
+        'awaiting_approval',
+        'awaiting_external_completion',
+      ]),
       input.excludeRunId ? ne(migrationRuns.id, input.excludeRunId) : undefined
     ),
     orderBy: (run, { desc }) => [desc(run.createdAt)],
@@ -190,7 +218,14 @@ export async function buildMigrationExecutionPlan(
   const warnings: string[] = [...migrationPolicy.warnings];
   const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
   const imageUrl = options.imageUrl ?? null;
-  const runnerType: 'k8s_job' | 'worker' = spec.specification.tool === 'sql' ? 'worker' : 'k8s_job';
+  const runnerType: 'k8s_job' | 'worker' | 'external' =
+    spec.specification.executionMode === 'external'
+      ? 'external'
+      : spec.specification.tool === 'sql'
+        ? 'worker'
+        : 'k8s_job';
+  const requiresImage =
+    spec.specification.executionMode !== 'external' && spec.specification.tool !== 'sql';
   let canRun = spec.database.status === 'running';
   let blockingReason: string | null =
     spec.database.status === 'running'
@@ -223,12 +258,12 @@ export async function buildMigrationExecutionPlan(
       filePreviewError = error instanceof Error ? error.message : String(error);
       blockingReason = `无法从 ${migrationPath} 读取迁移文件：${filePreviewError}`;
     }
-  } else if (!imageUrl) {
+  } else if (requiresImage && !imageUrl) {
     canRun = false;
     blockingReason = '命令式迁移需要最近一次可用的部署镜像。';
   }
 
-  if (commandSafety.blocksExecution) {
+  if (commandSafety.blocksExecution && spec.specification.executionMode !== 'external') {
     canRun = false;
     blockingReason = commandSafety.summary;
   }
@@ -273,13 +308,13 @@ export async function buildMigrationExecutionPlan(
       id: spec.specification.id,
       tool: spec.specification.tool,
       phase: spec.specification.phase,
+      executionMode: spec.specification.executionMode,
       workingDirectory: spec.specification.workingDirectory,
       migrationPath,
       command: spec.specification.command,
       compatibility: spec.specification.compatibility,
       approvalPolicy: spec.specification.approvalPolicy,
       lockStrategy: spec.specification.lockStrategy,
-      autoRun: spec.specification.autoRun,
     },
     resolution: spec.resolution,
     envVars: buildPlanEnvVars(spec),

@@ -11,6 +11,7 @@ export const releaseStatusDecorations: Record<string, ReleaseStatusDecoration> =
   planning: { color: 'info', pulse: true, label: '规划中' },
   migration_pre_running: { color: 'warning', pulse: true, label: '前置迁移' },
   awaiting_approval: { color: 'warning', pulse: false, label: '待审批' },
+  awaiting_external_completion: { color: 'warning', pulse: false, label: '待外部完成' },
   migration_pre_failed: { color: 'error', pulse: false, label: '前置迁移失败' },
   deploying: { color: 'info', pulse: true, label: '发布中' },
   awaiting_rollout: { color: 'warning', pulse: false, label: '待放量' },
@@ -38,6 +39,7 @@ export const deploymentStatusDecorations: Record<string, ReleaseStatusDecoration
 export const migrationStatusDecorations: Record<string, ReleaseStatusDecoration> = {
   queued: { color: 'neutral', pulse: false, label: '排队中' },
   awaiting_approval: { color: 'warning', pulse: false, label: '待审批' },
+  awaiting_external_completion: { color: 'warning', pulse: false, label: '待外部完成' },
   planning: { color: 'info', pulse: true, label: '规划中' },
   running: { color: 'info', pulse: true, label: '执行中' },
   success: { color: 'success', pulse: false, label: '成功' },
@@ -77,7 +79,12 @@ export function getTimelineTone(
   if (kind === 'preview') return 'success';
   if (status === 'failed' || status === 'migration_pre_failed' || status === 'verification_failed')
     return 'danger';
-  if (status === 'awaiting_approval' || status === 'degraded' || status === 'awaiting_rollout')
+  if (
+    status === 'awaiting_approval' ||
+    status === 'awaiting_external_completion' ||
+    status === 'degraded' ||
+    status === 'awaiting_rollout'
+  )
     return 'warning';
   if (
     status === 'running' ||

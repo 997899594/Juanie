@@ -59,7 +59,11 @@ export interface ManualReleasePlanResponse {
     migration: {
       preDeployCount: number;
       postDeployCount: number;
+      automaticCount: number;
+      manualPlatformCount: number;
+      externalCount: number;
       warnings: string[];
+      requiresExternalCompletion?: boolean;
       primarySignal: {
         code: string;
         kind: 'migration';
@@ -125,7 +129,11 @@ export interface RollbackPlanResponse {
     migration: {
       preDeployCount: number;
       postDeployCount: number;
+      automaticCount: number;
+      manualPlatformCount: number;
+      externalCount: number;
       warnings: string[];
+      requiresExternalCompletion?: boolean;
       primarySignal: {
         code: string;
         kind: 'migration';
@@ -299,7 +307,7 @@ export async function createProductionRelease(input: {
 export async function executeMigrationRunAction(input: {
   projectId: string;
   runId: string;
-  action: 'approve' | 'retry';
+  action: 'approve' | 'retry' | 'mark_external_complete' | 'mark_external_failed';
   imageUrl?: string | null;
 }): Promise<MigrationRunActionResponse> {
   const response = await fetch(`/api/projects/${input.projectId}/migration-runs/${input.runId}`, {
@@ -313,8 +321,14 @@ export async function executeMigrationRunAction(input: {
     }),
   });
 
-  return parseJsonResponse<MigrationRunActionResponse>(
-    response,
-    input.action === 'approve' ? '迁移审批失败' : '迁移重试失败'
-  );
+  const fallbackMessage =
+    input.action === 'approve'
+      ? '迁移审批失败'
+      : input.action === 'retry'
+        ? '迁移重试失败'
+        : input.action === 'mark_external_complete'
+          ? '标记外部迁移完成失败'
+          : '标记外部迁移失败失败';
+
+  return parseJsonResponse<MigrationRunActionResponse>(response, fallbackMessage);
 }

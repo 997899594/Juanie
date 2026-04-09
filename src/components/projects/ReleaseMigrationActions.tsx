@@ -24,12 +24,17 @@ export function ReleaseMigrationActions({
   disabledSummary,
 }: ReleaseMigrationActionsProps) {
   const router = useRouter();
-  const [pendingAction, setPendingAction] = useState<'approve' | 'retry' | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    'approve' | 'retry' | 'mark_external_complete' | 'mark_external_failed' | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const canApprove = status === 'awaiting_approval';
+  const canMarkExternal = status === 'awaiting_external_completion';
   const canRetry = status === 'failed' || status === 'canceled';
 
-  const handleAction = async (action: 'approve' | 'retry') => {
+  const handleAction = async (
+    action: 'approve' | 'retry' | 'mark_external_complete' | 'mark_external_failed'
+  ) => {
     setPendingAction(action);
     setError(null);
 
@@ -48,7 +53,7 @@ export function ReleaseMigrationActions({
     }
   };
 
-  if (!canApprove && !canRetry) {
+  if (!canApprove && !canMarkExternal && !canRetry) {
     return null;
   }
 
@@ -68,6 +73,36 @@ export function ReleaseMigrationActions({
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : null}
             Approve
+          </Button>
+        )}
+        {canMarkExternal && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-xl px-3 text-xs"
+            onClick={() => handleAction('mark_external_complete')}
+            disabled={pendingAction !== null || disabled}
+            title={disabled ? (disabledSummary ?? undefined) : undefined}
+          >
+            {pendingAction === 'mark_external_complete' ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : null}
+            Mark Complete
+          </Button>
+        )}
+        {canMarkExternal && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-xl px-3 text-xs"
+            onClick={() => handleAction('mark_external_failed')}
+            disabled={pendingAction !== null || disabled}
+            title={disabled ? (disabledSummary ?? undefined) : undefined}
+          >
+            {pendingAction === 'mark_external_failed' ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : null}
+            Mark Failed
           </Button>
         )}
         {canRetry && (
