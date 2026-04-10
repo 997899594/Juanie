@@ -19,6 +19,7 @@ import {
   buildEnvironmentRuntimeIndexes,
 } from '@/lib/environments/page-runtime';
 import { decorateEnvironmentList } from '@/lib/environments/view';
+import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 
 export function buildProjectEnvironmentListData<
   TEnvironment extends Parameters<typeof decorateEnvironmentList>[0][number],
@@ -74,8 +75,22 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
             columns: {
               id: true,
               name: true,
+              type: true,
               status: true,
               sourceDatabaseId: true,
+            },
+            with: {
+              schemaState: {
+                columns: {
+                  status: true,
+                  summary: true,
+                  expectedVersion: true,
+                  actualVersion: true,
+                  hasLedger: true,
+                  hasUserTables: true,
+                  lastInspectedAt: true,
+                },
+              },
             },
           },
         },
@@ -139,6 +154,15 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
     buildProjectEnvironmentListData(
       environmentList.map((environment) => ({
         ...environment,
+        databases: environment.databases.map((database) => ({
+          ...database,
+          schemaState: database.schemaState
+            ? {
+                ...database.schemaState,
+                statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
+              }
+            : null,
+        })),
         latestRelease: runtimeIndexes.latestReleaseByEnvironment.get(environment.id) ?? null,
         activeReleaseCount: runtimeIndexes.activeReleaseCountByEnvironment.get(environment.id) ?? 0,
         latestDeployment: runtimeIndexes.latestDeploymentByEnvironment.get(environment.id) ?? null,

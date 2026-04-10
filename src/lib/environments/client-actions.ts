@@ -38,6 +38,20 @@ export interface CreatePreviewEnvironmentInput {
   databaseStrategy?: 'inherit' | 'isolated_clone';
 }
 
+export async function inspectDatabaseSchemaState(
+  projectId: string,
+  databaseId: string
+): Promise<void> {
+  const response = await fetch(
+    `/api/projects/${projectId}/databases/${databaseId}/schema/inspect`,
+    {
+      method: 'POST',
+    }
+  );
+
+  await parseJsonResponse<{ state: { id: string } }>(response);
+}
+
 export async function fetchProjectEnvironments<T>(projectId: string): Promise<T> {
   const response = await fetch(`/api/projects/${projectId}/environments`);
   return parseJsonResponse<T>(response);

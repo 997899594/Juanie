@@ -5,6 +5,7 @@ import {
   ChevronUp,
   GitBranch,
   Globe,
+  Loader2,
   Plus,
   Rocket,
   ScrollText,
@@ -52,6 +53,7 @@ import {
   createPreviewEnvironment,
   deletePreviewEnvironment,
   fetchProjectEnvironments,
+  inspectDatabaseSchemaState,
   updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
 import { cn } from '@/lib/utils';
@@ -93,6 +95,23 @@ interface EnvironmentRecord {
     service?: {
       id: string;
       name: string;
+    } | null;
+  }>;
+  databases: Array<{
+    id: string;
+    name: string;
+    type: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
+    status: string | null;
+    sourceDatabaseId: string | null;
+    schemaState: {
+      status: 'aligned' | 'aligned_untracked' | 'drifted' | 'unmanaged' | 'blocked';
+      statusLabel: string;
+      summary: string | null;
+      expectedVersion: string | null;
+      actualVersion: string | null;
+      hasLedger: boolean;
+      hasUserTables: boolean;
+      lastInspectedAt: string | Date | null;
     } | null;
   }>;
   policy: {
@@ -150,6 +169,10 @@ interface EnvironmentRecord {
     deleteSummary?: string;
   };
 }
+
+type SchemaStateStatus = NonNullable<
+  EnvironmentRecord['databases'][number]['schemaState']
+>['status'];
 
 const deploymentStrategyOptions = [
   { value: 'rolling', label: '滚动发布' },
@@ -355,6 +378,41 @@ function statusToneClass(color: ActivityStatusDecoration['color']): string {
     default:
       return 'bg-muted-foreground';
   }
+}
+
+function getSchemaStateBadgeClass(status: SchemaStateStatus | null | undefined): string {
+  switch (status) {
+    case 'aligned':
+      return 'border-success/40 text-success';
+    case 'aligned_untracked':
+      return 'border-warning/40 text-warning';
+    case 'drifted':
+      return 'border-destructive/40 text-destructive';
+    case 'blocked':
+      return 'border-destructive/40 text-destructive';
+    case 'unmanaged':
+      return 'border-muted-foreground/40 text-muted-foreground';
+    default:
+      return 'border-muted-foreground/40 text-muted-foreground';
+  }
+}
+
+function formatInspectionTimestamp(value: string | Date | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function EnvironmentQuickActions({
@@ -689,11 +747,15 @@ function EnvironmentAdvancedPanel({
   environment,
   governance,
   diagnosticOpen,
+  inspectingDatabaseId,
+  onInspectDatabase,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
   governance: EnvironmentsPageClientProps['initialData']['governance'];
   diagnosticOpen: boolean;
+  inspectingDatabaseId: string | null;
+  onInspectDatabase: (databaseId: string) => Promise<void>;
 }) {
   return (
     <details className="rounded-2xl border border-border bg-background px-4 py-4">
@@ -707,6 +769,86 @@ function EnvironmentAdvancedPanel({
             canManage={environment.actions.canConfigureStrategy}
             manageSummary={environment.actions.configureStrategySummary}
           />
+        )}
+        {environment.databases.length > 0 && (
+          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+            <div className="mb-3">
+              <div className="text-sm font-medium">数据库纳管</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                先看 schema 状态，再决定是否需要接管或修复。
+              </div>
+            </div>
+            <div className="space-y-3">
+              {environment.databases.map((database) => {
+                const state = database.schemaState;
+                const lastInspectedLabel = formatInspectionTimestamp(state?.lastInspectedAt);
+                const versionSummary =
+                  state?.actualVersion || state?.expectedVersion
+                    ? [
+                        state?.actualVersion ? `当前 ${state.actualVersion}` : null,
+                        state?.expectedVersion ? `期望 ${state.expectedVersion}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : null;
+
+                return (
+                  <div
+                    key={database.id}
+                    className="rounded-2xl border border-border bg-background px-4 py-3"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-medium text-foreground">{database.name}</div>
+                          <Badge variant="secondary">{database.type}</Badge>
+                          <Badge
+                            variant="outline"
+                            className={getSchemaStateBadgeClass(state?.status)}
+                          >
+                            {state?.statusLabel ?? '未检查'}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {state?.summary ?? '尚未检查 schema 状态'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {[
+                            database.status ? `运行状态 ${database.status}` : null,
+                            state ? (state.hasLedger ? '已检测到账本' : '未检测到账本') : null,
+                            state?.hasUserTables ? '存在业务表' : null,
+                            versionSummary,
+                            lastInspectedLabel ? `上次检查 ${lastInspectedLabel}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl lg:shrink-0"
+                        disabled={
+                          inspectingDatabaseId !== null || !environment.actions.canConfigureStrategy
+                        }
+                        title={
+                          environment.actions.canConfigureStrategy
+                            ? undefined
+                            : environment.actions.configureStrategySummary
+                        }
+                        onClick={() => onInspectDatabase(database.id)}
+                      >
+                        {inspectingDatabaseId === database.id ? (
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        ) : null}
+                        检查 schema
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
         {environment.domains.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -743,18 +885,22 @@ function EnvironmentExpandedContent({
   governance,
   diagnosticOpen,
   savingStrategy,
+  inspectingDatabaseId,
   onToggleDiagnostics,
   onStrategyChange,
+  onInspectDatabase,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
   governance: EnvironmentsPageClientProps['initialData']['governance'];
   diagnosticOpen: boolean;
   savingStrategy: boolean;
+  inspectingDatabaseId: string | null;
   onToggleDiagnostics: () => void;
   onStrategyChange: (
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
+  onInspectDatabase: (databaseId: string) => Promise<void>;
 }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
@@ -778,6 +924,8 @@ function EnvironmentExpandedContent({
           environment={environment}
           governance={governance}
           diagnosticOpen={diagnosticOpen}
+          inspectingDatabaseId={inspectingDatabaseId}
+          onInspectDatabase={onInspectDatabase}
         />
       </div>
     </div>
@@ -851,6 +999,7 @@ export function EnvironmentsPageClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleaningExpired, setCleaningExpired] = useState(false);
   const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
+  const [inspectingDatabaseId, setInspectingDatabaseId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const fetchEnvironments = useCallback(async () => {
@@ -979,6 +1128,22 @@ export function EnvironmentsPageClient({
       setTimeout(() => setFeedback(null), 5000);
     } finally {
       setSavingStrategyId(null);
+    }
+  };
+
+  const handleInspectDatabase = async (databaseId: string) => {
+    setInspectingDatabaseId(databaseId);
+
+    try {
+      await inspectDatabaseSchemaState(projectId, databaseId);
+      await fetchEnvironments();
+      setFeedback('Schema 状态已更新');
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '检查 schema 失败');
+      setTimeout(() => setFeedback(null), 5000);
+    } finally {
+      setInspectingDatabaseId(null);
     }
   };
 
@@ -1174,10 +1339,12 @@ export function EnvironmentsPageClient({
                             governance={governance}
                             diagnosticOpen={diagnosticEnvId === environment.id}
                             savingStrategy={savingStrategyId === environment.id}
+                            inspectingDatabaseId={inspectingDatabaseId}
                             onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
                             onStrategyChange={(value) =>
                               handleStrategyChange(environment.id, value)
                             }
+                            onInspectDatabase={handleInspectDatabase}
                           />
                         </div>
                       )}
@@ -1272,10 +1439,12 @@ export function EnvironmentsPageClient({
                             governance={governance}
                             diagnosticOpen={diagnosticEnvId === environment.id}
                             savingStrategy={savingStrategyId === environment.id}
+                            inspectingDatabaseId={inspectingDatabaseId}
                             onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
                             onStrategyChange={(value) =>
                               handleStrategyChange(environment.id, value)
                             }
+                            onInspectDatabase={handleInspectDatabase}
                           />
                         </div>
                       )}

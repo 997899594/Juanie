@@ -122,6 +122,14 @@ export const environmentDeploymentStrategies = [
 export type EnvironmentDeploymentStrategy = (typeof environmentDeploymentStrategies)[number];
 export const environmentDatabaseStrategies = ['direct', 'inherit', 'isolated_clone'] as const;
 export type EnvironmentDatabaseStrategy = (typeof environmentDatabaseStrategies)[number];
+export const environmentSchemaStateStatuses = [
+  'aligned',
+  'aligned_untracked',
+  'drifted',
+  'unmanaged',
+  'blocked',
+] as const;
+export type EnvironmentSchemaStateStatus = (typeof environmentSchemaStateStatuses)[number];
 
 export const aiPlans = ['free', 'pro', 'scale', 'enterprise'] as const;
 export type AIPlan = (typeof aiPlans)[number];
@@ -172,6 +180,10 @@ export const environmentDeploymentStrategyEnum = pgEnum(
 export const environmentDatabaseStrategyEnum = pgEnum(
   'environmentDatabaseStrategy',
   environmentDatabaseStrategies
+);
+export const environmentSchemaStateStatusEnum = pgEnum(
+  'environmentSchemaStateStatus',
+  environmentSchemaStateStatuses
 );
 export const aiPluginRunStatusEnum = pgEnum('aiPluginRunStatus', aiPluginRunStatuses);
 
@@ -781,6 +793,43 @@ export const databaseMigrations = pgTable(
   })
 );
 
+export const environmentSchemaStates = pgTable(
+  'environmentSchemaState',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    databaseId: uuid('databaseId')
+      .notNull()
+      .references(() => databases.id, { onDelete: 'cascade' }),
+
+    status: environmentSchemaStateStatusEnum('status').notNull().default('unmanaged'),
+    expectedVersion: varchar('expectedVersion', { length: 255 }),
+    actualVersion: varchar('actualVersion', { length: 255 }),
+    expectedChecksum: varchar('expectedChecksum', { length: 64 }),
+    actualChecksum: varchar('actualChecksum', { length: 64 }),
+    hasLedger: boolean('hasLedger').notNull().default(false),
+    hasUserTables: boolean('hasUserTables').notNull().default(false),
+    summary: text('summary'),
+    lastInspectedAt: timestamp('lastInspectedAt'),
+    lastErrorCode: varchar('lastErrorCode', { length: 100 }),
+    lastErrorMessage: text('lastErrorMessage'),
+
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('environmentSchemaState_projectId_idx').on(table.projectId),
+    environmentIdIdx: index('environmentSchemaState_environmentId_idx').on(table.environmentId),
+    databaseIdIdx: index('environmentSchemaState_databaseId_idx').on(table.databaseId),
+    uniqueDatabase: unique('environmentSchemaState_database_unique').on(table.databaseId),
+  })
+);
+
 // ============================================
 // Domain Tables
 // ============================================
@@ -1335,6 +1384,10 @@ export const databasesRelations = relations(databases, ({ one, many }) => ({
     relationName: 'database_clone',
   }),
   migrations: many(databaseMigrations),
+  schemaState: one(environmentSchemaStates, {
+    fields: [databases.id],
+    references: [environmentSchemaStates.databaseId],
+  }),
   migrationSpecifications: many(migrationSpecifications),
   migrationRuns: many(migrationRuns),
 }));
@@ -1408,6 +1461,21 @@ export const migrationRunItemsRelations = relations(migrationRunItems, ({ one })
 export const databaseMigrationsRelations = relations(databaseMigrations, ({ one }) => ({
   database: one(databases, {
     fields: [databaseMigrations.databaseId],
+    references: [databases.id],
+  }),
+}));
+
+export const environmentSchemaStatesRelations = relations(environmentSchemaStates, ({ one }) => ({
+  project: one(projects, {
+    fields: [environmentSchemaStates.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [environmentSchemaStates.environmentId],
+    references: [environments.id],
+  }),
+  database: one(databases, {
+    fields: [environmentSchemaStates.databaseId],
     references: [databases.id],
   }),
 }));
