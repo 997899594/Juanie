@@ -95,11 +95,28 @@ async function markMigrationApplied(fileName: string): Promise<void> {
   `;
 }
 
+async function shouldEnableLegacyBootstrap(applied: Set<string>): Promise<boolean> {
+  if (applied.has('001_init.sql')) {
+    return false;
+  }
+
+  const rows = await sql<{ hasProjectTable: boolean }[]>`
+    select exists (
+      select 1
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name = 'project'
+    ) as "hasProjectTable"
+  `;
+
+  return rows[0]?.hasProjectTable === true;
+}
+
 async function applySqlMigrations(): Promise<void> {
   await ensureMigrationTable();
   const files = await listMigrationFiles();
   const applied = await getAppliedMigrations();
-  const isBootstrapMode = applied.size === 0;
+  const isBootstrapMode = await shouldEnableLegacyBootstrap(applied);
 
   if (files.length === 0) {
     console.log('[db:push] no SQL migrations found');
