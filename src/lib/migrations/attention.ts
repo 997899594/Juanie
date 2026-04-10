@@ -2,7 +2,6 @@ export const attentionMigrationStatuses = [
   'awaiting_approval',
   'awaiting_external_completion',
   'failed',
-  'canceled',
 ] as const;
 
 export type AttentionMigrationStatus = (typeof attentionMigrationStatuses)[number];
