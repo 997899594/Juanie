@@ -52,11 +52,7 @@ RUN cat <<'EOF' > package.json
   "private": true,
   "type": "module",
   "dependencies": {
-    "drizzle-kit": "0.30.6",
-    "drizzle-orm": "0.38.4",
-    "pg": "8.20.0",
-    "postgres": "3.4.8",
-    "typescript": "5.9.3"
+    "postgres": "3.4.8"
   }
 }
 EOF
@@ -98,12 +94,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=worker-builder /app/worker ./worker
 COPY --from=worker-builder /app/scheduler ./scheduler
 COPY --from=source /app/templates ./templates
+COPY --from=source /app/migrations ./migrations
 COPY --from=migrate-deps /migrate/package.json ./package.json
 COPY --from=migrate-deps /migrate/node_modules ./node_modules
-COPY --from=source /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=source /app/tsconfig.json ./tsconfig.json
-RUN mkdir -p ./src/lib/db ./src/lib/releases ./scripts
-COPY --from=source /app/src/lib/db/schema.ts ./src/lib/db/schema.ts
+RUN mkdir -p ./src/lib/releases ./scripts
 COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/recap-record.ts
 COPY --from=source /app/scripts/db-push.ts ./scripts/db-push.ts
 

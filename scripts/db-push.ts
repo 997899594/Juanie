@@ -1,17 +1,10 @@
 import postgres from 'postgres';
-import { spawnSync } from 'node:child_process';
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 function exitWith(code: number): never {
   process.exit(code);
-}
-
-const schemaPush = spawnSync('bunx', ['drizzle-kit', 'push'], {
-  stdio: 'inherit',
-  env: process.env,
-});
-
-if (schemaPush.status !== 0) {
-  exitWith(schemaPush.status ?? 1);
 }
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -25,9 +18,82 @@ const sql = postgres(databaseUrl, {
   max: 1,
 });
 
+const migrationTableName = '_migrations';
+const advisoryLockKey = 28619131;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const migrationsDir = path.resolve(__dirname, '../migrations');
+
 interface PostSchemaTask {
   name: string;
   run: () => Promise<void>;
+}
+
+async function ensureMigrationTable(): Promise<void> {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "${migrationTableName}" (
+      "id" serial PRIMARY KEY,
+      "name" varchar(255) NOT NULL UNIQUE,
+      "executed_at" timestamp NOT NULL DEFAULT NOW()
+    );
+  `);
+}
+
+async function acquireMigrationLock(): Promise<void> {
+  await sql`select pg_advisory_lock(${advisoryLockKey});`;
+}
+
+async function releaseMigrationLock(): Promise<void> {
+  await sql`select pg_advisory_unlock(${advisoryLockKey});`;
+}
+
+async function getAppliedMigrations(): Promise<Set<string>> {
+  const rows = await sql<{ name: string }[]>`
+    select "name"
+    from "_migrations"
+    order by "name" asc
+  `;
+  return new Set(rows.map((row) => row.name));
+}
+
+async function listMigrationFiles(): Promise<string[]> {
+  const entries = await readdir(migrationsDir, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.sql'))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+async function applySqlMigrations(): Promise<void> {
+  await ensureMigrationTable();
+  const files = await listMigrationFiles();
+  const applied = await getAppliedMigrations();
+
+  if (files.length === 0) {
+    console.log('[db:push] no SQL migrations found');
+    return;
+  }
+
+  let appliedCount = 0;
+
+  for (const fileName of files) {
+    if (applied.has(fileName)) {
+      continue;
+    }
+
+    const filePath = path.join(migrationsDir, fileName);
+    const content = await readFile(filePath, 'utf8');
+
+    console.log(`[db:push] applying ${fileName}`);
+    await sql.unsafe(content);
+    await sql`
+      insert into "_migrations" ("name")
+      values (${fileName})
+    `;
+    appliedCount += 1;
+  }
+
+  console.log(`[db:push] applied ${appliedCount} migration(s)`);
 }
 
 async function runPostSchemaTasks(tasks: PostSchemaTask[]): Promise<void> {
@@ -42,6 +108,9 @@ async function runPostSchemaTasks(tasks: PostSchemaTask[]): Promise<void> {
 }
 
 try {
+  await acquireMigrationLock();
+  await applySqlMigrations();
+
   await runPostSchemaTasks([
     {
       name: 'normalize gated releases',
@@ -74,6 +143,15 @@ try {
       },
     },
   ]);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[db:push] failed: ${message}`);
+  exitWith(1);
 } finally {
+  try {
+    await releaseMigrationLock();
+  } catch {
+    // no-op
+  }
   await sql.end();
 }
