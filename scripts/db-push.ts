@@ -26,7 +26,30 @@ const sql = postgres(databaseUrl, {
 });
 
 try {
-  const updatedReleases = await sql<{ id: string }[]>`
+  const enumSupport = await sql<{ migrationRunReady: boolean; releaseReady: boolean }[]>`
+    select
+      exists (
+        select 1
+        from pg_type as enum_type
+        inner join pg_enum as enum_value on enum_value.enumtypid = enum_type.oid
+        where enum_type.typname = 'migrationRunStatus'
+          and enum_value.enumlabel = 'awaiting_external_completion'
+      ) as "migrationRunReady",
+      exists (
+        select 1
+        from pg_type as enum_type
+        inner join pg_enum as enum_value on enum_value.enumtypid = enum_type.oid
+        where enum_type.typname = 'releaseStatus'
+          and enum_value.enumlabel = 'awaiting_external_completion'
+      ) as "releaseReady"
+  `;
+
+  if (!enumSupport[0]?.migrationRunReady || !enumSupport[0]?.releaseReady) {
+    console.log(
+      '[db:push] skip gated release normalization: awaiting_external_completion enum values are not ready yet',
+    );
+  } else {
+    const updatedReleases = await sql<{ id: string }[]>`
     with blocked_release as (
       select
         "releaseId",
@@ -50,7 +73,8 @@ try {
     returning release.id
   `;
 
-  console.log(`[db:push] normalized ${updatedReleases.length} gated release(s)`);
+    console.log(`[db:push] normalized ${updatedReleases.length} gated release(s)`);
+  }
 } finally {
   await sql.end();
 }

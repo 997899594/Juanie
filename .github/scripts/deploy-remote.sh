@@ -114,13 +114,50 @@ run_schema_sync_job() {
 
   apply_schema_sync_job
 
-  if ! kubectl wait --for=condition=complete job/"${SCHEMA_JOB}" -n "${NAMESPACE}" --timeout=45m; then
+  wait_result=0
+  wait_for_job_result "${SCHEMA_JOB}" $((45 * 60)) || wait_result=$?
+
+  if (( wait_result != 0 )); then
+    if (( wait_result == 2 )); then
+      echo "Schema sync job timed out after 45 minutes."
+    else
+      echo "Schema sync job failed."
+    fi
     show_failure job "${SCHEMA_JOB}"
     kubectl logs job/"${SCHEMA_JOB}" -n "${NAMESPACE}" --tail=200 || true
     exit 1
   fi
 
   kubectl logs job/"${SCHEMA_JOB}" -n "${NAMESPACE}" --tail=120 || true
+}
+
+wait_for_job_result() {
+  local job_name="$1"
+  local timeout_seconds="$2"
+  local interval_seconds=5
+  local elapsed=0
+
+  while (( elapsed < timeout_seconds )); do
+    local succeeded
+    local failed
+    succeeded="$(kubectl get job "${job_name}" -n "${NAMESPACE}" -o jsonpath='{.status.succeeded}' 2>/dev/null || echo 0)"
+    failed="$(kubectl get job "${job_name}" -n "${NAMESPACE}" -o jsonpath='{.status.failed}' 2>/dev/null || echo 0)"
+    succeeded="${succeeded:-0}"
+    failed="${failed:-0}"
+
+    if (( succeeded > 0 )); then
+      return 0
+    fi
+
+    if (( failed > 0 )); then
+      return 1
+    fi
+
+    sleep "${interval_seconds}"
+    elapsed=$((elapsed + interval_seconds))
+  done
+
+  return 2
 }
 
 require_command helm
