@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, lt, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   deployments,
@@ -20,6 +20,20 @@ import {
 } from '@/lib/releases/state-machine';
 
 type OrchestratedRelease = NonNullable<Awaited<ReturnType<typeof loadReleaseForOrchestration>>>;
+
+const supersedableReleaseStatuses: ReleaseStatus[] = [
+  'queued',
+  'planning',
+  'awaiting_approval',
+  'awaiting_external_completion',
+];
+
+const supersedableRunStatuses: MigrationRunStatus[] = [
+  'queued',
+  'planning',
+  'awaiting_approval',
+  'awaiting_external_completion',
+];
 
 export class ReleaseApprovalRequiredError extends Error {
   constructor(
@@ -75,6 +89,58 @@ export async function persistReleaseRecapSafely(releaseId: string) {
   await persistReleaseRecapById(releaseId).catch((recapError) => {
     console.error(`[Release] Failed to persist recap for ${releaseId}:`, recapError);
   });
+}
+
+async function cancelSupersededPendingReleases(target: OrchestratedRelease) {
+  const candidates = await db.query.releases.findMany({
+    where: and(
+      ne(releases.id, target.id),
+      eq(releases.projectId, target.projectId),
+      eq(releases.environmentId, target.environmentId),
+      lt(releases.createdAt, target.createdAt),
+      inArray(releases.status, supersedableReleaseStatuses)
+    ),
+    columns: { id: true },
+  });
+
+  if (candidates.length === 0) {
+    return;
+  }
+
+  const candidateIds = candidates.map((candidate) => candidate.id);
+  const now = new Date();
+  const message = `Superseded by release ${target.id}`;
+
+  await db
+    .update(migrationRuns)
+    .set({
+      status: 'canceled',
+      errorCode: 'MIGRATION_SUPERSEDED',
+      errorMessage: message,
+      finishedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        inArray(migrationRuns.releaseId, candidateIds),
+        inArray(migrationRuns.status, supersedableRunStatuses)
+      )
+    );
+
+  await db
+    .update(releases)
+    .set({
+      status: 'canceled',
+      errorMessage: message,
+      updatedAt: now,
+    })
+    .where(
+      and(inArray(releases.id, candidateIds), inArray(releases.status, supersedableReleaseStatuses))
+    );
+
+  for (const candidateId of candidateIds) {
+    await persistReleaseRecapSafely(candidateId);
+  }
 }
 
 export async function waitForMigrationRun(runId: string): Promise<MigrationRunStatus> {
@@ -161,11 +227,13 @@ export async function runReleaseMigrationPhase(
     const result = await waitForMigrationRun(run.id);
     if (result === 'awaiting_approval') {
       await updateReleaseStatus(release.id, 'awaiting_approval');
+      await cancelSupersededPendingReleases(release);
       throw new ReleaseApprovalRequiredError(run.id, phase);
     }
 
     if (result === 'awaiting_external_completion') {
       await updateReleaseStatus(release.id, 'awaiting_external_completion');
+      await cancelSupersededPendingReleases(release);
       throw new ReleaseExternalCompletionRequiredError(run.id, phase);
     }
 
