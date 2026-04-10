@@ -29,6 +29,29 @@ interface PostSchemaTask {
   run: () => Promise<void>;
 }
 
+function getErrorCode(error: unknown): string | null {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    return typeof code === 'string' ? code : null;
+  }
+  return null;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function isLegacyBaselineConflict(error: unknown): boolean {
+  const code = getErrorCode(error);
+  if (code && ['42P07', '42710', '42701'].includes(code)) {
+    return true;
+  }
+  return getErrorMessage(error).toLowerCase().includes('already exists');
+}
+
 async function ensureMigrationTable(): Promise<void> {
   await sql.unsafe(`
     CREATE TABLE IF NOT EXISTS "${migrationTableName}" (
@@ -64,10 +87,19 @@ async function listMigrationFiles(): Promise<string[]> {
     .sort((left, right) => left.localeCompare(right));
 }
 
+async function markMigrationApplied(fileName: string): Promise<void> {
+  await sql`
+    insert into "_migrations" ("name")
+    values (${fileName})
+    on conflict ("name") do nothing
+  `;
+}
+
 async function applySqlMigrations(): Promise<void> {
   await ensureMigrationTable();
   const files = await listMigrationFiles();
   const applied = await getAppliedMigrations();
+  const isBootstrapMode = applied.size === 0;
 
   if (files.length === 0) {
     console.log('[db:push] no SQL migrations found');
@@ -75,6 +107,7 @@ async function applySqlMigrations(): Promise<void> {
   }
 
   let appliedCount = 0;
+  let baselineAdoptedCount = 0;
 
   for (const fileName of files) {
     if (applied.has(fileName)) {
@@ -84,16 +117,28 @@ async function applySqlMigrations(): Promise<void> {
     const filePath = path.join(migrationsDir, fileName);
     const content = await readFile(filePath, 'utf8');
 
-    console.log(`[db:push] applying ${fileName}`);
-    await sql.unsafe(content);
-    await sql`
-      insert into "_migrations" ("name")
-      values (${fileName})
-    `;
-    appliedCount += 1;
+    try {
+      console.log(`[db:push] applying ${fileName}`);
+      await sql.unsafe(content);
+      await markMigrationApplied(fileName);
+      appliedCount += 1;
+    } catch (error) {
+      if (isBootstrapMode && isLegacyBaselineConflict(error)) {
+        await markMigrationApplied(fileName);
+        baselineAdoptedCount += 1;
+        console.warn(
+          `[db:push] baseline-adopted ${fileName}: ${getErrorMessage(error)}`,
+        );
+        continue;
+      }
+
+      throw error;
+    }
   }
 
-  console.log(`[db:push] applied ${appliedCount} migration(s)`);
+  console.log(
+    `[db:push] applied ${appliedCount} migration(s), baseline-adopted ${baselineAdoptedCount} migration(s)`,
+  );
 }
 
 async function runPostSchemaTasks(tasks: PostSchemaTask[]): Promise<void> {
@@ -144,8 +189,7 @@ try {
     },
   ]);
 } catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`[db:push] failed: ${message}`);
+  console.error(`[db:push] failed: ${getErrorMessage(error)}`);
   exitWith(1);
 } finally {
   try {
