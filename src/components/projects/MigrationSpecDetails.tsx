@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview';
 import {
   getMigrationApprovalPolicyLabel,
   getMigrationCompatibilityLabel,
@@ -6,14 +7,6 @@ import {
   getMigrationLockStrategyLabel,
   getMigrationPhaseLabel,
 } from '@/lib/migrations/presentation';
-
-interface MigrationFilePreviewView {
-  sourceLabel: string;
-  files: string[];
-  total: number;
-  truncated: boolean;
-  warning?: string | null;
-}
 
 export interface MigrationSpecDetailsValue {
   tool: string;
@@ -25,7 +18,7 @@ export interface MigrationSpecDetailsValue {
   compatibility?: string | null;
   approvalPolicy?: string | null;
   lockStrategy?: string | null;
-  filePreview?: MigrationFilePreviewView | null;
+  filePreview?: MigrationFilePreviewSnapshot | null;
 }
 
 interface MigrationSpecDetailsProps {
