@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
@@ -8,7 +8,15 @@ import {
   decorateHomeAttentionRuns,
   decorateHomeProjects,
 } from '@/lib/home/view';
-import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
+import { getAttentionStats } from '@/lib/migrations/attention';
+
+const homeQueueStatuses = ['awaiting_approval', 'awaiting_external_completion'] as const;
+
+type HomeQueueStatus = (typeof homeQueueStatuses)[number];
+
+function isHomeQueueStatus(status: string): status is HomeQueueStatus {
+  return homeQueueStatuses.includes(status as HomeQueueStatus);
+}
 
 export function buildHomePageData<
   TTeamMember extends { teamId: string; role: 'owner' | 'admin' | 'member' },
@@ -62,12 +70,13 @@ export function buildHomePageData<
   userProjects: TProject[];
   attentionRuns: TAttentionRun[];
 }) {
-  const attentionStats = getAttentionStats(input.attentionRuns);
+  const queueRuns = input.attentionRuns.filter((run) => isHomeQueueStatus(run.status));
+  const attentionStats = getAttentionStats(queueRuns);
   const rolesByTeamId = new Map(
     input.userTeams.map((membership) => [membership.teamId, membership.role])
   );
   const projectCards = decorateHomeProjects(input.userProjects, { rolesByTeamId });
-  const attentionItems = decorateHomeAttentionRuns(input.attentionRuns);
+  const attentionItems = decorateHomeAttentionRuns(queueRuns);
   const activeProjectCount = input.userProjects.filter(
     (project) => project.status === 'active' || project.status === 'running'
   ).length;
@@ -135,27 +144,29 @@ export async function getHomePageData(userId: string, userName?: string | null) 
 
   const attentionRuns =
     teamProjectIds.length > 0
-      ? await db.query.migrationRuns
-          .findMany({
-            where: (run, { inArray }) => inArray(run.projectId, teamProjectIds),
-            orderBy: (run, { desc }) => [desc(run.createdAt)],
-            limit: 5,
-            with: {
-              database: true,
-              environment: {
-                with: {
-                  domains: true,
-                },
-              },
-              project: true,
-              release: {
-                with: {
-                  environment: true,
-                },
+      ? await db.query.migrationRuns.findMany({
+          where: (run) =>
+            and(
+              inArray(run.projectId, teamProjectIds),
+              inArray(run.status, [...homeQueueStatuses])
+            ),
+          orderBy: (run, { desc }) => [desc(run.createdAt)],
+          limit: 5,
+          with: {
+            database: true,
+            environment: {
+              with: {
+                domains: true,
               },
             },
-          })
-          .then((runs) => filterAttentionRuns(runs))
+            project: true,
+            release: {
+              with: {
+                environment: true,
+              },
+            },
+          },
+        })
       : [];
 
   const previewReviewMetadataById = await buildPreviewReviewMetadataByItemId({
