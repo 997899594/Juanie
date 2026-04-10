@@ -90,6 +90,20 @@ interface ExecutionStateSnapshot {
   warning?: string | null;
 }
 
+function isMissingPostgresRelation(error: unknown, tableName: string): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const maybeError = error as { code?: string; message?: string };
+  if (maybeError.code === '42P01') {
+    return true;
+  }
+
+  const message = (maybeError.message ?? '').toLowerCase();
+  return message.includes('does not exist') && message.includes(tableName.toLowerCase());
+}
+
 class PreviewTimeoutError extends Error {
   constructor(
     readonly operation: string,
@@ -522,16 +536,29 @@ async function resolvePostgresExecutionState(input: {
   const { tool } = input;
 
   if (tool === 'prisma') {
-    const names = await withPostgresClient(
-      input.connectionString,
-      '读取 Prisma 执行状态',
-      async (client) => {
-        const result = await client.query<{ migration_name: string }>(
-          'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
-        );
-        return result.rows.map((row) => row.migration_name);
+    let names: string[] = [];
+    try {
+      names = await withPostgresClient(
+        input.connectionString,
+        '读取 Prisma 执行状态',
+        async (client) => {
+          const result = await client.query<{ migration_name: string }>(
+            'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
+          );
+          return result.rows.map((row) => row.migration_name);
+        }
+      );
+    } catch (error) {
+      if (!isMissingPostgresRelation(error, '_prisma_migrations')) {
+        throw error;
       }
-    );
+
+      return {
+        mode: 'names',
+        executedNames: new Set<string>(),
+        warning: '首次迁移，Prisma 执行记录表尚未创建，按 0 已执行处理。',
+      };
+    }
 
     return {
       mode: 'names',
@@ -540,14 +567,27 @@ async function resolvePostgresExecutionState(input: {
   }
 
   if (tool === 'knex') {
-    const names = await withPostgresClient(
-      input.connectionString,
-      '读取 Knex 执行状态',
-      async (client) => {
-        const result = await client.query<{ name: string }>('SELECT name FROM knex_migrations');
-        return result.rows.map((row) => row.name);
+    let names: string[] = [];
+    try {
+      names = await withPostgresClient(
+        input.connectionString,
+        '读取 Knex 执行状态',
+        async (client) => {
+          const result = await client.query<{ name: string }>('SELECT name FROM knex_migrations');
+          return result.rows.map((row) => row.name);
+        }
+      );
+    } catch (error) {
+      if (!isMissingPostgresRelation(error, 'knex_migrations')) {
+        throw error;
       }
-    );
+
+      return {
+        mode: 'names',
+        executedNames: new Set<string>(),
+        warning: '首次迁移，Knex 执行记录表尚未创建，按 0 已执行处理。',
+      };
+    }
 
     return {
       mode: 'names',
@@ -556,14 +596,27 @@ async function resolvePostgresExecutionState(input: {
   }
 
   if (tool === 'typeorm') {
-    const names = await withPostgresClient(
-      input.connectionString,
-      '读取 TypeORM 执行状态',
-      async (client) => {
-        const result = await client.query<{ name: string }>('SELECT name FROM migrations');
-        return result.rows.map((row) => row.name);
+    let names: string[] = [];
+    try {
+      names = await withPostgresClient(
+        input.connectionString,
+        '读取 TypeORM 执行状态',
+        async (client) => {
+          const result = await client.query<{ name: string }>('SELECT name FROM migrations');
+          return result.rows.map((row) => row.name);
+        }
+      );
+    } catch (error) {
+      if (!isMissingPostgresRelation(error, 'migrations')) {
+        throw error;
       }
-    );
+
+      return {
+        mode: 'names',
+        executedNames: new Set<string>(),
+        warning: '首次迁移，TypeORM 执行记录表尚未创建，按 0 已执行处理。',
+      };
+    }
 
     return {
       mode: 'names',
@@ -572,19 +625,32 @@ async function resolvePostgresExecutionState(input: {
   }
 
   if (tool === 'drizzle') {
-    const executedCount = await withPostgresClient(
-      input.connectionString,
-      '读取 Drizzle 执行状态',
-      async (client) => {
-        const result = await client.query<{ count: string | number }>(
-          'SELECT COUNT(*) AS count FROM "__drizzle_migrations"'
-        );
-        const rawValue = result.rows[0]?.count ?? 0;
-        const count =
-          typeof rawValue === 'number' ? rawValue : Number.parseInt(String(rawValue), 10);
-        return Number.isNaN(count) ? 0 : count;
+    let executedCount = 0;
+    try {
+      executedCount = await withPostgresClient(
+        input.connectionString,
+        '读取 Drizzle 执行状态',
+        async (client) => {
+          const result = await client.query<{ count: string | number }>(
+            'SELECT COUNT(*) AS count FROM "__drizzle_migrations"'
+          );
+          const rawValue = result.rows[0]?.count ?? 0;
+          const count =
+            typeof rawValue === 'number' ? rawValue : Number.parseInt(String(rawValue), 10);
+          return Number.isNaN(count) ? 0 : count;
+        }
+      );
+    } catch (error) {
+      if (!isMissingPostgresRelation(error, '__drizzle_migrations')) {
+        throw error;
       }
-    );
+
+      return {
+        mode: 'ordered_count',
+        executedCount: 0,
+        warning: '首次迁移，Drizzle 执行记录表尚未创建，按 0 已执行处理。',
+      };
+    }
 
     return {
       mode: 'ordered_count',

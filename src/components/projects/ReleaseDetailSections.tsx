@@ -250,6 +250,23 @@ export function ReleaseDiffSection({
   previousReleaseLink: ReleasePageData['previousReleaseLink'];
   release: ReleasePageData['release'];
 }) {
+  const runtimeMigrationDiffItems = release.migrationItems
+    .filter(
+      (run) =>
+        run.specification.filePreview &&
+        (run.specification.filePreview.total > 0 ||
+          run.specification.filePreview.warning ||
+          run.specification.filePreview.declaredTotal > 0)
+    )
+    .map((run) => ({
+      runId: run.id,
+      serviceName: run.serviceName,
+      databaseName: run.database.name,
+      phaseLabel: getMigrationPhaseLabel(run.specification.phase),
+      tool: run.specification.tool,
+      preview: run.specification.filePreview!,
+    }));
+
   return (
     <section className="console-panel p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -308,7 +325,7 @@ export function ReleaseDiffSection({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              迁移变化
+              迁移变化（配置）
             </div>
             {release.diff.changedMigrations.length > 0 && (
               <Badge variant="outline">{release.diff.changedMigrations.length} 项</Badge>
@@ -331,6 +348,58 @@ export function ReleaseDiffSection({
               </div>
             ))
           )}
+
+          <div className="pt-2">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              真实环境差异
+            </div>
+            {runtimeMigrationDiffItems.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-4 text-sm text-muted-foreground">
+                当前没有检测到与真实环境的迁移差异。
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {runtimeMigrationDiffItems.map((item) => (
+                  <div
+                    key={item.runId}
+                    className="rounded-2xl border border-border bg-background px-4 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-medium">
+                        {item.serviceName} · {item.databaseName}
+                      </div>
+                      <Badge variant="outline">{item.phaseLabel}</Badge>
+                      <Badge variant="secondary">{item.tool}</Badge>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      待执行 {item.preview.total} · 已执行 {item.preview.executedTotal} · 声明{' '}
+                      {item.preview.declaredTotal}
+                    </div>
+                    {item.preview.files.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {item.preview.files.map((file) => (
+                          <div
+                            key={`${item.runId}:${file}`}
+                            className="break-all font-mono text-xs text-foreground"
+                          >
+                            {file}
+                          </div>
+                        ))}
+                        {item.preview.truncated && (
+                          <div className="text-xs text-muted-foreground">
+                            文件较多，仅展示前 {item.preview.files.length} 项。
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {item.preview.warning && (
+                      <div className="mt-2 text-xs text-warning">{item.preview.warning}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </section>
