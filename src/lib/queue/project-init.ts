@@ -619,17 +619,6 @@ export function inferMigrationCommand(
     };
   }
 
-  if (scripts['db:push']) {
-    return {
-      comment:
-        'Auto-generated from package.json script db:push; review before approving it in Juanie',
-      tool,
-      command: buildRunScriptCommand(automation.packageManager, 'db:push'),
-      executionMode: 'manual_platform',
-      approvalPolicy: 'manual_in_production',
-    };
-  }
-
   return null;
 }
 

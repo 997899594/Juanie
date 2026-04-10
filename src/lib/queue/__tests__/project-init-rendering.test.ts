@@ -49,7 +49,7 @@ describe('project init migration inference', () => {
     });
   });
 
-  it('keeps db:push disabled by default', () => {
+  it('returns null when only unsupported migration scripts exist', () => {
     const inferred = inferMigrationCommand(
       {
         monorepoType: 'none',
@@ -59,7 +59,7 @@ describe('project init migration inference', () => {
         bakeTargets: [],
         packageJson: {
           scripts: {
-            'db:push': 'drizzle-kit push',
+            'db:sync': 'drizzle-kit sync',
           },
           dependencies: {
             'drizzle-orm': '^0.1.0',
@@ -72,9 +72,7 @@ describe('project init migration inference', () => {
       'postgresql'
     );
 
-    expect(inferred?.command).toBe('pnpm run db:push');
-    expect(inferred?.executionMode).toBe('manual_platform');
-    expect(inferred?.approvalPolicy).toBe('manual_in_production');
+    expect(inferred).toBeNull();
   });
 
   it('falls back to custom when no known migration tool is installed', () => {
