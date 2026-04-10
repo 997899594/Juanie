@@ -5,6 +5,7 @@ import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
 import { environments, projects, releases, type TeamRole } from '@/lib/db/schema';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
+import { buildMigrationFilePreviewByRunId } from '@/lib/migrations/file-preview';
 import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
 import { buildReleasePageGovernanceSnapshot } from '@/lib/releases/governance-view';
 import { buildPromotionPlan } from '@/lib/releases/planning';
@@ -35,6 +36,59 @@ export function buildProjectReleaseListData<
     ...release,
     aiReleasePlan: aiReleasePlans?.get(release.id) ?? null,
   }));
+}
+
+async function attachReleaseMigrationFilePreviews<
+  TRelease extends Awaited<ReturnType<typeof getReleaseById>>,
+>(release: TRelease) {
+  if (!release) {
+    return release;
+  }
+
+  const previewByRunId = await buildMigrationFilePreviewByRunId(
+    release.migrationRuns.map((run) => ({
+      id: run.id,
+      projectId: release.projectId,
+      specification: run.specification
+        ? {
+            tool: run.specification.tool,
+            migrationPath: run.specification.migrationPath,
+          }
+        : null,
+      database: run.database
+        ? {
+            id: run.database.id,
+            type: run.database.type,
+            connectionString: run.database.connectionString,
+          }
+        : null,
+      release: {
+        sourceRef: release.sourceRef,
+        sourceCommitSha: run.sourceCommitSha ?? release.sourceCommitSha,
+      },
+      environment: {
+        branch: release.environment.branch,
+      },
+    }))
+  );
+
+  return {
+    ...release,
+    migrationRuns: release.migrationRuns.map((run) => {
+      const filePreview = previewByRunId.get(run.id);
+      if (!filePreview || !run.specification) {
+        return run;
+      }
+
+      return {
+        ...run,
+        specification: {
+          ...run.specification,
+          filePreview,
+        },
+      };
+    }),
+  };
 }
 
 function buildManualReleaseSources<
@@ -539,11 +593,13 @@ export async function getReleaseDetailPageData(input: { projectId: string; relea
     ],
   });
 
+  const releaseWithFilePreviews = await attachReleaseMigrationFilePreviews(release);
+
   return buildReleaseDetailPageData({
     projectId: input.projectId,
     release: {
-      ...release,
-      previewReviewMetadata: previewReviewMetadataById.get(release.id) ?? null,
+      ...releaseWithFilePreviews,
+      previewReviewMetadata: previewReviewMetadataById.get(releaseWithFilePreviews.id) ?? null,
       infrastructureDiagnostics: runtimeContext.infrastructureDiagnostics,
       governanceEvents: runtimeContext.governanceEvents,
     },

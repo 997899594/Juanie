@@ -7,9 +7,11 @@ import { db } from '@/lib/db';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import {
   type AttentionFilterState,
+  attentionMigrationStatuses,
   filterAttentionRuns,
   getAttentionStats,
 } from '@/lib/migrations/attention';
+import { buildMigrationFilePreviewByRunId } from '@/lib/migrations/file-preview';
 
 export function buildApprovalsPageData<TRun extends ApprovalRunLike>(input: {
   runs: TRun[];
@@ -85,9 +87,53 @@ export async function getApprovalsPageData(input: {
     })),
   });
 
+  const runsNeedingPreview = runs.filter(
+    (run) =>
+      attentionMigrationStatuses.includes(
+        run.status as (typeof attentionMigrationStatuses)[number]
+      ) && run.specification !== null
+  );
+  const filePreviewByRunId = await buildMigrationFilePreviewByRunId(
+    runsNeedingPreview.map((run) => ({
+      id: run.id,
+      projectId: run.projectId,
+      specification: run.specification
+        ? {
+            tool: run.specification.tool,
+            migrationPath: run.specification.migrationPath,
+          }
+        : null,
+      database: run.database
+        ? {
+            id: run.database.id,
+            type: run.database.type,
+            connectionString: run.database.connectionString,
+          }
+        : null,
+      release: run.release
+        ? {
+            sourceRef: run.release.sourceRef,
+            sourceCommitSha: run.release.sourceCommitSha,
+          }
+        : null,
+      environment: run.environment
+        ? {
+            branch: run.environment.branch,
+          }
+        : null,
+    }))
+  );
+
   return buildApprovalsPageData({
     runs: runs.map((run) => ({
       ...run,
+      specification:
+        run.specification && filePreviewByRunId.has(run.id)
+          ? {
+              ...run.specification,
+              filePreview: filePreviewByRunId.get(run.id) ?? null,
+            }
+          : run.specification,
       previewReviewMetadata: previewReviewMetadataById.get(run.id) ?? null,
     })),
     filterState: input.filterState,

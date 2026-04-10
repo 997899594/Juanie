@@ -11,12 +11,7 @@ interface MigrationFile {
   content: string;
 }
 
-export async function fetchMigrationFilesFromRepoPath(
-  projectId: string,
-  path: string,
-  ref: string = 'main'
-): Promise<MigrationFile[]> {
-  // 获取项目和仓库信息
+async function getProjectRepositoryContext(projectId: string) {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
   });
@@ -37,7 +32,6 @@ export async function fetchMigrationFilesFromRepoPath(
     throw new Error('Repository not found');
   }
 
-  // 获取 Git provider session
   const session = await getTeamIntegrationSession({
     teamId: project.teamId,
     requiredCapabilities: ['read_repo'],
@@ -47,19 +41,60 @@ export async function fetchMigrationFilesFromRepoPath(
     throw new Error('No Git integration found');
   }
 
-  try {
-    // 列出目录内容
-    const contents = await gateway.listDirectory(session, repo.fullName, path, ref);
+  return {
+    session,
+    repoFullName: repo.fullName,
+  };
+}
 
-    // 过滤出迁移文件（.sql 或 .js）
+export async function listRepositoryDirectoryFromRepoPath(
+  projectId: string,
+  path: string,
+  ref: string = 'main'
+): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
+  const context = await getProjectRepositoryContext(projectId);
+
+  try {
+    return await gateway.listDirectory(context.session, context.repoFullName, path, ref);
+  } catch (err: any) {
+    if (err.status === 404 || err.message?.includes('not found')) {
+      return [];
+    }
+    throw err;
+  }
+}
+
+export async function readRepositoryFileFromRepoPath(
+  projectId: string,
+  path: string,
+  ref: string = 'main'
+): Promise<string | null> {
+  const context = await getProjectRepositoryContext(projectId);
+  return gateway.getFileContent(context.session, context.repoFullName, path, ref);
+}
+
+export async function fetchMigrationFilesFromRepoPath(
+  projectId: string,
+  path: string,
+  ref: string = 'main'
+): Promise<MigrationFile[]> {
+  const context = await getProjectRepositoryContext(projectId);
+
+  try {
+    const contents = await gateway.listDirectory(context.session, context.repoFullName, path, ref);
+
     const migrationFiles = contents.filter(
       (item) => item.type === 'file' && (item.name.endsWith('.sql') || item.name.endsWith('.js'))
     );
 
-    // 读取每个文件内容
     const migrations: MigrationFile[] = [];
     for (const file of migrationFiles) {
-      const content = await gateway.getFileContent(session, repo.fullName, file.path, ref);
+      const content = await gateway.getFileContent(
+        context.session,
+        context.repoFullName,
+        file.path,
+        ref
+      );
 
       if (content) {
         migrations.push({
@@ -71,7 +106,6 @@ export async function fetchMigrationFilesFromRepoPath(
 
     return migrations.sort((a, b) => a.name.localeCompare(b.name));
   } catch (err: any) {
-    // 目录不存在或为空
     if (err.status === 404 || err.message?.includes('not found')) {
       return [];
     }

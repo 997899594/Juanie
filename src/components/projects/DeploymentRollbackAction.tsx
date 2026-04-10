@@ -114,7 +114,7 @@ export function DeploymentRollbackAction({
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>回滚预检</DialogTitle>
           <DialogDescription>
-            平台会先评估环境保护、迁移和阻断条件，再创建新的回滚 release。
+            平台会先评估环境保护、迁移和阻断条件，再创建新的回滚发布。
           </DialogDescription>
         </DialogHeader>
 
@@ -161,7 +161,7 @@ export function DeploymentRollbackAction({
                 <div className="mb-3 space-y-1">
                   <div className="text-sm font-semibold text-foreground">回滚预检</div>
                   <div className="text-xs leading-5 text-muted-foreground">
-                    回滚不会直接覆盖线上，而是先走一次新的 release 创建流程。
+                    回滚不会直接覆盖线上，而是先走一次新的发布创建流程。
                   </div>
                 </div>
 

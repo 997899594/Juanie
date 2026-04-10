@@ -117,7 +117,7 @@ export function ProjectEnvironmentEntrySection({
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
               {environment.platformSignals.primarySummary ??
-                '进入环境查看当前 live release 与最近发布。'}
+                '进入环境查看当前线上发布版本与最近发布。'}
             </div>
             {environment.primaryDomainUrl ? (
               <a

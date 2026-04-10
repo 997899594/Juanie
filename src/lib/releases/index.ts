@@ -10,7 +10,9 @@ import {
 } from '@/lib/db/schema';
 import { resolvePreviewEnvironment } from '@/lib/environments/preview';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
+import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
+import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
@@ -171,6 +173,21 @@ async function persistRelease(
   );
 
   await addReleaseJob(release.id);
+
+  void (async () => {
+    try {
+      invalidateMigrationFilePreviewCache({ projectId: project.id });
+      await prewarmReleaseMigrationPreviewCache({
+        projectId: project.id,
+        environmentId: environment.id,
+        sourceRef: meta.sourceRef,
+        sourceCommitSha: meta.sourceCommitSha ?? null,
+        serviceIds: artifacts.map((artifact) => artifact.service.id),
+      });
+    } catch (error) {
+      console.warn(`[Release] Failed to prewarm migration preview cache for ${release.id}:`, error);
+    }
+  })();
 
   return db.query.releases.findFirst({
     where: eq(releases.id, release.id),

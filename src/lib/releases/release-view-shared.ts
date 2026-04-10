@@ -18,6 +18,7 @@ import {
   type PreviewSourceMetadata,
 } from '@/lib/environments/source-metadata';
 import type { InfrastructureDiagnosticsSnapshot } from '@/lib/infrastructure/diagnostics';
+import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview';
 import {
   evaluateEnvironmentPolicy,
   evaluateReleasePolicy,
@@ -102,14 +103,20 @@ export interface ReleaseViewLike {
     database?: {
       id: string;
       name: string;
+      type?: string | null;
     } | null;
     databaseId?: string;
     specification?: {
       tool?: string;
       phase?: string;
       command?: string;
+      executionMode?: string | null;
+      workingDirectory?: string | null;
+      migrationPath?: string | null;
+      lockStrategy?: string | null;
       compatibility?: string | null;
       approvalPolicy?: string | null;
+      filePreview?: MigrationFilePreviewSnapshot | null;
     } | null;
     status: string;
   }>;
@@ -204,11 +211,19 @@ export interface ReleaseDetailDecorations {
     database: {
       id: string;
       name: string;
+      type?: string | null;
     };
     specification: {
       tool: string;
       phase: string;
       command: string;
+      executionMode: string;
+      workingDirectory: string;
+      migrationPath: string | null;
+      lockStrategy: string;
+      compatibility: string;
+      approvalPolicy: string;
+      filePreview?: MigrationFilePreviewSnapshot | null;
     };
     statusDecoration: Omit<ReleaseStatusDecoration, 'label'> & { label: string };
     imageUrl: string | null;
@@ -415,11 +430,19 @@ export function buildMigrationItems(
     database: run.database ?? {
       id: run.databaseId ?? `database-${index}`,
       name: '数据库',
+      type: null,
     },
     specification: {
       tool: run.specification?.tool ?? 'custom',
       phase: run.specification?.phase ?? 'manual',
       command: run.specification?.command ?? '未提供命令',
+      executionMode: run.specification?.executionMode ?? 'automatic',
+      workingDirectory: run.specification?.workingDirectory ?? '.',
+      migrationPath: run.specification?.migrationPath ?? null,
+      lockStrategy: run.specification?.lockStrategy ?? 'platform',
+      compatibility: run.specification?.compatibility ?? 'backward_compatible',
+      approvalPolicy: run.specification?.approvalPolicy ?? 'auto',
+      filePreview: run.specification?.filePreview ?? null,
     },
     statusDecoration: getMigrationStatusDecoration(run.status),
     imageUrl:

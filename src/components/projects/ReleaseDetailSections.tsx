@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { DeploymentLogs } from '@/components/projects/DeploymentLogs';
 import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollbackAction';
 import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
+import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
 import { ReleaseAISnapshotPanel } from '@/components/projects/ReleaseAISnapshotPanel';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { TeamRole } from '@/lib/db/schema';
+import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
 import type { getReleaseDetailPageData } from '@/lib/releases/service';
 import { formatPlatformDateTime } from '@/lib/time/format';
@@ -324,7 +326,7 @@ export function ReleaseDiffSection({
                   <Badge variant="secondary">{item.change === 'added' ? '新增' : '移除'}</Badge>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {item.tool} · {item.phase}
+                  {item.tool} · {getMigrationPhaseLabel(item.phase)}
                 </div>
               </div>
             ))
@@ -377,7 +379,7 @@ export function ReleaseExecutionSections({
             <section className="console-panel p-5">
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
                 <Rocket className="h-4 w-4" />
-                Rollout
+                放量推进
               </div>
               <div className="space-y-3">
                 {release.deploymentItems.map((deployment) => (
@@ -505,10 +507,11 @@ export function ReleaseExecutionSections({
                       disabledSummary={releaseActions.summary}
                     />
                   </div>
-                  <div className="text-sm font-medium">{run.specification.tool}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {run.specification.phase} · {run.specification.command}
-                  </div>
+                  <MigrationSpecDetails
+                    specification={run.specification}
+                    databaseType={run.database.type ?? null}
+                    compact
+                  />
                 </div>
               ))}
             </div>

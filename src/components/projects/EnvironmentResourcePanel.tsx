@@ -474,9 +474,9 @@ export function EnvironmentResourcePanel({
           <SelectContent>
             <SelectItem value="diagnostics">诊断概览</SelectItem>
             <SelectItem value="pods">Pod</SelectItem>
-            <SelectItem value="deployments">Deployment</SelectItem>
-            <SelectItem value="events">Event</SelectItem>
-            <SelectItem value="services">Service</SelectItem>
+            <SelectItem value="deployments">部署</SelectItem>
+            <SelectItem value="events">事件</SelectItem>
+            <SelectItem value="services">服务</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -505,7 +505,7 @@ export function EnvironmentResourcePanel({
             title={canManage ? undefined : (manageSummary ?? undefined)}
             onClick={() => runRemediation('restart_deployments')}
           >
-            {remediationAction === 'restart_deployments' ? '重启中...' : '重启环境 Deployment'}
+            {remediationAction === 'restart_deployments' ? '重启中...' : '重启环境部署'}
           </Button>
         </div>
       )}

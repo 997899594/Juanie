@@ -80,7 +80,7 @@ export function ReleaseEnvironmentCenter({
                 <>
                   <div className="text-sm font-medium">还没有发布</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    从这个环境发第一版后，这里会显示当前 live release。
+                    从这个环境发第一版后，这里会显示当前线上发布版本。
                   </div>
                 </>
               )}

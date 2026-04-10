@@ -274,7 +274,7 @@ export function ManualReleaseDialog({
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>手动发布</DialogTitle>
           <DialogDescription>
-            复用已有 release 的镜像和元信息，先看预检结果，再决定是否生成新的 release。
+            复用已有发布的镜像和元信息，先看预检结果，再决定是否生成新的发布。
           </DialogDescription>
         </DialogHeader>
 
@@ -291,7 +291,7 @@ export function ManualReleaseDialog({
                 <div className="mb-4 space-y-1">
                   <div className="text-sm font-semibold text-foreground">发布来源</div>
                   <div className="text-xs leading-5 text-muted-foreground">
-                    先指定目标环境，再选一个已经有镜像产物的 release 作为复制源。
+                    先指定目标环境，再选一个已经有镜像产物的发布作为复制源。
                   </div>
                 </div>
 
@@ -312,7 +312,7 @@ export function ManualReleaseDialog({
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>来源 release</Label>
+                    <Label>来源发布</Label>
                     <Select value={sourceReleaseId} onValueChange={setSourceReleaseId}>
                       <SelectTrigger className="rounded-xl">
                         <SelectValue placeholder="选择来源" />
@@ -333,7 +333,7 @@ export function ManualReleaseDialog({
                   <Textarea
                     value={summary}
                     onChange={(event) => setSummary(event.target.value)}
-                    placeholder="可选。不填则沿用来源 release 摘要。"
+                    placeholder="可选。不填则沿用来源发布摘要。"
                     className="min-h-[112px] rounded-2xl"
                   />
                 </div>
@@ -352,7 +352,7 @@ export function ManualReleaseDialog({
                   <div>
                     <div className="text-sm font-semibold text-foreground">来源快照</div>
                     <div className="text-xs leading-5 text-muted-foreground">
-                      这里展示本次要复用的 release 内容，方便确认来源是否正确。
+                      这里展示本次要复用的发布内容，方便确认来源是否正确。
                     </div>
                   </div>
                   {selectedArtifacts.length > 0 && (
@@ -401,7 +401,7 @@ export function ManualReleaseDialog({
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-sm text-muted-foreground">
-                    先选择一个可复用的 release，右侧会展示来源信息和预检结果。
+                    先选择一个可复用的发布，右侧会展示来源信息和预检结果。
                   </div>
                 )}
               </div>

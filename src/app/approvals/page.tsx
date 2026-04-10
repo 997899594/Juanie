@@ -1,14 +1,7 @@
-import {
-  AlertTriangle,
-  ArrowRight,
-  Clock3,
-  Database,
-  FolderKanban,
-  GitBranch,
-  TerminalSquare,
-} from 'lucide-react';
+import { AlertTriangle, ArrowRight, Clock3, Database, FolderKanban, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -22,6 +15,7 @@ import {
 } from '@/lib/approvals/view';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { getMigrationStatusDecoration } from '@/lib/releases/status-presentation';
 
 export default async function ApprovalsPage({
@@ -118,7 +112,7 @@ export default async function ApprovalsPage({
                           run.environment.name,
                           run.previewSourceMeta.label,
                           run.database.name,
-                          run.specification.phase,
+                          getMigrationPhaseLabel(run.specification.phase),
                         ]
                           .filter(Boolean)
                           .join(' · ')}
@@ -156,11 +150,10 @@ export default async function ApprovalsPage({
                     </div>
 
                     <div className="console-card bg-secondary/20 p-4">
-                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        <TerminalSquare className="h-3.5 w-3.5" />
-                        命令
-                      </div>
-                      <div className="break-all font-mono text-xs">{run.specification.command}</div>
+                      <MigrationSpecDetails
+                        specification={run.specification}
+                        databaseType={run.database.type}
+                      />
                     </div>
 
                     {run.errorMessage && (

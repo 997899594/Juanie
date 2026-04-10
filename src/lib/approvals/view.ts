@@ -14,6 +14,7 @@ import {
   type PreviewSourceMetadata,
 } from '@/lib/environments/source-metadata';
 import type { AttentionFilterState } from '@/lib/migrations/attention';
+import type { MigrationFilePreviewSnapshot } from '@/lib/migrations/file-preview';
 import {
   buildIssueSnapshot,
   getIssueLabel,
@@ -64,6 +65,13 @@ export interface ApprovalRunLike {
     tool: string;
     phase: string;
     command: string;
+    executionMode?: string | null;
+    workingDirectory?: string | null;
+    migrationPath?: string | null;
+    lockStrategy?: string | null;
+    compatibility?: string | null;
+    approvalPolicy?: string | null;
+    filePreview?: MigrationFilePreviewSnapshot | null;
   };
   release?: {
     sourceRef?: string | null;

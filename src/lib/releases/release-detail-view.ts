@@ -1,3 +1,4 @@
+import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { buildReleaseDiff } from '@/lib/releases/diff';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { buildReleaseRecap } from '@/lib/releases/recap';
@@ -109,7 +110,9 @@ function buildReleaseTimeline(input: {
       key: `migration-${run.id ?? `${run.serviceId ?? 'service'}-${run.status}`}`,
       at: formatTimelineTimestamp(run.createdAt),
       title: `迁移${getMigrationStatusDecoration(run.status).label ?? run.status}`,
-      description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · ${run.specification?.phase ?? 'manual'}`,
+      description: `${run.service?.name ?? '服务'} · ${run.database?.name ?? '数据库'} · ${getMigrationPhaseLabel(
+        run.specification?.phase ?? 'manual'
+      )}`,
       tone: getTimelineTone(run.status, 'migration'),
       href: releaseHref,
       sortValue: run.createdAt ? new Date(run.createdAt).getTime() : 0,

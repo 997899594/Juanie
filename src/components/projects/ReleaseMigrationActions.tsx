@@ -72,7 +72,7 @@ export function ReleaseMigrationActions({
             {pendingAction === 'approve' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : null}
-            Approve
+            审批通过
           </Button>
         )}
         {canMarkExternal && (
@@ -87,7 +87,7 @@ export function ReleaseMigrationActions({
             {pendingAction === 'mark_external_complete' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : null}
-            Mark Complete
+            标记完成
           </Button>
         )}
         {canMarkExternal && (
@@ -102,7 +102,7 @@ export function ReleaseMigrationActions({
             {pendingAction === 'mark_external_failed' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : null}
-            Mark Failed
+            标记失败
           </Button>
         )}
         {canRetry && (
@@ -117,7 +117,7 @@ export function ReleaseMigrationActions({
             {pendingAction === 'retry' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : null}
-            Retry
+            重试
           </Button>
         )}
       </div>
