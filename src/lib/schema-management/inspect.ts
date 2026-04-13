@@ -43,6 +43,11 @@ export interface EnvironmentSchemaStateSnapshot {
   updatedAt: Date;
 }
 
+interface DrizzleMigrationFileRecord {
+  name: string;
+  content: string;
+}
+
 function getUnknownResolution(): MigrationResolutionInfo {
   return {
     strategy: 'unknown',
@@ -60,6 +65,23 @@ function buildChecksum(entries: string[]): string | null {
   }
 
   return crypto.createHash('sha256').update(entries.join('\n')).digest('hex');
+}
+
+export function normalizeDrizzleLedgerEntries(input: {
+  repoFiles: DrizzleMigrationFileRecord[];
+  actualLedgerEntries: string[];
+}): string[] {
+  const tagByRawLedgerValue = new Map<string, string>();
+
+  for (const file of input.repoFiles) {
+    const fileTag = file.name.replace(/\.(sql|js)$/u, '');
+    const fileHash = crypto.createHash('sha256').update(file.content).digest('hex');
+
+    tagByRawLedgerValue.set(fileTag, fileTag);
+    tagByRawLedgerValue.set(fileHash, fileTag);
+  }
+
+  return input.actualLedgerEntries.map((entry) => tagByRawLedgerValue.get(entry) ?? entry);
 }
 
 function buildPostgresConnectionString(database: {
@@ -213,11 +235,17 @@ async function inspectDrizzleLedger(spec: ResolvedMigrationSpec): Promise<{
     ref
   );
 
-  const expectedEntries = journalContent
+  const journalEntries = journalContent
     ? (((JSON.parse(journalContent) as { entries?: Array<{ tag?: unknown }> }).entries ?? [])
         .map((entry) => (typeof entry?.tag === 'string' ? entry.tag : ''))
         .filter(Boolean) as string[])
     : [];
+  const migrationFiles = await fetchMigrationFilesFromRepoPath(
+    spec.specification.projectId,
+    migrationPath,
+    ref
+  );
+  const expectedEntries = journalEntries;
 
   const connectionString = buildPostgresConnectionString(spec.database);
   if (!connectionString) {
@@ -257,13 +285,16 @@ async function inspectDrizzleLedger(spec: ResolvedMigrationSpec): Promise<{
     const hasUserTables = Number(userTableRows[0]?.count ?? 0) > 0;
     const ledgerTablePresent = ledgerTableRows[0]?.present === true;
     const actualEntries = ledgerTablePresent
-      ? (
-          await sql<{ hash: string }[]>`
-            SELECT hash
-            FROM "drizzle"."__drizzle_migrations"
-            ORDER BY created_at ASC, id ASC
-          `
-        ).map((row) => row.hash)
+      ? normalizeDrizzleLedgerEntries({
+          repoFiles: migrationFiles,
+          actualLedgerEntries: (
+            await sql<{ hash: string }[]>`
+              SELECT hash
+              FROM "drizzle"."__drizzle_migrations"
+              ORDER BY created_at ASC, id ASC
+            `
+          ).map((row) => row.hash),
+        })
       : [];
 
     const classified = classifySchemaLedgerState({

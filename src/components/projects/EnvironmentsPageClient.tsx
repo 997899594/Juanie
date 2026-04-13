@@ -806,11 +806,11 @@ function EnvironmentAdvancedPanel({
                             variant="outline"
                             className={getSchemaStateBadgeClass(state?.status)}
                           >
-                            {state?.statusLabel ?? '未检查'}
+                            {state?.statusLabel ?? '未纳管'}
                           </Badge>
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {state?.summary ?? '尚未检查 schema 状态'}
+                          {state?.summary ?? '环境尚未进入 schema 纳管，点击检查开始识别'}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {[
