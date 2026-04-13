@@ -153,14 +153,16 @@ export async function createSchemaRepairReviewRequest(input: {
           tool: spec.specification.tool,
           databaseType: spec.database.type,
           migrationPath,
-          existingMigrationNames:
-            spec.specification.tool === 'drizzle'
-              ? migrationFiles.map((file) => file.name)
-              : migrationFiles.map((file) => file.name),
+          existingMigrationNames: migrationFiles.map((file) => file.name),
           journalContent,
           planId: plan.id,
           title: plan.title,
           summary: plan.summary,
+          planKind: plan.kind,
+          stateStatus: plan.stateStatus,
+          databaseName: plan.database?.name ?? 'database',
+          expectedVersion: plan.expectedVersion,
+          actualVersion: plan.actualVersion,
         })
       : {
           files: {},

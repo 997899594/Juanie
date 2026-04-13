@@ -41,14 +41,42 @@ describe('schema review request helpers', () => {
       planId: 'plan-12345678',
       title: 'Schema repair',
       summary: 'Need repair',
+      planKind: 'repair_pr_required',
+      stateStatus: 'drifted',
+      databaseName: 'postgresql',
+      expectedVersion: '0001_soft_hedge_knight',
+      actualVersion: '0000_known_mole_man',
     });
 
+    expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-12345678.json');
     expect(Object.keys(artifacts.files)).toContain(
       'drizzle/0001_juanie_schema_repair_plan-123.sql'
     );
     expect(Object.keys(artifacts.files)).toContain('drizzle/meta/_journal.json');
     expect(artifacts.files['drizzle/meta/_journal.json']).toContain(
       '0001_juanie_schema_repair_plan-123'
+    );
+  });
+
+  it('builds baseline scaffold with baseline stem', () => {
+    const artifacts = buildSchemaRepairArtifacts({
+      tool: 'sql',
+      databaseType: 'postgresql',
+      migrationPath: 'migrations/postgresql',
+      existingMigrationNames: ['0000_init.sql'],
+      planId: 'plan-abcdefgh',
+      title: 'Adopt current db',
+      summary: 'Need baseline',
+      planKind: 'adopt_current_db',
+      stateStatus: 'unmanaged',
+      databaseName: 'postgresql',
+      expectedVersion: null,
+      actualVersion: null,
+    });
+
+    expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-abcdefgh.json');
+    expect(Object.keys(artifacts.files)).toContain(
+      'migrations/postgresql/0001_juanie_schema_baseline_plan-abc.sql'
     );
   });
 });
