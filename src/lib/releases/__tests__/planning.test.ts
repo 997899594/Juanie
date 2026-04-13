@@ -119,4 +119,43 @@ describe('release planning', () => {
     expect(plan.summary).toBe('存在 1 个数据库 schema 门禁未满足');
     expect(plan.platformSignals.chips.some((chip) => chip.key === 'schema:blocking')).toBe(true);
   });
+
+  it('allows release creation when schema gate only reports pending migrations', () => {
+    const plan = summarizeReleasePlan({
+      environment: { isProduction: false, isPreview: false },
+      services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
+      migrationSpecs: [],
+      schemaGate: {
+        canCreate: true,
+        checkedCount: 1,
+        blockingCount: 0,
+        blockingReason: null,
+        summary: '数据库落后于仓库迁移链，已执行 1/2 项，可通过正常发布补齐',
+        nextActionLabel: null,
+        customSignals: [
+          {
+            key: 'schema:pending_migrations',
+            label: '待迁移 1 项',
+            tone: 'neutral',
+          },
+        ],
+        states: [
+          {
+            databaseId: 'db-1',
+            databaseName: 'postgresql',
+            status: 'pending_migrations',
+            statusLabel: '待迁移',
+            summary: '数据库落后于仓库迁移链，已执行 1/2 项，可通过正常发布补齐',
+          },
+        ],
+      },
+    });
+
+    expect(plan.canCreate).toBe(true);
+    expect(plan.blockingReason).toBeNull();
+    expect(plan.schema.blockingCount).toBe(0);
+    expect(plan.platformSignals.chips.some((chip) => chip.key === 'schema:pending_migrations')).toBe(
+      true
+    );
+  });
 });

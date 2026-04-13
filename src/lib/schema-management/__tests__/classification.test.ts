@@ -26,7 +26,7 @@ describe('schema ledger classification', () => {
     expect(result.summary).toContain('缺少 Drizzle 迁移账本');
   });
 
-  it('marks prefix ledger as drifted', () => {
+  it('marks prefix ledger as pending migrations', () => {
     const result = classifySchemaLedgerState({
       kind: 'sql',
       expectedEntries: ['001_init.sql', '002_add_index.sql'],
@@ -34,7 +34,7 @@ describe('schema ledger classification', () => {
       hasUserTables: true,
     });
 
-    expect(result.status).toBe('drifted');
+    expect(result.status).toBe('pending_migrations');
     expect(result.summary).toContain('已执行 1/2 项');
   });
 

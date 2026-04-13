@@ -6,7 +6,13 @@ import type { PlatformSignalChip } from '@/lib/signals/platform';
 export interface ReleaseSchemaGateState {
   databaseId: string;
   databaseName: string;
-  status: 'aligned' | 'aligned_untracked' | 'drifted' | 'unmanaged' | 'blocked';
+  status:
+    | 'aligned'
+    | 'pending_migrations'
+    | 'aligned_untracked'
+    | 'drifted'
+    | 'unmanaged'
+    | 'blocked';
   statusLabel: string;
   summary: string | null;
 }
@@ -34,6 +40,12 @@ export class ReleaseSchemaGateBlockedError extends Error {
 
 function getSchemaStatusChip(status: ReleaseSchemaGateState['status']): PlatformSignalChip | null {
   switch (status) {
+    case 'pending_migrations':
+      return {
+        key: 'schema:pending_migrations',
+        label: '待迁移',
+        tone: 'neutral',
+      };
     case 'aligned_untracked':
       return {
         key: 'schema:aligned_untracked',
@@ -66,7 +78,9 @@ function getSchemaStatusChip(status: ReleaseSchemaGateState['status']): Platform
 function buildReleaseSchemaGateSnapshot(
   states: ReleaseSchemaGateState[]
 ): ReleaseSchemaGateSnapshot {
-  const blockingStates = states.filter((state) => state.status !== 'aligned');
+  const blockingStates = states.filter(
+    (state) => !['aligned', 'pending_migrations'].includes(state.status)
+  );
   const customSignals: PlatformSignalChip[] = [];
 
   if (blockingStates.length > 0) {
@@ -74,6 +88,14 @@ function buildReleaseSchemaGateSnapshot(
       key: 'schema:blocking',
       label: `Schema 门禁 ${blockingStates.length} 项`,
       tone: 'danger',
+    });
+  }
+
+  if (states.some((state) => state.status === 'pending_migrations')) {
+    customSignals.push({
+      key: 'schema:pending_migrations',
+      label: `待迁移 ${states.filter((state) => state.status === 'pending_migrations').length} 项`,
+      tone: 'neutral',
     });
   }
 

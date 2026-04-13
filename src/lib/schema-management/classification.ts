@@ -70,8 +70,8 @@ export function classifySchemaLedgerState(
 
   if (isPrefix(input.actualEntries, input.expectedEntries)) {
     return {
-      status: 'drifted',
-      summary: `数据库落后于仓库迁移链，已执行 ${input.actualEntries.length}/${input.expectedEntries.length} 项`,
+      status: 'pending_migrations',
+      summary: `数据库落后于仓库迁移链，已执行 ${input.actualEntries.length}/${input.expectedEntries.length} 项，可通过正常发布补齐`,
       hasLedger,
       hasUserTables: input.hasUserTables,
     };

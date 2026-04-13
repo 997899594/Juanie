@@ -46,6 +46,7 @@ Today Juanie cannot answer these questions in-product:
 Phase 1 uses these schema states:
 
 - `aligned`
+- `pending_migrations`
 - `aligned_untracked`
 - `drifted`
 - `unmanaged`
@@ -54,6 +55,7 @@ Phase 1 uses these schema states:
 Interpretation in Phase 1:
 
 - `aligned`: observed migration ledger matches repo migration truth
+- `pending_migrations`: observed ledger is a strict prefix of repo migration truth, so the environment is behind but can be advanced by tracked migrations
 - `aligned_untracked`: repo expects tracked migrations, the database has user tables, but the observed ledger is empty or missing
 - `drifted`: observed migration ledger does not match the repo migration chain
 - `unmanaged`: no usable repo migration truth or the environment has not yet entered managed migration flow
@@ -206,6 +208,6 @@ Phase 1 is complete when:
 
 - an operator can open an environment in Juanie and see schema state for each database
 - an operator can click inspect and get a persisted result
-- Juanie can distinguish at least `aligned`, `aligned_untracked`, `drifted`, `unmanaged`, and `blocked`
+- Juanie can distinguish at least `aligned`, `pending_migrations`, `aligned_untracked`, `drifted`, `unmanaged`, and `blocked`
 - no destructive repair SQL is introduced
 - no child-app migration contract is broken

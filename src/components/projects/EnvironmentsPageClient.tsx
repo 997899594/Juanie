@@ -105,7 +105,13 @@ interface EnvironmentRecord {
     status: string | null;
     sourceDatabaseId: string | null;
     schemaState: {
-      status: 'aligned' | 'aligned_untracked' | 'drifted' | 'unmanaged' | 'blocked';
+      status:
+        | 'aligned'
+        | 'pending_migrations'
+        | 'aligned_untracked'
+        | 'drifted'
+        | 'unmanaged'
+        | 'blocked';
       statusLabel: string;
       summary: string | null;
       expectedVersion: string | null;
@@ -385,6 +391,8 @@ function getSchemaStateBadgeClass(status: SchemaStateStatus | null | undefined):
   switch (status) {
     case 'aligned':
       return 'border-success/40 text-success';
+    case 'pending_migrations':
+      return 'border-warning/40 text-warning';
     case 'aligned_untracked':
       return 'border-warning/40 text-warning';
     case 'drifted':

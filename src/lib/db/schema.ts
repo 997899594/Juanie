@@ -124,6 +124,7 @@ export const environmentDatabaseStrategies = ['direct', 'inherit', 'isolated_clo
 export type EnvironmentDatabaseStrategy = (typeof environmentDatabaseStrategies)[number];
 export const environmentSchemaStateStatuses = [
   'aligned',
+  'pending_migrations',
   'aligned_untracked',
   'drifted',
   'unmanaged',
