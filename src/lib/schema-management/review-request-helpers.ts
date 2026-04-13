@@ -5,6 +5,7 @@ export interface GeneratedSchemaRepairArtifacts {
 }
 
 interface SchemaRepairArtifactInput {
+  provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
   tool: 'drizzle' | 'sql' | 'prisma' | 'knex' | 'typeorm' | 'custom';
   databaseType: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
   migrationPath: string | null;
@@ -204,6 +205,40 @@ function buildAtlasScriptContent(
     .join('\n');
 }
 
+function buildGitHubAtlasWorkflow(input: { planId: string; atlasScriptPath: string }): string {
+  return [
+    `name: Schema Repair ${input.planId.slice(0, 8)}`,
+    `on:`,
+    `  pull_request:`,
+    `    branches: [main, master]`,
+    `jobs:`,
+    `  atlas-repair:`,
+    `    runs-on: ubuntu-latest`,
+    `    steps:`,
+    `      - uses: actions/checkout@v5`,
+    `      - uses: ariga/setup-atlas@v0`,
+    `      - run: chmod +x ${input.atlasScriptPath}`,
+    `      - run: ${input.atlasScriptPath}`,
+    ``,
+  ].join('\n');
+}
+
+function buildGitLabAtlasSnippet(input: { planId: string; atlasScriptPath: string }): string {
+  const jobName = `schema_repair_${input.planId.slice(0, 8)}`;
+
+  return [
+    `${jobName}:`,
+    `  stage: test`,
+    `  image: arigaio/atlas:latest`,
+    `  script:`,
+    `    - chmod +x ${input.atlasScriptPath}`,
+    `    - ${input.atlasScriptPath}`,
+    `  rules:`,
+    `    - if: $CI_PIPELINE_SOURCE == "merge_request_event"`,
+    ``,
+  ].join('\n');
+}
+
 function buildScaffoldHeading(input: SchemaRepairArtifactInput): string[] {
   const modeSummary =
     input.planKind === 'adopt_current_db'
@@ -240,6 +275,22 @@ export function buildSchemaRepairArtifacts(
     [atlasScriptPath]: buildAtlasScriptContent(input, atlasConfigPath),
   };
   const generatedFiles = [metadataPath, atlasConfigPath, atlasScriptPath];
+
+  if (input.provider === 'github') {
+    const workflowPath = `.github/workflows/schema-repair-${input.planId.slice(0, 8)}.yml`;
+    files[workflowPath] = buildGitHubAtlasWorkflow({
+      planId: input.planId,
+      atlasScriptPath,
+    });
+    generatedFiles.push(workflowPath);
+  } else {
+    const gitlabSnippetPath = `.juanie/schema-repair/${input.planId}.gitlab-ci.yml`;
+    files[gitlabSnippetPath] = buildGitLabAtlasSnippet({
+      planId: input.planId,
+      atlasScriptPath,
+    });
+    generatedFiles.push(gitlabSnippetPath);
+  }
 
   const needsMigrationScaffold =
     input.migrationPath &&

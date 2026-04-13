@@ -150,6 +150,7 @@ export async function createSchemaRepairReviewRequest(input: {
   const generatedArtifacts =
     spec && migrationPath
       ? buildSchemaRepairArtifacts({
+          provider: session.provider,
           tool: spec.specification.tool,
           databaseType: spec.database.type,
           migrationPath,

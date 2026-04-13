@@ -29,6 +29,7 @@ describe('schema review request helpers', () => {
 
   it('builds drizzle scaffold artifacts with journal update', () => {
     const artifacts = buildSchemaRepairArtifacts({
+      provider: 'github',
       tool: 'drizzle',
       databaseType: 'postgresql',
       migrationPath: 'drizzle',
@@ -51,6 +52,7 @@ describe('schema review request helpers', () => {
     expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-12345678.json');
     expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-12345678.atlas.hcl');
     expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-12345678.atlas.sh');
+    expect(Object.keys(artifacts.files)).toContain('.github/workflows/schema-repair-plan-123.yml');
     expect(Object.keys(artifacts.files)).toContain(
       'drizzle/0001_juanie_schema_repair_plan-123.sql'
     );
@@ -65,6 +67,7 @@ describe('schema review request helpers', () => {
 
   it('builds baseline scaffold with baseline stem', () => {
     const artifacts = buildSchemaRepairArtifacts({
+      provider: 'gitlab',
       tool: 'sql',
       databaseType: 'postgresql',
       migrationPath: 'migrations/postgresql',
@@ -82,6 +85,9 @@ describe('schema review request helpers', () => {
     expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-abcdefgh.json');
     expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-abcdefgh.atlas.hcl');
     expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-abcdefgh.atlas.sh');
+    expect(Object.keys(artifacts.files)).toContain(
+      '.juanie/schema-repair/plan-abcdefgh.gitlab-ci.yml'
+    );
     expect(Object.keys(artifacts.files)).toContain(
       'migrations/postgresql/0001_juanie_schema_baseline_plan-abc.sql'
     );
