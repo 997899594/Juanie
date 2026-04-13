@@ -106,6 +106,12 @@ interface ManualReleasePlan {
       nextActionLabel: string | null;
     } | null;
   };
+  schema: {
+    checkedCount: number;
+    blockingCount: number;
+    summary: string | null;
+    nextActionLabel: string | null;
+  };
 }
 
 interface ManualReleaseDialogProps {

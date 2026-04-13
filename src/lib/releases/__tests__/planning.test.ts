@@ -152,10 +152,10 @@ describe('release planning', () => {
     });
 
     expect(plan.canCreate).toBe(true);
-    expect(plan.blockingReason).toBeNull();
+    expect(plan.blockingReason).toBe(null);
     expect(plan.schema.blockingCount).toBe(0);
-    expect(plan.platformSignals.chips.some((chip) => chip.key === 'schema:pending_migrations')).toBe(
-      true
-    );
+    expect(
+      plan.platformSignals.chips.some((chip) => chip.key === 'schema:pending_migrations')
+    ).toBe(true);
   });
 });
