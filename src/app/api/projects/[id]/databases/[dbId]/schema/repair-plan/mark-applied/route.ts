@@ -6,7 +6,10 @@ import { db } from '@/lib/db';
 import { databases, schemaRepairPlans } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { inspectEnvironmentSchemaState } from '@/lib/schema-management/inspect';
-import { markSchemaRepairPlanApplied } from '@/lib/schema-management/repair-plan';
+import {
+  isSchemaRepairResolvedStatus,
+  markSchemaRepairPlanApplied,
+} from '@/lib/schema-management/repair-plan';
 
 export async function POST(
   _request: Request,
@@ -51,13 +54,23 @@ export async function POST(
       return NextResponse.json({ error: '没有可标记的修复计划' }, { status: 400 });
     }
 
-    const plan = await markSchemaRepairPlanApplied({
-      projectId,
-      planId: latestPlan.id,
-    });
     const state = await inspectEnvironmentSchemaState({
       projectId,
       databaseId: dbId,
+    });
+
+    if (!isSchemaRepairResolvedStatus(state.status)) {
+      return NextResponse.json(
+        {
+          error: `当前 schema 状态仍为 ${state.status}，不能标记修复计划已应用`,
+        },
+        { status: 409 }
+      );
+    }
+
+    const plan = await markSchemaRepairPlanApplied({
+      projectId,
+      planId: latestPlan.id,
     });
 
     return NextResponse.json({ plan, state }, { status: 200 });

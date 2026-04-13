@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import { buildSchemaRepairPlan } from '@/lib/schema-management/repair-plan';
+import {
+  buildSchemaRepairPlan,
+  isSchemaRepairResolvedStatus,
+} from '@/lib/schema-management/repair-plan';
 
 describe('schema repair plan', () => {
   it('treats pending migrations as normal release work', () => {
@@ -26,5 +29,12 @@ describe('schema repair plan', () => {
     expect(plan.kind).toBe('repair_pr_required');
     expect(plan.riskLevel).toBe('high');
     expect(plan.steps[1]).toContain('repair migration');
+  });
+
+  it('only treats aligned or pending migrations as resolved', () => {
+    expect(isSchemaRepairResolvedStatus('aligned')).toBe(true);
+    expect(isSchemaRepairResolvedStatus('pending_migrations')).toBe(true);
+    expect(isSchemaRepairResolvedStatus('drifted')).toBe(false);
+    expect(isSchemaRepairResolvedStatus('aligned_untracked')).toBe(false);
   });
 });

@@ -39,6 +39,10 @@ export interface PersistedSchemaRepairPlan extends SchemaRepairPlan {
   updatedAt: Date;
 }
 
+export function isSchemaRepairResolvedStatus(status: EnvironmentSchemaStateStatus): boolean {
+  return status === 'aligned' || status === 'pending_migrations';
+}
+
 export function buildSchemaRepairPlan(input: {
   status: EnvironmentSchemaStateStatus;
   summary: string | null;
