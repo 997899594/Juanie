@@ -3,6 +3,7 @@ import { startDriftDetector } from './drift-detector';
 import { startHistoryRetention } from './history-retention';
 import { startInfrastructureRemediation } from './infrastructure-remediation';
 import { startPreviewEnvironmentCleanup } from './preview-cleanup';
+import { startSchemaRepairReviewSync } from './schema-repair-review-sync';
 
 initK8sClient();
 
@@ -28,6 +29,11 @@ if (process.env.ENABLE_AUTO_REMEDIATION !== 'false') {
 if (process.env.ENABLE_HISTORY_RETENTION !== 'false') {
   startHistoryRetention();
   enabledTasks.push('history-retention');
+}
+
+if (process.env.ENABLE_SCHEMA_REPAIR_REVIEW_SYNC !== 'false') {
+  startSchemaRepairReviewSync();
+  enabledTasks.push('schema-repair-review-sync');
 }
 
 console.log(

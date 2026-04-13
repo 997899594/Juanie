@@ -87,6 +87,9 @@ export interface DatabaseSchemaRepairPlan {
   branchName: string | null;
   reviewNumber: number | null;
   reviewUrl: string | null;
+  reviewState: 'draft' | 'open' | 'merged' | 'closed' | 'unknown';
+  reviewStateLabel: string | null;
+  reviewSyncedAt: string | Date | null;
   errorMessage: string | null;
 }
 
@@ -135,6 +138,21 @@ export async function createDatabaseRepairReviewRequest(
 
   const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(response);
 
+  return payload.plan;
+}
+
+export async function syncDatabaseRepairReviewRequest(
+  projectId: string,
+  databaseId: string
+): Promise<DatabaseSchemaRepairPlan> {
+  const response = await fetch(
+    `/api/projects/${projectId}/databases/${databaseId}/schema/repair-plan/review-request/sync`,
+    {
+      method: 'POST',
+    }
+  );
+
+  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(response);
   return payload.plan;
 }
 

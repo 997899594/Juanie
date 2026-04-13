@@ -59,6 +59,7 @@ import {
   inspectDatabaseSchemaState,
   markDatabaseRepairPlanApplied,
   markDatabaseSchemaAligned,
+  syncDatabaseRepairReviewRequest,
   updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
 import { cn } from '@/lib/utils';
@@ -781,6 +782,7 @@ function EnvironmentAdvancedPanel({
   const [repairPlanLoadingId, setRepairPlanLoadingId] = useState<string | null>(null);
   const [repairReviewLoadingId, setRepairReviewLoadingId] = useState<string | null>(null);
   const [repairApplyLoadingId, setRepairApplyLoadingId] = useState<string | null>(null);
+  const [repairReviewSyncLoadingId, setRepairReviewSyncLoadingId] = useState<string | null>(null);
 
   const repairStatusLabel: Record<DatabaseSchemaRepairPlan['status'], string> = {
     draft: '草稿',
@@ -788,6 +790,13 @@ function EnvironmentAdvancedPanel({
     applied: '已应用',
     superseded: '已替代',
     failed: '失败',
+  };
+  const repairReviewStateLabel: Record<DatabaseSchemaRepairPlan['reviewState'], string> = {
+    draft: '草稿',
+    open: '进行中',
+    merged: '已合并',
+    closed: '已关闭',
+    unknown: '未知',
   };
 
   const handleBuildRepairPlan = async (databaseId: string) => {
@@ -859,6 +868,29 @@ function EnvironmentAdvancedPanel({
     }
   };
 
+  const handleSyncRepairReviewRequest = async (databaseId: string) => {
+    setRepairReviewSyncLoadingId(databaseId);
+    setRepairPlanErrors((current) => ({
+      ...current,
+      [databaseId]: null,
+    }));
+
+    try {
+      const updatedPlan = await syncDatabaseRepairReviewRequest(projectId, databaseId);
+      setRepairPlans((current) => ({
+        ...current,
+        [databaseId]: updatedPlan,
+      }));
+    } catch (error) {
+      setRepairPlanErrors((current) => ({
+        ...current,
+        [databaseId]: error instanceof Error ? error.message : '同步评审状态失败',
+      }));
+    } finally {
+      setRepairReviewSyncLoadingId(null);
+    }
+  };
+
   return (
     <details className="rounded-2xl border border-border bg-background px-4 py-4">
       <summary className="cursor-pointer list-none text-sm font-medium">环境细节</summary>
@@ -886,6 +918,7 @@ function EnvironmentAdvancedPanel({
                 const repairPlan = repairPlans[database.id] ?? database.latestRepairPlan ?? null;
                 const repairPlanError = repairPlanErrors[database.id] ?? null;
                 const lastInspectedLabel = formatInspectionTimestamp(state?.lastInspectedAt);
+                const reviewSyncedLabel = formatInspectionTimestamp(repairPlan?.reviewSyncedAt);
                 const versionSummary =
                   state?.actualVersion || state?.expectedVersion
                     ? [
@@ -1001,6 +1034,11 @@ function EnvironmentAdvancedPanel({
                           <Badge variant="outline">
                             状态 {repairStatusLabel[repairPlan.status] ?? repairPlan.status}
                           </Badge>
+                          {repairPlan.reviewUrl && (
+                            <Badge variant="outline">
+                              评审 {repairReviewStateLabel[repairPlan.reviewState]}
+                            </Badge>
+                          )}
                         </div>
                         <div className="mt-2 text-sm text-foreground">{repairPlan.summary}</div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -1010,6 +1048,10 @@ function EnvironmentAdvancedPanel({
                               ? `期望 ${repairPlan.expectedVersion}`
                               : null,
                             repairPlan.nextActionLabel,
+                            repairPlan.reviewStateLabel
+                              ? `评审状态 ${repairPlan.reviewStateLabel}`
+                              : null,
+                            reviewSyncedLabel ? `同步于 ${reviewSyncedLabel}` : null,
                           ]
                             .filter(Boolean)
                             .join(' · ')}
@@ -1027,7 +1069,7 @@ function EnvironmentAdvancedPanel({
                             'adopt_current_db',
                             'manual_investigation',
                           ].includes(repairPlan.kind) &&
-                            repairPlan.status !== 'review_opened' && (
+                            ['draft', 'failed'].includes(repairPlan.status) && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -1051,20 +1093,41 @@ function EnvironmentAdvancedPanel({
                               </a>
                             </Button>
                           )}
-                          {repairPlan.status === 'review_opened' && (
+                          {repairPlan.reviewUrl && (
                             <Button
                               variant="outline"
                               size="sm"
                               className="rounded-xl"
-                              disabled={repairApplyLoadingId !== null}
-                              onClick={() => handleMarkRepairPlanApplied(database.id)}
+                              disabled={repairReviewSyncLoadingId !== null}
+                              onClick={() => handleSyncRepairReviewRequest(database.id)}
                             >
-                              {repairApplyLoadingId === database.id ? (
+                              {repairReviewSyncLoadingId === database.id ? (
                                 <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                               ) : null}
-                              标记已应用
+                              同步评审状态
                             </Button>
                           )}
+                          {repairPlan.status === 'review_opened' &&
+                            repairPlan.reviewState === 'merged' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                disabled={repairApplyLoadingId !== null}
+                                onClick={() => handleMarkRepairPlanApplied(database.id)}
+                              >
+                                {repairApplyLoadingId === database.id ? (
+                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                ) : null}
+                                标记已应用
+                              </Button>
+                            )}
+                          {repairPlan.status === 'review_opened' &&
+                            repairPlan.reviewState !== 'merged' && (
+                              <Button variant="ghost" size="sm" className="rounded-xl" disabled>
+                                等待评审合并
+                              </Button>
+                            )}
                           {repairPlan.branchName && (
                             <Badge variant="secondary">{repairPlan.branchName}</Badge>
                           )}

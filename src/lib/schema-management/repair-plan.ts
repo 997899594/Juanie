@@ -33,6 +33,9 @@ export interface PersistedSchemaRepairPlan extends SchemaRepairPlan {
   branchName: string | null;
   reviewNumber: number | null;
   reviewUrl: string | null;
+  reviewState: 'draft' | 'open' | 'merged' | 'closed' | 'unknown';
+  reviewStateLabel: string | null;
+  reviewSyncedAt: Date | null;
   errorMessage: string | null;
   createdByUserId: string | null;
   createdAt: Date;
@@ -204,6 +207,9 @@ export async function createSchemaRepairPlanRecord(input: {
     branchName: record.branchName,
     reviewNumber: record.reviewNumber,
     reviewUrl: record.reviewUrl,
+    reviewState: record.reviewState ?? 'unknown',
+    reviewStateLabel: record.reviewStateLabel,
+    reviewSyncedAt: record.reviewSyncedAt,
     errorMessage: record.errorMessage,
   };
 }
@@ -258,6 +264,9 @@ export async function markSchemaRepairPlanApplied(input: {
     branchName: record.branchName,
     reviewNumber: record.reviewNumber,
     reviewUrl: record.reviewUrl,
+    reviewState: record.reviewState ?? 'unknown',
+    reviewStateLabel: record.reviewStateLabel,
+    reviewSyncedAt: record.reviewSyncedAt,
     errorMessage: null,
   };
 }
@@ -290,6 +299,9 @@ export async function getLatestSchemaRepairPlansForProject(projectId: string) {
       branchName: row.branchName,
       reviewNumber: row.reviewNumber,
       reviewUrl: row.reviewUrl,
+      reviewState: row.reviewState ?? 'unknown',
+      reviewStateLabel: row.reviewStateLabel,
+      reviewSyncedAt: row.reviewSyncedAt,
       errorMessage: row.errorMessage,
     });
   }

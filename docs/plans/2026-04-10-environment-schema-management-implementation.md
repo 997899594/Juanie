@@ -209,6 +209,7 @@ Implementation rules:
 - generated review requests should include Atlas-oriented config/script artifacts so operators can use Atlas as the preferred diff/migration engine
 - generated migration scaffolds must fail fast by default so an operator cannot safely merge them without replacing the scaffold body
 - generated review requests must be persisted on the `schemaRepairPlan` record
+- platform should persist and sync remote PR/MR state so workflow can react to `draft / open / merged / closed`
 - environment page should surface branch name, review URL, and workflow status
 
 ## Data Contract

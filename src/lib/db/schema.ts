@@ -148,6 +148,8 @@ export const schemaRepairPlanStatuses = [
   'failed',
 ] as const;
 export type SchemaRepairPlanStatus = (typeof schemaRepairPlanStatuses)[number];
+export const schemaRepairReviewStates = ['draft', 'open', 'merged', 'closed', 'unknown'] as const;
+export type SchemaRepairReviewState = (typeof schemaRepairReviewStates)[number];
 
 export const aiPlans = ['free', 'pro', 'scale', 'enterprise'] as const;
 export type AIPlan = (typeof aiPlans)[number];
@@ -207,6 +209,10 @@ export const schemaRepairPlanKindEnum = pgEnum('schemaRepairPlanKind', schemaRep
 export const schemaRepairPlanStatusEnum = pgEnum(
   'schemaRepairPlanStatus',
   schemaRepairPlanStatuses
+);
+export const schemaRepairReviewStateEnum = pgEnum(
+  'schemaRepairReviewState',
+  schemaRepairReviewStates
 );
 export const aiPluginRunStatusEnum = pgEnum('aiPluginRunStatus', aiPluginRunStatuses);
 
@@ -880,6 +886,9 @@ export const schemaRepairPlans = pgTable(
     branchName: varchar('branchName', { length: 255 }),
     reviewNumber: integer('reviewNumber'),
     reviewUrl: text('reviewUrl'),
+    reviewState: schemaRepairReviewStateEnum('reviewState').default('unknown'),
+    reviewStateLabel: varchar('reviewStateLabel', { length: 50 }),
+    reviewSyncedAt: timestamp('reviewSyncedAt'),
     errorMessage: text('errorMessage'),
     createdByUserId: uuid('createdByUserId').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('createdAt').defaultNow().notNull(),
