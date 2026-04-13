@@ -50,7 +50,9 @@ import {
 } from '@/components/ui/select';
 import {
   cleanupPreviewEnvironments,
+  createDatabaseRepairPlan,
   createPreviewEnvironment,
+  type DatabaseSchemaRepairPlan,
   deletePreviewEnvironment,
   fetchProjectEnvironments,
   inspectDatabaseSchemaState,
@@ -768,6 +770,36 @@ function EnvironmentAdvancedPanel({
   onInspectDatabase: (databaseId: string) => Promise<void>;
   onMarkDatabaseAligned: (databaseId: string) => Promise<void>;
 }) {
+  const [repairPlans, setRepairPlans] = useState<Record<string, DatabaseSchemaRepairPlan | null>>(
+    {}
+  );
+  const [repairPlanErrors, setRepairPlanErrors] = useState<Record<string, string | null>>({});
+
+  const [repairPlanLoadingId, setRepairPlanLoadingId] = useState<string | null>(null);
+
+  const handleBuildRepairPlan = async (databaseId: string) => {
+    setRepairPlanLoadingId(databaseId);
+    setRepairPlanErrors((current) => ({
+      ...current,
+      [databaseId]: null,
+    }));
+
+    try {
+      const plan = await createDatabaseRepairPlan(projectId, databaseId);
+      setRepairPlans((current) => ({
+        ...current,
+        [databaseId]: plan,
+      }));
+    } catch (error) {
+      setRepairPlanErrors((current) => ({
+        ...current,
+        [databaseId]: error instanceof Error ? error.message : '生成修复计划失败',
+      }));
+    } finally {
+      setRepairPlanLoadingId(null);
+    }
+  };
+
   return (
     <details className="rounded-2xl border border-border bg-background px-4 py-4">
       <summary className="cursor-pointer list-none text-sm font-medium">环境细节</summary>
@@ -792,6 +824,8 @@ function EnvironmentAdvancedPanel({
             <div className="space-y-3">
               {environment.databases.map((database) => {
                 const state = database.schemaState;
+                const repairPlan = repairPlans[database.id] ?? null;
+                const repairPlanError = repairPlanErrors[database.id] ?? null;
                 const lastInspectedLabel = formatInspectionTimestamp(state?.lastInspectedAt);
                 const versionSummary =
                   state?.actualVersion || state?.expectedVersion
@@ -873,7 +907,65 @@ function EnvironmentAdvancedPanel({
                           标记为已对齐
                         </Button>
                       )}
+                      {state &&
+                        ['pending_migrations', 'drifted', 'unmanaged', 'blocked'].includes(
+                          state.status
+                        ) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl lg:shrink-0"
+                            disabled={
+                              repairPlanLoadingId !== null ||
+                              !environment.actions.canConfigureStrategy
+                            }
+                            title={
+                              environment.actions.canConfigureStrategy
+                                ? undefined
+                                : environment.actions.configureStrategySummary
+                            }
+                            onClick={() => handleBuildRepairPlan(database.id)}
+                          >
+                            {repairPlanLoadingId === database.id ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            生成修复计划
+                          </Button>
+                        )}
                     </div>
+                    {repairPlan && (
+                      <div className="mt-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">修复计划</Badge>
+                          <Badge variant="outline">{repairPlan.title}</Badge>
+                          <Badge variant="outline">风险 {repairPlan.riskLevel}</Badge>
+                        </div>
+                        <div className="mt-2 text-sm text-foreground">{repairPlan.summary}</div>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          {[
+                            repairPlan.actualVersion ? `当前 ${repairPlan.actualVersion}` : null,
+                            repairPlan.expectedVersion
+                              ? `期望 ${repairPlan.expectedVersion}`
+                              : null,
+                            repairPlan.nextActionLabel,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </div>
+                        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
+                          {repairPlan.steps.map((step, index) => (
+                            <div key={`${database.id}-repair-step-${index}`}>
+                              {index + 1}. {step}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {repairPlanError && (
+                      <div className="mt-4 rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                        {repairPlanError}
+                      </div>
+                    )}
                   </div>
                 );
               })}

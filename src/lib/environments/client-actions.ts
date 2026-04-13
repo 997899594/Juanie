@@ -66,6 +66,42 @@ export async function markDatabaseSchemaAligned(
   await parseJsonResponse<{ state: { id: string } }>(response);
 }
 
+export interface DatabaseSchemaRepairPlan {
+  kind:
+    | 'no_action'
+    | 'run_release_migrations'
+    | 'mark_aligned'
+    | 'repair_pr_required'
+    | 'adopt_current_db'
+    | 'manual_investigation';
+  title: string;
+  summary: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  expectedVersion: string | null;
+  actualVersion: string | null;
+  nextActionLabel: string | null;
+  steps: string[];
+}
+
+export async function createDatabaseRepairPlan(
+  projectId: string,
+  databaseId: string
+): Promise<DatabaseSchemaRepairPlan> {
+  const response = await fetch(
+    `/api/projects/${projectId}/databases/${databaseId}/schema/repair-plan`,
+    {
+      method: 'POST',
+    }
+  );
+
+  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(
+    response,
+    '生成修复计划失败'
+  );
+
+  return payload.plan;
+}
+
 export async function fetchProjectEnvironments<T>(projectId: string): Promise<T> {
   const response = await fetch(`/api/projects/${projectId}/environments`);
   return parseJsonResponse<T>(response);

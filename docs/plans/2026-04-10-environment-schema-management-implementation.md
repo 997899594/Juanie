@@ -173,6 +173,24 @@ Implementation rules:
 - unsupported tools remain blocked
 - release preflight may block on schema state, but `标记为已对齐` is the supported path to recover an `aligned_untracked` environment
 
+## Phase 3: Repair Plan
+
+After `inspect` and `mark aligned`, the next operator-facing capability is a structured `修复计划`.
+
+Scope:
+
+- available for `pending_migrations`, `drifted`, `unmanaged`, and `blocked`
+- produces a structured recommendation, not automatic schema mutation
+- distinguishes “正常发布即可补齐” from “必须先做 repair PR”
+
+Implementation rules:
+
+- `pending_migrations` => recommend normal tracked release
+- `aligned_untracked` => recommend `标记为已对齐`
+- `drifted` => recommend repair migration / repair PR path
+- `unmanaged` => recommend establish baseline or adoption path
+- `blocked` => recommend investigation first
+
 ## Data Contract
 
 Phase 1 server responses should expose:
