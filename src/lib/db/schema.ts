@@ -140,7 +140,13 @@ export const schemaRepairPlanKinds = [
   'manual_investigation',
 ] as const;
 export type SchemaRepairPlanKind = (typeof schemaRepairPlanKinds)[number];
-export const schemaRepairPlanStatuses = ['draft', 'review_opened', 'failed'] as const;
+export const schemaRepairPlanStatuses = [
+  'draft',
+  'review_opened',
+  'applied',
+  'superseded',
+  'failed',
+] as const;
 export type SchemaRepairPlanStatus = (typeof schemaRepairPlanStatuses)[number];
 
 export const aiPlans = ['free', 'pro', 'scale', 'enterprise'] as const;

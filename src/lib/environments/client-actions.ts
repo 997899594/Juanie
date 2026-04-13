@@ -75,7 +75,7 @@ export interface DatabaseSchemaRepairPlan {
     | 'repair_pr_required'
     | 'adopt_current_db'
     | 'manual_investigation';
-  status: 'draft' | 'review_opened' | 'failed';
+  status: 'draft' | 'review_opened' | 'applied' | 'superseded' | 'failed';
   title: string;
   summary: string;
   riskLevel: 'low' | 'medium' | 'high';
@@ -90,6 +90,22 @@ export interface DatabaseSchemaRepairPlan {
   errorMessage: string | null;
 }
 
+export async function markDatabaseRepairPlanApplied(
+  projectId: string,
+  databaseId: string
+): Promise<DatabaseSchemaRepairPlan> {
+  const response = await fetch(
+    `/api/projects/${projectId}/databases/${databaseId}/schema/repair-plan/mark-applied`,
+    {
+      method: 'POST',
+    }
+  );
+
+  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(response);
+
+  return payload.plan;
+}
+
 export async function createDatabaseRepairPlan(
   projectId: string,
   databaseId: string
@@ -101,10 +117,7 @@ export async function createDatabaseRepairPlan(
     }
   );
 
-  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(
-    response,
-    '生成修复计划失败'
-  );
+  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(response);
 
   return payload.plan;
 }
@@ -120,10 +133,7 @@ export async function createDatabaseRepairReviewRequest(
     }
   );
 
-  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(
-    response,
-    '生成修复 PR 失败'
-  );
+  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(response);
 
   return payload.plan;
 }

@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import type { EnvironmentSchemaStateStatus, SchemaRepairPlanStatus } from '@/lib/db/schema';
 import { schemaRepairPlans } from '@/lib/db/schema';
@@ -152,6 +152,20 @@ export async function createSchemaRepairPlanRecord(input: {
     actualVersion: input.actualVersion,
   });
 
+  await db
+    .update(schemaRepairPlans)
+    .set({
+      status: 'superseded',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schemaRepairPlans.projectId, input.projectId),
+        eq(schemaRepairPlans.databaseId, input.databaseId),
+        inArray(schemaRepairPlans.status, ['draft', 'review_opened', 'failed'])
+      )
+    );
+
   const [record] = await db
     .insert(schemaRepairPlans)
     .values({
@@ -187,6 +201,60 @@ export async function createSchemaRepairPlanRecord(input: {
     reviewNumber: record.reviewNumber,
     reviewUrl: record.reviewUrl,
     errorMessage: record.errorMessage,
+  };
+}
+
+export async function markSchemaRepairPlanApplied(input: {
+  projectId: string;
+  planId: string;
+}): Promise<PersistedSchemaRepairPlan> {
+  const [record] = await db
+    .update(schemaRepairPlans)
+    .set({
+      status: 'applied',
+      errorMessage: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(schemaRepairPlans.projectId, input.projectId), eq(schemaRepairPlans.id, input.planId))
+    )
+    .returning();
+
+  if (!record) {
+    throw new Error('修复计划不存在');
+  }
+
+  await db
+    .update(schemaRepairPlans)
+    .set({
+      status: 'superseded',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schemaRepairPlans.projectId, input.projectId),
+        eq(schemaRepairPlans.databaseId, record.databaseId),
+        ne(schemaRepairPlans.id, record.id),
+        inArray(schemaRepairPlans.status, ['draft', 'review_opened', 'failed'])
+      )
+    );
+
+  return {
+    ...record,
+    kind: record.kind,
+    status: 'applied',
+    title: record.title,
+    summary: record.summary,
+    riskLevel: record.riskLevel as SchemaRepairPlan['riskLevel'],
+    expectedVersion: record.expectedVersion,
+    actualVersion: record.actualVersion,
+    nextActionLabel: record.nextActionLabel,
+    steps: Array.isArray(record.steps) ? (record.steps as string[]) : [],
+    generatedFiles: Array.isArray(record.generatedFiles) ? (record.generatedFiles as string[]) : [],
+    branchName: record.branchName,
+    reviewNumber: record.reviewNumber,
+    reviewUrl: record.reviewUrl,
+    errorMessage: null,
   };
 }
 

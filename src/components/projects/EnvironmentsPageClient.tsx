@@ -57,6 +57,7 @@ import {
   deletePreviewEnvironment,
   fetchProjectEnvironments,
   inspectDatabaseSchemaState,
+  markDatabaseRepairPlanApplied,
   markDatabaseSchemaAligned,
   updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
@@ -779,6 +780,15 @@ function EnvironmentAdvancedPanel({
 
   const [repairPlanLoadingId, setRepairPlanLoadingId] = useState<string | null>(null);
   const [repairReviewLoadingId, setRepairReviewLoadingId] = useState<string | null>(null);
+  const [repairApplyLoadingId, setRepairApplyLoadingId] = useState<string | null>(null);
+
+  const repairStatusLabel: Record<DatabaseSchemaRepairPlan['status'], string> = {
+    draft: '草稿',
+    review_opened: '已开评审',
+    applied: '已应用',
+    superseded: '已替代',
+    failed: '失败',
+  };
 
   const handleBuildRepairPlan = async (databaseId: string) => {
     setRepairPlanLoadingId(databaseId);
@@ -823,6 +833,29 @@ function EnvironmentAdvancedPanel({
       }));
     } finally {
       setRepairReviewLoadingId(null);
+    }
+  };
+
+  const handleMarkRepairPlanApplied = async (databaseId: string) => {
+    setRepairApplyLoadingId(databaseId);
+    setRepairPlanErrors((current) => ({
+      ...current,
+      [databaseId]: null,
+    }));
+
+    try {
+      const updatedPlan = await markDatabaseRepairPlanApplied(projectId, databaseId);
+      setRepairPlans((current) => ({
+        ...current,
+        [databaseId]: updatedPlan,
+      }));
+    } catch (error) {
+      setRepairPlanErrors((current) => ({
+        ...current,
+        [databaseId]: error instanceof Error ? error.message : '标记已应用失败',
+      }));
+    } finally {
+      setRepairApplyLoadingId(null);
     }
   };
 
@@ -965,7 +998,9 @@ function EnvironmentAdvancedPanel({
                           <Badge variant="secondary">修复计划</Badge>
                           <Badge variant="outline">{repairPlan.title}</Badge>
                           <Badge variant="outline">风险 {repairPlan.riskLevel}</Badge>
-                          <Badge variant="outline">状态 {repairPlan.status}</Badge>
+                          <Badge variant="outline">
+                            状态 {repairStatusLabel[repairPlan.status] ?? repairPlan.status}
+                          </Badge>
                         </div>
                         <div className="mt-2 text-sm text-foreground">{repairPlan.summary}</div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -1014,6 +1049,20 @@ function EnvironmentAdvancedPanel({
                               <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
                                 打开评审单
                               </a>
+                            </Button>
+                          )}
+                          {repairPlan.status === 'review_opened' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              disabled={repairApplyLoadingId !== null}
+                              onClick={() => handleMarkRepairPlanApplied(database.id)}
+                            >
+                              {repairApplyLoadingId === database.id ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : null}
+                              标记已应用
                             </Button>
                           )}
                           {repairPlan.branchName && (
