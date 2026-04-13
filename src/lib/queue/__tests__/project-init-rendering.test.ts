@@ -72,7 +72,7 @@ describe('project init migration inference', () => {
       'postgresql'
     );
 
-    expect(inferred).toBeNull();
+    expect(inferred).toBe(null);
   });
 
   it('falls back to custom when no known migration tool is installed', () => {

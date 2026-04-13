@@ -24,6 +24,6 @@ describe('home service', () => {
     expect(result.stats[0]?.value).toBe(1);
     expect(result.stats[2]?.value).toBe(0);
     expect(result.projectCards[0]?.statusLabel).toBe('运行中');
-    expect(result.attentionItems).toHaveLength(0);
+    expect(result.attentionItems.length).toBe(0);
   });
 });
