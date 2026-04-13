@@ -204,6 +204,18 @@ async function resolveSchemaInspectionSpec(
   return buildResolvedSpec(persistedSpecification, database, syncedSpecs);
 }
 
+export async function resolveSchemaManagementSpec(input: {
+  projectId: string;
+  databaseId: string;
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
+}): Promise<ResolvedMigrationSpec | null> {
+  return resolveSchemaInspectionSpec(input.projectId, input.databaseId, {
+    sourceRef: input.sourceRef,
+    sourceCommitSha: input.sourceCommitSha,
+  });
+}
+
 async function inspectDrizzleLedger(spec: ResolvedMigrationSpec): Promise<{
   status: EnvironmentSchemaStateStatus;
   summary: string;

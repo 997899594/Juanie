@@ -54,6 +54,7 @@ import {
   deletePreviewEnvironment,
   fetchProjectEnvironments,
   inspectDatabaseSchemaState,
+  markDatabaseSchemaAligned,
   updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
 import { cn } from '@/lib/utils';
@@ -749,6 +750,7 @@ function EnvironmentAdvancedPanel({
   diagnosticOpen,
   inspectingDatabaseId,
   onInspectDatabase,
+  onMarkDatabaseAligned,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
@@ -756,6 +758,7 @@ function EnvironmentAdvancedPanel({
   diagnosticOpen: boolean;
   inspectingDatabaseId: string | null;
   onInspectDatabase: (databaseId: string) => Promise<void>;
+  onMarkDatabaseAligned: (databaseId: string) => Promise<void>;
 }) {
   return (
     <details className="rounded-2xl border border-border bg-background px-4 py-4">
@@ -843,6 +846,25 @@ function EnvironmentAdvancedPanel({
                         ) : null}
                         检查 schema
                       </Button>
+                      {state?.status === 'aligned_untracked' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl lg:shrink-0"
+                          disabled={
+                            inspectingDatabaseId !== null ||
+                            !environment.actions.canConfigureStrategy
+                          }
+                          title={
+                            environment.actions.canConfigureStrategy
+                              ? undefined
+                              : environment.actions.configureStrategySummary
+                          }
+                          onClick={() => onMarkDatabaseAligned(database.id)}
+                        >
+                          标记为已对齐
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -889,6 +911,7 @@ function EnvironmentExpandedContent({
   onToggleDiagnostics,
   onStrategyChange,
   onInspectDatabase,
+  onMarkDatabaseAligned,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
@@ -901,6 +924,7 @@ function EnvironmentExpandedContent({
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
   onInspectDatabase: (databaseId: string) => Promise<void>;
+  onMarkDatabaseAligned: (databaseId: string) => Promise<void>;
 }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
@@ -926,6 +950,7 @@ function EnvironmentExpandedContent({
           diagnosticOpen={diagnosticOpen}
           inspectingDatabaseId={inspectingDatabaseId}
           onInspectDatabase={onInspectDatabase}
+          onMarkDatabaseAligned={onMarkDatabaseAligned}
         />
       </div>
     </div>
@@ -1147,6 +1172,22 @@ export function EnvironmentsPageClient({
     }
   };
 
+  const handleMarkDatabaseAligned = async (databaseId: string) => {
+    setInspectingDatabaseId(databaseId);
+
+    try {
+      await markDatabaseSchemaAligned(projectId, databaseId);
+      await fetchEnvironments();
+      setFeedback('数据库账本已标记为对齐');
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '标记为已对齐失败');
+      setTimeout(() => setFeedback(null), 5000);
+    } finally {
+      setInspectingDatabaseId(null);
+    }
+  };
+
   const handleCleanupExpiredPreviews = async () => {
     if (cleaningExpired) return;
     setCleaningExpired(true);
@@ -1345,6 +1386,7 @@ export function EnvironmentsPageClient({
                               handleStrategyChange(environment.id, value)
                             }
                             onInspectDatabase={handleInspectDatabase}
+                            onMarkDatabaseAligned={handleMarkDatabaseAligned}
                           />
                         </div>
                       )}
@@ -1445,6 +1487,7 @@ export function EnvironmentsPageClient({
                               handleStrategyChange(environment.id, value)
                             }
                             onInspectDatabase={handleInspectDatabase}
+                            onMarkDatabaseAligned={handleMarkDatabaseAligned}
                           />
                         </div>
                       )}

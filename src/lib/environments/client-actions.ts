@@ -52,6 +52,20 @@ export async function inspectDatabaseSchemaState(
   await parseJsonResponse<{ state: { id: string } }>(response);
 }
 
+export async function markDatabaseSchemaAligned(
+  projectId: string,
+  databaseId: string
+): Promise<void> {
+  const response = await fetch(
+    `/api/projects/${projectId}/databases/${databaseId}/schema/mark-aligned`,
+    {
+      method: 'POST',
+    }
+  );
+
+  await parseJsonResponse<{ state: { id: string } }>(response);
+}
+
 export async function fetchProjectEnvironments<T>(projectId: string): Promise<T> {
   const response = await fetch(`/api/projects/${projectId}/environments`);
   return parseJsonResponse<T>(response);

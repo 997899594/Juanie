@@ -148,12 +148,28 @@ Do not create a brand-new screen. Reuse the environment page.
 
 Do not implement these in Phase 1:
 
-- mark-aligned action
 - baseline PR generation
 - repair PR generation
 - release preflight blocking on schema state
 
 They stay in the next phase after inspection is trustworthy.
+
+## Phase 2: Mark Aligned Adoption
+
+After Phase 1, the next operator action is `标记为已对齐`.
+
+Scope:
+
+- only available for `aligned_untracked`
+- must write real ledger metadata instead of only flipping UI state
+- after the action completes, a fresh inspect must return `aligned`
+
+Implementation rules:
+
+- for `drizzle + postgresql`, create the Drizzle ledger schema/table when missing and seed ledger entries from repo journal tags
+- for `sql`, mark repo migration files as successful in Juanie `databaseMigration`
+- unsupported tools remain blocked
+- release preflight may block on schema state, but `标记为已对齐` is the supported path to recover an `aligned_untracked` environment
 
 ## Data Contract
 
