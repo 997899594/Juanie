@@ -150,6 +150,8 @@ export const schemaRepairPlanStatuses = [
 export type SchemaRepairPlanStatus = (typeof schemaRepairPlanStatuses)[number];
 export const schemaRepairReviewStates = ['draft', 'open', 'merged', 'closed', 'unknown'] as const;
 export type SchemaRepairReviewState = (typeof schemaRepairReviewStates)[number];
+export const atlasExecutionStatuses = ['idle', 'running', 'succeeded', 'failed'] as const;
+export type AtlasExecutionStatus = (typeof atlasExecutionStatuses)[number];
 
 export const aiPlans = ['free', 'pro', 'scale', 'enterprise'] as const;
 export type AIPlan = (typeof aiPlans)[number];
@@ -214,6 +216,7 @@ export const schemaRepairReviewStateEnum = pgEnum(
   'schemaRepairReviewState',
   schemaRepairReviewStates
 );
+export const atlasExecutionStatusEnum = pgEnum('atlasExecutionStatus', atlasExecutionStatuses);
 export const aiPluginRunStatusEnum = pgEnum('aiPluginRunStatus', aiPluginRunStatuses);
 
 // ============================================
@@ -889,6 +892,10 @@ export const schemaRepairPlans = pgTable(
     reviewState: schemaRepairReviewStateEnum('reviewState').default('unknown'),
     reviewStateLabel: varchar('reviewStateLabel', { length: 50 }),
     reviewSyncedAt: timestamp('reviewSyncedAt'),
+    atlasExecutionStatus: atlasExecutionStatusEnum('atlasExecutionStatus').default('idle'),
+    atlasExecutionLog: text('atlasExecutionLog'),
+    atlasExecutionStartedAt: timestamp('atlasExecutionStartedAt'),
+    atlasExecutionFinishedAt: timestamp('atlasExecutionFinishedAt'),
     errorMessage: text('errorMessage'),
     createdByUserId: uuid('createdByUserId').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('createdAt').defaultNow().notNull(),

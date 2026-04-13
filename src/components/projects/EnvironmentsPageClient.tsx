@@ -59,6 +59,7 @@ import {
   inspectDatabaseSchemaState,
   markDatabaseRepairPlanApplied,
   markDatabaseSchemaAligned,
+  runDatabaseRepairAtlas,
   syncDatabaseRepairReviewRequest,
   updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
@@ -783,6 +784,7 @@ function EnvironmentAdvancedPanel({
   const [repairReviewLoadingId, setRepairReviewLoadingId] = useState<string | null>(null);
   const [repairApplyLoadingId, setRepairApplyLoadingId] = useState<string | null>(null);
   const [repairReviewSyncLoadingId, setRepairReviewSyncLoadingId] = useState<string | null>(null);
+  const [repairAtlasLoadingId, setRepairAtlasLoadingId] = useState<string | null>(null);
 
   const repairStatusLabel: Record<DatabaseSchemaRepairPlan['status'], string> = {
     draft: '草稿',
@@ -797,6 +799,15 @@ function EnvironmentAdvancedPanel({
     merged: '已合并',
     closed: '已关闭',
     unknown: '未知',
+  };
+  const atlasExecutionStatusLabel: Record<
+    DatabaseSchemaRepairPlan['atlasExecutionStatus'],
+    string
+  > = {
+    idle: '未执行',
+    running: '运行中',
+    succeeded: '成功',
+    failed: '失败',
   };
 
   const handleBuildRepairPlan = async (databaseId: string) => {
@@ -888,6 +899,29 @@ function EnvironmentAdvancedPanel({
       }));
     } finally {
       setRepairReviewSyncLoadingId(null);
+    }
+  };
+
+  const handleRunRepairAtlas = async (databaseId: string) => {
+    setRepairAtlasLoadingId(databaseId);
+    setRepairPlanErrors((current) => ({
+      ...current,
+      [databaseId]: null,
+    }));
+
+    try {
+      const updatedPlan = await runDatabaseRepairAtlas(projectId, databaseId);
+      setRepairPlans((current) => ({
+        ...current,
+        [databaseId]: updatedPlan,
+      }));
+    } catch (error) {
+      setRepairPlanErrors((current) => ({
+        ...current,
+        [databaseId]: error instanceof Error ? error.message : '运行 Atlas 失败',
+      }));
+    } finally {
+      setRepairAtlasLoadingId(null);
     }
   };
 
@@ -1039,6 +1073,9 @@ function EnvironmentAdvancedPanel({
                               评审 {repairReviewStateLabel[repairPlan.reviewState]}
                             </Badge>
                           )}
+                          <Badge variant="outline">
+                            Atlas {atlasExecutionStatusLabel[repairPlan.atlasExecutionStatus]}
+                          </Badge>
                         </div>
                         <div className="mt-2 text-sm text-foreground">{repairPlan.summary}</div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -1052,6 +1089,9 @@ function EnvironmentAdvancedPanel({
                               ? `评审状态 ${repairPlan.reviewStateLabel}`
                               : null,
                             reviewSyncedLabel ? `同步于 ${reviewSyncedLabel}` : null,
+                            repairPlan.atlasExecutionFinishedAt
+                              ? `Atlas 完成于 ${formatInspectionTimestamp(repairPlan.atlasExecutionFinishedAt)}`
+                              : null,
                           ]
                             .filter(Boolean)
                             .join(' · ')}
@@ -1107,6 +1147,20 @@ function EnvironmentAdvancedPanel({
                               同步评审状态
                             </Button>
                           )}
+                          {repairPlan.status === 'review_opened' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              disabled={repairAtlasLoadingId !== null}
+                              onClick={() => handleRunRepairAtlas(database.id)}
+                            >
+                              {repairAtlasLoadingId === database.id ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : null}
+                              运行 Atlas
+                            </Button>
+                          )}
                           {repairPlan.status === 'review_opened' &&
                             repairPlan.reviewState === 'merged' && (
                               <Button
@@ -1132,6 +1186,11 @@ function EnvironmentAdvancedPanel({
                             <Badge variant="secondary">{repairPlan.branchName}</Badge>
                           )}
                         </div>
+                        {repairPlan.atlasExecutionLog && (
+                          <pre className="mt-3 overflow-x-auto rounded-2xl border border-border bg-background px-4 py-3 text-xs text-muted-foreground">
+                            {repairPlan.atlasExecutionLog}
+                          </pre>
+                        )}
                       </div>
                     )}
                     {repairPlanError && (

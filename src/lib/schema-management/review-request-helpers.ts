@@ -135,19 +135,16 @@ function buildPlanMetadataContent(input: SchemaRepairArtifactInput): string {
 }
 
 function buildAtlasConfigContent(input: SchemaRepairArtifactInput): string {
+  const schemaFilePath = `.juanie/schema-repair/${input.planId}.schema.sql`;
   const envBlock =
     input.tool === 'drizzle'
       ? [
           `env "repair" {`,
-          `  src = data.external_schema.drizzle.url`,
+          `  src = "file://${schemaFilePath}"`,
           `  dev = env("ATLAS_DEV_URL")`,
           `  migration {`,
           `    dir = "file://${input.migrationPath}"`,
           `  }`,
-          `}`,
-          ``,
-          `data "external_schema" "drizzle" {`,
-          `  program = ["npx", "drizzle-kit", "export"]`,
           `}`,
           ``,
         ]
@@ -177,10 +174,36 @@ function buildAtlasScriptContent(
   input: SchemaRepairArtifactInput,
   atlasConfigPath: string
 ): string {
+  const schemaFilePath = `.juanie/schema-repair/${input.planId}.schema.sql`;
   const migrationName =
     input.planKind === 'adopt_current_db'
       ? `baseline_${input.planId.slice(0, 8)}`
       : `repair_${input.planId.slice(0, 8)}`;
+
+  const installLines =
+    input.tool === 'drizzle'
+      ? [
+          `if [ -f bun.lockb ] || [ -f bun.lock ]; then`,
+          `  bun install --frozen-lockfile`,
+          `elif [ -f pnpm-lock.yaml ]; then`,
+          `  pnpm install --frozen-lockfile`,
+          `elif [ -f yarn.lock ]; then`,
+          `  yarn install --immutable`,
+          `elif [ -f package-lock.json ]; then`,
+          `  npm ci`,
+          `else`,
+          `  npm install`,
+          `fi`,
+          ``,
+          `DRIZZLE_CONFIG="${'$'}{DRIZZLE_CONFIG:-$(ls drizzle.config.ts drizzle.config.mjs drizzle.config.js drizzle.config.cjs 2>/dev/null | head -n 1)}"`,
+          `if [ -z "${'$'}DRIZZLE_CONFIG" ]; then`,
+          `  echo "Unable to locate drizzle config" >&2`,
+          `  exit 1`,
+          `fi`,
+          `npx drizzle-kit export --config "${'$'}DRIZZLE_CONFIG" > "${schemaFilePath}"`,
+          ``,
+        ]
+      : [];
 
   return [
     `#!/usr/bin/env bash`,
@@ -190,15 +213,20 @@ function buildAtlasScriptContent(
     `# Prefer Atlas for real migration generation instead of editing scaffold SQL by hand.`,
     `# Required env: ATLAS_DEV_URL and${input.tool === 'sql' ? ' ATLAS_SRC_URL' : ''} optional ATLAS_IMAGE`,
     ``,
+    ...installLines,
     `ATLAS_IMAGE="\${ATLAS_IMAGE:-arigaio/atlas:latest}"`,
-    `docker run --rm \\`,
-    `  -v "$PWD:/workspace" \\`,
-    `  -w /workspace \\`,
-    `  -e ATLAS_DEV_URL="${'$'}{ATLAS_DEV_URL:-}" \\`,
-    input.tool === 'sql' ? `  -e ATLAS_SRC_URL="${'$'}{ATLAS_SRC_URL:-}" \\` : '',
-    `  "$ATLAS_IMAGE" migrate diff "${migrationName}" \\`,
-    `  --env repair \\`,
-    `  --config "file://${atlasConfigPath}"`,
+    `if command -v atlas >/dev/null 2>&1; then`,
+    `  atlas migrate diff "${migrationName}" --env repair --config "file://${atlasConfigPath}"`,
+    `else`,
+    `  docker run --rm \\`,
+    `    -v "$PWD:/workspace" \\`,
+    `    -w /workspace \\`,
+    `    -e ATLAS_DEV_URL="${'$'}{ATLAS_DEV_URL:-}" \\`,
+    input.tool === 'sql' ? `    -e ATLAS_SRC_URL="${'$'}{ATLAS_SRC_URL:-}" \\` : '',
+    `    "$ATLAS_IMAGE" migrate diff "${migrationName}" \\`,
+    `    --env repair \\`,
+    `    --config "file://${atlasConfigPath}"`,
+    `fi`,
     ``,
   ]
     .filter(Boolean)
@@ -216,6 +244,9 @@ function buildGitHubAtlasWorkflow(input: { planId: string; atlasScriptPath: stri
     `    runs-on: ubuntu-latest`,
     `    steps:`,
     `      - uses: actions/checkout@v5`,
+    `      - uses: actions/setup-node@v5`,
+    `        with:`,
+    `          node-version: "20"`,
     `      - uses: ariga/setup-atlas@v0`,
     `      - run: chmod +x ${input.atlasScriptPath}`,
     `      - run: ${input.atlasScriptPath}`,
@@ -229,8 +260,10 @@ function buildGitLabAtlasSnippet(input: { planId: string; atlasScriptPath: strin
   return [
     `${jobName}:`,
     `  stage: test`,
-    `  image: arigaio/atlas:latest`,
+    `  image: node:20-bullseye`,
     `  script:`,
+    `    - curl -sSf https://atlasgo.sh | sh`,
+    `    - export PATH="${'$'}PATH:${'$'}HOME/.atlas/bin"`,
     `    - chmod +x ${input.atlasScriptPath}`,
     `    - ${input.atlasScriptPath}`,
     `  rules:`,

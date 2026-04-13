@@ -61,7 +61,7 @@ describe('schema review request helpers', () => {
       '0001_juanie_schema_repair_plan-123'
     );
     expect(artifacts.files['.juanie/schema-repair/plan-12345678.atlas.hcl']).toContain(
-      'external_schema'
+      'plan-12345678.schema.sql'
     );
   });
 

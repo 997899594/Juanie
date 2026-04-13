@@ -1,6 +1,10 @@
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import type { EnvironmentSchemaStateStatus, SchemaRepairPlanStatus } from '@/lib/db/schema';
+import type {
+  AtlasExecutionStatus,
+  EnvironmentSchemaStateStatus,
+  SchemaRepairPlanStatus,
+} from '@/lib/db/schema';
 import { schemaRepairPlans } from '@/lib/db/schema';
 
 export type SchemaRepairPlanKind =
@@ -36,6 +40,10 @@ export interface PersistedSchemaRepairPlan extends SchemaRepairPlan {
   reviewState: 'draft' | 'open' | 'merged' | 'closed' | 'unknown';
   reviewStateLabel: string | null;
   reviewSyncedAt: Date | null;
+  atlasExecutionStatus: AtlasExecutionStatus;
+  atlasExecutionLog: string | null;
+  atlasExecutionStartedAt: Date | null;
+  atlasExecutionFinishedAt: Date | null;
   errorMessage: string | null;
   createdByUserId: string | null;
   createdAt: Date;
@@ -210,6 +218,10 @@ export async function createSchemaRepairPlanRecord(input: {
     reviewState: record.reviewState ?? 'unknown',
     reviewStateLabel: record.reviewStateLabel,
     reviewSyncedAt: record.reviewSyncedAt,
+    atlasExecutionStatus: record.atlasExecutionStatus ?? 'idle',
+    atlasExecutionLog: record.atlasExecutionLog,
+    atlasExecutionStartedAt: record.atlasExecutionStartedAt,
+    atlasExecutionFinishedAt: record.atlasExecutionFinishedAt,
     errorMessage: record.errorMessage,
   };
 }
@@ -267,6 +279,10 @@ export async function markSchemaRepairPlanApplied(input: {
     reviewState: record.reviewState ?? 'unknown',
     reviewStateLabel: record.reviewStateLabel,
     reviewSyncedAt: record.reviewSyncedAt,
+    atlasExecutionStatus: record.atlasExecutionStatus ?? 'idle',
+    atlasExecutionLog: record.atlasExecutionLog,
+    atlasExecutionStartedAt: record.atlasExecutionStartedAt,
+    atlasExecutionFinishedAt: record.atlasExecutionFinishedAt,
     errorMessage: null,
   };
 }
@@ -302,6 +318,10 @@ export async function getLatestSchemaRepairPlansForProject(projectId: string) {
       reviewState: row.reviewState ?? 'unknown',
       reviewStateLabel: row.reviewStateLabel,
       reviewSyncedAt: row.reviewSyncedAt,
+      atlasExecutionStatus: row.atlasExecutionStatus ?? 'idle',
+      atlasExecutionLog: row.atlasExecutionLog,
+      atlasExecutionStartedAt: row.atlasExecutionStartedAt,
+      atlasExecutionFinishedAt: row.atlasExecutionFinishedAt,
       errorMessage: row.errorMessage,
     });
   }

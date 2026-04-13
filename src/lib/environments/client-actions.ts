@@ -90,6 +90,10 @@ export interface DatabaseSchemaRepairPlan {
   reviewState: 'draft' | 'open' | 'merged' | 'closed' | 'unknown';
   reviewStateLabel: string | null;
   reviewSyncedAt: string | Date | null;
+  atlasExecutionStatus: 'idle' | 'running' | 'succeeded' | 'failed';
+  atlasExecutionLog: string | null;
+  atlasExecutionStartedAt: string | Date | null;
+  atlasExecutionFinishedAt: string | Date | null;
   errorMessage: string | null;
 }
 
@@ -147,6 +151,21 @@ export async function syncDatabaseRepairReviewRequest(
 ): Promise<DatabaseSchemaRepairPlan> {
   const response = await fetch(
     `/api/projects/${projectId}/databases/${databaseId}/schema/repair-plan/review-request/sync`,
+    {
+      method: 'POST',
+    }
+  );
+
+  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(response);
+  return payload.plan;
+}
+
+export async function runDatabaseRepairAtlas(
+  projectId: string,
+  databaseId: string
+): Promise<DatabaseSchemaRepairPlan> {
+  const response = await fetch(
+    `/api/projects/${projectId}/databases/${databaseId}/schema/repair-plan/run-atlas`,
     {
       method: 'POST',
     }
