@@ -1,4 +1,7 @@
+import { desc, eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
 import type { EnvironmentSchemaStateStatus } from '@/lib/db/schema';
+import { schemaRepairPlans } from '@/lib/db/schema';
 
 export type SchemaRepairPlanKind =
   | 'no_action'
@@ -17,6 +20,17 @@ export interface SchemaRepairPlan {
   actualVersion: string | null;
   nextActionLabel: string | null;
   steps: string[];
+}
+
+export interface PersistedSchemaRepairPlan extends SchemaRepairPlan {
+  id: string;
+  projectId: string;
+  environmentId: string;
+  databaseId: string;
+  stateStatus: EnvironmentSchemaStateStatus;
+  createdByUserId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export function buildSchemaRepairPlan(input: {
@@ -113,4 +127,82 @@ export function buildSchemaRepairPlan(input: {
         ],
       };
   }
+}
+
+export async function createSchemaRepairPlanRecord(input: {
+  projectId: string;
+  environmentId: string;
+  databaseId: string;
+  createdByUserId?: string | null;
+  stateStatus: EnvironmentSchemaStateStatus;
+  summary: string | null;
+  expectedVersion: string | null;
+  actualVersion: string | null;
+}): Promise<PersistedSchemaRepairPlan> {
+  const plan = buildSchemaRepairPlan({
+    status: input.stateStatus,
+    summary: input.summary,
+    expectedVersion: input.expectedVersion,
+    actualVersion: input.actualVersion,
+  });
+
+  const [record] = await db
+    .insert(schemaRepairPlans)
+    .values({
+      projectId: input.projectId,
+      environmentId: input.environmentId,
+      databaseId: input.databaseId,
+      createdByUserId: input.createdByUserId ?? null,
+      stateStatus: input.stateStatus,
+      kind: plan.kind,
+      title: plan.title,
+      summary: plan.summary,
+      riskLevel: plan.riskLevel,
+      expectedVersion: plan.expectedVersion,
+      actualVersion: plan.actualVersion,
+      nextActionLabel: plan.nextActionLabel,
+      steps: plan.steps,
+    })
+    .returning();
+
+  return {
+    ...record,
+    kind: record.kind,
+    title: record.title,
+    summary: record.summary,
+    riskLevel: record.riskLevel as SchemaRepairPlan['riskLevel'],
+    expectedVersion: record.expectedVersion,
+    actualVersion: record.actualVersion,
+    nextActionLabel: record.nextActionLabel,
+    steps: Array.isArray(record.steps) ? (record.steps as string[]) : [],
+  };
+}
+
+export async function getLatestSchemaRepairPlansForProject(projectId: string) {
+  const rows = await db.query.schemaRepairPlans.findMany({
+    where: eq(schemaRepairPlans.projectId, projectId),
+    orderBy: [desc(schemaRepairPlans.createdAt)],
+  });
+
+  const latestByDatabaseId = new Map<string, PersistedSchemaRepairPlan>();
+
+  for (const row of rows) {
+    if (latestByDatabaseId.has(row.databaseId)) {
+      continue;
+    }
+
+    latestByDatabaseId.set(row.databaseId, {
+      ...row,
+      kind: row.kind,
+      title: row.title,
+      summary: row.summary,
+      riskLevel: row.riskLevel as SchemaRepairPlan['riskLevel'],
+      expectedVersion: row.expectedVersion,
+      actualVersion: row.actualVersion,
+      nextActionLabel: row.nextActionLabel,
+      steps: Array.isArray(row.steps) ? (row.steps as string[]) : [],
+    });
+  }
+
+  return latestByDatabaseId;
 }

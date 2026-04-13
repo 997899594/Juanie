@@ -6,7 +6,7 @@ import { db } from '@/lib/db';
 import { databases } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { inspectEnvironmentSchemaState } from '@/lib/schema-management/inspect';
-import { buildSchemaRepairPlan } from '@/lib/schema-management/repair-plan';
+import { createSchemaRepairPlanRecord } from '@/lib/schema-management/repair-plan';
 
 export async function POST(
   _request: Request,
@@ -43,8 +43,12 @@ export async function POST(
       projectId,
       databaseId: dbId,
     });
-    const plan = buildSchemaRepairPlan({
-      status: state.status,
+    const plan = await createSchemaRepairPlanRecord({
+      projectId,
+      environmentId: database.environment.id,
+      databaseId: dbId,
+      createdByUserId: session.user.id,
+      stateStatus: state.status,
       summary: state.summary,
       expectedVersion: state.expectedVersion,
       actualVersion: state.actualVersion,

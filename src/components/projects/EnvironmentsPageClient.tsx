@@ -122,6 +122,7 @@ interface EnvironmentRecord {
       hasUserTables: boolean;
       lastInspectedAt: string | Date | null;
     } | null;
+    latestRepairPlan: DatabaseSchemaRepairPlan | null;
   }>;
   policy: {
     level: 'normal' | 'protected' | 'preview';
@@ -824,7 +825,7 @@ function EnvironmentAdvancedPanel({
             <div className="space-y-3">
               {environment.databases.map((database) => {
                 const state = database.schemaState;
-                const repairPlan = repairPlans[database.id] ?? null;
+                const repairPlan = repairPlans[database.id] ?? database.latestRepairPlan ?? null;
                 const repairPlanError = repairPlanErrors[database.id] ?? null;
                 const lastInspectedLabel = formatInspectionTimestamp(state?.lastInspectedAt);
                 const versionSummary =

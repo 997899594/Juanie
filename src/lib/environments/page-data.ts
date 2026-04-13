@@ -20,6 +20,7 @@ import {
 } from '@/lib/environments/page-runtime';
 import { decorateEnvironmentList } from '@/lib/environments/view';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
+import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
 
 export function buildProjectEnvironmentListData<
   TEnvironment extends Parameters<typeof decorateEnvironmentList>[0][number],
@@ -55,88 +56,95 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
     };
   }
 
-  const [environmentList, releaseList, deploymentList, migrationRunList, recentAuditLogs] =
-    await Promise.all([
-      db.query.environments.findMany({
-        where: eq(environments.projectId, projectId),
-        with: {
-          baseEnvironment: {
-            columns: {
-              id: true,
-              name: true,
-            },
+  const [
+    environmentList,
+    releaseList,
+    deploymentList,
+    migrationRunList,
+    recentAuditLogs,
+    latestRepairPlans,
+  ] = await Promise.all([
+    db.query.environments.findMany({
+      where: eq(environments.projectId, projectId),
+      with: {
+        baseEnvironment: {
+          columns: {
+            id: true,
+            name: true,
           },
-          domains: {
-            with: {
-              service: true,
-            },
+        },
+        domains: {
+          with: {
+            service: true,
           },
-          databases: {
-            columns: {
-              id: true,
-              name: true,
-              type: true,
-              status: true,
-              sourceDatabaseId: true,
-            },
-            with: {
-              schemaState: {
-                columns: {
-                  status: true,
-                  summary: true,
-                  expectedVersion: true,
-                  actualVersion: true,
-                  hasLedger: true,
-                  hasUserTables: true,
-                  lastInspectedAt: true,
-                },
+        },
+        databases: {
+          columns: {
+            id: true,
+            name: true,
+            type: true,
+            status: true,
+            sourceDatabaseId: true,
+          },
+          with: {
+            schemaState: {
+              columns: {
+                status: true,
+                summary: true,
+                expectedVersion: true,
+                actualVersion: true,
+                hasLedger: true,
+                hasUserTables: true,
+                lastInspectedAt: true,
               },
             },
           },
         },
-      }),
-      db.query.releases.findMany({
-        where: eq(releases.projectId, projectId),
-        orderBy: [desc(releases.createdAt)],
-        with: {
-          environment: true,
-        },
-      }),
-      db.query.deployments.findMany({
-        where: eq(deployments.projectId, projectId),
-        orderBy: [desc(deployments.createdAt)],
-        limit: 120,
-        with: {
-          service: {
-            columns: {
-              name: true,
-            },
+      },
+    }),
+    db.query.releases.findMany({
+      where: eq(releases.projectId, projectId),
+      orderBy: [desc(releases.createdAt)],
+      with: {
+        environment: true,
+      },
+    }),
+    db.query.deployments.findMany({
+      where: eq(deployments.projectId, projectId),
+      orderBy: [desc(deployments.createdAt)],
+      limit: 120,
+      with: {
+        service: {
+          columns: {
+            name: true,
           },
         },
-      }),
-      db.query.migrationRuns.findMany({
-        where: eq(migrationRuns.projectId, projectId),
-        orderBy: [desc(migrationRuns.createdAt)],
-        limit: 120,
-        with: {
-          service: {
-            columns: {
-              name: true,
-            },
-          },
-          database: {
-            columns: {
-              name: true,
-            },
+      },
+    }),
+    db.query.migrationRuns.findMany({
+      where: eq(migrationRuns.projectId, projectId),
+      orderBy: [desc(migrationRuns.createdAt)],
+      limit: 120,
+      with: {
+        service: {
+          columns: {
+            name: true,
           },
         },
-      }),
-      db.query.auditLogs.findMany({
-        where: (log, { eq }) => eq(log.teamId, project.teamId),
-        orderBy: [desc(auditLogs.createdAt)],
-        limit: 40,
-      }),
-    ]);
+        database: {
+          columns: {
+            name: true,
+          },
+        },
+      },
+    }),
+    db.query.auditLogs.findMany({
+      where: (log, { eq }) => eq(log.teamId, project.teamId),
+      orderBy: [desc(auditLogs.createdAt)],
+      limit: 40,
+    }),
+    getLatestSchemaRepairPlansForProject(projectId),
+  ]);
   const runtimeIndexes = buildEnvironmentRuntimeIndexes({
     releases: releaseList,
     deployments: deploymentList,
@@ -162,6 +170,7 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
                 statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
               }
             : null,
+          latestRepairPlan: latestRepairPlans.get(database.id) ?? null,
         })),
         latestRelease: runtimeIndexes.latestReleaseByEnvironment.get(environment.id) ?? null,
         activeReleaseCount: runtimeIndexes.activeReleaseCountByEnvironment.get(environment.id) ?? 0,

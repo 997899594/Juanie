@@ -131,6 +131,15 @@ export const environmentSchemaStateStatuses = [
   'blocked',
 ] as const;
 export type EnvironmentSchemaStateStatus = (typeof environmentSchemaStateStatuses)[number];
+export const schemaRepairPlanKinds = [
+  'no_action',
+  'run_release_migrations',
+  'mark_aligned',
+  'repair_pr_required',
+  'adopt_current_db',
+  'manual_investigation',
+] as const;
+export type SchemaRepairPlanKind = (typeof schemaRepairPlanKinds)[number];
 
 export const aiPlans = ['free', 'pro', 'scale', 'enterprise'] as const;
 export type AIPlan = (typeof aiPlans)[number];
@@ -186,6 +195,7 @@ export const environmentSchemaStateStatusEnum = pgEnum(
   'environmentSchemaStateStatus',
   environmentSchemaStateStatuses
 );
+export const schemaRepairPlanKindEnum = pgEnum('schemaRepairPlanKind', schemaRepairPlanKinds);
 export const aiPluginRunStatusEnum = pgEnum('aiPluginRunStatus', aiPluginRunStatuses);
 
 // ============================================
@@ -831,6 +841,40 @@ export const environmentSchemaStates = pgTable(
   })
 );
 
+export const schemaRepairPlans = pgTable(
+  'schemaRepairPlan',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    databaseId: uuid('databaseId')
+      .notNull()
+      .references(() => databases.id, { onDelete: 'cascade' }),
+    stateStatus: environmentSchemaStateStatusEnum('stateStatus').notNull(),
+    kind: schemaRepairPlanKindEnum('kind').notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    summary: text('summary').notNull(),
+    riskLevel: varchar('riskLevel', { length: 20 }).notNull(),
+    expectedVersion: varchar('expectedVersion', { length: 255 }),
+    actualVersion: varchar('actualVersion', { length: 255 }),
+    nextActionLabel: text('nextActionLabel'),
+    steps: jsonb('steps').notNull(),
+    createdByUserId: uuid('createdByUserId').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('schemaRepairPlan_projectId_idx').on(table.projectId),
+    environmentIdIdx: index('schemaRepairPlan_environmentId_idx').on(table.environmentId),
+    databaseIdIdx: index('schemaRepairPlan_databaseId_idx').on(table.databaseId),
+    createdAtIdx: index('schemaRepairPlan_createdAt_idx').on(table.createdAt),
+  })
+);
+
 // ============================================
 // Domain Tables
 // ============================================
@@ -1389,6 +1433,7 @@ export const databasesRelations = relations(databases, ({ one, many }) => ({
     fields: [databases.id],
     references: [environmentSchemaStates.databaseId],
   }),
+  repairPlans: many(schemaRepairPlans),
   migrationSpecifications: many(migrationSpecifications),
   migrationRuns: many(migrationRuns),
 }));
@@ -1478,6 +1523,25 @@ export const environmentSchemaStatesRelations = relations(environmentSchemaState
   database: one(databases, {
     fields: [environmentSchemaStates.databaseId],
     references: [databases.id],
+  }),
+}));
+
+export const schemaRepairPlansRelations = relations(schemaRepairPlans, ({ one }) => ({
+  project: one(projects, {
+    fields: [schemaRepairPlans.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [schemaRepairPlans.environmentId],
+    references: [environments.id],
+  }),
+  database: one(databases, {
+    fields: [schemaRepairPlans.databaseId],
+    references: [databases.id],
+  }),
+  createdByUser: one(users, {
+    fields: [schemaRepairPlans.createdByUserId],
+    references: [users.id],
   }),
 }));
 
