@@ -204,7 +204,9 @@ Scope:
 
 Implementation rules:
 
-- Phase 4 may generate a review request that contains a repair-plan artifact before the platform can generate actual migration SQL
+- Phase 4 may generate a review request that contains both repair-plan artifacts and tool-aware migration scaffolds
+- `sql` and `drizzle` use the same platform workflow but generate different repository files
+- generated migration scaffolds must fail fast by default so an operator cannot safely merge them without replacing the scaffold body
 - generated review requests must be persisted on the `schemaRepairPlan` record
 - environment page should surface branch name, review URL, and workflow status
 

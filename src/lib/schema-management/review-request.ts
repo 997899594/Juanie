@@ -7,7 +7,14 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import {
+  fetchMigrationFilesFromRepoPath,
+  readRepositoryFileFromRepoPath,
+} from '@/lib/migrations/fetch';
+import { resolveMigrationPath } from '@/lib/migrations/path';
+import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
+import { buildSchemaRepairArtifacts } from '@/lib/schema-management/review-request-helpers';
 
 function sanitizeBranchSegment(value: string): string {
   return value
@@ -116,6 +123,50 @@ export async function createSchemaRepairReviewRequest(input: {
       steps: Array.isArray(plan.steps) ? (plan.steps as string[]) : [],
     },
   });
+  const spec = await resolveSchemaManagementSpec({
+    projectId: input.projectId,
+    databaseId: plan.databaseId,
+  });
+  const migrationPath =
+    spec && plan.kind !== 'manual_investigation'
+      ? resolveMigrationPath(spec.specification, spec.database.type)
+      : null;
+  const migrationFiles =
+    spec && migrationPath
+      ? await fetchMigrationFilesFromRepoPath(
+          spec.specification.projectId,
+          migrationPath,
+          baseBranch
+        )
+      : [];
+  const journalContent =
+    spec?.specification.tool === 'drizzle' && migrationPath
+      ? await readRepositoryFileFromRepoPath(
+          spec.specification.projectId,
+          `${migrationPath}/meta/_journal.json`,
+          baseBranch
+        )
+      : null;
+  const generatedArtifacts =
+    spec && migrationPath
+      ? buildSchemaRepairArtifacts({
+          tool: spec.specification.tool,
+          databaseType: spec.database.type,
+          migrationPath,
+          existingMigrationNames:
+            spec.specification.tool === 'drizzle'
+              ? migrationFiles.map((file) => file.name)
+              : migrationFiles.map((file) => file.name),
+          journalContent,
+          planId: plan.id,
+          title: plan.title,
+          summary: plan.summary,
+        })
+      : {
+          files: {},
+          generatedFiles: [],
+          migrationTag: null,
+        };
 
   try {
     await gateway.createBranch(session, {
@@ -130,6 +181,7 @@ export async function createSchemaRepairReviewRequest(input: {
       message: `chore: add schema repair plan for ${plan.database?.name ?? 'database'}`,
       files: {
         [filePath]: body,
+        ...generatedArtifacts.files,
       },
     });
 
@@ -149,7 +201,7 @@ export async function createSchemaRepairReviewRequest(input: {
         branchName,
         reviewNumber: review.number,
         reviewUrl: review.webUrl,
-        generatedFiles: [filePath],
+        generatedFiles: [filePath, ...generatedArtifacts.generatedFiles],
         errorMessage: null,
         updatedAt: new Date(),
       })
