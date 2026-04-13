@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createRepositoryRelease } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
+import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
 export async function POST(request: Request) {
   try {
@@ -44,9 +45,11 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const status =
-      message.includes('Token does not have access') || message.includes('Missing bearer token')
-        ? 401
-        : 400;
+      error instanceof ReleaseSchemaGateBlockedError
+        ? 409
+        : message.includes('Token does not have access') || message.includes('Missing bearer token')
+          ? 401
+          : 400;
     return NextResponse.json(
       {
         error: 'Failed to create release',

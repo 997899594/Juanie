@@ -12,6 +12,7 @@ import { getTeamIntegrationSession } from '@/lib/integrations/service/integratio
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
 import { buildPromotionPlan } from '@/lib/releases/planning';
+import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -34,6 +35,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
+    }
+
+    if (error instanceof ReleaseSchemaGateBlockedError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

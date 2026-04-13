@@ -14,6 +14,10 @@ import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-previ
 import { addReleaseJob } from '@/lib/queue';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
+import {
+  inspectReleaseSchemaGate,
+  ReleaseSchemaGateBlockedError,
+} from '@/lib/releases/schema-gate';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 
@@ -141,6 +145,18 @@ async function persistRelease(
   }
 
   const artifacts = await resolveReleaseServices(project.id, project.services, requestedServices);
+  const schemaGate = await inspectReleaseSchemaGate({
+    projectId: project.id,
+    environmentId: environment.id,
+    serviceIds: artifacts.map((artifact) => artifact.service.id),
+    sourceRef: meta.sourceRef,
+    sourceCommitSha: meta.sourceCommitSha ?? null,
+  });
+
+  if (!schemaGate.canCreate) {
+    throw new ReleaseSchemaGateBlockedError(schemaGate);
+  }
+
   const [release] = await db
     .insert(releases)
     .values({

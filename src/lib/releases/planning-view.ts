@@ -56,6 +56,12 @@ export interface ReleasePlanningViewLike {
       nextActionLabel: string | null;
     } | null;
   };
+  schema: {
+    checkedCount: number;
+    blockingCount: number;
+    summary: string | null;
+    nextActionLabel: string | null;
+  };
 }
 
 export interface ReleasePlanningPanelChip {
@@ -113,6 +119,14 @@ export function buildReleasePlanningPanel(input: {
     chips.push({
       key: 'external-completion',
       label: `外部确认 ${input.plan.migration.externalCount} 项`,
+      tone: 'danger',
+    });
+  }
+
+  if (input.plan.schema.blockingCount > 0) {
+    chips.push({
+      key: 'schema-blocked',
+      label: `Schema 门禁 ${input.plan.schema.blockingCount} 项`,
       tone: 'danger',
     });
   }

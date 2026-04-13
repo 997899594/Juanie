@@ -161,7 +161,11 @@ function buildResolvedSpec(
 
 async function resolveSchemaInspectionSpec(
   projectId: string,
-  databaseId: string
+  databaseId: string,
+  options?: {
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+  }
 ): Promise<ResolvedMigrationSpec | null> {
   const database = await db.query.databases.findFirst({
     where: and(eq(databases.id, databaseId), eq(databases.projectId, projectId)),
@@ -171,7 +175,10 @@ async function resolveSchemaInspectionSpec(
     return null;
   }
 
-  const syncedSpecs = await syncMigrationSpecificationsFromRepo(projectId, database.environmentId);
+  const syncedSpecs = await syncMigrationSpecificationsFromRepo(projectId, database.environmentId, {
+    sourceRef: options?.sourceRef,
+    sourceCommitSha: options?.sourceCommitSha,
+  });
   const syncedSpec = pickResolvedSpecForDatabase(databaseId, database.environmentId, syncedSpecs);
 
   if (syncedSpec) {
@@ -441,6 +448,8 @@ export async function getEnvironmentSchemaState(
 export async function inspectEnvironmentSchemaState(input: {
   projectId: string;
   databaseId: string;
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
 }): Promise<EnvironmentSchemaStateSnapshot> {
   const database = await db.query.databases.findFirst({
     where: and(eq(databases.id, input.databaseId), eq(databases.projectId, input.projectId)),
@@ -457,7 +466,10 @@ export async function inspectEnvironmentSchemaState(input: {
     throw new Error('Database has no environment binding');
   }
 
-  const resolvedSpec = await resolveSchemaInspectionSpec(input.projectId, input.databaseId);
+  const resolvedSpec = await resolveSchemaInspectionSpec(input.projectId, input.databaseId, {
+    sourceRef: input.sourceRef,
+    sourceCommitSha: input.sourceCommitSha,
+  });
 
   if (!resolvedSpec) {
     return upsertEnvironmentSchemaState({

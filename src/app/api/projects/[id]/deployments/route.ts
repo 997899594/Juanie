@@ -12,6 +12,7 @@ import { deployments, environments, migrationRuns, projects, services } from '@/
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
 import { buildProjectReleasePlan } from '@/lib/releases/planning';
+import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -81,6 +82,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
+    }
+
+    if (error instanceof ReleaseSchemaGateBlockedError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

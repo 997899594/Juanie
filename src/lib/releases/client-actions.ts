@@ -73,6 +73,12 @@ export interface ManualReleasePlanResponse {
         nextActionLabel: string | null;
       } | null;
     };
+    schema: {
+      checkedCount: number;
+      blockingCount: number;
+      summary: string | null;
+      nextActionLabel: string | null;
+    };
   };
 }
 
@@ -142,6 +148,12 @@ export interface RollbackPlanResponse {
         summary: string;
         nextActionLabel: string | null;
       } | null;
+    };
+    schema: {
+      checkedCount: number;
+      blockingCount: number;
+      summary: string | null;
+      nextActionLabel: string | null;
     };
   };
 }

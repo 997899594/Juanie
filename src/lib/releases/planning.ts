@@ -16,6 +16,10 @@ import {
 } from '@/lib/policies/delivery';
 import type { ReleaseServiceInput } from '@/lib/releases';
 import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
+import {
+  inspectReleaseSchemaGate,
+  type ReleaseSchemaGateSnapshot,
+} from '@/lib/releases/schema-gate';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 
 interface PlanningServiceLike {
@@ -69,6 +73,13 @@ export interface ReleasePlanningSnapshot {
     requiresApproval: boolean;
     requiresExternalCompletion: boolean;
   };
+  schema: {
+    checkedCount: number;
+    blockingCount: number;
+    states: ReleaseSchemaGateSnapshot['states'];
+    summary: string | null;
+    nextActionLabel: string | null;
+  };
   environmentInheritance: string | null;
   environmentDatabaseStrategy: string | null;
   summary: string | null;
@@ -115,6 +126,13 @@ function buildStaticPlanningSnapshot(input: {
       primarySignal: null,
       requiresApproval: false,
       requiresExternalCompletion: false,
+    },
+    schema: {
+      checkedCount: 0,
+      blockingCount: 0,
+      states: [],
+      summary: null,
+      nextActionLabel: null,
     },
     environmentInheritance: environmentInheritance?.label ?? null,
     environmentDatabaseStrategy,
@@ -186,6 +204,7 @@ export function summarizeReleasePlan(input: {
   environment: PlanningEnvironmentLike;
   services: PlanningServiceLike[];
   migrationSpecs: PlanningMigrationSpecLike[];
+  schemaGate?: ReleaseSchemaGateSnapshot | null;
 }): ReleasePlanningSnapshot {
   const preDeploySpecs = input.migrationSpecs.filter(
     (spec) => spec.specification.phase === 'preDeploy'
@@ -226,10 +245,12 @@ export function summarizeReleasePlan(input: {
     })),
   });
   const requiresExternalCompletion = preDeployExternalCount > 0;
-  const blockingReason =
+  const migrationBlockingReason =
     preDeployManualPlatformCount > 0 || preDeployExternalCount > 0
       ? '存在未满足的前置迁移门禁'
       : null;
+  const schemaGate = input.schemaGate ?? null;
+  const blockingReason = schemaGate?.blockingReason ?? migrationBlockingReason;
   const issue = releasePolicy.requiresApproval ? buildIssueSnapshot('approval_blocked') : null;
   const totalAutomatic = automaticSpecs.length;
   const environmentInheritance = getEnvironmentInheritancePresentation(input.environment);
@@ -237,16 +258,21 @@ export function summarizeReleasePlan(input: {
     input.environment.databaseStrategy
   );
   const platformSignals = buildPlatformSignalSnapshot({
-    customSignals: environmentInheritance
-      ? [
-          {
-            key: environmentInheritance.key,
-            label: environmentInheritance.label,
-            tone: 'neutral',
-          },
-        ]
-      : null,
+    customSignals: [
+      ...(environmentInheritance
+        ? [
+            {
+              key: environmentInheritance.key,
+              label: environmentInheritance.label,
+              tone: 'neutral' as const,
+            },
+          ]
+        : []),
+      ...(schemaGate?.customSignals ?? []),
+    ],
     issue,
+    customSummary: schemaGate?.summary ?? null,
+    customNextActionLabel: schemaGate?.nextActionLabel ?? null,
     environmentPolicySignals: environmentPolicy.signals,
     environmentPolicySignal: environmentPolicy.primarySignal,
     releasePolicySignals: releasePolicy.signals,
@@ -256,7 +282,7 @@ export function summarizeReleasePlan(input: {
   });
 
   return {
-    canCreate: true,
+    canCreate: schemaGate?.canCreate ?? true,
     blockingReason,
     services: input.services,
     environmentPolicy,
@@ -275,10 +301,18 @@ export function summarizeReleasePlan(input: {
       requiresApproval: releasePolicy.requiresApproval,
       requiresExternalCompletion,
     },
+    schema: {
+      checkedCount: schemaGate?.checkedCount ?? 0,
+      blockingCount: schemaGate?.blockingCount ?? 0,
+      states: schemaGate?.states ?? [],
+      summary: schemaGate?.summary ?? null,
+      nextActionLabel: schemaGate?.nextActionLabel ?? null,
+    },
     environmentInheritance: environmentInheritance?.label ?? null,
     environmentDatabaseStrategy,
     summary:
       blockingReason ??
+      schemaGate?.summary ??
       releasePolicy.summary ??
       environmentPolicy.summary ??
       environmentInheritance?.summary ??
@@ -334,11 +368,19 @@ export async function buildProjectReleasePlan(input: {
       sourceCommitSha: input.sourceCommitSha,
     }),
   ]);
+  const schemaGate = await inspectReleaseSchemaGate({
+    projectId: project.id,
+    environmentId: environment.id,
+    serviceIds,
+    sourceRef: input.sourceRef,
+    sourceCommitSha: input.sourceCommitSha,
+  });
 
   return summarizeReleasePlan({
     environment,
     services: plannedServices,
     migrationSpecs: [...preDeploySpecs, ...postDeploySpecs],
+    schemaGate,
   });
 }
 

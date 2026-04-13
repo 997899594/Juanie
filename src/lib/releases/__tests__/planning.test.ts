@@ -81,4 +81,42 @@ describe('release planning', () => {
     expect(plan.migration.externalCount).toBe(1);
     expect(plan.migration.requiresExternalCompletion).toBe(true);
   });
+
+  it('blocks release creation when schema gate is not aligned', () => {
+    const plan = summarizeReleasePlan({
+      environment: { isProduction: false, isPreview: false },
+      services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
+      migrationSpecs: [],
+      schemaGate: {
+        canCreate: false,
+        checkedCount: 1,
+        blockingCount: 1,
+        blockingReason: '存在 1 个数据库 schema 门禁未满足',
+        summary: '数据库账本与仓库 Drizzle 迁移链不一致',
+        nextActionLabel: '先在环境页处理数据库纳管',
+        customSignals: [
+          {
+            key: 'schema:blocking',
+            label: 'Schema 门禁 1 项',
+            tone: 'danger',
+          },
+        ],
+        states: [
+          {
+            databaseId: 'db-1',
+            databaseName: 'postgresql',
+            status: 'drifted',
+            statusLabel: '已漂移',
+            summary: '数据库账本与仓库 Drizzle 迁移链不一致',
+          },
+        ],
+      },
+    });
+
+    expect(plan.canCreate).toBe(false);
+    expect(plan.blockingReason).toBe('存在 1 个数据库 schema 门禁未满足');
+    expect(plan.schema.blockingCount).toBe(1);
+    expect(plan.summary).toBe('存在 1 个数据库 schema 门禁未满足');
+    expect(plan.platformSignals.chips.some((chip) => chip.key === 'schema:blocking')).toBe(true);
+  });
 });
