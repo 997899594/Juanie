@@ -191,6 +191,23 @@ Implementation rules:
 - `unmanaged` => recommend establish baseline or adoption path
 - `blocked` => recommend investigation first
 
+## Phase 4: Repair Review Request
+
+After `repair plan` becomes stable, the next step is to export selected plans into repository review requests.
+
+Scope:
+
+- only for plan kinds that truly need repo work, such as `repair_pr_required`, `adopt_current_db`, and `manual_investigation`
+- create a dedicated branch
+- commit generated repair-plan artifacts into the child-app repository
+- open a draft PR/MR and persist the review metadata back into Juanie
+
+Implementation rules:
+
+- Phase 4 may generate a review request that contains a repair-plan artifact before the platform can generate actual migration SQL
+- generated review requests must be persisted on the `schemaRepairPlan` record
+- environment page should surface branch name, review URL, and workflow status
+
 ## Data Contract
 
 Phase 1 server responses should expose:

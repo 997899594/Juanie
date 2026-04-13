@@ -1,7 +1,14 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { teamMembers } from '@/lib/db/schema';
-import type { CreateRepoOptions, GitRepository, GitReviewRequest, PushOptions } from '@/lib/git';
+import type {
+  CreateBranchOptions,
+  CreateRepoOptions,
+  CreateReviewRequestOptions,
+  GitRepository,
+  GitReviewRequest,
+  PushOptions,
+} from '@/lib/git';
 import { githubAdapter } from '@/lib/integrations/adapters/github-adapter';
 import { gitlabAdapter } from '@/lib/integrations/adapters/gitlab-adapter';
 import {
@@ -210,6 +217,19 @@ export const gateway = {
   ): Promise<GitRepository> {
     const adapter = resolveAdapter(session.provider);
     return adapter.createRepository(session, options);
+  },
+
+  async createBranch(session: IntegrationSession, options: CreateBranchOptions): Promise<void> {
+    const adapter = resolveAdapter(session.provider);
+    return adapter.createBranch(session, options);
+  },
+
+  async createReviewRequest(
+    session: IntegrationSession,
+    options: CreateReviewRequestOptions
+  ): Promise<GitReviewRequest> {
+    const adapter = resolveAdapter(session.provider);
+    return adapter.createReviewRequest(session, options);
   },
 
   async listRootFiles(

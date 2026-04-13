@@ -1,5 +1,7 @@
 import {
+  type CreateBranchOptions,
   type CreateRepoOptions,
+  type CreateReviewRequestOptions,
   createGitProvider,
   type GitRepository,
   type GitReviewRequest,
@@ -50,6 +52,19 @@ export const gitlabAdapter = {
   ): Promise<GitRepository> {
     const provider = createProvider(resolveGitLabProvider(session));
     return provider.createRepository(session.accessToken, options);
+  },
+
+  async createBranch(session: IntegrationSession, options: CreateBranchOptions): Promise<void> {
+    const provider = createProvider(resolveGitLabProvider(session));
+    return provider.createBranch(session.accessToken, options);
+  },
+
+  async createReviewRequest(
+    session: IntegrationSession,
+    options: CreateReviewRequestOptions
+  ): Promise<GitReviewRequest> {
+    const provider = createProvider(resolveGitLabProvider(session));
+    return provider.createReviewRequest(session.accessToken, options);
   },
 
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {

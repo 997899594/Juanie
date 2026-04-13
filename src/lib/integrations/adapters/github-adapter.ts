@@ -1,4 +1,11 @@
-import type { CreateRepoOptions, GitRepository, GitReviewRequest, PushOptions } from '@/lib/git';
+import type {
+  CreateBranchOptions,
+  CreateRepoOptions,
+  CreateReviewRequestOptions,
+  GitRepository,
+  GitReviewRequest,
+  PushOptions,
+} from '@/lib/git';
 import { createGitProvider } from '@/lib/git';
 import type { IntegrationSession } from '@/lib/integrations/service/session-service';
 
@@ -42,6 +49,19 @@ export const githubAdapter = {
   ): Promise<GitRepository> {
     const provider = createProvider('github');
     return provider.createRepository(session.accessToken, options);
+  },
+
+  async createBranch(session: IntegrationSession, options: CreateBranchOptions): Promise<void> {
+    const provider = createProvider('github');
+    return provider.createBranch(session.accessToken, options);
+  },
+
+  async createReviewRequest(
+    session: IntegrationSession,
+    options: CreateReviewRequestOptions
+  ): Promise<GitReviewRequest> {
+    const provider = createProvider('github');
+    return provider.createReviewRequest(session.accessToken, options);
   },
 
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {

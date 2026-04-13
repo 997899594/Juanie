@@ -1,5 +1,7 @@
 import type {
+  CreateBranchOptions,
   CreateRepoOptions,
+  CreateReviewRequestOptions,
   GitProvider,
   GitProviderConfig,
   GitRepository,
@@ -189,6 +191,86 @@ export class GitHubProvider implements GitProvider {
     }
 
     return this.mapRepository(await res.json());
+  }
+
+  async createBranch(accessToken: string, options: CreateBranchOptions): Promise<void> {
+    const [owner, repo] = options.repoFullName.split('/');
+    const sourceRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${options.fromBranch}`,
+      {
+        headers: this.getHeaders(accessToken),
+      }
+    );
+
+    if (!sourceRes.ok) {
+      const error = await sourceRes.json();
+      throw new Error(error.message || `Failed to load source branch ${options.fromBranch}`);
+    }
+
+    const sourceData = await sourceRes.json();
+    const sha = sourceData.object?.sha;
+
+    if (!sha || typeof sha !== 'string') {
+      throw new Error(`Source branch ${options.fromBranch} has no resolvable commit SHA`);
+    }
+
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        ref: `refs/heads/${options.branch}`,
+        sha,
+      }),
+    });
+
+    if (!res.ok && res.status !== 422) {
+      const error = await res.json();
+      throw new Error(error.message || `Failed to create branch ${options.branch}`);
+    }
+  }
+
+  async createReviewRequest(
+    accessToken: string,
+    options: CreateReviewRequestOptions
+  ): Promise<GitReviewRequest> {
+    const [owner, repo] = options.repoFullName.split('/');
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        title: options.title,
+        body: options.body ?? '',
+        head: options.headBranch,
+        base: options.baseBranch,
+        draft: options.draft ?? true,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.message || 'Failed to create pull request');
+    }
+
+    const data = await res.json();
+    const state = this.mapReviewState({
+      draft: Boolean(data.draft),
+      state: typeof data.state === 'string' ? data.state : null,
+      mergedAt: typeof data.merged_at === 'string' ? data.merged_at : null,
+    });
+
+    return {
+      number: data.number as number,
+      kind: 'pull_request',
+      label: `PR #${data.number as number}`,
+      title: data.title as string,
+      state,
+      stateLabel: this.getReviewStateLabel(state),
+      authorName: ((data.user as { name?: string | null; login?: string | null } | undefined)
+        ?.name ??
+        (data.user as { login?: string | null } | undefined)?.login ??
+        null) as string | null,
+      webUrl: (data.html_url as string | null) ?? null,
+    };
   }
 
   async pushFiles(accessToken: string, options: PushOptions): Promise<void> {

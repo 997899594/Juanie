@@ -67,6 +67,7 @@ export async function markDatabaseSchemaAligned(
 }
 
 export interface DatabaseSchemaRepairPlan {
+  id: string;
   kind:
     | 'no_action'
     | 'run_release_migrations'
@@ -74,6 +75,7 @@ export interface DatabaseSchemaRepairPlan {
     | 'repair_pr_required'
     | 'adopt_current_db'
     | 'manual_investigation';
+  status: 'draft' | 'review_opened' | 'failed';
   title: string;
   summary: string;
   riskLevel: 'low' | 'medium' | 'high';
@@ -81,6 +83,11 @@ export interface DatabaseSchemaRepairPlan {
   actualVersion: string | null;
   nextActionLabel: string | null;
   steps: string[];
+  generatedFiles: string[];
+  branchName: string | null;
+  reviewNumber: number | null;
+  reviewUrl: string | null;
+  errorMessage: string | null;
 }
 
 export async function createDatabaseRepairPlan(
@@ -97,6 +104,25 @@ export async function createDatabaseRepairPlan(
   const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(
     response,
     '生成修复计划失败'
+  );
+
+  return payload.plan;
+}
+
+export async function createDatabaseRepairReviewRequest(
+  projectId: string,
+  databaseId: string
+): Promise<DatabaseSchemaRepairPlan> {
+  const response = await fetch(
+    `/api/projects/${projectId}/databases/${databaseId}/schema/repair-plan/review-request`,
+    {
+      method: 'POST',
+    }
+  );
+
+  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(
+    response,
+    '生成修复 PR 失败'
   );
 
   return payload.plan;

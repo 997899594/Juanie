@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import type { EnvironmentSchemaStateStatus } from '@/lib/db/schema';
+import type { EnvironmentSchemaStateStatus, SchemaRepairPlanStatus } from '@/lib/db/schema';
 import { schemaRepairPlans } from '@/lib/db/schema';
 
 export type SchemaRepairPlanKind =
@@ -28,6 +28,12 @@ export interface PersistedSchemaRepairPlan extends SchemaRepairPlan {
   environmentId: string;
   databaseId: string;
   stateStatus: EnvironmentSchemaStateStatus;
+  status: SchemaRepairPlanStatus;
+  generatedFiles: string[];
+  branchName: string | null;
+  reviewNumber: number | null;
+  reviewUrl: string | null;
+  errorMessage: string | null;
   createdByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -168,6 +174,7 @@ export async function createSchemaRepairPlanRecord(input: {
   return {
     ...record,
     kind: record.kind,
+    status: record.status,
     title: record.title,
     summary: record.summary,
     riskLevel: record.riskLevel as SchemaRepairPlan['riskLevel'],
@@ -175,6 +182,11 @@ export async function createSchemaRepairPlanRecord(input: {
     actualVersion: record.actualVersion,
     nextActionLabel: record.nextActionLabel,
     steps: Array.isArray(record.steps) ? (record.steps as string[]) : [],
+    generatedFiles: Array.isArray(record.generatedFiles) ? (record.generatedFiles as string[]) : [],
+    branchName: record.branchName,
+    reviewNumber: record.reviewNumber,
+    reviewUrl: record.reviewUrl,
+    errorMessage: record.errorMessage,
   };
 }
 
@@ -194,6 +206,7 @@ export async function getLatestSchemaRepairPlansForProject(projectId: string) {
     latestByDatabaseId.set(row.databaseId, {
       ...row,
       kind: row.kind,
+      status: row.status,
       title: row.title,
       summary: row.summary,
       riskLevel: row.riskLevel as SchemaRepairPlan['riskLevel'],
@@ -201,6 +214,11 @@ export async function getLatestSchemaRepairPlansForProject(projectId: string) {
       actualVersion: row.actualVersion,
       nextActionLabel: row.nextActionLabel,
       steps: Array.isArray(row.steps) ? (row.steps as string[]) : [],
+      generatedFiles: Array.isArray(row.generatedFiles) ? (row.generatedFiles as string[]) : [],
+      branchName: row.branchName,
+      reviewNumber: row.reviewNumber,
+      reviewUrl: row.reviewUrl,
+      errorMessage: row.errorMessage,
     });
   }
 

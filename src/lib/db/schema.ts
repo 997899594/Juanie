@@ -140,6 +140,8 @@ export const schemaRepairPlanKinds = [
   'manual_investigation',
 ] as const;
 export type SchemaRepairPlanKind = (typeof schemaRepairPlanKinds)[number];
+export const schemaRepairPlanStatuses = ['draft', 'review_opened', 'failed'] as const;
+export type SchemaRepairPlanStatus = (typeof schemaRepairPlanStatuses)[number];
 
 export const aiPlans = ['free', 'pro', 'scale', 'enterprise'] as const;
 export type AIPlan = (typeof aiPlans)[number];
@@ -196,6 +198,10 @@ export const environmentSchemaStateStatusEnum = pgEnum(
   environmentSchemaStateStatuses
 );
 export const schemaRepairPlanKindEnum = pgEnum('schemaRepairPlanKind', schemaRepairPlanKinds);
+export const schemaRepairPlanStatusEnum = pgEnum(
+  'schemaRepairPlanStatus',
+  schemaRepairPlanStatuses
+);
 export const aiPluginRunStatusEnum = pgEnum('aiPluginRunStatus', aiPluginRunStatuses);
 
 // ============================================
@@ -856,6 +862,7 @@ export const schemaRepairPlans = pgTable(
       .references(() => databases.id, { onDelete: 'cascade' }),
     stateStatus: environmentSchemaStateStatusEnum('stateStatus').notNull(),
     kind: schemaRepairPlanKindEnum('kind').notNull(),
+    status: schemaRepairPlanStatusEnum('status').notNull().default('draft'),
     title: varchar('title', { length: 255 }).notNull(),
     summary: text('summary').notNull(),
     riskLevel: varchar('riskLevel', { length: 20 }).notNull(),
@@ -863,6 +870,11 @@ export const schemaRepairPlans = pgTable(
     actualVersion: varchar('actualVersion', { length: 255 }),
     nextActionLabel: text('nextActionLabel'),
     steps: jsonb('steps').notNull(),
+    generatedFiles: jsonb('generatedFiles'),
+    branchName: varchar('branchName', { length: 255 }),
+    reviewNumber: integer('reviewNumber'),
+    reviewUrl: text('reviewUrl'),
+    errorMessage: text('errorMessage'),
     createdByUserId: uuid('createdByUserId').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('createdAt').defaultNow().notNull(),
     updatedAt: timestamp('updatedAt').defaultNow().notNull(),

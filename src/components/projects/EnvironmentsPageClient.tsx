@@ -51,6 +51,7 @@ import {
 import {
   cleanupPreviewEnvironments,
   createDatabaseRepairPlan,
+  createDatabaseRepairReviewRequest,
   createPreviewEnvironment,
   type DatabaseSchemaRepairPlan,
   deletePreviewEnvironment,
@@ -777,6 +778,7 @@ function EnvironmentAdvancedPanel({
   const [repairPlanErrors, setRepairPlanErrors] = useState<Record<string, string | null>>({});
 
   const [repairPlanLoadingId, setRepairPlanLoadingId] = useState<string | null>(null);
+  const [repairReviewLoadingId, setRepairReviewLoadingId] = useState<string | null>(null);
 
   const handleBuildRepairPlan = async (databaseId: string) => {
     setRepairPlanLoadingId(databaseId);
@@ -798,6 +800,29 @@ function EnvironmentAdvancedPanel({
       }));
     } finally {
       setRepairPlanLoadingId(null);
+    }
+  };
+
+  const handleCreateRepairReviewRequest = async (databaseId: string) => {
+    setRepairReviewLoadingId(databaseId);
+    setRepairPlanErrors((current) => ({
+      ...current,
+      [databaseId]: null,
+    }));
+
+    try {
+      const updatedPlan = await createDatabaseRepairReviewRequest(projectId, databaseId);
+      setRepairPlans((current) => ({
+        ...current,
+        [databaseId]: updatedPlan,
+      }));
+    } catch (error) {
+      setRepairPlanErrors((current) => ({
+        ...current,
+        [databaseId]: error instanceof Error ? error.message : '生成修复 PR 失败',
+      }));
+    } finally {
+      setRepairReviewLoadingId(null);
     }
   };
 
@@ -940,6 +965,7 @@ function EnvironmentAdvancedPanel({
                           <Badge variant="secondary">修复计划</Badge>
                           <Badge variant="outline">{repairPlan.title}</Badge>
                           <Badge variant="outline">风险 {repairPlan.riskLevel}</Badge>
+                          <Badge variant="outline">状态 {repairPlan.status}</Badge>
                         </div>
                         <div className="mt-2 text-sm text-foreground">{repairPlan.summary}</div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -959,6 +985,40 @@ function EnvironmentAdvancedPanel({
                               {index + 1}. {step}
                             </div>
                           ))}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {[
+                            'repair_pr_required',
+                            'adopt_current_db',
+                            'manual_investigation',
+                          ].includes(repairPlan.kind) &&
+                            repairPlan.status !== 'review_opened' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                disabled={
+                                  repairReviewLoadingId !== null ||
+                                  !environment.actions.canConfigureStrategy
+                                }
+                                onClick={() => handleCreateRepairReviewRequest(database.id)}
+                              >
+                                {repairReviewLoadingId === database.id ? (
+                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                ) : null}
+                                生成修复 PR
+                              </Button>
+                            )}
+                          {repairPlan.reviewUrl && (
+                            <Button asChild variant="outline" size="sm" className="rounded-xl">
+                              <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
+                                打开评审单
+                              </a>
+                            </Button>
+                          )}
+                          {repairPlan.branchName && (
+                            <Badge variant="secondary">{repairPlan.branchName}</Badge>
+                          )}
                         </div>
                       </div>
                     )}

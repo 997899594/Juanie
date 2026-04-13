@@ -31,6 +31,21 @@ export interface GitReviewRequest {
   webUrl: string | null;
 }
 
+export interface CreateBranchOptions {
+  repoFullName: string;
+  branch: string;
+  fromBranch: string;
+}
+
+export interface CreateReviewRequestOptions {
+  repoFullName: string;
+  title: string;
+  body?: string;
+  headBranch: string;
+  baseBranch: string;
+  draft?: boolean;
+}
+
 export interface CreateRepoOptions {
   name: string;
   description?: string;
@@ -79,6 +94,11 @@ export interface GitProvider {
     repoFullName: string,
     number: number
   ): Promise<GitReviewRequest | null>;
+  createBranch(accessToken: string, options: CreateBranchOptions): Promise<void>;
+  createReviewRequest(
+    accessToken: string,
+    options: CreateReviewRequestOptions
+  ): Promise<GitReviewRequest>;
 
   createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository>;
 

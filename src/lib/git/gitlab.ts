@@ -1,5 +1,7 @@
 import type {
+  CreateBranchOptions,
   CreateRepoOptions,
+  CreateReviewRequestOptions,
   GitProvider,
   GitProviderConfig,
   GitRepository,
@@ -175,6 +177,75 @@ export class GitLabProvider implements GitProvider {
     }
 
     return this.mapRepository(await res.json());
+  }
+
+  async createBranch(accessToken: string, options: CreateBranchOptions): Promise<void> {
+    const encodedPath = encodeURIComponent(options.repoFullName);
+    const res = await fetch(
+      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/branches`,
+      {
+        method: 'POST',
+        headers: this.getHeaders(accessToken),
+        body: JSON.stringify({
+          branch: options.branch,
+          ref: options.fromBranch,
+        }),
+      }
+    );
+
+    if (!res.ok && res.status !== 400) {
+      const error = await res.json();
+      throw new Error(error.message || `Failed to create branch ${options.branch}`);
+    }
+  }
+
+  async createReviewRequest(
+    accessToken: string,
+    options: CreateReviewRequestOptions
+  ): Promise<GitReviewRequest> {
+    const encodedPath = encodeURIComponent(options.repoFullName);
+    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/merge_requests`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        title: options.title,
+        description: options.body ?? '',
+        source_branch: options.headBranch,
+        target_branch: options.baseBranch,
+        draft: options.draft ?? true,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.message || 'Failed to create merge request');
+    }
+
+    const data = await res.json();
+    const state = this.mapReviewState({
+      draft: Boolean(data.draft),
+      state: typeof data.state === 'string' ? data.state : null,
+    });
+
+    return {
+      number: data.iid as number,
+      kind: 'merge_request',
+      label: `MR !${data.iid as number}`,
+      title: data.title as string,
+      state,
+      stateLabel: this.getReviewStateLabel(state),
+      authorName: ((
+        data.author as
+          | {
+              name?: string | null;
+              username?: string | null;
+            }
+          | undefined
+      )?.name ??
+        (data.author as { username?: string | null } | undefined)?.username ??
+        null) as string | null,
+      webUrl: (data.web_url as string | null) ?? null,
+    };
   }
 
   async pushFiles(accessToken: string, options: PushOptions): Promise<void> {
