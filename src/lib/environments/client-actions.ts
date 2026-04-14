@@ -97,6 +97,15 @@ export interface DatabaseSchemaRepairPlan {
   errorMessage: string | null;
 }
 
+export interface DatabaseSchemaRepairReviewFlowResult {
+  plan: DatabaseSchemaRepairPlan;
+  autoRun: {
+    status: 'queued' | 'running' | 'succeeded' | 'failed' | 'skipped';
+    message: string | null;
+    run: { id: string; status: 'queued' | 'running' | 'succeeded' | 'failed' } | null;
+  };
+}
+
 export async function markDatabaseRepairPlanApplied(
   projectId: string,
   databaseId: string
@@ -132,7 +141,7 @@ export async function createDatabaseRepairPlan(
 export async function createDatabaseRepairReviewRequest(
   projectId: string,
   databaseId: string
-): Promise<DatabaseSchemaRepairPlan> {
+): Promise<DatabaseSchemaRepairReviewFlowResult> {
   const response = await fetch(
     `/api/projects/${projectId}/databases/${databaseId}/schema/repair-plan/review-request`,
     {
@@ -140,9 +149,9 @@ export async function createDatabaseRepairReviewRequest(
     }
   );
 
-  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(response);
+  const payload = await parseJsonResponse<DatabaseSchemaRepairReviewFlowResult>(response);
 
-  return payload.plan;
+  return payload;
 }
 
 export async function syncDatabaseRepairReviewRequest(
