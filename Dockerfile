@@ -39,6 +39,7 @@ COPY --from=source /app ./
 # 编译队列 worker/scheduler 为独立可执行文件
 RUN bun build ./src/lib/queue/worker.ts --compile --outfile=worker
 RUN bun build ./src/lib/queue/scheduler.ts --compile --outfile=scheduler
+RUN bun build ./src/lib/schema-management/schema-runner.ts --compile --outfile=schema-runner
 
 # ============================================
 # Stage 5: Migration Builder
@@ -103,6 +104,7 @@ RUN apt-get update \
 
 COPY --from=worker-builder /app/worker ./worker
 COPY --from=worker-builder /app/scheduler ./scheduler
+COPY --from=worker-builder /app/schema-runner ./schema-runner
 COPY --from=source /app/templates ./templates
 COPY --from=source /app/migrations ./migrations
 COPY --from=migrate-deps /migrate/package.json ./package.json
@@ -113,5 +115,13 @@ COPY --from=source /app/scripts/db-push.ts ./scripts/db-push.ts
 
 RUN chmod +x ./worker
 RUN chmod +x ./scheduler
+RUN chmod +x ./schema-runner
 
 CMD ["./worker"]
+
+# ============================================
+# Stage 8: Schema Runner
+# ============================================
+FROM worker AS schema-runner
+
+CMD ["./schema-runner"]

@@ -168,6 +168,7 @@ IMAGE_REGISTRY="$(decode_env IMAGE_REGISTRY_B64)"
 FULL_IMAGE_REPOSITORY="$(decode_env FULL_IMAGE_REPOSITORY_B64)"
 WEB_IMAGE_TAG="$(decode_env WEB_IMAGE_TAG_B64)"
 WORKER_IMAGE_TAG="$(decode_env WORKER_IMAGE_TAG_B64)"
+SCHEMA_RUNNER_IMAGE_TAG="$(decode_env SCHEMA_RUNNER_IMAGE_TAG_B64)"
 REMOTE_DIR="$(decode_env REMOTE_DIR_B64)"
 CHART_ARCHIVE="${REMOTE_DIR}/juanie-chart.tgz"
 CHART_DIR="${REMOTE_DIR}/chart"
@@ -201,6 +202,8 @@ helm_args=(
   --set "images.web.tag=${WEB_IMAGE_TAG}"
   --set "images.worker.repository=${FULL_IMAGE_REPOSITORY}"
   --set "images.worker.tag=${WORKER_IMAGE_TAG}"
+  --set "images.schemaRunner.repository=${FULL_IMAGE_REPOSITORY}"
+  --set "images.schemaRunner.tag=${SCHEMA_RUNNER_IMAGE_TAG}"
 )
 
 helm "${helm_args[@]}"

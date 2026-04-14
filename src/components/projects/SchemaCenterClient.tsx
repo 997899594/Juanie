@@ -10,7 +10,6 @@ import {
   createDatabaseRepairPlan,
   createDatabaseRepairReviewRequest,
   type DatabaseSchemaRepairPlan,
-  type DatabaseSchemaRepairReviewFlowResult,
   inspectDatabaseSchemaState,
   markDatabaseRepairPlanApplied,
   markDatabaseSchemaAligned,
@@ -112,17 +111,17 @@ function getRepairFlowSummary(
 
   switch (repairPlan.atlasExecutionStatus) {
     case 'queued':
-      return '平台正在排队生成真实 migration，先不要去看 PR 内容。';
+      return '平台正在排队生成修复草案，先不要去看 PR。';
     case 'running':
-      return '平台正在自动生成真实 migration，生成后先看下方 diff，再决定是否评审 PR。';
+      return '平台正在生成修复草案。等下方迁移详情出来后，再决定是否创建 PR。';
     case 'succeeded':
       return latestAtlasRun?.diffSummary
-        ? '真实 migration 已生成。先看下方 diff 详情，再决定是否打开 PR 评审。'
-        : 'Atlas 已完成，请先确认生成结果，再决定是否打开 PR。';
+        ? '修复草案已生成。先看下方迁移详情，再决定是否创建 PR。'
+        : '修复草案已完成，请先确认生成结果。';
     case 'failed':
-      return repairPlan.errorMessage ?? '自动生成 migration 失败，请重试 Atlas。';
+      return repairPlan.errorMessage ?? '生成修复草案失败，请重试。';
     default:
-      return '这个修复 PR 还只是中间态。先生成真实 migration 和 diff，再决定是否采用。';
+      return '先生成修复草案和迁移详情，再决定是否创建 PR。';
   }
 }
 
@@ -131,7 +130,7 @@ function getRepairReviewActionLabel(repairPlan: DatabaseSchemaRepairPlan): strin
     return '生成排查 PR';
   }
 
-  return '生成修复草案';
+  return '创建修复 PR';
 }
 
 function getReviewLinkLabel(repairPlan: DatabaseSchemaRepairPlan): string {
@@ -425,7 +424,11 @@ export function SchemaCenterClient({
                             'adopt_current_db',
                             'manual_investigation',
                           ].includes(repairPlan.kind) &&
-                          ['draft', 'failed'].includes(repairPlan.status) && (
+                          ((isAutoRepairPlanKind(repairPlan.kind) &&
+                            repairPlan.status === 'draft' &&
+                            repairPlan.atlasExecutionStatus === 'succeeded') ||
+                            (repairPlan.kind === 'manual_investigation' &&
+                              ['draft', 'failed'].includes(repairPlan.status))) && (
                             <Button
                               variant="default"
                               size="sm"
@@ -438,19 +441,9 @@ export function SchemaCenterClient({
                                   database.id,
                                   'createReview',
                                   () => createDatabaseRepairReviewRequest(projectId, database.id),
-                                  (result) => {
-                                    const flow = result as DatabaseSchemaRepairReviewFlowResult;
-
-                                    if (flow.autoRun.status === 'failed') {
-                                      return `修复 PR 已创建，但自动生成 migration 失败：${flow.autoRun.message ?? '未知错误'}`;
-                                    }
-
-                                    if (flow.autoRun.status === 'skipped') {
-                                      return '排查 PR 已创建';
-                                    }
-
-                                    return '修复 PR 已创建，平台正在自动生成真实 migration';
-                                  }
+                                  repairPlan.kind === 'manual_investigation'
+                                    ? '排查 PR 已创建'
+                                    : '修复 PR 已创建'
                                 )
                               }
                             >
@@ -489,8 +482,9 @@ export function SchemaCenterClient({
                             同步评审状态
                           </Button>
                         )}
-                        {repairPlan?.status === 'review_opened' &&
+                        {repairPlan &&
                           isAutoRepairPlanKind(repairPlan.kind) &&
+                          ['draft', 'failed'].includes(repairPlan.status) &&
                           ['idle', 'failed'].includes(repairPlan.atlasExecutionStatus) && (
                             <Button
                               variant="outline"
@@ -505,8 +499,8 @@ export function SchemaCenterClient({
                                   'runAtlas',
                                   () => runDatabaseRepairAtlas(projectId, database.id),
                                   repairPlan.atlasExecutionStatus === 'failed'
-                                    ? 'Atlas 已重新加入队列'
-                                    : '平台正在继续自动修复'
+                                    ? '修复草案已重新加入队列'
+                                    : '平台正在生成修复草案'
                                 )
                               }
                             >
@@ -514,8 +508,8 @@ export function SchemaCenterClient({
                                 <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                               ) : null}
                               {repairPlan.atlasExecutionStatus === 'failed'
-                                ? '重试 Atlas'
-                                : '继续自动修复'}
+                                ? '重试生成草案'
+                                : '生成修复草案'}
                             </Button>
                           )}
                         {repairPlan?.status === 'review_opened' &&

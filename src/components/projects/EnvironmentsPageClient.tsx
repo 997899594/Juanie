@@ -857,13 +857,11 @@ function EnvironmentAdvancedPanel({
 function EnvironmentExpandedContent({
   projectId,
   environment,
-  governance,
   savingStrategy,
   onStrategyChange,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
-  governance: EnvironmentsPageClientProps['initialData']['governance'];
   savingStrategy: boolean;
   onStrategyChange: (
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
@@ -881,11 +879,7 @@ function EnvironmentExpandedContent({
           savingStrategy={savingStrategy}
           onStrategyChange={onStrategyChange}
         />
-        <EnvironmentAdvancedPanel
-          projectId={projectId}
-          environment={environment}
-          governance={governance}
-        />
+        <EnvironmentAdvancedPanel projectId={projectId} environment={environment} />
       </div>
     </div>
   );
@@ -1217,7 +1211,6 @@ export function EnvironmentsPageClient({
                           <EnvironmentExpandedContent
                             projectId={projectId}
                             environment={environment}
-                            governance={governance}
                             savingStrategy={savingStrategyId === environment.id}
                             onStrategyChange={(value) =>
                               handleStrategyChange(environment.id, value)
@@ -1313,7 +1306,6 @@ export function EnvironmentsPageClient({
                           <EnvironmentExpandedContent
                             projectId={projectId}
                             environment={environment}
-                            governance={governance}
                             savingStrategy={savingStrategyId === environment.id}
                             onStrategyChange={(value) =>
                               handleStrategyChange(environment.id, value)

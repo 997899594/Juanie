@@ -1,20 +1,13 @@
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
-import type { EnvironmentSchemaStateStatus } from '@/lib/db/schema';
-import { projects, schemaRepairPlans } from '@/lib/db/schema';
+import type { EnvironmentSchemaStateStatus, SchemaRepairPlanKind } from '@/lib/db/schema';
+import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
-import {
-  fetchMigrationFilesFromRepoPath,
-  readRepositoryFileFromRepoPath,
-} from '@/lib/migrations/fetch';
-import { resolveMigrationPath } from '@/lib/migrations/path';
-import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
-import { buildSchemaRepairArtifacts } from '@/lib/schema-management/review-request-helpers';
 
 function sanitizeBranchSegment(value: string): string {
   return value
@@ -94,6 +87,10 @@ export function resolveSchemaRepairReviewFiles(input: {
   };
 }
 
+function canCreateReviewWithoutDraft(kind: SchemaRepairPlanKind): boolean {
+  return kind === 'manual_investigation';
+}
+
 export async function createSchemaRepairReviewRequest(input: {
   projectId: string;
   planId: string;
@@ -153,53 +150,33 @@ export async function createSchemaRepairReviewRequest(input: {
       steps: Array.isArray(plan.steps) ? (plan.steps as string[]) : [],
     },
   });
-  const spec = await resolveSchemaManagementSpec({
-    projectId: input.projectId,
-    databaseId: plan.databaseId,
+  const latestSuccessfulRun = await db.query.schemaRepairAtlasRuns.findFirst({
+    where: eq(schemaRepairAtlasRuns.planId, plan.id),
+    orderBy: [desc(schemaRepairAtlasRuns.createdAt)],
   });
-  const migrationPath =
-    spec && plan.kind !== 'manual_investigation'
-      ? resolveMigrationPath(spec.specification, spec.database.type)
-      : null;
-  const migrationFiles =
-    spec && migrationPath
-      ? await fetchMigrationFilesFromRepoPath(
-          spec.specification.projectId,
-          migrationPath,
-          baseBranch
-        )
-      : [];
-  const journalContent =
-    spec?.specification.tool === 'drizzle' && migrationPath
-      ? await readRepositoryFileFromRepoPath(
-          spec.specification.projectId,
-          `${migrationPath}/meta/_journal.json`,
-          baseBranch
-        )
-      : null;
+
   const generatedArtifacts =
-    spec && migrationPath
-      ? buildSchemaRepairArtifacts({
-          provider: session.provider,
-          tool: spec.specification.tool,
-          databaseType: spec.database.type,
-          migrationPath,
-          existingMigrationNames: migrationFiles.map((file) => file.name),
-          journalContent,
-          planId: plan.id,
-          title: plan.title,
-          summary: plan.summary,
-          planKind: plan.kind,
-          stateStatus: plan.stateStatus,
-          databaseName: plan.database?.name ?? 'database',
-          expectedVersion: plan.expectedVersion,
-          actualVersion: plan.actualVersion,
-        })
+    latestSuccessfulRun?.status === 'succeeded' &&
+    latestSuccessfulRun.artifactFiles &&
+    typeof latestSuccessfulRun.artifactFiles === 'object'
+      ? {
+          files: latestSuccessfulRun.artifactFiles as Record<string, string>,
+          generatedFiles: Array.isArray(latestSuccessfulRun.generatedFiles)
+            ? (latestSuccessfulRun.generatedFiles as string[])
+            : Object.keys(latestSuccessfulRun.artifactFiles as Record<string, string>),
+        }
       : {
           files: {},
           generatedFiles: [],
-          migrationTag: null,
         };
+
+  if (
+    !canCreateReviewWithoutDraft(plan.kind) &&
+    Object.keys(generatedArtifacts.files).length === 0
+  ) {
+    throw new Error('请先生成修复草案并确认迁移详情，再创建 PR');
+  }
+
   const reviewPayload = resolveSchemaRepairReviewFiles({
     body,
     fallbackReviewFilePath,

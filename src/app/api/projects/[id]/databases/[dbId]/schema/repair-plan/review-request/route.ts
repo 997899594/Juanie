@@ -5,7 +5,6 @@ import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { databases, schemaRepairPlans } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
-import { runSchemaRepairAtlas } from '@/lib/schema-management/atlas-run';
 import { createSchemaRepairReviewRequest } from '@/lib/schema-management/review-request';
 
 export async function POST(
@@ -57,67 +56,7 @@ export async function POST(
       userId: session.user.id,
     });
 
-    const shouldAutoRunAtlas = ['repair_pr_required', 'adopt_current_db'].includes(
-      result.plan.kind
-    );
-
-    if (!shouldAutoRunAtlas) {
-      return NextResponse.json(
-        {
-          ...result,
-          autoRun: {
-            status: 'skipped',
-            message: '当前修复计划不需要自动生成 migration',
-            run: null,
-          },
-        },
-        { status: 200 }
-      );
-    }
-
-    try {
-      const run = await runSchemaRepairAtlas({
-        projectId,
-        planId: result.plan.id,
-        userId: session.user.id,
-      });
-
-      return NextResponse.json(
-        {
-          ...result,
-          autoRun: {
-            status: run.status,
-            message: '修复 PR 已创建，Atlas 已自动加入队列',
-            run,
-          },
-        },
-        { status: 200 }
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '自动运行 Atlas 失败';
-      const [updatedPlan] = await db
-        .update(schemaRepairPlans)
-        .set({
-          atlasExecutionStatus: 'failed',
-          errorMessage: `自动运行 Atlas 失败: ${message}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(schemaRepairPlans.id, result.plan.id))
-        .returning();
-
-      return NextResponse.json(
-        {
-          review: result.review,
-          plan: updatedPlan ?? result.plan,
-          autoRun: {
-            status: 'failed',
-            message,
-            run: null,
-          },
-        },
-        { status: 200 }
-      );
-    }
+    return NextResponse.json(result, { status: 200 });
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

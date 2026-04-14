@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [web, worker]
+        target: [web, worker, schema-runner]
     steps:
       - uses: actions/checkout@v4
 

@@ -8,6 +8,10 @@ images:
     repository: ghcr.io/997899594/juanie
     pullPolicy: IfNotPresent
     tag: "worker-sha-f12feba"
+  schemaRunner:
+    repository: ghcr.io/997899594/juanie
+    pullPolicy: IfNotPresent
+    tag: "schema-runner-sha-f12feba"
 
 imagePullSecrets: []
 

@@ -3,13 +3,14 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import type { V1Job } from '@kubernetes/client-node';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { createJob, deleteJob, getIsConnected } from '@/lib/k8s';
 import { resolveMigrationPath } from '@/lib/migrations/path';
-import { addSchemaRepairAtlasJob } from '@/lib/queue';
 import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
 import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
 
@@ -66,32 +67,19 @@ async function fileExists(pathname: string): Promise<boolean> {
   }
 }
 
-async function restoreGeneratedFilesToBase(
-  repoDir: string,
-  baseBranch: string,
-  generatedFiles: string[]
-): Promise<void> {
-  for (const file of generatedFiles) {
-    if (
-      !(file.endsWith('.sql') || file.endsWith('_journal.json') || file.endsWith('.schema.sql'))
-    ) {
+async function collectArtifactFiles(repoDir: string, changedFiles: string[]) {
+  const artifactFiles: Record<string, string> = {};
+
+  for (const file of changedFiles) {
+    const absolutePath = path.join(repoDir, file);
+    if (!(await fileExists(absolutePath))) {
       continue;
     }
 
-    let hasBaseVersion = true;
-    try {
-      await runCommand('git', ['cat-file', '-e', `origin/${baseBranch}:${file}`], { cwd: repoDir });
-    } catch {
-      hasBaseVersion = false;
-    }
-
-    if (hasBaseVersion) {
-      await runCommand('git', ['checkout', `origin/${baseBranch}`, '--', file], { cwd: repoDir });
-      continue;
-    }
-
-    await runCommand('rm', ['-f', file], { cwd: repoDir }).catch(() => {});
+    artifactFiles[file] = await readFile(absolutePath, 'utf8');
   }
+
+  return artifactFiles;
 }
 
 async function collectDiffSummary(repoDir: string) {
@@ -156,6 +144,114 @@ export async function runSchemaRepairAtlas(input: {
   return run;
 }
 
+function buildSchemaRepairJobName(atlasRunId: string): string {
+  return `schema-repair-${atlasRunId.slice(0, 8)}`;
+}
+
+function buildSchemaRepairDraftJob(input: {
+  namespace: string;
+  jobName: string;
+  image: string;
+  atlasRunId: string;
+  projectId: string;
+  userId: string | null;
+}) {
+  return {
+    apiVersion: 'batch/v1',
+    kind: 'Job',
+    metadata: {
+      name: input.jobName,
+      namespace: input.namespace,
+      labels: {
+        'app.kubernetes.io/name': 'juanie',
+        'app.kubernetes.io/component': 'schema-runner',
+        'juanie.dev/schema-repair-run-id': input.atlasRunId,
+      },
+    },
+    spec: {
+      backoffLimit: 0,
+      ttlSecondsAfterFinished: 3600,
+      template: {
+        metadata: {
+          labels: {
+            'job-name': input.jobName,
+            'juanie.dev/schema-repair-run-id': input.atlasRunId,
+          },
+        },
+        spec: {
+          restartPolicy: 'Never',
+          serviceAccountName: 'juanie',
+          securityContext: {
+            runAsNonRoot: true,
+            runAsUser: 1001,
+            fsGroup: 1001,
+          },
+          initContainers: [
+            {
+              name: 'wait-for-postgres',
+              image: 'busybox:1.36',
+              command: [
+                'sh',
+                '-c',
+                'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done',
+              ],
+            },
+            {
+              name: 'wait-for-redis',
+              image: 'busybox:1.36',
+              command: [
+                'sh',
+                '-c',
+                'until nc -z redis 6379; do echo waiting for redis; sleep 2; done',
+              ],
+            },
+          ],
+          containers: [
+            {
+              name: 'schema-runner',
+              image: input.image,
+              imagePullPolicy: 'IfNotPresent',
+              command: ['./schema-runner'],
+              envFrom: [
+                {
+                  configMapRef: {
+                    name: 'juanie-config',
+                  },
+                },
+                {
+                  secretRef: {
+                    name: 'juanie-secret',
+                  },
+                },
+              ],
+              env: [
+                {
+                  name: 'SCHEMA_REPAIR_ATLAS_RUN_ID',
+                  value: input.atlasRunId,
+                },
+                {
+                  name: 'SCHEMA_REPAIR_PROJECT_ID',
+                  value: input.projectId,
+                },
+                {
+                  name: 'SCHEMA_REPAIR_USER_ID',
+                  value: input.userId ?? '',
+                },
+              ],
+              securityContext: {
+                allowPrivilegeEscalation: false,
+                capabilities: {
+                  drop: ['ALL'],
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  } satisfies V1Job;
+}
+
 export async function createSchemaRepairAtlasRun(input: {
   projectId: string;
   planId: string;
@@ -183,10 +279,6 @@ export async function createSchemaRepairAtlasRun(input: {
     throw new Error('修复计划不存在');
   }
 
-  if (!plan.branchName) {
-    throw new Error('修复计划还没有 branch');
-  }
-
   const activeRun = await db.query.schemaRepairAtlasRuns.findFirst({
     where: and(
       eq(schemaRepairAtlasRuns.projectId, input.projectId),
@@ -199,6 +291,21 @@ export async function createSchemaRepairAtlasRun(input: {
   if (activeRun) {
     if (activeRun.status === 'queued') {
       const requeuedAt = new Date();
+      const jobName = activeRun.jobName ?? buildSchemaRepairJobName(activeRun.id);
+      const namespace = process.env.JUANIE_NAMESPACE ?? 'juanie';
+      const schemaRunnerImage = [
+        process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY,
+        process.env.SCHEMA_RUNNER_IMAGE_TAG,
+      ].every(Boolean)
+        ? `${process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY}:${process.env.SCHEMA_RUNNER_IMAGE_TAG}`
+        : null;
+
+      if (!getIsConnected()) {
+        throw new Error('Schema runner draft execution requires Kubernetes connectivity');
+      }
+      if (!schemaRunnerImage) {
+        throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
+      }
 
       await db
         .update(schemaRepairPlans)
@@ -216,6 +323,7 @@ export async function createSchemaRepairAtlasRun(input: {
         .update(schemaRepairAtlasRuns)
         .set({
           status: 'queued',
+          jobName,
           errorMessage: null,
           log: null,
           finishedAt: null,
@@ -224,7 +332,18 @@ export async function createSchemaRepairAtlasRun(input: {
         .where(eq(schemaRepairAtlasRuns.id, activeRun.id));
 
       try {
-        await addSchemaRepairAtlasJob(activeRun.id, input.projectId, input.userId);
+        await deleteJob(namespace, jobName).catch(() => undefined);
+        await createJob(
+          namespace,
+          buildSchemaRepairDraftJob({
+            namespace,
+            jobName,
+            image: schemaRunnerImage,
+            atlasRunId: activeRun.id,
+            projectId: input.projectId,
+            userId: input.userId,
+          })
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const failedAt = new Date();
@@ -259,6 +378,21 @@ export async function createSchemaRepairAtlasRun(input: {
   }
 
   const queuedAt = new Date();
+  const namespace = process.env.JUANIE_NAMESPACE ?? 'juanie';
+  const schemaRunnerImage = [
+    process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY,
+    process.env.SCHEMA_RUNNER_IMAGE_TAG,
+  ].every(Boolean)
+    ? `${process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY}:${process.env.SCHEMA_RUNNER_IMAGE_TAG}`
+    : null;
+
+  if (!getIsConnected()) {
+    throw new Error('Schema runner draft execution requires Kubernetes connectivity');
+  }
+  if (!schemaRunnerImage) {
+    throw new Error('SCHEMA_RUNNER_IMAGE_REPOSITORY and SCHEMA_RUNNER_IMAGE_TAG are required');
+  }
+
   const [run] = await db
     .insert(schemaRepairAtlasRuns)
     .values({
@@ -269,6 +403,15 @@ export async function createSchemaRepairAtlasRun(input: {
       status: 'queued',
     })
     .returning();
+  const jobName = buildSchemaRepairJobName(run.id);
+
+  await db
+    .update(schemaRepairAtlasRuns)
+    .set({
+      jobName,
+      updatedAt: queuedAt,
+    })
+    .where(eq(schemaRepairAtlasRuns.id, run.id));
 
   await db
     .update(schemaRepairPlans)
@@ -282,7 +425,18 @@ export async function createSchemaRepairAtlasRun(input: {
     .where(eq(schemaRepairPlans.id, plan.id));
 
   try {
-    await addSchemaRepairAtlasJob(run.id, input.projectId, input.userId);
+    await deleteJob(namespace, jobName).catch(() => undefined);
+    await createJob(
+      namespace,
+      buildSchemaRepairDraftJob({
+        namespace,
+        jobName,
+        image: schemaRunnerImage,
+        atlasRunId: run.id,
+        projectId: input.projectId,
+        userId: input.userId,
+      })
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failedAt = new Date();
@@ -349,9 +503,6 @@ export async function executeSchemaRepairAtlasRun(input: {
   if (!plan) {
     throw new Error('修复计划不存在');
   }
-  if (!plan.branchName) {
-    throw new Error('修复计划还没有 branch');
-  }
 
   const session = await getTeamIntegrationSession({
     teamId: project.teamId,
@@ -368,7 +519,6 @@ export async function executeSchemaRepairAtlasRun(input: {
     accessToken: session.accessToken,
   });
   const baseBranch = project.repository.defaultBranch || 'main';
-  const branchName = plan.branchName;
   const startTime = new Date();
   await db
     .update(schemaRepairPlans)
@@ -397,17 +547,11 @@ export async function executeSchemaRepairAtlasRun(input: {
       '--depth',
       '1',
       '--branch',
-      branchName,
+      baseBranch,
       cloneUrl,
       repoDir,
     ]);
     logs += '\n';
-    await runCommand('git', ['fetch', 'origin', baseBranch, '--depth', '1'], { cwd: repoDir });
-    await restoreGeneratedFilesToBase(
-      repoDir,
-      baseBranch,
-      Array.isArray(plan.generatedFiles) ? (plan.generatedFiles as string[]) : []
-    );
 
     const spec = await resolveSchemaManagementSpec({
       projectId: input.projectId,
@@ -471,16 +615,7 @@ export async function executeSchemaRepairAtlasRun(input: {
     if (status.trim().length > 0) {
       logs += status;
       logs += '\n';
-      await runCommand('git', ['config', 'user.name', 'Juanie Bot'], { cwd: repoDir });
-      await runCommand('git', ['config', 'user.email', 'noreply@juanie.art'], { cwd: repoDir });
-      await runCommand('git', ['add', '.'], { cwd: repoDir });
-      await runCommand(
-        'git',
-        ['commit', '-m', `chore: run atlas schema repair for ${plan.database?.name ?? 'database'}`],
-        { cwd: repoDir }
-      );
-      const commitSha = await runCommand('git', ['rev-parse', 'HEAD'], { cwd: repoDir });
-      await runCommand('git', ['push', 'origin', branchName], { cwd: repoDir });
+      const artifactFiles = await collectArtifactFiles(repoDir, diffSummary.changedFiles);
       const finishedAt = new Date();
       const [updated] = await db
         .update(schemaRepairPlans)
@@ -497,8 +632,9 @@ export async function executeSchemaRepairAtlasRun(input: {
         .set({
           status: 'succeeded',
           generatedFiles: diffSummary.changedFiles,
+          artifactFiles,
           diffSummary,
-          commitSha,
+          commitSha: null,
           log: clipLog(logs),
           finishedAt,
           updatedAt: finishedAt,
@@ -512,10 +648,9 @@ export async function executeSchemaRepairAtlasRun(input: {
         resourceType: 'project',
         resourceId: project.id,
         metadata: {
-          schemaAction: 'run_atlas_repair',
+          schemaAction: 'run_atlas_draft',
           databaseId: plan.databaseId,
           planId: plan.id,
-          branchName,
           atlasRunId: run.id,
         },
       });
