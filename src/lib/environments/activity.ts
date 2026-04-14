@@ -103,9 +103,9 @@ export function buildEnvironmentRecentActivity(input: {
         .join(' · '),
       createdAtLabel: formatPlatformTimeContext(input.latestDeployment.createdAt),
       href: input.latestDeployment.releaseId
-        ? `/projects/${input.projectId}/releases/${input.latestDeployment.releaseId}`
-        : `/projects/${input.projectId}/logs?env=${input.environmentId}`,
-      actionLabel: input.latestDeployment.releaseId ? '查看发布' : '查看日志',
+        ? `/projects/${input.projectId}/delivery/${input.latestDeployment.releaseId}`
+        : `/projects/${input.projectId}/runtime/logs?env=${input.environmentId}`,
+      actionLabel: input.latestDeployment.releaseId ? '查看交付' : '查看日志',
       statusDecoration,
       timestamp: toTimestamp(input.latestDeployment.createdAt),
     });
@@ -127,9 +127,9 @@ export function buildEnvironmentRecentActivity(input: {
         .join(' · '),
       createdAtLabel: formatPlatformTimeContext(input.latestMigration.createdAt),
       href: input.latestMigration.releaseId
-        ? `/projects/${input.projectId}/releases/${input.latestMigration.releaseId}`
-        : `/projects/${input.projectId}/logs?env=${input.environmentId}`,
-      actionLabel: input.latestMigration.releaseId ? '查看发布' : '查看日志',
+        ? `/projects/${input.projectId}/delivery/${input.latestMigration.releaseId}`
+        : `/projects/${input.projectId}/runtime/logs?env=${input.environmentId}`,
+      actionLabel: input.latestMigration.releaseId ? '查看交付' : '查看日志',
       statusDecoration,
       timestamp: toTimestamp(input.latestMigration.createdAt),
     });

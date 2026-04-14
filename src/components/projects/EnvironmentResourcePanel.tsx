@@ -459,7 +459,9 @@ export function EnvironmentResourcePanel({
           </div>
         </div>
         <Button asChild variant="outline" size="sm" className="rounded-xl">
-          <Link href={`/projects/${projectId}/logs?env=${environmentId}`}>查看环境日志</Link>
+          <Link href={`/projects/${projectId}/runtime/logs?env=${environmentId}`}>
+            查看环境日志
+          </Link>
         </Button>
       </div>
 
@@ -643,7 +645,9 @@ export function EnvironmentResourcePanel({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button asChild variant="outline" size="sm" className="rounded-xl">
-                <Link href={`/projects/${projectId}/logs?env=${environmentId}`}>环境日志</Link>
+                <Link href={`/projects/${projectId}/runtime/logs?env=${environmentId}`}>
+                  环境日志
+                </Link>
               </Button>
               <Button
                 variant="ghost"

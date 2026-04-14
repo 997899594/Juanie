@@ -92,7 +92,7 @@ export function ProjectEnvironmentEntrySection({
           </div>
         </div>
         <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-          <Link href={`/projects/${projectId}/environments`}>打开环境列表</Link>
+          <Link href={`/projects/${projectId}/runtime`}>打开运行中心</Link>
         </Button>
       </div>
       <div className="grid gap-3 xl:grid-cols-3">
@@ -147,22 +147,20 @@ export function ProjectEnvironmentEntrySection({
               {environment.latestReleaseCard ? (
                 <Button asChild size="sm" className="h-8 rounded-xl px-3">
                   <Link
-                    href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}
+                    href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}
                   >
-                    打开发布
+                    打开交付
                   </Link>
                 </Button>
               ) : (
                 <Button asChild size="sm" className="h-8 rounded-xl px-3">
-                  <Link href={`/projects/${projectId}/releases?env=${environment.id}`}>
-                    进入发布
+                  <Link href={`/projects/${projectId}/delivery?env=${environment.id}`}>
+                    进入交付
                   </Link>
                 </Button>
               )}
               <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-                <Link href={`/projects/${projectId}/environments?env=${environment.id}`}>
-                  打开环境
-                </Link>
+                <Link href={`/projects/${projectId}/runtime?env=${environment.id}`}>打开运行</Link>
               </Button>
             </div>
           </div>
@@ -277,10 +275,10 @@ export function ProjectOperationsSection({
           <div className="text-sm font-semibold">项目动态</div>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-              <Link href={`/projects/${projectId}/environments`}>环境列表</Link>
+              <Link href={`/projects/${projectId}/runtime`}>运行中心</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-              <Link href={`/projects/${projectId}/releases`}>发布列表</Link>
+              <Link href={`/projects/${projectId}/delivery`}>交付中心</Link>
             </Button>
           </div>
         </div>
@@ -303,8 +301,8 @@ export function ProjectOperationsSection({
                   key={run.id}
                   href={
                     run.releaseId
-                      ? `/projects/${projectId}/releases/${run.releaseId}`
-                      : `/projects/${projectId}/releases`
+                      ? `/projects/${projectId}/delivery/${run.releaseId}`
+                      : `/projects/${projectId}/delivery`
                   }
                   className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
                 >
@@ -356,7 +354,7 @@ export function ProjectOperationsSection({
             recentReleaseCards.slice(0, 5).map((release) => (
               <Link
                 key={release.id}
-                href={`/projects/${projectId}/releases/${release.id}`}
+                href={`/projects/${projectId}/delivery/${release.id}`}
                 className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
               >
                 <div className="min-w-0 space-y-1">

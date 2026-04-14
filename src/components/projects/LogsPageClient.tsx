@@ -201,11 +201,11 @@ export function LogsPageClient({
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Button asChild size="sm" className="h-9 rounded-xl px-4">
-              <Link href={`/projects/${projectId}/environments?env=${envId}`}>打开环境</Link>
+              <Link href={`/projects/${projectId}/runtime?env=${envId}`}>打开运行</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-              <Link href={`/projects/${projectId}/releases`}>
-                打开发布
+              <Link href={`/projects/${projectId}/delivery`}>
+                打开交付
                 <ExternalLink className="h-3.5 w-3.5" />
               </Link>
             </Button>

@@ -195,10 +195,10 @@ export function SchemaCenterClient({
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <Link href={`/projects/${projectId}/environments`}>打开环境</Link>
+              <Link href={`/projects/${projectId}/runtime`}>打开运行</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <Link href={`/projects/${projectId}/releases`}>打开发布</Link>
+              <Link href={`/projects/${projectId}/delivery`}>打开交付</Link>
             </Button>
           </div>
         }

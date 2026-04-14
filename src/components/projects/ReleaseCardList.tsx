@@ -159,7 +159,9 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         size="sm"
                         className="min-w-0 flex-1 rounded-xl sm:flex-none"
                       >
-                        <Link href={`/projects/${projectId}/logs?env=${release.environment.id}`}>
+                        <Link
+                          href={`/projects/${projectId}/runtime/logs?env=${release.environment.id}`}
+                        >
                           打开日志
                         </Link>
                       </Button>
@@ -169,7 +171,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         size="sm"
                         className="min-w-0 flex-1 rounded-xl sm:flex-none"
                       >
-                        <Link href={`/projects/${projectId}/releases/${release.id}`}>
+                        <Link href={`/projects/${projectId}/delivery/${release.id}`}>
                           打开
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>

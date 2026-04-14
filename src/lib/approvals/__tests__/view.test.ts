@@ -12,8 +12,8 @@ describe('approvals view', () => {
     expect(normalizeApprovalFilterState('approval')).toBe('approval');
     expect(normalizeApprovalFilterState('external')).toBe('external');
     expect(normalizeApprovalFilterState('weird')).toBe('all');
-    expect(buildApprovalsFilterHref('all')).toBe('/approvals');
-    expect(buildApprovalsFilterHref('failed')).toBe('/approvals?state=failed');
+    expect(buildApprovalsFilterHref('all')).toBe('/inbox');
+    expect(buildApprovalsFilterHref('failed')).toBe('/inbox?state=failed');
   });
 
   it('formats stats and statuses', () => {

@@ -38,10 +38,10 @@ export function ReleaseDetailDashboard({
 }: ReleaseDetailDashboardProps) {
   const { release, previousReleaseLink } = pageData;
   const environmentId = release.environment?.id ?? release.environmentId;
-  const environmentLogsHref = `/projects/${projectId}/logs?env=${environmentId}`;
-  const environmentDetailHref = `/projects/${projectId}/environments?env=${environmentId}`;
-  const environmentDiagnosticsHref = `/projects/${projectId}/environments?env=${environmentId}&panel=diagnostics`;
-  const releasesHref = `/projects/${projectId}/releases`;
+  const environmentLogsHref = `/projects/${projectId}/runtime/logs?env=${environmentId}`;
+  const environmentDetailHref = `/projects/${projectId}/runtime?env=${environmentId}`;
+  const environmentDiagnosticsHref = `/projects/${projectId}/runtime?env=${environmentId}&panel=diagnostics`;
+  const releasesHref = `/projects/${projectId}/delivery`;
   const releaseStateKey = buildReleaseEventStateKey(release);
 
   return (

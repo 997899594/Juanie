@@ -145,7 +145,7 @@ export async function GET(
         sourceCommitSha: release.sourceCommitSha,
         createdAt: release.createdAt,
         updatedAt: release.updatedAt,
-        releasePath: `/projects/${release.projectId}/releases/${release.id}`,
+        releasePath: `/projects/${release.projectId}/delivery/${release.id}`,
       },
     });
   } catch (error) {
