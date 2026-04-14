@@ -40,7 +40,7 @@ export function ReleaseDetailDashboard({
   const environmentId = release.environment?.id ?? release.environmentId;
   const environmentLogsHref = `/projects/${projectId}/runtime/logs?env=${environmentId}`;
   const environmentDetailHref = `/projects/${projectId}/runtime?env=${environmentId}`;
-  const environmentDiagnosticsHref = `/projects/${projectId}/runtime?env=${environmentId}&panel=diagnostics`;
+  const environmentDiagnosticsHref = `/projects/${projectId}/runtime/diagnostics?env=${environmentId}`;
   const releasesHref = `/projects/${projectId}/delivery`;
   const releaseStateKey = buildReleaseEventStateKey(release);
 
