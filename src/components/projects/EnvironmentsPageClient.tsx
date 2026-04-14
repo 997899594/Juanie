@@ -867,6 +867,21 @@ function EnvironmentAdvancedPanel({
           canManage={governance.manageEnvVars.allowed}
           disabledSummary={governance.manageEnvVars.summary}
         />
+        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+          变量与诊断的完整入口已收口到 Runtime 子页。
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <Link href={`/projects/${projectId}/runtime/variables?env=${environment.id}`}>
+                打开变量页
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>
+                打开诊断页
+              </Link>
+            </Button>
+          </div>
+        </div>
       </div>
     </details>
   );
