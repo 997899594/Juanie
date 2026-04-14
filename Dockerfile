@@ -91,10 +91,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git curl ca-certificates bash \
-  && curl -sSf https://atlasgo.sh | sh \
-  && install -m 0755 /root/.atlas/bin/atlas /usr/local/bin/atlas \
+  && curl -sSfL "https://atlasbinaries.com/atlas/atlas-${TARGETOS}-${TARGETARCH}-latest" -o /usr/local/bin/atlas \
+  && chmod +x /usr/local/bin/atlas \
+  && atlas version \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=worker-builder /app/worker ./worker
