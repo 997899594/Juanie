@@ -81,11 +81,7 @@ export default async function InboxPage({
       </div>
 
       {attentionRuns.length === 0 ? (
-        <EmptyState
-          icon={<AlertTriangle className="h-12 w-12" />}
-          title="没有待处理事项"
-          description="当前筛选条件下为空。"
-        />
+        <EmptyState icon={<AlertTriangle className="h-12 w-12" />} title="没有待处理事项" />
       ) : (
         <div className="space-y-3">
           {attentionRuns.map((run) => {
@@ -125,7 +121,7 @@ export default async function InboxPage({
                       )}
                       {run.platformSignals.nextActionLabel && (
                         <div className="text-xs text-muted-foreground">
-                          下一步：{run.platformSignals.nextActionLabel}
+                          {run.platformSignals.nextActionLabel}
                         </div>
                       )}
                     </div>

@@ -1,0 +1,11 @@
+pre-commit:
+  commands:
+    biome:
+      glob: "src/**/*.{ts,tsx,js,jsx,json,css,md}"
+      run: bunx biome check --write {staged_files}
+      stage_fixed: true
+
+pre-push:
+  commands:
+    typecheck:
+      run: bun run typecheck

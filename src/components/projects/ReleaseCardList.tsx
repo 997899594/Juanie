@@ -119,7 +119,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                             className="inline-flex items-center gap-1.5 text-foreground underline underline-offset-4"
                           >
                             <Rocket className="h-3.5 w-3.5" />
-                            <span>打开</span>
+                            <span>环境</span>
                           </a>
                         )}
                       </div>
@@ -171,7 +171,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         className="min-w-0 flex-1 rounded-lg sm:flex-none"
                       >
                         <Link href={`/projects/${projectId}/delivery/${release.id}`}>
-                          打开
+                          交付
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
                       </Button>

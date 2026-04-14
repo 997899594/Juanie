@@ -55,7 +55,7 @@ export function PlatformSignalSummary({
       {summary && <div className="text-sm text-foreground">{summary}</div>}
       {nextActionLabel && (
         <div className={cn(summary ? 'mt-2' : null, 'text-xs text-muted-foreground')}>
-          下一步：{nextActionLabel}
+          {nextActionLabel}
         </div>
       )}
     </div>

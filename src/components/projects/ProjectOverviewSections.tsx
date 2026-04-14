@@ -21,8 +21,7 @@ export function ProjectOverviewHero({
 }: ProjectOverviewHeroProps) {
   return (
     <section className="console-panel px-5 py-5">
-      <div className="console-eyebrow">{commandCenter.eyebrow}</div>
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <div>
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
             {commandCenter.title}
@@ -42,13 +41,13 @@ export function ProjectOverviewHero({
             ) : null}
           </div>
         </div>
-        <div className="console-surface rounded-[20px] px-4 py-4">
-          <div className="text-sm font-medium">{commandCenter.primaryAction.description}</div>
+        <div className="console-surface flex items-center rounded-[20px] px-4 py-4">
+          <div className="text-sm font-medium">{commandCenter.primaryAction.label}</div>
         </div>
       </div>
       <div className="mt-6 grid gap-3 md:grid-cols-2">
         <div className="console-stat px-4 py-3">
-          <div className="text-xs text-muted-foreground">当前发布</div>
+          <div className="text-xs text-muted-foreground">发布</div>
           <div className="mt-2 line-clamp-2 text-sm font-medium">
             {currentRelease?.title ?? '还没有发布'}
           </div>
@@ -59,90 +58,6 @@ export function ProjectOverviewHero({
             {primaryAttention?.issueLabel ?? '当前无阻塞项'}
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-export function ProjectEnvironmentEntrySection({
-  projectId,
-  environments,
-}: {
-  projectId: string;
-  environments: ProjectOverviewPageData['environmentCards'];
-}) {
-  if (environments.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="console-panel px-5 py-4">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold">环境入口</div>
-        </div>
-        <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-          <Link href={`/projects/${projectId}/runtime`}>运行</Link>
-        </Button>
-      </div>
-      <div className="grid gap-3 xl:grid-cols-3">
-        {environments.slice(0, 3).map((environment) => (
-          <div key={environment.id} className="console-card hover-lift bg-secondary/20 px-4 py-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <div
-                className={`h-2 w-2 rounded-full ${
-                  environment.primaryDomainUrl ? 'bg-success' : 'bg-warning'
-                }`}
-              />
-              <span className="text-sm font-medium">{environment.name}</span>
-            </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              {[
-                environment.isProduction ? '生产' : null,
-                environment.scopeLabel,
-                environment.sourceLabel,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-            {environment.primaryDomainUrl ? (
-              <a
-                href={environment.primaryDomainUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 text-xs text-foreground underline underline-offset-4"
-              >
-                访问
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            ) : null}
-            {environment.latestReleaseCard && (
-              <div className="console-surface mt-3 rounded-2xl px-3 py-2">
-                <div className="text-sm font-medium">{environment.latestReleaseCard.title}</div>
-              </div>
-            )}
-            <div className="mt-4 flex flex-wrap gap-2">
-              {environment.latestReleaseCard ? (
-                <Button asChild size="sm" className="h-8 rounded-xl px-3">
-                  <Link
-                    href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}
-                  >
-                    交付
-                  </Link>
-                </Button>
-              ) : (
-                <Button asChild size="sm" className="h-8 rounded-xl px-3">
-                  <Link href={`/projects/${projectId}/delivery?env=${environment.id}`}>
-                    进入交付
-                  </Link>
-                </Button>
-              )}
-              <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-                <Link href={`/projects/${projectId}/runtime?env=${environment.id}`}>运行</Link>
-              </Button>
-            </div>
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -244,10 +159,10 @@ export function ProjectOperationsSection({
           <div className="text-sm font-semibold">项目动态</div>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-              <Link href={`/projects/${projectId}/runtime`}>运行中心</Link>
+              <Link href={`/projects/${projectId}/runtime`}>运行</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-              <Link href={`/projects/${projectId}/delivery`}>交付中心</Link>
+              <Link href={`/projects/${projectId}/delivery`}>交付</Link>
             </Button>
           </div>
         </div>

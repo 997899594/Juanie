@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -257,62 +256,43 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   <DialogTitle>生成邀请链接</DialogTitle>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
-                    <div className="space-y-4">
-                      <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                        <div className="space-y-2">
-                          <Label className="text-sm">新成员角色</Label>
-                          <Select value={linkRole} onValueChange={setLinkRole}>
-                            <SelectTrigger className="h-11 rounded-xl">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="admin">管理员</SelectItem>
-                              <SelectItem value="member">成员</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {generatedLink && (
-                          <div className="mt-4 space-y-2">
-                            <Label className="text-sm">邀请链接</Label>
-                            <div className="flex gap-2">
-                              <Input
-                                value={generatedLink}
-                                readOnly
-                                className="h-11 rounded-xl text-xs"
-                              />
-                              <Button
-                                className="h-11 shrink-0 rounded-xl px-4"
-                                onClick={handleCopyLink}
-                              >
-                                {copied ? (
-                                  <Check className="h-4 w-4" />
-                                ) : (
-                                  <Copy className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
+                  <div className="space-y-4">
+                    <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                      <div className="space-y-2">
+                        <Label className="text-sm">新成员角色</Label>
+                        <Select value={linkRole} onValueChange={setLinkRole}>
+                          <SelectTrigger className="h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">管理员</SelectItem>
+                            <SelectItem value="member">成员</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </div>
 
-                    <div className="space-y-4">
-                      <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
-                        <div className="space-y-1">
-                          <div className="text-sm font-semibold text-foreground">使用说明</div>
-                          <div className="text-xs leading-5 text-muted-foreground">
-                            链接生成后可直接分享。角色决定新加入成员的默认权限，你也可以之后再调整。
+                      {generatedLink ? (
+                        <div className="mt-4 space-y-2">
+                          <Label className="text-sm">邀请链接</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              value={generatedLink}
+                              readOnly
+                              className="h-11 rounded-xl text-xs"
+                            />
+                            <Button
+                              className="h-11 shrink-0 rounded-xl px-4"
+                              onClick={handleCopyLink}
+                            >
+                              {copied ? (
+                                <Check className="h-4 w-4" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </Button>
                           </div>
                         </div>
-                        <div className="mt-4 rounded-2xl border border-border bg-background px-4 py-3 text-sm">
-                          <div className="text-xs text-muted-foreground">当前角色</div>
-                          <div className="mt-1 text-foreground">
-                            {linkRole === 'admin' ? '管理员' : '成员'}
-                          </div>
-                        </div>
-                      </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -348,55 +328,35 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                 <form onSubmit={handleInvite} className="flex min-h-0 flex-1 flex-col">
                   <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
                     <DialogTitle>邀请成员</DialogTitle>
-                    <DialogDescription>输入邮箱地址后发送邀请。</DialogDescription>
                   </DialogHeader>
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
-                      <div className="space-y-4">
-                        <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                          <div className="space-y-2">
-                            <Label htmlFor="email" className="text-sm">
-                              邮箱
-                            </Label>
-                            <Input
-                              id="email"
-                              type="email"
-                              placeholder="colleague@example.com"
-                              value={inviteEmail}
-                              onChange={(e) => setInviteEmail(e.target.value)}
-                              className="h-11 rounded-xl"
-                              required
-                            />
-                          </div>
-                          <div className="mt-4 space-y-2">
-                            <Label className="text-sm">角色</Label>
-                            <Select value={inviteRole} onValueChange={setInviteRole}>
-                              <SelectTrigger className="h-11 rounded-xl">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="admin">管理员</SelectItem>
-                                <SelectItem value="member">成员</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                    <div className="space-y-4">
+                      <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                        <div className="space-y-2">
+                          <Label htmlFor="email" className="text-sm">
+                            邮箱
+                          </Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            placeholder="colleague@example.com"
+                            value={inviteEmail}
+                            onChange={(e) => setInviteEmail(e.target.value)}
+                            className="h-11 rounded-xl"
+                            required
+                          />
                         </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
-                          <div className="space-y-1">
-                            <div className="text-sm font-semibold text-foreground">邀请说明</div>
-                            <div className="text-xs leading-5 text-muted-foreground">
-                              邮件邀请更适合正式成员。角色会决定新成员进入团队后的初始权限范围。
-                            </div>
-                          </div>
-                          <div className="mt-4 rounded-2xl border border-border bg-background px-4 py-3 text-sm">
-                            <div className="text-xs text-muted-foreground">将授予角色</div>
-                            <div className="mt-1 text-foreground">
-                              {inviteRole === 'admin' ? '管理员' : '成员'}
-                            </div>
-                          </div>
+                        <div className="mt-4 space-y-2">
+                          <Label className="text-sm">角色</Label>
+                          <Select value={inviteRole} onValueChange={setInviteRole}>
+                            <SelectTrigger className="h-11 rounded-xl">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="admin">管理员</SelectItem>
+                              <SelectItem value="member">成员</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -457,7 +417,6 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">还没有成员</h2>
-          <p className="mt-2 text-sm text-muted-foreground">邀请成员后开始协作</p>
           <Button className="mt-5 rounded-xl" onClick={() => setIsOpen(true)}>
             <Plus className="h-4 w-4" />
             邀请成员

@@ -189,7 +189,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
               )}
               {diagnostics.nextActionLabel && (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  下一步：{diagnostics.nextActionLabel}
+                  {diagnostics.nextActionLabel}
                 </div>
               )}
             </div>

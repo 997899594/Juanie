@@ -5,10 +5,10 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const runtimeNav = [
-  { label: '环境', href: '', description: '先看整体状态和环境入口。' },
-  { label: '变量', href: '/variables', description: '核对配置、密文和注入结果。' },
-  { label: '日志', href: '/logs', description: '追实例输出，确认报错位置。' },
-  { label: '诊断', href: '/diagnostics', description: '看资源、事件和探针异常。' },
+  { label: '环境', href: '' },
+  { label: '变量', href: '/variables' },
+  { label: '日志', href: '/logs' },
+  { label: '诊断', href: '/diagnostics' },
 ] as const;
 
 export function RuntimeSectionNav({ projectId }: { projectId: string }) {
@@ -24,8 +24,7 @@ export function RuntimeSectionNav({ projectId }: { projectId: string }) {
   return (
     <div className="space-y-3">
       <div className="console-surface rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
-        当前排查节点：<span className="font-medium text-foreground">{activeItem.label}</span> ·{' '}
-        {activeItem.description}
+        当前：<span className="font-medium text-foreground">{activeItem.label}</span>
       </div>
       <div className="console-panel px-4 py-3">
         <div className="flex flex-wrap gap-2">

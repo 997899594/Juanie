@@ -80,7 +80,6 @@ export default async function TeamsPage() {
               <Plus className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-sm font-semibold">新建团队</div>
-            <div className="mt-1 text-xs text-muted-foreground">开始协作</div>
           </Link>
         </div>
       )}

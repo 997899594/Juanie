@@ -31,7 +31,6 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium">项目</div>
-            <div className="mt-1 text-xs text-muted-foreground">{overview.memberSummary}</div>
           </div>
           <Link href="/projects/new">
             <Button className="h-9 rounded-xl px-4">
