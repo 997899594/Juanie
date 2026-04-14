@@ -16,6 +16,8 @@ coverage/
 .DS_Store
 *.pem
 .env*.local
+.atlas/
+.tmp/atlas
 
 # Debug
 npm-debug.log*

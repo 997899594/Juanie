@@ -28,6 +28,8 @@ docker-compose*.yml
 .DS_Store
 *.log
 *.tmp
+.atlas
+.tmp/atlas
 
 # Tests
 __tests__
