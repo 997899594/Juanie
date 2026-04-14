@@ -55,7 +55,10 @@ export default async function RuntimeVariablesPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="运行变量" description={`${environment.name} 的环境变量与密文配置`} />
+      <PageHeader
+        title="运行变量"
+        description={`${environment.name} 的直接配置、实际生效变量与服务级覆盖`}
+      />
       <RuntimeSectionNav projectId={id} />
       <EnvVarManager
         projectId={id}

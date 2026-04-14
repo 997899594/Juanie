@@ -14,6 +14,7 @@ import {
   buildEnvironmentManageActionSnapshot,
   buildPreviewEnvironmentActionSnapshot,
 } from '@/lib/environments/governance-view';
+import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { buildEnvironmentGovernanceData } from '@/lib/environments/page-governance';
 import {
   attachEnvironmentRecentActivity,
@@ -86,6 +87,7 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
             name: true,
             type: true,
             status: true,
+            environmentId: true,
             sourceDatabaseId: true,
           },
           with: {
@@ -162,6 +164,69 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
       latestAtlasRunByDatabase.set(run.databaseId, run);
     }
   }
+  const environmentNameById = new Map(
+    environmentList.map((environment) => [environment.id, environment.name])
+  );
+  const decorateDatabaseRecord = (
+    database: (typeof environmentList)[number]['databases'][number]
+  ) => {
+    const run = latestAtlasRunByDatabase.get(database.id);
+
+    return {
+      ...database,
+      schemaState: database.schemaState
+        ? {
+            ...database.schemaState,
+            statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
+          }
+        : null,
+      latestRepairPlan: latestRepairPlans.get(database.id) ?? null,
+      latestAtlasRun: run
+        ? {
+            ...run,
+            generatedFiles: Array.isArray(run.generatedFiles)
+              ? (run.generatedFiles as string[])
+              : null,
+            diffSummary:
+              typeof run.diffSummary === 'object' &&
+              run.diffSummary !== null &&
+              'changedFiles' in run.diffSummary &&
+              'fileStats' in run.diffSummary
+                ? (run.diffSummary as {
+                    changedFiles: string[];
+                    fileStats: Array<{
+                      file: string;
+                      added: number;
+                      removed: number;
+                    }>;
+                  })
+                : null,
+          }
+        : null,
+    };
+  };
+  type DecoratedDatabaseRecord = ReturnType<typeof decorateDatabaseRecord>;
+  const directDatabaseById = new Map<string, DecoratedDatabaseRecord>();
+  for (const environment of environmentList) {
+    for (const database of environment.databases) {
+      directDatabaseById.set(database.id, decorateDatabaseRecord(database));
+    }
+  }
+  const effectiveDatabaseIdsByEnvironment = new Map<string, string[]>(
+    await Promise.all(
+      environmentList.map(
+        async (environment): Promise<[string, string[]]> => [
+          environment.id,
+          (
+            await getDatabasesForEnvironment({
+              projectId,
+              environmentId: environment.id,
+            })
+          ).map((database) => database.id),
+        ]
+      )
+    )
+  );
   const governanceData = buildEnvironmentGovernanceData({
     projectId,
     role,
@@ -174,44 +239,35 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
     buildProjectEnvironmentListData(
       environmentList.map((environment) => ({
         ...environment,
-        databases: environment.databases.map((database) => ({
-          ...database,
-          schemaState: database.schemaState
-            ? {
-                ...database.schemaState,
-                statusLabel: getEnvironmentSchemaStateLabel(database.schemaState.status),
-              }
-            : null,
-          latestRepairPlan: latestRepairPlans.get(database.id) ?? null,
-          latestAtlasRun: (() => {
-            const run = latestAtlasRunByDatabase.get(database.id);
-
-            if (!run) {
-              return null;
-            }
+        databases: (effectiveDatabaseIdsByEnvironment.get(environment.id) ?? [])
+          .map((databaseId) => directDatabaseById.get(databaseId))
+          .filter((database): database is DecoratedDatabaseRecord => !!database)
+          .map((database) => {
+            const sourceEnvironmentName = database.environmentId
+              ? (environmentNameById.get(database.environmentId) ?? null)
+              : null;
+            const isInherited =
+              Boolean(database.environmentId) && database.environmentId !== environment.id;
 
             return {
-              ...run,
-              generatedFiles: Array.isArray(run.generatedFiles)
-                ? (run.generatedFiles as string[])
-                : null,
-              diffSummary:
-                typeof run.diffSummary === 'object' &&
-                run.diffSummary !== null &&
-                'changedFiles' in run.diffSummary &&
-                'fileStats' in run.diffSummary
-                  ? (run.diffSummary as {
-                      changedFiles: string[];
-                      fileStats: Array<{
-                        file: string;
-                        added: number;
-                        removed: number;
-                      }>;
-                    })
-                  : null,
+              ...database,
+              sourceEnvironmentName,
+              isInherited,
+              usageLabel: isInherited
+                ? `继承自 ${sourceEnvironmentName ?? '基础环境'}`
+                : '当前环境',
             };
-          })(),
-        })),
+          }),
+        databaseBindingSummary: {
+          directCount: environment.databases.length,
+          effectiveCount: (effectiveDatabaseIdsByEnvironment.get(environment.id) ?? []).length,
+          inheritedCount: (effectiveDatabaseIdsByEnvironment.get(environment.id) ?? [])
+            .map((databaseId) => directDatabaseById.get(databaseId))
+            .filter(
+              (database): database is DecoratedDatabaseRecord =>
+                !!database && database.environmentId !== environment.id
+            ).length,
+        },
         latestRelease: runtimeIndexes.latestReleaseByEnvironment.get(environment.id) ?? null,
         activeReleaseCount: runtimeIndexes.activeReleaseCountByEnvironment.get(environment.id) ?? 0,
         latestDeployment: runtimeIndexes.latestDeploymentByEnvironment.get(environment.id) ?? null,

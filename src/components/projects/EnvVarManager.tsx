@@ -25,6 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -40,6 +41,27 @@ interface EnvVar {
   serviceId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface EffectiveEnvVar extends EnvVar {
+  inherited: boolean;
+  sourceLabel: string;
+}
+
+interface ServiceOverrideVar extends EnvVar {
+  overridesEnvironmentValue: boolean;
+}
+
+interface ServiceOverrideGroup {
+  serviceId: string;
+  serviceName: string;
+  variables: ServiceOverrideVar[];
+}
+
+interface EnvVarOverview {
+  direct: EnvVar[];
+  effective: EffectiveEnvVar[];
+  serviceOverrides: ServiceOverrideGroup[];
 }
 
 interface EnvVarManagerProps {
@@ -398,6 +420,85 @@ function EnvVarRow({
   );
 }
 
+function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string[] }) {
+  return (
+    <div className="px-4 py-4 transition-colors hover:bg-secondary/30 sm:px-5">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] sm:items-center">
+        <div className="flex min-w-0 items-center gap-2">
+          {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          <code className="truncate text-sm font-mono">{envVar.key}</code>
+          {envVar.isSecret && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+              <KeyRound className="h-3 w-3" />
+              密文
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 rounded-xl bg-secondary/20 px-3 py-2 sm:rounded-none sm:bg-transparent sm:px-0 sm:py-0">
+          {envVar.isSecret ? (
+            <span className="select-none font-mono text-sm tracking-widest text-muted-foreground">
+              ••••••••••••
+            </span>
+          ) : (
+            <code className="block truncate text-sm font-mono text-muted-foreground">
+              {envVar.value ?? ''}
+            </code>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {(badges ?? []).map((badge) => (
+            <span
+              key={`${envVar.id}-${badge}`}
+              className="inline-flex items-center rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
+  if (groups.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+        <KeyRound className="h-8 w-8 text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">当前没有服务级覆盖变量</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {groups.map((group) => (
+        <div key={group.serviceId} className="overflow-hidden rounded-[20px] border border-border">
+          <div className="border-b border-border/70 bg-secondary/30 px-4 py-3 sm:px-5">
+            <div className="flex items-center gap-2">
+              <code className="text-sm font-medium">{group.serviceName}</code>
+              <span className="text-xs text-muted-foreground">
+                {group.variables.length} 个服务级变量
+              </span>
+            </div>
+          </div>
+          <div className="divide-y divide-border/70 bg-background">
+            {group.variables.map((variable) => (
+              <ReadonlyEnvVarRow
+                key={variable.id}
+                envVar={variable}
+                badges={variable.overridesEnvironmentValue ? ['覆盖环境级同名键'] : ['仅服务级']}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ============================================
 // 主组件
 // ============================================
@@ -409,15 +510,17 @@ export function EnvVarManager({
   canManage = true,
   disabledSummary,
 }: EnvVarManagerProps) {
-  const [vars, setVars] = useState<EnvVar[]>([]);
+  const [overview, setOverview] = useState<EnvVarOverview | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchVars = useCallback(async () => {
+  const fetchOverview = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}/env-vars?environmentId=${environmentId}`);
+      const res = await fetch(
+        `/api/projects/${projectId}/env-vars/overview?environmentId=${environmentId}`
+      );
       if (res.ok) {
-        setVars(await res.json());
+        setOverview((await res.json()) as EnvVarOverview);
       }
     } finally {
       setLoading(false);
@@ -425,11 +528,18 @@ export function EnvVarManager({
   }, [projectId, environmentId]);
 
   useEffect(() => {
-    fetchVars();
-  }, [fetchVars]);
+    fetchOverview();
+  }, [fetchOverview]);
 
-  const secretCount = vars.filter((v) => v.isSecret).length;
-  const plainCount = vars.length - secretCount;
+  const directVars = overview?.direct ?? [];
+  const effectiveVars = overview?.effective ?? [];
+  const serviceOverrides = overview?.serviceOverrides ?? [];
+  const directSecretCount = directVars.filter((v) => v.isSecret).length;
+  const directPlainCount = directVars.length - directSecretCount;
+  const serviceOverrideCount = serviceOverrides.reduce(
+    (count, group) => count + group.variables.length,
+    0
+  );
 
   return (
     <div className="space-y-3">
@@ -438,9 +548,15 @@ export function EnvVarManager({
           <h3 className="text-sm font-medium capitalize">{environmentName}</h3>
           {!loading && (
             <p className="text-xs text-muted-foreground mt-0.5">
-              {vars.length === 0
-                ? '没有变量'
-                : `${plainCount} 个普通变量${secretCount > 0 ? `，${secretCount} 个密文变量` : ''}`}
+              {[
+                directVars.length === 0
+                  ? '当前环境没有直接变量'
+                  : `${directPlainCount} 个普通变量${directSecretCount > 0 ? `，${directSecretCount} 个密文变量` : ''}`,
+                effectiveVars.length > 0 ? `实际生效 ${effectiveVars.length} 个` : null,
+                serviceOverrideCount > 0 ? `服务覆盖 ${serviceOverrideCount} 个` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </p>
           )}
         </div>
@@ -449,7 +565,7 @@ export function EnvVarManager({
           environmentId={environmentId}
           disabled={!canManage}
           disabledSummary={disabledSummary}
-          onSuccess={fetchVars}
+          onSuccess={fetchOverview}
           trigger={
             <Button
               size="sm"
@@ -469,66 +585,145 @@ export function EnvVarManager({
         <div className="text-xs text-muted-foreground">{disabledSummary}</div>
       )}
 
-      <div className="overflow-hidden rounded-[20px] border border-border bg-background">
-        <div className="hidden items-center gap-3 border-b border-border/70 bg-secondary/30 px-5 py-3 sm:flex">
-          <span className="w-56 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            变量名
-          </span>
-          <span className="flex-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            变量值
-          </span>
-        </div>
+      <Tabs defaultValue="direct" className="space-y-4">
+        <TabsList className="h-11 rounded-[18px] bg-secondary/70 p-1">
+          <TabsTrigger value="direct" className="rounded-xl px-4">
+            当前环境
+          </TabsTrigger>
+          <TabsTrigger value="effective" className="rounded-xl px-4">
+            实际生效
+          </TabsTrigger>
+          <TabsTrigger value="service" className="rounded-xl px-4">
+            服务覆盖
+          </TabsTrigger>
+        </TabsList>
 
-        {loading ? (
-          <div className="divide-y divide-border/70">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="space-y-3 px-4 py-4 sm:flex sm:items-center sm:gap-3 sm:px-5">
-                <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-                <div className="h-12 w-full animate-pulse rounded-xl bg-muted sm:h-4 sm:w-56 sm:rounded" />
+        <TabsContent value="direct">
+          <div className="mb-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+            这里只展示当前环境直接配置的变量。项目级变量和继承来的环境变量会在“实际生效”里一起看到。
+          </div>
+
+          <div className="overflow-hidden rounded-[20px] border border-border bg-background">
+            <div className="hidden items-center gap-3 border-b border-border/70 bg-secondary/30 px-5 py-3 sm:flex">
+              <span className="w-56 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                变量名
+              </span>
+              <span className="flex-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                变量值
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="divide-y divide-border/70">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="space-y-3 px-4 py-4 sm:flex sm:items-center sm:gap-3 sm:px-5"
+                  >
+                    <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+                    <div className="h-12 w-full animate-pulse rounded-xl bg-muted sm:h-4 sm:w-56 sm:rounded" />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : vars.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
-            <KeyRound className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">还没有变量</p>
-            <EnvVarDialog
-              projectId={projectId}
-              environmentId={environmentId}
-              disabled={!canManage}
-              disabledSummary={disabledSummary}
-              onSuccess={fetchVars}
-              trigger={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-1 rounded-xl"
+            ) : directVars.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+                <KeyRound className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">当前环境还没有直接变量</p>
+                <EnvVarDialog
+                  projectId={projectId}
+                  environmentId={environmentId}
                   disabled={!canManage}
-                  title={!canManage ? (disabledSummary ?? undefined) : undefined}
-                >
-                  <Plus className="h-4 w-4" />
-                  添加第一个变量
-                </Button>
-              }
-            />
+                  disabledSummary={disabledSummary}
+                  onSuccess={fetchOverview}
+                  trigger={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-1 rounded-xl"
+                      disabled={!canManage}
+                      title={!canManage ? (disabledSummary ?? undefined) : undefined}
+                    >
+                      <Plus className="h-4 w-4" />
+                      添加第一个变量
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
+              <div className={cn('divide-y divide-border/70')}>
+                {directVars.map((v) => (
+                  <EnvVarRow
+                    key={v.id}
+                    envVar={v}
+                    projectId={projectId}
+                    environmentId={environmentId}
+                    canManage={canManage}
+                    disabledSummary={disabledSummary}
+                    onUpdated={fetchOverview}
+                    onDeleted={fetchOverview}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className={cn('divide-y divide-border/70')}>
-            {vars.map((v) => (
-              <EnvVarRow
-                key={v.id}
-                envVar={v}
-                projectId={projectId}
-                environmentId={environmentId}
-                canManage={canManage}
-                disabledSummary={disabledSummary}
-                onUpdated={fetchVars}
-                onDeleted={fetchVars}
-              />
-            ))}
+        </TabsContent>
+
+        <TabsContent value="effective">
+          <div className="mb-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+            这里展示当前环境最终会注入的环境级变量。来源可能是项目级、当前环境，或继承链上的基础环境。
           </div>
-        )}
-      </div>
+
+          <div className="overflow-hidden rounded-[20px] border border-border bg-background">
+            {loading ? (
+              <div className="divide-y divide-border/70">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="space-y-3 px-4 py-4 sm:flex sm:items-center sm:gap-3 sm:px-5"
+                  >
+                    <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+                    <div className="h-12 w-full animate-pulse rounded-xl bg-muted sm:h-4 sm:w-56 sm:rounded" />
+                  </div>
+                ))}
+              </div>
+            ) : effectiveVars.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                <KeyRound className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">当前没有可生效的环境级变量</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/70">
+                {effectiveVars.map((envVar) => (
+                  <ReadonlyEnvVarRow
+                    key={envVar.id}
+                    envVar={envVar}
+                    badges={[envVar.sourceLabel, ...(envVar.inherited ? ['继承链'] : [])]}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="service">
+          <div className="mb-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+            这些变量按服务生效，会在对应容器启动时追加注入；如果键名相同，会覆盖环境级同名变量。
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2].map((item) => (
+                <div
+                  key={item}
+                  className="h-24 animate-pulse rounded-[20px] border border-border bg-muted"
+                />
+              ))}
+            </div>
+          ) : (
+            <ServiceOverridePanel groups={serviceOverrides} />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

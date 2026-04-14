@@ -101,6 +101,9 @@ interface EnvironmentRecord {
     type: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
     status: string | null;
     sourceDatabaseId: string | null;
+    sourceEnvironmentName: string | null;
+    isInherited: boolean;
+    usageLabel: string;
     schemaState: {
       status:
         | 'aligned'
@@ -137,6 +140,11 @@ interface EnvironmentRecord {
       finishedAt: string | Date | null;
     } | null;
   }>;
+  databaseBindingSummary: {
+    directCount: number;
+    effectiveCount: number;
+    inheritedCount: number;
+  };
   policy: {
     level: 'normal' | 'protected' | 'preview';
     reasons: string[];
@@ -756,7 +764,18 @@ function EnvironmentAdvancedPanel({
                   摘要
                 </div>
                 <div className="mt-2 text-sm text-foreground">
-                  {`共 ${environment.databases.length} 个数据库 · 门禁阻塞 ${blockingCount} · 待迁移 ${pendingCount}`}
+                  {[
+                    `当前环境直连 ${environment.databaseBindingSummary.directCount} 个`,
+                    `实际使用 ${environment.databaseBindingSummary.effectiveCount} 个`,
+                    environment.databaseBindingSummary.inheritedCount > 0
+                      ? `继承 ${environment.databaseBindingSummary.inheritedCount} 个`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {`门禁阻塞 ${blockingCount} · 待迁移 ${pendingCount}`}
                 </div>
               </div>
               <div className="rounded-2xl border border-border bg-background px-4 py-3">
@@ -778,6 +797,7 @@ function EnvironmentAdvancedPanel({
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-medium text-foreground">{database.name}</div>
                       <Badge variant="secondary">{database.type}</Badge>
+                      <Badge variant="outline">{database.usageLabel}</Badge>
                       <Badge
                         variant="outline"
                         className={getSchemaStateBadgeClass(database.schemaState?.status)}
