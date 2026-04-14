@@ -12,8 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
-import { EnvironmentResourcePanel } from '@/components/projects/EnvironmentResourcePanel';
-import { EnvVarManager } from '@/components/projects/EnvVarManager';
+import { RuntimeSectionNav } from '@/components/projects/RuntimeSectionNav';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -426,13 +425,9 @@ function getSchemaStateBadgeClass(status: SchemaStateStatus | null | undefined):
 function EnvironmentQuickActions({
   projectId,
   environment,
-  diagnosticOpen,
-  onToggleDiagnostics,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
-  diagnosticOpen: boolean;
-  onToggleDiagnostics: () => void;
 }) {
   return (
     <div className="mb-4 flex flex-wrap gap-2">
@@ -453,13 +448,10 @@ function EnvironmentQuickActions({
           </Link>
         </Button>
       )}
-      <Button
-        variant={diagnosticOpen ? 'default' : 'outline'}
-        size="sm"
-        className="rounded-xl"
-        onClick={onToggleDiagnostics}
-      >
-        {diagnosticOpen ? '收起容量与异常' : '容量与异常'}
+      <Button asChild variant="outline" size="sm" className="rounded-xl">
+        <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>
+          打开诊断
+        </Link>
       </Button>
     </div>
   );
@@ -590,13 +582,9 @@ function EnvironmentCardHeader({
 function EnvironmentRuntimePanel({
   projectId,
   environment,
-  diagnosticOpen,
-  onToggleDiagnostics,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
-  diagnosticOpen: boolean;
-  onToggleDiagnostics: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-background px-4 py-4">
@@ -644,12 +632,7 @@ function EnvironmentRuntimePanel({
       )}
 
       <div className="mt-4">
-        <EnvironmentQuickActions
-          projectId={projectId}
-          environment={environment}
-          diagnosticOpen={diagnosticOpen}
-          onToggleDiagnostics={onToggleDiagnostics}
-        />
+        <EnvironmentQuickActions projectId={projectId} environment={environment} />
       </div>
     </div>
   );
@@ -754,12 +737,10 @@ function EnvironmentAdvancedPanel({
   projectId,
   environment,
   governance,
-  diagnosticOpen,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
   governance: EnvironmentsPageClientProps['initialData']['governance'];
-  diagnosticOpen: boolean;
 }) {
   const blockingCount = environment.databases.filter((database) =>
     ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
@@ -774,15 +755,6 @@ function EnvironmentAdvancedPanel({
     <details className="rounded-2xl border border-border bg-background px-4 py-4">
       <summary className="cursor-pointer list-none text-sm font-medium">环境细节</summary>
       <div className="mt-4 space-y-4">
-        {diagnosticOpen && (
-          <EnvironmentResourcePanel
-            projectId={projectId}
-            environmentId={environment.id}
-            environmentName={environment.name}
-            canManage={environment.actions.canConfigureStrategy}
-            manageSummary={environment.actions.configureStrategySummary}
-          />
-        )}
         {environment.databases.length > 0 && (
           <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
             <div className="mb-3">
@@ -860,26 +832,51 @@ function EnvironmentAdvancedPanel({
             ))}
           </div>
         )}
-        <EnvVarManager
-          projectId={projectId}
-          environmentId={environment.id}
-          environmentName={environment.name}
-          canManage={governance.manageEnvVars.allowed}
-          disabledSummary={governance.manageEnvVars.summary}
-        />
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-          变量与诊断的完整入口已收口到 Runtime 子页。
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <Link href={`/projects/${projectId}/runtime/variables?env=${environment.id}`}>
-                打开变量页
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>
-                打开诊断页
-              </Link>
-            </Button>
+        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+          <div className="mb-3">
+            <div className="text-sm font-medium">运行子页</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              变量、日志和诊断都已拆到独立页面，这里只保留环境上下文和跳转。
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                变量
+              </div>
+              <div className="mt-2 text-sm text-foreground">
+                {governance.manageEnvVars.allowed
+                  ? '集中管理该环境的变量与密文。'
+                  : governance.manageEnvVars.summary}
+              </div>
+              <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
+                <Link href={`/projects/${projectId}/runtime/variables?env=${environment.id}`}>
+                  打开变量
+                </Link>
+              </Button>
+            </div>
+            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                日志
+              </div>
+              <div className="mt-2 text-sm text-foreground">查看 Pod、实时流和最近运行输出。</div>
+              <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
+                <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>
+                  打开日志
+                </Link>
+              </Button>
+            </div>
+            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                诊断
+              </div>
+              <div className="mt-2 text-sm text-foreground">查看资源状态、容量与异常诊断入口。</div>
+              <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
+                <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>
+                  打开诊断
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -891,17 +888,13 @@ function EnvironmentExpandedContent({
   projectId,
   environment,
   governance,
-  diagnosticOpen,
   savingStrategy,
-  onToggleDiagnostics,
   onStrategyChange,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
   governance: EnvironmentsPageClientProps['initialData']['governance'];
-  diagnosticOpen: boolean;
   savingStrategy: boolean;
-  onToggleDiagnostics: () => void;
   onStrategyChange: (
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
@@ -909,12 +902,7 @@ function EnvironmentExpandedContent({
   return (
     <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
       <div className="space-y-4">
-        <EnvironmentRuntimePanel
-          projectId={projectId}
-          environment={environment}
-          diagnosticOpen={diagnosticOpen}
-          onToggleDiagnostics={onToggleDiagnostics}
-        />
+        <EnvironmentRuntimePanel projectId={projectId} environment={environment} />
         <EnvironmentRecentActivityPanel items={environment.recentActivity} />
       </div>
       <div className="space-y-4">
@@ -927,7 +915,6 @@ function EnvironmentExpandedContent({
           projectId={projectId}
           environment={environment}
           governance={governance}
-          diagnosticOpen={diagnosticOpen}
         />
       </div>
     </div>
@@ -937,7 +924,6 @@ function EnvironmentExpandedContent({
 interface EnvironmentsPageClientProps {
   projectId: string;
   initialEnvId?: string | null;
-  initialDiagnosticsEnvId?: string | null;
   initialData: {
     governance: {
       roleLabel: string;
@@ -978,7 +964,6 @@ interface EnvironmentsPageClientProps {
 export function EnvironmentsPageClient({
   projectId,
   initialEnvId,
-  initialDiagnosticsEnvId,
   initialData,
 }: EnvironmentsPageClientProps) {
   const defaultExpandedEnvId =
@@ -988,11 +973,6 @@ export function EnvironmentsPageClient({
   const [environments, setEnvironments] = useState(initialData.environments);
   const [expanded, setExpanded] = useState<Record<string, boolean>>(
     defaultExpandedEnvId ? { [defaultExpandedEnvId]: true } : {}
-  );
-  const [diagnosticEnvId, setDiagnosticEnvId] = useState<string | null>(
-    initialData.environments.some((environment) => environment.id === initialDiagnosticsEnvId)
-      ? (initialDiagnosticsEnvId ?? null)
-      : null
   );
   const [governance, setGovernance] = useState(initialData.governance);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -1046,11 +1026,6 @@ export function EnvironmentsPageClient({
 
   const toggleExpanded = (envId: string) => {
     setExpanded((prev) => ({ ...prev, [envId]: !prev[envId] }));
-  };
-
-  const toggleDiagnostics = (envId: string) => {
-    setExpanded((prev) => ({ ...prev, [envId]: true }));
-    setDiagnosticEnvId((current) => (current === envId ? null : envId));
   };
 
   const handleCreatePreview = async (input: {
@@ -1162,8 +1137,8 @@ export function EnvironmentsPageClient({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="环境"
-        description="先选环境，再进入对应发布、预览与配置。"
+        title="运行"
+        description="环境总览、预览治理和运行入口都在这里。变量、日志、诊断进入各自子页。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline">
@@ -1188,6 +1163,8 @@ export function EnvironmentsPageClient({
           </div>
         }
       />
+
+      <RuntimeSectionNav projectId={projectId} />
 
       <PreviewEnvironmentDialog
         open={dialogOpen}
@@ -1322,9 +1299,7 @@ export function EnvironmentsPageClient({
                             projectId={projectId}
                             environment={environment}
                             governance={governance}
-                            diagnosticOpen={diagnosticEnvId === environment.id}
                             savingStrategy={savingStrategyId === environment.id}
-                            onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
                             onStrategyChange={(value) =>
                               handleStrategyChange(environment.id, value)
                             }
@@ -1420,9 +1395,7 @@ export function EnvironmentsPageClient({
                             projectId={projectId}
                             environment={environment}
                             governance={governance}
-                            diagnosticOpen={diagnosticEnvId === environment.id}
                             savingStrategy={savingStrategyId === environment.id}
-                            onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
                             onStrategyChange={(value) =>
                               handleStrategyChange(environment.id, value)
                             }

@@ -3,6 +3,7 @@
 import { ExternalLink, RefreshCw, ScrollText, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { RuntimeSectionNav } from '@/components/projects/RuntimeSectionNav';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import {
@@ -179,6 +180,7 @@ export function LogsPageClient({
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader title="运行日志" description={`${projectName} 的环境运行视图`} />
+      <RuntimeSectionNav projectId={projectId} />
 
       <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
         <section className="console-panel px-5 py-5">

@@ -151,8 +151,8 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   return (
     <div className="space-y-6">
       <PageHeader
-        title="发布"
-        description="按环境查看当前版本、风险信号与发布记录。"
+        title="交付"
+        description="按环境查看当前版本、风险信号与交付记录。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusIndicator

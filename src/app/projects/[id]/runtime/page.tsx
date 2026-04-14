@@ -11,7 +11,7 @@ export default async function RuntimePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ env?: string; panel?: string }>;
+  searchParams?: Promise<{ env?: string }>;
 }) {
   const session = await auth();
   const { id } = await params;
@@ -44,9 +44,6 @@ export default async function RuntimePage({
       projectId={id}
       initialData={initialData}
       initialEnvId={resolvedSearchParams?.env ?? null}
-      initialDiagnosticsEnvId={
-        resolvedSearchParams?.panel === 'diagnostics' ? (resolvedSearchParams?.env ?? null) : null
-      }
     />
   );
 }
