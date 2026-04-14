@@ -3,6 +3,7 @@ import {
   appendDrizzleJournalEntry,
   buildNextMigrationTag,
   buildSchemaRepairArtifacts,
+  buildSchemaRepairRuntimeArtifacts,
 } from '@/lib/schema-management/review-request-helpers';
 
 describe('schema review request helpers', () => {
@@ -49,19 +50,12 @@ describe('schema review request helpers', () => {
       actualVersion: '0000_known_mole_man',
     });
 
-    expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-12345678.json');
-    expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-12345678.atlas.hcl');
-    expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-12345678.atlas.sh');
-    expect(Object.keys(artifacts.files)).toContain('.github/workflows/schema-repair-plan-123.yml');
     expect(Object.keys(artifacts.files)).toContain(
       'drizzle/0001_juanie_schema_repair_plan-123.sql'
     );
     expect(Object.keys(artifacts.files)).toContain('drizzle/meta/_journal.json');
     expect(artifacts.files['drizzle/meta/_journal.json']).toContain(
       '0001_juanie_schema_repair_plan-123'
-    );
-    expect(artifacts.files['.juanie/schema-repair/plan-12345678.atlas.hcl']).toContain(
-      'plan-12345678.schema.sql'
     );
   });
 
@@ -82,16 +76,38 @@ describe('schema review request helpers', () => {
       actualVersion: null,
     });
 
-    expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-abcdefgh.json');
-    expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-abcdefgh.atlas.hcl');
-    expect(Object.keys(artifacts.files)).toContain('.juanie/schema-repair/plan-abcdefgh.atlas.sh');
-    expect(Object.keys(artifacts.files)).toContain(
-      '.juanie/schema-repair/plan-abcdefgh.gitlab-ci.yml'
-    );
     expect(Object.keys(artifacts.files)).toContain(
       'migrations/postgresql/0001_juanie_schema_baseline_plan-abc.sql'
     );
-    expect(artifacts.files['.juanie/schema-repair/plan-abcdefgh.atlas.sh']).toContain(
+  });
+
+  it('builds runtime-only atlas artifacts outside the repo review surface', () => {
+    const artifacts = buildSchemaRepairRuntimeArtifacts({
+      provider: 'github',
+      tool: 'drizzle',
+      databaseType: 'postgresql',
+      migrationPath: 'drizzle',
+      existingMigrationNames: [],
+      planId: 'plan-12345678',
+      title: 'Schema repair',
+      summary: 'Need repair',
+      planKind: 'repair_pr_required',
+      stateStatus: 'drifted',
+      databaseName: 'postgresql',
+      expectedVersion: '0001_soft_hedge_knight',
+      actualVersion: '0000_known_mole_man',
+    });
+
+    expect(artifacts.atlasConfigPath).toBe('.juanie/schema-repair/plan-12345678.atlas.hcl');
+    expect(artifacts.atlasScriptPath).toBe('.juanie/schema-repair/plan-12345678.atlas.sh');
+    expect(Object.keys(artifacts.files)).toEqual([
+      '.juanie/schema-repair/plan-12345678.atlas.hcl',
+      '.juanie/schema-repair/plan-12345678.atlas.sh',
+    ]);
+    expect(artifacts.files['.juanie/schema-repair/plan-12345678.atlas.hcl']).toContain(
+      'plan-12345678.schema.sql'
+    );
+    expect(artifacts.files['.juanie/schema-repair/plan-12345678.atlas.sh']).toContain(
       'migrate diff'
     );
   });

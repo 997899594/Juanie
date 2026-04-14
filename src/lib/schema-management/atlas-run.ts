@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -8,7 +8,10 @@ import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { resolveMigrationPath } from '@/lib/migrations/path';
 import { addSchemaRepairAtlasJob } from '@/lib/queue';
+import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
+import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
 
 const execFileAsync = promisify(execFile);
 
@@ -279,7 +282,6 @@ export async function executeSchemaRepairAtlasRun(input: {
   });
   const baseBranch = project.repository.defaultBranch || 'main';
   const branchName = plan.branchName;
-  const scriptPath = path.join(repoDir, '.juanie', 'schema-repair', `${plan.id}.atlas.sh`);
   const startTime = new Date();
   await db
     .update(schemaRepairPlans)
@@ -319,6 +321,44 @@ export async function executeSchemaRepairAtlasRun(input: {
       baseBranch,
       Array.isArray(plan.generatedFiles) ? (plan.generatedFiles as string[]) : []
     );
+
+    const spec = await resolveSchemaManagementSpec({
+      projectId: input.projectId,
+      databaseId: plan.databaseId,
+    });
+
+    if (!spec) {
+      throw new Error('无法解析 schema repair 对应的迁移配置');
+    }
+
+    const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
+    if (!migrationPath) {
+      throw new Error('当前迁移工具没有可用的 migration 目录，无法运行 Atlas');
+    }
+
+    const runtimeArtifacts = buildSchemaRepairRuntimeArtifacts({
+      provider: session.provider,
+      tool: spec.specification.tool,
+      databaseType: spec.database.type,
+      migrationPath,
+      existingMigrationNames: [],
+      planId: plan.id,
+      title: plan.title,
+      summary: plan.summary,
+      planKind: plan.kind,
+      stateStatus: plan.stateStatus,
+      databaseName: plan.database?.name ?? 'database',
+      expectedVersion: plan.expectedVersion,
+      actualVersion: plan.actualVersion,
+    });
+    const runtimeDir = path.join(repoDir, '.juanie', 'schema-repair');
+    await mkdir(runtimeDir, { recursive: true });
+    await Promise.all(
+      Object.entries(runtimeArtifacts.files).map(([relativePath, content]) =>
+        writeFile(path.join(repoDir, relativePath), content, 'utf8')
+      )
+    );
+    const scriptPath = path.join(repoDir, runtimeArtifacts.atlasScriptPath);
 
     const env = {
       ...process.env,

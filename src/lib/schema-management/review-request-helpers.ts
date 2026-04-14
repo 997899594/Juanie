@@ -4,6 +4,12 @@ export interface GeneratedSchemaRepairArtifacts {
   migrationTag: string | null;
 }
 
+export interface SchemaRepairRuntimeArtifacts {
+  files: Record<string, string>;
+  atlasConfigPath: string;
+  atlasScriptPath: string;
+}
+
 interface SchemaRepairArtifactInput {
   provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
   tool: 'drizzle' | 'sql' | 'prisma' | 'knex' | 'typeorm' | 'custom';
@@ -114,26 +120,6 @@ function buildFailureScaffoldMessage(input: SchemaRepairArtifactInput): string {
   ].join(' | ');
 }
 
-function buildPlanMetadataContent(input: SchemaRepairArtifactInput): string {
-  return `${JSON.stringify(
-    {
-      planId: input.planId,
-      title: input.title,
-      summary: input.summary,
-      planKind: input.planKind,
-      stateStatus: input.stateStatus,
-      databaseName: input.databaseName,
-      tool: input.tool,
-      databaseType: input.databaseType,
-      migrationPath: input.migrationPath,
-      expectedVersion: input.expectedVersion,
-      actualVersion: input.actualVersion,
-    },
-    null,
-    2
-  )}\n`;
-}
-
 function buildAtlasConfigContent(input: SchemaRepairArtifactInput): string {
   const schemaFilePath = `.juanie/schema-repair/${input.planId}.schema.sql`;
   const envBlock =
@@ -233,45 +219,6 @@ function buildAtlasScriptContent(
     .join('\n');
 }
 
-function buildGitHubAtlasWorkflow(input: { planId: string; atlasScriptPath: string }): string {
-  return [
-    `name: Schema Repair ${input.planId.slice(0, 8)}`,
-    `on:`,
-    `  pull_request:`,
-    `    branches: [main, master]`,
-    `jobs:`,
-    `  atlas-repair:`,
-    `    runs-on: ubuntu-latest`,
-    `    steps:`,
-    `      - uses: actions/checkout@v5`,
-    `      - uses: actions/setup-node@v5`,
-    `        with:`,
-    `          node-version: "20"`,
-    `      - uses: ariga/setup-atlas@v0`,
-    `      - run: chmod +x ${input.atlasScriptPath}`,
-    `      - run: ${input.atlasScriptPath}`,
-    ``,
-  ].join('\n');
-}
-
-function buildGitLabAtlasSnippet(input: { planId: string; atlasScriptPath: string }): string {
-  const jobName = `schema_repair_${input.planId.slice(0, 8)}`;
-
-  return [
-    `${jobName}:`,
-    `  stage: test`,
-    `  image: node:20-bullseye`,
-    `  script:`,
-    `    - curl -sSf https://atlasgo.sh | sh`,
-    `    - export PATH="${'$'}PATH:${'$'}HOME/.atlas/bin"`,
-    `    - chmod +x ${input.atlasScriptPath}`,
-    `    - ${input.atlasScriptPath}`,
-    `  rules:`,
-    `    - if: $CI_PIPELINE_SOURCE == "merge_request_event"`,
-    ``,
-  ].join('\n');
-}
-
 function buildScaffoldHeading(input: SchemaRepairArtifactInput): string[] {
   const modeSummary =
     input.planKind === 'adopt_current_db'
@@ -296,34 +243,27 @@ function buildScaffoldHeading(input: SchemaRepairArtifactInput): string[] {
   ];
 }
 
+export function buildSchemaRepairRuntimeArtifacts(
+  input: SchemaRepairArtifactInput
+): SchemaRepairRuntimeArtifacts {
+  const atlasConfigPath = `.juanie/schema-repair/${input.planId}.atlas.hcl`;
+  const atlasScriptPath = `.juanie/schema-repair/${input.planId}.atlas.sh`;
+
+  return {
+    files: {
+      [atlasConfigPath]: buildAtlasConfigContent(input),
+      [atlasScriptPath]: buildAtlasScriptContent(input, atlasConfigPath),
+    },
+    atlasConfigPath,
+    atlasScriptPath,
+  };
+}
+
 export function buildSchemaRepairArtifacts(
   input: SchemaRepairArtifactInput
 ): GeneratedSchemaRepairArtifacts {
-  const metadataPath = `.juanie/schema-repair/${input.planId}.json`;
-  const atlasConfigPath = `.juanie/schema-repair/${input.planId}.atlas.hcl`;
-  const atlasScriptPath = `.juanie/schema-repair/${input.planId}.atlas.sh`;
-  const files: Record<string, string> = {
-    [metadataPath]: buildPlanMetadataContent(input),
-    [atlasConfigPath]: buildAtlasConfigContent(input),
-    [atlasScriptPath]: buildAtlasScriptContent(input, atlasConfigPath),
-  };
-  const generatedFiles = [metadataPath, atlasConfigPath, atlasScriptPath];
-
-  if (input.provider === 'github') {
-    const workflowPath = `.github/workflows/schema-repair-${input.planId.slice(0, 8)}.yml`;
-    files[workflowPath] = buildGitHubAtlasWorkflow({
-      planId: input.planId,
-      atlasScriptPath,
-    });
-    generatedFiles.push(workflowPath);
-  } else {
-    const gitlabSnippetPath = `.juanie/schema-repair/${input.planId}.gitlab-ci.yml`;
-    files[gitlabSnippetPath] = buildGitLabAtlasSnippet({
-      planId: input.planId,
-      atlasScriptPath,
-    });
-    generatedFiles.push(gitlabSnippetPath);
-  }
+  const files: Record<string, string> = {};
+  const generatedFiles: string[] = [];
 
   const needsMigrationScaffold =
     input.migrationPath &&

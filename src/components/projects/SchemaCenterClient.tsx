@@ -389,7 +389,7 @@ export function SchemaCenterClient({
                                 runAction(
                                   database.id,
                                   () => createDatabaseRepairReviewRequest(projectId, database.id),
-                                  '修复 PR 已生成'
+                                  '修复 PR 已生成，Atlas 请回到平台内运行'
                                 )
                               }
                             >
