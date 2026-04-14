@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpCircle, ScrollText } from 'lucide-react';
+import { ArrowUpCircle, Database, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
@@ -164,6 +164,12 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               <Link href={`/projects/${projectId}/logs`}>
                 <ScrollText className="h-3.5 w-3.5" />
                 打开日志
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+              <Link href={`/projects/${projectId}/schema`}>
+                <Database className="h-3.5 w-3.5" />
+                Schema Center
               </Link>
             </Button>
             <ManualReleaseDialog

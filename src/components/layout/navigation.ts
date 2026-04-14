@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Database,
   FolderKanban,
   Globe,
   Home,
@@ -58,6 +59,11 @@ export const projectNav: NavItem[] = [
     title: '环境',
     href: '/environments',
     icon: Globe,
+  },
+  {
+    title: 'Schema',
+    href: '/schema',
+    icon: Database,
   },
   {
     title: '发布',

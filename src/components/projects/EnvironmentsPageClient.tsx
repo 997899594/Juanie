@@ -5,7 +5,6 @@ import {
   ChevronUp,
   GitBranch,
   Globe,
-  Loader2,
   Plus,
   Rocket,
   ScrollText,
@@ -50,17 +49,10 @@ import {
 } from '@/components/ui/select';
 import {
   cleanupPreviewEnvironments,
-  createDatabaseRepairPlan,
-  createDatabaseRepairReviewRequest,
   createPreviewEnvironment,
   type DatabaseSchemaRepairPlan,
   deletePreviewEnvironment,
   fetchProjectEnvironments,
-  inspectDatabaseSchemaState,
-  markDatabaseRepairPlanApplied,
-  markDatabaseSchemaAligned,
-  runDatabaseRepairAtlas,
-  syncDatabaseRepairReviewRequest,
   updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
 import { cn } from '@/lib/utils';
@@ -431,24 +423,6 @@ function getSchemaStateBadgeClass(status: SchemaStateStatus | null | undefined):
   }
 }
 
-function formatInspectionTimestamp(value: string | Date | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 function EnvironmentQuickActions({
   projectId,
   environment,
@@ -781,164 +755,20 @@ function EnvironmentAdvancedPanel({
   environment,
   governance,
   diagnosticOpen,
-  inspectingDatabaseId,
-  onInspectDatabase,
-  onMarkDatabaseAligned,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
   governance: EnvironmentsPageClientProps['initialData']['governance'];
   diagnosticOpen: boolean;
-  inspectingDatabaseId: string | null;
-  onInspectDatabase: (databaseId: string) => Promise<void>;
-  onMarkDatabaseAligned: (databaseId: string) => Promise<void>;
 }) {
-  const [repairPlans, setRepairPlans] = useState<Record<string, DatabaseSchemaRepairPlan | null>>(
-    {}
-  );
-  const [repairPlanErrors, setRepairPlanErrors] = useState<Record<string, string | null>>({});
-
-  const [repairPlanLoadingId, setRepairPlanLoadingId] = useState<string | null>(null);
-  const [repairReviewLoadingId, setRepairReviewLoadingId] = useState<string | null>(null);
-  const [repairApplyLoadingId, setRepairApplyLoadingId] = useState<string | null>(null);
-  const [repairReviewSyncLoadingId, setRepairReviewSyncLoadingId] = useState<string | null>(null);
-  const [repairAtlasLoadingId, setRepairAtlasLoadingId] = useState<string | null>(null);
-
-  const repairStatusLabel: Record<DatabaseSchemaRepairPlan['status'], string> = {
-    draft: '草稿',
-    review_opened: '已开评审',
-    applied: '已应用',
-    superseded: '已替代',
-    failed: '失败',
-  };
-  const repairReviewStateLabel: Record<DatabaseSchemaRepairPlan['reviewState'], string> = {
-    draft: '草稿',
-    open: '进行中',
-    merged: '已合并',
-    closed: '已关闭',
-    unknown: '未知',
-  };
-  const atlasExecutionStatusLabel: Record<
-    DatabaseSchemaRepairPlan['atlasExecutionStatus'],
-    string
-  > = {
-    idle: '未执行',
-    queued: '排队中',
-    running: '运行中',
-    succeeded: '成功',
-    failed: '失败',
-  };
-
-  const handleBuildRepairPlan = async (databaseId: string) => {
-    setRepairPlanLoadingId(databaseId);
-    setRepairPlanErrors((current) => ({
-      ...current,
-      [databaseId]: null,
-    }));
-
-    try {
-      const plan = await createDatabaseRepairPlan(projectId, databaseId);
-      setRepairPlans((current) => ({
-        ...current,
-        [databaseId]: plan,
-      }));
-    } catch (error) {
-      setRepairPlanErrors((current) => ({
-        ...current,
-        [databaseId]: error instanceof Error ? error.message : '生成修复计划失败',
-      }));
-    } finally {
-      setRepairPlanLoadingId(null);
-    }
-  };
-
-  const handleCreateRepairReviewRequest = async (databaseId: string) => {
-    setRepairReviewLoadingId(databaseId);
-    setRepairPlanErrors((current) => ({
-      ...current,
-      [databaseId]: null,
-    }));
-
-    try {
-      const updatedPlan = await createDatabaseRepairReviewRequest(projectId, databaseId);
-      setRepairPlans((current) => ({
-        ...current,
-        [databaseId]: updatedPlan,
-      }));
-    } catch (error) {
-      setRepairPlanErrors((current) => ({
-        ...current,
-        [databaseId]: error instanceof Error ? error.message : '生成修复 PR 失败',
-      }));
-    } finally {
-      setRepairReviewLoadingId(null);
-    }
-  };
-
-  const handleMarkRepairPlanApplied = async (databaseId: string) => {
-    setRepairApplyLoadingId(databaseId);
-    setRepairPlanErrors((current) => ({
-      ...current,
-      [databaseId]: null,
-    }));
-
-    try {
-      const updatedPlan = await markDatabaseRepairPlanApplied(projectId, databaseId);
-      setRepairPlans((current) => ({
-        ...current,
-        [databaseId]: updatedPlan,
-      }));
-    } catch (error) {
-      setRepairPlanErrors((current) => ({
-        ...current,
-        [databaseId]: error instanceof Error ? error.message : '标记已应用失败',
-      }));
-    } finally {
-      setRepairApplyLoadingId(null);
-    }
-  };
-
-  const handleSyncRepairReviewRequest = async (databaseId: string) => {
-    setRepairReviewSyncLoadingId(databaseId);
-    setRepairPlanErrors((current) => ({
-      ...current,
-      [databaseId]: null,
-    }));
-
-    try {
-      const updatedPlan = await syncDatabaseRepairReviewRequest(projectId, databaseId);
-      setRepairPlans((current) => ({
-        ...current,
-        [databaseId]: updatedPlan,
-      }));
-    } catch (error) {
-      setRepairPlanErrors((current) => ({
-        ...current,
-        [databaseId]: error instanceof Error ? error.message : '同步评审状态失败',
-      }));
-    } finally {
-      setRepairReviewSyncLoadingId(null);
-    }
-  };
-
-  const handleRunRepairAtlas = async (databaseId: string) => {
-    setRepairAtlasLoadingId(databaseId);
-    setRepairPlanErrors((current) => ({
-      ...current,
-      [databaseId]: null,
-    }));
-
-    try {
-      await runDatabaseRepairAtlas(projectId, databaseId);
-    } catch (error) {
-      setRepairPlanErrors((current) => ({
-        ...current,
-        [databaseId]: error instanceof Error ? error.message : '运行 Atlas 失败',
-      }));
-    } finally {
-      setRepairAtlasLoadingId(null);
-    }
-  };
+  const blockingCount = environment.databases.filter((database) =>
+    ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
+      database.schemaState?.status ?? 'unmanaged'
+    )
+  ).length;
+  const pendingCount = environment.databases.filter(
+    (database) => database.schemaState?.status === 'pending_migrations'
+  ).length;
 
   return (
     <details className="rounded-2xl border border-border bg-background px-4 py-4">
@@ -958,287 +788,55 @@ function EnvironmentAdvancedPanel({
             <div className="mb-3">
               <div className="text-sm font-medium">数据库纳管</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                先看 schema 状态，再决定是否需要接管或修复。
+                主入口已收口到 Schema Center，这里只保留摘要与跳转。
               </div>
             </div>
-            <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  摘要
+                </div>
+                <div className="mt-2 text-sm text-foreground">
+                  {`共 ${environment.databases.length} 个数据库 · 门禁阻塞 ${blockingCount} · 待迁移 ${pendingCount}`}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  入口
+                </div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Schema 检查、修复计划、评审和 Atlas 执行都在统一页面处理。
+                </div>
+                <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
+                  <Link href={`/projects/${projectId}/schema?env=${environment.id}`}>
+                    打开 Schema Center
+                  </Link>
+                </Button>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
               {environment.databases.map((database) => {
-                const state = database.schemaState;
-                const repairPlan = repairPlans[database.id] ?? database.latestRepairPlan ?? null;
-                const latestAtlasRun = database.latestAtlasRun;
-                const repairPlanError = repairPlanErrors[database.id] ?? null;
-                const lastInspectedLabel = formatInspectionTimestamp(state?.lastInspectedAt);
-                const reviewSyncedLabel = formatInspectionTimestamp(repairPlan?.reviewSyncedAt);
-                const atlasFinishedLabel = formatInspectionTimestamp(
-                  latestAtlasRun?.finishedAt ?? repairPlan?.atlasExecutionFinishedAt
-                );
-                const versionSummary =
-                  state?.actualVersion || state?.expectedVersion
-                    ? [
-                        state?.actualVersion ? `当前 ${state.actualVersion}` : null,
-                        state?.expectedVersion ? `期望 ${state.expectedVersion}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                    : null;
-
                 return (
                   <div
                     key={database.id}
                     className="rounded-2xl border border-border bg-background px-4 py-3"
                   >
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-medium text-foreground">{database.name}</div>
-                          <Badge variant="secondary">{database.type}</Badge>
-                          <Badge
-                            variant="outline"
-                            className={getSchemaStateBadgeClass(state?.status)}
-                          >
-                            {state?.statusLabel ?? '未纳管'}
-                          </Badge>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {state?.summary ?? '环境尚未进入 schema 纳管，点击检查开始识别'}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {[
-                            database.status ? `运行状态 ${database.status}` : null,
-                            state ? (state.hasLedger ? '已检测到账本' : '未检测到账本') : null,
-                            state?.hasUserTables ? '存在业务表' : null,
-                            versionSummary,
-                            lastInspectedLabel ? `上次检查 ${lastInspectedLabel}` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </div>
-                      </div>
-                      <Button
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-medium text-foreground">{database.name}</div>
+                      <Badge variant="secondary">{database.type}</Badge>
+                      <Badge
                         variant="outline"
-                        size="sm"
-                        className="rounded-xl lg:shrink-0"
-                        disabled={
-                          inspectingDatabaseId !== null || !environment.actions.canConfigureStrategy
-                        }
-                        title={
-                          environment.actions.canConfigureStrategy
-                            ? undefined
-                            : environment.actions.configureStrategySummary
-                        }
-                        onClick={() => onInspectDatabase(database.id)}
+                        className={getSchemaStateBadgeClass(database.schemaState?.status)}
                       >
-                        {inspectingDatabaseId === database.id ? (
-                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                        ) : null}
-                        检查 schema
-                      </Button>
-                      {state?.status === 'aligned_untracked' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-xl lg:shrink-0"
-                          disabled={
-                            inspectingDatabaseId !== null ||
-                            !environment.actions.canConfigureStrategy
-                          }
-                          title={
-                            environment.actions.canConfigureStrategy
-                              ? undefined
-                              : environment.actions.configureStrategySummary
-                          }
-                          onClick={() => onMarkDatabaseAligned(database.id)}
-                        >
-                          标记为已对齐
-                        </Button>
-                      )}
-                      {state &&
-                        ['pending_migrations', 'drifted', 'unmanaged', 'blocked'].includes(
-                          state.status
-                        ) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-xl lg:shrink-0"
-                            disabled={
-                              repairPlanLoadingId !== null ||
-                              !environment.actions.canConfigureStrategy
-                            }
-                            title={
-                              environment.actions.canConfigureStrategy
-                                ? undefined
-                                : environment.actions.configureStrategySummary
-                            }
-                            onClick={() => handleBuildRepairPlan(database.id)}
-                          >
-                            {repairPlanLoadingId === database.id ? (
-                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                            ) : null}
-                            生成修复计划
-                          </Button>
-                        )}
+                        {database.schemaState?.statusLabel ?? '未纳管'}
+                      </Badge>
+                      {database.latestRepairPlan ? (
+                        <Badge variant="outline">{database.latestRepairPlan.status}</Badge>
+                      ) : null}
                     </div>
-                    {repairPlan && (
-                      <div className="mt-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary">修复计划</Badge>
-                          <Badge variant="outline">{repairPlan.title}</Badge>
-                          <Badge variant="outline">风险 {repairPlan.riskLevel}</Badge>
-                          <Badge variant="outline">
-                            状态 {repairStatusLabel[repairPlan.status] ?? repairPlan.status}
-                          </Badge>
-                          {repairPlan.reviewUrl && (
-                            <Badge variant="outline">
-                              评审 {repairReviewStateLabel[repairPlan.reviewState]}
-                            </Badge>
-                          )}
-                          <Badge variant="outline">
-                            Atlas {atlasExecutionStatusLabel[repairPlan.atlasExecutionStatus]}
-                          </Badge>
-                        </div>
-                        <div className="mt-2 text-sm text-foreground">{repairPlan.summary}</div>
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          {[
-                            repairPlan.actualVersion ? `当前 ${repairPlan.actualVersion}` : null,
-                            repairPlan.expectedVersion
-                              ? `期望 ${repairPlan.expectedVersion}`
-                              : null,
-                            repairPlan.nextActionLabel,
-                            repairPlan.reviewStateLabel
-                              ? `评审状态 ${repairPlan.reviewStateLabel}`
-                              : null,
-                            reviewSyncedLabel ? `同步于 ${reviewSyncedLabel}` : null,
-                            atlasFinishedLabel ? `Atlas 完成于 ${atlasFinishedLabel}` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </div>
-                        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                          {repairPlan.steps.map((step, index) => (
-                            <div key={`${database.id}-repair-step-${index}`}>
-                              {index + 1}. {step}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {[
-                            'repair_pr_required',
-                            'adopt_current_db',
-                            'manual_investigation',
-                          ].includes(repairPlan.kind) &&
-                            ['draft', 'failed'].includes(repairPlan.status) && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl"
-                                disabled={
-                                  repairReviewLoadingId !== null ||
-                                  !environment.actions.canConfigureStrategy
-                                }
-                                onClick={() => handleCreateRepairReviewRequest(database.id)}
-                              >
-                                {repairReviewLoadingId === database.id ? (
-                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                ) : null}
-                                生成修复 PR
-                              </Button>
-                            )}
-                          {repairPlan.reviewUrl && (
-                            <Button asChild variant="outline" size="sm" className="rounded-xl">
-                              <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
-                                打开评审单
-                              </a>
-                            </Button>
-                          )}
-                          {repairPlan.reviewUrl && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl"
-                              disabled={repairReviewSyncLoadingId !== null}
-                              onClick={() => handleSyncRepairReviewRequest(database.id)}
-                            >
-                              {repairReviewSyncLoadingId === database.id ? (
-                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                              ) : null}
-                              同步评审状态
-                            </Button>
-                          )}
-                          {repairPlan.status === 'review_opened' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl"
-                              disabled={repairAtlasLoadingId !== null}
-                              onClick={() => handleRunRepairAtlas(database.id)}
-                            >
-                              {repairAtlasLoadingId === database.id ? (
-                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                              ) : null}
-                              运行 Atlas
-                            </Button>
-                          )}
-                          {repairPlan.status === 'review_opened' &&
-                            repairPlan.reviewState === 'merged' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl"
-                                disabled={repairApplyLoadingId !== null}
-                                onClick={() => handleMarkRepairPlanApplied(database.id)}
-                              >
-                                {repairApplyLoadingId === database.id ? (
-                                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                ) : null}
-                                标记已应用
-                              </Button>
-                            )}
-                          {repairPlan.status === 'review_opened' &&
-                            repairPlan.reviewState !== 'merged' && (
-                              <Button variant="ghost" size="sm" className="rounded-xl" disabled>
-                                等待评审合并
-                              </Button>
-                            )}
-                          {repairPlan.branchName && (
-                            <Badge variant="secondary">{repairPlan.branchName}</Badge>
-                          )}
-                        </div>
-                        {repairPlan.atlasExecutionLog && (
-                          <pre className="mt-3 overflow-x-auto rounded-2xl border border-border bg-background px-4 py-3 text-xs text-muted-foreground">
-                            {repairPlan.atlasExecutionLog}
-                          </pre>
-                        )}
-                        {latestAtlasRun?.diffSummary && (
-                          <div className="mt-3 rounded-2xl border border-border bg-background px-4 py-3">
-                            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                              Atlas Diff
-                            </div>
-                            <div className="mt-2 text-xs text-muted-foreground">
-                              {[
-                                latestAtlasRun.commitSha
-                                  ? `提交 ${latestAtlasRun.commitSha.slice(0, 7)}`
-                                  : null,
-                                `${latestAtlasRun.diffSummary.changedFiles.length} 个文件`,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </div>
-                            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                              {latestAtlasRun.diffSummary.fileStats.map((item) => (
-                                <div key={`${database.id}-atlas-diff-${item.file}`}>
-                                  {item.file} · +{item.added} / -{item.removed}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {repairPlanError && (
-                      <div className="mt-4 rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
-                        {repairPlanError}
-                      </div>
-                    )}
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {database.schemaState?.summary ?? '尚未识别 schema 状态'}
+                    </div>
                   </div>
                 );
               })}
@@ -1280,24 +878,18 @@ function EnvironmentExpandedContent({
   governance,
   diagnosticOpen,
   savingStrategy,
-  inspectingDatabaseId,
   onToggleDiagnostics,
   onStrategyChange,
-  onInspectDatabase,
-  onMarkDatabaseAligned,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
   governance: EnvironmentsPageClientProps['initialData']['governance'];
   diagnosticOpen: boolean;
   savingStrategy: boolean;
-  inspectingDatabaseId: string | null;
   onToggleDiagnostics: () => void;
   onStrategyChange: (
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
-  onInspectDatabase: (databaseId: string) => Promise<void>;
-  onMarkDatabaseAligned: (databaseId: string) => Promise<void>;
 }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
@@ -1321,9 +913,6 @@ function EnvironmentExpandedContent({
           environment={environment}
           governance={governance}
           diagnosticOpen={diagnosticOpen}
-          inspectingDatabaseId={inspectingDatabaseId}
-          onInspectDatabase={onInspectDatabase}
-          onMarkDatabaseAligned={onMarkDatabaseAligned}
         />
       </div>
     </div>
@@ -1397,7 +986,6 @@ export function EnvironmentsPageClient({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleaningExpired, setCleaningExpired] = useState(false);
   const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
-  const [inspectingDatabaseId, setInspectingDatabaseId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const fetchEnvironments = useCallback(async () => {
@@ -1526,38 +1114,6 @@ export function EnvironmentsPageClient({
       setTimeout(() => setFeedback(null), 5000);
     } finally {
       setSavingStrategyId(null);
-    }
-  };
-
-  const handleInspectDatabase = async (databaseId: string) => {
-    setInspectingDatabaseId(databaseId);
-
-    try {
-      await inspectDatabaseSchemaState(projectId, databaseId);
-      await fetchEnvironments();
-      setFeedback('Schema 状态已更新');
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '检查 schema 失败');
-      setTimeout(() => setFeedback(null), 5000);
-    } finally {
-      setInspectingDatabaseId(null);
-    }
-  };
-
-  const handleMarkDatabaseAligned = async (databaseId: string) => {
-    setInspectingDatabaseId(databaseId);
-
-    try {
-      await markDatabaseSchemaAligned(projectId, databaseId);
-      await fetchEnvironments();
-      setFeedback('数据库账本已标记为对齐');
-      setTimeout(() => setFeedback(null), 3000);
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '标记为已对齐失败');
-      setTimeout(() => setFeedback(null), 5000);
-    } finally {
-      setInspectingDatabaseId(null);
     }
   };
 
@@ -1753,13 +1309,10 @@ export function EnvironmentsPageClient({
                             governance={governance}
                             diagnosticOpen={diagnosticEnvId === environment.id}
                             savingStrategy={savingStrategyId === environment.id}
-                            inspectingDatabaseId={inspectingDatabaseId}
                             onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
                             onStrategyChange={(value) =>
                               handleStrategyChange(environment.id, value)
                             }
-                            onInspectDatabase={handleInspectDatabase}
-                            onMarkDatabaseAligned={handleMarkDatabaseAligned}
                           />
                         </div>
                       )}
@@ -1854,13 +1407,10 @@ export function EnvironmentsPageClient({
                             governance={governance}
                             diagnosticOpen={diagnosticEnvId === environment.id}
                             savingStrategy={savingStrategyId === environment.id}
-                            inspectingDatabaseId={inspectingDatabaseId}
                             onToggleDiagnostics={() => toggleDiagnostics(environment.id)}
                             onStrategyChange={(value) =>
                               handleStrategyChange(environment.id, value)
                             }
-                            onInspectDatabase={handleInspectDatabase}
-                            onMarkDatabaseAligned={handleMarkDatabaseAligned}
                           />
                         </div>
                       )}
