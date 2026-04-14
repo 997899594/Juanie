@@ -46,18 +46,6 @@ export function Sidebar() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-4">
-          <div className="mb-4 px-3">
-            <div className="console-surface rounded-[20px] px-3 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Workspace
-              </div>
-              <div className="mt-1 text-sm font-semibold text-foreground">现代发布控制台</div>
-              <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                先定位主链路，再进入项目级诊断与执行。
-              </div>
-            </div>
-          </div>
-
           <nav className="space-y-1">
             {mainNav.map((item) => {
               const isActive = isNavItemActive(pathname, item.href);
@@ -69,7 +57,7 @@ export function Sidebar() {
                   className={cn(
                     'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
                     isActive
-                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      ? 'bg-secondary text-foreground'
                       : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
                   )}
                 >
@@ -97,7 +85,7 @@ export function Sidebar() {
                       className={cn(
                         'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
                         isActive
-                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          ? 'bg-secondary text-foreground'
                           : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
                       )}
                     >

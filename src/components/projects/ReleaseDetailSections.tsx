@@ -89,25 +89,21 @@ export function ReleaseNarrativeSection({
       <div className="space-y-4">
         <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            阻塞原因
+            阻塞
           </div>
           <div className="mt-2 text-sm font-medium text-foreground">
-            {release.blockingReason?.label ?? '当前没有明显阻塞'}
-          </div>
-          <div className="mt-2 text-sm text-muted-foreground">
-            {release.blockingReason?.summary ??
-              '发布链路没有发现明显的迁移、调度、镜像或运行时异常。'}
+            {release.blockingReason?.label ?? '无'}
           </div>
           {release.blockingReason?.nextActionLabel && (
             <div className="mt-2 text-xs text-muted-foreground">
-              下一步：{release.blockingReason.nextActionLabel}
+              {release.blockingReason.nextActionLabel}
             </div>
           )}
         </div>
         {release.infrastructureDiagnostics && (
           <div className="rounded-2xl border border-border bg-background px-4 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              容量与治理
+              容量
             </div>
             <div className="mt-2 text-sm font-medium text-foreground">
               剩余 {release.infrastructureDiagnostics.capacity.availableMemoryLabel}
@@ -149,14 +145,14 @@ export function ReleaseNarrativeSection({
         </div>
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            当前结果
+            结果
           </div>
           <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.result}</div>
         </div>
         {release.narrativeSummary.governance && (
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              平台处理
+              处理
             </div>
             <div className="mt-2 text-sm text-foreground">
               {release.narrativeSummary.governance}
@@ -166,7 +162,7 @@ export function ReleaseNarrativeSection({
         {release.narrativeSummary.nextAction && (
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              下一步建议
+              下一步
             </div>
             <div className="mt-2 text-sm text-foreground">
               {release.narrativeSummary.nextAction}
@@ -175,13 +171,13 @@ export function ReleaseNarrativeSection({
         )}
         <div className="flex flex-wrap gap-2 pt-1">
           <Button asChild size="sm" className="rounded-xl">
-            <Link href={environmentLogsHref}>打开日志</Link>
+            <Link href={environmentLogsHref}>日志</Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={environmentDetailHref}>打开环境</Link>
+            <Link href={environmentDetailHref}>环境</Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={releasesHref}>返回发布中心</Link>
+            <Link href={releasesHref}>返回</Link>
           </Button>
         </div>
       </div>
@@ -201,18 +197,13 @@ export function ReleaseTimelineSection({
   return (
     <div className="console-panel p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold">发布时间线</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            把 release、迁移、部署、放量和基础设施异常串成一条线。
-          </div>
-        </div>
+        <div className="text-sm font-semibold">时间线</div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={environmentLogsHref}>打开日志</Link>
+            <Link href={environmentLogsHref}>日志</Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={environmentDiagnosticsHref}>打开诊断</Link>
+            <Link href={environmentDiagnosticsHref}>诊断</Link>
           </Button>
         </div>
       </div>

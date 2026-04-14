@@ -61,7 +61,7 @@ function renderUnavailableState(panel: ResolvedAIPluginSnapshot, emptyLabel: str
     <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-5">
       <div className="text-sm font-medium text-foreground">{emptyLabel}</div>
       <div className="mt-2 text-sm text-muted-foreground">
-        {panel.errorMessage ?? panel.availability.blockedReason ?? '当前还没有可读的 AI snapshot。'}
+        {panel.errorMessage ?? panel.availability.blockedReason ?? '暂无结果'}
       </div>
     </div>
   );
@@ -77,9 +77,6 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">AI 发布计划</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              基于当前 release、迁移、diff 和基础设施证据生成。
-            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ReleaseAIRefreshActions projectId={props.projectId} releaseId={props.releaseId} />
@@ -94,7 +91,6 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
           <div className="space-y-4">
             {props.releasePlan.errorMessage && (
               <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                本次刷新失败，当前展示的是最近一次可用 snapshot。原因：
                 {props.releasePlan.errorMessage}
               </div>
             )}
@@ -177,7 +173,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
           </div>
         ) : (
-          renderUnavailableState(props.releasePlan, '当前还没有发布计划 snapshot')
+          renderUnavailableState(props.releasePlan, '暂无发布计划')
         )}
       </div>
 
@@ -185,9 +181,6 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">AI 故障归因</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              把 release timeline、K8s 异常和治理动作收束成一份诊断。
-            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">
@@ -201,7 +194,6 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
           <div className="space-y-4">
             {props.incidentAnalysis.errorMessage && (
               <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                本次刷新失败，当前展示的是最近一次可用 snapshot。原因：
                 {props.incidentAnalysis.errorMessage}
               </div>
             )}
@@ -267,7 +259,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
 
             <div className="rounded-2xl border border-border bg-background px-4 py-4">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                处置建议
+                动作
               </div>
               <div className="mt-3 space-y-3">
                 {incidentSnapshot.actions.safe.length > 0 && (
@@ -300,7 +292,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
           </div>
         ) : (
-          renderUnavailableState(props.incidentAnalysis, '当前还没有故障归因 snapshot')
+          renderUnavailableState(props.incidentAnalysis, '暂无故障归因')
         )}
       </div>
     </section>

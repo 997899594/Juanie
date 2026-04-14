@@ -15,7 +15,7 @@ export default async function HomePage() {
     redirect('/login');
   }
 
-  const { headerDescription, commandCenter, projectCards, attentionItems } = await getHomePageData(
+  const { commandCenter, projectCards, attentionItems } = await getHomePageData(
     session.user.id,
     session.user.name
   );
@@ -70,9 +70,6 @@ export default async function HomePage() {
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title="指挥台"
-        description={headerDescription}
-        eyebrow="Control Center"
-        meta="先处理阻塞，再回项目。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
@@ -91,7 +88,7 @@ export default async function HomePage() {
         }
       />
 
-      <PriorityDeck title="接下来怎么走" description="按顺序处理。" items={nextPriorityItems} />
+      <PriorityDeck title="下一步" items={nextPriorityItems} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <section className="console-panel overflow-hidden">
@@ -111,7 +108,6 @@ export default async function HomePage() {
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="text-sm font-medium">还没有项目</div>
-                <div className="mt-1 text-sm text-muted-foreground">新建一个项目开始使用</div>
                 <Button asChild className="mt-5 rounded-xl">
                   <Link href="/projects/new">
                     <Plus className="h-3.5 w-3.5" />
@@ -165,7 +161,7 @@ export default async function HomePage() {
                 <div className="mb-4 rounded-2xl bg-secondary p-3">
                   <AlertTriangle className="h-5 w-5 text-muted-foreground" />
                 </div>
-                <div className="text-sm font-medium">当前没有待处理项</div>
+                <div className="text-sm font-medium">没有待处理项</div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -211,7 +207,7 @@ export default async function HomePage() {
                             {run.releaseTitle && <span>{run.releaseTitle}</span>}
                             {run.primaryDomainUrl && (
                               <span className="text-foreground underline underline-offset-4">
-                                打开环境
+                                环境
                               </span>
                             )}
                           </div>

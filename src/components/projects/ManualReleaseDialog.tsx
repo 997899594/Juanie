@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -136,9 +135,9 @@ export function ManualReleaseDialog({
   );
   const unavailableReason =
     environments.length === 0
-      ? (disabledSummary ?? '当前没有可用环境，暂时无法创建手动发布。')
+      ? (disabledSummary ?? '没有环境')
       : successfulSources.length === 0
-        ? '当前没有可复用镜像的 release，手动发布暂不可用。'
+        ? '没有可复用发布'
         : null;
   const defaultEnvironmentId =
     environments.find((environment) => !environment.isProduction)?.id ?? environments[0]?.id ?? '';

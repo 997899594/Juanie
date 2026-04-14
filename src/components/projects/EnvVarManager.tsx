@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -165,9 +164,6 @@ function EnvVarDialog({
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>{isEdit ? '编辑变量' : '添加变量'}</DialogTitle>
-          <DialogDescription>
-            变量会绑定到当前环境。密文变量保存后不可回显，只能覆盖更新。
-          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -177,7 +173,7 @@ function EnvVarDialog({
                   <Label htmlFor="env-key">变量名</Label>
                   <Input
                     id="env-key"
-                    placeholder="例如 DATABASE_URL"
+                    placeholder="DATABASE_URL"
                     value={form.key}
                     onChange={(e) =>
                       setForm((f) => ({
@@ -203,7 +199,7 @@ function EnvVarDialog({
                     <Input
                       id="env-value"
                       type={form.isSecret && !showValue ? 'password' : 'text'}
-                      placeholder={isEdit ? '输入新的变量值以覆盖旧值' : '输入变量值'}
+                      placeholder={isEdit ? '输入新值' : '输入值'}
                       value={form.value}
                       onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
                       className="h-11 rounded-xl pr-9 font-mono"
@@ -221,11 +217,6 @@ function EnvVarDialog({
                       </button>
                     )}
                   </div>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {isEdit
-                      ? '出于安全原因，旧值不会回显。提交后会直接覆盖当前值。'
-                      : '普通变量可见，密文变量会在保存后加密存储。'}
-                  </p>
                 </div>
               </div>
 
@@ -233,9 +224,6 @@ function EnvVarDialog({
                 <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">密文变量</p>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    开启后会按 secret 处理，页面里不再显示原始内容。
-                  </p>
                 </div>
                 <Switch
                   checked={form.isSecret}

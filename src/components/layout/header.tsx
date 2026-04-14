@@ -43,7 +43,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 px-4 pt-4 md:px-6 lg:px-6">
-      <div className="glass hidden items-center justify-between rounded-[24px] border border-border/70 px-5 py-4 shadow-sm lg:flex">
+      <div className="glass hidden items-center justify-between rounded-[20px] border border-border/70 px-4 py-3 lg:flex">
         <nav className="flex min-w-0 items-center text-sm">
           {breadcrumbs.map((item, index) => (
             <React.Fragment key={item.title}>
@@ -66,7 +66,7 @@ export function Header() {
       </div>
 
       <div className="lg:hidden">
-        <div className="glass flex items-center justify-between gap-3 rounded-[24px] border border-border/70 px-4 py-3 shadow-sm">
+        <div className="glass flex items-center justify-between gap-3 rounded-[20px] border border-border/70 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <Button
               variant="outline"
@@ -98,7 +98,7 @@ export function Header() {
         </div>
 
         {mobileProjectTabs.length > 0 && (
-          <div className="overflow-x-auto px-1 pb-3 pt-3">
+          <div className="overflow-x-auto px-1 pb-2.5 pt-2.5">
             <nav className="flex min-w-max items-center gap-2">
               {mobileProjectTabs.map((item) => {
                 const Icon = item.icon;
@@ -115,9 +115,9 @@ export function Header() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition-colors',
+                      'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
                       isActive
-                        ? 'border-black bg-black text-white'
+                        ? 'border-border bg-secondary text-foreground'
                         : 'border-border bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
                     )}
                   >
@@ -144,9 +144,6 @@ export function Header() {
                 nameClassName="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
               />
               <div className="mt-2 text-2xl font-semibold tracking-tight">导航</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                先进入主链路，再展开具体诊断与操作。
-              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -167,7 +164,7 @@ export function Header() {
                         className={cn(
                           'flex items-center gap-3 rounded-[20px] border px-4 py-3.5 text-sm font-medium transition-colors',
                           isActive
-                            ? 'border-black bg-black text-white'
+                            ? 'border-border bg-secondary text-foreground'
                             : 'border-border bg-card text-foreground hover:bg-secondary'
                         )}
                       >
@@ -203,7 +200,7 @@ export function Header() {
                           className={cn(
                             'flex items-center gap-3 rounded-[20px] border px-4 py-3.5 text-sm font-medium transition-colors',
                             isActive
-                              ? 'border-black bg-black text-white'
+                              ? 'border-border bg-secondary text-foreground'
                               : 'border-border bg-card text-foreground hover:bg-secondary'
                           )}
                         >

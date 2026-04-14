@@ -23,7 +23,7 @@ export function BrandMark({ size = 40, className, priority = false }: BrandMarkP
   return (
     <div
       className={cn(
-        'shrink-0 overflow-hidden rounded-2xl border border-border/70 bg-white shadow-sm',
+        'shrink-0 overflow-hidden rounded-2xl border border-border/60 bg-card',
         className
       )}
       style={{ height: size, width: size }}
@@ -54,7 +54,7 @@ export function BrandLockup({
     <div className={cn('flex items-center gap-3', className)}>
       <BrandMark size={size} className={markClassName} priority={priority} />
       <div className="min-w-0">
-        <div className={cn('text-sm font-semibold', nameClassName)}>Juanie</div>
+        <div className={cn('text-sm font-medium', nameClassName)}>Juanie</div>
         {subtitle ? (
           <div className={cn('text-xs text-muted-foreground', subtitleClassName)}>{subtitle}</div>
         ) : null}

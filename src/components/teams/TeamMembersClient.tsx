@@ -229,7 +229,6 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
     <div className="space-y-6">
       <PageHeader
         title="成员"
-        description={overview.headerDescription}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {refreshing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
@@ -256,9 +255,6 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
               <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
                 <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
                   <DialogTitle>生成邀请链接</DialogTitle>
-                  <DialogDescription>
-                    生成一个可分享的入组链接，适合快速邀请临时协作者。
-                  </DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
                   <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">

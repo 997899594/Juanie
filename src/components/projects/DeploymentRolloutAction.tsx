@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -113,9 +112,6 @@ export function DeploymentRolloutAction({
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>{actionLabel}</DialogTitle>
-          <DialogDescription>
-            平台会检查候选版本和当前流量策略，确认后将候选版本切为正式版本。
-          </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -130,9 +126,6 @@ export function DeploymentRolloutAction({
               <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">候选切换上下文</div>
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    这里展示将要被提升为正式版本的候选镜像，以及当前放量动作的判断依据。
-                  </div>
                 </div>
 
                 {plan?.deployment?.candidateImage ? (
@@ -144,7 +137,7 @@ export function DeploymentRolloutAction({
                   </div>
                 ) : (
                   <div className="mt-4 rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
-                    当前没有可展示的候选镜像信息，预检结果会决定是否允许继续。
+                    暂无候选镜像
                   </div>
                 )}
               </div>
@@ -158,12 +151,7 @@ export function DeploymentRolloutAction({
 
             <div className="space-y-4">
               <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-3 space-y-1">
-                  <div className="text-sm font-semibold text-foreground">放量预检</div>
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    平台会先校验候选版本、策略和阻断条件，避免错误切流。
-                  </div>
-                </div>
+                <div className="mb-3 text-sm font-semibold text-foreground">放量预检</div>
 
                 {loadingPlan ? (
                   <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
@@ -185,7 +173,7 @@ export function DeploymentRolloutAction({
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
-                    打开面板后会自动加载当前部署的切换预检信息。
+                    暂无预检
                   </div>
                 )}
               </div>

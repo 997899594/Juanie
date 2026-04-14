@@ -31,9 +31,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium">项目</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {overview.memberSummary} · 从这里进入当前团队的项目主链路。
-            </div>
+            <div className="mt-1 text-xs text-muted-foreground">{overview.memberSummary}</div>
           </div>
           <Link href="/projects/new">
             <Button className="h-9 rounded-xl px-4">
@@ -50,7 +48,6 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
             <FolderKanban className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">还没有项目</h2>
-          <p className="mt-2 text-sm text-muted-foreground">新建项目后再开始部署</p>
           <Link href="/projects/new" className="mt-5">
             <Button className="rounded-xl">
               <Plus className="h-4 w-4" />
@@ -87,13 +84,10 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
           </div>
           <div className="min-w-0">
             <div className="text-sm font-semibold">团队成员</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              成员与邀请都集中在成员页处理，不在这里重复展开。
-            </div>
           </div>
           <Link href={`/teams/${teamId}/members`} className="ml-auto">
             <Button variant="outline" className="h-9 rounded-xl px-4">
-              打开成员页
+              成员
             </Button>
           </Link>
         </div>

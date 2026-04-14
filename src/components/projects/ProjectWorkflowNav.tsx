@@ -70,30 +70,33 @@ export function ProjectWorkflowNav({ projectId }: ProjectWorkflowNavProps) {
             key={item.href}
             href={href}
             className={cn(
-              'console-surface flex min-h-20 items-center gap-3 rounded-[20px] px-4 py-4 transition-all',
+              'console-surface flex min-h-16 items-center gap-3 rounded-[18px] px-3.5 py-3 transition-all',
               isActive
-                ? 'border-black bg-black text-white shadow-md'
+                ? 'border-border bg-secondary text-foreground'
                 : 'hover:bg-secondary/70 hover:text-foreground'
             )}
           >
             <div
               className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl',
-                isActive ? 'bg-white/14 text-white' : 'bg-background/80 text-foreground'
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+                isActive ? 'bg-background text-foreground' : 'bg-background/80 text-foreground'
               )}
             >
               <Icon className="h-4 w-4" />
             </div>
             <div className="min-w-0">
               <div
-                className={cn('text-sm font-semibold', isActive ? 'text-white' : 'text-foreground')}
+                className={cn(
+                  'text-sm font-semibold',
+                  isActive ? 'text-foreground' : 'text-foreground'
+                )}
               >
                 {item.label}
               </div>
               <div
                 className={cn(
                   'mt-1 text-[11px] uppercase tracking-[0.14em]',
-                  isActive ? 'text-white/78' : 'text-muted-foreground'
+                  isActive ? 'text-muted-foreground' : 'text-muted-foreground'
                 )}
               >
                 {isActive ? '当前' : item.shortLabel}

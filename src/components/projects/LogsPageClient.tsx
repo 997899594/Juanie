@@ -43,12 +43,7 @@ interface LogsPageClientProps {
   initialEnvId?: string;
 }
 
-export function LogsPageClient({
-  projectId,
-  projectName,
-  initialData,
-  initialEnvId,
-}: LogsPageClientProps) {
+export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPageClientProps) {
   const [pods, setPods] = useState<Pod[]>([]);
   const [envId, setEnvId] = useState(
     initialData.environments.some((environment) => environment.id === initialEnvId)
@@ -179,12 +174,7 @@ export function LogsPageClient({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader
-        title="运行日志"
-        description={`${projectName} 的环境运行视图`}
-        eyebrow="Runtime Logs"
-        meta="知道环境就直接查，不确定就先回运行总览。"
-      />
+      <PageHeader title="运行日志" />
       <RuntimeSectionNav projectId={projectId} />
 
       <div className="console-surface rounded-[20px] px-4 py-3">

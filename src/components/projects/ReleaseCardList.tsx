@@ -26,13 +26,7 @@ interface ReleaseCardListProps {
 
 export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
   if (releases.length === 0) {
-    return (
-      <EmptyState
-        icon={<Rocket className="h-12 w-12" />}
-        title="还没有发布"
-        description="镜像入库或手动触发后，这里会显示完整记录。"
-      />
-    );
+    return <EmptyState icon={<Rocket className="h-12 w-12" />} title="还没有发布" />;
   }
 
   return (
@@ -62,9 +56,9 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                           : 'bg-muted-foreground/30'
                 )}
               />
-              <div className="min-w-0 flex-1 px-5 py-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 flex-1 space-y-3">
+              <div className="min-w-0 flex-1 px-4 py-3.5">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1 space-y-2.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusIndicator
                         status={release.statusDecoration.color}
@@ -85,7 +79,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="text-base font-semibold">{release.displayTitle}</div>
+                      <div className="text-sm font-semibold">{release.displayTitle}</div>
                       <div className="text-[11px] text-muted-foreground">
                         {[
                           release.environmentScope,
@@ -95,12 +89,12 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                           .filter(Boolean)
                           .join(' · ')}
                       </div>
-                      {release.previewSourceMeta.title && (
+                      {release.previewSourceMeta.title ? (
                         <PreviewSourceSummary meta={release.previewSourceMeta} />
-                      )}
+                      ) : null}
                       {(release.recap?.primarySummary ||
                         release.platformSignals.primarySummary) && (
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-[11px] text-muted-foreground">
                           {release.recap?.primarySummary ?? release.platformSignals.primarySummary}
                         </div>
                       )}
@@ -132,11 +126,11 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {release.artifacts.map((artifact) => (
+                      {release.artifacts.slice(0, 3).map((artifact) => (
                         <Badge
                           key={artifact.id}
                           variant="secondary"
-                          className="gap-1 rounded-full px-2.5 py-1 font-normal"
+                          className="gap-1 rounded-full px-2 py-0.5 font-normal"
                         >
                           <span className="font-medium">{artifact.service.name}</span>
                           <span className="text-muted-foreground">
@@ -144,6 +138,11 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                           </span>
                         </Badge>
                       ))}
+                      {release.artifacts.length > 3 ? (
+                        <Badge variant="outline" className="rounded-full px-2 py-0.5 font-normal">
+                          +{release.artifacts.length - 3}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
 
@@ -157,19 +156,19 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         asChild
                         variant="outline"
                         size="sm"
-                        className="min-w-0 flex-1 rounded-xl sm:flex-none"
+                        className="min-w-0 flex-1 rounded-lg sm:flex-none"
                       >
                         <Link
                           href={`/projects/${projectId}/runtime/logs?env=${release.environment.id}`}
                         >
-                          打开日志
+                          日志
                         </Link>
                       </Button>
                       <Button
                         asChild
                         variant="outline"
                         size="sm"
-                        className="min-w-0 flex-1 rounded-xl sm:flex-none"
+                        className="min-w-0 flex-1 rounded-lg sm:flex-none"
                       >
                         <Link href={`/projects/${projectId}/delivery/${release.id}`}>
                           打开

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -113,9 +112,6 @@ export function DeploymentRollbackAction({
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>回滚预检</DialogTitle>
-          <DialogDescription>
-            平台会先评估环境保护、迁移和阻断条件，再创建新的回滚发布。
-          </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -130,9 +126,6 @@ export function DeploymentRollbackAction({
               <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">回滚来源</div>
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    这里展示将被恢复的来源版本，帮助你确认回滚目标是否正确。
-                  </div>
                 </div>
 
                 {planningPanel?.sourceImageUrl ? (
@@ -144,7 +137,7 @@ export function DeploymentRollbackAction({
                   </div>
                 ) : (
                   <div className="mt-4 rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
-                    当前没有可回显的来源镜像信息，平台仍会按预检规则判断是否允许回滚。
+                    暂无来源镜像
                   </div>
                 )}
               </div>
@@ -158,12 +151,7 @@ export function DeploymentRollbackAction({
 
             <div className="space-y-4">
               <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-3 space-y-1">
-                  <div className="text-sm font-semibold text-foreground">回滚预检</div>
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    回滚不会直接覆盖线上，而是先走一次新的发布创建流程。
-                  </div>
-                </div>
+                <div className="mb-3 text-sm font-semibold text-foreground">回滚预检</div>
 
                 {loadingPlan ? (
                   <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
@@ -189,7 +177,7 @@ export function DeploymentRollbackAction({
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
-                    打开面板后会自动加载回滚预检结果。
+                    暂无预检
                   </div>
                 )}
               </div>

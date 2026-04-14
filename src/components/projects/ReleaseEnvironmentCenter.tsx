@@ -63,7 +63,7 @@ export function ReleaseEnvironmentCenter({
                   <div className="mt-1 text-xs text-muted-foreground">
                     {latestRelease.recap?.primarySummary ??
                       latestRelease.platformSignals.primarySummary ??
-                      '打开发布查看详情'}
+                      '详情'}
                   </div>
                   <div className="mt-2 text-[11px] text-muted-foreground">
                     {[
@@ -77,24 +77,17 @@ export function ReleaseEnvironmentCenter({
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="text-sm font-medium">还没有发布</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    从这个环境发第一版后，这里会显示当前线上发布版本。
-                  </div>
-                </>
+                <div className="text-sm font-medium">还没有发布</div>
               )}
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
               <Button asChild variant="outline" size="sm" className="rounded-xl">
-                <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>
-                  打开日志
-                </Link>
+                <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>日志</Link>
               </Button>
               {latestRelease ? (
                 <Button asChild size="sm" className="rounded-xl">
-                  <Link href={`/projects/${projectId}/delivery/${latestRelease.id}`}>打开交付</Link>
+                  <Link href={`/projects/${projectId}/delivery/${latestRelease.id}`}>交付</Link>
                 </Button>
               ) : (
                 <Button
@@ -102,7 +95,7 @@ export function ReleaseEnvironmentCenter({
                   className="rounded-xl"
                   onClick={() => onShowRecords(environment.name)}
                 >
-                  打开记录
+                  记录
                 </Button>
               )}
             </div>

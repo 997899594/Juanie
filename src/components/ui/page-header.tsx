@@ -10,41 +10,24 @@ interface PageHeaderProps {
   meta?: React.ReactNode;
 }
 
-export function PageHeader({
-  title,
-  description,
-  actions,
-  className,
-  eyebrow,
-  meta,
-}: PageHeaderProps) {
+export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
   return (
-    <div className={cn('pb-2', className)}>
-      <div className="console-panel overflow-hidden">
-        <div className="flex flex-col gap-5 px-4 py-4 md:px-5 md:py-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0">
-              {eyebrow ? <div className="console-eyebrow">{eyebrow}</div> : null}
-              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-balance md:text-4xl">
-                {title}
-              </h1>
-              {description ? (
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground md:text-[15px]">
-                  {description}
-                </p>
-              ) : null}
-            </div>
-            {actions && (
-              <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
-                {actions}
-              </div>
-            )}
+    <div className={cn('pb-1', className)}>
+      <div className="flex flex-col gap-2 px-1 py-1 md:gap-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight text-balance md:text-3xl">
+              {title}
+            </h1>
+            {description ? (
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{description}</p>
+            ) : null}
           </div>
-          {meta ? (
-            <div className="rounded-[18px] border border-border/70 bg-background/35 px-4 py-2.5 text-sm text-muted-foreground">
-              {meta}
+          {actions && (
+            <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
+              {actions}
             </div>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

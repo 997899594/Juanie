@@ -5,7 +5,6 @@ import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationA
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
-import { PriorityDeck, type PriorityDeckItem } from '@/components/ui/priority-deck';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { getApprovalsPageData } from '@/lib/approvals/service';
 import {
@@ -43,62 +42,10 @@ export default async function InboxPage({
     teamIds,
     filterState,
   });
-  const firstRun = attentionRuns[0] ?? null;
-  const priorityItems: PriorityDeckItem[] = [];
-
-  if (firstRun) {
-    priorityItems.push({
-      key: 'primary',
-      eyebrow: '先处理这个',
-      title: firstRun.issueLabel ?? `${firstRun.project.name} · ${firstRun.database.name}`,
-      description: firstRun.platformSignals.primarySummary ?? firstRun.environment.name,
-      href: firstRun.releaseId
-        ? `/projects/${firstRun.projectId}/delivery/${firstRun.releaseId}`
-        : `/projects/${firstRun.projectId}`,
-      actionLabel: firstRun.platformSignals.nextActionLabel ?? '进入处理',
-      tone:
-        firstRun.status === 'failed'
-          ? 'danger'
-          : firstRun.status === 'awaiting_approval'
-            ? 'warning'
-            : 'default',
-    });
-  }
-
-  priorityItems.push(
-    {
-      key: 'approval',
-      eyebrow: '按类型收敛',
-      title: filterState === 'all' ? '先筛出一种阻塞类型' : `当前筛选：${filterState}`,
-      description: '减少干扰。',
-      href:
-        filterState === 'approval'
-          ? buildApprovalsFilterHref('external')
-          : buildApprovalsFilterHref('approval'),
-      actionLabel: filterState === 'approval' ? '切到外部动作' : '只看待审批',
-      tone: 'default',
-    },
-    {
-      key: 'return',
-      eyebrow: '处理完以后',
-      title: '回到项目继续推进主链',
-      description: '回项目继续。',
-      href: firstRun ? `/projects/${firstRun.projectId}` : '/projects',
-      actionLabel: firstRun ? '打开对应项目' : '打开项目列表',
-      tone: 'success',
-    }
-  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader
-        title="行动中心"
-        description="把所有需要你立即推进的审批、外部动作和失败项收拢到一个地方。"
-        eyebrow="Action Center"
-        meta="不知道先去哪，就先来这里。"
-      />
-
-      <PriorityDeck title="行动顺序" description="先解阻塞。" items={priorityItems} />
+      <PageHeader title="待处理" />
 
       <div className="console-surface rounded-[20px] px-4 py-3">
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -207,7 +154,7 @@ export default async function InboxPage({
                             className="justify-between rounded-xl"
                           >
                             <a href={run.primaryDomainUrl} target="_blank" rel="noreferrer">
-                              打开环境
+                              环境
                               <ArrowRight className="h-3.5 w-3.5" />
                             </a>
                           </Button>
@@ -219,7 +166,7 @@ export default async function InboxPage({
                           className="justify-between rounded-xl"
                         >
                           <Link href={`/projects/${run.projectId}/delivery/${run.releaseId}`}>
-                            打开交付
+                            交付
                             <ArrowRight className="h-3.5 w-3.5" />
                           </Link>
                         </Button>
@@ -232,7 +179,7 @@ export default async function InboxPage({
                         className="justify-between rounded-xl"
                       >
                         <Link href={`/projects/${run.projectId}`}>
-                          打开项目
+                          项目
                           <FolderKanban className="h-3.5 w-3.5" />
                         </Link>
                       </Button>

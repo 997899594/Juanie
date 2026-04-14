@@ -160,8 +160,8 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
       <PageHeader
         title="设置"
         description={initialData.overview.headerDescription}
-        eyebrow="Project Settings"
-        meta="设置页不负责日常推进，只负责定义边界和规则。改动会影响团队后续如何发布、运行和治理。"
+        eyebrow="设置"
+        meta="只改规则。"
       />
 
       <div className="grid gap-3 md:grid-cols-3">

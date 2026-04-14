@@ -90,11 +90,10 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
     <div className="space-y-6">
       <PageHeader
         title="设置"
-        description={initialData.overview.headerDescription}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" className="h-9 rounded-xl px-4">
-              <Link href="/settings/integrations">打开集成</Link>
+              <Link href="/settings/integrations">集成</Link>
             </Button>
             <Button variant="outline" className="h-9 rounded-xl px-4" onClick={handleSignOut}>
               退出登录
@@ -166,7 +165,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         <div className="space-y-2 p-3">
           {initialData.overview.integrations.length === 0 ? (
             <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
-              还没有检测到可用的代码托管连接
+              暂无代码托管连接
             </div>
           ) : (
             initialData.overview.integrations.map((integration) => (

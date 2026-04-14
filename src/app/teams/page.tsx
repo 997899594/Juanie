@@ -14,13 +14,12 @@ export default async function TeamsPage() {
     redirect('/login');
   }
 
-  const { headerDescription, teamCards } = await getTeamsListPageData(session.user.id);
+  const { teamCards } = await getTeamsListPageData(session.user.id);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title="团队"
-        description={headerDescription}
         actions={
           <Button asChild className="h-9 rounded-xl px-4">
             <Link href="/teams/new">
@@ -37,7 +36,6 @@ export default async function TeamsPage() {
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">还没有团队</h2>
-          <p className="mt-2 max-w-sm text-sm text-muted-foreground">新建一个团队后再开始协作。</p>
           <Button asChild className="mt-5 rounded-xl">
             <Link href="/teams/new">
               <Plus className="h-4 w-4" />
@@ -68,7 +66,7 @@ export default async function TeamsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="text-[11px] text-muted-foreground">进入团队</div>
+                  <div className="text-[11px] text-muted-foreground">团队</div>
                 </div>
               </Link>
             );

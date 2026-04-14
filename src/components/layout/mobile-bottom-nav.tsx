@@ -10,7 +10,7 @@ export function MobileBottomNav() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.6rem)] pt-2 lg:hidden">
-      <nav className="glass grid grid-cols-4 gap-1 rounded-[28px] border border-border/70 p-1.5 shadow-[0_-12px_32px_rgba(74,59,40,0.12)]">
+      <nav className="glass grid grid-cols-4 gap-1 rounded-[24px] border border-border/70 p-1">
         {mobileMainNav.map((item) => {
           const Icon = item.icon;
           const isActive = isNavItemActive(pathname, item.href);
@@ -20,9 +20,9 @@ export function MobileBottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex min-h-14 flex-col items-center justify-center gap-1 rounded-[20px] px-2 py-2 text-[11px] font-medium transition-colors',
+                'flex min-h-12 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-1.5 text-[11px] font-medium transition-colors',
                 isActive
-                  ? 'bg-black text-white'
+                  ? 'bg-secondary text-foreground'
                   : 'text-muted-foreground hover:bg-secondary/80 hover:text-foreground'
               )}
             >

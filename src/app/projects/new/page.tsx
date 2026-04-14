@@ -47,9 +47,6 @@ export default async function NewProjectPage() {
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="新建项目"
-        description={pageData.headerDescription}
-        eyebrow="New Project"
-        meta="按模式、仓库、运行配置一步步确认，尽量把选择压缩到真正影响交付的部分。"
         actions={
           <Button asChild variant="outline" className="h-9 rounded-xl px-4">
             <Link href="/projects">

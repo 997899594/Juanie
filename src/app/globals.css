@@ -1,47 +1,47 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #f3f0ea;
-  --color-foreground: #171717;
+  --color-background: #f7f6f3;
+  --color-foreground: #37352f;
   
-  --color-card: #fffdf8;
-  --color-card-foreground: #171717;
+  --color-card: #ffffff;
+  --color-card-foreground: #37352f;
   
-  --color-popover: #fffdf8;
-  --color-popover-foreground: #171717;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #37352f;
   
-  --color-primary: #171717;
-  --color-primary-foreground: #fffdf8;
+  --color-primary: #2f2d28;
+  --color-primary-foreground: #ffffff;
   
-  --color-secondary: #ebe5d9;
-  --color-secondary-foreground: #171717;
+  --color-secondary: #f1efeb;
+  --color-secondary-foreground: #37352f;
   
-  --color-muted: #f7f2e8;
-  --color-muted-foreground: #6d655b;
+  --color-muted: #fbfaf8;
+  --color-muted-foreground: #787774;
   
-  --color-accent: #e4dccf;
-  --color-accent-foreground: #171717;
+  --color-accent: #ebe8e2;
+  --color-accent-foreground: #37352f;
   
-  --color-destructive: #d94841;
+  --color-destructive: #c4554d;
   --color-destructive-foreground: #fffdf8;
   
-  --color-success: #2f7d57;
+  --color-success: #4f7f64;
   --color-success-foreground: #fffdf8;
   
-  --color-warning: #9d6c27;
+  --color-warning: #9f7a4b;
   --color-warning-foreground: #fffdf8;
   
-  --color-info: #3559d5;
+  --color-info: #6b7c93;
   --color-info-foreground: #fffdf8;
   
-  --color-border: #ddd2c3;
-  --color-input: #ddd2c3;
-  --color-ring: #171717;
+  --color-border: #e8e3db;
+  --color-input: #e8e3db;
+  --color-ring: #37352f;
   
-  --color-sidebar: #f8f3ea;
-  --color-sidebar-foreground: #171717;
-  --color-sidebar-accent: #ebe3d4;
-  --color-sidebar-accent-foreground: #171717;
+  --color-sidebar: #fbfaf8;
+  --color-sidebar-foreground: #37352f;
+  --color-sidebar-accent: #f1efeb;
+  --color-sidebar-accent-foreground: #37352f;
   
   --radius-sm: 8px;
   --radius-md: 10px;
@@ -49,13 +49,13 @@
   --radius-xl: 18px;
   --radius-full: 9999px;
   
-  --shadow-xs: 0 1px 2px rgba(23, 23, 23, 0.03);
-  --shadow-sm: 0 8px 18px rgba(103, 85, 58, 0.08);
-  --shadow-md: 0 14px 30px rgba(103, 85, 58, 0.1);
-  --shadow-lg: 0 24px 60px rgba(103, 85, 58, 0.12);
-  --shadow-xl: 0 32px 80px rgba(74, 59, 40, 0.14);
-  --shadow-2xl: 0 40px 100px rgba(74, 59, 40, 0.16);
-  --shadow-focus: 0 0 0 2px rgba(255, 253, 248, 0.9);
+  --shadow-xs: 0 1px 2px rgba(55, 53, 47, 0.02);
+  --shadow-sm: 0 1px 2px rgba(55, 53, 47, 0.04), 0 8px 24px rgba(55, 53, 47, 0.03);
+  --shadow-md: 0 10px 30px rgba(55, 53, 47, 0.05);
+  --shadow-lg: 0 18px 44px rgba(55, 53, 47, 0.06);
+  --shadow-xl: 0 28px 64px rgba(55, 53, 47, 0.08);
+  --shadow-2xl: 0 36px 84px rgba(55, 53, 47, 0.1);
+  --shadow-focus: 0 0 0 2px rgba(255, 255, 255, 0.9);
   
   --transition-fast: 100ms;
   --transition-normal: 150ms;
@@ -65,7 +65,7 @@
   --ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
-  --font-sans: "Fraunces", "Noto Serif SC", "PingFang SC", "Source Han Serif SC", serif;
+  --font-sans: "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Menlo", "Monaco", "Cascadia Mono", monospace;
 }
 
@@ -84,9 +84,8 @@ html {
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(216, 189, 141, 0.32), transparent 32%),
-    radial-gradient(circle at top right, rgba(85, 122, 103, 0.16), transparent 30%),
-    linear-gradient(180deg, #f8f4ed 0%, var(--color-background) 28%, #efe7dc 100%);
+    radial-gradient(circle at top left, rgba(215, 205, 190, 0.18), transparent 28%),
+    linear-gradient(180deg, #faf9f7 0%, var(--color-background) 38%, #f3f1ec 100%);
   color: var(--color-foreground);
   font-family: var(--font-sans), sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
@@ -130,7 +129,7 @@ pre,
 
 @layer components {
   .glass {
-    background: rgba(255, 253, 248, 0.82);
+    background: rgba(251, 250, 248, 0.84);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
   }
@@ -182,22 +181,22 @@ pre,
 
   .console-panel {
     border-radius: 20px;
-    border: 1px solid rgba(116, 98, 75, 0.14);
+    border: 1px solid rgba(55, 53, 47, 0.08);
     background:
-      linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(255, 251, 244, 0.92));
+      linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 249, 247, 0.94));
     box-shadow: var(--shadow-sm);
   }
 
   .console-card {
     border-radius: 16px;
-    border: 1px solid rgba(116, 98, 75, 0.12);
-    background: rgba(255, 252, 246, 0.86);
+    border: 1px solid rgba(55, 53, 47, 0.08);
+    background: rgba(255, 255, 255, 0.92);
   }
 
   .console-surface {
-    border: 1px solid rgba(116, 98, 75, 0.12);
-    background: rgba(255, 252, 246, 0.74);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(55, 53, 47, 0.08);
+    background: rgba(251, 250, 248, 0.78);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
   }
 
   .console-grid {
@@ -210,7 +209,7 @@ pre,
     inset: 0;
     background-image:
       linear-gradient(rgba(122, 103, 77, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(122, 103, 77, 0.04) 1px, transparent 1px);
+      linear-gradient(90deg, rgba(160, 150, 136, 0.04) 1px, transparent 1px);
     background-size: 28px 28px;
     mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.34), transparent 88%);
     pointer-events: none;
@@ -240,8 +239,8 @@ pre,
     align-items: center;
     gap: 0.4rem;
     border-radius: 9999px;
-    border: 1px solid rgba(116, 98, 75, 0.14);
-    background: rgba(255, 252, 246, 0.76);
+    border: 1px solid rgba(55, 53, 47, 0.08);
+    background: rgba(251, 250, 248, 0.8);
     padding: 0.4rem 0.8rem;
     font-size: 0.68rem;
     font-weight: 700;
@@ -252,9 +251,9 @@ pre,
 
   .console-stat {
     border-radius: 18px;
-    border: 1px solid rgba(116, 98, 75, 0.1);
-    background: rgba(255, 252, 246, 0.7);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(55, 53, 47, 0.07);
+    background: rgba(255, 255, 255, 0.74);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
   }
 }
 

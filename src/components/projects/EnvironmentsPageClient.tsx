@@ -434,24 +434,22 @@ function EnvironmentQuickActions({
       {environment.primaryDomainUrl && (
         <Button asChild variant="outline" size="sm" className="rounded-xl">
           <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-            打开环境
+            环境
           </a>
         </Button>
       )}
       <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>打开日志</Link>
+        <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>日志</Link>
       </Button>
       {environment.latestReleaseCard && (
         <Button asChild variant="outline" size="sm" className="rounded-xl">
           <Link href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}>
-            打开交付
+            交付
           </Link>
         </Button>
       )}
       <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>
-          打开诊断
-        </Link>
+        <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>诊断</Link>
       </Button>
     </div>
   );
@@ -545,9 +543,9 @@ function EnvironmentCardHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-secondary/20"
+      className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition-colors hover:bg-secondary/20"
     >
-      <div className="min-w-0 space-y-2">
+      <div className="min-w-0 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <div
             className={cn(
@@ -566,7 +564,7 @@ function EnvironmentCardHeader({
             <Badge variant="secondary">{environment.previewLifecycle.stateLabel}</Badge>
           )}
         </div>
-        <div className="text-[11px] text-muted-foreground">
+        <div className="truncate text-[11px] text-muted-foreground">
           {buildEnvironmentHeaderMeta(environment)}
         </div>
       </div>
@@ -590,10 +588,7 @@ function EnvironmentRuntimePanel({
     <div className="rounded-2xl border border-border bg-background px-4 py-4">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-medium">当前链路</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            用环境视角看当前可访问状态、最近发布和运行入口。
-          </div>
+          <div className="text-sm font-medium">环境</div>
         </div>
         {environment.previewLifecycle && (
           <Badge variant="outline">{environment.previewLifecycle.stateLabel}</Badge>
@@ -653,10 +648,7 @@ function EnvironmentPolicyPanel({
     <div className="rounded-2xl border border-border bg-background px-4 py-4">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-medium">策略与生命周期</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            长期状态、发布方式和预览治理都在这里统一管理。
-          </div>
+          <div className="text-sm font-medium">策略</div>
         </div>
         <div className="max-w-[220px] text-right text-xs text-muted-foreground">
           {environment.actions.configureStrategySummary}
@@ -694,7 +686,7 @@ function EnvironmentPolicyPanel({
             {environment.previewLifecycle?.summary ??
               (environment.cleanupState
                 ? `${environment.cleanupState.label} · ${environment.cleanupState.summary}`
-                : '当前生命周期稳定')}
+                : '稳定')}
           </div>
           {(environment.previewLifecycle?.nextActionLabel || environment.expiryLabel) && (
             <div className="mt-1 text-xs text-muted-foreground">
@@ -736,11 +728,9 @@ function EnvironmentPolicyPanel({
 function EnvironmentAdvancedPanel({
   projectId,
   environment,
-  governance,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
-  governance: EnvironmentsPageClientProps['initialData']['governance'];
 }) {
   const blockingCount = environment.databases.filter((database) =>
     ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
@@ -759,9 +749,6 @@ function EnvironmentAdvancedPanel({
           <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
             <div className="mb-3">
               <div className="text-sm font-medium">数据库纳管</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                主入口已收口到 Schema Center，这里只保留摘要与跳转。
-              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-2xl border border-border bg-background px-4 py-3">
@@ -776,13 +763,8 @@ function EnvironmentAdvancedPanel({
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   入口
                 </div>
-                <div className="mt-2 text-sm text-muted-foreground">
-                  Schema 检查、修复计划、评审和 Atlas 执行都在统一页面处理。
-                </div>
                 <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                  <Link href={`/projects/${projectId}/schema?env=${environment.id}`}>
-                    打开 Schema Center
-                  </Link>
+                  <Link href={`/projects/${projectId}/schema?env=${environment.id}`}>数据</Link>
                 </Button>
               </div>
             </div>
@@ -835,23 +817,15 @@ function EnvironmentAdvancedPanel({
         <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
           <div className="mb-3">
             <div className="text-sm font-medium">运行子页</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              变量、日志和诊断都已拆到独立页面，这里只保留环境上下文和跳转。
-            </div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-2xl border border-border bg-background px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 变量
               </div>
-              <div className="mt-2 text-sm text-foreground">
-                {governance.manageEnvVars.allowed
-                  ? '集中管理该环境的变量与密文。'
-                  : governance.manageEnvVars.summary}
-              </div>
               <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
                 <Link href={`/projects/${projectId}/runtime/variables?env=${environment.id}`}>
-                  打开变量
+                  变量
                 </Link>
               </Button>
             </div>
@@ -859,21 +833,17 @@ function EnvironmentAdvancedPanel({
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 日志
               </div>
-              <div className="mt-2 text-sm text-foreground">查看 Pod、实时流和最近运行输出。</div>
               <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>
-                  打开日志
-                </Link>
+                <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>日志</Link>
               </Button>
             </div>
             <div className="rounded-2xl border border-border bg-background px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 诊断
               </div>
-              <div className="mt-2 text-sm text-foreground">查看资源状态、容量与异常诊断入口。</div>
               <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
                 <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>
-                  打开诊断
+                  诊断
                 </Link>
               </Button>
             </div>
@@ -1138,21 +1108,18 @@ export function EnvironmentsPageClient({
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="运行"
-        description="环境总览、预览治理和运行入口都在这里。变量、日志、诊断进入各自子页。"
-        eyebrow="Runtime Flow"
-        meta="先选环境，再决定查什么。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline">
               <Link href={`/projects/${projectId}/delivery`}>
                 <Rocket className="h-4 w-4" />
-                打开交付
+                交付
               </Link>
             </Button>
             <Button asChild variant="outline">
               <Link href={`/projects/${projectId}/runtime/logs`}>
                 <ScrollText className="h-4 w-4" />
-                打开日志
+                日志
               </Link>
             </Button>
             <Button
@@ -1217,7 +1184,6 @@ export function EnvironmentsPageClient({
         <EmptyState
           icon={<Globe className="h-12 w-12" />}
           title="还没有环境"
-          description="部署后会自动创建固定环境，也可以先创建预览环境。"
           action={{
             label: '新建预览环境',
             onClick: () => setDialogOpen(true),
@@ -1232,7 +1198,7 @@ export function EnvironmentsPageClient({
             </div>
             {standardEnvironments.length === 0 ? (
               <div className="rounded-[20px] border border-dashed border-border bg-secondary/20 px-5 py-8 text-sm text-muted-foreground">
-                还没有固定环境。
+                暂无环境
               </div>
             ) : (
               <div className="space-y-3">
@@ -1274,7 +1240,7 @@ export function EnvironmentsPageClient({
 
             {previewEnvironments.length === 0 ? (
               <div className="rounded-[20px] border border-dashed border-border bg-secondary/20 px-5 py-8 text-sm text-muted-foreground">
-                还没有预览环境。创建后会自动接入 release 与 deployment 主链。
+                暂无预览环境
               </div>
             ) : (
               <div className="space-y-3">

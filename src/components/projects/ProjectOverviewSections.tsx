@@ -82,7 +82,7 @@ export function ProjectEnvironmentEntrySection({
           <div className="text-sm font-semibold">环境入口</div>
         </div>
         <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-          <Link href={`/projects/${projectId}/runtime`}>打开运行中心</Link>
+          <Link href={`/projects/${projectId}/runtime`}>运行</Link>
         </Button>
       </div>
       <div className="grid gap-3 xl:grid-cols-3">
@@ -112,7 +112,7 @@ export function ProjectEnvironmentEntrySection({
                 rel="noopener noreferrer"
                 className="mt-3 inline-flex items-center gap-1.5 text-xs text-foreground underline underline-offset-4"
               >
-                打开访问地址
+                访问
                 <ExternalLink className="h-3 w-3" />
               </a>
             ) : null}
@@ -127,7 +127,7 @@ export function ProjectEnvironmentEntrySection({
                   <Link
                     href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}
                   >
-                    打开交付
+                    交付
                   </Link>
                 </Button>
               ) : (
@@ -138,7 +138,7 @@ export function ProjectEnvironmentEntrySection({
                 </Button>
               )}
               <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-                <Link href={`/projects/${projectId}/runtime?env=${environment.id}`}>打开运行</Link>
+                <Link href={`/projects/${projectId}/runtime?env=${environment.id}`}>运行</Link>
               </Button>
             </div>
           </div>
@@ -286,8 +286,8 @@ export function ProjectOperationsSection({
                       <div className="mt-1 truncate text-sm text-foreground">
                         {run.platformSignals.primarySummary ??
                           (run.platformSignals.nextActionLabel || run.actionLabel
-                            ? `下一步：${run.platformSignals.nextActionLabel ?? run.actionLabel}`
-                            : '进入后继续处理当前执行项')}
+                            ? (run.platformSignals.nextActionLabel ?? run.actionLabel)
+                            : '处理')}
                       </div>
                     </div>
                   </div>
@@ -328,8 +328,8 @@ export function ProjectOperationsSection({
                   <div className="truncate text-xs text-muted-foreground">
                     {release.platformSignals.primarySummary ??
                       (release.platformSignals.nextActionLabel
-                        ? `下一步：${release.platformSignals.nextActionLabel}`
-                        : (release.sourceSummary ?? '打开发布查看详情'))}
+                        ? release.platformSignals.nextActionLabel
+                        : (release.sourceSummary ?? '详情'))}
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">

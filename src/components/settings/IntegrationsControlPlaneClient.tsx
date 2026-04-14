@@ -17,7 +17,7 @@ export function IntegrationsControlPlaneClient({
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <PageHeader title="集成" description={overview.headerDescription} />
+      <PageHeader title="集成" />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {overview.stats.map((stat) => (
@@ -84,7 +84,7 @@ export function IntegrationsControlPlaneClient({
           <div className="space-y-2 p-3">
             {overview.repositories.length === 0 ? (
               <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
-                还没有仓库记录
+                暂无仓库
               </div>
             ) : (
               overview.repositories.map((repository) => (
@@ -103,7 +103,7 @@ export function IntegrationsControlPlaneClient({
                       <Button asChild variant="outline" className="h-8 rounded-xl px-3">
                         <a href={repository.webUrl} target="_blank" rel="noreferrer">
                           <ExternalLink className="h-3.5 w-3.5" />
-                          打开
+                          链接
                         </a>
                       </Button>
                     ) : null}
@@ -130,7 +130,7 @@ export function IntegrationsControlPlaneClient({
           <div className="space-y-2 p-3">
             {overview.teamScopes.length === 0 ? (
               <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
-                还没有团队范围
+                暂无团队
               </div>
             ) : (
               overview.teamScopes.map((team) => (

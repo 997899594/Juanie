@@ -78,7 +78,6 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
     <div className="space-y-6">
       <PageHeader
         title="集成"
-        description={overview.headerDescription}
         actions={
           <Button
             variant="outline"
@@ -110,7 +109,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
       <div className="space-y-3">
         {overview.bindings.length === 0 ? (
           <div className="console-panel rounded-[24px] px-5 py-8 text-center text-sm text-muted-foreground">
-            当前团队还没有可用的集成绑定。
+            暂无集成
           </div>
         ) : (
           overview.bindings.map((binding) => {

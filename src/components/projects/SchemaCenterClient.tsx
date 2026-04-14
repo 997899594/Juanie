@@ -252,16 +252,13 @@ export function SchemaCenterClient({
     <div className="space-y-6">
       <PageHeader
         title="数据"
-        description="所有 schema 纳管、修复、评审和 Atlas 执行都在这里。其它页面只显示摘要和跳转。"
-        eyebrow="Data Flow"
-        meta="先看有没有门禁，再处理数据库。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <Link href={`/projects/${projectId}/runtime`}>打开运行</Link>
+              <Link href={`/projects/${projectId}/runtime`}>运行</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <Link href={`/projects/${projectId}/delivery`}>打开交付</Link>
+              <Link href={`/projects/${projectId}/delivery`}>交付</Link>
             </Button>
           </div>
         }

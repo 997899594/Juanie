@@ -154,31 +154,29 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       title: latestProductionRelease
         ? `${latestProductionRelease.environment.name} 当前版本`
         : '先确认当前环境版本',
-      description: latestProductionRelease
-        ? `${latestProductionRelease.displayTitle} · ${latestProductionRelease.statusDecoration.label}`
-        : '还没有发布记录。',
+      description: latestProductionRelease ? latestProductionRelease.displayTitle : undefined,
       href: latestProductionRelease
         ? `/projects/${projectId}/delivery/${latestProductionRelease.id}`
         : `/projects/${projectId}/delivery`,
-      actionLabel: latestProductionRelease ? '打开当前发布' : '查看环境中心',
+      actionLabel: latestProductionRelease ? '详情' : '环境',
       tone: 'default' as const,
     },
     {
       key: 'decision',
       eyebrow: '再判断',
       title: canPromote ? '可以推进生产发布' : '先处理发布前阻塞',
-      description: promotePanel?.blockingReason ?? governance.promoteToProduction.summary,
+      description: undefined,
       href: canPromote ? undefined : `/projects/${projectId}/schema`,
-      actionLabel: canPromote ? '在右上角发起生产发布' : '先去处理阻塞',
+      actionLabel: canPromote ? '发布到生产' : '处理阻塞',
       tone: canPromote ? ('success' as const) : ('warning' as const),
     },
     {
       key: 'fallback',
       eyebrow: '排查分流',
-      title: '风险不清楚时先去日志或数据',
-      description: '不要在交付页硬查。',
+      title: '日志或数据',
+      description: undefined,
       href: error ? `/projects/${projectId}/runtime/logs` : `/projects/${projectId}/schema`,
-      actionLabel: error ? '打开运行日志' : '打开数据',
+      actionLabel: error ? '日志' : '数据',
       tone: 'default' as const,
     },
   ];
@@ -187,9 +185,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     <div className="space-y-6">
       <PageHeader
         title="交付"
-        description="按环境查看当前版本、风险信号与交付记录。"
-        eyebrow="Delivery Flow"
-        meta="先看版本，再决定要不要发。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusIndicator
@@ -200,7 +195,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
               <Link href={`/projects/${projectId}/runtime/logs`}>
                 <ScrollText className="h-3.5 w-3.5" />
-                打开日志
+                日志
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
@@ -234,7 +229,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         }
       />
 
-      <PriorityDeck title="交付顺序" description="先确认，再推进。" items={deliveryPriorityItems} />
+      <PriorityDeck title="顺序" items={deliveryPriorityItems} />
 
       {error && (
         <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-foreground">

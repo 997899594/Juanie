@@ -28,8 +28,8 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
       <PageHeader
         title={project.name}
         description={overview.headerDescription}
-        eyebrow="Project Overview"
-        meta="先确认当前发布与待处理，再进入环境、交付或运行中心处理具体问题。"
+        eyebrow="总览"
+        meta="先看状态。"
         actions={
           <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
             <Link href={`/projects/${projectId}/settings`}>

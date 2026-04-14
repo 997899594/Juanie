@@ -706,10 +706,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
             <div className="space-y-4">
               <div>
-                <h2 className="mb-1 text-lg font-semibold">先确定项目入口方式</h2>
-                <p className="text-sm text-muted-foreground">
-                  导入已有仓库，或者用平台模板直接拉起一个新项目仓库。
-                </p>
+                <h2 className="mb-1 text-lg font-semibold">项目入口方式</h2>
               </div>
 
               <div className="space-y-2">
@@ -800,9 +797,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               <>
                 <div>
                   <h2 className="mb-1 text-lg font-semibold">选择要接入的仓库</h2>
-                  <p className="text-sm text-muted-foreground">
-                    选中后平台会分析仓库结构，并预填服务与部署建议。
-                  </p>
                 </div>
 
                 <div className="relative">
@@ -851,9 +845,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               <>
                 <div>
                   <h2 className="mb-1 text-lg font-semibold">定义新仓库骨架</h2>
-                  <p className="text-sm text-muted-foreground">
-                    这里只提供真实可创建的模板，后续再补更多模板也会直接从这里接入。
-                  </p>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -977,16 +968,10 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
             <div>
               <h2 className="mb-1 text-lg font-semibold">把交付参数一次配齐</h2>
-              <p className="text-sm text-muted-foreground">
-                这里只放平台已经落地的真实能力，避免后续进项目后再返工。
-              </p>
             </div>
 
             <div className="rounded-[20px] border border-border bg-secondary/20 p-4">
               <div className="text-sm font-medium">平台推荐配置</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                先用平台默认方案把主链路配齐，服务与数据库细节可在下方高级调整。
-              </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-[16px] border border-border bg-background px-3 py-3">
                   <div className="text-xs text-muted-foreground">资源档位</div>
@@ -1081,9 +1066,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">基础环境自动部署</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        push 到生产分支后，staging 是否自动生成新部署。
-                      </div>
                     </div>
                     <Switch
                       checked={formData.autoDeploy}
@@ -1099,9 +1081,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             <div className="space-y-3">
               <div>
                 <h3 className="text-sm font-medium">资源档位</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  先选平台默认档位，下一步还能对服务做更细粒度调整。
-                </p>
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 {createRuntimeProfiles.map((profile) => (
@@ -1126,9 +1105,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             <div className="space-y-3">
               <div>
                 <h3 className="text-sm font-medium">生产发布方式</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  这里决定 production 默认走哪种发布链路。
-                </p>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {createProductionDeploymentStrategies.map((strategy) => (
@@ -1158,9 +1134,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             <div className="space-y-3">
               <div>
                 <h3 className="text-sm font-medium">预览环境数据库策略</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  PR 预览环境默认如何处理数据库，创建时先定好原则。
-                </p>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {createPreviewDatabaseStrategies.map((strategy) => (
@@ -1195,9 +1168,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               >
                 <div>
                   <div className="text-sm font-medium">高级调整</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    自定义域名、服务识别结果和仓库结构信号都放在这里。
-                  </div>
                 </div>
                 {configAdvancedOpen ? (
                   <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -1238,9 +1208,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-medium">服务预览</h3>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          平台将基于这些服务生成默认交付骨架和运行配置。
-                        </p>
                       </div>
                       <Badge variant="outline">{formData.services.length} 个服务</Badge>
                     </div>
@@ -1299,9 +1266,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
           <div className="space-y-6">
             <div>
               <h2 className="mb-1 text-lg font-semibold">最后确认</h2>
-              <p className="text-sm text-muted-foreground">
-                这里主要确认会真实落库和影响交付链路的配置。
-              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -1399,9 +1363,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               >
                 <div>
                   <h3 className="text-sm font-medium">高级调整 · 服务与资源</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    仅在需要覆盖平台推荐值时展开。
-                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="outline">{activeServices.length} 个启用中</Badge>
@@ -1644,9 +1605,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               {reviewDatabasesOpen && (
                 <div className="space-y-3 border-t border-border px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-xs text-muted-foreground">
-                      可以直接把平台托管数据库或外部数据库一起挂进来。
-                    </div>
                     <div className="flex flex-wrap gap-2">
                       {DATABASE_TYPE_OPTIONS.map((databaseType) => (
                         <Button
@@ -1675,7 +1633,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                     {formData.databases.length === 0 ? (
                       <div className="flex flex-col items-center gap-2 p-6 text-center text-muted-foreground">
                         <Database className="h-5 w-5 opacity-40" />
-                        <span className="text-sm">当前没有数据库，需要时可直接添加。</span>
+                        <span className="text-sm">没有数据库</span>
                       </div>
                     ) : (
                       formData.databases.map((database) => {
