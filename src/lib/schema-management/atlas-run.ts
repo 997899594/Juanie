@@ -8,6 +8,7 @@ import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { addSchemaRepairAtlasJob } from '@/lib/queue';
 
 const execFileAsync = promisify(execFile);
 
@@ -148,6 +149,15 @@ export async function runSchemaRepairAtlas(input: {
   planId: string;
   userId: string;
 }) {
+  const run = await createSchemaRepairAtlasRun(input);
+  return run;
+}
+
+export async function createSchemaRepairAtlasRun(input: {
+  projectId: string;
+  planId: string;
+  userId: string;
+}) {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, input.projectId),
     with: {
@@ -174,9 +184,88 @@ export async function runSchemaRepairAtlas(input: {
     throw new Error('修复计划还没有 branch');
   }
 
+  const activeRun = await db.query.schemaRepairAtlasRuns.findFirst({
+    where: and(
+      eq(schemaRepairAtlasRuns.projectId, input.projectId),
+      eq(schemaRepairAtlasRuns.databaseId, plan.databaseId),
+      inArray(schemaRepairAtlasRuns.status, ['queued', 'running'])
+    ),
+    orderBy: (table, { desc }) => [desc(table.createdAt)],
+  });
+
+  if (activeRun) {
+    return activeRun;
+  }
+
+  const queuedAt = new Date();
+  const [run] = await db
+    .insert(schemaRepairAtlasRuns)
+    .values({
+      planId: plan.id,
+      projectId: input.projectId,
+      environmentId: plan.environmentId,
+      databaseId: plan.databaseId,
+      status: 'queued',
+    })
+    .returning();
+
+  await db
+    .update(schemaRepairPlans)
+    .set({
+      atlasExecutionStatus: 'queued',
+      atlasExecutionStartedAt: null,
+      atlasExecutionFinishedAt: null,
+      atlasExecutionLog: null,
+      updatedAt: queuedAt,
+    })
+    .where(eq(schemaRepairPlans.id, plan.id));
+
+  await addSchemaRepairAtlasJob(run.id, input.projectId, input.userId);
+
+  return run;
+}
+
+export async function executeSchemaRepairAtlasRun(input: {
+  atlasRunId: string;
+  projectId: string;
+  userId?: string | null;
+}) {
+  const run = await db.query.schemaRepairAtlasRuns.findFirst({
+    where: eq(schemaRepairAtlasRuns.id, input.atlasRunId),
+  });
+
+  if (!run || run.projectId !== input.projectId) {
+    throw new Error('Atlas 执行记录不存在');
+  }
+
+  const project = await db.query.projects.findFirst({
+    where: eq(projects.id, input.projectId),
+    with: {
+      repository: true,
+    },
+  });
+
+  if (!project?.repository) {
+    throw new Error('项目缺少仓库绑定');
+  }
+
+  const plan = await db.query.schemaRepairPlans.findFirst({
+    where: eq(schemaRepairPlans.id, run.planId),
+    with: {
+      database: true,
+    },
+  });
+
+  if (!plan) {
+    throw new Error('修复计划不存在');
+  }
+  if (!plan.branchName) {
+    throw new Error('修复计划还没有 branch');
+  }
+
   const session = await getTeamIntegrationSession({
     teamId: project.teamId,
-    actingUserId: input.userId,
+    actingUserId: input.userId ?? null,
     requiredCapabilities: ['write_repo'],
   });
 
@@ -189,31 +278,9 @@ export async function runSchemaRepairAtlas(input: {
     accessToken: session.accessToken,
   });
   const baseBranch = project.repository.defaultBranch || 'main';
+  const branchName = plan.branchName;
   const scriptPath = path.join(repoDir, '.juanie', 'schema-repair', `${plan.id}.atlas.sh`);
   const startTime = new Date();
-  const activeRun = await db.query.schemaRepairAtlasRuns.findFirst({
-    where: and(
-      eq(schemaRepairAtlasRuns.planId, plan.id),
-      inArray(schemaRepairAtlasRuns.status, ['running'])
-    ),
-  });
-
-  if (activeRun) {
-    throw new Error('当前修复计划已有 Atlas 执行正在进行中');
-  }
-
-  const [run] = await db
-    .insert(schemaRepairAtlasRuns)
-    .values({
-      planId: plan.id,
-      projectId: input.projectId,
-      environmentId: plan.environmentId,
-      databaseId: plan.databaseId,
-      status: 'running',
-      startedAt: startTime,
-    })
-    .returning();
-
   await db
     .update(schemaRepairPlans)
     .set({
@@ -224,6 +291,14 @@ export async function runSchemaRepairAtlas(input: {
       updatedAt: startTime,
     })
     .where(eq(schemaRepairPlans.id, plan.id));
+  await db
+    .update(schemaRepairAtlasRuns)
+    .set({
+      status: 'running',
+      startedAt: startTime,
+      updatedAt: startTime,
+    })
+    .where(eq(schemaRepairAtlasRuns.id, run.id));
 
   try {
     let logs = '';
@@ -233,7 +308,7 @@ export async function runSchemaRepairAtlas(input: {
       '--depth',
       '1',
       '--branch',
-      plan.branchName,
+      branchName,
       cloneUrl,
       repoDir,
     ]);
@@ -278,7 +353,7 @@ export async function runSchemaRepairAtlas(input: {
         { cwd: repoDir }
       );
       const commitSha = await runCommand('git', ['rev-parse', 'HEAD'], { cwd: repoDir });
-      await runCommand('git', ['push', 'origin', plan.branchName], { cwd: repoDir });
+      await runCommand('git', ['push', 'origin', branchName], { cwd: repoDir });
       const finishedAt = new Date();
       const [updated] = await db
         .update(schemaRepairPlans)
@@ -305,7 +380,7 @@ export async function runSchemaRepairAtlas(input: {
 
       await createAuditLog({
         teamId: project.teamId,
-        userId: input.userId,
+        userId: input.userId ?? undefined,
         action: 'project.updated',
         resourceType: 'project',
         resourceId: project.id,
@@ -313,7 +388,7 @@ export async function runSchemaRepairAtlas(input: {
           schemaAction: 'run_atlas_repair',
           databaseId: plan.databaseId,
           planId: plan.id,
-          branchName: plan.branchName,
+          branchName,
           atlasRunId: run.id,
         },
       });

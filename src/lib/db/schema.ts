@@ -150,7 +150,7 @@ export const schemaRepairPlanStatuses = [
 export type SchemaRepairPlanStatus = (typeof schemaRepairPlanStatuses)[number];
 export const schemaRepairReviewStates = ['draft', 'open', 'merged', 'closed', 'unknown'] as const;
 export type SchemaRepairReviewState = (typeof schemaRepairReviewStates)[number];
-export const atlasExecutionStatuses = ['idle', 'running', 'succeeded', 'failed'] as const;
+export const atlasExecutionStatuses = ['idle', 'queued', 'running', 'succeeded', 'failed'] as const;
 export type AtlasExecutionStatus = (typeof atlasExecutionStatuses)[number];
 
 export const aiPlans = ['free', 'pro', 'scale', 'enterprise'] as const;

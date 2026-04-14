@@ -13,6 +13,7 @@ let _projectInitQueue: Queue | null = null;
 let _releaseQueue: Queue | null = null;
 let _deploymentQueue: Queue | null = null;
 let _migrationQueue: Queue | null = null;
+let _schemaRepairAtlasQueue: Queue | null = null;
 
 export function getProjectInitQueue(): Queue {
   if (!_projectInitQueue) {
@@ -42,6 +43,13 @@ export function getMigrationQueue(): Queue {
   return _migrationQueue;
 }
 
+export function getSchemaRepairAtlasQueue(): Queue {
+  if (!_schemaRepairAtlasQueue) {
+    _schemaRepairAtlasQueue = new Queue('schema-repair-atlas', { connection: getConnection() });
+  }
+  return _schemaRepairAtlasQueue;
+}
+
 export type ProjectInitJobData = {
   projectId: string;
   mode: 'import' | 'create';
@@ -62,6 +70,12 @@ export type MigrationJobData = {
   runId: string;
   imageUrl?: string | null;
   allowApprovalBypass?: boolean;
+};
+
+export type SchemaRepairAtlasJobData = {
+  atlasRunId: string;
+  projectId: string;
+  userId: string | null;
 };
 
 export async function addProjectInitJob(
@@ -123,11 +137,31 @@ export async function addMigrationJob(
   );
 }
 
+export async function addSchemaRepairAtlasJob(
+  atlasRunId: string,
+  projectId: string,
+  userId?: string | null
+) {
+  return getSchemaRepairAtlasQueue().add(
+    'schema-repair-atlas',
+    {
+      atlasRunId,
+      projectId,
+      userId: userId ?? null,
+    },
+    {
+      attempts: 1,
+      jobId: `schema-repair-atlas:${atlasRunId}`,
+    }
+  );
+}
+
 export async function closeQueues() {
   const promises: Promise<void>[] = [];
   if (_projectInitQueue) promises.push(_projectInitQueue.close());
   if (_releaseQueue) promises.push(_releaseQueue.close());
   if (_deploymentQueue) promises.push(_deploymentQueue.close());
   if (_migrationQueue) promises.push(_migrationQueue.close());
+  if (_schemaRepairAtlasQueue) promises.push(_schemaRepairAtlasQueue.close());
   return Promise.all(promises);
 }

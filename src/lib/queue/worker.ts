@@ -3,6 +3,7 @@ import { createDeploymentWorker } from './deployment';
 import { createMigrationWorker } from './migration';
 import { createProjectInitWorker } from './project-init';
 import { createReleaseWorker } from './release';
+import { createSchemaRepairAtlasWorker } from './schema-repair-atlas';
 
 // 启动时初始化 K8s 客户端（in-cluster ServiceAccount 或 KUBECONFIG）
 initK8sClient();
@@ -13,6 +14,7 @@ const projectInitWorker = createProjectInitWorker();
 const releaseWorker = createReleaseWorker();
 const deploymentWorker = createDeploymentWorker();
 const migrationWorker = createMigrationWorker();
+const schemaRepairAtlasWorker = createSchemaRepairAtlasWorker();
 
 projectInitWorker.on('completed', (job) => {
   console.log(`Project init job ${job.id} completed`);
@@ -46,6 +48,14 @@ migrationWorker.on('failed', (job, err) => {
   console.error(`Migration job ${job?.id} failed:`, err.message);
 });
 
+schemaRepairAtlasWorker.on('completed', (job) => {
+  console.log(`Schema repair Atlas job ${job.id} completed`);
+});
+
+schemaRepairAtlasWorker.on('failed', (job, err) => {
+  console.error(`Schema repair Atlas job ${job?.id} failed:`, err.message);
+});
+
 process.on('SIGTERM', async () => {
   console.log('Shutting down workers...');
   await Promise.all([
@@ -53,6 +63,7 @@ process.on('SIGTERM', async () => {
     releaseWorker.close(),
     deploymentWorker.close(),
     migrationWorker.close(),
+    schemaRepairAtlasWorker.close(),
   ]);
   process.exit(0);
 });
@@ -64,6 +75,7 @@ process.on('SIGINT', async () => {
     releaseWorker.close(),
     deploymentWorker.close(),
     migrationWorker.close(),
+    schemaRepairAtlasWorker.close(),
   ]);
   process.exit(0);
 });
@@ -73,3 +85,4 @@ console.log('  - Project init worker: listening to "project-init" queue');
 console.log('  - Release worker: listening to "release" queue');
 console.log('  - Deployment worker: listening to "deployment" queue');
 console.log('  - Migration worker: listening to "migration" queue');
+console.log('  - Schema repair Atlas worker: listening to "schema-repair-atlas" queue');

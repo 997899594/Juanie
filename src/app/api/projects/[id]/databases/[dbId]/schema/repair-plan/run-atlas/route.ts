@@ -50,13 +50,13 @@ export async function POST(
       return NextResponse.json({ error: '没有可执行的修复计划' }, { status: 400 });
     }
 
-    const plan = await runSchemaRepairAtlas({
+    const run = await runSchemaRepairAtlas({
       projectId,
       planId: latestPlan.id,
       userId: session.user.id,
     });
 
-    return NextResponse.json({ plan }, { status: 200 });
+    return NextResponse.json({ run }, { status: 202 });
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

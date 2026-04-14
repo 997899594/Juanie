@@ -129,7 +129,7 @@ interface EnvironmentRecord {
     latestRepairPlan: DatabaseSchemaRepairPlan | null;
     latestAtlasRun: {
       id: string;
-      status: 'idle' | 'running' | 'succeeded' | 'failed';
+      status: 'idle' | 'queued' | 'running' | 'succeeded' | 'failed';
       commitSha: string | null;
       generatedFiles: string[] | null;
       diffSummary: {
@@ -823,6 +823,7 @@ function EnvironmentAdvancedPanel({
     string
   > = {
     idle: '未执行',
+    queued: '排队中',
     running: '运行中',
     succeeded: '成功',
     failed: '失败',
@@ -928,11 +929,7 @@ function EnvironmentAdvancedPanel({
     }));
 
     try {
-      const updatedPlan = await runDatabaseRepairAtlas(projectId, databaseId);
-      setRepairPlans((current) => ({
-        ...current,
-        [databaseId]: updatedPlan,
-      }));
+      await runDatabaseRepairAtlas(projectId, databaseId);
     } catch (error) {
       setRepairPlanErrors((current) => ({
         ...current,
