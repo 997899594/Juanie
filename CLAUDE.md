@@ -35,9 +35,12 @@ bun run lint
 # Format (Biome)
 bun run format
 
-# Database (Drizzle)
-bun run db:generate    # Generate migrations from schema changes
-bun run db:push        # Push schema to database
+# Database (Atlas + Drizzle schema)
+bun run db:generate foo # Generate a new Atlas migration from schema changes
+bun run db:hash         # Refresh Atlas migration checksums
+bun run db:validate     # Validate the Atlas migration directory
+bun run db:status       # Show Atlas migration status for DATABASE_URL
+bun run db:push         # Apply Atlas migrations to database
 bun run db:studio      # Open Drizzle Studio
 bun run db:seed        # Seed database
 ```
@@ -72,8 +75,9 @@ Juanie is a multi-tenant DevOps control plane for deploying app services to Kube
    - Boots both project-init and deployment workers.
    - Optionally starts drift detection (`ENABLE_DRIFT_DETECTOR`).
 
-4. **Domain + persistence** (`src/lib/db/`)
+4. **Domain + persistence** (`src/lib/db/`, `atlas.hcl`, `migrations/`)
    - Drizzle schema models teams, projects, repositories, services, environments, deployments, webhooks, etc.
+   - Atlas is the only active control-plane migration executor.
    - Workers and API handlers coordinate state transitions through the DB.
 
 5. **Infrastructure adapters**

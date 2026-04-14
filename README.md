@@ -1,6 +1,6 @@
 # Juanie - Modern DevOps Platform
 
-A modern AI-driven DevOps platform built with Next.js 15, Drizzle ORM, and Kubernetes.
+A modern AI-driven DevOps platform built with Next.js, PostgreSQL, Atlas, and Kubernetes.
 
 ## Features
 
@@ -13,15 +13,17 @@ A modern AI-driven DevOps platform built with Next.js 15, Drizzle ORM, and Kuber
 - **Pod Logs & Exec**: View logs and execute commands in pods
 - **Secrets & ConfigMaps**: Manage Kubernetes secrets and config maps
 - **Audit Logging**: Track all team activities
+- **Atlas Migrations**: Single control-plane migration system with validation in CI
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 (App Router)
-- **Database**: PostgreSQL + Drizzle ORM
+- **Framework**: Next.js 16 (App Router)
+- **Database**: PostgreSQL + Drizzle ORM schema modeling + Atlas migrations
 - **Auth**: NextAuth.js (GitHub/GitLab OAuth)
 - **K8s SDK**: @kubernetes/client-node
 - **UI**: Tailwind CSS + Radix UI
 - **GitOps**: Flux CD
+- **Queue**: BullMQ + Redis
 
 ## Getting Started
 
@@ -30,6 +32,7 @@ A modern AI-driven DevOps platform built with Next.js 15, Drizzle ORM, and Kuber
 - Node.js 22+
 - Bun
 - PostgreSQL database
+- Docker (recommended for Atlas dev diff/validation)
 - Kubernetes cluster (optional, for deployments)
 
 ### Installation
@@ -47,13 +50,36 @@ cp .env.example .env
 # GITHUB_CLIENT_ID=...
 # GITHUB_CLIENT_SECRET=...
 
-# Generate database schema
-bun run db:generate
+# Apply control-plane migrations
 bun run db:push
 
 # Start development server
 bun run dev
 ```
+
+## Database Workflow
+
+Juanie uses one active control-plane migration flow:
+
+- `src/lib/db/schema.ts` defines the desired schema in Drizzle ORM
+- `atlas.hcl` exports that schema and lets Atlas diff against the migration directory
+- `migrations/` contains the only active control-plane migration history
+- `archive/legacy-control-plane-migrations/` stores the retired SQL chain for reference only
+
+Commands:
+
+```bash
+bun run db:generate add_feature   # Generate a new Atlas migration
+bun run db:hash                   # Refresh migrations/atlas.sum
+bun run db:validate               # Validate replayability of the migration directory
+bun run db:status                 # Show pending migrations for DATABASE_URL
+bun run db:push                   # Apply Atlas migrations
+```
+
+Notes:
+
+- CI validates Atlas migrations and checksum, but does not run interactive local hooks.
+- Drizzle remains the schema authoring layer, not the runtime migration executor.
 
 ### Environment Variables
 
@@ -70,25 +96,20 @@ bun run dev
 
 ## Project Structure
 
-```
+```text
 src/
 ├── app/                    # Next.js App Router
-│   ├── api/               # API routes
-│   │   ├── auth/         # NextAuth
-│   │   ├── projects/    # Projects CRUD
-│   │   ├── teams/       # Teams CRUD
-│   │   ├── deployments/ # Deployments
-│   │   └── clusters/    # K8s clusters
-│   ├── projects/        # Project pages
-│   └── teams/           # Team pages
-├── components/            # React components
-│   └── ui/              # UI components (Radix)
-├── hooks/                 # Custom React hooks
-└── lib/                  # Core libraries
-    ├── db/               # Drizzle ORM schema
-    ├── k8s.ts           # K8s client
-    ├── flux.ts           # Flux CD integration
-    └── github.ts         # GitHub API
+├── components/             # React components
+├── hooks/                  # Custom React hooks
+└── lib/
+    ├── db/                 # Drizzle ORM schema and DB client
+    ├── queue/              # Worker and scheduler runtime
+    ├── k8s.ts              # K8s client
+    ├── flux.ts             # Flux CD integration
+    └── git/                # GitHub/GitLab provider abstraction
+migrations/                 # Active Atlas migration directory
+archive/legacy-control-plane-migrations/
+atlas.hcl                   # Atlas project config
 ```
 
 ## API Endpoints

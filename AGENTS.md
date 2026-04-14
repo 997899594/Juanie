@@ -7,7 +7,7 @@ This document provides coding guidelines and conventions for agentic coding agen
 Juanie is a modern AI-driven DevOps platform built with:
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript (strict mode)
-- **Database**: PostgreSQL + Drizzle ORM
+- **Database**: PostgreSQL + Drizzle ORM schema modeling + Atlas migrations
 - **Auth**: NextAuth.js (GitHub/GitLab OAuth)
 - **UI**: Tailwind CSS + Radix UI components
 - **K8s SDK**: @kubernetes/client-node
@@ -42,8 +42,11 @@ bun run format           # Format code with Biome
 bun run test             # Run Bun test suite
 
 # Database
-bun run db:generate      # Generate Drizzle migrations
-bun run db:push          # Push schema changes to database
+bun run db:generate foo  # Generate a new Atlas migration from schema changes
+bun run db:hash          # Refresh Atlas migration checksums
+bun run db:validate      # Validate the Atlas migration directory
+bun run db:status        # Show Atlas migration status for DATABASE_URL
+bun run db:push          # Apply Atlas migrations to the database
 bun run db:studio        # Open Drizzle Studio
 bun run db:seed          # Run seed script
 ```
@@ -178,6 +181,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 ### Database (Drizzle ORM)
 
 - Schema is defined in `src/lib/db/schema.ts`
+- Control-plane migrations are executed only through Atlas (`atlas.hcl` + `migrations/`)
+- Drizzle is the schema authoring layer, not the active migration executor
 - Use `db.query.*` for queries with relations
 - Use `db.select()`, `db.insert()`, `db.update()`, `db.delete()` for direct operations
 
@@ -369,7 +374,9 @@ k8s/                       # Kubernetes 部署清单
 ├── base/                  # 基础资源（Namespace, Deployment, RBAC, HPA, PDB）
 └── overlays/production/   # 生产环境 Kustomize 覆盖层
 templates/                 # 项目模板（用于 Create 模式）
-drizzle/                   # 数据库迁移文件
+migrations/                # Atlas 控制面迁移目录（唯一活跃迁移链）
+archive/legacy-control-plane-migrations/  # 归档的旧控制面 SQL 迁移
+atlas.hcl                  # Atlas project config
 docker-compose.yml         # 本地开发环境（PG, Redis, MinIO, Loki, Grafana）
 ```
 
@@ -420,11 +427,11 @@ SMTP_PASS=xxx
 1. **Before starting**: 
    - Run `bun install` to ensure dependencies are installed
    - Run `bun run dev:redis` to start Redis (首次需要)
-   - Run `bun run db:push` to sync database schema
+   - Run `bun run db:push` to apply Atlas migrations
 
 2. **Development**: Run `bun run dev` (启动 Web + Worker + Scheduler)
 
-3. **Database changes**: Edit `src/lib/db/schema.ts`, then run `bun run db:push`
+3. **Database changes**: Edit `src/lib/db/schema.ts`, then run `bun run db:generate <name>`, `bun run db:hash`, and `bun run db:validate`
 
 4. **Before committing**: Run `bun run test` and `bun run lint` to check for issues
 

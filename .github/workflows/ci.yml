@@ -17,6 +17,8 @@ permissions:
 env:
   IMAGE_REGISTRY: ghcr.io
   IMAGE_REPOSITORY: ${{ github.repository_owner }}/juanie
+  ATLAS_VERSION: 1.2.0
+  ATLAS_ACTION_VERSION: v1.2.0
 
 jobs:
   quality:
@@ -28,7 +30,14 @@ jobs:
         with:
           bun-version: latest
 
+      - uses: ariga/setup-atlas@v0
+        with:
+          version: ${{ env.ATLAS_ACTION_VERSION }}
+
       - run: bun install --frozen-lockfile
+      - run: bun run db:hash
+      - run: git diff --exit-code -- migrations/atlas.sum
+      - run: bun run db:validate
       - run: bunx biome check
       - run: bun run lint
       - run: bun run build
@@ -57,6 +66,8 @@ jobs:
           context: .
           file: ./Dockerfile
           target: ${{ matrix.target }}
+          build-args: |
+            ATLAS_VERSION=${{ env.ATLAS_VERSION }}
           push: true
           provenance: false
           sbom: false

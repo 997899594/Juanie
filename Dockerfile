@@ -9,6 +9,8 @@ COPY . /app
 # ============================================
 FROM oven/bun:1 AS deps
 WORKDIR /app
+ENV CI=true
+ENV LEFTHOOK=0
 
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
@@ -94,10 +96,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
+ARG ATLAS_VERSION=1.2.0
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git curl ca-certificates bash \
-  && curl -sSfL "https://atlasbinaries.com/atlas/atlas-${TARGETOS}-${TARGETARCH}-latest" -o /usr/local/bin/atlas \
+  && curl -sSfL "https://atlasbinaries.com/atlas/atlas-${TARGETOS}-${TARGETARCH}-v${ATLAS_VERSION}" -o /usr/local/bin/atlas \
   && chmod +x /usr/local/bin/atlas \
   && atlas version \
   && rm -rf /var/lib/apt/lists/*
@@ -111,6 +114,7 @@ COPY --from=migrate-deps /migrate/package.json ./package.json
 COPY --from=migrate-deps /migrate/node_modules ./node_modules
 RUN mkdir -p ./src/lib/releases ./scripts
 COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/recap-record.ts
+COPY --from=source /app/scripts/db-atlas.ts ./scripts/db-atlas.ts
 COPY --from=source /app/scripts/db-push.ts ./scripts/db-push.ts
 
 RUN chmod +x ./worker
