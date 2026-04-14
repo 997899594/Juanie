@@ -101,7 +101,7 @@ ENV XDG_CACHE_HOME=/tmp/.cache
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
-ARG ATLAS_VERSION=1.2.0
+ARG ATLAS_VERSION=1.1.0
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git curl ca-certificates bash \

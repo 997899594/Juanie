@@ -3,7 +3,7 @@ import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import postgres from 'postgres';
 
-const ATLAS_VERSION = process.env.ATLAS_VERSION ?? '1.2.0';
+const ATLAS_VERSION = process.env.ATLAS_VERSION ?? '1.1.0';
 const ATLAS_DOCKER_IMAGE =
   process.env.ATLAS_DOCKER_IMAGE ?? `arigaio/atlas:${ATLAS_VERSION}-community`;
 const MIGRATIONS_DIR_URL = 'file://migrations';
@@ -312,17 +312,14 @@ export async function validateControlPlaneMigrations(): Promise<void> {
       MIGRATIONS_DIR_URL,
       '--dev-url',
       DEFAULT_DEV_URL,
-      '--latest',
-      '1',
     ]);
     return;
   }
 
   await withDockerDevDatabase(async ({ devUrl, networkName }) => {
-    await runAtlas(
-      ['migrate', 'validate', '--dir', MIGRATIONS_DIR_URL, '--dev-url', devUrl, '--latest', '1'],
-      { network: networkName }
-    );
+    await runAtlas(['migrate', 'validate', '--dir', MIGRATIONS_DIR_URL, '--dev-url', devUrl], {
+      network: networkName,
+    });
   });
 }
 
@@ -432,7 +429,21 @@ export async function executeControlPlaneAtlasCommand(
       return;
     default:
       throw new Error(
-        'Usage: bun scripts/db-atlas.ts <generate|hash|validate|status|apply> [name]'
+        'Usage: bun src/lib/db/control-plane-atlas.ts <generate|hash|validate|status|apply> [name]'
       );
   }
 }
+
+async function main(): Promise<void> {
+  if (!import.meta.main) {
+    return;
+  }
+
+  const [command, arg] = process.argv.slice(2);
+  await executeControlPlaneAtlasCommand(command, arg);
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});
