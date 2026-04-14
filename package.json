@@ -20,7 +20,7 @@
     "prepare": "bun scripts/prepare.ts",
     "test": "bun test",
     "db:generate": "bun scripts/db-atlas.ts generate",
-    "db:push": "bun scripts/db-push.ts",
+    "db:push": "bun scripts/db-atlas.ts apply",
     "db:hash": "bun scripts/db-atlas.ts hash",
     "db:status": "bun scripts/db-atlas.ts status",
     "db:validate": "bun scripts/db-atlas.ts validate",
