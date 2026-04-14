@@ -350,9 +350,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === STEPS.length - 1;
   const activeServices = formData.services.filter((service) => !service.disabled);
-  const runtimeProfileLabel =
-    createRuntimeProfiles.find((profile) => profile.value === formData.runtimeProfile)?.label ??
-    formData.runtimeProfile;
   const deploymentStrategyLabel =
     getEnvironmentDeploymentStrategyLabel(formData.productionDeploymentStrategy) ??
     formData.productionDeploymentStrategy;
@@ -970,34 +967,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               <h2 className="mb-1 text-lg font-semibold">把交付参数一次配齐</h2>
             </div>
 
-            <div className="rounded-[20px] border border-border bg-secondary/20 p-4">
-              <div className="text-sm font-medium">平台推荐配置</div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
-                  <div className="text-xs text-muted-foreground">资源档位</div>
-                  <div className="mt-1 text-sm font-medium">{runtimeProfileLabel}</div>
-                </div>
-                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
-                  <div className="text-xs text-muted-foreground">生产发布</div>
-                  <div className="mt-1 text-sm font-medium">{deploymentStrategyLabel}</div>
-                </div>
-                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
-                  <div className="text-xs text-muted-foreground">预览数据库</div>
-                  <div className="mt-1 text-sm font-medium">{previewDatabaseStrategyLabel}</div>
-                </div>
-                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
-                  <div className="text-xs text-muted-foreground">基础环境</div>
-                  <div className="mt-1 text-sm font-medium">
-                    {formData.autoDeploy ? '自动部署' : '手动触发'}
-                  </div>
-                </div>
-                <div className="rounded-[16px] border border-border bg-background px-3 py-3">
-                  <div className="text-xs text-muted-foreground">识别服务</div>
-                  <div className="mt-1 text-sm font-medium">{formData.services.length} 个</div>
-                </div>
-              </div>
-            </div>
-
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>项目名称</Label>
@@ -1031,13 +1000,13 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             </div>
 
             <div className="space-y-2">
-              <Label>项目描述</Label>
+              <Label>描述</Label>
               <Textarea
                 value={formData.description}
                 onChange={(event) =>
                   setFormData((prev) => ({ ...prev, description: event.target.value }))
                 }
-                placeholder="一句话说明这个项目做什么。"
+                placeholder="做什么"
               />
             </div>
 
@@ -1104,7 +1073,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
             <div className="space-y-3">
               <div>
-                <h3 className="text-sm font-medium">生产发布方式</h3>
+                <h3 className="text-sm font-medium">生产发布</h3>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {createProductionDeploymentStrategies.map((strategy) => (
@@ -1133,7 +1102,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
             <div className="space-y-3">
               <div>
-                <h3 className="text-sm font-medium">预览环境数据库策略</h3>
+                <h3 className="text-sm font-medium">预览库策略</h3>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 {createPreviewDatabaseStrategies.map((strategy) => (
@@ -1167,7 +1136,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
               >
                 <div>
-                  <div className="text-sm font-medium">高级调整</div>
+                  <div className="text-sm font-medium">高级</div>
                 </div>
                 {configAdvancedOpen ? (
                   <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -1180,12 +1149,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 <div className="space-y-4 border-t border-border px-4 py-4">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between rounded-[18px] border border-border px-4 py-3">
-                      <div>
-                        <div className="text-sm font-medium">自定义域名</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          创建时就把主域名挂上，避免后面再补接入。
-                        </div>
-                      </div>
+                      <div className="text-sm font-medium">自定义域名</div>
                       <Switch
                         checked={formData.useCustomDomain}
                         onCheckedChange={(checked) =>
@@ -1202,59 +1166,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         placeholder="app.example.com"
                       />
                     )}
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-sm font-medium">服务预览</h3>
-                      </div>
-                      <Badge variant="outline">{formData.services.length} 个服务</Badge>
-                    </div>
-
-                    {(formData.monorepoType !== 'none' || formData.hasDockerBake) && (
-                      <div className="flex flex-wrap gap-2 rounded-[18px] bg-secondary/40 p-3 text-xs text-muted-foreground">
-                        {formData.monorepoType !== 'none' && (
-                          <Badge variant="secondary">Monorepo · {formData.monorepoType}</Badge>
-                        )}
-                        {formData.hasDockerBake && (
-                          <Badge variant="secondary">docker-bake.hcl</Badge>
-                        )}
-                        {formData.bakeTargets.map((target) => (
-                          <Badge key={target} variant="outline">
-                            {target}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="overflow-hidden rounded-[20px] border border-border">
-                      {formData.services.length === 0 ? (
-                        <div className="p-5 text-sm text-muted-foreground">
-                          当前还没有可创建的服务。
-                        </div>
-                      ) : (
-                        formData.services.map((service) => (
-                          <div
-                            key={service._id}
-                            className="border-b border-border px-4 py-4 last:border-b-0"
-                          >
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div>
-                                <div className="font-medium">{service.name}</div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  {service.appDir} · {service.type}
-                                  {typeof service.run.port === 'number'
-                                    ? ` · port ${service.run.port}`
-                                    : ''}
-                                </div>
-                              </div>
-                              <Badge variant="outline">{getServiceRuntimeSummary(service)}</Badge>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
                   </div>
                 </div>
               )}

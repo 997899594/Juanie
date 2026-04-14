@@ -12,7 +12,6 @@ import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
-import { PriorityDeck } from '@/components/ui/priority-deck';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { createProductionRelease } from '@/lib/releases/client-actions';
@@ -145,41 +144,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     sourceRef: release.sourceRef ?? '',
     sourceCommitSha: release.sourceCommitSha ?? null,
   }));
-  const latestProductionRelease =
-    releaseItems.find((release) => release.environment.isProduction) ?? releaseItems[0] ?? null;
-  const deliveryPriorityItems = [
-    {
-      key: 'current',
-      eyebrow: '先确认',
-      title: latestProductionRelease
-        ? `${latestProductionRelease.environment.name} 当前版本`
-        : '先确认当前环境版本',
-      description: latestProductionRelease ? latestProductionRelease.displayTitle : undefined,
-      href: latestProductionRelease
-        ? `/projects/${projectId}/delivery/${latestProductionRelease.id}`
-        : `/projects/${projectId}/delivery`,
-      actionLabel: latestProductionRelease ? '详情' : '环境',
-      tone: 'default' as const,
-    },
-    {
-      key: 'decision',
-      eyebrow: '再判断',
-      title: canPromote ? '可以推进生产发布' : '先处理发布前阻塞',
-      description: undefined,
-      href: canPromote ? undefined : `/projects/${projectId}/schema`,
-      actionLabel: canPromote ? '发布到生产' : '处理阻塞',
-      tone: canPromote ? ('success' as const) : ('warning' as const),
-    },
-    {
-      key: 'fallback',
-      eyebrow: '排查分流',
-      title: '日志或数据',
-      description: undefined,
-      href: error ? `/projects/${projectId}/runtime/logs` : `/projects/${projectId}/schema`,
-      actionLabel: error ? '日志' : '数据',
-      tone: 'default' as const,
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -228,8 +192,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           </div>
         }
       />
-
-      <PriorityDeck title="顺序" items={deliveryPriorityItems} />
 
       {error && (
         <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-foreground">

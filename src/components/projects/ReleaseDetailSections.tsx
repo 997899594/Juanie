@@ -85,7 +85,7 @@ export function ReleaseNarrativeSection({
 }) {
   return (
     <div className="console-panel p-5">
-      <div className="mb-4 text-sm font-semibold">发布总结</div>
+      <div className="mb-4 text-sm font-semibold">摘要</div>
       <div className="space-y-4">
         <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -113,16 +113,15 @@ export function ReleaseNarrativeSection({
             </div>
             <div className="mt-2 space-y-1 text-sm text-muted-foreground">
               <div>
-                集群已请求 {release.infrastructureDiagnostics.capacity.requestedMemoryLabel} /
-                可分配 {release.infrastructureDiagnostics.capacity.allocatableMemoryLabel}
+                已请求 {release.infrastructureDiagnostics.capacity.requestedMemoryLabel} / 可分配{' '}
+                {release.infrastructureDiagnostics.capacity.allocatableMemoryLabel}
               </div>
               <div>
-                平台占用 {release.infrastructureDiagnostics.capacity.platformRequestedMemoryLabel}
-                ，当前环境占用{' '}
-                {release.infrastructureDiagnostics.capacity.environmentRequestedMemoryLabel}
+                平台 {release.infrastructureDiagnostics.capacity.platformRequestedMemoryLabel} ·
+                环境 {release.infrastructureDiagnostics.capacity.environmentRequestedMemoryLabel}
               </div>
               <div>
-                这次放量预估增量{' '}
+                本次增量{' '}
                 {release.infrastructureDiagnostics.capacity.estimatedRolloutDeltaMemoryLabel}
               </div>
               <div>
@@ -133,13 +132,13 @@ export function ReleaseNarrativeSection({
         )}
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            这次发了什么
+            变更
           </div>
           <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.changed}</div>
         </div>
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            风险点
+            风险
           </div>
           <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.risk}</div>
         </div>
@@ -162,7 +161,7 @@ export function ReleaseNarrativeSection({
         {release.narrativeSummary.nextAction && (
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              下一步
+              动作
             </div>
             <div className="mt-2 text-sm text-foreground">
               {release.narrativeSummary.nextAction}
@@ -285,7 +284,7 @@ export function ReleaseDiffSection({
           </div>
           {release.diff.changedArtifacts.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
-              当前没有镜像变化。
+              没有镜像变化。
             </div>
           ) : (
             release.diff.changedArtifacts.map((item) => (
@@ -316,7 +315,7 @@ export function ReleaseDiffSection({
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              迁移变化（配置）
+              迁移变化
             </div>
             {release.diff.changedMigrations.length > 0 && (
               <Badge variant="outline">{release.diff.changedMigrations.length} 项</Badge>
@@ -324,7 +323,7 @@ export function ReleaseDiffSection({
           </div>
           {release.diff.changedMigrations.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
-              当前没有迁移计划变化。
+              没有迁移变化。
             </div>
           ) : (
             release.diff.changedMigrations.map((item) => (
@@ -346,7 +345,7 @@ export function ReleaseDiffSection({
             </div>
             {runtimeMigrationDiffItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-4 text-sm text-muted-foreground">
-                当前没有检测到与真实环境的迁移差异。
+                没有运行差异。
               </div>
             ) : (
               <div className="space-y-2">
@@ -495,7 +494,7 @@ export function ReleaseExecutionSections({
           </div>
           {release.deployments.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-8 text-center text-sm text-muted-foreground">
-              当前发布还没有部署记录。
+              没有部署记录。
             </div>
           ) : (
             <div className="space-y-3">
@@ -542,7 +541,7 @@ export function ReleaseExecutionSections({
           <div className="mb-4 text-sm font-semibold">迁移记录</div>
           {release.migrationRuns.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-8 text-center text-sm text-muted-foreground">
-              没有自动迁移记录。
+              没有迁移记录。
             </div>
           ) : (
             <div className="space-y-3">
@@ -579,9 +578,7 @@ export function ReleaseExecutionSections({
         </section>
 
         <details className="console-panel p-5">
-          <summary className="cursor-pointer list-none text-sm font-semibold">
-            AI 分析与细节
-          </summary>
+          <summary className="cursor-pointer list-none text-sm font-semibold">分析</summary>
           <div className="mt-4 space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               {release.sourceCommitSha && (
