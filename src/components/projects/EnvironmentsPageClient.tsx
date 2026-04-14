@@ -127,6 +127,24 @@ interface EnvironmentRecord {
       lastInspectedAt: string | Date | null;
     } | null;
     latestRepairPlan: DatabaseSchemaRepairPlan | null;
+    latestAtlasRun: {
+      id: string;
+      status: 'idle' | 'running' | 'succeeded' | 'failed';
+      commitSha: string | null;
+      generatedFiles: string[] | null;
+      diffSummary: {
+        changedFiles: string[];
+        fileStats: Array<{
+          file: string;
+          added: number;
+          removed: number;
+        }>;
+      } | null;
+      log: string | null;
+      errorMessage: string | null;
+      startedAt: string | Date | null;
+      finishedAt: string | Date | null;
+    } | null;
   }>;
   policy: {
     level: 'normal' | 'protected' | 'preview';
@@ -950,9 +968,13 @@ function EnvironmentAdvancedPanel({
               {environment.databases.map((database) => {
                 const state = database.schemaState;
                 const repairPlan = repairPlans[database.id] ?? database.latestRepairPlan ?? null;
+                const latestAtlasRun = database.latestAtlasRun;
                 const repairPlanError = repairPlanErrors[database.id] ?? null;
                 const lastInspectedLabel = formatInspectionTimestamp(state?.lastInspectedAt);
                 const reviewSyncedLabel = formatInspectionTimestamp(repairPlan?.reviewSyncedAt);
+                const atlasFinishedLabel = formatInspectionTimestamp(
+                  latestAtlasRun?.finishedAt ?? repairPlan?.atlasExecutionFinishedAt
+                );
                 const versionSummary =
                   state?.actualVersion || state?.expectedVersion
                     ? [
@@ -1089,9 +1111,7 @@ function EnvironmentAdvancedPanel({
                               ? `评审状态 ${repairPlan.reviewStateLabel}`
                               : null,
                             reviewSyncedLabel ? `同步于 ${reviewSyncedLabel}` : null,
-                            repairPlan.atlasExecutionFinishedAt
-                              ? `Atlas 完成于 ${formatInspectionTimestamp(repairPlan.atlasExecutionFinishedAt)}`
-                              : null,
+                            atlasFinishedLabel ? `Atlas 完成于 ${atlasFinishedLabel}` : null,
                           ]
                             .filter(Boolean)
                             .join(' · ')}
@@ -1190,6 +1210,30 @@ function EnvironmentAdvancedPanel({
                           <pre className="mt-3 overflow-x-auto rounded-2xl border border-border bg-background px-4 py-3 text-xs text-muted-foreground">
                             {repairPlan.atlasExecutionLog}
                           </pre>
+                        )}
+                        {latestAtlasRun?.diffSummary && (
+                          <div className="mt-3 rounded-2xl border border-border bg-background px-4 py-3">
+                            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                              Atlas Diff
+                            </div>
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              {[
+                                latestAtlasRun.commitSha
+                                  ? `提交 ${latestAtlasRun.commitSha.slice(0, 7)}`
+                                  : null,
+                                `${latestAtlasRun.diffSummary.changedFiles.length} 个文件`,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </div>
+                            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                              {latestAtlasRun.diffSummary.fileStats.map((item) => (
+                                <div key={`${database.id}-atlas-diff-${item.file}`}>
+                                  {item.file} · +{item.added} / -{item.removed}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}

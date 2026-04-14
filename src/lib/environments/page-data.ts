@@ -7,6 +7,7 @@ import {
   migrationRuns,
   projects,
   releases,
+  schemaRepairAtlasRuns,
   type TeamRole,
 } from '@/lib/db/schema';
 import {
@@ -63,6 +64,7 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
     migrationRunList,
     recentAuditLogs,
     latestRepairPlans,
+    latestAtlasRuns,
   ] = await Promise.all([
     db.query.environments.findMany({
       where: eq(environments.projectId, projectId),
@@ -144,12 +146,22 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
       limit: 40,
     }),
     getLatestSchemaRepairPlansForProject(projectId),
+    db.query.schemaRepairAtlasRuns.findMany({
+      where: eq(schemaRepairAtlasRuns.projectId, projectId),
+      orderBy: [desc(schemaRepairAtlasRuns.createdAt)],
+    }),
   ]);
   const runtimeIndexes = buildEnvironmentRuntimeIndexes({
     releases: releaseList,
     deployments: deploymentList,
     migrationRuns: migrationRunList,
   });
+  const latestAtlasRunByDatabase = new Map<string, (typeof latestAtlasRuns)[number]>();
+  for (const run of latestAtlasRuns) {
+    if (!latestAtlasRunByDatabase.has(run.databaseId)) {
+      latestAtlasRunByDatabase.set(run.databaseId, run);
+    }
+  }
   const governanceData = buildEnvironmentGovernanceData({
     projectId,
     role,
@@ -171,6 +183,34 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
               }
             : null,
           latestRepairPlan: latestRepairPlans.get(database.id) ?? null,
+          latestAtlasRun: (() => {
+            const run = latestAtlasRunByDatabase.get(database.id);
+
+            if (!run) {
+              return null;
+            }
+
+            return {
+              ...run,
+              generatedFiles: Array.isArray(run.generatedFiles)
+                ? (run.generatedFiles as string[])
+                : null,
+              diffSummary:
+                typeof run.diffSummary === 'object' &&
+                run.diffSummary !== null &&
+                'changedFiles' in run.diffSummary &&
+                'fileStats' in run.diffSummary
+                  ? (run.diffSummary as {
+                      changedFiles: string[];
+                      fileStats: Array<{
+                        file: string;
+                        added: number;
+                        removed: number;
+                      }>;
+                    })
+                  : null,
+            };
+          })(),
         })),
         latestRelease: runtimeIndexes.latestReleaseByEnvironment.get(environment.id) ?? null,
         activeReleaseCount: runtimeIndexes.activeReleaseCountByEnvironment.get(environment.id) ?? 0,

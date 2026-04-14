@@ -909,6 +909,42 @@ export const schemaRepairPlans = pgTable(
   })
 );
 
+export const schemaRepairAtlasRuns = pgTable(
+  'schemaRepairAtlasRun',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    planId: uuid('planId')
+      .notNull()
+      .references(() => schemaRepairPlans.id, { onDelete: 'cascade' }),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    databaseId: uuid('databaseId')
+      .notNull()
+      .references(() => databases.id, { onDelete: 'cascade' }),
+    status: atlasExecutionStatusEnum('status').notNull().default('idle'),
+    exitCode: integer('exitCode'),
+    generatedFiles: jsonb('generatedFiles'),
+    diffSummary: jsonb('diffSummary'),
+    commitSha: varchar('commitSha', { length: 100 }),
+    log: text('log'),
+    errorMessage: text('errorMessage'),
+    startedAt: timestamp('startedAt'),
+    finishedAt: timestamp('finishedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    planIdIdx: index('schemaRepairAtlasRun_planId_idx').on(table.planId),
+    projectIdIdx: index('schemaRepairAtlasRun_projectId_idx').on(table.projectId),
+    databaseIdIdx: index('schemaRepairAtlasRun_databaseId_idx').on(table.databaseId),
+    createdAtIdx: index('schemaRepairAtlasRun_createdAt_idx').on(table.createdAt),
+  })
+);
+
 // ============================================
 // Domain Tables
 // ============================================
@@ -1560,7 +1596,7 @@ export const environmentSchemaStatesRelations = relations(environmentSchemaState
   }),
 }));
 
-export const schemaRepairPlansRelations = relations(schemaRepairPlans, ({ one }) => ({
+export const schemaRepairPlansRelations = relations(schemaRepairPlans, ({ one, many }) => ({
   project: one(projects, {
     fields: [schemaRepairPlans.projectId],
     references: [projects.id],
@@ -1576,6 +1612,26 @@ export const schemaRepairPlansRelations = relations(schemaRepairPlans, ({ one })
   createdByUser: one(users, {
     fields: [schemaRepairPlans.createdByUserId],
     references: [users.id],
+  }),
+  atlasRuns: many(schemaRepairAtlasRuns),
+}));
+
+export const schemaRepairAtlasRunsRelations = relations(schemaRepairAtlasRuns, ({ one }) => ({
+  plan: one(schemaRepairPlans, {
+    fields: [schemaRepairAtlasRuns.planId],
+    references: [schemaRepairPlans.id],
+  }),
+  project: one(projects, {
+    fields: [schemaRepairAtlasRuns.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [schemaRepairAtlasRuns.environmentId],
+    references: [environments.id],
+  }),
+  database: one(databases, {
+    fields: [schemaRepairAtlasRuns.databaseId],
+    references: [databases.id],
   }),
 }));
 
