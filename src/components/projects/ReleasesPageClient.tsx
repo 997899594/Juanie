@@ -161,7 +161,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               pulse={isConnected}
             />
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-              <Link href={`/projects/${projectId}/logs`}>
+              <Link href={`/projects/${projectId}/runtime/logs`}>
                 <ScrollText className="h-3.5 w-3.5" />
                 打开日志
               </Link>

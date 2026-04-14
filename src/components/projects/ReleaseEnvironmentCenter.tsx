@@ -88,11 +88,13 @@ export function ReleaseEnvironmentCenter({
 
             <div className="mt-4 flex flex-wrap gap-2">
               <Button asChild variant="outline" size="sm" className="rounded-xl">
-                <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>打开日志</Link>
+                <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>
+                  打开日志
+                </Link>
               </Button>
               {latestRelease ? (
                 <Button asChild size="sm" className="rounded-xl">
-                  <Link href={`/projects/${projectId}/releases/${latestRelease.id}`}>打开发布</Link>
+                  <Link href={`/projects/${projectId}/delivery/${latestRelease.id}`}>打开交付</Link>
                 </Button>
               ) : (
                 <Button

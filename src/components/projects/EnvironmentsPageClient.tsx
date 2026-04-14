@@ -444,12 +444,12 @@ function EnvironmentQuickActions({
         </Button>
       )}
       <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/logs?env=${environment.id}`}>打开日志</Link>
+        <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>打开日志</Link>
       </Button>
       {environment.latestReleaseCard && (
         <Button asChild variant="outline" size="sm" className="rounded-xl">
-          <Link href={`/projects/${projectId}/releases/${environment.latestReleaseCard.id}`}>
-            打开发布
+          <Link href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}>
+            打开交付
           </Link>
         </Button>
       )}
@@ -1152,13 +1152,13 @@ export function EnvironmentsPageClient({
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline">
-              <Link href={`/projects/${projectId}/releases`}>
+              <Link href={`/projects/${projectId}/delivery`}>
                 <Rocket className="h-4 w-4" />
-                打开发布
+                打开交付
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href={`/projects/${projectId}/logs`}>
+              <Link href={`/projects/${projectId}/runtime/logs`}>
                 <ScrollText className="h-4 w-4" />
                 打开日志
               </Link>
