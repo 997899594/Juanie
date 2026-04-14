@@ -212,6 +212,24 @@ Implementation rules:
 - platform should persist and sync remote PR/MR state so workflow can react to `draft / open / merged / closed`
 - environment page should surface branch name, review URL, and workflow status
 
+## Phase 5: Atlas Execution Center
+
+After review requests exist, the next step is to turn Atlas execution into a first-class platform runtime.
+
+Scope:
+
+- queue Atlas execution instead of blocking the request cycle
+- store each execution as its own record instead of only mutating `schemaRepairPlan`
+- persist structured diff summary, generated files, commit SHA, and logs
+- add quality gates so Atlas output must replace scaffolds before it is treated as valid
+
+Implementation rules:
+
+- only one active Atlas run per database at a time
+- `run Atlas` should create an execution record and enqueue a worker job
+- platform should show latest run state and structured diff summary on the environment page
+- Atlas execution should operate on repair branches only and push results back to that branch
+
 ## Data Contract
 
 Phase 1 server responses should expose:
