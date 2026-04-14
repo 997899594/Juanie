@@ -3,9 +3,26 @@ name: Juanie CI
 on:
   push:
     branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      juanie_source_sha:
+        description: Source commit SHA to build
+        required: false
+        type: string
+      juanie_release_ref:
+        description: Logical release ref to send back to Juanie
+        required: false
+        type: string
+      juanie_force_full_build:
+        description: Build all services for preview startup
+        required: false
+        type: string
 
 env:
   IMAGE_REGISTRY: ghcr.io
+  JUANIE_SOURCE_SHA: ${{ inputs.juanie_source_sha || github.sha }}
+  JUANIE_RELEASE_REF: ${{ inputs.juanie_release_ref || github.ref }}
+  JUANIE_FORCE_FULL_BUILD: ${{ inputs.juanie_force_full_build || 'false' }}
 
 jobs:
   detect:
@@ -16,6 +33,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
 
       - uses: oven-sh/setup-bun@v1
 
@@ -25,8 +43,32 @@ jobs:
       - name: Detect affected services
         id: detect
         run: |
-          AFFECTED=$(turbo ls --filter="...[origin/main^1]" --json 2>/dev/null || echo '[]')
-          echo "services=$AFFECTED" >> $GITHUB_OUTPUT
+          set -euo pipefail
+
+          if [ "${JUANIE_FORCE_FULL_BUILD}" = "true" ]; then
+            SERVICES=$(
+              awk '
+                /^services:/ { in_services=1; next }
+                in_services && /^[^[:space:]-]/ { exit }
+                in_services && /^[[:space:]]*-[[:space:]]*name:/ {
+                  sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", $0)
+                  gsub(/["'\'']/,"",$0)
+                  print $0
+                }
+              ' juanie.yaml \
+                | sed 's/"/\\"/g; s/.*/"&"/' \
+                | paste -sd, -
+            )
+            if [ -n "${SERVICES}" ]; then
+              SERVICES="[${SERVICES}]"
+            else
+              SERVICES='[]'
+            fi
+          else
+            SERVICES=$(turbo ls --filter="...[origin/main^1]" --json 2>/dev/null || echo '[]')
+          fi
+
+          echo "services=$SERVICES" >> $GITHUB_OUTPUT
 
   build:
     needs: detect
@@ -39,6 +81,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -50,12 +94,13 @@ jobs:
       - name: Build and push ${{ matrix.service }}
         run: |
           export REGISTRY="${{ env.IMAGE_REGISTRY }}"
-          IMAGE_TAG=${REGISTRY}/${{ github.repository }}/${{ matrix.service }}:sha-${{ github.sha }}
+          IMAGE_TAG=${REGISTRY}/${{ github.repository }}/${{ matrix.service }}:sha-${{ env.JUANIE_SOURCE_SHA }}
 
           if [ -f docker-bake.hcl ]; then
             # 使用 docker-bake.hcl，Juanie 覆盖 tag
             docker buildx bake ${{ matrix.service }} \
               --set ${{ matrix.service }}.tags=${IMAGE_TAG} \
+              --set ${{ matrix.service }}.args.GIT_SHA=${{ env.JUANIE_SOURCE_SHA }} \
               --push
           else
             # 回退到标准 Dockerfile
@@ -66,15 +111,15 @@ jobs:
       - name: Trigger Juanie Release
         if: success()
         run: |
-          IMAGE_TAG=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:sha-${{ github.sha }}
+          IMAGE_TAG=${{ env.IMAGE_REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:sha-${{ env.JUANIE_SOURCE_SHA }}
           RELEASE_RESPONSE_FILE="$(mktemp)"
           RELEASE_STATUS=$(curl -sS -o "$RELEASE_RESPONSE_FILE" -w '%{http_code}' -X POST "https://juanie.art/api/releases" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -d '{
               "repository": "${{ github.repository }}",
-              "sha": "${{ github.sha }}",
-              "ref": "${{ github.ref }}",
+              "sha": "${{ env.JUANIE_SOURCE_SHA }}",
+              "ref": "${{ env.JUANIE_RELEASE_REF }}",
               "services": [
                 {
                   "name": "${{ matrix.service }}",

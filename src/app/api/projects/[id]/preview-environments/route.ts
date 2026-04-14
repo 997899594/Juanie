@@ -1,10 +1,15 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { getProjectAccessOrThrow, isOwnerOrAdmin, requireSession } from '@/lib/api/access';
+import {
+  getProjectAccessOrThrow,
+  getProjectWithRepositoryAccessOrThrow,
+  isOwnerOrAdmin,
+  requireSession,
+} from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments } from '@/lib/db/schema';
-import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
+import { launchPreviewEnvironmentFromRef } from '@/lib/environments/preview-launch';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -31,7 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const session = await requireSession();
-    const { project, member } = await getProjectAccessOrThrow(id, session.user.id);
+    const { project, member } = await getProjectWithRepositoryAccessOrThrow(id, session.user.id);
 
     const body = await request.json();
     const branch =
@@ -62,20 +67,41 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!branch && !prNumber) {
       return NextResponse.json({ error: '预览环境需要分支或 PR 号' }, { status: 400 });
     }
+    if (branch && prNumber) {
+      return NextResponse.json({ error: '分支和 PR 号一次只能填写一个' }, { status: 400 });
+    }
     if (databaseStrategy === 'isolated_clone' && !isOwnerOrAdmin(member.role)) {
       return NextResponse.json({ error: '独立预览库只允许 owner 或 admin 创建' }, { status: 403 });
     }
+    if (!project.repository) {
+      return NextResponse.json(
+        { error: '项目未绑定仓库，暂时无法从分支启动预览环境' },
+        { status: 409 }
+      );
+    }
+
     const ref = prNumber ? `refs/pull/${prNumber}/merge` : `refs/heads/${branch}`;
 
-    const environment = await ensurePreviewEnvironmentForRef({
+    const result = await launchPreviewEnvironmentFromRef({
       projectId: id,
-      projectSlug: project.slug,
       ref,
       ttlHours,
       databaseStrategy,
+      triggeredByUserId: session.user.id,
     });
 
-    return NextResponse.json(environment, { status: environment ? 201 : 200 });
+    return NextResponse.json(
+      {
+        id: result.environment.id,
+        name: result.environment.name,
+        launchState: result.launchState,
+        releaseId: result.release?.id ?? null,
+        releaseStatus: result.release?.status ?? null,
+        releasePath: result.release ? `/projects/${id}/delivery/${result.release.id}` : null,
+        sourceCommitSha: result.sourceCommitSha,
+      },
+      { status: 202 }
+    );
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

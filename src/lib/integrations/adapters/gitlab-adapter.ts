@@ -6,6 +6,7 @@ import {
   type GitRepository,
   type GitReviewRequest,
   type PushOptions,
+  type TriggerReleaseBuildOptions,
 } from '@/lib/git';
 import type { IntegrationSession } from '@/lib/integrations/service/session-service';
 
@@ -44,6 +45,23 @@ export const gitlabAdapter = {
   ): Promise<GitReviewRequest | null> {
     const provider = createProvider(resolveGitLabProvider(session));
     return provider.getReviewRequest(session.accessToken, repoFullName, number);
+  },
+
+  async resolveRefToCommitSha(
+    session: IntegrationSession,
+    repoFullName: string,
+    ref: string
+  ): Promise<string | null> {
+    const provider = createProvider(resolveGitLabProvider(session));
+    return provider.resolveRefToCommitSha(session.accessToken, repoFullName, ref);
+  },
+
+  async triggerReleaseBuild(
+    session: IntegrationSession,
+    options: TriggerReleaseBuildOptions
+  ): Promise<void> {
+    const provider = createProvider(resolveGitLabProvider(session));
+    return provider.triggerReleaseBuild(session.accessToken, options);
   },
 
   async createRepository(

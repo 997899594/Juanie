@@ -22,6 +22,11 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
 export interface PreviewEnvironmentRecord {
   id: string;
   name: string;
+  launchState: 'building' | 'deploying';
+  releaseId: string | null;
+  releaseStatus: string | null;
+  releasePath: string | null;
+  sourceCommitSha: string | null;
 }
 
 export interface UpdateEnvironmentStrategyInput {

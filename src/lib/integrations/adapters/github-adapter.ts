@@ -5,6 +5,7 @@ import type {
   GitRepository,
   GitReviewRequest,
   PushOptions,
+  TriggerReleaseBuildOptions,
 } from '@/lib/git';
 import { createGitProvider } from '@/lib/git';
 import type { IntegrationSession } from '@/lib/integrations/service/session-service';
@@ -41,6 +42,23 @@ export const githubAdapter = {
   ): Promise<GitReviewRequest | null> {
     const provider = createProvider('github');
     return provider.getReviewRequest(session.accessToken, repoFullName, number);
+  },
+
+  async resolveRefToCommitSha(
+    session: IntegrationSession,
+    repoFullName: string,
+    ref: string
+  ): Promise<string | null> {
+    const provider = createProvider('github');
+    return provider.resolveRefToCommitSha(session.accessToken, repoFullName, ref);
+  },
+
+  async triggerReleaseBuild(
+    session: IntegrationSession,
+    options: TriggerReleaseBuildOptions
+  ): Promise<void> {
+    const provider = createProvider('github');
+    return provider.triggerReleaseBuild(session.accessToken, options);
   },
 
   async createRepository(

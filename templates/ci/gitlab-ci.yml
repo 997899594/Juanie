@@ -18,6 +18,11 @@ build:
     - |
       set -euo pipefail
 
+      SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
+      RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
+      IMAGE_TAG="$CI_REGISTRY_IMAGE:sha-$SOURCE_SHA"
+      export SOURCE_SHA RELEASE_REF IMAGE_TAG
+
       ruby <<'RUBY' > juanie-ci-meta.json
       require 'json'
       require 'yaml'
@@ -91,12 +96,12 @@ build:
         if [ -n "$BUILD_TARGET" ]; then
           docker buildx bake --file "$BUILD_DEFINITION" "$BUILD_TARGET" \
             --set "*.tags=$IMAGE_TAG" \
-            --set "*.args.GIT_SHA=$CI_COMMIT_SHA" \
+            --set "*.args.GIT_SHA=$SOURCE_SHA" \
             --push
         else
           docker buildx bake --file "$BUILD_DEFINITION" \
             --set "*.tags=$IMAGE_TAG" \
-            --set "*.args.GIT_SHA=$CI_COMMIT_SHA" \
+            --set "*.args.GIT_SHA=$SOURCE_SHA" \
             --push
         fi
       elif [ "$BUILD_STRATEGY" = "dockerfile" ] || { [ "$BUILD_STRATEGY" = "auto" ] && [ -z "$BUILD_DEFINITION" ] && [ -n "$BUILD_DOCKERFILE" ]; }; then
@@ -130,8 +135,8 @@ build:
 
       RELEASE_PAYLOAD=$(jq -cn \
         --arg repository "$CI_PROJECT_PATH" \
-        --arg sha "$CI_COMMIT_SHA" \
-        --arg ref "$CI_COMMIT_REF_NAME" \
+        --arg sha "$SOURCE_SHA" \
+        --arg ref "$RELEASE_REF" \
         --argjson services "$RELEASE_SERVICES_JSON" \
         '{
           repository: $repository,

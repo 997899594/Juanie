@@ -9,9 +9,35 @@ detect:
   stage: detect
   image: oven/bun:1
   script:
-    - bun add -g turbo
-    - AFFECTED=$(turbo ls --filter="...[$CI_COMMIT_BEFORE_SHA]" --json 2>/dev/null || echo '[]')
-    - echo "SERVICES=$AFFECTED" >> build.env
+    - |
+      set -euo pipefail
+
+      bun add -g turbo
+
+      if [ "${JUANIE_FORCE_FULL_BUILD:-0}" = "1" ]; then
+        SERVICES=$(
+          awk '
+            /^services:/ { in_services=1; next }
+            in_services && /^[^[:space:]-]/ { exit }
+            in_services && /^[[:space:]]*-[[:space:]]*name:/ {
+              sub(/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/, "", $0)
+              gsub(/["'\'']/,"",$0)
+              print $0
+            }
+          ' juanie.yaml \
+            | sed 's/"/\\"/g; s/.*/"&"/' \
+            | paste -sd, -
+        )
+        if [ -n "${SERVICES}" ]; then
+          SERVICES="[${SERVICES}]"
+        else
+          SERVICES='[]'
+        fi
+      else
+        SERVICES=$(turbo ls --filter="...[$CI_COMMIT_BEFORE_SHA]" --json 2>/dev/null || echo '[]')
+      fi
+
+      echo "SERVICES=$SERVICES" >> build.env
   artifacts:
     reports:
       dotenv: build.env
@@ -26,12 +52,20 @@ build:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
+      set -euo pipefail
+
+      SOURCE_SHA="${JUANIE_SOURCE_SHA:-$CI_COMMIT_SHA}"
+      RELEASE_REF="${JUANIE_RELEASE_REF:-$CI_COMMIT_REF_NAME}"
+
       for SERVICE in $(echo $SERVICES | jq -r '.[]'); do
-        IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE:sha-$CI_COMMIT_SHA
+        IMAGE_TAG=$CI_REGISTRY_IMAGE/$SERVICE:sha-$SOURCE_SHA
 
         if [ -f docker-bake.hcl ]; then
           # 使用 docker-bake.hcl，Juanie 覆盖 tag
-          docker buildx bake $SERVICE --set ${SERVICE}.tags=${IMAGE_TAG} --push
+          docker buildx bake $SERVICE \
+            --set ${SERVICE}.tags=${IMAGE_TAG} \
+            --set ${SERVICE}.args.GIT_SHA=${SOURCE_SHA} \
+            --push
         else
           # 回退到标准 Dockerfile
           docker build -t $IMAGE_TAG -f apps/$SERVICE/Dockerfile .
@@ -44,8 +78,8 @@ build:
           -H "Authorization: Bearer $CI_JOB_TOKEN" \
           -d "{
             \"repository\": \"$CI_PROJECT_PATH\",
-            \"sha\": \"$CI_COMMIT_SHA\",
-            \"ref\": \"$CI_COMMIT_REF_NAME\",
+            \"sha\": \"$SOURCE_SHA\",
+            \"ref\": \"$RELEASE_REF\",
             \"services\": [
               {
                 \"name\": \"$SERVICE\",

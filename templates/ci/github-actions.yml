@@ -3,10 +3,22 @@ name: Juanie CI
 on:
   push:
     branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      juanie_source_sha:
+        description: Source commit SHA to build
+        required: false
+        type: string
+      juanie_release_ref:
+        description: Logical release ref to send back to Juanie
+        required: false
+        type: string
 
 env:
   IMAGE_REGISTRY: ghcr.io
-  IMAGE_TAG: ${{ format('{0}/{1}:sha-{2}', 'ghcr.io', github.repository, github.sha) }}
+  JUANIE_SOURCE_SHA: ${{ inputs.juanie_source_sha || github.sha }}
+  JUANIE_RELEASE_REF: ${{ inputs.juanie_release_ref || github.ref }}
+  IMAGE_TAG: ${{ format('{0}/{1}:sha-{2}', 'ghcr.io', github.repository, inputs.juanie_source_sha || github.sha) }}
 
 jobs:
   quality-gate:
@@ -14,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -31,6 +45,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.JUANIE_SOURCE_SHA }}
 
       - name: Resolve Juanie Build Plan
         id: plan
@@ -152,7 +168,7 @@ jobs:
           push: true
           set: |
             ${{ steps.plan.outputs.build_target }}.tags=${{ env.IMAGE_TAG }}
-            ${{ steps.plan.outputs.build_target }}.args.GIT_SHA=${{ github.sha }}
+            ${{ steps.plan.outputs.build_target }}.args.GIT_SHA=${{ env.JUANIE_SOURCE_SHA }}
             ${{ steps.plan.outputs.build_target }}.cache-from=type=gha
             ${{ steps.plan.outputs.build_target }}.cache-to=type=gha,mode=max
 
@@ -169,7 +185,7 @@ jobs:
           push: true
           set: |
             *.tags=${{ env.IMAGE_TAG }}
-            *.args.GIT_SHA=${{ github.sha }}
+            *.args.GIT_SHA=${{ env.JUANIE_SOURCE_SHA }}
 
       - name: Build and Push (Dockerfile)
         if: ${{ steps.plan.outputs.build_kind == 'dockerfile' }}
@@ -183,7 +199,7 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_TAG }}
           build-args: |
-            GIT_SHA=${{ github.sha }}
+            GIT_SHA=${{ env.JUANIE_SOURCE_SHA }}
 
       - name: Build and Push (Buildpacks)
         if: ${{ steps.plan.outputs.build_kind == 'buildpacks' }}
@@ -223,8 +239,8 @@ jobs:
           release_payload="$(
             jq -cn \
               --arg repository "${GITHUB_REPOSITORY}" \
-              --arg sha "${GITHUB_SHA}" \
-              --arg ref "${GITHUB_REF}" \
+              --arg sha "${JUANIE_SOURCE_SHA}" \
+              --arg ref "${JUANIE_RELEASE_REF}" \
               --argjson services '${{ steps.plan.outputs.release_services_json }}' \
               '{
                 repository: $repository,

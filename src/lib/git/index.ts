@@ -60,6 +60,14 @@ export interface PushOptions {
   message: string;
 }
 
+export interface TriggerReleaseBuildOptions {
+  repoFullName: string;
+  ref: string;
+  sourceCommitSha: string;
+  releaseRef?: string;
+  forceFullBuild?: boolean;
+}
+
 export interface GitProviderConfig {
   type: GitProviderType;
   serverUrl?: string;
@@ -94,6 +102,12 @@ export interface GitProvider {
     repoFullName: string,
     number: number
   ): Promise<GitReviewRequest | null>;
+  resolveRefToCommitSha(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<string | null>;
+  triggerReleaseBuild(accessToken: string, options: TriggerReleaseBuildOptions): Promise<void>;
   createBranch(accessToken: string, options: CreateBranchOptions): Promise<void>;
   createReviewRequest(
     accessToken: string,

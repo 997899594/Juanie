@@ -8,6 +8,7 @@ import type {
   GitRepository,
   GitReviewRequest,
   PushOptions,
+  TriggerReleaseBuildOptions,
 } from '@/lib/git';
 import { githubAdapter } from '@/lib/integrations/adapters/github-adapter';
 import { gitlabAdapter } from '@/lib/integrations/adapters/gitlab-adapter';
@@ -209,6 +210,23 @@ export const gateway = {
   ): Promise<GitReviewRequest | null> {
     const adapter = resolveAdapter(session.provider);
     return adapter.getReviewRequest(session, repoFullName, number);
+  },
+
+  async resolveRefToCommitSha(
+    session: IntegrationSession,
+    repoFullName: string,
+    ref: string
+  ): Promise<string | null> {
+    const adapter = resolveAdapter(session.provider);
+    return adapter.resolveRefToCommitSha(session, repoFullName, ref);
+  },
+
+  async triggerReleaseBuild(
+    session: IntegrationSession,
+    options: TriggerReleaseBuildOptions
+  ): Promise<void> {
+    const adapter = resolveAdapter(session.provider);
+    return adapter.triggerReleaseBuild(session, options);
   },
 
   async createRepository(

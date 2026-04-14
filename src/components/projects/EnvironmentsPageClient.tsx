@@ -256,7 +256,7 @@ function PreviewEnvironmentDialog({
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>新建预览环境</DialogTitle>
           <DialogDescription>
-            输入分支或 PR 号。平台会创建或续期对应的预览环境，并沿用现有 release 流程发布。
+            输入分支或 PR 号。平台会读取远端最新提交并直接启动预览部署，不需要你再补一次提交。
           </DialogDescription>
         </DialogHeader>
 
@@ -293,6 +293,9 @@ function PreviewEnvironmentDialog({
                         disabled={loading || disabled}
                       />
                     </div>
+                  </div>
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    分支和 PR 号二选一。创建后会按对应远端来源的最新提交直接启动部署。
                   </div>
 
                   <div className="mt-4 space-y-2">
@@ -344,7 +347,7 @@ function PreviewEnvironmentDialog({
                   <div className="space-y-1">
                     <div className="text-sm font-semibold text-foreground">创建说明</div>
                     <div className="text-xs leading-5 text-muted-foreground">
-                      预览环境会复用正式发布链路，但会按分支或 PR 建立临时作用域。
+                      预览环境会按分支或 PR 建立临时作用域，并立刻发起一次可访问的预览发布。
                     </div>
                   </div>
 
@@ -356,9 +359,13 @@ function PreviewEnvironmentDialog({
                       </div>
                     </div>
                     <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                      <div className="text-xs text-muted-foreground">启动方式</div>
+                      <div className="mt-1 text-foreground">按远端最新提交直接发布</div>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
                       <div className="text-xs text-muted-foreground">保留时长</div>
                       <div className="mt-1 text-foreground">
-                        {ttlHours ? `${ttlHours} 小时` : '等待输入'}
+                        {ttlHours ? `${ttlHours} 小时` : '默认 72 小时'}
                       </div>
                     </div>
                     <div className="rounded-2xl border border-border bg-background px-4 py-3">
@@ -387,7 +394,7 @@ function PreviewEnvironmentDialog({
               className="w-full rounded-xl sm:w-auto"
               disabled={loading || disabled}
             >
-              {loading ? '创建中...' : '创建预览环境'}
+              {loading ? '启动中...' : '启动预览环境'}
             </Button>
           </DialogFooter>
         </form>
@@ -1030,6 +1037,11 @@ export function EnvironmentsPageClient({
       setDialogLoading(false);
       return;
     }
+    if (branch && prNumber) {
+      setDialogError('分支和 PR 号一次只能填写一个。');
+      setDialogLoading(false);
+      return;
+    }
 
     try {
       const data = await createPreviewEnvironment({
@@ -1041,7 +1053,11 @@ export function EnvironmentsPageClient({
       });
 
       setDialogOpen(false);
-      setFeedback(`已准备 ${data.name}`);
+      setFeedback(
+        data.launchState === 'building'
+          ? `已启动 ${data.name} · ${data.sourceCommitSha?.slice(0, 7) ?? 'latest'} 正在构建，完成后会自动部署`
+          : `已启动 ${data.name} · ${data.sourceCommitSha?.slice(0, 7) ?? 'latest'} 正在部署`
+      );
       setExpanded((prev) => ({ ...prev, [data.id]: true }));
       await fetchEnvironments();
       setTimeout(() => setFeedback(null), 4000);
@@ -1141,7 +1157,7 @@ export function EnvironmentsPageClient({
               disabled={!governance.createPreview.allowed}
             >
               <Plus className="h-4 w-4" />
-              新建预览环境
+              启动预览环境
             </Button>
           </div>
         }
@@ -1199,7 +1215,7 @@ export function EnvironmentsPageClient({
           icon={<Globe className="h-12 w-12" />}
           title="还没有环境"
           action={{
-            label: '新建预览环境',
+            label: '启动预览环境',
             onClick: () => setDialogOpen(true),
           }}
         />

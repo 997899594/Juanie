@@ -8,6 +8,7 @@ import type {
   GitReviewRequest,
   GitUser,
   PushOptions,
+  TriggerReleaseBuildOptions,
 } from './index';
 
 export class GitHubProvider implements GitProvider {
@@ -171,6 +172,116 @@ export class GitHubProvider implements GitProvider {
         null) as string | null,
       webUrl: (data.html_url as string | null) ?? null,
     };
+  }
+
+  async resolveRefToCommitSha(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<string | null> {
+    const [owner, repo] = repoFullName.split('/');
+
+    if (ref.startsWith('refs/heads/')) {
+      const branch = ref.slice('refs/heads/'.length);
+      const res = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`,
+        {
+          headers: this.getHeaders(accessToken),
+        }
+      );
+
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json();
+      const sha = (data.commit as { sha?: string } | undefined)?.sha;
+      return typeof sha === 'string' ? sha : null;
+    }
+
+    const prMatch = ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
+    if (prMatch) {
+      const [, prNumber, target] = prMatch;
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, {
+        headers: this.getHeaders(accessToken),
+      });
+
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json();
+      if (target === 'merge' && typeof data.merge_commit_sha === 'string') {
+        return data.merge_commit_sha;
+      }
+
+      const headSha = (data.head as { sha?: string } | undefined)?.sha;
+      return typeof headSha === 'string' ? headSha : null;
+    }
+
+    return null;
+  }
+
+  async triggerReleaseBuild(
+    accessToken: string,
+    options: TriggerReleaseBuildOptions
+  ): Promise<void> {
+    const [owner, repo] = options.repoFullName.split('/');
+    let dispatchRef: string | null = null;
+
+    if (options.ref.startsWith('refs/heads/')) {
+      dispatchRef = options.ref.slice('refs/heads/'.length);
+    } else {
+      const prMatch = options.ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
+      if (prMatch) {
+        const [, prNumber] = prMatch;
+        const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, {
+          headers: this.getHeaders(accessToken),
+        });
+
+        if (!res.ok) {
+          const error = await res.json().catch(() => null);
+          throw new Error(
+            error && typeof error.message === 'string'
+              ? error.message
+              : `Failed to resolve pull request #${prNumber} for preview build`
+          );
+        }
+
+        const data = await res.json();
+        const headRef = (data.head as { ref?: string } | undefined)?.ref;
+        dispatchRef = typeof headRef === 'string' && headRef.trim().length > 0 ? headRef : null;
+      }
+    }
+
+    if (!dispatchRef) {
+      throw new Error('当前来源无法触发 GitHub 预览构建，请改用分支启动');
+    }
+
+    const res = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/juanie-ci.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: this.getHeaders(accessToken),
+        body: JSON.stringify({
+          ref: dispatchRef,
+          inputs: {
+            juanie_source_sha: options.sourceCommitSha,
+            juanie_release_ref: options.releaseRef ?? options.ref,
+            juanie_force_full_build: options.forceFullBuild ? 'true' : 'false',
+          },
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      throw new Error(
+        error && typeof error.message === 'string'
+          ? error.message
+          : 'Failed to trigger GitHub preview build workflow'
+      );
+    }
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {

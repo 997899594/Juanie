@@ -8,6 +8,7 @@ import type {
   GitReviewRequest,
   GitUser,
   PushOptions,
+  TriggerReleaseBuildOptions,
 } from './index';
 
 export class GitLabProvider implements GitProvider {
@@ -157,6 +158,99 @@ export class GitLabProvider implements GitProvider {
         null) as string | null,
       webUrl: (data.web_url as string | null) ?? null,
     };
+  }
+
+  async resolveRefToCommitSha(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<string | null> {
+    const encodedPath = encodeURIComponent(repoFullName);
+
+    if (ref.startsWith('refs/heads/')) {
+      const branch = ref.slice('refs/heads/'.length);
+      const res = await fetch(
+        `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/branches/${encodeURIComponent(branch)}`,
+        {
+          headers: this.getHeaders(accessToken),
+        }
+      );
+
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json();
+      const sha = (data.commit as { id?: string } | undefined)?.id;
+      return typeof sha === 'string' ? sha : null;
+    }
+
+    const prMatch = ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
+    if (prMatch) {
+      const [, mergeRequestNumber] = prMatch;
+      const res = await fetch(
+        `${this.serverUrl}/api/v4/projects/${encodedPath}/merge_requests/${mergeRequestNumber}`,
+        {
+          headers: this.getHeaders(accessToken),
+        }
+      );
+
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json();
+      if (typeof data.sha === 'string') {
+        return data.sha;
+      }
+
+      const headSha = (data.diff_refs as { head_sha?: string } | undefined)?.head_sha;
+      return typeof headSha === 'string' ? headSha : null;
+    }
+
+    return null;
+  }
+
+  async triggerReleaseBuild(
+    accessToken: string,
+    options: TriggerReleaseBuildOptions
+  ): Promise<void> {
+    if (!options.ref.startsWith('refs/heads/')) {
+      throw new Error('当前 GitLab 项目请使用分支启动预览环境');
+    }
+
+    const encodedPath = encodeURIComponent(options.repoFullName);
+    const branch = options.ref.slice('refs/heads/'.length);
+    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/pipeline`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        ref: branch,
+        variables: [
+          {
+            key: 'JUANIE_SOURCE_SHA',
+            value: options.sourceCommitSha,
+          },
+          {
+            key: 'JUANIE_RELEASE_REF',
+            value: options.releaseRef ?? options.ref,
+          },
+          {
+            key: 'JUANIE_FORCE_FULL_BUILD',
+            value: options.forceFullBuild ? '1' : '0',
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      throw new Error(
+        error && typeof error.message === 'string'
+          ? error.message
+          : 'Failed to trigger GitLab preview build pipeline'
+      );
+    }
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {
