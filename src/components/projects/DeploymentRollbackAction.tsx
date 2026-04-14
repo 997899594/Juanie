@@ -86,7 +86,7 @@ export function DeploymentRollbackAction({
 
       setOpen(false);
       if (data?.releaseId) {
-        router.push(`/projects/${projectId}/releases/${data.releaseId}`);
+        router.push(`/projects/${projectId}/delivery/${data.releaseId}`);
         router.refresh();
       }
     } catch (submitError) {

@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         success: true,
         release: {
           ...release,
-          releasePath: release ? `/projects/${release.projectId}/releases/${release.id}` : null,
+          releasePath: release ? `/projects/${release.projectId}/delivery/${release.id}` : null,
         },
       },
       { status: 202 }

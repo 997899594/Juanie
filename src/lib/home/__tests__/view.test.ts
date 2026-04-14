@@ -48,7 +48,7 @@ describe('home view', () => {
 
     expect(result[0]?.issueLabel).toBe('审批阻塞');
     expect(result[0]?.actionLabel).toBe('处理迁移审批');
-    expect(result[0]?.href).toBe('/projects/proj-1/releases/rel-1');
+    expect(result[0]?.href).toBe('/projects/proj-1/delivery/rel-1');
     expect(result[0]?.databaseName).toBe('postgres');
     expect(result[0]?.projectName).toBe('demo');
   });

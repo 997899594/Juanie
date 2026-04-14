@@ -1426,13 +1426,13 @@ export function EnvironmentsPageClient({
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
         <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
           <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
-            <Link href={`/projects/${projectId}/releases`}>
+            <Link href={`/projects/${projectId}/delivery`}>
               <Rocket className="h-4 w-4" />
-              发布
+              交付
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
-            <Link href={`/projects/${projectId}/logs`}>
+            <Link href={`/projects/${projectId}/runtime/logs`}>
               <ScrollText className="h-4 w-4" />
               日志
             </Link>

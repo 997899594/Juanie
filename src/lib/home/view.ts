@@ -238,7 +238,7 @@ export function decorateHomeAttentionRuns<TRun extends HomeAttentionRunLike>(
       issueLabel: issue?.label ?? getIssueLabel(issueCode),
       actionLabel: issue?.nextActionLabel ?? getReleaseActionLabel(issueCode),
       href: run.releaseId
-        ? `/projects/${run.projectId}/releases/${run.releaseId}`
+        ? `/projects/${run.projectId}/delivery/${run.releaseId}`
         : `/projects/${run.projectId}`,
       databaseName: run.database?.name ?? '数据库',
       projectName: run.project?.name ?? '项目',

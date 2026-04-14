@@ -89,7 +89,7 @@ function buildReleaseTimeline(input: {
 }) {
   const { release } = input;
   const releaseHref = release.projectId
-    ? `/projects/${release.projectId}/releases/${release.id}`
+    ? `/projects/${release.projectId}/delivery/${release.id}`
     : null;
   const items: Array<ReleaseTimelineItem & { sortValue: number }> = [
     ...buildMigrationRetryTimelineItems(release, releaseHref),

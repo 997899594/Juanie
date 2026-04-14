@@ -252,7 +252,7 @@ export function ManualReleaseDialog({
       setOpen(false);
       await onCreated?.();
       if (data?.id) {
-        router.push(`/projects/${projectId}/releases/${data.id}`);
+        router.push(`/projects/${projectId}/delivery/${data.id}`);
         router.refresh();
       }
     } catch (submitError) {

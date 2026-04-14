@@ -13,5 +13,5 @@ export default async function ProjectResourcesPage({
     redirect('/login');
   }
 
-  redirect(`/projects/${id}/environments`);
+  redirect(`/projects/${id}/runtime`);
 }

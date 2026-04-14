@@ -273,7 +273,7 @@ export function ReleaseDiffSection({
         <div className="text-sm font-semibold">变更</div>
         {previousReleaseLink ? (
           <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
-            <Link href={`/projects/${projectId}/releases/${previousReleaseLink.id}`}>
+            <Link href={`/projects/${projectId}/delivery/${previousReleaseLink.id}`}>
               对比上一版：{previousReleaseLink.title}
             </Link>
           </Button>

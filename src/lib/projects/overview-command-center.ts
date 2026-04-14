@@ -31,13 +31,13 @@ export function buildProjectCommandCenter(
       primaryAction: {
         label: '打开待处理项',
         href: primaryAttention.releaseId
-          ? `/projects/${projectId}/releases/${primaryAttention.releaseId}`
-          : `/projects/${projectId}/releases`,
+          ? `/projects/${projectId}/delivery/${primaryAttention.releaseId}`
+          : `/projects/${projectId}/delivery`,
       },
       secondaryAction: primaryEnvironment
         ? {
             label: '查看环境日志',
-            href: `/projects/${projectId}/logs?env=${primaryEnvironment.id}`,
+            href: `/projects/${projectId}/runtime/logs?env=${primaryEnvironment.id}`,
           }
         : null,
     };
@@ -53,11 +53,11 @@ export function buildProjectCommandCenter(
         '进入发布详情查看时间线、迁移和部署进度。',
       primaryAction: {
         label: '打开当前发布',
-        href: `/projects/${projectId}/releases/${currentRelease.id}`,
+        href: `/projects/${projectId}/delivery/${currentRelease.id}`,
       },
       secondaryAction: {
         label: '查看环境日志',
-        href: `/projects/${projectId}/logs?env=${currentRelease.environment.id}`,
+        href: `/projects/${projectId}/runtime/logs?env=${currentRelease.environment.id}`,
       },
     };
   }
@@ -70,12 +70,12 @@ export function buildProjectCommandCenter(
         primaryEnvironment.platformSignals.primarySummary ??
         '先进入环境确认 live 状态、发布记录和诊断信息。',
       primaryAction: {
-        label: '打开环境',
-        href: `/projects/${projectId}/environments`,
+        label: '打开运行',
+        href: `/projects/${projectId}/runtime`,
       },
       secondaryAction: {
-        label: '查看发布',
-        href: `/projects/${projectId}/releases`,
+        label: '查看交付',
+        href: `/projects/${projectId}/delivery`,
       },
     };
   }
@@ -85,8 +85,8 @@ export function buildProjectCommandCenter(
     title: '继续完成项目配置',
     summary: '先补齐环境和第一次发布，平台主链路才会完整运行起来。',
     primaryAction: {
-      label: '查看环境',
-      href: `/projects/${projectId}/environments`,
+      label: '查看运行',
+      href: `/projects/${projectId}/runtime`,
     },
     secondaryAction: {
       label: '查看设置',

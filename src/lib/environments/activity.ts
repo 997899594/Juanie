@@ -84,8 +84,8 @@ export function buildEnvironmentRecentActivity(input: {
         .filter(Boolean)
         .join(' · '),
       createdAtLabel: formatPlatformTimeContext(input.latestRelease.createdAt),
-      href: `/projects/${input.projectId}/releases/${input.latestRelease.id}`,
-      actionLabel: '查看发布',
+      href: `/projects/${input.projectId}/delivery/${input.latestRelease.id}`,
+      actionLabel: '查看交付',
       statusDecoration,
       timestamp: toTimestamp(input.latestRelease.createdAt),
     });
