@@ -1,55 +1,23 @@
-import { and, eq } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
-import { EnvironmentsPageClient } from '@/components/projects/EnvironmentsPageClient';
-import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { projects, teamMembers } from '@/lib/db/schema';
-import { getProjectEnvironmentListData } from '@/lib/environments/page-data';
 
-export default async function EnvironmentsPage({
+export default async function LegacyEnvironmentsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{
-    env?: string;
-    panel?: string;
-  }>;
+  searchParams?: Promise<{ env?: string; panel?: string }>;
 }) {
-  const session = await auth();
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const query = new URLSearchParams();
 
-  if (!session?.user?.id) {
-    redirect('/login');
+  if (resolvedSearchParams?.env) {
+    query.set('env', resolvedSearchParams.env);
   }
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, id),
-  });
-
-  if (!project) {
-    redirect('/projects');
+  if (resolvedSearchParams?.panel) {
+    query.set('panel', resolvedSearchParams.panel);
   }
 
-  const member = await db.query.teamMembers.findFirst({
-    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, session.user.id)),
-  });
-
-  if (!member) {
-    redirect('/projects');
-  }
-
-  const initialData = await getProjectEnvironmentListData(id, member.role);
-
-  return (
-    <EnvironmentsPageClient
-      projectId={id}
-      initialData={initialData}
-      initialEnvId={resolvedSearchParams?.env ?? null}
-      initialDiagnosticsEnvId={
-        resolvedSearchParams?.panel === 'diagnostics' ? (resolvedSearchParams?.env ?? null) : null
-      }
-    />
-  );
+  redirect(`/projects/${id}/runtime${query.toString() ? `?${query.toString()}` : ''}`);
 }

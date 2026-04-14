@@ -105,7 +105,7 @@ export function formatApprovalStatusLabel(value: string): string {
 }
 
 export function buildApprovalsFilterHref(state: string): string {
-  return state === 'all' ? '/approvals' : `/approvals?state=${state}`;
+  return state === 'all' ? '/inbox' : `/inbox?state=${state}`;
 }
 
 export function normalizeApprovalFilterState(state?: string): AttentionFilterState {

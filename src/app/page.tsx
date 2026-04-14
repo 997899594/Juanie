@@ -37,7 +37,7 @@ export default async function HomePage() {
               <Link href="/projects">项目</Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-              <Link href="/approvals">审批</Link>
+              <Link href="/inbox">待办</Link>
             </Button>
             <Button asChild size="sm" className="h-9 rounded-xl px-4">
               <Link href="/projects/new">
@@ -92,7 +92,7 @@ export default async function HomePage() {
               当前队列
             </div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
-              <Link href="/approvals">
+              <Link href="/inbox">
                 查看审批
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
@@ -213,7 +213,7 @@ export default async function HomePage() {
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <div className="text-sm font-semibold">待处理详情</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
-              <Link href="/approvals">
+              <Link href="/inbox">
                 查看全部
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>

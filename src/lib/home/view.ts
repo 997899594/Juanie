@@ -319,7 +319,7 @@ export function buildHomeCommandCenter<
         } satisfies HomeCommandCenterAction,
         secondaryAction: {
           label: '查看审批',
-          href: '/approvals',
+          href: '/inbox',
         },
       };
     }

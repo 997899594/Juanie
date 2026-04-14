@@ -1,12 +1,11 @@
 import {
-  AlertTriangle,
+  Bell,
   Database,
   FolderKanban,
   Globe,
   Home,
   type LucideIcon,
   Rocket,
-  ScrollText,
   Settings,
   Users,
 } from 'lucide-react';
@@ -29,9 +28,9 @@ export const mainNav: NavItem[] = [
     icon: FolderKanban,
   },
   {
-    title: '审批',
-    href: '/approvals',
-    icon: AlertTriangle,
+    title: '待办',
+    href: '/inbox',
+    icon: Bell,
   },
   {
     title: '团队',
@@ -56,9 +55,9 @@ export const projectNav: NavItem[] = [
     icon: Home,
   },
   {
-    title: '环境',
-    href: '/environments',
-    icon: Globe,
+    title: '交付',
+    href: '/delivery',
+    icon: Rocket,
   },
   {
     title: 'Schema',
@@ -66,14 +65,9 @@ export const projectNav: NavItem[] = [
     icon: Database,
   },
   {
-    title: '发布',
-    href: '/releases',
-    icon: Rocket,
-  },
-  {
-    title: '日志',
-    href: '/logs',
-    icon: ScrollText,
+    title: '运行',
+    href: '/runtime',
+    icon: Globe,
   },
   {
     title: '设置',
