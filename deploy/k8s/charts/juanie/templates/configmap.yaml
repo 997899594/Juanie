@@ -11,6 +11,7 @@ data:
   DATABASE_HOST: {{ .Values.env.DATABASE_HOST | quote }}
   DATABASE_PORT: {{ .Values.env.DATABASE_PORT | quote }}
   DATABASE_NAME: {{ .Values.env.DATABASE_NAME | quote }}
+  DATABASE_SSL_MODE: {{ .Values.env.DATABASE_SSL_MODE | default "disable" | quote }}
   AUTH_TRUST_HOST: {{ .Values.env.AUTH_TRUST_HOST | default "true" | quote }}
   JUANIE_NAMESPACE: {{ .Values.namespace | quote }}
   SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.schemaRunner.repository | quote }}

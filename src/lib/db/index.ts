@@ -1,8 +1,9 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { getNormalizedDatabaseUrlFromEnv } from './connection-url';
 import * as schema from './schema';
 
-const connectionString = process.env.DATABASE_URL!;
+const connectionString = getNormalizedDatabaseUrlFromEnv();
 
 const client = postgres(connectionString, {
   max: 10, // 巻加连接池大小以支持事务

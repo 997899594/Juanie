@@ -1,4 +1,5 @@
 import { Client as PgClient } from 'pg';
+import { getNormalizedDatabaseUrlFromEnv } from '@/lib/db/connection-url';
 
 export const databaseCapabilities = ['vector', 'pg_trgm'] as const;
 export type DatabaseCapability = (typeof databaseCapabilities)[number];
@@ -112,11 +113,13 @@ function getCapabilityConnectionString(
   mode: 'verify' | 'reconcile'
 ): string | null {
   if (mode === 'reconcile' && database.provisionType === 'shared' && database.databaseName) {
-    const adminUrl = process.env.DATABASE_URL;
-    if (adminUrl) {
+    try {
+      const adminUrl = getNormalizedDatabaseUrlFromEnv();
       const nextUrl = new URL(adminUrl);
       nextUrl.pathname = `/${database.databaseName}`;
       return nextUrl.toString();
+    } catch {
+      return database.connectionString;
     }
   }
 

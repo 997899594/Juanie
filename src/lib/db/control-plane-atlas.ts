@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import postgres from 'postgres';
+import { getNormalizedDatabaseUrlFromEnv } from './connection-url';
 
 const ATLAS_VERSION = process.env.ATLAS_VERSION ?? '1.1.0';
 const ATLAS_DOCKER_IMAGE =
@@ -99,11 +100,7 @@ function shouldRewriteDatabaseUrl(): boolean {
 }
 
 function getDatabaseUrl(): string {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required');
-  }
-
+  const databaseUrl = getNormalizedDatabaseUrlFromEnv();
   return shouldRewriteDatabaseUrl() ? normalizeUrlForDocker(databaseUrl) : databaseUrl;
 }
 

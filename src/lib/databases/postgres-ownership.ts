@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+import { getNormalizedDatabaseUrlFromEnv } from '@/lib/db/connection-url';
 
 type ManagedPostgresDatabase = {
   type: string;
@@ -55,8 +56,14 @@ function isManagedSharedPostgres(
 export async function ensureManagedPostgresOwnership(
   database: ManagedPostgresDatabase
 ): Promise<boolean> {
-  const adminUrl = process.env.DATABASE_URL;
-  if (!adminUrl || !isManagedSharedPostgres(database, adminUrl)) {
+  let adminUrl: string;
+  try {
+    adminUrl = getNormalizedDatabaseUrlFromEnv();
+  } catch {
+    return false;
+  }
+
+  if (!isManagedSharedPostgres(database, adminUrl)) {
     return false;
   }
 

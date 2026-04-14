@@ -13,6 +13,7 @@ import {
 } from '@/lib/databases/capabilities';
 import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
+import { getNormalizedDatabaseUrlFromEnv } from '@/lib/db/connection-url';
 import {
   databases,
   domains,
@@ -1722,8 +1723,12 @@ async function provisionSharedPostgreSQL(
   database: typeof databases.$inferSelect,
   project: typeof projects.$inferSelect
 ): Promise<void> {
-  const adminUrl = process.env.DATABASE_URL;
-  if (!adminUrl) throw new Error('DATABASE_URL not set; cannot provision shared PostgreSQL');
+  let adminUrl: string;
+  try {
+    adminUrl = getNormalizedDatabaseUrlFromEnv();
+  } catch {
+    throw new Error('DATABASE_URL not set; cannot provision shared PostgreSQL');
+  }
 
   const environment = database.environmentId
     ? await db.query.environments.findFirst({
