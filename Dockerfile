@@ -13,6 +13,7 @@ ENV CI=true
 ENV LEFTHOOK=0
 
 COPY package.json bun.lock ./
+COPY scripts/prepare.ts ./scripts/prepare.ts
 RUN bun install --frozen-lockfile
 
 # ============================================
