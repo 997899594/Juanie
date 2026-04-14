@@ -18,7 +18,7 @@ export interface NavItem {
 
 export const mainNav: NavItem[] = [
   {
-    title: '首页',
+    title: '指挥台',
     href: '/',
     icon: Home,
   },
@@ -28,7 +28,7 @@ export const mainNav: NavItem[] = [
     icon: FolderKanban,
   },
   {
-    title: '待办',
+    title: '行动',
     href: '/inbox',
     icon: Bell,
   },
@@ -50,7 +50,7 @@ export const mobileMainNav = [mainNav[0], mainNav[1], mainNav[2], mainNav[4]].fi
 
 export const projectNav: NavItem[] = [
   {
-    title: '概览',
+    title: '总览',
     href: '',
     icon: Home,
   },
@@ -60,7 +60,7 @@ export const projectNav: NavItem[] = [
     icon: Rocket,
   },
   {
-    title: 'Schema',
+    title: '数据',
     href: '/schema',
     icon: Database,
   },

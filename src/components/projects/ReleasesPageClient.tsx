@@ -12,6 +12,7 @@ import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import { PriorityDeck } from '@/components/ui/priority-deck';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { createProductionRelease } from '@/lib/releases/client-actions';
@@ -138,21 +139,57 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         sourceCommitSha: promotePlan.sourceRelease?.sourceCommitSha,
       })
     : null;
-  const stats = initialData.stats.map((stat) =>
-    stat.label === '实时' ? { ...stat, value: isConnected ? '在线' : '离线' } : stat
-  );
   const promoteAI = initialData.promoteAI;
   const manualReleaseSources = initialData.manualReleaseSources.map((release) => ({
     ...release,
     sourceRef: release.sourceRef ?? '',
     sourceCommitSha: release.sourceCommitSha ?? null,
   }));
+  const latestProductionRelease =
+    releaseItems.find((release) => release.environment.isProduction) ?? releaseItems[0] ?? null;
+  const deliveryPriorityItems = [
+    {
+      key: 'current',
+      eyebrow: '先确认',
+      title: latestProductionRelease
+        ? `${latestProductionRelease.environment.name} 当前版本`
+        : '先确认当前环境版本',
+      description: latestProductionRelease
+        ? `${latestProductionRelease.displayTitle} · ${latestProductionRelease.statusDecoration.label}`
+        : '还没有发布记录。',
+      href: latestProductionRelease
+        ? `/projects/${projectId}/delivery/${latestProductionRelease.id}`
+        : `/projects/${projectId}/delivery`,
+      actionLabel: latestProductionRelease ? '打开当前发布' : '查看环境中心',
+      tone: 'default' as const,
+    },
+    {
+      key: 'decision',
+      eyebrow: '再判断',
+      title: canPromote ? '可以推进生产发布' : '先处理发布前阻塞',
+      description: promotePanel?.blockingReason ?? governance.promoteToProduction.summary,
+      href: canPromote ? undefined : `/projects/${projectId}/schema`,
+      actionLabel: canPromote ? '在右上角发起生产发布' : '先去处理阻塞',
+      tone: canPromote ? ('success' as const) : ('warning' as const),
+    },
+    {
+      key: 'fallback',
+      eyebrow: '排查分流',
+      title: '风险不清楚时先去日志或数据',
+      description: '不要在交付页硬查。',
+      href: error ? `/projects/${projectId}/runtime/logs` : `/projects/${projectId}/schema`,
+      actionLabel: error ? '打开运行日志' : '打开数据',
+      tone: 'default' as const,
+    },
+  ];
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="交付"
         description="按环境查看当前版本、风险信号与交付记录。"
+        eyebrow="Delivery Flow"
+        meta="先看版本，再决定要不要发。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusIndicator
@@ -169,7 +206,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
               <Link href={`/projects/${projectId}/schema`}>
                 <Database className="h-3.5 w-3.5" />
-                Schema Center
+                数据
               </Link>
             </Button>
             <ManualReleaseDialog
@@ -197,6 +234,8 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         }
       />
 
+      <PriorityDeck title="交付顺序" description="先确认，再推进。" items={deliveryPriorityItems} />
+
       {error && (
         <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-foreground">
           {error}
@@ -215,16 +254,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           {promoteResult}
         </div>
       )}
-
-      <details className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-        <summary className="cursor-pointer list-none font-medium text-foreground">
-          发布控制面
-        </summary>
-        <div className="mt-2">
-          当前角色：{governance.roleLabel}。{governance.primarySummary}。
-          {governance.promoteToProduction.summary}。
-        </div>
-      </details>
 
       <ReleaseEnvironmentCenter
         projectId={projectId}
@@ -267,17 +296,15 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {stat.label}
-            </div>
-            <div className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
-              {stat.value}
-            </div>
-          </div>
-        ))}
+      <div className="console-surface rounded-[20px] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <StatusIndicator
+            status={isConnected ? 'success' : 'neutral'}
+            label={isConnected ? '实时同步' : '未连接'}
+          />
+          <span>{governance.roleLabel}</span>
+          <span>{governance.promoteToProduction.summary}</span>
+        </div>
       </div>
 
       <ReleaseFilterToolbar

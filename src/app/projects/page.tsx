@@ -20,6 +20,8 @@ export default async function ProjectsPage() {
       <PageHeader
         title="项目"
         description={headerDescription}
+        eyebrow="Projects"
+        meta="这里是项目级入口。先看状态，再按团队、仓库和最近动作进入对应项目。"
         actions={
           <Button asChild className="h-9 rounded-xl px-4">
             <Link href="/projects/new">
@@ -32,7 +34,7 @@ export default async function ProjectsPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         {stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
+          <div key={stat.label} className="console-stat px-5 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               {stat.label}
             </div>
@@ -56,33 +58,33 @@ export default async function ProjectsPage() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 xl:grid-cols-2">
           {projectCards.map((project) => (
             <Link
               key={project.id}
               href={`/projects/${project.id}`}
-              className="console-panel flex items-center justify-between px-5 py-4 transition-colors hover:bg-secondary/30"
+              className="console-panel hover-lift flex items-start justify-between gap-4 px-5 py-5 transition-colors hover:bg-secondary/30"
             >
-              <div className="flex min-w-0 items-center gap-4">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary">
+              <div className="flex min-w-0 items-start gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary">
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{project.name}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>{project.teamName}</span>
+                  <div className="truncate text-base font-semibold">{project.name}</div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span className="console-chip">{project.teamName}</span>
                     {project.repositoryLabel && (
-                      <code className="rounded bg-muted px-1.5 py-0.5 font-mono">
+                      <code className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px]">
                         {project.repositoryLabel}
                       </code>
                     )}
                   </div>
-                  <div className="mt-1 text-[11px] text-muted-foreground">
+                  <div className="mt-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                     {[project.roleLabel, project.createdAtLabel].filter(Boolean).join(' · ')}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="console-surface flex items-center gap-2 rounded-full px-3 py-1.5">
                 <div
                   className={`h-2 w-2 rounded-full ${
                     project.status === 'active'

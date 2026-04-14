@@ -33,13 +33,31 @@ export function Sidebar() {
   }, [projectId]);
 
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-60 border-r border-border bg-sidebar lg:block">
-      <div className="flex h-full flex-col">
-        <div className="border-b border-border px-5 py-5">
-          <BrandLockup href="/" size={44} subtitle="Release Control" priority />
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-60 p-4 lg:block">
+      <div className="glass flex h-full flex-col overflow-hidden rounded-[28px] border border-border/60 shadow-lg">
+        <div className="border-b border-border/70 px-5 py-5">
+          <BrandLockup
+            href="/"
+            size={44}
+            subtitle="Release Control"
+            subtitleClassName="tracking-[0.12em] uppercase"
+            priority
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-4">
+          <div className="mb-4 px-3">
+            <div className="console-surface rounded-[20px] px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Workspace
+              </div>
+              <div className="mt-1 text-sm font-semibold text-foreground">现代发布控制台</div>
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                先定位主链路，再进入项目级诊断与执行。
+              </div>
+            </div>
+          </div>
+
           <nav className="space-y-1">
             {mainNav.map((item) => {
               const isActive = isNavItemActive(pathname, item.href);
@@ -49,10 +67,10 @@ export function Sidebar() {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                    'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
                     isActive
-                      ? 'bg-black text-white'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -77,10 +95,10 @@ export function Sidebar() {
                       key={item.href}
                       href={href}
                       className={cn(
-                        'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                        'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
                         isActive
-                          ? 'bg-black text-white'
-                          : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
                       )}
                     >
                       <Icon className="h-4 w-4" />

@@ -179,79 +179,36 @@ export function LogsPageClient({
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="运行日志" description={`${projectName} 的环境运行视图`} />
+      <PageHeader
+        title="运行日志"
+        description={`${projectName} 的环境运行视图`}
+        eyebrow="Runtime Logs"
+        meta="知道环境就直接查，不确定就先回运行总览。"
+      />
       <RuntimeSectionNav projectId={projectId} />
 
-      <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-        <section className="console-panel px-5 py-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            环境运行视图
-          </div>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight">
-            {selectedEnvironment?.name ?? '选择环境'}
-          </h2>
-          <div className="mt-2 text-[11px] text-muted-foreground">
-            {[initialData.governance.roleLabel, selectedEnvironment?.namespace]
-              .filter(Boolean)
-              .join(' · ')}
-          </div>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {initialData.governance.logs.summary}
-            {selectedEnvironment
-              ? ` 当前已识别 ${pods.length} 个 Pod，其中 ${runningPodCount} 个运行中，${readyPodCount} 个就绪。`
-              : ' 先选择环境，再进入具体运行实例。'}
-          </p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Button asChild size="sm" className="h-9 rounded-xl px-4">
-              <Link href={`/projects/${projectId}/runtime?env=${envId}`}>打开运行</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-              <Link href={`/projects/${projectId}/delivery`}>
-                打开交付
-                <ExternalLink className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </div>
-        </section>
-
-        <section className="console-panel px-5 py-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            当前状态
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">环境</div>
-              <div className="mt-1 text-sm font-medium">
-                {selectedEnvironment?.name ?? '未选择'}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">当前 Pod</div>
-              <div className="mt-1 truncate font-mono text-sm">
-                {selectedPod?.metadata.name ?? '等待选择'}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">运行状态</div>
-              <div className="mt-2">
-                <StatusIndicator
-                  status={statusColor[status]}
-                  pulse={status === 'streaming'}
-                  label={statusLabel[status]}
-                />
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs text-muted-foreground">实例概况</div>
-              <div className="mt-1 text-sm font-medium">
-                {pods.length > 0 ? `${runningPodCount} 运行中 / ${readyPodCount} 就绪` : '等待识别'}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                最近 {tail} 条 · {follow ? '自动跟随' : '手动浏览'}
-              </div>
-            </div>
-          </div>
-        </section>
+      <div className="console-surface rounded-[20px] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+          <span>{selectedEnvironment?.name ?? '未选环境'}</span>
+          <span>{selectedPod?.metadata.name ?? '未选 Pod'}</span>
+          <StatusIndicator
+            status={statusColor[status]}
+            pulse={status === 'streaming'}
+            label={statusLabel[status]}
+          />
+          <span>
+            {pods.length > 0 ? `${runningPodCount} 运行中 / ${readyPodCount} 就绪` : '等待识别'}
+          </span>
+          <Button asChild variant="outline" size="sm" className="ml-auto rounded-xl">
+            <Link href={`/projects/${projectId}/runtime?env=${envId}`}>返回运行</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="rounded-xl">
+            <Link href={`/projects/${projectId}/delivery`}>
+              交付
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="console-panel px-4 py-4">

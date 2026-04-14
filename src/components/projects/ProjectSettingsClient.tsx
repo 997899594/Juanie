@@ -157,11 +157,16 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader title="设置" description={initialData.overview.headerDescription} />
+      <PageHeader
+        title="设置"
+        description={initialData.overview.headerDescription}
+        eyebrow="Project Settings"
+        meta="设置页不负责日常推进，只负责定义边界和规则。改动会影响团队后续如何发布、运行和治理。"
+      />
 
       <div className="grid gap-3 md:grid-cols-3">
         {initialData.overview.stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
+          <div key={stat.label} className="console-stat px-5 py-4">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>

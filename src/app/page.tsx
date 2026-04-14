@@ -1,17 +1,9 @@
-import {
-  AlertTriangle,
-  ArrowRight,
-  FolderKanban,
-  Gauge,
-  Plus,
-  Settings,
-  Sparkles,
-  Users,
-} from 'lucide-react';
+import { AlertTriangle, ArrowRight, FolderKanban, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { PriorityDeck, type PriorityDeckItem } from '@/components/ui/priority-deck';
 import { auth } from '@/lib/auth';
 import { getHomePageData } from '@/lib/home/service';
 import { getStatusDotClass } from '@/lib/releases/status-presentation';
@@ -23,14 +15,64 @@ export default async function HomePage() {
     redirect('/login');
   }
 
-  const { headerDescription, stats, commandCenter, projectCards, attentionItems } =
-    await getHomePageData(session.user.id, session.user.name);
+  const { headerDescription, commandCenter, projectCards, attentionItems } = await getHomePageData(
+    session.user.id,
+    session.user.name
+  );
+  const nextPriorityItems: PriorityDeckItem[] = [
+    {
+      key: 'primary',
+      eyebrow: '现在先做',
+      title: commandCenter.primaryAction.label,
+      href: commandCenter.primaryAction.href,
+      actionLabel: '立即进入',
+      tone: 'default',
+    },
+  ];
+
+  if (commandCenter.focusItems[0]) {
+    nextPriorityItems.push({
+      key: 'queue',
+      eyebrow: '最优先阻塞',
+      title: commandCenter.focusItems[0].title,
+      description: commandCenter.focusItems[0].meta,
+      href: commandCenter.focusItems[0].href,
+      actionLabel: commandCenter.focusItems[0].meta,
+      tone: commandCenter.focusItems[0].tone === 'danger' ? 'danger' : 'warning',
+    });
+  }
+
+  if (projectCards[0]) {
+    nextPriorityItems.push({
+      key: 'project',
+      eyebrow: '继续项目',
+      title: projectCards[0].name,
+      description: [projectCards[0].repositoryLabel, projectCards[0].statusLabel]
+        .filter(Boolean)
+        .join(' · '),
+      href: `/projects/${projectCards[0].id}`,
+      actionLabel: '回到项目',
+      tone: 'success',
+    });
+  } else {
+    nextPriorityItems.push({
+      key: 'project-empty',
+      eyebrow: '建立入口',
+      title: '先创建第一个项目',
+      description: '创建后再继续。',
+      href: '/projects/new',
+      actionLabel: '新建项目',
+      tone: 'success',
+    });
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
-        title="概览"
+        title="指挥台"
         description={headerDescription}
+        eyebrow="Control Center"
+        meta="先处理阻塞，再回项目。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
@@ -49,109 +91,7 @@ export default async function HomePage() {
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <section className="console-panel overflow-hidden px-5 py-5">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            <Gauge className="h-3.5 w-3.5" />
-            发布指挥台
-          </div>
-          <div className="mt-4 max-w-2xl">
-            <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
-              {commandCenter.title}
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">{commandCenter.summary}</p>
-          </div>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button asChild size="sm" className="h-10 rounded-xl px-4">
-              <Link href={commandCenter.primaryAction.href}>
-                {commandCenter.primaryAction.label}
-              </Link>
-            </Button>
-            {commandCenter.secondaryAction ? (
-              <Button asChild variant="outline" size="sm" className="h-10 rounded-xl px-4">
-                <Link href={commandCenter.secondaryAction.href}>
-                  {commandCenter.secondaryAction.label}
-                </Link>
-              </Button>
-            ) : null}
-          </div>
-          <div className="mt-5 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              当前建议
-            </div>
-            <div className="mt-2 text-sm font-medium">
-              {commandCenter.primaryAction.description}
-            </div>
-          </div>
-        </section>
-
-        <section className="console-panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Sparkles className="h-4 w-4" />
-              当前队列
-            </div>
-            <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
-              <Link href="/inbox">
-                查看审批
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </div>
-          <div className="p-3">
-            {commandCenter.focusItems.length === 0 ? (
-              <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
-                <div className="text-sm font-medium">当前链路平稳</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  没有阻塞项，可以直接进入项目继续推进。
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {commandCenter.focusItems.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    className="block rounded-2xl border border-transparent bg-secondary/20 px-4 py-3 transition-colors hover:border-border hover:bg-secondary/40"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`h-2 w-2 rounded-full ${
-                              item.tone === 'danger' ? 'bg-destructive' : 'bg-warning'
-                            }`}
-                          />
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                            {item.eyebrow}
-                          </div>
-                        </div>
-                        <div className="mt-2 truncate text-sm font-medium">{item.title}</div>
-                        <div className="mt-1 text-sm text-muted-foreground">{item.description}</div>
-                        <div className="mt-2 text-[11px] text-muted-foreground">{item.meta}</div>
-                      </div>
-                      <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {stat.label}
-            </div>
-            <div className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
-              {stat.value}
-            </div>
-          </div>
-        ))}
-      </div>
+      <PriorityDeck title="接下来怎么走" description="按顺序处理。" items={nextPriorityItems} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <section className="console-panel overflow-hidden">
@@ -181,11 +121,11 @@ export default async function HomePage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {projectCards.map((project) => (
+                {projectCards.slice(0, 3).map((project) => (
                   <Link
                     key={project.id}
                     href={`/projects/${project.id}`}
-                    className="flex items-center justify-between rounded-2xl border border-transparent bg-secondary/20 px-4 py-3 transition-colors hover:border-border hover:bg-secondary/40"
+                    className="console-surface flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/50"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-background">
@@ -229,11 +169,11 @@ export default async function HomePage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {attentionItems.map((run) => (
+                {attentionItems.slice(0, 3).map((run) => (
                   <Link
                     key={run.id}
                     href={run.href}
-                    className="flex items-center justify-between rounded-2xl border border-transparent bg-secondary/20 px-4 py-3 transition-colors hover:border-border hover:bg-secondary/40"
+                    className="console-surface flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/50"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div
@@ -287,7 +227,7 @@ export default async function HomePage() {
         </section>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Link
           href="/projects/new"
           className="console-panel flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/30"
@@ -311,19 +251,6 @@ export default async function HomePage() {
           <div>
             <div className="text-sm font-semibold">团队管理</div>
             <div className="text-xs text-muted-foreground">成员与权限</div>
-          </div>
-        </Link>
-
-        <Link
-          href="/settings"
-          className="console-panel flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/30"
-        >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-foreground">
-            <Settings className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold">代码托管</div>
-            <div className="text-xs text-muted-foreground">GitHub / GitLab</div>
           </div>
         </Link>
       </div>

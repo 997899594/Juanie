@@ -1,11 +1,11 @@
-import { AlertTriangle, ArrowRight, Clock3, Database, FolderKanban, GitBranch } from 'lucide-react';
+import { AlertTriangle, ArrowRight, FolderKanban } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { PriorityDeck, type PriorityDeckItem } from '@/components/ui/priority-deck';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { getApprovalsPageData } from '@/lib/approvals/service';
 import {
@@ -15,7 +15,6 @@ import {
 } from '@/lib/approvals/view';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { getMigrationStatusDecoration } from '@/lib/releases/status-presentation';
 
 export default async function InboxPage({
@@ -44,20 +43,71 @@ export default async function InboxPage({
     teamIds,
     filterState,
   });
+  const firstRun = attentionRuns[0] ?? null;
+  const priorityItems: PriorityDeckItem[] = [];
+
+  if (firstRun) {
+    priorityItems.push({
+      key: 'primary',
+      eyebrow: '先处理这个',
+      title: firstRun.issueLabel ?? `${firstRun.project.name} · ${firstRun.database.name}`,
+      description: firstRun.platformSignals.primarySummary ?? firstRun.environment.name,
+      href: firstRun.releaseId
+        ? `/projects/${firstRun.projectId}/delivery/${firstRun.releaseId}`
+        : `/projects/${firstRun.projectId}`,
+      actionLabel: firstRun.platformSignals.nextActionLabel ?? '进入处理',
+      tone:
+        firstRun.status === 'failed'
+          ? 'danger'
+          : firstRun.status === 'awaiting_approval'
+            ? 'warning'
+            : 'default',
+    });
+  }
+
+  priorityItems.push(
+    {
+      key: 'approval',
+      eyebrow: '按类型收敛',
+      title: filterState === 'all' ? '先筛出一种阻塞类型' : `当前筛选：${filterState}`,
+      description: '减少干扰。',
+      href:
+        filterState === 'approval'
+          ? buildApprovalsFilterHref('external')
+          : buildApprovalsFilterHref('approval'),
+      actionLabel: filterState === 'approval' ? '切到外部动作' : '只看待审批',
+      tone: 'default',
+    },
+    {
+      key: 'return',
+      eyebrow: '处理完以后',
+      title: '回到项目继续推进主链',
+      description: '回项目继续。',
+      href: firstRun ? `/projects/${firstRun.projectId}` : '/projects',
+      actionLabel: firstRun ? '打开对应项目' : '打开项目列表',
+      tone: 'success',
+    }
+  );
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="待办" description="所有需要你立即处理的迁移与外部动作" />
+      <PageHeader
+        title="行动中心"
+        description="把所有需要你立即推进的审批、外部动作和失败项收拢到一个地方。"
+        eyebrow="Action Center"
+        meta="不知道先去哪，就先来这里。"
+      />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {stat.label}
-            </div>
-            <div className="mt-3 text-3xl font-semibold tracking-tight">{stat.value}</div>
-          </div>
-        ))}
+      <PriorityDeck title="行动顺序" description="先解阻塞。" items={priorityItems} />
+
+      <div className="console-surface rounded-[20px] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          {stats.map((stat) => (
+            <span key={stat.label}>
+              {stat.label} {stat.value}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="console-panel px-4 py-4">
@@ -96,8 +146,8 @@ export default async function InboxPage({
 
             return (
               <div key={run.id} className="console-panel overflow-hidden">
-                <div className="flex flex-col gap-4 px-5 py-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 flex-1 space-y-4">
+                <div className="flex flex-col gap-3 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusIndicator
                         status={statusConfig.color}
@@ -108,34 +158,18 @@ export default async function InboxPage({
                         {run.project.name}
                       </span>
                       <span className="text-[11px] text-muted-foreground">
-                        {[
-                          run.environment.name,
-                          run.previewSourceMeta.label,
-                          run.database.name,
-                          getMigrationPhaseLabel(run.specification.phase),
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
+                        {run.environment.name}
                       </span>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="mt-3 space-y-1.5">
                       <div className="text-base font-semibold">
                         {run.service?.name ?? 'service'} · {run.specification.tool}
                       </div>
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1.5">
-                          <Clock3 className="h-3.5 w-3.5" />
-                          <span>{run.createdAtLabel}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Database className="h-3.5 w-3.5" />
-                          <span>{run.database.type}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <GitBranch className="h-3.5 w-3.5" />
-                          <span>{run.branchLabel}</span>
-                        </div>
+                      <div className="text-xs text-muted-foreground">
+                        {[run.database.name, run.database.type, run.branchLabel, run.createdAtLabel]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </div>
                       {run.platformSignals.primarySummary && (
                         <div className="text-sm text-foreground">
@@ -147,13 +181,6 @@ export default async function InboxPage({
                           下一步：{run.platformSignals.nextActionLabel}
                         </div>
                       )}
-                    </div>
-
-                    <div className="console-card bg-secondary/20 p-4">
-                      <MigrationSpecDetails
-                        specification={run.specification}
-                        databaseType={run.database.type}
-                      />
                     </div>
 
                     {run.errorMessage && (

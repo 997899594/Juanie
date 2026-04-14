@@ -48,6 +48,8 @@ export default async function NewProjectPage() {
       <PageHeader
         title="新建项目"
         description={pageData.headerDescription}
+        eyebrow="New Project"
+        meta="按模式、仓库、运行配置一步步确认，尽量把选择压缩到真正影响交付的部分。"
         actions={
           <Button asChild variant="outline" className="h-9 rounded-xl px-4">
             <Link href="/projects">
@@ -60,7 +62,7 @@ export default async function NewProjectPage() {
 
       <div className="grid gap-3 md:grid-cols-3">
         {pageData.stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
+          <div key={stat.label} className="console-stat px-5 py-4">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>

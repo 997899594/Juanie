@@ -254,7 +254,7 @@ export function SchemaCenterClient({
         title="数据"
         description="所有 schema 纳管、修复、评审和 Atlas 执行都在这里。其它页面只显示摘要和跳转。"
         eyebrow="Data Flow"
-        meta="这里只有和数据变更有关的动作。用户不需要先理解内部工具名，只需要知道是否被数据门禁挡住。"
+        meta="先看有没有门禁，再处理数据库。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="rounded-xl">
@@ -273,24 +273,12 @@ export function SchemaCenterClient({
         </div>
       )}
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="console-stat px-4 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            数据库
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{data.summary.databaseCount}</div>
-        </div>
-        <div className="console-stat px-4 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            门禁阻塞
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{data.summary.blockingCount}</div>
-        </div>
-        <div className="console-stat px-4 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            待迁移
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{data.summary.pendingCount}</div>
+      <div className="console-surface rounded-[20px] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          <span>{data.summary.databaseCount} 个数据库</span>
+          <span>{data.summary.blockingCount} 个门禁阻塞</span>
+          <span>{data.summary.pendingCount} 个待迁移</span>
+          <span className="ml-auto">{data.roleLabel}</span>
         </div>
       </div>
 
@@ -322,10 +310,7 @@ export function SchemaCenterClient({
                     : null;
 
                 return (
-                  <div
-                    key={database.id}
-                    className="rounded-2xl border border-border bg-background px-4 py-4"
-                  >
+                  <div key={database.id} className="console-surface rounded-2xl px-4 py-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -354,13 +339,12 @@ export function SchemaCenterClient({
                           ) : null}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {state?.summary ?? '环境尚未进入 schema 纳管，点击检查开始识别'}
+                          {state?.summary ?? '未纳管'}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {[
-                            database.status ? `运行状态 ${database.status}` : null,
-                            state ? (state.hasLedger ? '已检测到账本' : '未检测到账本') : null,
-                            state?.hasUserTables ? '存在业务表' : null,
+                            database.status ? `运行 ${database.status}` : null,
+                            state ? (state.hasLedger ? '有账本' : '无账本') : null,
                             versionSummary,
                             formatTimestamp(state?.lastInspectedAt)
                               ? `上次检查 ${formatTimestamp(state?.lastInspectedAt)}`

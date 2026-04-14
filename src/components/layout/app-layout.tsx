@@ -14,10 +14,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
+      <div className="pointer-events-none fixed inset-0">
+        <div className="absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-white/35 to-transparent" />
+        <div className="console-grid absolute inset-x-4 top-4 h-56 rounded-[32px] opacity-70 blur-[0.5px] lg:left-[15.5rem] lg:right-6" />
+      </div>
       <Sidebar />
       <div className="min-h-screen lg:pl-60">
         <Header />
-        <main className="px-4 pb-24 pt-4 md:px-6 lg:pb-6">{children}</main>
+        <main className="relative px-4 pb-24 pt-5 md:px-6 lg:pb-8 lg:pt-6">
+          <div className="mx-auto max-w-[1400px]">{children}</div>
+        </main>
       </div>
       <MobileBottomNav />
     </div>

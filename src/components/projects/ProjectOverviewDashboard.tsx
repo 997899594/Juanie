@@ -17,15 +17,8 @@ interface ProjectOverviewDashboardProps {
 }
 
 export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOverviewDashboardProps) {
-  const {
-    project,
-    stats,
-    overview,
-    environmentCards,
-    serviceCards,
-    attentionItems,
-    recentReleaseCards,
-  } = pageData;
+  const { project, overview, environmentCards, serviceCards, attentionItems, recentReleaseCards } =
+    pageData;
   const currentRelease = recentReleaseCards[0] ?? null;
   const primaryAttention = attentionItems[0] ?? null;
   const commandCenter = buildProjectCommandCenter(projectId, pageData);
@@ -35,6 +28,8 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
       <PageHeader
         title={project.name}
         description={overview.headerDescription}
+        eyebrow="Project Overview"
+        meta="先确认当前发布与待处理，再进入环境、交付或运行中心处理具体问题。"
         actions={
           <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
             <Link href={`/projects/${projectId}/settings`}>
@@ -46,7 +41,6 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
       />
 
       <ProjectOverviewHero
-        stats={stats}
         currentRelease={currentRelease}
         primaryAttention={primaryAttention}
         commandCenter={commandCenter}

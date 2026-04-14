@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { notFound, redirect } from 'next/navigation';
+import { ProjectWorkflowNav } from '@/components/projects/ProjectWorkflowNav';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
@@ -27,7 +28,10 @@ export default async function ProjectLayout({
 
   return (
     <ProjectProvider projectId={project.id} projectName={project.name}>
-      {children}
+      <div className="space-y-6">
+        <ProjectWorkflowNav projectId={project.id} />
+        {children}
+      </div>
     </ProjectProvider>
   );
 }

@@ -55,6 +55,8 @@ export function ReleaseDetailDashboard({
       <PageHeader
         title={getReleaseDisplayTitle(release)}
         description={release.sourceRef}
+        eyebrow="Release Detail"
+        meta="详情页回答的是这次发布发生了什么、卡在哪、接下来该回交付继续推进还是转去运行排查。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild size="sm" className="h-9 rounded-xl px-4">

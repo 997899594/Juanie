@@ -9,8 +9,8 @@ export function MobileBottomNav() {
   const pathname = usePathname();
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border/80 bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur lg:hidden">
-      <nav className="grid grid-cols-4 gap-1 rounded-[24px] bg-card/90 p-1 shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
+    <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.6rem)] pt-2 lg:hidden">
+      <nav className="glass grid grid-cols-4 gap-1 rounded-[28px] border border-border/70 p-1.5 shadow-[0_-12px_32px_rgba(74,59,40,0.12)]">
         {mobileMainNav.map((item) => {
           const Icon = item.icon;
           const isActive = isNavItemActive(pathname, item.href);

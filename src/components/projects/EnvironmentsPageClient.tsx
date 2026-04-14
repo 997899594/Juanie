@@ -1139,6 +1139,8 @@ export function EnvironmentsPageClient({
       <PageHeader
         title="运行"
         description="环境总览、预览治理和运行入口都在这里。变量、日志、诊断进入各自子页。"
+        eyebrow="Runtime Flow"
+        meta="先选环境，再决定查什么。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline">
@@ -1189,76 +1191,27 @@ export function EnvironmentsPageClient({
         </div>
       )}
 
-      <details className="rounded-2xl border border-border bg-background px-4 py-4">
-        <summary className="cursor-pointer list-none text-sm font-semibold">控制面</summary>
-        <div className="mt-4 space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                摘要
-              </div>
-              <div className="mt-2 text-sm text-foreground">
-                {[
-                  `当前角色 ${governance.roleLabel}`,
-                  governance.createPreview.allowed
-                    ? '可创建预览环境'
-                    : governance.createPreview.summary,
-                  governance.manageEnvVars.allowed
-                    ? '可管理环境变量'
-                    : governance.manageEnvVars.summary,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-background px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                预览治理
-              </div>
-              <div className="mt-2 text-sm text-foreground">
-                可回收 {governance.cleanupPreviews.eligibleCount} · 被阻塞{' '}
-                {governance.cleanupPreviews.blockedCount}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                过期总数 {governance.cleanupPreviews.expiredCount}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3 rounded-xl"
-                onClick={handleCleanupExpiredPreviews}
-                disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
-              >
-                {cleaningExpired ? '治理中...' : '立即治理'}
-              </Button>
-            </div>
-          </div>
-
-          {governance.recentEvents.length > 0 && (
-            <div className="rounded-2xl border border-border bg-background px-4 py-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                最近治理事件
-              </div>
-              <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                {governance.recentEvents.map((event) => (
-                  <div
-                    key={event.key}
-                    className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-medium">{event.label}</div>
-                      {event.createdAtLabel && (
-                        <div className="text-xs text-muted-foreground">{event.createdAtLabel}</div>
-                      )}
-                    </div>
-                    <div className="mt-1 text-sm text-muted-foreground">{event.summary}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+      <div className="console-surface rounded-[20px] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          <span>{governance.roleLabel}</span>
+          <span>
+            预览 {governance.cleanupPreviews.eligibleCount} 可回收 /{' '}
+            {governance.cleanupPreviews.blockedCount} 阻塞
+          </span>
+          <span>
+            {governance.manageEnvVars.allowed ? '可管理变量' : governance.manageEnvVars.summary}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto rounded-xl"
+            onClick={handleCleanupExpiredPreviews}
+            disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
+          >
+            {cleaningExpired ? '治理中...' : '治理预览'}
+          </Button>
         </div>
-      </details>
+      </div>
 
       {environments.length === 0 ? (
         <EmptyState

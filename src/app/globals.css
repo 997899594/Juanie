@@ -1,47 +1,47 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #F5F6F7;
-  --color-foreground: #111111;
+  --color-background: #f3f0ea;
+  --color-foreground: #171717;
   
-  --color-card: #FFFFFF;
-  --color-card-foreground: #111111;
+  --color-card: #fffdf8;
+  --color-card-foreground: #171717;
   
-  --color-popover: #FFFFFF;
-  --color-popover-foreground: #111111;
+  --color-popover: #fffdf8;
+  --color-popover-foreground: #171717;
   
-  --color-primary: #111111;
-  --color-primary-foreground: #FFFFFF;
+  --color-primary: #171717;
+  --color-primary-foreground: #fffdf8;
   
-  --color-secondary: #F3F4F6;
-  --color-secondary-foreground: #111111;
+  --color-secondary: #ebe5d9;
+  --color-secondary-foreground: #171717;
   
-  --color-muted: #F7F7F8;
-  --color-muted-foreground: #6B7280;
+  --color-muted: #f7f2e8;
+  --color-muted-foreground: #6d655b;
   
-  --color-accent: #F3F4F6;
-  --color-accent-foreground: #111111;
+  --color-accent: #e4dccf;
+  --color-accent-foreground: #171717;
   
-  --color-destructive: #E5484D;
-  --color-destructive-foreground: #FFFFFF;
+  --color-destructive: #d94841;
+  --color-destructive-foreground: #fffdf8;
   
-  --color-success: #2F7D57;
-  --color-success-foreground: #FFFFFF;
+  --color-success: #2f7d57;
+  --color-success-foreground: #fffdf8;
   
-  --color-warning: #4B5563;
-  --color-warning-foreground: #FFFFFF;
+  --color-warning: #9d6c27;
+  --color-warning-foreground: #fffdf8;
   
-  --color-info: #2563EB;
-  --color-info-foreground: #FFFFFF;
+  --color-info: #3559d5;
+  --color-info-foreground: #fffdf8;
   
-  --color-border: #E5E7EB;
-  --color-input: #E5E7EB;
-  --color-ring: #888888;
+  --color-border: #ddd2c3;
+  --color-input: #ddd2c3;
+  --color-ring: #171717;
   
-  --color-sidebar: #FFFFFF;
-  --color-sidebar-foreground: #111111;
-  --color-sidebar-accent: #F3F4F6;
-  --color-sidebar-accent-foreground: #111111;
+  --color-sidebar: #f8f3ea;
+  --color-sidebar-foreground: #171717;
+  --color-sidebar-accent: #ebe3d4;
+  --color-sidebar-accent-foreground: #171717;
   
   --radius-sm: 8px;
   --radius-md: 10px;
@@ -49,13 +49,13 @@
   --radius-xl: 18px;
   --radius-full: 9999px;
   
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.02);
-  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.04), 0 4px 8px rgba(0, 0, 0, 0.02);
-  --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.06), 0 8px 16px rgba(0, 0, 0, 0.03);
-  --shadow-2xl: 0 24px 48px rgba(0, 0, 0, 0.08);
-  --shadow-focus: 0 0 0 2px rgba(0, 0, 0, 0.04);
+  --shadow-xs: 0 1px 2px rgba(23, 23, 23, 0.03);
+  --shadow-sm: 0 8px 18px rgba(103, 85, 58, 0.08);
+  --shadow-md: 0 14px 30px rgba(103, 85, 58, 0.1);
+  --shadow-lg: 0 24px 60px rgba(103, 85, 58, 0.12);
+  --shadow-xl: 0 32px 80px rgba(74, 59, 40, 0.14);
+  --shadow-2xl: 0 40px 100px rgba(74, 59, 40, 0.16);
+  --shadow-focus: 0 0 0 2px rgba(255, 253, 248, 0.9);
   
   --transition-fast: 100ms;
   --transition-normal: 150ms;
@@ -65,7 +65,7 @@
   --ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
-  --font-sans: "SF Pro Display", "SF Pro Text", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-sans: "Fraunces", "Noto Serif SC", "PingFang SC", "Source Han Serif SC", serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Menlo", "Monaco", "Cascadia Mono", monospace;
 }
 
@@ -82,12 +82,16 @@ html {
 }
 
 body {
-  background-color: var(--color-background);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(216, 189, 141, 0.32), transparent 32%),
+    radial-gradient(circle at top right, rgba(85, 122, 103, 0.16), transparent 30%),
+    linear-gradient(180deg, #f8f4ed 0%, var(--color-background) 28%, #efe7dc 100%);
   color: var(--color-foreground);
   font-family: var(--font-sans), sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
   line-height: 1.5;
-  letter-spacing: -0.011em;
+  letter-spacing: -0.012em;
 }
 
 code,
@@ -102,7 +106,7 @@ pre,
 }
 
 ::selection {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(23, 23, 23, 0.12);
   color: var(--color-foreground);
 }
 
@@ -126,9 +130,9 @@ pre,
 
 @layer components {
   .glass {
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 253, 248, 0.82);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
   }
   
   .gradient-border {
@@ -178,15 +182,38 @@ pre,
 
   .console-panel {
     border-radius: 20px;
-    border: 1px solid var(--color-border);
-    background: var(--color-card);
+    border: 1px solid rgba(116, 98, 75, 0.14);
+    background:
+      linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(255, 251, 244, 0.92));
     box-shadow: var(--shadow-sm);
   }
 
   .console-card {
     border-radius: 16px;
-    border: 1px solid var(--color-border);
-    background: var(--color-card);
+    border: 1px solid rgba(116, 98, 75, 0.12);
+    background: rgba(255, 252, 246, 0.86);
+  }
+
+  .console-surface {
+    border: 1px solid rgba(116, 98, 75, 0.12);
+    background: rgba(255, 252, 246, 0.74);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+
+  .console-grid {
+    position: relative;
+  }
+
+  .console-grid::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(122, 103, 77, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(122, 103, 77, 0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.34), transparent 88%);
+    pointer-events: none;
   }
 
   .console-chip {
@@ -206,6 +233,28 @@ pre,
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: var(--color-primary-foreground);
+  }
+
+  .console-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(116, 98, 75, 0.14);
+    background: rgba(255, 252, 246, 0.76);
+    padding: 0.4rem 0.8rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-muted-foreground);
+  }
+
+  .console-stat {
+    border-radius: 18px;
+    border: 1px solid rgba(116, 98, 75, 0.1);
+    background: rgba(255, 252, 246, 0.7);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
   }
 }
 

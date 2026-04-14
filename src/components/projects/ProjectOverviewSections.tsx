@@ -9,63 +9,56 @@ import { getRuntimeStatusDotClass } from '@/lib/runtime/status-presentation';
 import { formatPlatformDateTime } from '@/lib/time/format';
 
 interface ProjectOverviewHeroProps {
-  stats: ProjectOverviewPageData['stats'];
   currentRelease: ProjectOverviewPageData['recentReleaseCards'][number] | null;
   primaryAttention: ProjectOverviewPageData['attentionItems'][number] | null;
   commandCenter: ProjectCommandCenterSnapshot;
 }
 
 export function ProjectOverviewHero({
-  stats,
   currentRelease,
   primaryAttention,
   commandCenter,
 }: ProjectOverviewHeroProps) {
   return (
     <section className="console-panel px-5 py-5">
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {commandCenter.eyebrow}
+      <div className="console-eyebrow">{commandCenter.eyebrow}</div>
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <div>
+          <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
+            {commandCenter.title}
+          </h2>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Button asChild size="sm" className="h-10 rounded-xl px-4">
+              <Link href={commandCenter.primaryAction.href}>
+                {commandCenter.primaryAction.label}
+              </Link>
+            </Button>
+            {commandCenter.secondaryAction ? (
+              <Button asChild variant="outline" size="sm" className="h-10 rounded-xl px-4">
+                <Link href={commandCenter.secondaryAction.href}>
+                  {commandCenter.secondaryAction.label}
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="console-surface rounded-[20px] px-4 py-4">
+          <div className="text-sm font-medium">{commandCenter.primaryAction.description}</div>
+        </div>
       </div>
-      <div className="mt-4">
-        <h2 className="text-2xl font-semibold tracking-tight">{commandCenter.title}</h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-          {commandCenter.summary}
-        </p>
-      </div>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        <Button asChild size="sm" className="h-10 rounded-xl px-4">
-          <Link href={commandCenter.primaryAction.href}>{commandCenter.primaryAction.label}</Link>
-        </Button>
-        {commandCenter.secondaryAction ? (
-          <Button asChild variant="outline" size="sm" className="h-10 rounded-xl px-4">
-            <Link href={commandCenter.secondaryAction.href}>
-              {commandCenter.secondaryAction.label}
-            </Link>
-          </Button>
-        ) : null}
-      </div>
-      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+      <div className="mt-6 grid gap-3 md:grid-cols-2">
+        <div className="console-stat px-4 py-3">
           <div className="text-xs text-muted-foreground">当前发布</div>
           <div className="mt-2 line-clamp-2 text-sm font-medium">
             {currentRelease?.title ?? '还没有发布'}
           </div>
         </div>
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+        <div className="console-stat px-4 py-3">
           <div className="text-xs text-muted-foreground">待处理</div>
           <div className="mt-2 line-clamp-2 text-sm font-medium">
             {primaryAttention?.issueLabel ?? '当前无阻塞项'}
           </div>
         </div>
-        {stats.slice(0, 2).map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-2xl border border-border bg-background px-4 py-3"
-          >
-            <div className="text-xs text-muted-foreground">{stat.label}</div>
-            <div className="mt-2 text-xl font-semibold">{stat.value}</div>
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -87,17 +80,14 @@ export function ProjectEnvironmentEntrySection({
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold">环境入口</div>
-          <div className="mt-1 text-sm text-muted-foreground">
-            先选环境，再进入对应发布与执行详情。
-          </div>
         </div>
         <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
           <Link href={`/projects/${projectId}/runtime`}>打开运行中心</Link>
         </Button>
       </div>
       <div className="grid gap-3 xl:grid-cols-3">
-        {environments.map((environment) => (
-          <div key={environment.id} className="console-card bg-secondary/20 px-4 py-4">
+        {environments.slice(0, 3).map((environment) => (
+          <div key={environment.id} className="console-card hover-lift bg-secondary/20 px-4 py-4">
             <div className="flex min-w-0 items-center gap-2">
               <div
                 className={`h-2 w-2 rounded-full ${
@@ -115,10 +105,6 @@ export function ProjectEnvironmentEntrySection({
                 .filter(Boolean)
                 .join(' · ')}
             </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              {environment.platformSignals.primarySummary ??
-                '进入环境查看当前线上发布版本与最近发布。'}
-            </div>
             {environment.primaryDomainUrl ? (
               <a
                 href={environment.primaryDomainUrl}
@@ -131,16 +117,8 @@ export function ProjectEnvironmentEntrySection({
               </a>
             ) : null}
             {environment.latestReleaseCard && (
-              <div className="mt-3 rounded-2xl border border-border bg-background px-3 py-2">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  最近发布
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {environment.latestReleaseCard.title}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {environment.latestReleaseCard.createdAtLabel ?? '最近发布'}
-                </div>
+              <div className="console-surface mt-3 rounded-2xl px-3 py-2">
+                <div className="text-sm font-medium">{environment.latestReleaseCard.title}</div>
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
@@ -213,17 +191,8 @@ export function ProjectDefinitionSection({
           </div>
         )}
 
-        {overview.description && (
-          <div className="space-y-1">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              描述
-            </div>
-            <div className="text-sm text-muted-foreground">{overview.description}</div>
-          </div>
-        )}
-
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/20 px-3 py-1.5">
+          <div className="console-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5">
             <div className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(project.status)}`} />
             <span className="font-medium capitalize">{overview.statusLabel}</span>
           </div>
@@ -236,10 +205,10 @@ export function ProjectDefinitionSection({
               服务模型
             </div>
             <div className="flex flex-wrap gap-2">
-              {services.map((service) => (
+              {services.slice(0, 4).map((service) => (
                 <div
                   key={service.id}
-                  className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/20 px-3 py-1.5"
+                  className="console-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5"
                 >
                   <div
                     className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(service.status)}`}
@@ -296,7 +265,7 @@ export function ProjectOperationsSection({
             </div>
           ) : (
             <div className="space-y-2">
-              {attentionItems.slice(0, 5).map((run) => (
+              {attentionItems.slice(0, 3).map((run) => (
                 <Link
                   key={run.id}
                   href={
@@ -304,7 +273,7 @@ export function ProjectOperationsSection({
                       ? `/projects/${projectId}/delivery/${run.releaseId}`
                       : `/projects/${projectId}/delivery`
                   }
-                  className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
+                  className="console-surface flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div
@@ -313,17 +282,6 @@ export function ProjectOperationsSection({
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium">
                         {run.releaseTitle ?? run.issueLabel ?? run.database?.name ?? '待处理项'}
-                      </div>
-                      <div className="mt-1 truncate text-[11px] text-muted-foreground">
-                        {[
-                          run.service?.name ?? null,
-                          run.database?.name ?? null,
-                          run.environmentScopeLabel,
-                          run.environmentSourceLabel,
-                          run.previewSourceMeta.label,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
                       </div>
                       <div className="mt-1 truncate text-sm text-foreground">
                         {run.platformSignals.primarySummary ??
@@ -351,11 +309,11 @@ export function ProjectOperationsSection({
               还没有发布
             </div>
           ) : (
-            recentReleaseCards.slice(0, 5).map((release) => (
+            recentReleaseCards.slice(0, 3).map((release) => (
               <Link
                 key={release.id}
                 href={`/projects/${projectId}/delivery/${release.id}`}
-                className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
+                className="console-surface flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/40"
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@ import type { ProjectOverviewPageData } from '@/lib/projects/service';
 interface ProjectOverviewAction {
   label: string;
   href: string;
+  description?: string;
 }
 
 export interface ProjectCommandCenterSnapshot {
@@ -33,6 +34,9 @@ export function buildProjectCommandCenter(
         href: primaryAttention.releaseId
           ? `/projects/${projectId}/delivery/${primaryAttention.releaseId}`
           : `/projects/${projectId}/delivery`,
+        description:
+          primaryAttention.platformSignals.nextActionLabel ??
+          '优先处理当前阻塞，再回到主链继续推进。',
       },
       secondaryAction: primaryEnvironment
         ? {
@@ -54,6 +58,7 @@ export function buildProjectCommandCenter(
       primaryAction: {
         label: '打开当前发布',
         href: `/projects/${projectId}/delivery/${currentRelease.id}`,
+        description: '先确认当前版本和风险，再决定是否继续推进发布。',
       },
       secondaryAction: {
         label: '查看环境日志',
@@ -72,6 +77,7 @@ export function buildProjectCommandCenter(
       primaryAction: {
         label: '打开运行',
         href: `/projects/${projectId}/runtime`,
+        description: '先确认当前环境状态，再决定是否回到交付或数据链路。',
       },
       secondaryAction: {
         label: '查看交付',
@@ -87,6 +93,7 @@ export function buildProjectCommandCenter(
     primaryAction: {
       label: '查看运行',
       href: `/projects/${projectId}/runtime`,
+      description: '先把环境和第一次发布基线补齐。',
     },
     secondaryAction: {
       label: '查看设置',

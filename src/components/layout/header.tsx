@@ -42,21 +42,21 @@ export function Header() {
   }, [projectId]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-sm">
-      <div className="hidden h-16 items-center justify-between px-6 lg:flex">
-        <nav className="flex items-center text-sm">
+    <header className="sticky top-0 z-30 px-4 pt-4 md:px-6 lg:px-6">
+      <div className="glass hidden items-center justify-between rounded-[24px] border border-border/70 px-5 py-4 shadow-sm lg:flex">
+        <nav className="flex min-w-0 items-center text-sm">
           {breadcrumbs.map((item, index) => (
             <React.Fragment key={item.title}>
               {index > 0 && <ChevronRight className="mx-1.5 h-4 w-4 text-muted-foreground/50" />}
               {index < breadcrumbs.length - 1 && item.href ? (
                 <Link
                   href={item.href}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="transition-colors text-muted-foreground hover:text-foreground"
                 >
                   {item.title}
                 </Link>
               ) : (
-                <span className="font-semibold">{item.title}</span>
+                <span className="truncate font-semibold">{item.title}</span>
               )}
             </React.Fragment>
           ))}
@@ -66,12 +66,12 @@ export function Header() {
       </div>
 
       <div className="lg:hidden">
-        <div className="flex h-16 items-center justify-between gap-3 px-4">
+        <div className="glass flex items-center justify-between gap-3 rounded-[24px] border border-border/70 px-4 py-3 shadow-sm">
           <div className="flex min-w-0 items-center gap-3">
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10 rounded-2xl"
+              className="h-10 w-10 rounded-2xl bg-card/80"
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu className="h-4 w-4" />
@@ -98,7 +98,7 @@ export function Header() {
         </div>
 
         {mobileProjectTabs.length > 0 && (
-          <div className="overflow-x-auto px-4 pb-3">
+          <div className="overflow-x-auto px-1 pb-3 pt-3">
             <nav className="flex min-w-max items-center gap-2">
               {mobileProjectTabs.map((item) => {
                 const Icon = item.icon;
@@ -118,7 +118,7 @@ export function Header() {
                       'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition-colors',
                       isActive
                         ? 'border-black bg-black text-white'
-                        : 'border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground'
+                        : 'border-border bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -235,9 +235,11 @@ function generateBreadcrumbs(
 
   const pathMap: Record<string, string> = {
     projects: '项目',
+    inbox: '行动',
     approvals: '审批',
     teams: '团队',
     settings: '设置',
+    delivery: '交付',
     deployments: '部署执行',
     releases: '发布',
     environments: '环境',
@@ -245,6 +247,8 @@ function generateBreadcrumbs(
     resources: '资源浏览',
     members: '成员',
     new: '新建',
+    schema: '数据',
+    runtime: '运行',
   };
 
   const breadcrumbs: BreadcrumbItem[] = [{ title: '首页', href: '/' }];
