@@ -401,7 +401,6 @@ export async function applyControlPlaneMigrations(): Promise<void> {
     databaseUrl,
     '--revisions-schema',
     REVISIONS_SCHEMA,
-    '--auto-approve',
   ]);
 
   await runPostMigrationTasks(databaseUrl);
