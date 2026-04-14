@@ -223,7 +223,36 @@ export async function createSchemaRepairAtlasRun(input: {
     })
     .where(eq(schemaRepairPlans.id, plan.id));
 
-  await addSchemaRepairAtlasJob(run.id, input.projectId, input.userId);
+  try {
+    await addSchemaRepairAtlasJob(run.id, input.projectId, input.userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const failedAt = new Date();
+
+    await db
+      .update(schemaRepairPlans)
+      .set({
+        atlasExecutionStatus: 'failed',
+        atlasExecutionFinishedAt: failedAt,
+        atlasExecutionLog: message,
+        errorMessage: message,
+        updatedAt: failedAt,
+      })
+      .where(eq(schemaRepairPlans.id, plan.id));
+
+    await db
+      .update(schemaRepairAtlasRuns)
+      .set({
+        status: 'failed',
+        log: message,
+        errorMessage: message,
+        finishedAt: failedAt,
+        updatedAt: failedAt,
+      })
+      .where(eq(schemaRepairAtlasRuns.id, run.id));
+
+    throw error;
+  }
 
   return run;
 }

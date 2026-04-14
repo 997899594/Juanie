@@ -85,6 +85,15 @@ interface SchemaCenterData {
   };
 }
 
+type SchemaCenterActionKey =
+  | 'inspect'
+  | 'markAligned'
+  | 'createPlan'
+  | 'createReview'
+  | 'syncReview'
+  | 'runAtlas'
+  | 'markApplied';
+
 type SchemaCenterSchemaStateStatus = NonNullable<
   SchemaCenterDatabaseRecord['schemaState']
 >['status'];
@@ -105,15 +114,15 @@ function getRepairFlowSummary(
     case 'queued':
       return '平台正在排队生成真实 migration，先不要去看 PR 内容。';
     case 'running':
-      return '平台正在自动生成真实 migration，完成后再去评审 PR。';
+      return '平台正在自动生成真实 migration，生成后先看下方 diff，再决定是否评审 PR。';
     case 'succeeded':
       return latestAtlasRun?.diffSummary
-        ? '真实 migration 已生成，可以直接去评审 PR。'
-        : 'Atlas 已完成，请打开 PR 确认真实 migration 内容。';
+        ? '真实 migration 已生成。先看下方 diff 详情，再决定是否打开 PR 评审。'
+        : 'Atlas 已完成，请先确认生成结果，再决定是否打开 PR。';
     case 'failed':
       return repairPlan.errorMessage ?? '自动生成 migration 失败，请重试 Atlas。';
     default:
-      return '这个修复 PR 还只是中间态，继续自动修复后才会生成真实 migration。';
+      return '这个修复 PR 还只是中间态。先生成真实 migration 和 diff，再决定是否采用。';
   }
 }
 
@@ -122,7 +131,15 @@ function getRepairReviewActionLabel(repairPlan: DatabaseSchemaRepairPlan): strin
     return '生成排查 PR';
   }
 
-  return '开始自动修复';
+  return '生成修复草案';
+}
+
+function getReviewLinkLabel(repairPlan: DatabaseSchemaRepairPlan): string {
+  if (!isAutoRepairPlanKind(repairPlan.kind)) {
+    return '打开评审单';
+  }
+
+  return repairPlan.atlasExecutionStatus === 'succeeded' ? '打开评审单' : '打开草案 PR';
 }
 
 function getSchemaStateBadgeClass(
@@ -170,7 +187,10 @@ export function SchemaCenterClient({
   initialData: SchemaCenterData;
 }) {
   const [data, setData] = useState(initialData);
-  const [pendingDatabaseId, setPendingDatabaseId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    databaseId: string;
+    action: SchemaCenterActionKey;
+  } | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const repairStatusLabel: Record<DatabaseSchemaRepairPlan['status'], string> = {
@@ -205,12 +225,16 @@ export function SchemaCenterClient({
     setData(next);
   }, [projectId]);
 
+  const isPendingAction = (databaseId: string, action: SchemaCenterActionKey): boolean =>
+    pendingAction?.databaseId === databaseId && pendingAction?.action === action;
+
   const runAction = async (
     databaseId: string,
+    action: SchemaCenterActionKey,
     task: () => Promise<unknown>,
     successMessage: string | ((result: unknown) => string)
   ) => {
-    setPendingDatabaseId(databaseId);
+    setPendingAction({ databaseId, action });
     try {
       const result = await task();
       await refresh();
@@ -220,15 +244,17 @@ export function SchemaCenterClient({
       setFeedback(error instanceof Error ? error.message : '执行失败');
       setTimeout(() => setFeedback(null), 5000);
     } finally {
-      setPendingDatabaseId(null);
+      setPendingAction(null);
     }
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Schema Center"
+        title="数据"
         description="所有 schema 纳管、修复、评审和 Atlas 执行都在这里。其它页面只显示摘要和跳转。"
+        eyebrow="Data Flow"
+        meta="这里只有和数据变更有关的动作。用户不需要先理解内部工具名，只需要知道是否被数据门禁挡住。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm" className="rounded-xl">
@@ -248,19 +274,19 @@ export function SchemaCenterClient({
       )}
 
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="console-panel px-4 py-4">
+        <div className="console-stat px-4 py-4">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             数据库
           </div>
           <div className="mt-2 text-3xl font-semibold">{data.summary.databaseCount}</div>
         </div>
-        <div className="console-panel px-4 py-4">
+        <div className="console-stat px-4 py-4">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             门禁阻塞
           </div>
           <div className="mt-2 text-3xl font-semibold">{data.summary.blockingCount}</div>
         </div>
-        <div className="console-panel px-4 py-4">
+        <div className="console-stat px-4 py-4">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             待迁移
           </div>
@@ -284,6 +310,7 @@ export function SchemaCenterClient({
                 const repairPlan = database.latestRepairPlan;
                 const latestAtlasRun = database.latestAtlasRun;
                 const repairFlowSummary = getRepairFlowSummary(repairPlan, latestAtlasRun);
+                const hasPendingAction = pendingAction !== null;
                 const versionSummary =
                   state?.actualVersion || state?.expectedVersion
                     ? [
@@ -349,18 +376,17 @@ export function SchemaCenterClient({
                           variant="outline"
                           size="sm"
                           className="rounded-xl"
-                          disabled={
-                            pendingDatabaseId !== null || !environment.actions.canConfigureStrategy
-                          }
+                          disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                           onClick={() =>
                             runAction(
                               database.id,
+                              'inspect',
                               () => inspectDatabaseSchemaState(projectId, database.id),
                               'Schema 状态已更新'
                             )
                           }
                         >
-                          {pendingDatabaseId === database.id ? (
+                          {isPendingAction(database.id, 'inspect') ? (
                             <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                           ) : null}
                           检查 schema
@@ -370,18 +396,19 @@ export function SchemaCenterClient({
                             variant="outline"
                             size="sm"
                             className="rounded-xl"
-                            disabled={
-                              pendingDatabaseId !== null ||
-                              !environment.actions.canConfigureStrategy
-                            }
+                            disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                             onClick={() =>
                               runAction(
                                 database.id,
+                                'markAligned',
                                 () => markDatabaseSchemaAligned(projectId, database.id),
                                 '数据库账本已标记为对齐'
                               )
                             }
                           >
+                            {isPendingAction(database.id, 'markAligned') ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
                             标记为已对齐
                           </Button>
                         )}
@@ -394,17 +421,20 @@ export function SchemaCenterClient({
                               size="sm"
                               className="rounded-xl"
                               disabled={
-                                pendingDatabaseId !== null ||
-                                !environment.actions.canConfigureStrategy
+                                hasPendingAction || !environment.actions.canConfigureStrategy
                               }
                               onClick={() =>
                                 runAction(
                                   database.id,
+                                  'createPlan',
                                   () => createDatabaseRepairPlan(projectId, database.id),
                                   '修复计划已生成'
                                 )
                               }
                             >
+                              {isPendingAction(database.id, 'createPlan') ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : null}
                               生成修复计划
                             </Button>
                           )}
@@ -420,12 +450,12 @@ export function SchemaCenterClient({
                               size="sm"
                               className="rounded-xl"
                               disabled={
-                                pendingDatabaseId !== null ||
-                                !environment.actions.canConfigureStrategy
+                                hasPendingAction || !environment.actions.canConfigureStrategy
                               }
                               onClick={() =>
                                 runAction(
                                   database.id,
+                                  'createReview',
                                   () => createDatabaseRepairReviewRequest(projectId, database.id),
                                   (result) => {
                                     const flow = result as DatabaseSchemaRepairReviewFlowResult;
@@ -443,13 +473,16 @@ export function SchemaCenterClient({
                                 )
                               }
                             >
+                              {isPendingAction(database.id, 'createReview') ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : null}
                               {getRepairReviewActionLabel(repairPlan)}
                             </Button>
                           )}
                         {repairPlan?.reviewUrl && (
                           <Button asChild variant="outline" size="sm" className="rounded-xl">
                             <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
-                              打开评审单
+                              {getReviewLinkLabel(repairPlan)}
                               <ExternalLink className="ml-1 h-3.5 w-3.5" />
                             </a>
                           </Button>
@@ -459,18 +492,19 @@ export function SchemaCenterClient({
                             variant="outline"
                             size="sm"
                             className="rounded-xl"
-                            disabled={
-                              pendingDatabaseId !== null ||
-                              !environment.actions.canConfigureStrategy
-                            }
+                            disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                             onClick={() =>
                               runAction(
                                 database.id,
+                                'syncReview',
                                 () => syncDatabaseRepairReviewRequest(projectId, database.id),
                                 '评审状态已同步'
                               )
                             }
                           >
+                            {isPendingAction(database.id, 'syncReview') ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
                             同步评审状态
                           </Button>
                         )}
@@ -482,12 +516,12 @@ export function SchemaCenterClient({
                               size="sm"
                               className="rounded-xl"
                               disabled={
-                                pendingDatabaseId !== null ||
-                                !environment.actions.canConfigureStrategy
+                                hasPendingAction || !environment.actions.canConfigureStrategy
                               }
                               onClick={() =>
                                 runAction(
                                   database.id,
+                                  'runAtlas',
                                   () => runDatabaseRepairAtlas(projectId, database.id),
                                   repairPlan.atlasExecutionStatus === 'failed'
                                     ? 'Atlas 已重新加入队列'
@@ -495,6 +529,9 @@ export function SchemaCenterClient({
                                 )
                               }
                             >
+                              {isPendingAction(database.id, 'runAtlas') ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : null}
                               {repairPlan.atlasExecutionStatus === 'failed'
                                 ? '重试 Atlas'
                                 : '继续自动修复'}
@@ -507,17 +544,20 @@ export function SchemaCenterClient({
                               size="sm"
                               className="rounded-xl"
                               disabled={
-                                pendingDatabaseId !== null ||
-                                !environment.actions.canConfigureStrategy
+                                hasPendingAction || !environment.actions.canConfigureStrategy
                               }
                               onClick={() =>
                                 runAction(
                                   database.id,
+                                  'markApplied',
                                   () => markDatabaseRepairPlanApplied(projectId, database.id),
                                   '修复计划已标记为应用'
                                 )
                               }
                             >
+                              {isPendingAction(database.id, 'markApplied') ? (
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                              ) : null}
                               标记已应用
                             </Button>
                           )}
@@ -566,7 +606,7 @@ export function SchemaCenterClient({
                     {latestAtlasRun?.diffSummary ? (
                       <div className="mt-4 rounded-2xl border border-border bg-background px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary">Atlas Diff</Badge>
+                          <Badge variant="secondary">迁移详情</Badge>
                           {latestAtlasRun.commitSha ? (
                             <Badge variant="outline">{latestAtlasRun.commitSha.slice(0, 7)}</Badge>
                           ) : null}

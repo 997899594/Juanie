@@ -151,7 +151,7 @@ export async function addSchemaRepairAtlasJob(
     },
     {
       attempts: 1,
-      jobId: `schema-repair-atlas:${atlasRunId}`,
+      jobId: `schema-repair-atlas-${atlasRunId}`,
     }
   );
 }
