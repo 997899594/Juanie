@@ -91,6 +91,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git curl ca-certificates bash \
+  && curl -sSf https://atlasgo.sh | sh \
+  && install -m 0755 /root/.atlas/bin/atlas /usr/local/bin/atlas \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=worker-builder /app/worker ./worker
 COPY --from=worker-builder /app/scheduler ./scheduler
 COPY --from=source /app/templates ./templates
