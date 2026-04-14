@@ -71,6 +71,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOME=/tmp
+ENV XDG_CACHE_HOME=/tmp/.cache
 ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
@@ -94,6 +96,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOME=/tmp
+ENV XDG_CACHE_HOME=/tmp/.cache
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
@@ -118,6 +122,7 @@ COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/reca
 COPY --from=source /app/scripts/db-atlas.ts ./scripts/db-atlas.ts
 COPY --from=source /app/scripts/db-push.ts ./scripts/db-push.ts
 
+RUN mkdir -p /tmp/.cache
 RUN chmod +x ./worker
 RUN chmod +x ./scheduler
 RUN chmod +x ./schema-runner

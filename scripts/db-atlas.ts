@@ -379,8 +379,6 @@ async function runPostMigrationTasks(databaseUrl: string): Promise<void> {
 async function applyMigrations(): Promise<void> {
   const databaseUrl = getDatabaseUrl();
 
-  await hashMigrations();
-
   const atlasRevisionCount = await getAtlasRevisionCount(databaseUrl);
   if (atlasRevisionCount === 0) {
     const hasLegacyState = await hasLegacyMigrationState(databaseUrl);

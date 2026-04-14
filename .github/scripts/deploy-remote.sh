@@ -8,14 +8,6 @@ WEB_DEPLOYMENT="${RELEASE_NAME}-web"
 WORKER_DEPLOYMENT="${RELEASE_NAME}-worker"
 SCHEDULER_DEPLOYMENT="${RELEASE_NAME}-scheduler"
 
-cleanup() {
-  if [[ -n "${REMOTE_DIR:-}" ]]; then
-    rm -rf "${REMOTE_DIR}" >/dev/null 2>&1 || true
-  fi
-}
-
-trap cleanup EXIT
-
 require_command() {
   local command_name="$1"
   if ! command -v "${command_name}" >/dev/null 2>&1; then
