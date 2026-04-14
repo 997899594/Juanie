@@ -96,6 +96,11 @@ export async function getProjectSchemaCenterData(projectId: string, role: TeamRo
               generatedFiles: Array.isArray(latestAtlasRun.generatedFiles)
                 ? (latestAtlasRun.generatedFiles as string[])
                 : null,
+              artifactFiles:
+                typeof latestAtlasRun.artifactFiles === 'object' &&
+                latestAtlasRun.artifactFiles !== null
+                  ? (latestAtlasRun.artifactFiles as Record<string, string>)
+                  : null,
               diffSummary:
                 typeof latestAtlasRun.diffSummary === 'object' &&
                 latestAtlasRun.diffSummary !== null &&

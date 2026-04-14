@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 export interface PriorityDeckItem {
   key: string;
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: string;
   href?: string;
@@ -50,6 +50,11 @@ export function PriorityDeck({ title, items, className }: PriorityDeckProps) {
                   className={cn('mt-1 h-2 w-2 rounded-full', toneClasses[item.tone ?? 'default'])}
                 />
                 <div className="min-w-0">
+                  {item.eyebrow ? (
+                    <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      {item.eyebrow}
+                    </div>
+                  ) : null}
                   <div className="text-sm font-semibold text-foreground">{item.title}</div>
                 </div>
               </div>

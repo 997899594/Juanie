@@ -10,11 +10,10 @@ import {
   createDatabaseRepairPlan,
   createDatabaseRepairReviewRequest,
   type DatabaseSchemaRepairPlan,
+  discardDatabaseRepairPlan,
   inspectDatabaseSchemaState,
-  markDatabaseRepairPlanApplied,
   markDatabaseSchemaAligned,
   runDatabaseRepairAtlas,
-  syncDatabaseRepairReviewRequest,
 } from '@/lib/environments/client-actions';
 import { fetchProjectSchemaCenter } from '@/lib/schema-management/client-actions';
 
@@ -46,6 +45,7 @@ interface SchemaCenterDatabaseRecord {
     status: 'idle' | 'queued' | 'running' | 'succeeded' | 'failed';
     commitSha: string | null;
     generatedFiles: string[] | null;
+    artifactFiles: Record<string, string> | null;
     diffSummary: {
       changedFiles: string[];
       fileStats: Array<{
@@ -87,58 +87,38 @@ interface SchemaCenterData {
 type SchemaCenterActionKey =
   | 'inspect'
   | 'markAligned'
-  | 'createPlan'
-  | 'createReview'
-  | 'syncReview'
-  | 'runAtlas'
-  | 'markApplied';
+  | 'generateSuggestion'
+  | 'confirm'
+  | 'discard';
 
 type SchemaCenterSchemaStateStatus = NonNullable<
   SchemaCenterDatabaseRecord['schemaState']
 >['status'];
 
-function isAutoRepairPlanKind(kind: DatabaseSchemaRepairPlan['kind'] | null | undefined): boolean {
+function isSuggestionRequired(kind: DatabaseSchemaRepairPlan['kind'] | null | undefined): boolean {
   return kind === 'repair_pr_required' || kind === 'adopt_current_db';
 }
 
-function getRepairFlowSummary(
-  repairPlan: DatabaseSchemaRepairPlan | null,
-  latestAtlasRun: SchemaCenterDatabaseRecord['latestAtlasRun']
-): string | null {
-  if (!repairPlan || !isAutoRepairPlanKind(repairPlan.kind) || !repairPlan.reviewUrl) {
-    return null;
+function getSuggestionStatusLabel(repairPlan: DatabaseSchemaRepairPlan): string {
+  if (repairPlan.kind === 'manual_investigation') {
+    return repairPlan.reviewUrl ? '已转排查 PR' : '待人工排查';
+  }
+
+  if (!isSuggestionRequired(repairPlan.kind)) {
+    return '无需生成建议';
   }
 
   switch (repairPlan.atlasExecutionStatus) {
     case 'queued':
-      return '平台正在排队生成修复草案，先不要去看 PR。';
     case 'running':
-      return '平台正在生成修复草案。等下方迁移详情出来后，再决定是否创建 PR。';
+      return '建议生成中';
     case 'succeeded':
-      return latestAtlasRun?.diffSummary
-        ? '修复草案已生成。先看下方迁移详情，再决定是否创建 PR。'
-        : '修复草案已完成，请先确认生成结果。';
+      return repairPlan.reviewUrl ? '已确认修复' : '建议已就绪';
     case 'failed':
-      return repairPlan.errorMessage ?? '生成修复草案失败，请重试。';
+      return '建议失败';
     default:
-      return '先生成修复草案和迁移详情，再决定是否创建 PR。';
+      return '待生成建议';
   }
-}
-
-function getRepairReviewActionLabel(repairPlan: DatabaseSchemaRepairPlan): string {
-  if (repairPlan.kind === 'manual_investigation') {
-    return '生成排查 PR';
-  }
-
-  return '创建修复 PR';
-}
-
-function getReviewLinkLabel(repairPlan: DatabaseSchemaRepairPlan): string {
-  if (!isAutoRepairPlanKind(repairPlan.kind)) {
-    return '打开评审单';
-  }
-
-  return repairPlan.atlasExecutionStatus === 'succeeded' ? '打开评审单' : '打开草案 PR';
 }
 
 function getSchemaStateBadgeClass(
@@ -178,6 +158,34 @@ function formatTimestamp(value: string | Date | null | undefined): string | null
   });
 }
 
+function getSuggestionSummary(
+  repairPlan: DatabaseSchemaRepairPlan | null,
+  latestAtlasRun: SchemaCenterDatabaseRecord['latestAtlasRun']
+): string | null {
+  if (!repairPlan) {
+    return null;
+  }
+
+  if (!isSuggestionRequired(repairPlan.kind)) {
+    return repairPlan.summary;
+  }
+
+  switch (repairPlan.atlasExecutionStatus) {
+    case 'queued':
+      return '平台正在排队生成修复建议，稍后会展示迁移详情。';
+    case 'running':
+      return '平台正在分析数据库与仓库差异，稍后会展示迁移详情。';
+    case 'succeeded':
+      return latestAtlasRun?.diffSummary
+        ? '修复建议已生成。先看迁移详情，再决定确认还是丢弃。'
+        : '修复建议已生成，请确认结果。';
+    case 'failed':
+      return repairPlan.errorMessage ?? '修复建议生成失败，请重试。';
+    default:
+      return '先生成修复建议，再决定是否采用。';
+  }
+}
+
 export function SchemaCenterClient({
   projectId,
   initialData,
@@ -192,33 +200,6 @@ export function SchemaCenterClient({
   } | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const repairStatusLabel: Record<DatabaseSchemaRepairPlan['status'], string> = {
-    draft: '草稿',
-    review_opened: '已开评审',
-    applied: '已应用',
-    superseded: '已替代',
-    failed: '失败',
-  };
-
-  const repairReviewStateLabel: Record<DatabaseSchemaRepairPlan['reviewState'], string> = {
-    draft: '草稿',
-    open: '进行中',
-    merged: '已合并',
-    closed: '已关闭',
-    unknown: '未知',
-  };
-
-  const atlasExecutionStatusLabel: Record<
-    DatabaseSchemaRepairPlan['atlasExecutionStatus'],
-    string
-  > = {
-    idle: '未执行',
-    queued: '排队中',
-    running: '运行中',
-    succeeded: '成功',
-    failed: '失败',
-  };
-
   const refresh = useCallback(async () => {
     const next = await fetchProjectSchemaCenter<SchemaCenterData>(projectId);
     setData(next);
@@ -231,13 +212,13 @@ export function SchemaCenterClient({
     databaseId: string,
     action: SchemaCenterActionKey,
     task: () => Promise<unknown>,
-    successMessage: string | ((result: unknown) => string)
+    successMessage: string
   ) => {
     setPendingAction({ databaseId, action });
     try {
-      const result = await task();
+      await task();
       await refresh();
-      setFeedback(typeof successMessage === 'function' ? successMessage(result) : successMessage);
+      setFeedback(successMessage);
       setTimeout(() => setFeedback(null), 3000);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '执行失败');
@@ -245,6 +226,16 @@ export function SchemaCenterClient({
     } finally {
       setPendingAction(null);
     }
+  };
+
+  const generateSuggestion = async (databaseId: string) => {
+    const plan = await createDatabaseRepairPlan(projectId, databaseId);
+
+    if (isSuggestionRequired(plan.kind)) {
+      await runDatabaseRepairAtlas(projectId, databaseId);
+    }
+
+    return plan;
   };
 
   return (
@@ -263,11 +254,11 @@ export function SchemaCenterClient({
         }
       />
 
-      {feedback && (
+      {feedback ? (
         <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-foreground">
           {feedback}
         </div>
-      )}
+      ) : null}
 
       <div className="console-surface rounded-[20px] px-4 py-3">
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
@@ -293,7 +284,7 @@ export function SchemaCenterClient({
                 const state = database.schemaState;
                 const repairPlan = database.latestRepairPlan;
                 const latestAtlasRun = database.latestAtlasRun;
-                const repairFlowSummary = getRepairFlowSummary(repairPlan, latestAtlasRun);
+                const suggestionSummary = getSuggestionSummary(repairPlan, latestAtlasRun);
                 const hasPendingAction = pendingAction !== null;
                 const versionSummary =
                   state?.actualVersion || state?.expectedVersion
@@ -304,6 +295,23 @@ export function SchemaCenterClient({
                         .filter(Boolean)
                         .join(' · ')
                     : null;
+                const canGenerateSuggestion =
+                  !!state &&
+                  ['drifted', 'unmanaged', 'blocked'].includes(state.status) &&
+                  (!repairPlan || ['draft', 'failed', 'superseded'].includes(repairPlan.status));
+                const canConfirmRepair =
+                  !!repairPlan &&
+                  ((isSuggestionRequired(repairPlan.kind) &&
+                    repairPlan.status === 'draft' &&
+                    repairPlan.atlasExecutionStatus === 'succeeded') ||
+                    (repairPlan.kind === 'manual_investigation' &&
+                      ['draft', 'failed'].includes(repairPlan.status)));
+                const canDiscardSuggestion =
+                  !!repairPlan &&
+                  repairPlan.status === 'draft' &&
+                  (repairPlan.kind === 'manual_investigation' ||
+                    repairPlan.atlasExecutionStatus === 'succeeded' ||
+                    repairPlan.atlasExecutionStatus === 'failed');
 
                 return (
                   <div key={database.id} className="console-surface rounded-2xl px-4 py-4">
@@ -319,19 +327,10 @@ export function SchemaCenterClient({
                             {state?.statusLabel ?? '未纳管'}
                           </Badge>
                           {repairPlan ? (
-                            <Badge variant="outline">
-                              计划 {repairStatusLabel[repairPlan.status]}
-                            </Badge>
+                            <Badge variant="outline">{getSuggestionStatusLabel(repairPlan)}</Badge>
                           ) : null}
                           {repairPlan?.reviewUrl ? (
-                            <Badge variant="outline">
-                              评审 {repairReviewStateLabel[repairPlan.reviewState]}
-                            </Badge>
-                          ) : null}
-                          {repairPlan ? (
-                            <Badge variant="outline">
-                              Atlas {atlasExecutionStatusLabel[repairPlan.atlasExecutionStatus]}
-                            </Badge>
+                            <Badge variant="outline">已创建 PR</Badge>
                           ) : null}
                         </div>
                         <div className="text-sm text-muted-foreground">
@@ -371,7 +370,8 @@ export function SchemaCenterClient({
                           ) : null}
                           检查 schema
                         </Button>
-                        {state?.status === 'aligned_untracked' && (
+
+                        {state?.status === 'aligned_untracked' ? (
                           <Button
                             variant="outline"
                             size="sm"
@@ -391,77 +391,55 @@ export function SchemaCenterClient({
                             ) : null}
                             标记为已对齐
                           </Button>
-                        )}
-                        {state &&
-                          ['pending_migrations', 'drifted', 'unmanaged', 'blocked'].includes(
-                            state.status
-                          ) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl"
-                              disabled={
-                                hasPendingAction || !environment.actions.canConfigureStrategy
-                              }
-                              onClick={() =>
-                                runAction(
-                                  database.id,
-                                  'createPlan',
-                                  () => createDatabaseRepairPlan(projectId, database.id),
-                                  '修复计划已生成'
-                                )
-                              }
-                            >
-                              {isPendingAction(database.id, 'createPlan') ? (
-                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                              ) : null}
-                              生成修复计划
-                            </Button>
-                          )}
-                        {repairPlan &&
-                          [
-                            'repair_pr_required',
-                            'adopt_current_db',
-                            'manual_investigation',
-                          ].includes(repairPlan.kind) &&
-                          ((isAutoRepairPlanKind(repairPlan.kind) &&
-                            repairPlan.status === 'draft' &&
-                            repairPlan.atlasExecutionStatus === 'succeeded') ||
-                            (repairPlan.kind === 'manual_investigation' &&
-                              ['draft', 'failed'].includes(repairPlan.status))) && (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              className="rounded-xl"
-                              disabled={
-                                hasPendingAction || !environment.actions.canConfigureStrategy
-                              }
-                              onClick={() =>
-                                runAction(
-                                  database.id,
-                                  'createReview',
-                                  () => createDatabaseRepairReviewRequest(projectId, database.id),
-                                  repairPlan.kind === 'manual_investigation'
-                                    ? '排查 PR 已创建'
-                                    : '修复 PR 已创建'
-                                )
-                              }
-                            >
-                              {isPendingAction(database.id, 'createReview') ? (
-                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                              ) : null}
-                              {getRepairReviewActionLabel(repairPlan)}
-                            </Button>
-                          )}
-                        {repairPlan?.reviewUrl && (
-                          <Button asChild variant="outline" size="sm" className="rounded-xl">
-                            <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
-                              {getReviewLinkLabel(repairPlan)}
-                              <ExternalLink className="ml-1 h-3.5 w-3.5" />
-                            </a>
+                        ) : null}
+
+                        {canGenerateSuggestion ? (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="rounded-xl"
+                            disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
+                            onClick={() =>
+                              runAction(
+                                database.id,
+                                'generateSuggestion',
+                                () => generateSuggestion(database.id),
+                                '修复建议已生成'
+                              )
+                            }
+                          >
+                            {isPendingAction(database.id, 'generateSuggestion') ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            生成修复建议
                           </Button>
-                        )}
-                        {repairPlan?.reviewUrl && (
+                        ) : null}
+
+                        {canConfirmRepair ? (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="rounded-xl"
+                            disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
+                            onClick={() =>
+                              runAction(
+                                database.id,
+                                'confirm',
+                                () => createDatabaseRepairReviewRequest(projectId, database.id),
+                                repairPlan?.kind === 'manual_investigation'
+                                  ? '排查 PR 已创建'
+                                  : '修复 PR 已创建'
+                              )
+                            }
+                          >
+                            {isPendingAction(database.id, 'confirm') ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : null}
+                            {repairPlan?.kind === 'manual_investigation' ? '确认排查' : '确认修复'}
+                          </Button>
+                        ) : null}
+
+                        {canDiscardSuggestion ? (
                           <Button
                             variant="outline"
                             size="sm"
@@ -470,110 +448,48 @@ export function SchemaCenterClient({
                             onClick={() =>
                               runAction(
                                 database.id,
-                                'syncReview',
-                                () => syncDatabaseRepairReviewRequest(projectId, database.id),
-                                '评审状态已同步'
+                                'discard',
+                                () => discardDatabaseRepairPlan(projectId, database.id),
+                                '修复建议已丢弃'
                               )
                             }
                           >
-                            {isPendingAction(database.id, 'syncReview') ? (
+                            {isPendingAction(database.id, 'discard') ? (
                               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                             ) : null}
-                            同步评审状态
+                            丢弃
                           </Button>
-                        )}
-                        {repairPlan &&
-                          isAutoRepairPlanKind(repairPlan.kind) &&
-                          ['draft', 'failed'].includes(repairPlan.status) &&
-                          ['idle', 'failed'].includes(repairPlan.atlasExecutionStatus) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl"
-                              disabled={
-                                hasPendingAction || !environment.actions.canConfigureStrategy
-                              }
-                              onClick={() =>
-                                runAction(
-                                  database.id,
-                                  'runAtlas',
-                                  () => runDatabaseRepairAtlas(projectId, database.id),
-                                  repairPlan.atlasExecutionStatus === 'failed'
-                                    ? '修复草案已重新加入队列'
-                                    : '平台正在生成修复草案'
-                                )
-                              }
-                            >
-                              {isPendingAction(database.id, 'runAtlas') ? (
-                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                              ) : null}
-                              {repairPlan.atlasExecutionStatus === 'failed'
-                                ? '重试生成草案'
-                                : '生成修复草案'}
-                            </Button>
-                          )}
-                        {repairPlan?.status === 'review_opened' &&
-                          repairPlan.reviewState === 'merged' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl"
-                              disabled={
-                                hasPendingAction || !environment.actions.canConfigureStrategy
-                              }
-                              onClick={() =>
-                                runAction(
-                                  database.id,
-                                  'markApplied',
-                                  () => markDatabaseRepairPlanApplied(projectId, database.id),
-                                  '修复计划已标记为应用'
-                                )
-                              }
-                            >
-                              {isPendingAction(database.id, 'markApplied') ? (
-                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                              ) : null}
-                              标记已应用
-                            </Button>
-                          )}
+                        ) : null}
+
+                        {repairPlan?.reviewUrl ? (
+                          <Button asChild variant="outline" size="sm" className="rounded-xl">
+                            <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
+                              打开修复 PR
+                              <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
 
-                    {repairPlan ? (
+                    {repairPlan && suggestionSummary ? (
                       <div className="mt-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-                        <div className="text-sm font-medium text-foreground">
-                          {repairPlan.title}
-                        </div>
+                        <div className="text-sm font-medium text-foreground">修复建议</div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {repairPlan.summary}
                         </div>
-                        {repairFlowSummary ? (
-                          <div className="mt-2 rounded-2xl border border-border bg-background px-3 py-2 text-sm text-foreground">
-                            {repairFlowSummary}
-                          </div>
-                        ) : null}
+                        <div className="mt-2 rounded-2xl border border-border bg-background px-3 py-2 text-sm text-foreground">
+                          {suggestionSummary}
+                        </div>
                         <div className="mt-2 text-xs text-muted-foreground">
                           {[
-                            repairPlan.nextActionLabel,
-                            repairPlan.reviewStateLabel
-                              ? `评审状态 ${repairPlan.reviewStateLabel}`
-                              : null,
-                            repairPlan.reviewSyncedAt
-                              ? `同步于 ${formatTimestamp(repairPlan.reviewSyncedAt)}`
-                              : null,
+                            repairPlan.riskLevel ? `风险 ${repairPlan.riskLevel}` : null,
                             repairPlan.atlasExecutionFinishedAt
-                              ? `Atlas 完成于 ${formatTimestamp(repairPlan.atlasExecutionFinishedAt)}`
+                              ? `建议生成于 ${formatTimestamp(repairPlan.atlasExecutionFinishedAt)}`
                               : null,
                           ]
                             .filter(Boolean)
                             .join(' · ')}
-                        </div>
-                        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
-                          {repairPlan.steps.map((step, index) => (
-                            <div key={`${database.id}-schema-center-step-${index}`}>
-                              {index + 1}. {step}
-                            </div>
-                          ))}
                         </div>
                       </div>
                     ) : null}
@@ -582,9 +498,6 @@ export function SchemaCenterClient({
                       <div className="mt-4 rounded-2xl border border-border bg-background px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">迁移详情</Badge>
-                          {latestAtlasRun.commitSha ? (
-                            <Badge variant="outline">{latestAtlasRun.commitSha.slice(0, 7)}</Badge>
-                          ) : null}
                           <Badge variant="outline">
                             {latestAtlasRun.diffSummary.changedFiles.length} 个文件
                           </Badge>
@@ -596,13 +509,36 @@ export function SchemaCenterClient({
                             </div>
                           ))}
                         </div>
+
+                        {latestAtlasRun.artifactFiles ? (
+                          <div className="mt-4 space-y-3">
+                            {Object.entries(latestAtlasRun.artifactFiles).map(([file, content]) => (
+                              <div
+                                key={`${database.id}-schema-center-artifact-${file}`}
+                                className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
+                              >
+                                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                  {file}
+                                </div>
+                                <pre className="mt-3 overflow-x-auto text-xs text-foreground">
+                                  {content}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
 
                     {latestAtlasRun?.log ? (
-                      <pre className="mt-4 overflow-x-auto rounded-2xl border border-border bg-background px-4 py-3 text-xs text-muted-foreground">
-                        {latestAtlasRun.log}
-                      </pre>
+                      <details className="mt-4 rounded-2xl border border-border bg-background px-4 py-3">
+                        <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
+                          执行日志
+                        </summary>
+                        <pre className="mt-3 overflow-x-auto text-xs text-muted-foreground">
+                          {latestAtlasRun.log}
+                        </pre>
+                      </details>
                     ) : null}
                   </div>
                 );

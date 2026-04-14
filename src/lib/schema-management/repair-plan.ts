@@ -287,6 +287,52 @@ export async function markSchemaRepairPlanApplied(input: {
   };
 }
 
+export async function discardSchemaRepairPlan(input: {
+  projectId: string;
+  planId: string;
+}): Promise<PersistedSchemaRepairPlan> {
+  const [record] = await db
+    .update(schemaRepairPlans)
+    .set({
+      status: 'superseded',
+      errorMessage: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(schemaRepairPlans.projectId, input.projectId), eq(schemaRepairPlans.id, input.planId))
+    )
+    .returning();
+
+  if (!record) {
+    throw new Error('修复计划不存在');
+  }
+
+  return {
+    ...record,
+    kind: record.kind,
+    status: 'superseded',
+    title: record.title,
+    summary: record.summary,
+    riskLevel: record.riskLevel as SchemaRepairPlan['riskLevel'],
+    expectedVersion: record.expectedVersion,
+    actualVersion: record.actualVersion,
+    nextActionLabel: record.nextActionLabel,
+    steps: Array.isArray(record.steps) ? (record.steps as string[]) : [],
+    generatedFiles: Array.isArray(record.generatedFiles) ? (record.generatedFiles as string[]) : [],
+    branchName: record.branchName,
+    reviewNumber: record.reviewNumber,
+    reviewUrl: record.reviewUrl,
+    reviewState: record.reviewState ?? 'unknown',
+    reviewStateLabel: record.reviewStateLabel,
+    reviewSyncedAt: record.reviewSyncedAt,
+    atlasExecutionStatus: record.atlasExecutionStatus ?? 'idle',
+    atlasExecutionLog: record.atlasExecutionLog,
+    atlasExecutionStartedAt: record.atlasExecutionStartedAt,
+    atlasExecutionFinishedAt: record.atlasExecutionFinishedAt,
+    errorMessage: null,
+  };
+}
+
 export async function getLatestSchemaRepairPlansForProject(projectId: string) {
   const rows = await db.query.schemaRepairPlans.findMany({
     where: eq(schemaRepairPlans.projectId, projectId),

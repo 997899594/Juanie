@@ -5,14 +5,11 @@ import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { databases, schemaRepairPlans } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
-import { createSchemaRepairReviewRequest } from '@/lib/schema-management/review-request';
+import { discardSchemaRepairPlan } from '@/lib/schema-management/repair-plan';
 
-export async function POST(
-  _request: Request,
-  { params }: { params: Promise<{ id: string; dbId: string }> }
-) {
+export async function POST(_request: Request, context: { params: Promise<unknown> }) {
   try {
-    const { id: projectId, dbId } = await params;
+    const { id: projectId, dbId } = (await context.params) as { id: string; dbId: string };
     const session = await requireSession();
     const { member } = await getProjectAccessOrThrow(projectId, session.user.id);
 
@@ -47,16 +44,15 @@ export async function POST(
     });
 
     if (!latestPlan) {
-      return NextResponse.json({ error: '请先检测并生成修复建议' }, { status: 400 });
+      return NextResponse.json({ error: '没有可丢弃的修复建议' }, { status: 400 });
     }
 
-    const result = await createSchemaRepairReviewRequest({
+    const plan = await discardSchemaRepairPlan({
       projectId,
       planId: latestPlan.id,
-      userId: session.user.id,
     });
 
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json({ plan }, { status: 200 });
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

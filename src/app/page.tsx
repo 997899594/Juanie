@@ -22,10 +22,10 @@ export default async function HomePage() {
   const nextPriorityItems: PriorityDeckItem[] = [
     {
       key: 'primary',
-      eyebrow: '现在先做',
+      eyebrow: '主入口',
       title: commandCenter.primaryAction.label,
       href: commandCenter.primaryAction.href,
-      actionLabel: '立即进入',
+      actionLabel: '进入',
       tone: 'default',
     },
   ];
@@ -33,9 +33,8 @@ export default async function HomePage() {
   if (commandCenter.focusItems[0]) {
     nextPriorityItems.push({
       key: 'queue',
-      eyebrow: '最优先阻塞',
+      eyebrow: '优先处理',
       title: commandCenter.focusItems[0].title,
-      description: commandCenter.focusItems[0].meta,
       href: commandCenter.focusItems[0].href,
       actionLabel: commandCenter.focusItems[0].meta,
       tone: commandCenter.focusItems[0].tone === 'danger' ? 'danger' : 'warning',
@@ -45,21 +44,17 @@ export default async function HomePage() {
   if (projectCards[0]) {
     nextPriorityItems.push({
       key: 'project',
-      eyebrow: '继续项目',
+      eyebrow: '项目',
       title: projectCards[0].name,
-      description: [projectCards[0].repositoryLabel, projectCards[0].statusLabel]
-        .filter(Boolean)
-        .join(' · '),
       href: `/projects/${projectCards[0].id}`,
-      actionLabel: '回到项目',
+      actionLabel: '进入',
       tone: 'success',
     });
   } else {
     nextPriorityItems.push({
       key: 'project-empty',
-      eyebrow: '建立入口',
+      eyebrow: '开始',
       title: '先创建第一个项目',
-      description: '创建后再继续。',
       href: '/projects/new',
       actionLabel: '新建项目',
       tone: 'success',
@@ -96,7 +91,7 @@ export default async function HomePage() {
             <div className="text-sm font-semibold">项目入口</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
               <Link href="/projects">
-                查看全部
+                全部
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -150,7 +145,7 @@ export default async function HomePage() {
             <div className="text-sm font-semibold">待处理详情</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
               <Link href="/inbox">
-                查看全部
+                全部
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -199,7 +194,7 @@ export default async function HomePage() {
                         )}
                         {(run.platformSignals.nextActionLabel || run.actionLabel) && (
                           <div className="mt-1 text-[11px] text-muted-foreground">
-                            下一步：{run.platformSignals.nextActionLabel ?? run.actionLabel}
+                            {run.platformSignals.nextActionLabel ?? run.actionLabel}
                           </div>
                         )}
                         {(run.releaseTitle || run.primaryDomainUrl) && (
@@ -233,7 +228,6 @@ export default async function HomePage() {
           </div>
           <div>
             <div className="text-sm font-semibold">新建项目</div>
-            <div className="text-xs text-muted-foreground">从模板或仓库开始</div>
           </div>
         </Link>
 

@@ -129,6 +129,22 @@ export async function createDatabaseRepairPlan(
   return payload.plan;
 }
 
+export async function discardDatabaseRepairPlan(
+  projectId: string,
+  databaseId: string
+): Promise<DatabaseSchemaRepairPlan> {
+  const response = await fetch(
+    `/api/projects/${projectId}/databases/${databaseId}/schema/repair-plan/discard`,
+    {
+      method: 'POST',
+    }
+  );
+
+  const payload = await parseJsonResponse<{ plan: DatabaseSchemaRepairPlan }>(response);
+
+  return payload.plan;
+}
+
 export async function createDatabaseRepairReviewRequest(
   projectId: string,
   databaseId: string
