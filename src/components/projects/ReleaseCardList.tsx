@@ -26,7 +26,7 @@ interface ReleaseCardListProps {
 
 export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
   if (releases.length === 0) {
-    return <EmptyState icon={<Rocket className="h-12 w-12" />} title="还没有发布" />;
+    return <EmptyState icon={<Rocket className="h-12 w-12" />} title="没有发布" />;
   }
 
   return (

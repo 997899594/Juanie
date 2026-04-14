@@ -49,7 +49,7 @@ export function ProjectOverviewHero({
         <div className="console-stat px-4 py-3">
           <div className="text-xs text-muted-foreground">发布</div>
           <div className="mt-2 line-clamp-2 text-sm font-medium">
-            {currentRelease?.title ?? '还没有发布'}
+            {currentRelease?.title ?? '没有发布'}
           </div>
         </div>
         <div className="console-stat px-4 py-3">
@@ -221,7 +221,7 @@ export function ProjectOperationsSection({
           </div>
           {recentReleaseCards.length === 0 ? (
             <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
-              还没有发布
+              没有发布
             </div>
           ) : (
             recentReleaseCards.slice(0, 3).map((release) => (

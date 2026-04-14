@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -76,21 +75,13 @@ export function ReleasePromoteDialog({
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>发布到生产</DialogTitle>
-          <DialogDescription>
-            平台会先沿用预发（staging）成功版本，再按预检结果创建生产发布。
-          </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
             <div className="space-y-4">
               <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
-                <div className="space-y-1">
-                  <div className="text-sm font-semibold text-foreground">提升来源</div>
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    生产发布会直接沿用预发（staging）成功版本，避免重复构建和环境偏差。
-                  </div>
-                </div>
+                <div className="text-sm font-semibold text-foreground">来源</div>
 
                 {promotePlan?.sourceRelease ? (
                   <div className="mt-4 space-y-3 text-sm">
@@ -108,7 +99,7 @@ export function ReleasePromoteDialog({
                   </div>
                 ) : (
                   <div className="mt-4 rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-sm text-muted-foreground">
-                    当前没有可提升到生产的预发（staging）成功版本。
+                    没有可用版本。
                   </div>
                 )}
               </div>
@@ -116,12 +107,7 @@ export function ReleasePromoteDialog({
 
             <div className="space-y-4">
               <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-3 space-y-1">
-                  <div className="text-sm font-semibold text-foreground">生产预检</div>
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    平台会先检查审批、环境保护和迁移风险，再决定是否允许创建生产发布。
-                  </div>
-                </div>
+                <div className="mb-3 text-sm font-semibold text-foreground">预检</div>
 
                 {promotePanel ? (
                   <div className="space-y-3">
@@ -141,7 +127,7 @@ export function ReleasePromoteDialog({
                             <Badge variant="outline">{getAILevelLabel(promoteAI.riskLevel)}</Badge>
                           )}
                           {promoteAI.confidence && (
-                            <Badge variant="outline">{promoteAI.confidence} 置信度</Badge>
+                            <Badge variant="outline">{promoteAI.confidence}</Badge>
                           )}
                         </div>
                         <div className="mt-2 text-sm font-medium text-foreground">
@@ -156,8 +142,8 @@ export function ReleasePromoteDialog({
                         )}
                         {promoteAI.generatedAt && (
                           <div className="mt-3 text-[11px] text-muted-foreground">
-                            AI 更新时间：{formatPlatformDateTime(promoteAI.generatedAt) ?? '—'}
-                            {promoteAI.stale ? ' · 使用历史快照' : ''}
+                            {formatPlatformDateTime(promoteAI.generatedAt) ?? '—'}
+                            {promoteAI.stale ? ' · 历史' : ''}
                           </div>
                         )}
                       </div>
@@ -171,7 +157,7 @@ export function ReleasePromoteDialog({
 
                     {!promoteAI?.summary && promoteAI?.errorMessage && (
                       <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                        AI 建议暂不可用：{promoteAI.errorMessage}
+                        {promoteAI.errorMessage}
                       </div>
                     )}
 
@@ -182,7 +168,7 @@ export function ReleasePromoteDialog({
                     {promoteAI?.checks.length ? (
                       <div className="space-y-2 rounded-2xl border border-border bg-background px-4 py-3">
                         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                          AI 重点检查
+                          检查
                         </div>
                         {promoteAI.checks.map((check) => (
                           <div key={check.key} className="text-sm">
@@ -197,7 +183,7 @@ export function ReleasePromoteDialog({
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
-                    正在加载发布预检...
+                    加载中...
                   </div>
                 )}
               </div>

@@ -14,11 +14,11 @@ interface ReleaseAISnapshotPanelProps {
 
 function getSourceLabel(source: ResolvedAIPluginSnapshot['source'], stale: boolean): string {
   if (source === 'fresh') {
-    return '刚生成';
+    return '最新';
   }
 
   if (stale) {
-    return '历史快照';
+    return '历史';
   }
 
   if (source === 'cache') {
@@ -61,7 +61,7 @@ function renderUnavailableState(panel: ResolvedAIPluginSnapshot, emptyLabel: str
     <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-5">
       <div className="text-sm font-medium text-foreground">{emptyLabel}</div>
       <div className="mt-2 text-sm text-muted-foreground">
-        {panel.errorMessage ?? panel.availability.blockedReason ?? '暂无结果'}
+        {panel.errorMessage ?? panel.availability.blockedReason ?? '无结果'}
       </div>
     </div>
   );
@@ -76,7 +76,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
       <div className="console-panel p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold">AI 发布计划</div>
+            <div className="text-sm font-semibold">发布计划</div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ReleaseAIRefreshActions projectId={props.projectId} releaseId={props.releaseId} />
@@ -109,13 +109,13 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                 {releasePlanSnapshot.operatorNarrative}
               </div>
               <div className="mt-3 text-xs text-muted-foreground">
-                更新时间：{formatPlatformDateTime(props.releasePlan.snapshot?.generatedAt) ?? '—'}
+                {formatPlatformDateTime(props.releasePlan.snapshot?.generatedAt) ?? '—'}
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                关键检查
+                检查
               </div>
               {releasePlanSnapshot.checks.slice(0, 4).map((check) => (
                 <div
@@ -134,7 +134,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-2xl border border-border bg-background px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  执行步骤
+                  步骤
                 </div>
                 <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                   {releasePlanSnapshot.executionSteps.slice(0, 5).map((step, index) => (
@@ -150,14 +150,14 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               </div>
               <div className="rounded-2xl border border-border bg-background px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  回滚策略
+                  回滚
                 </div>
                 <div className="mt-3 text-sm text-foreground">
                   {releasePlanSnapshot.rollbackPlan.summary}
                 </div>
                 {releasePlanSnapshot.rollbackPlan.target && (
                   <div className="mt-2 text-sm text-muted-foreground">
-                    回滚目标：{releasePlanSnapshot.rollbackPlan.target}
+                    {releasePlanSnapshot.rollbackPlan.target}
                   </div>
                 )}
                 {releasePlanSnapshot.rollbackPlan.triggerSignals.length > 0 && (
@@ -173,14 +173,14 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
           </div>
         ) : (
-          renderUnavailableState(props.releasePlan, '暂无发布计划')
+          renderUnavailableState(props.releasePlan, '没有发布计划')
         )}
       </div>
 
       <div className="console-panel p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold">AI 故障归因</div>
+            <div className="text-sm font-semibold">故障归因</div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">
@@ -216,10 +216,9 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                 {incidentSnapshot.diagnosis.summary}
               </div>
               <div className="mt-2 text-sm text-muted-foreground">
-                根因：{incidentSnapshot.diagnosis.rootCause}
+                {incidentSnapshot.diagnosis.rootCause}
               </div>
               <div className="mt-3 text-xs text-muted-foreground">
-                更新时间：
                 {formatPlatformDateTime(props.incidentAnalysis.snapshot?.generatedAt) ?? '—'}
               </div>
             </div>
@@ -227,7 +226,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-2xl border border-border bg-background px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  因果链
+                  过程
                 </div>
                 <div className="mt-3 space-y-3">
                   {incidentSnapshot.causalChain.slice(0, 4).map((item, index) => (
@@ -264,7 +263,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               <div className="mt-3 space-y-3">
                 {incidentSnapshot.actions.safe.length > 0 && (
                   <div>
-                    <div className="text-sm font-medium text-foreground">安全动作</div>
+                    <div className="text-sm font-medium text-foreground">可直接执行</div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {incidentSnapshot.actions.safe.map((action) => (
                         <Badge key={action.key} variant="outline">
@@ -292,7 +291,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
           </div>
         ) : (
-          renderUnavailableState(props.incidentAnalysis, '暂无故障归因')
+          renderUnavailableState(props.incidentAnalysis, '没有归因')
         )}
       </div>
     </section>

@@ -240,7 +240,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
               {canEdit && (
                 <div className="flex items-center gap-3 pt-2">
                   <Button type="submit" className="rounded-xl" disabled={saving}>
-                    {saving ? '保存中...' : '保存修改'}
+                    {saving ? '保存中...' : '保存'}
                   </Button>
                   {saved && <span className="text-xs text-success">已保存</span>}
                 </div>
@@ -293,7 +293,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             <div className="space-y-3 px-5 py-4">
               {project.environments.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
-                  当前项目还没有环境。
+                  没有环境。
                 </div>
               ) : (
                 project.environments.map((environment) => (

@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -279,9 +278,6 @@ export function ManualReleaseDialog({
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
           <DialogTitle>手动发布</DialogTitle>
-          <DialogDescription>
-            复用已有发布的镜像和元信息，先看预检结果，再决定是否生成新的发布。
-          </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -294,12 +290,7 @@ export function ManualReleaseDialog({
               )}
 
               <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-4 space-y-1">
-                  <div className="text-sm font-semibold text-foreground">发布来源</div>
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    先指定目标环境，再选一个已经有镜像产物的发布作为复制源。
-                  </div>
-                </div>
+                <div className="mb-4 text-sm font-semibold text-foreground">发布来源</div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
@@ -339,7 +330,7 @@ export function ManualReleaseDialog({
                   <Textarea
                     value={summary}
                     onChange={(event) => setSummary(event.target.value)}
-                    placeholder="可选。不填则沿用来源发布摘要。"
+                    placeholder="可留空"
                     className="min-h-[112px] rounded-2xl"
                   />
                 </div>
@@ -355,12 +346,7 @@ export function ManualReleaseDialog({
             <div className="space-y-4">
               <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
                 <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">来源快照</div>
-                    <div className="text-xs leading-5 text-muted-foreground">
-                      这里展示本次要复用的发布内容，方便确认来源是否正确。
-                    </div>
-                  </div>
+                  <div className="text-sm font-semibold text-foreground">来源</div>
                   {selectedArtifacts.length > 0 && (
                     <div className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
                       {selectedArtifacts.length} 个服务
@@ -407,22 +393,17 @@ export function ManualReleaseDialog({
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-sm text-muted-foreground">
-                    先选择一个可复用的发布，右侧会展示来源信息和预检结果。
+                    先选来源发布。
                   </div>
                 )}
               </div>
 
               <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-3 space-y-1">
-                  <div className="text-sm font-semibold text-foreground">发布预检</div>
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    平台会检查环境策略、审批要求和迁移风险，避免错误复制到错误环境。
-                  </div>
-                </div>
+                <div className="mb-3 text-sm font-semibold text-foreground">预检</div>
 
                 {loadingPlan ? (
                   <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
-                    正在加载发布预检...
+                    加载中...
                   </div>
                 ) : planningPanel ? (
                   <div className="space-y-3">
@@ -444,7 +425,7 @@ export function ManualReleaseDialog({
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
-                    选择来源后会自动生成预检结果。
+                    选择来源后生成结果。
                   </div>
                 )}
               </div>

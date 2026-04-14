@@ -77,7 +77,7 @@ export function ReleaseEnvironmentCenter({
                   </div>
                 </>
               ) : (
-                <div className="text-sm font-medium">还没有发布</div>
+                <div className="text-sm font-medium">没有发布</div>
               )}
             </div>
 

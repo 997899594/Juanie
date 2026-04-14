@@ -102,7 +102,7 @@ export default async function HomePage() {
                 <div className="mb-4 rounded-2xl bg-secondary p-3">
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
-                <div className="text-sm font-medium">还没有项目</div>
+                <div className="text-sm font-medium">没有项目</div>
                 <Button asChild className="mt-5 rounded-xl">
                   <Link href="/projects/new">
                     <Plus className="h-3.5 w-3.5" />

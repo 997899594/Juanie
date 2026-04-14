@@ -187,7 +187,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
                 <div className="mt-3 text-[11px] text-muted-foreground">
                   {integration.capabilities.length > 0
                     ? integration.capabilities.join(' · ')
-                    : '暂无能力快照'}
+                    : '未识别能力'}
                 </div>
                 <div className="mt-3 text-xs text-muted-foreground">{integration.summary}</div>
                 <div className="mt-1 text-[11px] text-muted-foreground">

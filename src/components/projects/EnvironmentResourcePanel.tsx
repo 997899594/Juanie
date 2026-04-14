@@ -199,7 +199,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
 
       {diagnostics.recommendations.length > 0 && (
         <div className="rounded-2xl border border-border bg-background px-4 py-4">
-          <div className="text-sm font-medium">治理建议</div>
+          <div className="text-sm font-medium">建议</div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             {diagnostics.recommendations.map((recommendation) => (
               <div
@@ -251,7 +251,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
           <div className="mt-3 text-2xl font-semibold tracking-tight">
             {diagnostics.capacity.estimatedRolloutDeltaMemoryLabel}
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">按当前发布策略估算新增内存请求</div>
+          <div className="mt-1 text-xs text-muted-foreground">预计新增请求</div>
         </div>
         <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -261,7 +261,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
           <div className="mt-3 text-2xl font-semibold tracking-tight">
             {diagnostics.abnormalResources.clusterTerminatingPods.count}
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">卡住的 Terminating Pod</div>
+          <div className="mt-1 text-xs text-muted-foreground">Terminating Pod</div>
         </div>
       </div>
 

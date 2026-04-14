@@ -46,7 +46,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
           <div className="mb-4 rounded-2xl bg-muted p-4">
             <FolderKanban className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="text-lg font-medium">还没有项目</h2>
+          <h2 className="text-lg font-medium">没有项目</h2>
           <Link href="/projects/new" className="mt-5">
             <Button className="rounded-xl">
               <Plus className="h-4 w-4" />

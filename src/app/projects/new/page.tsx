@@ -34,9 +34,8 @@ export default async function NewProjectPage() {
 
         <div className="console-panel flex min-h-72 flex-col items-center justify-center rounded-[20px] px-8 text-center">
           <h2 className="text-lg font-medium">没有可用团队</h2>
-          <p className="mt-2 text-sm text-muted-foreground">先加入团队，才能创建项目。</p>
           <Link href="/teams/new" className="mt-5">
-            <Button className="rounded-xl">先创建团队</Button>
+            <Button className="rounded-xl">创建团队</Button>
           </Link>
         </div>
       </div>

@@ -72,7 +72,7 @@ export function TeamGovernancePanel({ governance }: TeamGovernancePanelProps) {
     <div className="space-y-4">
       <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
         <div className="text-sm font-medium">{governance.primarySummary}</div>
-        <div className="mt-1 text-xs text-muted-foreground">当前角色：{governance.roleLabel}</div>
+        <div className="mt-1 text-xs text-muted-foreground">{governance.roleLabel}</div>
       </div>
       <PlatformSignalChipList chips={governance.signals} />
       <GovernanceCapabilityGrid items={governance.capabilities} />

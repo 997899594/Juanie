@@ -416,7 +416,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
           <div className="mb-4 rounded-2xl bg-muted p-4">
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
-          <h2 className="text-lg font-medium">还没有成员</h2>
+          <h2 className="text-lg font-medium">没有成员</h2>
           <Button className="mt-5 rounded-xl" onClick={() => setIsOpen(true)}>
             <Plus className="h-4 w-4" />
             邀请成员
