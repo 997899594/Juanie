@@ -68,6 +68,32 @@ function buildSchemaRepairReviewBody(input: {
   ].join('\n');
 }
 
+export function resolveSchemaRepairReviewFiles(input: {
+  body: string;
+  fallbackReviewFilePath: string;
+  generatedArtifacts: {
+    files: Record<string, string>;
+    generatedFiles: string[];
+  };
+}): {
+  files: Record<string, string>;
+  generatedFiles: string[];
+} {
+  if (Object.keys(input.generatedArtifacts.files).length > 0) {
+    return {
+      files: input.generatedArtifacts.files,
+      generatedFiles: input.generatedArtifacts.generatedFiles,
+    };
+  }
+
+  return {
+    files: {
+      [input.fallbackReviewFilePath]: input.body,
+    },
+    generatedFiles: [input.fallbackReviewFilePath],
+  };
+}
+
 export async function createSchemaRepairReviewRequest(input: {
   projectId: string;
   planId: string;
@@ -112,7 +138,7 @@ export async function createSchemaRepairReviewRequest(input: {
     sanitizeBranchSegment(plan.database?.name ?? 'database'),
     plan.id.slice(0, 8),
   ].join('/');
-  const filePath = `.juanie/schema-repair/${plan.id}.md`;
+  const fallbackReviewFilePath = `.juanie/schema-repair/${plan.id}.md`;
   const body = buildSchemaRepairReviewBody({
     projectName: project.name,
     databaseName: plan.database?.name ?? 'database',
@@ -174,6 +200,11 @@ export async function createSchemaRepairReviewRequest(input: {
           generatedFiles: [],
           migrationTag: null,
         };
+  const reviewPayload = resolveSchemaRepairReviewFiles({
+    body,
+    fallbackReviewFilePath,
+    generatedArtifacts,
+  });
 
   try {
     await gateway.createBranch(session, {
@@ -186,10 +217,7 @@ export async function createSchemaRepairReviewRequest(input: {
       repoFullName: project.repository.fullName,
       branch: branchName,
       message: `chore: add schema repair plan for ${plan.database?.name ?? 'database'}`,
-      files: {
-        [filePath]: body,
-        ...generatedArtifacts.files,
-      },
+      files: reviewPayload.files,
     });
 
     const review = await gateway.createReviewRequest(session, {
@@ -211,7 +239,7 @@ export async function createSchemaRepairReviewRequest(input: {
         reviewState: review.state,
         reviewStateLabel: review.stateLabel,
         reviewSyncedAt: new Date(),
-        generatedFiles: [filePath, ...generatedArtifacts.generatedFiles],
+        generatedFiles: reviewPayload.generatedFiles,
         errorMessage: null,
         updatedAt: new Date(),
       })
