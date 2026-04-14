@@ -197,6 +197,64 @@ export async function createSchemaRepairAtlasRun(input: {
   });
 
   if (activeRun) {
+    if (activeRun.status === 'queued') {
+      const requeuedAt = new Date();
+
+      await db
+        .update(schemaRepairPlans)
+        .set({
+          atlasExecutionStatus: 'queued',
+          atlasExecutionStartedAt: null,
+          atlasExecutionFinishedAt: null,
+          atlasExecutionLog: null,
+          errorMessage: null,
+          updatedAt: requeuedAt,
+        })
+        .where(eq(schemaRepairPlans.id, plan.id));
+
+      await db
+        .update(schemaRepairAtlasRuns)
+        .set({
+          status: 'queued',
+          errorMessage: null,
+          log: null,
+          finishedAt: null,
+          updatedAt: requeuedAt,
+        })
+        .where(eq(schemaRepairAtlasRuns.id, activeRun.id));
+
+      try {
+        await addSchemaRepairAtlasJob(activeRun.id, input.projectId, input.userId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const failedAt = new Date();
+
+        await db
+          .update(schemaRepairPlans)
+          .set({
+            atlasExecutionStatus: 'failed',
+            atlasExecutionFinishedAt: failedAt,
+            atlasExecutionLog: message,
+            errorMessage: message,
+            updatedAt: failedAt,
+          })
+          .where(eq(schemaRepairPlans.id, plan.id));
+
+        await db
+          .update(schemaRepairAtlasRuns)
+          .set({
+            status: 'failed',
+            log: message,
+            errorMessage: message,
+            finishedAt: failedAt,
+            updatedAt: failedAt,
+          })
+          .where(eq(schemaRepairAtlasRuns.id, activeRun.id));
+
+        throw error;
+      }
+    }
+
     return activeRun;
   }
 
