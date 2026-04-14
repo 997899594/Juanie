@@ -117,10 +117,8 @@ COPY --from=source /app/templates ./templates
 COPY --from=source /app/migrations ./migrations
 COPY --from=migrate-deps /migrate/package.json ./package.json
 COPY --from=migrate-deps /migrate/node_modules ./node_modules
-RUN mkdir -p ./src/lib/releases ./scripts
+RUN mkdir -p ./src/lib/releases
 COPY --from=source /app/src/lib/releases/recap-record.ts ./src/lib/releases/recap-record.ts
-COPY --from=source /app/scripts/db-atlas.ts ./scripts/db-atlas.ts
-COPY --from=source /app/scripts/db-push.ts ./scripts/db-push.ts
 
 RUN mkdir -p /tmp/.cache
 RUN chmod +x ./worker

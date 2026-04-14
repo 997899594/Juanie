@@ -1,6 +1,7 @@
+import { applyControlPlaneMigrations } from '@/lib/db/control-plane-atlas';
 import { executeSchemaRepairAtlasRun } from '@/lib/schema-management/atlas-run';
 
-async function main() {
+async function runSchemaRepairMode(): Promise<void> {
   const atlasRunId = process.env.SCHEMA_REPAIR_ATLAS_RUN_ID;
   const projectId = process.env.SCHEMA_REPAIR_PROJECT_ID;
   const userId = process.env.SCHEMA_REPAIR_USER_ID ?? null;
@@ -14,6 +15,17 @@ async function main() {
     projectId,
     userId,
   });
+}
+
+async function main(): Promise<void> {
+  const mode = process.argv[2];
+
+  if (mode === 'control-plane-apply') {
+    await applyControlPlaneMigrations();
+    return;
+  }
+
+  await runSchemaRepairMode();
 }
 
 main().catch((error) => {

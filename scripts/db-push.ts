@@ -1,10 +1,6 @@
-import { spawn } from 'node:child_process';
+import { applyControlPlaneMigrations } from '../src/lib/db/control-plane-atlas';
 
-const child = spawn('bun', ['scripts/db-atlas.ts', 'apply'], {
-  stdio: 'inherit',
-  env: process.env,
-});
-
-child.on('exit', (code) => {
-  process.exit(code ?? 1);
+applyControlPlaneMigrations().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
 });

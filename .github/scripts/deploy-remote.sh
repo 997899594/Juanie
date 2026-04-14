@@ -84,18 +84,30 @@ spec:
           command: ['sh', '-c', 'until nc -z postgres 5432; do sleep 2; done']
       containers:
         - name: schema-sync
-          image: ${FULL_IMAGE_REPOSITORY}:${WORKER_IMAGE_TAG}
+          image: ${FULL_IMAGE_REPOSITORY}:${SCHEMA_RUNNER_IMAGE_TAG}
           imagePullPolicy: IfNotPresent
-          command: ["bun", "./scripts/db-push.ts"]
+          command: ["./schema-runner", "control-plane-apply"]
+          env:
+            - name: HOME
+              value: /tmp
+            - name: XDG_CACHE_HOME
+              value: /tmp/.cache
           envFrom:
             - configMapRef:
                 name: juanie-config
             - secretRef:
                 name: juanie-secret
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+      volumes:
+        - name: tmp
+          emptyDir: {}
 JOB
 }
 
