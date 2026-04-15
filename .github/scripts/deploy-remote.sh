@@ -7,6 +7,7 @@ RELEASE_NAME="${RELEASE_NAME:-juanie}"
 WEB_DEPLOYMENT="${RELEASE_NAME}-web"
 WORKER_DEPLOYMENT="${RELEASE_NAME}-worker"
 SCHEDULER_DEPLOYMENT="${RELEASE_NAME}-scheduler"
+HELM_VALUES_FILE=""
 
 require_command() {
   local command_name="$1"
@@ -36,6 +37,53 @@ show_failure() {
 
 ensure_namespace() {
   kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+}
+
+build_helm_args() {
+  HELM_VALUES_FILE="${CHART_PATH}/values-prod.yaml"
+  HELM_SHARED_ARGS=(
+    -f "${HELM_VALUES_FILE}"
+    --set "images.web.repository=${FULL_IMAGE_REPOSITORY}"
+    --set "images.web.tag=${WEB_IMAGE_TAG}"
+    --set "images.worker.repository=${FULL_IMAGE_REPOSITORY}"
+    --set "images.worker.tag=${WORKER_IMAGE_TAG}"
+    --set "images.schemaRunner.repository=${FULL_IMAGE_REPOSITORY}"
+    --set "images.schemaRunner.tag=${SCHEMA_RUNNER_IMAGE_TAG}"
+  )
+  HELM_RENDER_ARGS=(
+    --namespace "${NAMESPACE}"
+    "${HELM_SHARED_ARGS[@]}"
+  )
+  HELM_UPGRADE_ARGS=(
+    --namespace "${NAMESPACE}"
+    --create-namespace
+    --reset-values
+    "${HELM_SHARED_ARGS[@]}"
+  )
+}
+
+render_chart_template() {
+  local template_path="$1"
+  helm template "${RELEASE_NAME}" "${CHART_PATH}" \
+    "${HELM_RENDER_ARGS[@]}" \
+    --show-only "${template_path}"
+}
+
+apply_preflight_runtime_config() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+  trap 'rm -rf "${temp_dir}"' RETURN
+
+  echo "Applying target runtime config before schema sync..."
+
+  render_chart_template "templates/configmap.yaml" > "${temp_dir}/configmap.yaml"
+  kubectl apply -f "${temp_dir}/configmap.yaml"
+
+  if render_chart_template "templates/secret.yaml" > "${temp_dir}/secret.yaml" 2>/dev/null; then
+    if [[ -s "${temp_dir}/secret.yaml" ]]; then
+      kubectl apply -f "${temp_dir}/secret.yaml"
+    fi
+  fi
 }
 
 wait_for_rollout() {
@@ -193,24 +241,12 @@ if [[ ! -d "${CHART_PATH}" ]]; then
 fi
 
 ensure_namespace
+build_helm_args
+apply_preflight_runtime_config
 run_schema_sync_job
 
 echo "Deploying Helm release..."
-helm_args=(
-  upgrade --install "${RELEASE_NAME}" "${CHART_PATH}"
-  --namespace "${NAMESPACE}"
-  --create-namespace
-  --reset-values
-  -f "${CHART_PATH}/values-prod.yaml"
-  --set "images.web.repository=${FULL_IMAGE_REPOSITORY}"
-  --set "images.web.tag=${WEB_IMAGE_TAG}"
-  --set "images.worker.repository=${FULL_IMAGE_REPOSITORY}"
-  --set "images.worker.tag=${WORKER_IMAGE_TAG}"
-  --set "images.schemaRunner.repository=${FULL_IMAGE_REPOSITORY}"
-  --set "images.schemaRunner.tag=${SCHEMA_RUNNER_IMAGE_TAG}"
-)
-
-helm "${helm_args[@]}"
+helm upgrade --install "${RELEASE_NAME}" "${CHART_PATH}" "${HELM_UPGRADE_ARGS[@]}"
 
 for deployment in "${WEB_DEPLOYMENT}" "${WORKER_DEPLOYMENT}" "${SCHEDULER_DEPLOYMENT}"; do
   wait_for_rollout "${deployment}"
