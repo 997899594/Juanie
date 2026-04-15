@@ -34,10 +34,10 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
       {releases.map((release) => {
         const riskTone =
           release.riskLabel === '高风险'
-            ? 'border-destructive/15 bg-background text-destructive'
+            ? 'bg-destructive/[0.08] text-destructive'
             : release.riskLabel === '中风险'
-              ? 'border-border bg-secondary/30 text-foreground'
-              : 'border-border bg-background text-muted-foreground';
+              ? 'ui-control-muted text-foreground'
+              : 'ui-control text-muted-foreground';
 
         return (
           <div key={release.id} className="console-panel overflow-hidden">
@@ -65,14 +65,11 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         pulse={release.statusDecoration.pulse}
                         label={release.statusDecoration.label}
                       />
-                      <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
+                      <span className="ui-control rounded-full px-2.5 py-1 text-xs font-medium text-foreground">
                         {release.environment.name}
                       </span>
                       <span
-                        className={cn(
-                          'rounded-full border px-2.5 py-1 text-xs font-medium',
-                          riskTone
-                        )}
+                        className={cn('rounded-full px-2.5 py-1 text-xs font-medium', riskTone)}
                       >
                         {release.riskLabel}
                       </span>
@@ -156,7 +153,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         asChild
                         variant="outline"
                         size="sm"
-                        className="min-w-0 flex-1 rounded-lg sm:flex-none"
+                        className="min-w-0 flex-1 sm:flex-none"
                       >
                         <Link
                           href={`/projects/${projectId}/runtime/logs?env=${release.environment.id}`}
@@ -168,7 +165,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         asChild
                         variant="outline"
                         size="sm"
-                        className="min-w-0 flex-1 rounded-lg sm:flex-none"
+                        className="min-w-0 flex-1 sm:flex-none"
                       >
                         <Link href={`/projects/${projectId}/delivery/${release.id}`}>
                           交付

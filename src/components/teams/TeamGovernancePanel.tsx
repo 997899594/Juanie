@@ -49,7 +49,7 @@ function GovernanceCapabilityGrid(props: {
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {props.items.map((item) => (
-        <div key={item.key} className="console-card bg-secondary/20 px-4 py-3">
+        <div key={item.key} className="ui-control-muted px-4 py-3">
           <div className="flex items-center gap-2">
             <div
               className={
@@ -70,7 +70,7 @@ function GovernanceCapabilityGrid(props: {
 export function TeamGovernancePanel({ governance }: TeamGovernancePanelProps) {
   return (
     <div className="space-y-4">
-      <div className="console-surface rounded-2xl px-4 py-3">
+      <div className="ui-control-muted px-4 py-3">
         <div className="text-sm font-medium">{governance.primarySummary}</div>
         <div className="mt-1 text-xs text-muted-foreground">{governance.roleLabel}</div>
       </div>
@@ -78,7 +78,7 @@ export function TeamGovernancePanel({ governance }: TeamGovernancePanelProps) {
       <GovernanceCapabilityGrid items={governance.capabilities} />
       <GovernanceMatrix title="团队治理" rows={governance.matrix} />
 
-      <div className="console-surface rounded-2xl px-4 py-3">
+      <div className="ui-control-muted px-4 py-3">
         <div className="text-sm font-medium">{governance.platformSummary}</div>
         <div className="mt-1 text-xs text-muted-foreground">项目和环境操作边界</div>
       </div>

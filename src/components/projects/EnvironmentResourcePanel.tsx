@@ -175,9 +175,9 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
   return (
     <div className="space-y-4">
       {(diagnostics.summary || diagnostics.nextActionLabel) && (
-        <div className="console-card px-4 py-4">
+        <div className="ui-control rounded-[22px] px-4 py-4">
           <div className="flex items-start gap-3">
-            <div className="rounded-full bg-background p-2 text-foreground">
+            <div className="ui-control-muted rounded-full p-2 text-foreground">
               <AlertTriangle className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
@@ -198,11 +198,11 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
       )}
 
       {diagnostics.recommendations.length > 0 && (
-        <div className="console-surface px-4 py-4">
+        <div className="ui-control-muted rounded-[22px] px-4 py-4">
           <div className="text-sm font-medium">动作</div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             {diagnostics.recommendations.map((recommendation) => (
-              <div key={recommendation.key} className="console-card px-4 py-3">
+              <div key={recommendation.key} className="ui-control rounded-[18px] px-4 py-3">
                 <div className="text-sm font-medium">{recommendation.label}</div>
                 <div className="mt-1 text-sm text-muted-foreground">{recommendation.summary}</div>
               </div>
@@ -212,7 +212,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
       )}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="console-card px-4 py-4">
+        <div className="ui-control rounded-[22px] px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <ServerCrash className="h-3.5 w-3.5" />
             集群容量
@@ -228,7 +228,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
               : ''}
           </div>
         </div>
-        <div className="console-card px-4 py-4">
+        <div className="ui-control rounded-[22px] px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <Database className="h-3.5 w-3.5" />
             平台占用
@@ -240,7 +240,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
             环境请求 {diagnostics.capacity.environmentRequestedMemoryLabel}
           </div>
         </div>
-        <div className="console-card px-4 py-4">
+        <div className="ui-control rounded-[22px] px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <Boxes className="h-3.5 w-3.5" />
             放量增量
@@ -250,7 +250,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
           </div>
           <div className="mt-1 text-xs text-muted-foreground">预计新增请求</div>
         </div>
-        <div className="console-card px-4 py-4">
+        <div className="ui-control rounded-[22px] px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <Clock3 className="h-3.5 w-3.5" />
             异常残留
@@ -263,7 +263,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="console-surface px-4 py-4">
+        <div className="ui-control-muted rounded-[22px] px-4 py-4">
           <div className="text-sm font-medium">异常资源</div>
           <div className="mt-3 space-y-3">
             {[
@@ -274,7 +274,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
               diagnostics.abnormalResources.clusterTerminatingPods,
               diagnostics.abnormalResources.clusterLongPendingPods,
             ].map((bucket) => (
-              <div key={bucket.label} className="console-card px-4 py-3">
+              <div key={bucket.label} className="ui-control rounded-[18px] px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium">{bucket.label}</div>
                   <div className="text-xs text-muted-foreground">{bucket.count}</div>
@@ -290,14 +290,16 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
           </div>
         </div>
 
-        <div className="console-surface px-4 py-4">
+        <div className="ui-control-muted rounded-[22px] px-4 py-4">
           <div className="text-sm font-medium">基础设施事件线</div>
           <div className="mt-4 space-y-3">
             {diagnostics.incidents.length === 0 ? (
-              <div className="console-card px-4 py-8 text-sm text-muted-foreground">暂无异常</div>
+              <div className="ui-control rounded-[18px] px-4 py-8 text-sm text-muted-foreground">
+                暂无异常
+              </div>
             ) : (
               diagnostics.incidents.map((incident) => (
-                <div key={incident.key} className="console-card px-4 py-3">
+                <div key={incident.key} className="ui-control rounded-[18px] px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className={cn('text-sm font-medium', toneClassName(incident.tone))}>
                       {incident.title}
@@ -434,12 +436,12 @@ export function EnvironmentResourcePanel({
   };
 
   return (
-    <div className="console-surface rounded-2xl px-4 py-4">
+    <div className="ui-control-muted rounded-2xl px-4 py-4">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium">容量与异常</div>
         </div>
-        <Button asChild variant="outline" size="sm" className="rounded-xl">
+        <Button asChild variant="outline" size="sm">
           <Link href={`/projects/${projectId}/runtime/logs?env=${environmentId}`}>
             查看环境日志
           </Link>
@@ -451,7 +453,7 @@ export function EnvironmentResourcePanel({
           value={resourceType}
           onValueChange={(value) => setResourceType(value as ResourceType)}
         >
-          <SelectTrigger className="w-[220px] rounded-xl">
+          <SelectTrigger className="w-[220px]">
             <SelectValue placeholder="资源类型" />
           </SelectTrigger>
           <SelectContent>
@@ -469,7 +471,7 @@ export function EnvironmentResourcePanel({
           <Button
             variant="outline"
             size="sm"
-            className="rounded-xl"
+            className=""
             disabled={
               !canManage ||
               remediationAction !== null ||
@@ -483,7 +485,7 @@ export function EnvironmentResourcePanel({
           <Button
             variant="outline"
             size="sm"
-            className="rounded-xl"
+            className=""
             disabled={!canManage || remediationAction !== null}
             title={canManage ? undefined : (manageSummary ?? undefined)}
             onClick={() => runRemediation('restart_deployments')}
@@ -494,13 +496,13 @@ export function EnvironmentResourcePanel({
       )}
 
       {remediationFeedback && (
-        <div className="console-card mb-4 px-4 py-3 text-sm text-foreground">
+        <div className="ui-control mb-4 rounded-[18px] px-4 py-3 text-sm text-foreground">
           {remediationFeedback}
         </div>
       )}
 
       {resourceError ? (
-        <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+        <div className="rounded-2xl bg-destructive/[0.08] px-4 py-3 text-sm text-destructive">
           {resourceError}
         </div>
       ) : loading ? (
@@ -512,16 +514,13 @@ export function EnvironmentResourcePanel({
       ) : resourceType === 'diagnostics' ? (
         <DiagnosticsOverview diagnostics={diagnostics} />
       ) : resources.length === 0 ? (
-        <div className="console-card flex min-h-40 items-center justify-center text-sm text-muted-foreground">
+        <div className="ui-control flex min-h-40 items-center justify-center rounded-[22px] text-sm text-muted-foreground">
           没有可用的 {resourceTypeLabel[resourceType]}
         </div>
       ) : resourceType === 'pods' ? (
         <div className="space-y-2">
           {(resources as Pod[]).map((pod) => (
-            <div
-              key={pod.metadata.name}
-              className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
-            >
+            <div key={pod.metadata.name} className="ui-control rounded-2xl px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
                 <StatusIndicator status={podPhaseStatus(pod.status.phase)} />
                 <span className="truncate font-mono text-sm">{pod.metadata.name}</span>
@@ -538,7 +537,7 @@ export function EnvironmentResourcePanel({
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-xl"
+                className=""
                 onClick={() => setSelectedPod(pod.metadata.name)}
               >
                 Pod 日志
@@ -549,10 +548,7 @@ export function EnvironmentResourcePanel({
       ) : resourceType === 'services' ? (
         <div className="space-y-2">
           {(resources as Service[]).map((service) => (
-            <div
-              key={service.metadata.name}
-              className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
-            >
+            <div key={service.metadata.name} className="ui-control rounded-2xl px-4 py-3">
               <span className="font-mono text-sm">{service.metadata.name}</span>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span>{service.spec.type}</span>
@@ -566,10 +562,7 @@ export function EnvironmentResourcePanel({
       ) : resourceType === 'deployments' ? (
         <div className="space-y-2">
           {(resources as K8sDeployment[]).map((deployment) => (
-            <div
-              key={deployment.metadata.name}
-              className="flex items-center justify-between rounded-2xl bg-secondary/20 px-4 py-3"
-            >
+            <div key={deployment.metadata.name} className="ui-control rounded-2xl px-4 py-3">
               <span className="font-mono text-sm">{deployment.metadata.name}</span>
               <div className="flex items-center gap-2">
                 <StatusIndicator
@@ -592,7 +585,7 @@ export function EnvironmentResourcePanel({
           {(resources as K8sEvent[]).map((event, index) => (
             <div
               key={event.metadata?.uid ?? `${event.reason ?? 'event'}-${index}`}
-              className="rounded-2xl bg-secondary/20 px-4 py-3"
+              className="ui-control rounded-2xl px-4 py-3"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-sm font-medium">{event.reason ?? 'Event'}</div>
@@ -616,23 +609,18 @@ export function EnvironmentResourcePanel({
       )}
 
       {selectedPod && (
-        <section className="console-surface mt-4 overflow-hidden rounded-2xl">
+        <section className="ui-control-muted mt-4 overflow-hidden rounded-2xl">
           <div className="flex items-center justify-between px-4 py-3">
             <div>
               <div className="text-sm font-medium">Pod 原始日志 · {selectedPod}</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <Button asChild variant="outline" size="sm">
                 <Link href={`/projects/${projectId}/runtime/logs?env=${environmentId}`}>
                   环境日志
                 </Link>
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="rounded-xl"
-                onClick={() => setSelectedPod('')}
-              >
+              <Button variant="ghost" size="sm" className="" onClick={() => setSelectedPod('')}>
                 关闭
               </Button>
             </div>

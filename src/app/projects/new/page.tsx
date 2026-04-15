@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation';
 import { CreateProjectForm } from '@/components/projects/create-project-form';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalBlock } from '@/components/ui/platform-signals';
 import { auth } from '@/lib/auth';
 import { getCreateProjectPageData } from '@/lib/projects/create-service';
 
@@ -54,23 +53,6 @@ export default async function NewProjectPage() {
             </Link>
           </Button>
         }
-      />
-
-      <div className="grid gap-3 md:grid-cols-3">
-        {pageData.stats.map((stat) => (
-          <div key={stat.label} className="console-stat px-5 py-4">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              {stat.label}
-            </div>
-            <div className="mt-3 truncate text-sm font-semibold">{stat.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <PlatformSignalBlock
-        chips={pageData.platformSignals.chips}
-        summary={pageData.platformSignals.primarySummary}
-        nextActionLabel={pageData.platformSignals.nextActionLabel}
       />
 
       <div className="console-panel px-5 py-5">

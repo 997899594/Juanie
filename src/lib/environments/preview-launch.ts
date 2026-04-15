@@ -7,6 +7,7 @@ import {
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 import { createProjectRelease, type ReleaseServiceInput } from '@/lib/releases';
+import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 
 interface PreviewLaunchProject {
   id: string;
@@ -149,6 +150,8 @@ export async function launchPreviewEnvironmentFromRef(input: {
       teamId: true,
     },
     with: {
+      environments: true,
+      deliveryRules: true,
       repository: {
         columns: {
           id: true,
@@ -193,12 +196,22 @@ export async function launchPreviewEnvironmentFromRef(input: {
     throw new Error('无法解析该分支或 PR 的最新提交，请确认它在远端仓库中存在');
   }
 
+  const previewRoute = resolveEnvironmentRoute({
+    ref: input.ref,
+    environments: project.environments,
+    deliveryRules: project.deliveryRules,
+  });
+
   const environment = await ensurePreviewEnvironmentForRef({
     projectId: launchProject.id,
     projectSlug: launchProject.slug,
     ref: input.ref,
     ttlHours: input.ttlHours,
     databaseStrategy: input.databaseStrategy,
+    baseEnvironmentId:
+      previewRoute.sourceEvent.sourceType === 'pull_request'
+        ? (previewRoute.rule?.environmentId ?? undefined)
+        : undefined,
   });
 
   if (!environment) {

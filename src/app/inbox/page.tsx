@@ -47,7 +47,11 @@ export default async function InboxPage({
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader title="待处理" />
 
-      <div className="console-surface rounded-[20px] px-4 py-3">
+      <div className="ui-control-muted flex flex-wrap items-center gap-2 px-4 py-3">
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          概览
+        </span>
+        <span className="text-muted-foreground/50">/</span>
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           {stats.map((stat) => (
             <span key={stat.label}>
@@ -57,7 +61,7 @@ export default async function InboxPage({
         </div>
       </div>
 
-      <div className="console-panel px-4 py-4">
+      <div className="ui-control px-4 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <div className="mr-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             筛选
@@ -88,7 +92,7 @@ export default async function InboxPage({
             const statusConfig = getMigrationStatusDecoration(run.status);
 
             return (
-              <div key={run.id} className="console-panel overflow-hidden">
+              <div key={run.id} className="ui-floating overflow-hidden">
                 <div className="flex flex-col gap-3 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -97,7 +101,7 @@ export default async function InboxPage({
                         pulse={statusConfig.pulse}
                         label={formatApprovalStatusLabel(run.status)}
                       />
-                      <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
+                      <span className="ui-control rounded-full px-2.5 py-1 text-xs font-medium text-foreground">
                         {run.project.name}
                       </span>
                       <span className="text-[11px] text-muted-foreground">
@@ -127,7 +131,7 @@ export default async function InboxPage({
                     </div>
 
                     {run.errorMessage && (
-                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                      <div className="ui-control rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {run.errorMessage}
                       </div>
                     )}

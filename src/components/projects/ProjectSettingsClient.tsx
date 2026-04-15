@@ -159,39 +159,29 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader title="设置" />
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-3">
         {initialData.overview.stats.map((stat) => (
-          <div key={stat.label} className="console-stat px-5 py-4">
+          <div key={stat.label} className="ui-control-muted rounded-[20px] px-4 py-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
-            <div className="mt-3 truncate text-sm font-semibold">{stat.value}</div>
+            <div className="mt-2 truncate text-sm font-semibold">{stat.value}</div>
           </div>
         ))}
       </div>
 
       <Tabs defaultValue="general" className="space-y-4">
-        <TabsList className="h-11 rounded-[18px] bg-secondary/70 p-1">
-          <TabsTrigger value="general" className="rounded-xl px-4">
-            常规
-          </TabsTrigger>
-          <TabsTrigger value="git" className="rounded-xl px-4">
-            Git
-          </TabsTrigger>
-          <TabsTrigger value="environments" className="rounded-xl px-4">
-            环境
-          </TabsTrigger>
-          <TabsTrigger value="governance" className="rounded-xl px-4">
-            治理
-          </TabsTrigger>
-          <TabsTrigger value="danger" className="rounded-xl px-4">
-            危险操作
-          </TabsTrigger>
+        <TabsList className="h-11">
+          <TabsTrigger value="general">常规</TabsTrigger>
+          <TabsTrigger value="git">Git</TabsTrigger>
+          <TabsTrigger value="environments">环境</TabsTrigger>
+          <TabsTrigger value="governance">治理</TabsTrigger>
+          <TabsTrigger value="danger">危险操作</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
           <div className="console-panel overflow-hidden">
-            <div className="px-5 py-4">
+            <div className="console-divider-bottom px-5 py-4">
               <div className="text-sm font-semibold">常规</div>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
@@ -201,7 +191,6 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="h-11 rounded-xl"
                   disabled={!canEdit}
                 />
               </div>
@@ -212,19 +201,18 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="h-11 rounded-xl"
                   disabled={!canEdit}
                 />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="console-card px-4 py-3">
+                <div className="ui-control-muted rounded-[18px] px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     团队
                   </div>
                   <div className="mt-2 text-sm font-medium">{project.teamName}</div>
                 </div>
-                <div className="console-card px-4 py-3">
+                <div className="ui-control-muted rounded-[18px] px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     状态
                   </div>
@@ -234,7 +222,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
               {canEdit && (
                 <div className="flex items-center gap-3 pt-2">
-                  <Button type="submit" className="rounded-xl" disabled={saving}>
+                  <Button type="submit" disabled={saving}>
                     {saving ? '保存中...' : '保存'}
                   </Button>
                   {saved && <span className="text-xs text-success">已保存</span>}
@@ -246,13 +234,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="git">
           <div className="console-panel overflow-hidden">
-            <div className="px-5 py-4">
+            <div className="console-divider-bottom px-5 py-4">
               <div className="text-sm font-semibold">代码仓库</div>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
               <div className="space-y-2">
                 <Label htmlFor="gitRepository">仓库地址</Label>
-                <div className="rounded-xl bg-secondary/30 px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
+                <div className="ui-control-muted rounded-[18px] px-4 py-3 text-sm text-muted-foreground">
                   {project.repositoryFullName ?? '未绑定仓库'}
                 </div>
               </div>
@@ -263,14 +251,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                   id="productionBranch"
                   value={formData.productionBranch}
                   onChange={(e) => setFormData({ ...formData, productionBranch: e.target.value })}
-                  className="h-11 rounded-xl"
                   disabled={!canEdit}
                 />
               </div>
 
               {canEdit && (
                 <div className="flex items-center gap-3 pt-2">
-                  <Button type="submit" className="rounded-xl" disabled={saving}>
+                  <Button type="submit" disabled={saving}>
                     {saving ? '保存中...' : '保存修改'}
                   </Button>
                   {saved && <span className="text-xs text-success">已保存</span>}
@@ -282,7 +269,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="environments">
           <div className="console-panel overflow-hidden">
-            <div className="px-5 py-4">
+            <div className="console-divider-bottom px-5 py-4">
               <div className="text-sm font-semibold">环境策略</div>
             </div>
             <div className="space-y-3 px-5 py-4">
@@ -292,21 +279,18 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                 </div>
               ) : (
                 project.environments.map((environment) => (
-                  <div
-                    key={environment.id}
-                    className="rounded-2xl bg-secondary/20 px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_24px_rgba(55,53,47,0.03)]"
-                  >
+                  <div key={environment.id} className="ui-control-muted rounded-[22px] px-4 py-4">
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-semibold">{environment.name}</div>
                           {environment.isProduction && (
-                            <span className="rounded-full bg-background/90 px-2.5 py-1 text-[11px] text-foreground shadow-[0_1px_2px_rgba(55,53,47,0.03)]">
+                            <span className="ui-control rounded-full px-2.5 py-1 text-[11px] text-foreground">
                               生产
                             </span>
                           )}
                           {environment.isPreview && (
-                            <span className="rounded-full bg-background/90 px-2.5 py-1 text-[11px] text-foreground shadow-[0_1px_2px_rgba(55,53,47,0.03)]">
+                            <span className="ui-control rounded-full px-2.5 py-1 text-[11px] text-foreground">
                               预览
                             </span>
                           )}
@@ -334,7 +318,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                             !environment.actions.canConfigureStrategy
                           }
                         >
-                          <SelectTrigger className="h-11 rounded-xl bg-background">
+                          <SelectTrigger>
                             <SelectValue placeholder="选择发布策略" />
                           </SelectTrigger>
                           <SelectContent>
@@ -356,10 +340,10 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="governance">
           <div className="console-panel overflow-hidden">
-            <div className="px-5 py-4">
+            <div className="console-divider-bottom px-5 py-4">
               <div className="text-sm font-semibold">治理</div>
             </div>
-            <div className="px-5 py-4">
+            <div className="console-divider-bottom px-5 py-4">
               <ProjectGovernancePanel governance={project.governance} />
             </div>
           </div>
@@ -372,14 +356,14 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             </div>
             <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
-                <div className="flex flex-col gap-4 rounded-[24px] bg-destructive/[0.05] p-4 shadow-[0_1px_0_rgba(255,255,255,0.5)_inset,0_12px_28px_rgba(127,29,29,0.06)] sm:p-5 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-4 rounded-[24px] bg-destructive/[0.05] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
                   <div className="space-y-1">
                     <div className="text-sm font-medium text-foreground">删除项目</div>
                     <div className="text-sm text-muted-foreground">该操作无法撤销。</div>
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" className="w-full rounded-xl md:w-auto">
+                      <Button variant="destructive" className="w-full md:w-auto">
                         <Trash2 className="h-4 w-4" />
                         删除
                       </Button>
@@ -392,16 +376,14 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                           <span className="font-medium text-foreground">{project.name}</span>？
                         </AlertDialogDescription>
                       </AlertDialogHeader>
-                      <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                      <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                         项目、环境和发布记录会一起删除。
                       </div>
                       <AlertDialogFooter>
-                        <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
-                          取消
-                        </AlertDialogCancel>
+                        <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={handleDelete}
-                          className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                          className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                         >
                           删除
                         </AlertDialogAction>

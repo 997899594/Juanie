@@ -61,7 +61,7 @@ export function ReleaseTopSummarySection({ release }: { release: ReleasePageData
         )}
       </div>
       {release.stats.map((stat) => (
-        <div key={stat.label} className="console-panel px-5 py-4">
+        <div key={stat.label} className="ui-control-muted rounded-[20px] px-5 py-4">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {stat.label}
           </div>
@@ -87,7 +87,7 @@ export function ReleaseNarrativeSection({
     <div className="console-panel p-5">
       <div className="mb-4 text-sm font-semibold">摘要</div>
       <div className="space-y-4">
-        <div className="console-card rounded-2xl px-4 py-4">
+        <div className="ui-control rounded-2xl px-4 py-4">
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             阻塞
           </div>
@@ -101,7 +101,7 @@ export function ReleaseNarrativeSection({
           )}
         </div>
         {release.infrastructureDiagnostics && (
-          <div className="console-surface rounded-2xl px-4 py-4">
+          <div className="ui-control-muted rounded-2xl px-4 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               容量
             </div>
@@ -169,13 +169,13 @@ export function ReleaseNarrativeSection({
           </div>
         )}
         <div className="flex flex-wrap gap-2 pt-1">
-          <Button asChild size="sm" className="rounded-xl">
+          <Button asChild size="sm">
             <Link href={environmentLogsHref}>日志</Link>
           </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <Button asChild variant="outline" size="sm">
             <Link href={environmentDetailHref}>环境</Link>
           </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <Button asChild variant="outline" size="sm">
             <Link href={releasesHref}>返回</Link>
           </Button>
         </div>
@@ -198,10 +198,10 @@ export function ReleaseTimelineSection({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm font-semibold">时间线</div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <Button asChild variant="outline" size="sm">
             <Link href={environmentLogsHref}>日志</Link>
           </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
+          <Button asChild variant="outline" size="sm">
             <Link href={environmentDiagnosticsHref}>诊断</Link>
           </Button>
         </div>
@@ -262,7 +262,7 @@ export function ReleaseDiffSection({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm font-semibold">变更</div>
         {previousReleaseLink ? (
-          <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
+          <Button asChild variant="outline" size="sm" className="h-8 px-3">
             <Link href={`/projects/${projectId}/delivery/${previousReleaseLink.id}`}>
               对比上一版：{previousReleaseLink.title}
             </Link>
@@ -283,14 +283,14 @@ export function ReleaseDiffSection({
             )}
           </div>
           {release.diff.changedArtifacts.length === 0 ? (
-            <div className="console-surface rounded-2xl px-4 py-6 text-sm text-muted-foreground">
+            <div className="ui-control-muted rounded-2xl px-4 py-6 text-sm text-muted-foreground">
               没有镜像变化。
             </div>
           ) : (
             release.diff.changedArtifacts.map((item) => (
               <div
                 key={`${item.serviceId}:${item.change}`}
-                className="console-card bg-secondary/20 px-4 py-3"
+                className="ui-control rounded-2xl px-4 py-3"
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <div className="text-sm font-medium">{item.serviceName}</div>
@@ -322,12 +322,12 @@ export function ReleaseDiffSection({
             )}
           </div>
           {release.diff.changedMigrations.length === 0 ? (
-            <div className="console-surface rounded-2xl px-4 py-6 text-sm text-muted-foreground">
+            <div className="ui-control-muted rounded-2xl px-4 py-6 text-sm text-muted-foreground">
               没有迁移变化。
             </div>
           ) : (
             release.diff.changedMigrations.map((item) => (
-              <div key={item.key} className="console-card bg-secondary/20 px-4 py-3">
+              <div key={item.key} className="ui-control rounded-2xl px-4 py-3">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <div className="text-sm font-medium">{item.label}</div>
                   <Badge variant="secondary">{item.change === 'added' ? '新增' : '移除'}</Badge>
@@ -344,13 +344,13 @@ export function ReleaseDiffSection({
               真实环境差异
             </div>
             {runtimeMigrationDiffItems.length === 0 ? (
-              <div className="console-surface rounded-2xl px-4 py-4 text-sm text-muted-foreground">
+              <div className="ui-control-muted rounded-2xl px-4 py-4 text-sm text-muted-foreground">
                 没有运行差异。
               </div>
             ) : (
               <div className="space-y-2">
                 {runtimeMigrationDiffItems.map((item) => (
-                  <div key={item.runId} className="console-surface rounded-2xl px-4 py-3">
+                  <div key={item.runId} className="ui-control rounded-2xl px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-medium">
                         {item.serviceName} · {item.databaseName}
@@ -655,14 +655,14 @@ export function ReleaseMobileActions({
 }) {
   return (
     <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-      <div className="flex items-center gap-2 rounded-[24px] bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
-        <Button asChild size="sm" className="min-w-0 flex-1 rounded-xl">
+      <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
+        <Button asChild size="sm" className="min-w-0 flex-1">
           <Link href={environmentLogsHref}>日志</Link>
         </Button>
-        <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
+        <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
           <Link href={environmentDetailHref}>环境</Link>
         </Button>
-        <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
+        <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
           <Link href={releasesHref}>发布中心</Link>
         </Button>
       </div>

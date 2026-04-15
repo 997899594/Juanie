@@ -80,12 +80,12 @@ export function ReleasePromoteDialog({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
             <div className="space-y-4">
-              <div className="console-card p-4 sm:p-5">
+              <div className="ui-control p-4 sm:p-5">
                 <div className="text-sm font-semibold text-foreground">来源</div>
 
                 {promotePlan?.sourceRelease ? (
                   <div className="mt-4 space-y-3 text-sm">
-                    <div className="console-surface rounded-2xl px-4 py-3">
+                    <div className="ui-control-muted px-4 py-3">
                       <div className="text-xs text-muted-foreground">来源发布</div>
                       <div className="mt-1 text-foreground">
                         {promotePlan.sourceRelease.summary ??
@@ -99,7 +99,7 @@ export function ReleasePromoteDialog({
                     </div>
                   </div>
                 ) : (
-                  <div className="console-surface mt-4 rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                  <div className="ui-control-muted mt-4 px-4 py-8 text-sm text-muted-foreground">
                     没有可用版本。
                   </div>
                 )}
@@ -107,7 +107,7 @@ export function ReleasePromoteDialog({
             </div>
 
             <div className="space-y-4">
-              <div className="console-surface p-4 sm:p-5">
+              <div className="ui-control-muted p-4 sm:p-5">
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {promotePanel ? (
@@ -119,7 +119,7 @@ export function ReleasePromoteDialog({
                     />
 
                     {promoteAI?.summary && (
-                      <div className="console-card rounded-2xl px-4 py-3">
+                      <div className="ui-control px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           {promoteAI.strategy && (
                             <Badge variant="outline">{getStrategyLabel(promoteAI.strategy)}</Badge>
@@ -151,13 +151,13 @@ export function ReleasePromoteDialog({
                     )}
 
                     {promotePanel.blockingReason && (
-                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                      <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {promotePanel.blockingReason}
                       </div>
                     )}
 
                     {!promoteAI?.summary && promoteAI?.errorMessage && (
-                      <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                      <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
                         {promoteAI.errorMessage}
                       </div>
                     )}
@@ -167,7 +167,7 @@ export function ReleasePromoteDialog({
                     )}
 
                     {promoteAI?.checks.length ? (
-                      <div className="console-surface space-y-2 rounded-2xl px-4 py-3">
+                      <div className="ui-control-muted space-y-2 px-4 py-3">
                         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           检查
                         </div>
@@ -183,7 +183,7 @@ export function ReleasePromoteDialog({
                     ) : null}
                   </div>
                 ) : (
-                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">
                     加载中...
                   </div>
                 )}

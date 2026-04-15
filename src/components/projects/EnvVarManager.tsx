@@ -191,7 +191,7 @@ function EnvVarDialog({
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
             <div className="space-y-4">
-              <div className="console-surface p-4 sm:p-5">
+              <div className="ui-control-muted p-4 sm:p-5">
                 <div className="space-y-1.5">
                   <Label htmlFor="env-key">变量名</Label>
                   <Input
@@ -204,7 +204,7 @@ function EnvVarDialog({
                         key: e.target.value.toUpperCase().replace(/\s/g, '_'),
                       }))
                     }
-                    className="h-11 rounded-xl font-mono"
+                    className="font-mono"
                     autoComplete="off"
                     autoFocus
                     disabled={disabled}
@@ -225,7 +225,7 @@ function EnvVarDialog({
                       placeholder={isEdit ? '输入新值' : '输入值'}
                       value={form.value}
                       onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-                      className="h-11 rounded-xl pr-9 font-mono"
+                      className="pr-9 font-mono"
                       autoComplete="off"
                       disabled={disabled}
                     />
@@ -243,7 +243,7 @@ function EnvVarDialog({
                 </div>
               </div>
 
-              <div className="console-card flex items-center gap-3 rounded-[24px] px-4 py-4">
+              <div className="ui-control flex items-center gap-3 rounded-[24px] px-4 py-4">
                 <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">密文变量</p>
@@ -256,13 +256,13 @@ function EnvVarDialog({
               </div>
 
               {disabledSummary && (
-                <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
               {error && (
-                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                <div className="rounded-2xl bg-destructive/[0.08] px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
@@ -273,17 +273,13 @@ function EnvVarDialog({
             <Button
               type="button"
               variant="outline"
-              className="w-full rounded-xl sm:w-auto"
+              className="w-full sm:w-auto"
               onClick={() => setOpen(false)}
               disabled={saving}
             >
               取消
             </Button>
-            <Button
-              type="submit"
-              className="w-full rounded-xl sm:w-auto"
-              disabled={saving || disabled}
-            >
+            <Button type="submit" className="w-full sm:w-auto" disabled={saving || disabled}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? '更新变量' : '添加变量'}
             </Button>
@@ -340,7 +336,7 @@ function EnvVarRow({
           {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <code className="truncate text-sm font-mono">{envVar.key}</code>
           {envVar.isSecret && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
+            <span className="ui-control-muted inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
               <KeyRound className="h-3 w-3" />
               密文
             </span>
@@ -371,7 +367,7 @@ function EnvVarRow({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-xl"
+                className="h-8 w-8"
                 disabled={!canManage}
                 title={!canManage ? (disabledSummary ?? undefined) : undefined}
               >
@@ -385,7 +381,7 @@ function EnvVarRow({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-xl text-destructive hover:text-destructive"
+                className="h-8 w-8 text-destructive hover:text-destructive"
                 disabled={!canManage}
                 title={!canManage ? (disabledSummary ?? undefined) : undefined}
               >
@@ -405,10 +401,10 @@ function EnvVarRow({
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="w-full rounded-xl sm:w-auto">取消</AlertDialogCancel>
+                <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
-                  className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                  className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                 >
                   删除
                 </AlertDialogAction>
@@ -429,7 +425,7 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
           {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <code className="truncate text-sm font-mono">{envVar.key}</code>
           {envVar.isSecret && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
+            <span className="ui-control-muted inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
               <KeyRound className="h-3 w-3" />
               密文
             </span>
@@ -452,7 +448,7 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
           {(badges ?? []).map((badge) => (
             <span
               key={`${envVar.id}-${badge}`}
-              className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]"
+              className="ui-control-muted inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
             >
               {badge}
             </span>
@@ -574,7 +570,7 @@ export function EnvVarManager({
             <Button
               size="sm"
               variant="outline"
-              className="rounded-xl"
+              className=""
               disabled={!canManage}
               title={!canManage ? (disabledSummary ?? undefined) : undefined}
             >
@@ -590,16 +586,10 @@ export function EnvVarManager({
       )}
 
       <Tabs defaultValue="direct" className="space-y-4">
-        <TabsList className="h-11 rounded-[18px] bg-secondary/70 p-1">
-          <TabsTrigger value="direct" className="rounded-xl px-4">
-            直配变量
-          </TabsTrigger>
-          <TabsTrigger value="effective" className="rounded-xl px-4">
-            实际生效
-          </TabsTrigger>
-          <TabsTrigger value="service" className="rounded-xl px-4">
-            服务覆盖
-          </TabsTrigger>
+        <TabsList className="h-11">
+          <TabsTrigger value="direct">直配变量</TabsTrigger>
+          <TabsTrigger value="effective">实际生效</TabsTrigger>
+          <TabsTrigger value="service">服务覆盖</TabsTrigger>
         </TabsList>
 
         <TabsContent value="direct">
@@ -639,7 +629,7 @@ export function EnvVarManager({
                     <Button
                       size="sm"
                       variant="outline"
-                      className="mt-1 rounded-xl"
+                      className="mt-1"
                       disabled={!canManage}
                       title={!canManage ? (disabledSummary ?? undefined) : undefined}
                     >
@@ -702,17 +692,14 @@ export function EnvVarManager({
         </TabsContent>
 
         <TabsContent value="service">
-          <div className="console-card mb-3 rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+          <div className="ui-control-muted mb-3 rounded-2xl px-4 py-3 text-sm text-muted-foreground">
             这些变量按服务生效，会在对应容器启动时追加注入；如果键名相同，会覆盖环境级同名变量。
           </div>
 
           {loading ? (
             <div className="space-y-3">
               {[1, 2].map((item) => (
-                <div
-                  key={item}
-                  className="h-24 animate-pulse rounded-[20px] bg-muted shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]"
-                />
+                <div key={item} className="h-24 animate-pulse rounded-[20px] bg-muted" />
               ))}
             </div>
           ) : (

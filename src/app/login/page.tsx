@@ -15,24 +15,20 @@ export default async function LoginPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto grid min-h-screen max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="console-panel flex items-center justify-center overflow-hidden px-8 py-10">
+        <div className="ui-floating flex items-center justify-center overflow-hidden px-8 py-10">
           <div className="w-full max-w-sm space-y-8">
             <div className="space-y-4">
               <BrandLockup href="/" size={52} priority />
               <div className="space-y-1">
-                <div className="console-eyebrow">Release Console</div>
                 <h1 className="pt-2 text-3xl font-semibold tracking-tight">登录</h1>
               </div>
             </div>
 
-            <div className="console-surface rounded-[24px] p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                控制台
-              </div>
-              <div className="mt-3 grid gap-2">
-                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">项目</div>
-                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">交付</div>
-                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">运行</div>
+            <div className="ui-control-muted p-4">
+              <div className="grid gap-2">
+                <div className="ui-control px-3 py-3 text-sm">项目</div>
+                <div className="ui-control px-3 py-3 text-sm">交付</div>
+                <div className="ui-control px-3 py-3 text-sm">运行</div>
               </div>
             </div>
 
@@ -42,7 +38,6 @@ export default async function LoginPage() {
                   <Button type="submit" className="h-11 w-full rounded-xl">
                     以开发用户登录
                   </Button>
-                  <p className="mt-3 text-center text-xs text-muted-foreground">当前为开发模式</p>
                 </form>
               ) : (
                 <>
@@ -71,14 +66,10 @@ export default async function LoginPage() {
                 </>
               )}
             </div>
-
-            <div className="text-xs text-muted-foreground">
-              继续即表示你同意服务条款与隐私政策。
-            </div>
           </div>
         </div>
 
-        <div className="hidden console-panel overflow-hidden lg:flex lg:flex-col lg:justify-between">
+        <div className="hidden ui-floating overflow-hidden lg:flex lg:flex-col lg:justify-between">
           <div className="console-grid console-divider-bottom px-8 py-8">
             <BrandLockup
               href="/"
@@ -88,31 +79,28 @@ export default async function LoginPage() {
               nameClassName="text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
             />
             <div className="mt-4 max-w-xl text-5xl font-semibold leading-tight tracking-tight">
-              统一交付台
+              清晰的交付主链
             </div>
           </div>
 
           <div className="grid gap-3 px-8 py-8">
-            <div className="console-surface rounded-[18px] px-5 py-4">
+            <div className="ui-control-muted px-5 py-4">
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 发布
               </div>
               <div className="mt-3 text-3xl font-semibold tracking-tight">1 条主链</div>
-              <div className="mt-1 text-sm text-muted-foreground">迁移、部署、审批同屏</div>
             </div>
-            <div className="console-surface rounded-[18px] px-5 py-4">
+            <div className="ui-control-muted px-5 py-4">
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 可观测
               </div>
               <div className="mt-3 text-3xl font-semibold tracking-tight">实时</div>
-              <div className="mt-1 text-sm text-muted-foreground">日志、状态、待处理同步</div>
             </div>
-            <div className="console-surface rounded-[18px] px-5 py-4">
+            <div className="ui-control-muted px-5 py-4">
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 团队
               </div>
               <div className="mt-3 text-3xl font-semibold tracking-tight">共享</div>
-              <div className="mt-1 text-sm text-muted-foreground">项目、成员、环境同视角</div>
             </div>
           </div>
         </div>

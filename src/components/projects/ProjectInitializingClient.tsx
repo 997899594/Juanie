@@ -138,19 +138,19 @@ export function ProjectInitializingClient({
       />
 
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="console-panel px-5 py-4">
+        <div className="ui-control px-5 py-4">
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">进度</div>
           <div className="mt-3 text-3xl font-semibold tracking-tight">
             {overview.overallProgress}%
           </div>
         </div>
-        <div className="console-panel px-5 py-4">
+        <div className="ui-control px-5 py-4">
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">步骤</div>
           <div className="mt-3 text-3xl font-semibold tracking-tight">
             {overview.completedSteps}/{overview.totalSteps}
           </div>
         </div>
-        <div className="console-panel px-5 py-4">
+        <div className="ui-control px-5 py-4">
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             后续动作
           </div>
@@ -158,7 +158,7 @@ export function ProjectInitializingClient({
         </div>
       </div>
 
-      <div className="console-panel px-5 py-5">
+      <div className="ui-floating px-5 py-5">
         <div className="flex items-center justify-between gap-4">
           <div className="text-sm font-semibold">进度</div>
           <div className="text-xs text-muted-foreground">{overview.overallProgress}%</div>
@@ -171,7 +171,7 @@ export function ProjectInitializingClient({
         </div>
       </div>
 
-      <div className="console-panel console-list overflow-hidden px-0 py-0">
+      <div className="ui-floating console-list overflow-hidden px-0 py-0">
         {overview.steps.map((step) => (
           <div key={step.id} className="flex gap-4 px-5 py-4">
             <div className="mt-0.5 shrink-0">

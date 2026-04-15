@@ -43,6 +43,25 @@ export interface CreatePreviewEnvironmentInput {
   databaseStrategy?: 'inherit' | 'isolated_clone';
 }
 
+export interface DeliveryRoutingRuleInput {
+  id?: string;
+  environmentId: string;
+  kind: 'branch' | 'tag' | 'pull_request' | 'manual';
+  pattern: string | null;
+  priority: number;
+  isActive: boolean;
+  autoCreateEnvironment: boolean;
+}
+
+export interface PromotionFlowInput {
+  id?: string;
+  sourceEnvironmentId: string;
+  targetEnvironmentId: string;
+  requiresApproval: boolean;
+  strategy: 'reuse_release_artifacts' | 'rebuild_from_ref';
+  isActive: boolean;
+}
+
 export async function inspectDatabaseSchemaState(
   projectId: string,
   databaseId: string
@@ -262,6 +281,25 @@ export async function updateEnvironmentStrategy(
       }),
     }
   );
+
+  await parseJsonResponse<{ success: boolean }>(response);
+}
+
+export async function updateDeliveryControl(input: {
+  projectId: string;
+  routingRules: DeliveryRoutingRuleInput[];
+  promotionFlows: PromotionFlowInput[];
+}): Promise<void> {
+  const response = await fetch(`/api/projects/${input.projectId}/delivery-control`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      routingRules: input.routingRules,
+      promotionFlows: input.promotionFlows,
+    }),
+  });
 
   await parseJsonResponse<{ success: boolean }>(response);
 }

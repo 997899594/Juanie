@@ -16,13 +16,13 @@ interface StatsCardProps {
 export function StatsCard({ title, value, description, icon, trend, className }: StatsCardProps) {
   return (
     <Card className={cn('', className)}>
-      <CardContent className="p-6">
+      <CardContent className="px-5 py-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               {title}
             </p>
-            <p className="text-3xl font-semibold tracking-tight">{value}</p>
+            <p className="text-xl font-semibold tracking-tight">{value}</p>
             {description && <p className="text-xs text-muted-foreground">{description}</p>}
             {trend && (
               <p
@@ -37,7 +37,7 @@ export function StatsCard({ title, value, description, icon, trend, className }:
             )}
           </div>
           {icon && (
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary">
+            <div className="ui-control-muted flex h-11 w-11 items-center justify-center rounded-2xl">
               {icon}
             </div>
           )}

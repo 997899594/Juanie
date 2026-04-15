@@ -97,7 +97,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
 
       <div className="grid gap-3 md:grid-cols-3">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
+          <div key={stat.label} className="ui-control px-5 py-4">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -108,7 +108,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
 
       <div className="space-y-3">
         {overview.bindings.length === 0 ? (
-          <div className="console-panel rounded-[24px] px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className="ui-floating px-5 py-8 text-center text-sm text-muted-foreground">
             暂无集成
           </div>
         ) : (
@@ -116,7 +116,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
             const isPending = pendingBindingId === binding.id;
 
             return (
-              <div key={binding.id} className="console-panel rounded-[24px] px-5 py-4">
+              <div key={binding.id} className="ui-floating px-5 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">

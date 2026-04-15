@@ -257,7 +257,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                 </DialogHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
                   <div className="space-y-4">
-                    <div className="console-surface p-4 sm:p-5">
+                    <div className="ui-control-muted p-4 sm:p-5">
                       <div className="space-y-2">
                         <Label className="text-sm">新成员角色</Label>
                         <Select value={linkRole} onValueChange={setLinkRole}>
@@ -331,7 +331,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   </DialogHeader>
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
                     <div className="space-y-4">
-                      <div className="console-surface p-4 sm:p-5">
+                      <div className="ui-control-muted p-4 sm:p-5">
                         <div className="space-y-2">
                           <Label htmlFor="email" className="text-sm">
                             邮箱
@@ -385,9 +385,9 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
         }
       />
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-3">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
+          <div key={stat.label} className="ui-control-muted rounded-[20px] px-5 py-4">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -397,12 +397,12 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       </div>
 
       {errorMessage && (
-        <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+        <div className="rounded-2xl bg-destructive/[0.08] px-4 py-3 text-sm text-destructive">
           {errorMessage}
         </div>
       )}
 
-      <section className="console-panel overflow-hidden">
+      <section className="ui-floating overflow-hidden">
         <div className="console-divider-bottom px-5 py-4">
           <div className="text-sm font-semibold">治理</div>
         </div>
@@ -412,18 +412,18 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       </section>
 
       {overview.members.length === 0 ? (
-        <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
+        <div className="ui-control-muted flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
           <div className="mb-4 rounded-2xl bg-muted p-4">
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">没有成员</h2>
-          <Button className="mt-5 rounded-xl" onClick={() => setIsOpen(true)}>
+          <Button className="mt-5" onClick={() => setIsOpen(true)}>
             <Plus className="h-4 w-4" />
             邀请成员
           </Button>
         </div>
       ) : (
-        <div className="console-panel console-list overflow-hidden px-0 py-0">
+        <div className="ui-floating console-list overflow-hidden px-0 py-0">
           {overview.members.map((member) => (
             <div
               key={member.id}
@@ -453,7 +453,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   onValueChange={(value) => handleChangeRole(member.id, value)}
                   disabled={!member.actions.canChangeRole}
                 >
-                  <SelectTrigger className="h-9 w-28 rounded-xl text-xs">
+                  <SelectTrigger className="h-9 w-28 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -469,7 +469,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 w-9 rounded-xl p-0 text-muted-foreground hover:text-destructive"
+                    className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
                     onClick={() => setDeleteId(member.id)}
                     disabled={!member.actions.canRemove}
                     title={member.actions.removeSummary}
@@ -492,7 +492,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       {overview.invitations.length > 0 && (
         <div className="space-y-2">
           <div className="text-sm font-medium text-muted-foreground">待处理邀请链接</div>
-          <div className="console-panel console-list overflow-hidden px-0 py-0">
+          <div className="ui-floating console-list overflow-hidden px-0 py-0">
             {overview.invitations.map((invitation) => (
               <div
                 key={invitation.id}
@@ -507,7 +507,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-9 w-9 rounded-xl p-0 text-muted-foreground hover:text-destructive"
+                  className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
                   onClick={() => handleRevokeInvitation(invitation.id)}
                   title="撤销邀请"
                 >
@@ -525,14 +525,14 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
             <AlertDialogTitle>移除成员？</AlertDialogTitle>
             <AlertDialogDescription>将移除该成员的团队访问权限。</AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+          <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
             仅移除团队成员关系。
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel className="w-full rounded-xl sm:w-auto">取消</AlertDialogCancel>
+            <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRemoveMember}
-              className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+              className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
             >
               确认移除
             </AlertDialogAction>

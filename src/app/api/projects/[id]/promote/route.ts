@@ -129,7 +129,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         digest: artifact.imageDigest,
       })),
       sourceRepository: project.repository?.fullName ?? project.name,
-      sourceRef: `refs/heads/${prodEnv.branch ?? project.productionBranch ?? 'main'}`,
+      sourceRef: sourceRelease.sourceRef ?? `refs/heads/${project.productionBranch ?? 'main'}`,
       sourceCommitSha: sourceRelease.sourceCommitSha,
       configCommitSha: sourceRelease.configCommitSha,
       triggeredBy: 'manual',

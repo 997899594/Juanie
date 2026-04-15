@@ -31,8 +31,8 @@ export default async function TeamsPage() {
       />
 
       {teamCards.length === 0 ? (
-        <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
-          <div className="mb-4 rounded-2xl bg-muted p-4">
+        <div className="ui-floating flex min-h-80 flex-col items-center justify-center text-center">
+          <div className="mb-4 rounded-2xl bg-secondary/80 p-4">
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">还没有团队</h2>
@@ -50,12 +50,12 @@ export default async function TeamsPage() {
               <Link
                 key={team.id}
                 href={`/teams/${team.id}`}
-                className="console-panel px-5 py-4 transition-colors hover:bg-secondary/30"
+                className="ui-control px-5 py-4 transition-colors hover:bg-secondary/60"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10 rounded-xl">
-                      <AvatarFallback className="rounded-xl bg-secondary text-xs font-semibold">
+                      <AvatarFallback className="rounded-xl bg-secondary/80 text-xs font-semibold">
                         {team.initials}
                       </AvatarFallback>
                     </Avatar>
@@ -74,9 +74,9 @@ export default async function TeamsPage() {
 
           <Link
             href="/teams/new"
-            className="console-surface flex min-h-40 flex-col items-center justify-center rounded-[20px] px-5 py-4 text-center transition-colors hover:bg-secondary/30"
+            className="ui-control-muted flex min-h-40 flex-col items-center justify-center px-5 py-4 text-center transition-colors hover:bg-secondary/70"
           >
-            <div className="mb-3 rounded-2xl bg-muted p-3">
+            <div className="mb-3 rounded-2xl bg-background/80 p-3">
               <Plus className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-sm font-semibold">新建团队</div>

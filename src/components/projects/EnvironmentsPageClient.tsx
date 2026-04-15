@@ -45,12 +45,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
   cleanupPreviewEnvironments,
   createPreviewEnvironment,
   type DatabaseSchemaRepairPlan,
+  type DeliveryRoutingRuleInput,
   deletePreviewEnvironment,
   fetchProjectEnvironments,
+  type PromotionFlowInput,
+  updateDeliveryControl,
   updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
 import { cn } from '@/lib/utils';
@@ -71,6 +75,44 @@ interface EnvironmentActivityItem {
   href: string | null;
   actionLabel: string | null;
   statusDecoration: ActivityStatusDecoration | null;
+}
+
+interface DeliveryControlEnvironmentOption {
+  id: string;
+  name: string;
+  kind?: 'production' | 'persistent' | 'preview' | null;
+  scopeLabel: string | null;
+  sourceLabel: string | null;
+}
+
+interface DeliveryControlRuleRecord {
+  id: string;
+  kind: DeliveryRoutingRuleInput['kind'];
+  pattern: string | null;
+  priority: number;
+  isActive: boolean;
+  autoCreateEnvironment: boolean;
+  environmentId: string | null;
+  environmentName: string | null;
+}
+
+interface DeliveryControlFlowRecord {
+  id: string;
+  requiresApproval: boolean;
+  strategy: PromotionFlowInput['strategy'];
+  isActive: boolean;
+  sourceEnvironmentId: string | null;
+  targetEnvironmentId: string | null;
+  sourceEnvironmentName: string | null;
+  targetEnvironmentName: string | null;
+}
+
+interface DeliveryControlState {
+  editable: boolean;
+  editSummary: string;
+  environments: DeliveryControlEnvironmentOption[];
+  routingRules: DeliveryControlRuleRecord[];
+  promotionFlows: DeliveryControlFlowRecord[];
 }
 
 interface EnvironmentRecord {
@@ -210,6 +252,18 @@ const deploymentStrategyOptions = [
   { value: 'controlled', label: '受控放量' },
   { value: 'canary', label: '金丝雀' },
   { value: 'blue_green', label: '蓝绿切换' },
+] as const;
+
+const deliveryRuleKindOptions = [
+  { value: 'branch', label: '分支' },
+  { value: 'tag', label: '标签' },
+  { value: 'pull_request', label: 'PR' },
+  { value: 'manual', label: '手动' },
+] as const;
+
+const promotionStrategyOptions = [
+  { value: 'reuse_release_artifacts', label: '复用已验证产物' },
+  { value: 'rebuild_from_ref', label: '从源码重新构建' },
 ] as const;
 
 interface PreviewDialogProps {
@@ -523,6 +577,469 @@ function getEnvironmentPriority(environment: EnvironmentRecord): number {
 
       return environment.isPreview ? 0 : 1;
   }
+}
+
+function toEditableRoutingRule(rule: DeliveryControlRuleRecord): DeliveryRoutingRuleInput {
+  return {
+    environmentId: rule.environmentId ?? '',
+    kind: rule.kind,
+    pattern: rule.pattern,
+    priority: rule.priority,
+    isActive: rule.isActive,
+    autoCreateEnvironment: rule.autoCreateEnvironment,
+  };
+}
+
+function toEditablePromotionFlow(flow: DeliveryControlFlowRecord): PromotionFlowInput {
+  return {
+    sourceEnvironmentId: flow.sourceEnvironmentId ?? '',
+    targetEnvironmentId: flow.targetEnvironmentId ?? '',
+    requiresApproval: flow.requiresApproval,
+    strategy: flow.strategy,
+    isActive: flow.isActive,
+  };
+}
+
+function createRuleDraft(
+  environments: DeliveryControlEnvironmentOption[]
+): DeliveryRoutingRuleInput {
+  return {
+    environmentId: environments[0]?.id ?? '',
+    kind: 'branch',
+    pattern: '',
+    priority: 100,
+    isActive: true,
+    autoCreateEnvironment: false,
+  };
+}
+
+function createFlowDraft(environments: DeliveryControlEnvironmentOption[]): PromotionFlowInput {
+  const sourceEnvironmentId = environments[0]?.id ?? '';
+  const targetEnvironmentId = environments[1]?.id ?? environments[0]?.id ?? '';
+
+  return {
+    sourceEnvironmentId,
+    targetEnvironmentId,
+    requiresApproval: true,
+    strategy: 'reuse_release_artifacts',
+    isActive: true,
+  };
+}
+
+function DeliveryControlPanel({
+  deliveryControl,
+  routingRules,
+  promotionFlows,
+  editing,
+  saving,
+  onToggleEditing,
+  onReset,
+  onSave,
+  onAddRule,
+  onUpdateRule,
+  onRemoveRule,
+  onAddFlow,
+  onUpdateFlow,
+  onRemoveFlow,
+}: {
+  deliveryControl: DeliveryControlState;
+  routingRules: DeliveryRoutingRuleInput[];
+  promotionFlows: PromotionFlowInput[];
+  editing: boolean;
+  saving: boolean;
+  onToggleEditing: () => void;
+  onReset: () => void;
+  onSave: () => Promise<void>;
+  onAddRule: () => void;
+  onUpdateRule: (index: number, rule: DeliveryRoutingRuleInput) => void;
+  onRemoveRule: (index: number) => void;
+  onAddFlow: () => void;
+  onUpdateFlow: (index: number, flow: PromotionFlowInput) => void;
+  onRemoveFlow: (index: number) => void;
+}) {
+  const persistentEnvironments = deliveryControl.environments.filter(
+    (environment) => environment.kind !== 'preview'
+  );
+  const displayedRoutingRules = editing ? routingRules : deliveryControl.routingRules;
+  const displayedPromotionFlows = editing ? promotionFlows : deliveryControl.promotionFlows;
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Rocket className="h-4 w-4" />
+          交付控制面
+        </div>
+        <div className="flex items-center gap-2">
+          {editing && (
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={onReset}>
+              丢弃
+            </Button>
+          )}
+          {deliveryControl.editable ? (
+            editing ? (
+              <Button
+                size="sm"
+                className="rounded-xl"
+                disabled={saving}
+                onClick={() => void onSave()}
+              >
+                {saving ? '保存中...' : '保存链路'}
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={onToggleEditing}>
+                编辑链路
+              </Button>
+            )
+          ) : null}
+        </div>
+      </div>
+
+      <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+        {deliveryControl.editSummary}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="console-panel overflow-hidden">
+          <div className="console-divider-bottom px-4 py-3">
+            <div className="text-sm font-medium">Git 路由规则</div>
+          </div>
+          <div className="space-y-3 px-4 py-4">
+            {displayedRoutingRules.length === 0 ? (
+              <div className="ui-control-muted rounded-[18px] px-4 py-4 text-sm text-muted-foreground">
+                还没有路由规则
+              </div>
+            ) : (
+              displayedRoutingRules.map((rule, index) => (
+                <div
+                  key={rule.id ?? `${rule.kind}-${index}`}
+                  className="console-surface rounded-[18px] px-4 py-4"
+                >
+                  {editing ? (
+                    <div className="space-y-3">
+                      {(() => {
+                        const editableRule = rule as DeliveryRoutingRuleInput;
+
+                        return (
+                          <>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label>目标环境</Label>
+                                <Select
+                                  value={editableRule.environmentId}
+                                  onValueChange={(value) =>
+                                    onUpdateRule(index, { ...editableRule, environmentId: value })
+                                  }
+                                >
+                                  <SelectTrigger className="rounded-xl">
+                                    <SelectValue placeholder="选择环境" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {persistentEnvironments.map((environment) => (
+                                      <SelectItem key={environment.id} value={environment.id}>
+                                        {environment.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>来源类型</Label>
+                                <Select
+                                  value={editableRule.kind}
+                                  onValueChange={(value: DeliveryRoutingRuleInput['kind']) =>
+                                    onUpdateRule(index, {
+                                      ...editableRule,
+                                      kind: value,
+                                      autoCreateEnvironment:
+                                        value === 'pull_request'
+                                          ? true
+                                          : editableRule.autoCreateEnvironment,
+                                      pattern: value === 'manual' ? null : editableRule.pattern,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="rounded-xl">
+                                    <SelectValue placeholder="选择规则类型" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {deliveryRuleKindOptions.map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            {editableRule.kind !== 'manual' && (
+                              <div className="grid gap-3 md:grid-cols-[1fr_120px]">
+                                <div className="space-y-2">
+                                  <Label>Pattern</Label>
+                                  <Input
+                                    value={editableRule.pattern ?? ''}
+                                    onChange={(event) =>
+                                      onUpdateRule(index, {
+                                        ...editableRule,
+                                        pattern: event.target.value,
+                                      })
+                                    }
+                                    placeholder={
+                                      editableRule.kind === 'pull_request' ? '*' : 'main'
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>优先级</Label>
+                                  <Input
+                                    inputMode="numeric"
+                                    value={String(editableRule.priority)}
+                                    onChange={(event) =>
+                                      onUpdateRule(index, {
+                                        ...editableRule,
+                                        priority: Number.parseInt(event.target.value || '100', 10),
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-4">
+                              <div className="flex items-center gap-2 text-sm">
+                                <Switch
+                                  checked={editableRule.isActive}
+                                  onCheckedChange={(checked) =>
+                                    onUpdateRule(index, { ...editableRule, isActive: checked })
+                                  }
+                                />
+                                <span>启用</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm">
+                                <Switch
+                                  checked={editableRule.autoCreateEnvironment}
+                                  disabled={editableRule.kind !== 'pull_request'}
+                                  onCheckedChange={(checked) =>
+                                    onUpdateRule(index, {
+                                      ...editableRule,
+                                      autoCreateEnvironment: checked,
+                                    })
+                                  }
+                                />
+                                <span>自动创建预览</span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="ml-auto rounded-xl text-destructive"
+                                onClick={() => onRemoveRule(index)}
+                              >
+                                删除
+                              </Button>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">
+                          {deliveryRuleKindOptions.find((option) => option.value === rule.kind)
+                            ?.label ?? rule.kind}
+                        </Badge>
+                        <div className="text-sm font-medium text-foreground">
+                          {'environmentName' in rule
+                            ? (rule.environmentName ?? '未绑定环境')
+                            : '未绑定环境'}
+                        </div>
+                        <Badge variant="outline">{rule.isActive ? '已启用' : '已停用'}</Badge>
+                        {rule.autoCreateEnvironment ? (
+                          <Badge variant="outline">自动创建预览</Badge>
+                        ) : null}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {[rule.pattern ? `匹配 ${rule.pattern}` : null, `优先级 ${rule.priority}`]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {editing && (
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={onAddRule}>
+                <Plus className="h-4 w-4" />
+                添加路由
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="console-panel overflow-hidden">
+          <div className="console-divider-bottom px-4 py-3">
+            <div className="text-sm font-medium">环境推广链路</div>
+          </div>
+          <div className="space-y-3 px-4 py-4">
+            {displayedPromotionFlows.length === 0 ? (
+              <div className="ui-control-muted rounded-[18px] px-4 py-4 text-sm text-muted-foreground">
+                还没有推广链路
+              </div>
+            ) : (
+              displayedPromotionFlows.map((flow, index) => (
+                <div
+                  key={
+                    flow.id ?? `${flow.sourceEnvironmentId}-${flow.targetEnvironmentId}-${index}`
+                  }
+                  className="console-surface rounded-[18px] px-4 py-4"
+                >
+                  {editing ? (
+                    <div className="space-y-3">
+                      {(() => {
+                        const editableFlow = flow as PromotionFlowInput;
+
+                        return (
+                          <>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <Label>源环境</Label>
+                                <Select
+                                  value={editableFlow.sourceEnvironmentId}
+                                  onValueChange={(value) =>
+                                    onUpdateFlow(index, {
+                                      ...editableFlow,
+                                      sourceEnvironmentId: value,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="rounded-xl">
+                                    <SelectValue placeholder="选择源环境" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {persistentEnvironments.map((environment) => (
+                                      <SelectItem key={environment.id} value={environment.id}>
+                                        {environment.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label>目标环境</Label>
+                                <Select
+                                  value={editableFlow.targetEnvironmentId}
+                                  onValueChange={(value) =>
+                                    onUpdateFlow(index, {
+                                      ...editableFlow,
+                                      targetEnvironmentId: value,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="rounded-xl">
+                                    <SelectValue placeholder="选择目标环境" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {persistentEnvironments.map((environment) => (
+                                      <SelectItem key={environment.id} value={environment.id}>
+                                        {environment.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>策略</Label>
+                              <Select
+                                value={editableFlow.strategy}
+                                onValueChange={(value: PromotionFlowInput['strategy']) =>
+                                  onUpdateFlow(index, { ...editableFlow, strategy: value })
+                                }
+                              >
+                                <SelectTrigger className="rounded-xl">
+                                  <SelectValue placeholder="选择策略" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {promotionStrategyOptions.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4">
+                              <div className="flex items-center gap-2 text-sm">
+                                <Switch
+                                  checked={editableFlow.requiresApproval}
+                                  onCheckedChange={(checked) =>
+                                    onUpdateFlow(index, {
+                                      ...editableFlow,
+                                      requiresApproval: checked,
+                                    })
+                                  }
+                                />
+                                <span>需要审批</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm">
+                                <Switch
+                                  checked={editableFlow.isActive}
+                                  onCheckedChange={(checked) =>
+                                    onUpdateFlow(index, { ...editableFlow, isActive: checked })
+                                  }
+                                />
+                                <span>启用</span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="ml-auto rounded-xl text-destructive"
+                                onClick={() => onRemoveFlow(index)}
+                              >
+                                删除
+                              </Button>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">
+                          {'sourceEnvironmentName' in flow && 'targetEnvironmentName' in flow
+                            ? `${flow.sourceEnvironmentName ?? flow.sourceEnvironmentId ?? '未绑定'} → ${
+                                flow.targetEnvironmentName ?? flow.targetEnvironmentId ?? '未绑定'
+                              }`
+                            : `${flow.sourceEnvironmentId} → ${flow.targetEnvironmentId}`}
+                        </Badge>
+                        <Badge variant="outline">{flow.isActive ? '已启用' : '已停用'}</Badge>
+                        {flow.requiresApproval ? <Badge variant="outline">需要审批</Badge> : null}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {promotionStrategyOptions.find((option) => option.value === flow.strategy)
+                          ?.label ?? flow.strategy}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {editing && (
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={onAddFlow}>
+                <Plus className="h-4 w-4" />
+                添加链路
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function buildEnvironmentHeaderMeta(environment: EnvironmentRecord): string {
@@ -938,6 +1455,7 @@ interface EnvironmentsPageClientProps {
         createdAtLabel: string | null;
       }>;
     };
+    deliveryControl: DeliveryControlState;
     environments: EnvironmentRecord[];
   };
 }
@@ -956,12 +1474,21 @@ export function EnvironmentsPageClient({
     defaultExpandedEnvId ? { [defaultExpandedEnvId]: true } : {}
   );
   const [governance, setGovernance] = useState(initialData.governance);
+  const [deliveryControl, setDeliveryControl] = useState(initialData.deliveryControl);
+  const [routingRules, setRoutingRules] = useState<DeliveryRoutingRuleInput[]>(
+    initialData.deliveryControl.routingRules.map(toEditableRoutingRule)
+  );
+  const [promotionFlows, setPromotionFlows] = useState<PromotionFlowInput[]>(
+    initialData.deliveryControl.promotionFlows.map(toEditablePromotionFlow)
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cleaningExpired, setCleaningExpired] = useState(false);
   const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
+  const [editingDeliveryControl, setEditingDeliveryControl] = useState(false);
+  const [savingDeliveryControl, setSavingDeliveryControl] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const fetchEnvironments = useCallback(async () => {
@@ -970,6 +1497,10 @@ export function EnvironmentsPageClient({
         await fetchProjectEnvironments<EnvironmentsPageClientProps['initialData']>(projectId);
       setEnvironments(data.environments);
       setGovernance(data.governance);
+      setDeliveryControl(data.deliveryControl);
+      setRoutingRules(data.deliveryControl.routingRules.map(toEditableRoutingRule));
+      setPromotionFlows(data.deliveryControl.promotionFlows.map(toEditablePromotionFlow));
+      setEditingDeliveryControl(false);
       setExpanded((prev) => {
         if (Object.keys(prev).length > 0) {
           return prev;
@@ -1011,6 +1542,32 @@ export function EnvironmentsPageClient({
   const toggleExpanded = (envId: string) => {
     setExpanded((prev) => ({ ...prev, [envId]: !prev[envId] }));
   };
+
+  const resetDeliveryControlEditor = useCallback(() => {
+    setRoutingRules(deliveryControl.routingRules.map(toEditableRoutingRule));
+    setPromotionFlows(deliveryControl.promotionFlows.map(toEditablePromotionFlow));
+    setEditingDeliveryControl(false);
+  }, [deliveryControl]);
+
+  const handleSaveDeliveryControl = useCallback(async () => {
+    setSavingDeliveryControl(true);
+
+    try {
+      await updateDeliveryControl({
+        projectId,
+        routingRules,
+        promotionFlows,
+      });
+      await fetchEnvironments();
+      setFeedback('交付链路已更新');
+      setTimeout(() => setFeedback(null), 4000);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '更新交付链路失败');
+      setTimeout(() => setFeedback(null), 5000);
+    } finally {
+      setSavingDeliveryControl(false);
+    }
+  }, [fetchEnvironments, projectId, promotionFlows, routingRules]);
 
   const handleCreatePreview = async (input: {
     branch: string;
@@ -1181,7 +1738,7 @@ export function EnvironmentsPageClient({
         </div>
       )}
 
-      <div className="console-surface rounded-[20px] px-4 py-3">
+      <div className="ui-control-muted rounded-[20px] px-4 py-3">
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <span>{governance.roleLabel}</span>
           <span>
@@ -1194,7 +1751,7 @@ export function EnvironmentsPageClient({
           <Button
             variant="outline"
             size="sm"
-            className="ml-auto rounded-xl"
+            className="ml-auto"
             onClick={handleCleanupExpiredPreviews}
             disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
           >
@@ -1214,13 +1771,52 @@ export function EnvironmentsPageClient({
         />
       ) : (
         <div className="space-y-6">
+          <DeliveryControlPanel
+            deliveryControl={deliveryControl}
+            routingRules={routingRules}
+            promotionFlows={promotionFlows}
+            editing={editingDeliveryControl}
+            saving={savingDeliveryControl}
+            onToggleEditing={() => setEditingDeliveryControl(true)}
+            onReset={resetDeliveryControlEditor}
+            onSave={handleSaveDeliveryControl}
+            onAddRule={() =>
+              setRoutingRules((current) => [
+                ...current,
+                createRuleDraft(deliveryControl.environments),
+              ])
+            }
+            onUpdateRule={(index, rule) =>
+              setRoutingRules((current) =>
+                current.map((item, itemIndex) => (itemIndex === index ? rule : item))
+              )
+            }
+            onRemoveRule={(index) =>
+              setRoutingRules((current) => current.filter((_, itemIndex) => itemIndex !== index))
+            }
+            onAddFlow={() =>
+              setPromotionFlows((current) => [
+                ...current,
+                createFlowDraft(deliveryControl.environments),
+              ])
+            }
+            onUpdateFlow={(index, flow) =>
+              setPromotionFlows((current) =>
+                current.map((item, itemIndex) => (itemIndex === index ? flow : item))
+              )
+            }
+            onRemoveFlow={(index) =>
+              setPromotionFlows((current) => current.filter((_, itemIndex) => itemIndex !== index))
+            }
+          />
+
           <section className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Globe className="h-4 w-4" />
               核心环境
             </div>
             {standardEnvironments.length === 0 ? (
-              <div className="console-surface rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
+              <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
                 暂无环境
               </div>
             ) : (
@@ -1261,7 +1857,7 @@ export function EnvironmentsPageClient({
             </div>
 
             {previewEnvironments.length === 0 ? (
-              <div className="console-surface rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
+              <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
                 暂无预览环境
               </div>
             ) : (
@@ -1285,7 +1881,7 @@ export function EnvironmentsPageClient({
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-9 shrink-0 rounded-xl"
+                              className="h-9 shrink-0"
                               disabled={
                                 deletingId === environment.id || !environment.actions?.canDelete
                               }
@@ -1307,18 +1903,18 @@ export function EnvironmentsPageClient({
                                 及关联资源会一起删除。
                               </AlertDialogDescription>
                             </AlertDialogHeader>
-                            <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                            <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                               {environment.cleanupState?.state === 'expired_ready'
                                 ? '已过期，可直接回收。'
                                 : '会回收域名、变量、数据库和运行资源。'}
                             </div>
                             <AlertDialogFooter>
-                              <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
+                              <AlertDialogCancel className="w-full sm:w-auto">
                                 取消
                               </AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => handleDeletePreview(environment.id)}
-                                className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                                className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                                 disabled={
                                   deletingId === environment.id || !environment.actions?.canDelete
                                 }
@@ -1352,14 +1948,14 @@ export function EnvironmentsPageClient({
       )}
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-        <div className="flex items-center gap-2 rounded-[24px] bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
-          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
+        <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
+          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
             <Link href={`/projects/${projectId}/delivery`}>
               <Rocket className="h-4 w-4" />
               交付
             </Link>
           </Button>
-          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
+          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
             <Link href={`/projects/${projectId}/runtime/logs`}>
               <ScrollText className="h-4 w-4" />
               日志
@@ -1367,7 +1963,6 @@ export function EnvironmentsPageClient({
           </Button>
           <Button
             size="sm"
-            className="rounded-xl"
             onClick={() => setDialogOpen(true)}
             disabled={!governance.createPreview.allowed}
           >

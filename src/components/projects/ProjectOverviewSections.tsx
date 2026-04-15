@@ -27,13 +27,13 @@ export function ProjectOverviewHero({
             {commandCenter.title}
           </h2>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button asChild size="sm" className="h-10 rounded-xl px-4">
+            <Button asChild size="sm" className="h-10 px-4">
               <Link href={commandCenter.primaryAction.href}>
                 {commandCenter.primaryAction.label}
               </Link>
             </Button>
             {commandCenter.secondaryAction ? (
-              <Button asChild variant="outline" size="sm" className="h-10 rounded-xl px-4">
+              <Button asChild variant="outline" size="sm" className="h-10 px-4">
                 <Link href={commandCenter.secondaryAction.href}>
                   {commandCenter.secondaryAction.label}
                 </Link>
@@ -41,18 +41,18 @@ export function ProjectOverviewHero({
             ) : null}
           </div>
         </div>
-        <div className="console-surface flex items-center rounded-[20px] px-4 py-4">
+        <div className="ui-control-muted flex items-center rounded-[20px] px-4 py-4">
           <div className="text-sm font-medium">{commandCenter.primaryAction.label}</div>
         </div>
       </div>
       <div className="mt-6 grid gap-3 md:grid-cols-2">
-        <div className="console-stat px-4 py-3">
+        <div className="ui-control-muted rounded-[18px] px-4 py-3">
           <div className="text-xs text-muted-foreground">发布</div>
           <div className="mt-2 line-clamp-2 text-sm font-medium">
             {currentRelease?.title ?? '没有发布'}
           </div>
         </div>
-        <div className="console-stat px-4 py-3">
+        <div className="ui-control-muted rounded-[18px] px-4 py-3">
           <div className="text-xs text-muted-foreground">待处理</div>
           <div className="mt-2 line-clamp-2 text-sm font-medium">
             {primaryAttention?.issueLabel ?? '无阻塞'}
@@ -107,7 +107,7 @@ export function ProjectDefinitionSection({
         )}
 
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <div className="console-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5">
+          <div className="ui-control-muted inline-flex items-center gap-2 rounded-full px-3 py-1.5">
             <div className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(project.status)}`} />
             <span className="font-medium capitalize">{overview.statusLabel}</span>
           </div>
@@ -123,7 +123,7 @@ export function ProjectDefinitionSection({
               {services.slice(0, 4).map((service) => (
                 <div
                   key={service.id}
-                  className="console-surface inline-flex items-center gap-2 rounded-full px-3 py-1.5"
+                  className="ui-control inline-flex items-center gap-2 rounded-full px-3 py-1.5"
                 >
                   <div
                     className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(service.status)}`}
@@ -158,10 +158,10 @@ export function ProjectOperationsSection({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm font-semibold">项目动态</div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
+            <Button asChild variant="outline" size="sm" className="h-8 px-3">
               <Link href={`/projects/${projectId}/runtime`}>运行</Link>
             </Button>
-            <Button asChild variant="outline" size="sm" className="h-8 rounded-xl px-3">
+            <Button asChild variant="outline" size="sm" className="h-8 px-3">
               <Link href={`/projects/${projectId}/delivery`}>交付</Link>
             </Button>
           </div>
@@ -174,7 +174,7 @@ export function ProjectOperationsSection({
             待处理
           </div>
           {attentionItems.length === 0 ? (
-            <div className="console-surface flex min-h-52 flex-col items-center justify-center rounded-2xl p-6 text-center">
+            <div className="ui-control-muted flex min-h-52 flex-col items-center justify-center rounded-2xl p-6 text-center">
               <AlertTriangle className="mb-3 h-5 w-5 text-muted-foreground" />
               <div className="text-sm font-medium">没有待处理项</div>
             </div>
@@ -188,7 +188,7 @@ export function ProjectOperationsSection({
                       ? `/projects/${projectId}/delivery/${run.releaseId}`
                       : `/projects/${projectId}/delivery`
                   }
-                  className="console-surface flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/40"
+                  className="ui-control rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/70"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div
@@ -220,7 +220,7 @@ export function ProjectOperationsSection({
             最近发布
           </div>
           {recentReleaseCards.length === 0 ? (
-            <div className="console-surface flex min-h-40 items-center justify-center rounded-2xl text-sm text-muted-foreground">
+            <div className="ui-control-muted flex min-h-40 items-center justify-center rounded-2xl text-sm text-muted-foreground">
               没有发布
             </div>
           ) : (
@@ -228,7 +228,7 @@ export function ProjectOperationsSection({
               <Link
                 key={release.id}
                 href={`/projects/${projectId}/delivery/${release.id}`}
-                className="console-surface flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/40"
+                className="ui-control rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/70"
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-2">

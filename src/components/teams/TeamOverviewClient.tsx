@@ -18,7 +18,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
     <div className="space-y-6">
       <div className="grid gap-3 md:grid-cols-2">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
+          <div key={stat.label} className="ui-control px-5 py-4">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -27,11 +27,9 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         ))}
       </div>
 
-      <div className="console-panel px-5 py-4">
+      <div className="ui-control px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium">项目</div>
-          </div>
+          <div className="text-sm font-medium">项目</div>
           <Link href="/projects/new">
             <Button className="h-9 rounded-xl px-4">
               <Plus className="h-4 w-4" />
@@ -42,8 +40,8 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
       </div>
 
       {overview.projects.length === 0 ? (
-        <div className="console-panel flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
-          <div className="mb-4 rounded-2xl bg-muted p-4">
+        <div className="ui-floating flex min-h-80 flex-col items-center justify-center text-center">
+          <div className="mb-4 rounded-2xl bg-secondary/80 p-4">
             <FolderKanban className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">没有项目</h2>
@@ -60,9 +58,9 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
             <Link
               key={project.id}
               href={`/projects/${project.id}`}
-              className="console-panel flex items-start gap-4 px-5 py-4 transition-colors hover:bg-secondary/30"
+              className="ui-control flex items-start gap-4 px-5 py-4 transition-colors hover:bg-secondary/60"
             >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-muted">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-secondary/80">
                 <FolderKanban className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="min-w-0">
@@ -76,9 +74,9 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         </div>
       )}
 
-      <div className="console-panel px-5 py-4">
+      <div className="ui-control px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-muted p-3">
+          <div className="rounded-2xl bg-secondary/80 p-3">
             <Users className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="min-w-0">
@@ -92,7 +90,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         </div>
       </div>
 
-      <div className="console-panel px-5 py-4">
+      <div className="ui-floating px-5 py-4">
         <div className="text-sm font-semibold">治理</div>
         <div className="mt-3">
           <TeamGovernancePanel governance={overview.governance} />

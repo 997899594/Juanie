@@ -119,7 +119,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             <Button
               type="submit"
               form="team-settings-form"
-              className="h-9 rounded-xl px-4"
+              className="h-9 px-4"
               disabled={saving || name === team.name}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存'}
@@ -128,18 +128,18 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         }
       />
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-3">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
+          <div key={stat.label} className="ui-control-muted rounded-[20px] px-4 py-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
-            <div className="mt-3 truncate text-sm font-semibold">{stat.value}</div>
+            <div className="mt-2 truncate text-sm font-semibold">{stat.value}</div>
           </div>
         ))}
       </div>
 
-      <form id="team-settings-form" onSubmit={handleSave} className="console-panel px-5 py-5">
+      <form id="team-settings-form" onSubmit={handleSave} className="ui-floating px-5 py-5">
         <div className="grid gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="name" className="text-sm">
@@ -149,14 +149,13 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-11 rounded-xl"
               disabled={!overview.canEdit}
               required
             />
           </div>
           <div className="space-y-2">
             <Label className="text-sm">标识</Label>
-            <Input value={team.slug} className="h-11 rounded-xl text-muted-foreground" disabled />
+            <Input value={team.slug} className="text-muted-foreground" disabled />
           </div>
         </div>
         {saveMsg && (
@@ -168,27 +167,27 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         )}
       </form>
 
-      <section className="console-panel px-5 py-5">
+      <section className="ui-floating px-5 py-5">
         <div className="text-sm font-semibold">治理</div>
         <div className="mt-4">
           <TeamGovernancePanel governance={overview.governance} />
         </div>
       </section>
 
-      <form onSubmit={handleSaveAI} className="console-panel px-5 py-5">
+      <form onSubmit={handleSaveAI} className="ui-floating px-5 py-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">AI Control Plane</div>
           </div>
           {overview.canEdit ? (
-            <Button type="submit" className="h-9 rounded-xl px-4" disabled={savingAI}>
+            <Button type="submit" className="h-9 px-4" disabled={savingAI}>
               {savingAI ? <Loader2 className="h-4 w-4 animate-spin" /> : '保存 AI 配置'}
             </Button>
           ) : null}
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[280px_1fr]">
-          <div className="console-card space-y-4 p-4">
+          <div className="ui-control space-y-4 p-4">
             <div className="space-y-2">
               <Label className="text-sm">团队套餐</Label>
               <Select
@@ -198,7 +197,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                 }
                 disabled={!overview.canEdit}
               >
-                <SelectTrigger className="h-11 rounded-xl">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -210,7 +209,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               </Select>
             </div>
 
-            <div className="console-surface rounded-2xl px-4 py-3">
+            <div className="ui-control-muted rounded-2xl px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Provider
               </div>
@@ -240,10 +239,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
 
           <div className="space-y-3">
             {aiPlugins.map((plugin) => (
-              <div
-                key={plugin.id}
-                className="rounded-[24px] bg-background/90 px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_24px_rgba(55,53,47,0.03)]"
-              >
+              <div key={plugin.id} className="ui-control px-4 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -288,7 +284,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         )}
       </form>
 
-      <section className="console-panel px-5 py-5">
+      <section className="ui-floating px-5 py-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">最近 AI 活动</div>
@@ -300,7 +296,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             aiActivity.map((item) => (
               <div
                 key={item.id}
-                className="console-surface flex flex-col gap-2 rounded-[24px] px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
+                className="ui-control-muted flex flex-col gap-2 rounded-[24px] px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="space-y-1">
                   <div className="text-sm font-medium">{item.title}</div>
@@ -312,15 +308,15 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               </div>
             ))
           ) : (
-            <div className="console-card rounded-[24px] px-4 py-5 text-sm text-muted-foreground">
+            <div className="ui-control-muted rounded-[24px] px-4 py-5 text-sm text-muted-foreground">
               暂无记录
             </div>
           )}
         </div>
       </section>
 
-      <section className="console-panel px-5 py-5">
-        <div className="flex flex-col gap-4 rounded-[24px] bg-destructive/[0.05] p-4 shadow-[0_1px_0_rgba(255,255,255,0.5)_inset,0_12px_28px_rgba(127,29,29,0.06)] sm:p-5 md:flex-row md:items-center md:justify-between">
+      <section className="ui-floating px-5 py-5">
+        <div className="flex flex-col gap-4 rounded-[24px] bg-destructive/[0.05] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
             <div className="text-sm font-semibold text-destructive">删除团队</div>
             <div className="text-xs text-muted-foreground">该操作无法恢复。</div>
@@ -328,10 +324,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
           {overview.canDelete ? (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  className="h-9 w-full shrink-0 rounded-xl px-4 md:w-auto"
-                >
+                <Button variant="destructive" className="h-9 w-full shrink-0 px-4 md:w-auto">
                   <Trash2 className="h-4 w-4" />
                   删除团队
                 </Button>
@@ -341,17 +334,15 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                   <AlertDialogTitle>删除 &ldquo;{team.name}&rdquo;？</AlertDialogTitle>
                   <AlertDialogDescription>关联项目会一起删除。</AlertDialogDescription>
                 </AlertDialogHeader>
-                <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                   团队和关联项目会一起删除。
                 </div>
                 <AlertDialogFooter>
-                  <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
-                    取消
-                  </AlertDialogCancel>
+                  <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="w-full rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                    className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                   >
                     {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : '删除团队'}
                   </AlertDialogAction>

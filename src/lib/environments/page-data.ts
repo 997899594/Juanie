@@ -2,14 +2,17 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   auditLogs,
+  deliveryRules,
   deployments,
   environments,
   migrationRuns,
   projects,
+  promotionFlows,
   releases,
   schemaRepairAtlasRuns,
   type TeamRole,
 } from '@/lib/db/schema';
+import { buildDeliveryControlSnapshot } from '@/lib/environments/control-plane';
 import {
   buildEnvironmentManageActionSnapshot,
   buildPreviewEnvironmentActionSnapshot,
@@ -55,6 +58,12 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
         activeReleaseCountByEnvironment: new Map(),
         recentAuditLogs: [],
       }).governance,
+      deliveryControl: buildDeliveryControlSnapshot({
+        role,
+        environments: [],
+        deliveryRules: [],
+        promotionFlows: [],
+      }),
       environments: [],
     };
   }
@@ -67,6 +76,8 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
     recentAuditLogs,
     latestRepairPlans,
     latestAtlasRuns,
+    deliveryRuleList,
+    promotionFlowList,
   ] = await Promise.all([
     db.query.environments.findMany({
       where: eq(environments.projectId, projectId),
@@ -159,6 +170,14 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
     db.query.schemaRepairAtlasRuns.findMany({
       where: eq(schemaRepairAtlasRuns.projectId, projectId),
       orderBy: [desc(schemaRepairAtlasRuns.createdAt)],
+    }),
+    db.query.deliveryRules.findMany({
+      where: eq(deliveryRules.projectId, projectId),
+      orderBy: [deliveryRules.priority],
+    }),
+    db.query.promotionFlows.findMany({
+      where: eq(promotionFlows.projectId, projectId),
+      orderBy: [promotionFlows.createdAt],
     }),
   ]);
   const runtimeIndexes = buildEnvironmentRuntimeIndexes({
@@ -289,6 +308,12 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
 
   return {
     governance: governanceData.governance,
+    deliveryControl: buildDeliveryControlSnapshot({
+      role,
+      environments: environmentList,
+      deliveryRules: deliveryRuleList,
+      promotionFlows: promotionFlowList,
+    }),
     environments: decoratedEnvironments,
   };
 }

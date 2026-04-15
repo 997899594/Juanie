@@ -17,17 +17,17 @@ export function EmptyState({ icon, title, description, action, className }: Empt
   return (
     <div
       className={cn(
-        'flex min-h-48 flex-col items-center justify-center rounded-[20px] bg-secondary/20 p-8 text-center shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_28px_rgba(55,53,47,0.03)] animate-in fade-in-50',
+        'console-surface flex min-h-48 flex-col items-center justify-center rounded-[24px] p-8 text-center animate-in fade-in-50',
         className
       )}
     >
       {icon && (
-        <div className="mb-4 rounded-2xl bg-secondary p-3 text-muted-foreground">{icon}</div>
+        <div className="ui-control-muted mb-4 rounded-2xl p-3 text-muted-foreground">{icon}</div>
       )}
       <h3 className="mb-1 text-lg font-semibold">{title}</h3>
       {description && <p className="mb-4 max-w-sm text-sm text-muted-foreground">{description}</p>}
       {action && (
-        <Button onClick={action.onClick} asChild={!!action.href} className="rounded-xl px-4">
+        <Button onClick={action.onClick} asChild={!!action.href} className="px-4">
           {action.href ? <a href={action.href}>{action.label}</a> : action.label}
         </Button>
       )}

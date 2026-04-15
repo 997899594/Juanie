@@ -289,12 +289,12 @@ export function ManualReleaseDialog({
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
-                <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
-              <div className="console-surface p-4 sm:p-5">
+              <div className="ui-control-muted p-4 sm:p-5">
                 <div className="mb-4 text-sm font-semibold text-foreground">发布来源</div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -342,14 +342,14 @@ export function ManualReleaseDialog({
               </div>
 
               {error && (
-                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
             </div>
 
             <div className="space-y-4">
-              <div className="console-card p-4 sm:p-5">
+              <div className="ui-control p-4 sm:p-5">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">来源</div>
                   {selectedArtifacts.length > 0 && (
@@ -361,7 +361,7 @@ export function ManualReleaseDialog({
 
                 {selectedSourceRelease ? (
                   <div className="space-y-3 text-sm">
-                    <div className="console-surface rounded-2xl px-4 py-3">
+                    <div className="ui-control-muted px-4 py-3">
                       <div className="text-xs text-muted-foreground">来源标识</div>
                       <div className="mt-1 font-medium text-foreground">
                         {selectedSourceRelease.sourceRef}
@@ -373,7 +373,7 @@ export function ManualReleaseDialog({
                       )}
                     </div>
 
-                    <div className="console-surface space-y-2 rounded-2xl px-4 py-3">
+                    <div className="ui-control-muted space-y-2 px-4 py-3">
                       <div className="text-xs text-muted-foreground">包含服务</div>
                       <div className="flex flex-wrap gap-2">
                         {selectedArtifacts.map((artifact) => (
@@ -388,7 +388,7 @@ export function ManualReleaseDialog({
                     </div>
 
                     {(summary || selectedSourceRelease.summary) && (
-                      <div className="console-surface rounded-2xl px-4 py-3">
+                      <div className="ui-control-muted px-4 py-3">
                         <div className="text-xs text-muted-foreground">最终摘要</div>
                         <div className="mt-1 text-sm leading-6 text-foreground">
                           {summary || selectedSourceRelease.summary}
@@ -397,17 +397,17 @@ export function ManualReleaseDialog({
                     )}
                   </div>
                 ) : (
-                  <div className="console-surface rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                  <div className="ui-control-muted px-4 py-8 text-sm text-muted-foreground">
                     选择来源
                   </div>
                 )}
               </div>
 
-              <div className="console-surface p-4 sm:p-5">
+              <div className="ui-control-muted p-4 sm:p-5">
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {loadingPlan ? (
-                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">
                     加载中...
                   </div>
                 ) : planningPanel ? (
@@ -419,7 +419,7 @@ export function ManualReleaseDialog({
                     />
 
                     {planningPanel.blockingReason && (
-                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                      <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {planningPanel.blockingReason}
                       </div>
                     )}
@@ -429,7 +429,7 @@ export function ManualReleaseDialog({
                     )}
                   </div>
                 ) : (
-                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">
                     选择来源后查看
                   </div>
                 )}

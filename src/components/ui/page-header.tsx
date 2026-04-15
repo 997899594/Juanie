@@ -12,25 +12,26 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
   return (
-    <div className={cn('pb-1', className)}>
-      <div className="flex flex-col gap-2 px-1 py-1 md:gap-3">
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-balance md:text-3xl">
-              {title}
-            </h1>
-            {description ? (
-              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{description}</p>
-            ) : null}
-          </div>
-          {actions && (
-            <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
-              {actions}
-            </div>
-          )}
-        </div>
+    <header
+      className={cn(
+        'flex flex-col gap-3 pb-1 md:flex-row md:items-start md:justify-between',
+        className
+      )}
+    >
+      <div className="min-w-0 space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-balance md:text-[2rem]">
+          {title}
+        </h1>
+        {description ? (
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
+        ) : null}
       </div>
-    </div>
+      {actions && (
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
+          {actions}
+        </div>
+      )}
+    </header>
   );
 }
 
@@ -50,7 +51,7 @@ export function PageHeaderAction({
   variant = 'default',
 }: PageHeaderActionProps) {
   return (
-    <Button onClick={onClick} variant={variant} className="rounded-xl px-4" asChild={!!href}>
+    <Button onClick={onClick} variant={variant} className="px-4" asChild={!!href}>
       {href ? (
         <a href={href}>
           {icon}

@@ -22,6 +22,10 @@ import { buildPrimaryEnvironmentHostname } from '@/lib/domains/defaults';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { ensureRepository } from '@/lib/integrations/service/repository-service';
 import type { CreateRuntimeProfile } from '@/lib/projects/create-defaults';
+import {
+  buildEnvironmentTopologyBlueprint,
+  type CreateEnvironmentTemplate,
+} from '@/lib/projects/environment-topology';
 import { addProjectInitJob } from '@/lib/queue';
 
 interface CreateProjectRequest {
@@ -43,6 +47,7 @@ interface CreateProjectRequest {
   productionDeploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green';
   previewDatabaseStrategy?: 'inherit' | 'isolated_clone';
   runtimeProfile?: CreateRuntimeProfile;
+  environmentTemplate?: CreateEnvironmentTemplate;
 }
 
 export async function GET() {
@@ -95,6 +100,7 @@ export async function POST(request: Request) {
       productionDeploymentStrategy,
       previewDatabaseStrategy,
       runtimeProfile,
+      environmentTemplate,
     } = body;
 
     if (!teamId || !name || !slug) {
@@ -155,6 +161,14 @@ export async function POST(request: Request) {
       dbRepositoryId = await ensureRepository(repositoryId, repositoryFullName, integrationSession);
     }
 
+    const topology = buildEnvironmentTopologyBlueprint({
+      template: environmentTemplate ?? 'staging_production_preview',
+      productionBranch,
+      autoDeploy,
+      productionDeploymentStrategy: productionDeploymentStrategy ?? 'controlled',
+      previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
+    });
+
     const importSteps: { step: string; status: InitStepStatus; progress: number }[] = [
       { step: 'validate_repository', status: 'pending', progress: 0 },
       { step: 'push_cicd_config', status: 'pending', progress: 0 },
@@ -199,6 +213,7 @@ export async function POST(request: Request) {
               runtimeProfile: runtimeProfile ?? 'standard',
               productionDeploymentStrategy: productionDeploymentStrategy ?? 'controlled',
               previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
+              environmentTemplate: environmentTemplate ?? 'staging_production_preview',
             },
           },
           status: 'initializing',
@@ -209,67 +224,73 @@ export async function POST(request: Request) {
         throw new Error('Failed to create project');
       }
 
-      const [stagingEnv] = await tx
+      const createdEnvironments = await tx
         .insert(environments)
-        .values({
-          projectId: createdProject.id,
-          name: 'staging',
-          kind: 'persistent',
-          branch: productionBranch,
-          autoDeploy,
-          isProduction: false,
-          databaseStrategy: 'direct',
-          deploymentStrategy: 'rolling',
-        })
+        .values(
+          topology.environments.map((environment) => ({
+            projectId: createdProject.id,
+            name: environment.name,
+            kind: environment.kind,
+            branch: environment.branch,
+            autoDeploy: environment.autoDeploy,
+            isProduction: environment.isProduction,
+            databaseStrategy: environment.databaseStrategy,
+            deploymentStrategy: environment.deploymentStrategy,
+          }))
+        )
         .returning();
 
-      if (!stagingEnv) {
-        throw new Error('Failed to create staging environment');
+      const environmentByKey = new Map(
+        topology.environments.map((environment, index) => [
+          environment.key,
+          createdEnvironments[index] ?? null,
+        ])
+      );
+      const primaryEnvironment = environmentByKey.get(topology.primaryEnvironmentKey);
+
+      if (!primaryEnvironment) {
+        throw new Error('Failed to create primary environment');
       }
 
-      const [productionEnv] = await tx
-        .insert(environments)
-        .values({
-          projectId: createdProject.id,
-          name: 'production',
-          kind: 'production',
-          autoDeploy: false,
-          isProduction: true,
-          databaseStrategy: 'direct',
-          deploymentStrategy: productionDeploymentStrategy ?? 'controlled',
+      await tx.insert(deliveryRules).values(
+        topology.deliveryRules.map((rule) => {
+          const environment = environmentByKey.get(rule.environmentKey);
+          if (!environment) {
+            throw new Error(
+              `Failed to resolve environment for delivery rule ${rule.environmentKey}`
+            );
+          }
+
+          return {
+            projectId: createdProject.id,
+            environmentId: environment.id,
+            kind: rule.kind,
+            pattern: rule.pattern,
+            priority: rule.priority,
+            autoCreateEnvironment: rule.autoCreateEnvironment,
+          };
         })
-        .returning();
+      );
 
-      if (!productionEnv) {
-        throw new Error('Failed to create production environment');
-      }
+      await tx.insert(promotionFlows).values(
+        topology.promotionFlows.map((flow) => {
+          const sourceEnvironment = environmentByKey.get(flow.sourceEnvironmentKey);
+          const targetEnvironment = environmentByKey.get(flow.targetEnvironmentKey);
 
-      await tx.insert(deliveryRules).values([
-        {
-          projectId: createdProject.id,
-          environmentId: stagingEnv.id,
-          kind: 'branch',
-          pattern: productionBranch,
-          priority: 100,
-          autoCreateEnvironment: false,
-        },
-        {
-          projectId: createdProject.id,
-          environmentId: stagingEnv.id,
-          kind: 'pull_request',
-          pattern: '*',
-          priority: 100,
-          autoCreateEnvironment: true,
-        },
-      ]);
+          if (!sourceEnvironment || !targetEnvironment) {
+            throw new Error('Failed to resolve promotion flow environments');
+          }
 
-      await tx.insert(promotionFlows).values({
-        projectId: createdProject.id,
-        sourceEnvironmentId: stagingEnv.id,
-        targetEnvironmentId: productionEnv.id,
-        requiresApproval: true,
-        strategy: 'reuse_release_artifacts',
-      });
+          return {
+            projectId: createdProject.id,
+            sourceEnvironmentId: sourceEnvironment.id,
+            targetEnvironmentId: targetEnvironment.id,
+            requiresApproval: flow.requiresApproval,
+            strategy: flow.strategy,
+            isActive: flow.isActive,
+          };
+        })
+      );
 
       const createdServices = new Map<string, string>();
       for (const serviceConfig of serviceConfigs) {
@@ -317,7 +338,7 @@ export async function POST(request: Request) {
         const provisionType = dbConfig.provisionType || 'standalone';
         await tx.insert(databases).values({
           projectId: createdProject.id,
-          environmentId: stagingEnv.id,
+          environmentId: primaryEnvironment.id,
           serviceId: dbConfig.service ? (createdServices.get(dbConfig.service) ?? null) : null,
           name: dbConfig.name,
           type: dbConfig.type,
@@ -334,7 +355,7 @@ export async function POST(request: Request) {
       if (useCustomDomain && domain) {
         await tx.insert(domains).values({
           projectId: createdProject.id,
-          environmentId: stagingEnv.id,
+          environmentId: primaryEnvironment.id,
           hostname: domain,
           isCustom: true,
           isVerified: false,
@@ -342,7 +363,7 @@ export async function POST(request: Request) {
       } else {
         await tx.insert(domains).values({
           projectId: createdProject.id,
-          environmentId: stagingEnv.id,
+          environmentId: primaryEnvironment.id,
           hostname: buildPrimaryEnvironmentHostname(slug),
           isCustom: false,
           isVerified: true,

@@ -58,7 +58,7 @@ function getCheckBadgeVariant(
 
 function renderUnavailableState(panel: ResolvedAIPluginSnapshot, emptyLabel: string) {
   return (
-    <div className="console-surface rounded-2xl px-4 py-5">
+    <div className="ui-control-muted px-4 py-5">
       <div className="text-sm font-medium text-foreground">{emptyLabel}</div>
       <div className="mt-2 text-sm text-muted-foreground">
         {panel.errorMessage ?? panel.availability.blockedReason ?? '无结果'}
@@ -73,7 +73,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
 
   return (
     <section className="grid gap-4 xl:grid-cols-2">
-      <div className="console-panel p-5">
+      <div className="ui-floating p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">发布计划</div>
@@ -90,11 +90,11 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
         {releasePlanSnapshot ? (
           <div className="space-y-4">
             {props.releasePlan.errorMessage && (
-              <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+              <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
                 {props.releasePlan.errorMessage}
               </div>
             )}
-            <div className="console-card rounded-2xl px-4 py-4">
+            <div className="ui-control px-4 py-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{releasePlanSnapshot.recommendation.strategy}</Badge>
                 <Badge variant={getRiskBadgeVariant(releasePlanSnapshot.risk.level)}>
@@ -118,7 +118,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                 检查
               </div>
               {releasePlanSnapshot.checks.slice(0, 4).map((check) => (
-                <div key={check.key} className="console-surface rounded-2xl px-4 py-3">
+                <div key={check.key} className="ui-control-muted px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm font-medium">{check.label}</div>
                     <Badge variant={getCheckBadgeVariant(check.status)}>{check.status}</Badge>
@@ -129,7 +129,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="console-surface rounded-2xl px-4 py-4">
+              <div className="ui-control-muted px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   步骤
                 </div>
@@ -145,7 +145,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                   ))}
                 </div>
               </div>
-              <div className="console-surface rounded-2xl px-4 py-4">
+              <div className="ui-control-muted px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   回滚
                 </div>
@@ -174,7 +174,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
         )}
       </div>
 
-      <div className="console-panel p-5">
+      <div className="ui-floating p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">故障归因</div>
@@ -190,11 +190,11 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
         {incidentSnapshot ? (
           <div className="space-y-4">
             {props.incidentAnalysis.errorMessage && (
-              <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+              <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
                 {props.incidentAnalysis.errorMessage}
               </div>
             )}
-            <div className="console-card rounded-2xl px-4 py-4">
+            <div className="ui-control px-4 py-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge
                   variant={getRiskBadgeVariant(
@@ -221,7 +221,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="console-surface rounded-2xl px-4 py-4">
+              <div className="ui-control-muted px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   过程
                 </div>
@@ -237,7 +237,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                   ))}
                 </div>
               </div>
-              <div className="console-surface rounded-2xl px-4 py-4">
+              <div className="ui-control-muted px-4 py-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   证据
                 </div>
@@ -253,7 +253,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               </div>
             </div>
 
-            <div className="console-surface rounded-2xl px-4 py-4">
+            <div className="ui-control-muted px-4 py-4">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 动作
               </div>

@@ -118,43 +118,43 @@ export function DeploymentRolloutAction({
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
             <div className="space-y-4">
               {disabledSummary && (
-                <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
-              <div className="console-surface p-4 sm:p-5">
+              <div className="ui-control-muted p-4 sm:p-5">
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">候选切换上下文</div>
                 </div>
 
                 {plan?.deployment?.candidateImage ? (
-                  <div className="console-card mt-4 rounded-2xl px-4 py-3">
+                  <div className="ui-control mt-4 px-4 py-3">
                     <div className="text-xs text-muted-foreground">候选版本镜像</div>
                     <code className="mt-2 block break-all text-xs text-foreground">
                       {plan.deployment.candidateImage}
                     </code>
                   </div>
                 ) : (
-                  <div className="console-card mt-4 rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                  <div className="ui-control mt-4 px-4 py-8 text-sm text-muted-foreground">
                     暂无候选镜像
                   </div>
                 )}
               </div>
 
               {error && (
-                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
             </div>
 
             <div className="space-y-4">
-              <div className="console-surface p-4 sm:p-5">
+              <div className="ui-control-muted p-4 sm:p-5">
                 <div className="mb-3 text-sm font-semibold text-foreground">放量检查</div>
 
                 {loadingPlan ? (
-                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">
                     加载中...
                   </div>
                 ) : plan ? (
@@ -166,15 +166,13 @@ export function DeploymentRolloutAction({
                     />
 
                     {plan.plan.blockingReason && (
-                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                      <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {plan.plan.blockingReason}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
-                    暂无结果
-                  </div>
+                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">暂无结果</div>
                 )}
               </div>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { buildCreateProjectSubmissionSnapshot } from '@/lib/projects/create-view';
+import type { CreateEnvironmentTemplate } from '@/lib/projects/environment-topology';
 
 interface CreateProjectPayload {
   mode: 'import' | 'create';
@@ -21,6 +22,7 @@ interface CreateProjectPayload {
   productionDeploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green';
   previewDatabaseStrategy?: 'inherit' | 'isolated_clone';
   runtimeProfile?: 'standard' | 'resilient' | 'performance';
+  environmentTemplate?: CreateEnvironmentTemplate;
 }
 
 export async function submitCreateProject(payload: CreateProjectPayload): Promise<

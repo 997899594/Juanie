@@ -82,7 +82,7 @@ export default async function HomePage() {
       <PriorityDeck title="下一步" items={nextPriorityItems} />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <section className="console-panel overflow-hidden">
+        <section className="ui-floating overflow-hidden">
           <div className="console-divider-bottom flex items-center justify-between px-5 py-4">
             <div className="text-sm font-semibold">项目入口</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
@@ -94,8 +94,8 @@ export default async function HomePage() {
           </div>
           <div className="p-3">
             {projectCards.length === 0 ? (
-              <div className="console-surface flex min-h-64 flex-col items-center justify-center rounded-2xl p-6 text-center">
-                <div className="mb-4 rounded-2xl bg-secondary p-3">
+              <div className="ui-control-muted flex min-h-64 flex-col items-center justify-center p-6 text-center">
+                <div className="mb-4 rounded-2xl bg-background/80 p-3">
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="text-sm font-medium">没有项目</div>
@@ -112,10 +112,10 @@ export default async function HomePage() {
                   <Link
                     key={project.id}
                     href={`/projects/${project.id}`}
-                    className="console-surface flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/50"
+                    className="ui-control-muted flex items-center justify-between px-4 py-3 transition-colors hover:bg-secondary/70"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-background">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-background/90 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
                         <FolderKanban className="h-4 w-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0">
@@ -136,7 +136,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="console-panel overflow-hidden">
+        <section className="ui-floating overflow-hidden">
           <div className="console-divider-bottom flex items-center justify-between px-5 py-4">
             <div className="text-sm font-semibold">待处理详情</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
@@ -148,8 +148,8 @@ export default async function HomePage() {
           </div>
           <div className="p-3">
             {attentionItems.length === 0 ? (
-              <div className="console-surface flex min-h-64 flex-col items-center justify-center rounded-2xl p-6 text-center">
-                <div className="mb-4 rounded-2xl bg-secondary p-3">
+              <div className="ui-control-muted flex min-h-64 flex-col items-center justify-center p-6 text-center">
+                <div className="mb-4 rounded-2xl bg-background/80 p-3">
                   <AlertTriangle className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="text-sm font-medium">没有待处理项</div>
@@ -160,7 +160,7 @@ export default async function HomePage() {
                   <Link
                     key={run.id}
                     href={run.href}
-                    className="console-surface flex items-center justify-between rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/50"
+                    className="ui-control-muted flex items-center justify-between px-4 py-3 transition-colors hover:bg-secondary/70"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div
@@ -217,7 +217,7 @@ export default async function HomePage() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Link
           href="/projects/new"
-          className="console-panel flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/30"
+          className="ui-control flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/60"
         >
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-black text-white">
             <Plus className="h-4 w-4" />
@@ -229,14 +229,13 @@ export default async function HomePage() {
 
         <Link
           href="/teams"
-          className="console-panel flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/30"
+          className="ui-control flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/60"
         >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-foreground">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 text-foreground">
             <Users className="h-4 w-4" />
           </div>
           <div>
             <div className="text-sm font-semibold">团队管理</div>
-            <div className="text-xs text-muted-foreground">成员与权限</div>
           </div>
         </Link>
       </div>

@@ -92,28 +92,28 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         title="设置"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" className="h-9 rounded-xl px-4">
+            <Button asChild variant="outline" className="h-9 px-4">
               <Link href="/settings/integrations">集成</Link>
             </Button>
-            <Button variant="outline" className="h-9 rounded-xl px-4" onClick={handleSignOut}>
+            <Button variant="outline" className="h-9 px-4" onClick={handleSignOut}>
               退出登录
             </Button>
           </div>
         }
       />
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {initialData.overview.stats.map((stat) => (
-          <div key={stat.label} className="console-panel px-5 py-4">
+          <div key={stat.label} className="ui-control-muted rounded-[20px] px-4 py-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
-            <div className="mt-3 truncate text-sm font-semibold">{stat.value}</div>
+            <div className="mt-2 truncate text-sm font-semibold">{stat.value}</div>
           </div>
         ))}
       </div>
 
-      <div className="console-panel px-5 py-5">
+      <div className="ui-floating px-5 py-5">
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 rounded-2xl">
@@ -138,19 +138,18 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
                 value={formData.name}
                 onChange={(e) => setFormData({ name: e.target.value })}
                 placeholder="输入你的名称"
-                className="h-11 rounded-xl"
               />
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm">邮箱地址</Label>
-              <div className="console-surface rounded-xl px-4 py-3 text-sm text-muted-foreground">
+              <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
                 {user.email}
               </div>
             </div>
 
             <div className="flex justify-end">
-              <Button type="submit" className="h-9 rounded-xl px-4" disabled={saving}>
+              <Button type="submit" className="h-9 px-4" disabled={saving}>
                 {saving ? '保存中...' : '保存'}
               </Button>
             </div>
@@ -158,18 +157,18 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         </div>
       </div>
 
-      <div className="console-panel overflow-hidden">
+      <div className="ui-floating overflow-hidden">
         <div className="console-divider-bottom px-5 py-4">
           <div className="text-sm font-semibold">代码托管连接</div>
         </div>
         <div className="space-y-2 p-3">
           {initialData.overview.integrations.length === 0 ? (
-            <div className="console-surface flex min-h-40 items-center justify-center rounded-2xl text-sm text-muted-foreground">
+            <div className="ui-control-muted flex min-h-40 items-center justify-center text-sm text-muted-foreground">
               暂无代码托管连接
             </div>
           ) : (
             initialData.overview.integrations.map((integration) => (
-              <div key={integration.id} className="console-card rounded-2xl px-4 py-4">
+              <div key={integration.id} className="ui-control px-4 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">{integration.provider}</div>

@@ -17,7 +17,7 @@ export function ReleaseFilterToolbar({
   onChange,
 }: ReleaseFilterToolbarProps) {
   return (
-    <div className="console-panel space-y-4 px-4 py-4">
+    <div className="ui-control-muted space-y-4 rounded-[24px] px-4 py-4">
       <div className="overflow-x-auto pb-1">
         <div className="flex min-w-max items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />

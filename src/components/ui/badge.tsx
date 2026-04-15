@@ -11,8 +11,7 @@ const badgeVariants = cva(
         secondary:
           'bg-secondary text-secondary-foreground shadow-[0_1px_2px_rgba(55,53,47,0.03)] hover:bg-secondary/92',
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/94',
-        outline:
-          'bg-[rgba(255,255,255,0.84)] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]',
+        outline: 'ui-control text-muted-foreground',
         success:
           'bg-[rgba(79,127,100,0.14)] text-[rgb(79,127,100)] hover:bg-[rgba(79,127,100,0.14)]',
         warning:
@@ -30,7 +29,7 @@ export interface BadgeProps
     VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+  return <div data-slot="badge" className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
 export { Badge, badgeVariants };
