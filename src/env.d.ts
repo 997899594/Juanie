@@ -1,5 +1,15 @@
 export interface Env {
-  DATABASE_URL: string;
+  DATABASE_URL?: string;
+  DATABASE_HOST?: string;
+  DATABASE_PORT?: string;
+  DATABASE_NAME?: string;
+  DATABASE_USER?: string;
+  DATABASE_PASSWORD?: string;
+  DATABASE_SSL_MODE?: string;
+  POSTGRES_DB?: string;
+  POSTGRES_USER?: string;
+  POSTGRES_PASSWORD?: string;
+  POSTGRES_PORT?: string;
 
   // NextAuth
   NEXTAUTH_URL: string;

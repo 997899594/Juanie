@@ -87,7 +87,12 @@ Notes:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| DATABASE_URL | Yes | PostgreSQL connection string for runtime, `db:status`, `db:push`, and `db:studio` |
+| DATABASE_URL | Conditional | PostgreSQL connection string when component env vars are not provided |
+| DATABASE_HOST | Conditional | PostgreSQL host for component-based runtime config |
+| DATABASE_PORT | Conditional | PostgreSQL port for component-based runtime config |
+| DATABASE_NAME | Conditional | PostgreSQL database name for component-based runtime config |
+| DATABASE_USER | Conditional | PostgreSQL username for component-based runtime config |
+| DATABASE_PASSWORD | Conditional | PostgreSQL password for component-based runtime config |
 | NEXTAUTH_URL | Yes | Your app URL |
 | NEXTAUTH_SECRET | Yes | Secret for NextAuth |
 | GITHUB_CLIENT_ID | Yes | GitHub OAuth app client ID |

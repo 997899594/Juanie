@@ -387,6 +387,12 @@ Required environment variables (see `.env.example`):
 ```bash
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/juanie
+# 或使用组件化配置（推荐给控制面部署）
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=juanie
+DATABASE_USER=postgres
+DATABASE_PASSWORD=your-password
 
 # Auth
 NEXTAUTH_SECRET=your-secret-key

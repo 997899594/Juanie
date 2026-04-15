@@ -73,6 +73,7 @@ env:
   DATABASE_HOST: "postgres"
   DATABASE_PORT: 5432
   DATABASE_NAME: "juanie"
+  DATABASE_USER: "postgres"
   DATABASE_SSL_MODE: "disable"
   AUTH_TRUST_HOST: "true"
 

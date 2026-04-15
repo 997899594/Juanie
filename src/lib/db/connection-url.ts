@@ -25,6 +25,44 @@ export function normalizeDatabaseUrl(rawUrl: string): string {
   return parsed.toString();
 }
 
+function parseOptionalPort(rawPort?: string | null): number | null {
+  if (!rawPort?.trim()) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(rawPort, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+type DatabaseUrlComponents = {
+  username: string;
+  password?: string | null;
+  host: string;
+  port?: number | null;
+  databaseName: string;
+};
+
+export function getDatabaseUrlComponentsFromEnv(): DatabaseUrlComponents | null {
+  const host = process.env.DATABASE_HOST?.trim();
+  const databaseName = process.env.DATABASE_NAME?.trim() || process.env.POSTGRES_DB?.trim();
+  const username = process.env.DATABASE_USER?.trim() || process.env.POSTGRES_USER?.trim();
+  const password =
+    process.env.DATABASE_PASSWORD?.trim() || process.env.POSTGRES_PASSWORD?.trim() || null;
+
+  if (!host || !databaseName || !username || !password) {
+    return null;
+  }
+
+  return {
+    username,
+    password,
+    host,
+    port:
+      parseOptionalPort(process.env.DATABASE_PORT) ?? parseOptionalPort(process.env.POSTGRES_PORT),
+    databaseName,
+  };
+}
+
 export function buildNormalizedPostgresUrl(input: {
   username: string;
   password?: string | null;
@@ -43,9 +81,16 @@ export function buildNormalizedPostgresUrl(input: {
 }
 
 export function getNormalizedDatabaseUrlFromEnv(): string {
+  const components = getDatabaseUrlComponentsFromEnv();
+  if (components) {
+    return buildNormalizedPostgresUrl(components);
+  }
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required');
+    throw new Error(
+      'DATABASE_URL is required when DATABASE_HOST/DATABASE_NAME/DATABASE_USER/DATABASE_PASSWORD are not set'
+    );
   }
 
   return normalizeDatabaseUrl(databaseUrl);
