@@ -706,7 +706,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               <div className="space-y-2">
                 <Label>团队</Label>
                 <Select value={formData.teamId} onValueChange={updateTeamId}>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-12 rounded-[20px]">
                     <SelectValue placeholder="选择团队" />
                   </SelectTrigger>
                   <SelectContent>
