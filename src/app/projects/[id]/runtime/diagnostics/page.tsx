@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { environments, projects, teamMembers } from '@/lib/db/schema';
+import { pickDefaultEnvironment } from '@/lib/environments/model';
 
 export default async function RuntimeDiagnosticsPage({
   params,
@@ -44,10 +45,11 @@ export default async function RuntimeDiagnosticsPage({
           where: and(eq(environments.id, resolvedSearchParams.env), eq(environments.projectId, id)),
         })
       : null) ??
-    (await db.query.environments.findFirst({
-      where: eq(environments.projectId, id),
-      orderBy: (table, { desc, asc }) => [desc(table.isProduction), asc(table.createdAt)],
-    }));
+    pickDefaultEnvironment(
+      await db.query.environments.findMany({
+        where: eq(environments.projectId, id),
+      })
+    );
 
   if (!environment) {
     redirect(`/projects/${id}/runtime`);

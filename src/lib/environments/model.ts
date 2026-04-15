@@ -11,6 +11,10 @@ interface EnvironmentNamespaceLike extends EnvironmentKindLike {
   name: string;
 }
 
+interface EnvironmentIdentityLike extends EnvironmentKindLike {
+  name?: string | null;
+}
+
 function slugifySegment(value: string): string {
   return value
     .trim()
@@ -50,6 +54,46 @@ export function isProductionEnvironment(environment: EnvironmentKindLike): boole
 
 export function isPersistentEnvironment(environment: EnvironmentKindLike): boolean {
   return getEnvironmentKind(environment) === 'persistent';
+}
+
+export function getEnvironmentSortRank(environment: EnvironmentKindLike): number {
+  switch (getEnvironmentKind(environment)) {
+    case 'persistent':
+      return 0;
+    case 'production':
+      return 1;
+    case 'preview':
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+export function compareEnvironmentDisplayOrder(
+  left: EnvironmentIdentityLike,
+  right: EnvironmentIdentityLike
+): number {
+  const leftRank = getEnvironmentSortRank(left);
+  const rightRank = getEnvironmentSortRank(right);
+
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+
+  return (left.name ?? '').localeCompare(right.name ?? '');
+}
+
+export function pickDefaultEnvironment<T extends EnvironmentIdentityLike>(
+  environments: T[]
+): T | null {
+  const ordered = [...environments].sort(compareEnvironmentDisplayOrder);
+  return ordered[0] ?? null;
+}
+
+export function pickProductionEnvironment<T extends EnvironmentKindLike>(
+  environments: T[]
+): T | null {
+  return environments.find((environment) => isProductionEnvironment(environment)) ?? null;
 }
 
 export function buildEnvironmentNamespace(

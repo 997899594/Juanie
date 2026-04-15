@@ -1,4 +1,5 @@
 import type { TeamRole } from '@/lib/db/schema';
+import { isProductionEnvironment } from '@/lib/environments/model';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 
 interface GovernanceEnvironmentLike {
@@ -45,7 +46,7 @@ export function buildReleaseEnvironmentActionSnapshot(
   return {
     canManage,
     summary: canManage
-      ? environment.isProduction
+      ? isProductionEnvironment(environment)
         ? '可管理当前生产发布与回滚'
         : '可管理当前环境的发布动作'
       : getEnvironmentGuardReason(environment),
@@ -59,8 +60,8 @@ export function buildReleasePageGovernanceSnapshot(input: {
   const manageableEnvironmentIds = input.environments
     .filter((environment) => canManageEnvironment(input.role, environment))
     .map((environment) => environment.id);
-  const productionEnvironments = input.environments.filter(
-    (environment) => environment.isProduction
+  const productionEnvironments = input.environments.filter((environment) =>
+    isProductionEnvironment(environment)
   );
   const canPromoteToProduction = productionEnvironments.every((environment) =>
     canManageEnvironment(input.role, environment)

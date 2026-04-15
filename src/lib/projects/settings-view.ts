@@ -1,4 +1,5 @@
 import type { TeamRole } from '@/lib/db/schema';
+import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { canManageEnvironment, evaluateEnvironmentPolicy } from '@/lib/policies/delivery';
 
 interface GovernanceEnvironmentLike {
@@ -68,10 +69,12 @@ export function buildProjectGovernanceSnapshot(input: {
   role: TeamRole;
   environments: GovernanceEnvironmentLike[];
 }): ProjectGovernanceSnapshot {
-  const productionEnvironments = input.environments.filter(
-    (environment) => environment.isProduction
+  const productionEnvironments = input.environments.filter((environment) =>
+    isProductionEnvironment(environment)
   );
-  const previewEnvironments = input.environments.filter((environment) => environment.isPreview);
+  const previewEnvironments = input.environments.filter((environment) =>
+    isPreviewEnvironment(environment)
+  );
   const canEditProject = input.role === 'owner' || input.role === 'admin';
   const canDeleteProject = input.role === 'owner';
   const canManageProduction = productionEnvironments.every((environment) =>

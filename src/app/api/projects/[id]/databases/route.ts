@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import {
   getProjectAccessOrThrow,
@@ -10,6 +10,7 @@ import { databaseCapabilities, normalizeDatabaseCapabilities } from '@/lib/datab
 import { db } from '@/lib/db';
 import { databases, environments, services } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
+import { pickProductionEnvironment } from '@/lib/environments/model';
 import { getIsConnected, initK8sClient } from '@/lib/k8s';
 import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/queue/project-init';
 
@@ -152,14 +153,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     } else {
       // Default to the project's production environment if no environmentId provided
-      const prodEnv = await db.query.environments.findFirst({
-        where: and(
-          eq(environments.projectId, id),
-          eq(environments.name, 'production'),
-          isNull(environments.isPreview)
-        ),
+      const projectEnvironments = await db.query.environments.findMany({
+        where: eq(environments.projectId, id),
       });
-      resolvedEnvId = prodEnv?.id ?? null;
+      resolvedEnvId = pickProductionEnvironment(projectEnvironments)?.id ?? null;
     }
 
     if (serviceId) {

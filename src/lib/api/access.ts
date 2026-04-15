@@ -12,6 +12,7 @@ import {
   teamMembers,
   teams,
 } from '@/lib/db/schema';
+import { pickDefaultEnvironment } from '@/lib/environments/model';
 import { isUuid } from '@/lib/uuid';
 
 const OWNER_ADMIN_ROLES: readonly TeamRole[] = ['owner', 'admin'];
@@ -137,10 +138,10 @@ export async function getProjectEnvironmentOrThrow(
   }
 
   if (!environmentId) {
-    const environment = await db.query.environments.findFirst({
+    const environmentList = await db.query.environments.findMany({
       where: eq(environments.projectId, projectId),
-      orderBy: (table, { desc, asc }) => [desc(table.isProduction), asc(table.createdAt)],
     });
+    const environment = pickDefaultEnvironment(environmentList);
 
     if (!environment) {
       throw accessError('not_found', 'Environment not found');

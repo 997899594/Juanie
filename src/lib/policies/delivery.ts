@@ -1,4 +1,8 @@
 import type { TeamRole } from '@/lib/db/schema';
+import {
+  isPreviewEnvironment as isPreviewEnvironmentByKind,
+  isProductionEnvironment as isProductionEnvironmentByKind,
+} from '@/lib/environments/model';
 
 interface EnvironmentPolicyLike {
   isProduction?: boolean | null;
@@ -80,11 +84,11 @@ export interface MigrationPolicySignalSnapshot {
 }
 
 function isProductionEnvironment(environment: EnvironmentPolicyLike): boolean {
-  return Boolean(environment.isProduction);
+  return isProductionEnvironmentByKind(environment);
 }
 
 function isPreviewEnvironment(environment: EnvironmentPolicyLike): boolean {
-  return Boolean(environment.isPreview);
+  return isPreviewEnvironmentByKind(environment);
 }
 
 function getRolloutSignal(environment: EnvironmentPolicyLike): PolicySignalSnapshot | null {
