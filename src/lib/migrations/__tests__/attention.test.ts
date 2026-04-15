@@ -27,16 +27,18 @@ describe('migration attention helpers', () => {
   });
 
   it('filters attention runs', () => {
-    expect(filterAttentionRuns(runs).map((run) => run.id)).toEqual(['1', '2', '3']);
+    expect(filterAttentionRuns(runs).map((run) => run.id)).toEqual(['1', '2']);
     expect(filterAttentionRuns(runs, 'approval').map((run) => run.id)).toEqual(['1']);
+    expect(filterAttentionRuns(runs, 'canceled').map((run) => run.id)).toEqual(['3']);
   });
 
   it('builds stats from runs', () => {
     expect(getAttentionStats(runs)).toEqual({
-      total: 3,
+      total: 2,
       approval: 1,
       failed: 1,
       canceled: 1,
+      external: 0,
     });
   });
 });

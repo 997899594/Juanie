@@ -17,9 +17,12 @@ export function buildApprovalsPageData<TRun extends ApprovalRunLike>(input: {
   runs: TRun[];
   filterState: AttentionFilterState;
 }) {
-  const attentionRuns = filterAttentionRuns(input.runs);
-  const filteredRuns = filterAttentionRuns(attentionRuns, input.filterState);
-  const attentionStats = getAttentionStats(attentionRuns);
+  const activeAttentionRuns = filterAttentionRuns(input.runs);
+  const filteredRuns =
+    input.filterState === 'all'
+      ? activeAttentionRuns
+      : filterAttentionRuns(input.runs, input.filterState);
+  const attentionStats = getAttentionStats(input.runs);
 
   return {
     stats: buildApprovalStats(attentionStats),

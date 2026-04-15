@@ -76,6 +76,10 @@ export interface GitProviderConfig {
   redirectUri: string;
 }
 
+export interface GitProviderSessionConfig {
+  provider: GitProviderType;
+}
+
 export interface GitProvider {
   type: GitProviderType;
 
@@ -165,6 +169,15 @@ export function createGitProvider(config: GitProviderConfig): GitProvider {
     default:
       throw new Error(`Unsupported git provider: ${config.type}`);
   }
+}
+
+export function createGitProviderForSession(config: GitProviderSessionConfig): GitProvider {
+  return createGitProvider({
+    type: config.provider,
+    clientId: '',
+    clientSecret: '',
+    redirectUri: '',
+  });
 }
 
 import { GitHubProvider } from './github';

@@ -50,6 +50,7 @@ interface EffectiveEnvVar extends EnvVar {
 
 interface ServiceOverrideVar extends EnvVar {
   overridesEnvironmentValue: boolean;
+  sourceLabel: string;
 }
 
 interface ServiceOverrideGroup {
@@ -489,7 +490,10 @@ function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
               <ReadonlyEnvVarRow
                 key={variable.id}
                 envVar={variable}
-                badges={variable.overridesEnvironmentValue ? ['覆盖环境级同名键'] : ['仅服务级']}
+                badges={[
+                  variable.sourceLabel,
+                  variable.overridesEnvironmentValue ? '覆盖环境级同名键' : '仅服务级',
+                ]}
               />
             ))}
           </div>

@@ -21,6 +21,7 @@ export interface EffectiveEnvironmentVariableRecord extends VisibleEnvVarRecord 
 
 export interface ServiceOverrideVariableRecord extends VisibleEnvVarRecord {
   overridesEnvironmentValue: boolean;
+  sourceLabel: string;
 }
 
 export interface ServiceOverrideGroup {
@@ -170,6 +171,7 @@ export async function getEnvironmentVariableOverview(
     group.variables.push({
       ...visible,
       overridesEnvironmentValue: effectiveKeys.has(record.key),
+      sourceLabel: '项目级服务覆盖',
     });
     groupedServiceOverrides.set(record.service.id, group);
   }

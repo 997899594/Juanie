@@ -5,13 +5,13 @@ import type {
   CreateBranchOptions,
   CreateRepoOptions,
   CreateReviewRequestOptions,
+  GitProvider,
   GitRepository,
   GitReviewRequest,
   PushOptions,
   TriggerReleaseBuildOptions,
 } from '@/lib/git';
-import { githubAdapter } from '@/lib/integrations/adapters/github-adapter';
-import { gitlabAdapter } from '@/lib/integrations/adapters/gitlab-adapter';
+import { createGitProviderForSession } from '@/lib/git';
 import {
   type IntegrationError,
   type IntegrationErrorCode,
@@ -36,10 +36,10 @@ type ProviderErrorInput = {
   message?: string;
 };
 
-const isGitHubProvider = (provider: string) => provider === 'github';
-
-const resolveAdapter = (provider: 'github' | 'gitlab' | 'gitlab-self-hosted') =>
-  isGitHubProvider(provider) ? githubAdapter : gitlabAdapter;
+const resolveProvider = (session: IntegrationSession): GitProvider =>
+  createGitProviderForSession({
+    provider: session.provider,
+  });
 
 export const mapProviderError = (error: ProviderErrorInput): IntegrationError => {
   if (error.status === 404) {
@@ -191,16 +191,16 @@ export const gateway = {
     session: IntegrationSession,
     options?: { page?: number; perPage?: number; search?: string }
   ): Promise<GitRepository[]> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.listRepositories(session, options);
+    const provider = resolveProvider(session);
+    return provider.getRepositories(session.accessToken, options);
   },
 
   async getRepository(
     session: IntegrationSession,
     fullName: string
   ): Promise<GitRepository | null> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.getRepository(session, fullName);
+    const provider = resolveProvider(session);
+    return provider.getRepository(session.accessToken, fullName);
   },
 
   async getReviewRequest(
@@ -208,8 +208,8 @@ export const gateway = {
     repoFullName: string,
     number: number
   ): Promise<GitReviewRequest | null> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.getReviewRequest(session, repoFullName, number);
+    const provider = resolveProvider(session);
+    return provider.getReviewRequest(session.accessToken, repoFullName, number);
   },
 
   async resolveRefToCommitSha(
@@ -217,37 +217,37 @@ export const gateway = {
     repoFullName: string,
     ref: string
   ): Promise<string | null> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.resolveRefToCommitSha(session, repoFullName, ref);
+    const provider = resolveProvider(session);
+    return provider.resolveRefToCommitSha(session.accessToken, repoFullName, ref);
   },
 
   async triggerReleaseBuild(
     session: IntegrationSession,
     options: TriggerReleaseBuildOptions
   ): Promise<void> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.triggerReleaseBuild(session, options);
+    const provider = resolveProvider(session);
+    return provider.triggerReleaseBuild(session.accessToken, options);
   },
 
   async createRepository(
     session: IntegrationSession,
     options: CreateRepoOptions
   ): Promise<GitRepository> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.createRepository(session, options);
+    const provider = resolveProvider(session);
+    return provider.createRepository(session.accessToken, options);
   },
 
   async createBranch(session: IntegrationSession, options: CreateBranchOptions): Promise<void> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.createBranch(session, options);
+    const provider = resolveProvider(session);
+    return provider.createBranch(session.accessToken, options);
   },
 
   async createReviewRequest(
     session: IntegrationSession,
     options: CreateReviewRequestOptions
   ): Promise<GitReviewRequest> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.createReviewRequest(session, options);
+    const provider = resolveProvider(session);
+    return provider.createReviewRequest(session.accessToken, options);
   },
 
   async listRootFiles(
@@ -255,8 +255,8 @@ export const gateway = {
     repoFullName: string,
     branch?: string
   ): Promise<string[]> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.listRootFiles(session, repoFullName, branch);
+    const provider = resolveProvider(session);
+    return provider.listRootFiles(session.accessToken, repoFullName, branch);
   },
 
   async getFileContent(
@@ -265,8 +265,8 @@ export const gateway = {
     path: string,
     branch?: string
   ): Promise<string | null> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.getFileContent(session, repoFullName, path, branch);
+    const provider = resolveProvider(session);
+    return provider.getFileContent(session.accessToken, repoFullName, path, branch);
   },
 
   async listDirectory(
@@ -275,12 +275,12 @@ export const gateway = {
     path: string,
     branch?: string
   ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.listDirectory(session, repoFullName, path, branch);
+    const provider = resolveProvider(session);
+    return provider.listDirectory(session.accessToken, repoFullName, path, branch);
   },
 
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {
-    const adapter = resolveAdapter(session.provider);
-    return adapter.pushFiles(session, options);
+    const provider = resolveProvider(session);
+    return provider.pushFiles(session.accessToken, options);
   },
 };

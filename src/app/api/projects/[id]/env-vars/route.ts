@@ -20,6 +20,7 @@ import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { environmentVariables } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
+import { resolveEnvironmentVariableScope } from '@/lib/env-vars/scope';
 import { getIsConnected, rolloutRestartDeployments } from '@/lib/k8s';
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -43,6 +44,15 @@ export async function GET(request: Request, { params }: RouteParams) {
     }
     if (serviceId) {
       await getProjectServiceOrThrow(projectId, serviceId);
+    }
+
+    try {
+      resolveEnvironmentVariableScope({ environmentId, serviceId });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Invalid environment variable scope' },
+        { status: 400 }
+      );
     }
 
     const conditions = [eq(environmentVariables.projectId, projectId)];
@@ -125,6 +135,15 @@ export async function POST(request: Request, { params }: RouteParams) {
     }
 
     const { key, value, isSecret, environmentId = null, serviceId = null } = body;
+    try {
+      resolveEnvironmentVariableScope({ environmentId, serviceId });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Invalid environment variable scope' },
+        { status: 400 }
+      );
+    }
+
     const scopedEnvironment = environmentId
       ? await getProjectEnvironmentOrThrow(projectId, environmentId)
       : null;

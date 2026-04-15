@@ -4,6 +4,11 @@ export const attentionMigrationStatuses = [
   'failed',
 ] as const;
 
+export const historicalAttentionMigrationStatuses = [
+  ...attentionMigrationStatuses,
+  'canceled',
+] as const;
+
 export type AttentionMigrationStatus = (typeof attentionMigrationStatuses)[number];
 export type AttentionFilterState = 'all' | 'approval' | 'external' | 'failed' | 'canceled';
 
