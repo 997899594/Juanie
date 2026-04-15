@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import postgres from 'postgres';
 import { db } from '@/lib/db';
+import { buildNormalizedPostgresUrl, normalizeDatabaseUrl } from '@/lib/db/connection-url';
 import {
   databaseMigrations,
   databases,
@@ -93,19 +94,20 @@ function buildPostgresConnectionString(database: {
   password: string | null;
 }): string | null {
   if (database.connectionString) {
-    return database.connectionString;
+    return normalizeDatabaseUrl(database.connectionString);
   }
 
   if (!database.host || !database.databaseName || !database.username) {
     return null;
   }
 
-  const username = encodeURIComponent(database.username);
-  const password = encodeURIComponent(database.password ?? '');
-  const auth = database.password ? `${username}:${password}` : username;
-  const port = database.port ? `:${database.port}` : '';
-
-  return `postgresql://${auth}@${database.host}${port}/${database.databaseName}`;
+  return buildNormalizedPostgresUrl({
+    username: database.username,
+    password: database.password,
+    host: database.host,
+    port: database.port,
+    databaseName: database.databaseName,
+  });
 }
 
 async function getProjectDefaultRef(projectId: string, branch?: string | null): Promise<string> {

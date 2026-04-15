@@ -13,7 +13,10 @@ import {
 } from '@/lib/databases/capabilities';
 import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
-import { getNormalizedDatabaseUrlFromEnv } from '@/lib/db/connection-url';
+import {
+  buildNormalizedPostgresUrl,
+  getNormalizedDatabaseUrlFromEnv,
+} from '@/lib/db/connection-url';
 import {
   databases,
   domains,
@@ -1782,7 +1785,13 @@ async function provisionSharedPostgreSQL(
     const parsedUrl = new URL(adminUrl);
     const host = toFqdn(parsedUrl.hostname);
     const port = parseInt(parsedUrl.port || '5432', 10);
-    const connStr = `postgresql://${dbIdentifier}:${encodeURIComponent(dbPassword)}@${host}:${port}/${dbIdentifier}`;
+    const connStr = buildNormalizedPostgresUrl({
+      username: dbIdentifier,
+      password: dbPassword,
+      host,
+      port,
+      databaseName: dbIdentifier,
+    });
 
     await db
       .update(databases)
@@ -1976,7 +1985,13 @@ function getConnectionString(
   const encodedPassword = encodeURIComponent(password);
   switch (type) {
     case 'postgresql':
-      return `postgresql://postgres:${encodedPassword}@${fullHost}:5432/${dbName}`;
+      return buildNormalizedPostgresUrl({
+        username: 'postgres',
+        password,
+        host: fullHost,
+        port: 5432,
+        databaseName: dbName,
+      });
     case 'mysql':
       return `mysql://root:${encodedPassword}@${fullHost}:3306/${dbName}`;
     case 'redis':
