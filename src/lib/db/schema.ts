@@ -605,6 +605,10 @@ export const environments = pgTable(
     baseEnvironmentId: uuid('baseEnvironmentId').references((): AnyPgColumn => environments.id, {
       onDelete: 'set null',
     }),
+    previewBuildStatus: deploymentStatusEnum('previewBuildStatus'),
+    previewBuildSourceRef: varchar('previewBuildSourceRef', { length: 255 }),
+    previewBuildSourceCommitSha: varchar('previewBuildSourceCommitSha', { length: 100 }),
+    previewBuildStartedAt: timestamp('previewBuildStartedAt'),
     databaseStrategy: environmentDatabaseStrategyEnum('databaseStrategy')
       .default('direct')
       .notNull(),

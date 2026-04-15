@@ -12,6 +12,7 @@ import {
   getEnvironmentInheritancePresentation,
   getEnvironmentScopeLabel,
   getEnvironmentSourceLabel,
+  getPreviewBuildPresentation,
   getPreviewDatabasePresentation,
 } from '@/lib/environments/presentation';
 import { isPreviewEnvironmentExpired } from '@/lib/environments/preview';
@@ -38,6 +39,10 @@ interface EnvironmentViewLike {
   previewPrNumber?: number | null;
   branch?: string | null;
   expiresAt?: Date | string | null;
+  previewBuildStatus?: string | null;
+  previewBuildSourceRef?: string | null;
+  previewBuildSourceCommitSha?: string | null;
+  previewBuildStartedAt?: Date | string | null;
   deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
   domains?: Array<{
     id: string;
@@ -101,6 +106,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
     const inheritance = getEnvironmentInheritancePresentation(environment);
     const inheritanceLabel = inheritance?.label ?? null;
     const previewDatabase = getPreviewDatabasePresentation({ environment });
+    const previewBuild = getPreviewBuildPresentation({ environment });
     const expiryLabel = formatEnvironmentExpiry(environment.expiresAt);
     const primaryDomainUrl = (() => {
       if (!environment.domains?.length) {
@@ -182,9 +188,19 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
                 },
               ]
             : []),
+          ...(previewBuild
+            ? [
+                {
+                  key: previewBuild.key,
+                  label: previewBuild.label,
+                  tone: previewBuild.tone,
+                },
+              ]
+            : []),
         ],
-        customSummary: previewDatabase?.summary ?? null,
-        customNextActionLabel: previewDatabase?.nextActionLabel ?? null,
+        customSummary: previewBuild?.summary ?? previewDatabase?.summary ?? null,
+        customNextActionLabel:
+          previewBuild?.nextActionLabel ?? previewDatabase?.nextActionLabel ?? null,
         environmentPolicySignals: policy.signals,
         environmentPolicySignal: policy.primarySignal,
         previewLifecycle,

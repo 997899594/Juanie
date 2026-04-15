@@ -4,6 +4,7 @@ import {
   formatEnvironmentTimestamp,
   getEnvironmentScopeLabel,
   getEnvironmentSourceLabel,
+  getPreviewBuildPresentation,
 } from '@/lib/environments/presentation';
 
 describe('environment presentation helpers', () => {
@@ -26,5 +27,36 @@ describe('environment presentation helpers', () => {
   it('formats absolute timestamps', () => {
     expect(formatEnvironmentTimestamp('2026-03-25T08:30:00.000Z')).toContain('3/');
     expect(formatEnvironmentTimestamp(null)).toBe(null);
+  });
+
+  it('builds persistent preview build summaries', () => {
+    const building = getPreviewBuildPresentation({
+      environment: {
+        isPreview: true,
+        previewPrNumber: 42,
+        previewBuildStatus: 'building',
+        previewBuildSourceCommitSha: 'abc123456789',
+        previewBuildStartedAt: '2026-03-25T08:30:00.000Z',
+      },
+    });
+
+    expect(building?.label).toBe('预览构建中');
+    expect(building?.tone).toBe('neutral');
+    expect(building?.status).toBe('building');
+    expect(building?.shortCommitSha).toBe('abc1234');
+
+    const failed = getPreviewBuildPresentation({
+      environment: {
+        isPreview: true,
+        branch: 'feature/search',
+        previewBuildStatus: 'failed',
+        previewBuildSourceCommitSha: 'def987654321',
+      },
+    });
+
+    expect(failed?.label).toBe('预览构建失败');
+    expect(failed?.tone).toBe('danger');
+    expect(failed?.status).toBe('failed');
+    expect(failed?.shortCommitSha).toBe('def9876');
   });
 });

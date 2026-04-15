@@ -9,6 +9,10 @@ import {
   repositories,
   services,
 } from '@/lib/db/schema';
+import {
+  clearPreviewEnvironmentBuildState,
+  setPreviewEnvironmentBuildState,
+} from '@/lib/environments/preview-build-state';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
@@ -175,6 +179,10 @@ async function persistRelease(
     }))
   );
 
+  if (environment.kind === 'preview') {
+    await clearPreviewEnvironmentBuildState(environment.id);
+  }
+
   await addReleaseJob(release.id);
 
   void (async () => {
@@ -267,15 +275,29 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
           ]
         : [];
 
-  return persistRelease(project, environment, requestedServices, {
-    sourceRepository: input.repository,
-    sourceRef: input.ref,
-    sourceCommitSha: input.sha ?? null,
-    configCommitSha: input.sha ?? null,
-    triggeredBy: input.triggeredBy,
-    triggeredByUserId: input.triggeredByUserId ?? null,
-    summary: input.summary ?? null,
-  });
+  try {
+    return await persistRelease(project, environment, requestedServices, {
+      sourceRepository: input.repository,
+      sourceRef: input.ref,
+      sourceCommitSha: input.sha ?? null,
+      configCommitSha: input.sha ?? null,
+      triggeredBy: input.triggeredBy,
+      triggeredByUserId: input.triggeredByUserId ?? null,
+      summary: input.summary ?? null,
+    });
+  } catch (error) {
+    if (environment.kind === 'preview' && environment.previewBuildStatus === 'building') {
+      await setPreviewEnvironmentBuildState({
+        environmentId: environment.id,
+        status: 'failed',
+        sourceRef: input.ref,
+        sourceCommitSha: input.sha ?? null,
+        startedAt: environment.previewBuildStartedAt ?? new Date(),
+      });
+    }
+
+    throw error;
+  }
 }
 
 export async function createProjectRelease(input: CreateProjectReleaseInput) {

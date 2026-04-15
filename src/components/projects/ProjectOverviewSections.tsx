@@ -20,7 +20,7 @@ export function ProjectOverviewHero({
   commandCenter,
 }: ProjectOverviewHeroProps) {
   return (
-    <section className="console-panel px-5 py-5">
+    <section className="ui-floating px-5 py-5">
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <div>
           <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
@@ -73,7 +73,7 @@ export function ProjectDefinitionSection({
   services: ProjectOverviewPageData['serviceCards'];
 }) {
   return (
-    <section className="console-panel overflow-hidden">
+    <section className="ui-floating overflow-hidden">
       <div className="console-divider-bottom px-5 py-4">
         <div className="text-sm font-semibold">项目定义</div>
       </div>
@@ -153,7 +153,7 @@ export function ProjectOperationsSection({
   recentReleaseCards: ProjectOverviewPageData['recentReleaseCards'];
 }) {
   return (
-    <section className="console-panel overflow-hidden">
+    <section className="ui-floating overflow-hidden">
       <div className="console-divider-bottom px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm font-semibold">项目动态</div>

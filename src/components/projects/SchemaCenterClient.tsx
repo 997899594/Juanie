@@ -253,12 +253,12 @@ export function SchemaCenterClient({
       />
 
       {feedback ? (
-        <div className="console-surface rounded-2xl px-4 py-3 text-sm text-foreground">
+        <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-foreground">
           {feedback}
         </div>
       ) : null}
 
-      <div className="console-surface rounded-[20px] px-4 py-3">
+      <div className="ui-control-muted px-4 py-3">
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <span>{data.summary.databaseCount} 个数据库</span>
           <span>{data.summary.blockingCount} 个门禁阻塞</span>
@@ -269,7 +269,7 @@ export function SchemaCenterClient({
 
       <div className="space-y-4">
         {data.environments.map((environment) => (
-          <section key={environment.id} className="console-panel px-4 py-4">
+          <section key={environment.id} className="ui-floating px-4 py-4">
             <div className="mb-4 flex items-center gap-2">
               <Database className="h-4 w-4" />
               <div className="text-sm font-semibold">{environment.name}</div>
@@ -312,7 +312,7 @@ export function SchemaCenterClient({
                     repairPlan.atlasExecutionStatus === 'failed');
 
                 return (
-                  <div key={database.id} className="console-surface rounded-2xl px-4 py-4">
+                  <div key={database.id} className="ui-control-muted rounded-2xl px-4 py-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -473,12 +473,12 @@ export function SchemaCenterClient({
                     </div>
 
                     {repairPlan && suggestionSummary ? (
-                      <div className="console-card mt-4 px-4 py-3">
+                      <div className="ui-control mt-4 px-4 py-3">
                         <div className="text-sm font-medium text-foreground">处理</div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {repairPlan.summary}
                         </div>
-                        <div className="console-surface mt-2 rounded-2xl px-3 py-2 text-sm text-foreground">
+                        <div className="ui-control-muted mt-2 rounded-2xl px-3 py-2 text-sm text-foreground">
                           {suggestionSummary}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -495,7 +495,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.diffSummary ? (
-                      <div className="console-surface mt-4 rounded-2xl px-4 py-3">
+                      <div className="ui-control-muted mt-4 rounded-2xl px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">迁移详情</Badge>
                           <Badge variant="outline">
@@ -515,7 +515,7 @@ export function SchemaCenterClient({
                             {Object.entries(latestAtlasRun.artifactFiles).map(([file, content]) => (
                               <div
                                 key={`${database.id}-schema-center-artifact-${file}`}
-                                className="console-card rounded-2xl px-4 py-3"
+                                className="ui-control rounded-2xl px-4 py-3"
                               >
                                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                   {file}
@@ -531,7 +531,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.log ? (
-                      <details className="console-surface mt-4 rounded-2xl px-4 py-3">
+                      <details className="ui-control-muted mt-4 rounded-2xl px-4 py-3">
                         <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
                           执行日志
                         </summary>

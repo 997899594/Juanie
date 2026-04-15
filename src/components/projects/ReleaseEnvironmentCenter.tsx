@@ -23,14 +23,14 @@ export function ReleaseEnvironmentCenter({
   onShowRecords,
 }: ReleaseEnvironmentCenterProps) {
   return (
-    <section className="console-panel px-4 py-4">
+    <section className="ui-floating px-4 py-4">
       <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
         <Globe className="h-4 w-4" />
         环境发布
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {items.map(({ environment, latestRelease }) => (
-          <div key={environment.id} className="console-card bg-secondary/20 px-4 py-4">
+          <div key={environment.id} className="ui-control-muted px-4 py-4">
             <div className="flex items-center gap-2">
               <div
                 className={cn(

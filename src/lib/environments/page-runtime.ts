@@ -47,12 +47,17 @@ export function buildEnvironmentRuntimeIndexes<
 export function attachEnvironmentRecentActivity<
   TEnvironment extends {
     id: string;
+    branch?: string | null;
+    previewPrNumber?: number | null;
     latestRelease?: {
       id: string;
       status: string;
       sourceRef?: string | null;
       createdAt?: Date | string;
     } | null;
+    previewBuildStatus?: string | null;
+    previewBuildSourceCommitSha?: string | null;
+    previewBuildStartedAt?: Date | string | null;
     latestReleaseCard?: {
       title?: string | null;
       shortCommitSha?: string | null;
@@ -110,6 +115,18 @@ export function attachEnvironmentRecentActivity<
             serviceName: environment.latestDeployment.service?.name ?? null,
             createdAt: environment.latestDeployment.createdAt,
             releaseId: environment.latestDeployment.releaseId ?? null,
+          }
+        : null,
+      latestPreviewBuild: environment.previewBuildStatus
+        ? {
+            status: environment.previewBuildStatus,
+            sourceLabel: environment.previewPrNumber
+              ? `PR #${environment.previewPrNumber}`
+              : environment.branch
+                ? `分支 ${environment.branch}`
+                : null,
+            shortCommitSha: environment.previewBuildSourceCommitSha?.slice(0, 7) ?? null,
+            createdAt: environment.previewBuildStartedAt,
           }
         : null,
       latestMigration: environment.latestMigrationRun

@@ -1,4 +1,4 @@
-import type { EnvironmentKind } from '@/lib/db/schema';
+import type { DeploymentStatus, EnvironmentKind } from '@/lib/db/schema';
 import { getEnvironmentKind, isPreviewEnvironment } from '@/lib/environments/model';
 import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
@@ -38,11 +38,28 @@ export interface PreviewDatabasePresentation {
   tone: 'danger' | 'neutral';
 }
 
+export interface PreviewBuildPresentation {
+  key: string;
+  label: string;
+  summary: string;
+  nextActionLabel: string;
+  tone: 'danger' | 'neutral';
+  status: Extract<DeploymentStatus, 'building' | 'failed'>;
+  shortCommitSha: string | null;
+  startedAtLabel: string | null;
+}
+
 interface PreviewDatabaseLike {
   id: string;
   name: string;
   status?: string | null;
   sourceDatabaseId?: string | null;
+}
+
+interface PreviewBuildLike {
+  previewBuildStatus?: DeploymentStatus | string | null;
+  previewBuildSourceCommitSha?: string | null;
+  previewBuildStartedAt?: Date | string | null;
 }
 
 export function getEnvironmentScopeLabel(environment: PresentableEnvironment): string | null {
@@ -173,6 +190,54 @@ export function getPreviewDatabasePresentation(input: {
     summary: `当前预览环境已就绪 ${cloneDatabases.length} 个独立数据库，与基础环境数据隔离`,
     nextActionLabel: '打开环境或继续发布验证',
     tone: 'neutral',
+  };
+}
+
+export function getPreviewBuildPresentation(input: {
+  environment: PresentableEnvironment & PreviewBuildLike;
+}): PreviewBuildPresentation | null {
+  if (!isPreviewEnvironment(input.environment)) {
+    return null;
+  }
+
+  const status = input.environment.previewBuildStatus;
+  if (status !== 'building' && status !== 'failed') {
+    return null;
+  }
+
+  const shortCommitSha = input.environment.previewBuildSourceCommitSha?.slice(0, 7) ?? null;
+  const sourceLabel = getEnvironmentSourceLabel(input.environment) ?? '当前来源';
+  const startedAtLabel = formatEnvironmentTimestamp(input.environment.previewBuildStartedAt);
+  const commitLabel = shortCommitSha ? `commit ${shortCommitSha}` : null;
+
+  if (status === 'failed') {
+    return {
+      key: 'preview-build:failed',
+      label: '预览构建失败',
+      summary: [sourceLabel, commitLabel, '最近一次仓库构建没有成功进入发布链路']
+        .filter(Boolean)
+        .join(' · '),
+      nextActionLabel: '检查仓库流水线后重新启动预览环境',
+      tone: 'danger',
+      status,
+      shortCommitSha,
+      startedAtLabel,
+    };
+  }
+
+  return {
+    key: 'preview-build:building',
+    label: '预览构建中',
+    summary: [sourceLabel, commitLabel, '平台已触发仓库构建，完成后会自动发布']
+      .filter(Boolean)
+      .join(' · '),
+    nextActionLabel: startedAtLabel
+      ? `构建启动于 ${startedAtLabel}`
+      : '等待仓库流水线完成并回调 Juanie',
+    tone: 'neutral',
+    status,
+    shortCommitSha,
+    startedAtLabel,
   };
 }
 

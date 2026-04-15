@@ -59,7 +59,7 @@ export function MigrationSpecDetails({
         ) : null}
       </div>
 
-      <div className="console-surface rounded-2xl px-3 py-2">
+      <div className="ui-control-muted rounded-2xl px-3 py-2">
         <code className="break-all text-xs">{specification.command}</code>
       </div>
 
@@ -68,25 +68,25 @@ export function MigrationSpecDetails({
           compact ? 'grid gap-2 text-xs sm:grid-cols-2' : 'grid gap-2 text-xs md:grid-cols-2'
         }
       >
-        <div className="console-card rounded-xl px-2.5 py-2">
+        <div className="ui-control rounded-xl px-2.5 py-2">
           <div className="text-muted-foreground">工作目录</div>
           <code className="mt-1 block break-all text-foreground">
             {specification.workingDirectory ?? '.'}
           </code>
         </div>
-        <div className="console-card rounded-xl px-2.5 py-2">
+        <div className="ui-control rounded-xl px-2.5 py-2">
           <div className="text-muted-foreground">迁移路径</div>
           <code className="mt-1 block break-all text-foreground">
             {resolveMigrationPath(specification.migrationPath, databaseType)}
           </code>
         </div>
-        <div className="console-card rounded-xl px-2.5 py-2">
+        <div className="ui-control rounded-xl px-2.5 py-2">
           <div className="text-muted-foreground">审批策略</div>
           <div className="mt-1 text-foreground">
             {getMigrationApprovalPolicyLabel(specification.approvalPolicy)}
           </div>
         </div>
-        <div className="console-card rounded-xl px-2.5 py-2">
+        <div className="ui-control rounded-xl px-2.5 py-2">
           <div className="text-muted-foreground">锁策略</div>
           <div className="mt-1 text-foreground">
             {getMigrationLockStrategyLabel(specification.lockStrategy)}
@@ -95,7 +95,7 @@ export function MigrationSpecDetails({
       </div>
 
       {specification.filePreview && (
-        <div className="console-surface rounded-2xl px-3 py-2">
+        <div className="ui-control-muted rounded-2xl px-3 py-2">
           <div className="text-xs text-muted-foreground">
             迁移文件预览 · {specification.filePreview.sourceLabel}
           </div>

@@ -127,19 +127,11 @@ export class GitLabProvider implements GitProvider {
     repoFullName: string,
     number: number
   ): Promise<GitReviewRequest | null> {
-    const encodedPath = encodeURIComponent(repoFullName);
-    const res = await fetch(
-      `${this.serverUrl}/api/v4/projects/${encodedPath}/merge_requests/${number}`,
-      {
-        headers: this.getHeaders(accessToken),
-      }
-    );
+    const data = await this.fetchMergeRequest(accessToken, repoFullName, number);
 
-    if (!res.ok) {
+    if (!data) {
       return null;
     }
-
-    const data = await res.json();
     const state = this.mapReviewState({
       draft: Boolean(data.draft),
       state: typeof data.state === 'string' ? data.state : null,
@@ -188,18 +180,15 @@ export class GitLabProvider implements GitProvider {
     const prMatch = ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
     if (prMatch) {
       const [, mergeRequestNumber] = prMatch;
-      const res = await fetch(
-        `${this.serverUrl}/api/v4/projects/${encodedPath}/merge_requests/${mergeRequestNumber}`,
-        {
-          headers: this.getHeaders(accessToken),
-        }
+      const data = await this.fetchMergeRequest(
+        accessToken,
+        repoFullName,
+        Number(mergeRequestNumber)
       );
 
-      if (!res.ok) {
+      if (!data) {
         return null;
       }
-
-      const data = await res.json();
       if (typeof data.sha === 'string') {
         return data.sha;
       }
@@ -215,17 +204,37 @@ export class GitLabProvider implements GitProvider {
     accessToken: string,
     options: TriggerReleaseBuildOptions
   ): Promise<void> {
-    if (!options.ref.startsWith('refs/heads/')) {
-      throw new Error('当前 GitLab 项目请使用分支启动预览环境');
+    let pipelineRef: string | null = null;
+
+    if (options.ref.startsWith('refs/heads/')) {
+      pipelineRef = options.ref.slice('refs/heads/'.length);
+    } else {
+      const prMatch = options.ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
+      if (prMatch) {
+        const [, mergeRequestNumber] = prMatch;
+        const data = await this.fetchMergeRequest(
+          accessToken,
+          options.repoFullName,
+          Number(mergeRequestNumber)
+        );
+        const sourceBranch =
+          typeof data?.source_branch === 'string' && data.source_branch.trim().length > 0
+            ? data.source_branch
+            : null;
+        pipelineRef = sourceBranch;
+      }
+    }
+
+    if (!pipelineRef) {
+      throw new Error('当前 GitLab 来源无法触发预览构建，请检查 MR 或改用分支启动');
     }
 
     const encodedPath = encodeURIComponent(options.repoFullName);
-    const branch = options.ref.slice('refs/heads/'.length);
     const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/pipeline`, {
       method: 'POST',
       headers: this.getHeaders(accessToken),
       body: JSON.stringify({
-        ref: branch,
+        ref: pipelineRef,
         variables: [
           {
             key: 'JUANIE_SOURCE_SHA',
@@ -387,6 +396,26 @@ export class GitLabProvider implements GitProvider {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     };
+  }
+
+  private async fetchMergeRequest(
+    accessToken: string,
+    repoFullName: string,
+    mergeRequestNumber: number
+  ): Promise<Record<string, unknown> | null> {
+    const encodedPath = encodeURIComponent(repoFullName);
+    const res = await fetch(
+      `${this.serverUrl}/api/v4/projects/${encodedPath}/merge_requests/${mergeRequestNumber}`,
+      {
+        headers: this.getHeaders(accessToken),
+      }
+    );
+
+    if (!res.ok) {
+      return null;
+    }
+
+    return (await res.json()) as Record<string, unknown>;
   }
 
   async listRootFiles(

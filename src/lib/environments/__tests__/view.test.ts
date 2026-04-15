@@ -28,4 +28,21 @@ describe('environment list view', () => {
     expect(environments[1]?.policy.summary).toBe('预览环境会自动回收');
     expect(environments[1]?.policy.signals[0]?.code).toBe('preview_auto_cleanup');
   });
+
+  it('surfaces persistent preview build state through platform signals', () => {
+    const [environment] = decorateEnvironmentList([
+      {
+        id: 'env-preview',
+        name: 'preview-pr-42',
+        kind: 'preview' as const,
+        previewPrNumber: 42,
+        previewBuildStatus: 'building',
+        previewBuildSourceCommitSha: 'abc123456789',
+        previewBuildStartedAt: '2026-03-25T08:30:00.000Z',
+      },
+    ]);
+
+    expect(environment?.platformSignals.primarySummary).toContain('平台已触发仓库构建');
+    expect(environment?.platformSignals.nextActionLabel !== null).toBe(true);
+  });
 });

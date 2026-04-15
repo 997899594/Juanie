@@ -34,6 +34,13 @@ interface RecentDeploymentInput {
   releaseId?: string | null;
 }
 
+interface RecentPreviewBuildInput {
+  status: string;
+  sourceLabel?: string | null;
+  shortCommitSha?: string | null;
+  createdAt?: Date | string | null;
+}
+
 interface RecentMigrationInput {
   id: string;
   status: string;
@@ -64,6 +71,7 @@ export function buildEnvironmentRecentActivity(input: {
   environmentId: string;
   latestRelease?: RecentReleaseInput | null;
   latestDeployment?: RecentDeploymentInput | null;
+  latestPreviewBuild?: RecentPreviewBuildInput | null;
   latestMigration?: RecentMigrationInput | null;
   latestGovernance?: RecentGovernanceInput | null;
 }): EnvironmentRecentActivityItem[] {
@@ -108,6 +116,30 @@ export function buildEnvironmentRecentActivity(input: {
       actionLabel: input.latestDeployment.releaseId ? '查看交付' : '查看日志',
       statusDecoration,
       timestamp: toTimestamp(input.latestDeployment.createdAt),
+    });
+  }
+
+  if (input.latestPreviewBuild) {
+    const statusDecoration = getDeploymentStatusDecoration(input.latestPreviewBuild.status);
+    items.push({
+      key: `preview-build:${input.environmentId}`,
+      kind: 'deployment',
+      kindLabel: '构建',
+      title: '预览构建',
+      summary: [
+        input.latestPreviewBuild.sourceLabel ?? '预览环境',
+        statusDecoration.label,
+        input.latestPreviewBuild.shortCommitSha
+          ? `commit ${input.latestPreviewBuild.shortCommitSha}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      createdAtLabel: formatPlatformTimeContext(input.latestPreviewBuild.createdAt),
+      href: null,
+      actionLabel: null,
+      statusDecoration,
+      timestamp: toTimestamp(input.latestPreviewBuild.createdAt),
     });
   }
 

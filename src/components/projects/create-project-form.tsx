@@ -278,6 +278,15 @@ function createDatabaseDraft(type: DatabaseWithId['type']): DatabaseWithId {
   };
 }
 
+function getChoiceCardClass(selected: boolean): string {
+  return cn(
+    'relative cursor-pointer rounded-[18px] px-4 py-4 text-left transition-all duration-150',
+    selected
+      ? 'ui-floating ring-2 ring-foreground/20 shadow-[0_0_0_1px_rgba(55,53,47,0.05),0_18px_40px_rgba(55,53,47,0.08)]'
+      : 'ui-control hover:bg-secondary/70 hover:shadow-[0_12px_30px_rgba(55,53,47,0.06)]'
+  );
+}
+
 function toServicePayload(service: ServiceWithId): ServiceConfig {
   return {
     name: service.name,
@@ -1045,13 +1054,14 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                     key={profile.value}
                     type="button"
                     onClick={() => updateRuntimeProfile(profile.value)}
-                    className={cn(
-                      'rounded-[18px] px-4 py-4 text-left transition-colors',
-                      formData.runtimeProfile === profile.value
-                        ? 'ui-control-muted ring-1 ring-foreground/10'
-                        : 'ui-control hover:bg-secondary/70'
-                    )}
+                    aria-pressed={formData.runtimeProfile === profile.value}
+                    className={getChoiceCardClass(formData.runtimeProfile === profile.value)}
                   >
+                    {formData.runtimeProfile === profile.value && (
+                      <div className="mb-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background">
+                        <Check className="h-3.5 w-3.5" />
+                      </div>
+                    )}
                     <div className="font-medium">{profile.label}</div>
                     <div className="mt-1 text-sm text-muted-foreground">{profile.description}</div>
                   </button>
@@ -1074,13 +1084,14 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         environmentTemplate: template.value,
                       }))
                     }
-                    className={cn(
-                      'rounded-[18px] px-4 py-4 text-left transition-colors',
-                      formData.environmentTemplate === template.value
-                        ? 'ui-control-muted ring-1 ring-foreground/10'
-                        : 'ui-control hover:bg-secondary/70'
-                    )}
+                    aria-pressed={formData.environmentTemplate === template.value}
+                    className={getChoiceCardClass(formData.environmentTemplate === template.value)}
                   >
+                    {formData.environmentTemplate === template.value && (
+                      <div className="mb-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background">
+                        <Check className="h-3.5 w-3.5" />
+                      </div>
+                    )}
                     <div className="font-medium">{template.label}</div>
                     <div className="mt-1 text-sm text-muted-foreground">{template.description}</div>
                   </button>
@@ -1103,13 +1114,16 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         productionDeploymentStrategy: strategy.value,
                       }))
                     }
-                    className={cn(
-                      'rounded-[18px] px-4 py-4 text-left transition-colors',
+                    aria-pressed={formData.productionDeploymentStrategy === strategy.value}
+                    className={getChoiceCardClass(
                       formData.productionDeploymentStrategy === strategy.value
-                        ? 'ui-control-muted ring-1 ring-foreground/10'
-                        : 'ui-control hover:bg-secondary/70'
                     )}
                   >
+                    {formData.productionDeploymentStrategy === strategy.value && (
+                      <div className="mb-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background">
+                        <Check className="h-3.5 w-3.5" />
+                      </div>
+                    )}
                     <div className="font-medium">{strategy.label}</div>
                     <div className="mt-1 text-sm text-muted-foreground">{strategy.description}</div>
                   </button>
@@ -1132,13 +1146,16 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         previewDatabaseStrategy: strategy.value,
                       }))
                     }
-                    className={cn(
-                      'rounded-[18px] px-4 py-4 text-left transition-colors',
+                    aria-pressed={formData.previewDatabaseStrategy === strategy.value}
+                    className={getChoiceCardClass(
                       formData.previewDatabaseStrategy === strategy.value
-                        ? 'ui-control-muted ring-1 ring-foreground/10'
-                        : 'ui-control hover:bg-secondary/70'
                     )}
                   >
+                    {formData.previewDatabaseStrategy === strategy.value && (
+                      <div className="mb-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background">
+                        <Check className="h-3.5 w-3.5" />
+                      </div>
+                    )}
                     <div className="font-medium">{strategy.label}</div>
                     <div className="mt-1 text-sm text-muted-foreground">{strategy.description}</div>
                   </button>
@@ -1704,8 +1721,8 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         )}
       </div>
 
-      <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-20 mt-6 -mx-4 px-4 py-3 md:static md:mx-0 md:px-0 md:py-0">
-        <div className="ui-floating flex items-center justify-between gap-3 rounded-[24px] p-3 md:bg-transparent md:p-0 md:shadow-none">
+      <div className="pointer-events-none sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-20 mt-6 -mx-4 px-4 py-3 md:static md:mx-0 md:px-0 md:py-0">
+        <div className="pointer-events-auto ui-floating flex items-center justify-between gap-3 rounded-[24px] p-3 md:bg-transparent md:p-0 md:shadow-none">
           <Button
             variant="outline"
             className="px-4"

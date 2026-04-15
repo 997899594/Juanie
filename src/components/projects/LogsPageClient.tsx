@@ -177,7 +177,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
       <PageHeader title="运行日志" />
       <RuntimeSectionNav projectId={projectId} />
 
-      <div className="console-surface rounded-[20px] px-4 py-3">
+      <div className="ui-control-muted px-4 py-3">
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <span>{selectedEnvironment?.name ?? '未选环境'}</span>
           <span>{selectedPod?.metadata.name ?? '未选 Pod'}</span>
@@ -201,7 +201,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
         </div>
       </div>
 
-      <div className="console-panel px-4 py-4">
+      <div className="ui-floating px-4 py-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <ScrollText className="h-4 w-4" />
           诊断选择

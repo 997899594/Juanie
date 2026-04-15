@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects, releases } from '@/lib/db/schema';
+import { setPreviewEnvironmentBuildState } from '@/lib/environments/preview-build-state';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import {
   gateway,
@@ -246,11 +247,32 @@ export async function launchPreviewEnvironmentFromRef(input: {
     };
   }
 
-  await triggerPreviewBuild({
-    project: launchProject,
-    ref: input.ref,
+  const previewBuildStartedAt = new Date();
+
+  await setPreviewEnvironmentBuildState({
+    environmentId: environment.id,
+    status: 'building',
+    sourceRef: input.ref,
     sourceCommitSha,
+    startedAt: previewBuildStartedAt,
   });
+
+  try {
+    await triggerPreviewBuild({
+      project: launchProject,
+      ref: input.ref,
+      sourceCommitSha,
+    });
+  } catch (error) {
+    await setPreviewEnvironmentBuildState({
+      environmentId: environment.id,
+      status: 'failed',
+      sourceRef: input.ref,
+      sourceCommitSha,
+      startedAt: previewBuildStartedAt,
+    });
+    throw error;
+  }
 
   return {
     environment,

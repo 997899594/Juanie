@@ -73,7 +73,7 @@ export default function NewTeamPage() {
         }
       />
 
-      <form onSubmit={handleSubmit} className="console-panel space-y-6 px-5 py-5">
+      <form onSubmit={handleSubmit} className="ui-floating space-y-6 px-5 py-5">
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name" className="text-sm">
@@ -104,7 +104,9 @@ export default function NewTeamPage() {
                 required
               />
             </div>
-            <p className="text-xs text-muted-foreground">用于 URL 和命名空间前缀</p>
+            <div className="ui-control-muted px-3 py-2 text-xs text-muted-foreground">
+              用于 URL 和命名空间前缀
+            </div>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
