@@ -1,14 +1,11 @@
-import { isPreviewEnvironment } from '@/lib/environments/model';
+import { type EnvironmentKindLike, isPreviewEnvironment } from '@/lib/environments/model';
 import { extractBranchFromRef, extractPrNumberFromRef } from '@/lib/environments/preview';
 
 export interface ReleasePresentationLike {
   summary?: string | null;
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
-  environment?: {
-    kind?: 'production' | 'persistent' | 'preview' | null;
-    isPreview?: boolean | null;
-  } | null;
+  environment?: EnvironmentKindLike | null;
 }
 
 function extractTagFromRef(ref?: string | null): string | null {
@@ -26,19 +23,20 @@ function shortSha(value?: string | null): string | null {
 export function buildDefaultReleaseSummary(input: {
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
-  isPreview?: boolean | null;
+  environment?: EnvironmentKindLike | null;
 }): string {
   const prNumber = input.sourceRef ? extractPrNumberFromRef(input.sourceRef) : null;
   const branch = input.sourceRef ? extractBranchFromRef(input.sourceRef) : null;
   const tag = extractTagFromRef(input.sourceRef);
   const sha = shortSha(input.sourceCommitSha);
+  const isPreview = input.environment ? isPreviewEnvironment(input.environment) : false;
 
   let label = '发布';
 
   if (prNumber !== null) {
-    label = `PR #${prNumber}${input.isPreview ? ' 预览' : ''}`;
+    label = `PR #${prNumber}${isPreview ? ' 预览' : ''}`;
   } else if (branch) {
-    label = input.isPreview ? `${branch} 预览` : `${branch} 发布`;
+    label = isPreview ? `${branch} 预览` : `${branch} 发布`;
   } else if (tag) {
     label = `标签 ${tag}`;
   }
@@ -54,6 +52,6 @@ export function getReleaseDisplayTitle(release: ReleasePresentationLike): string
   return buildDefaultReleaseSummary({
     sourceRef: release.sourceRef,
     sourceCommitSha: release.sourceCommitSha,
-    isPreview: release.environment ? isPreviewEnvironment(release.environment) : false,
+    environment: release.environment,
   });
 }

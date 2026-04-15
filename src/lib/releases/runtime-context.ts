@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { auditLogs, services } from '@/lib/db/schema';
+import { type EnvironmentKindLike, isPreviewEnvironment } from '@/lib/environments/model';
 import { getInfrastructureDiagnostics } from '@/lib/infrastructure/diagnostics';
 import type { ReleaseGovernanceEvent } from '@/lib/releases/recap';
 
@@ -11,11 +12,12 @@ function getAuditMetadata(value: unknown): Record<string, unknown> | null {
 export async function getReleaseOperationalContext(input: {
   projectId: string;
   teamId: string;
-  environmentId: string;
-  environmentName: string;
-  environmentIsPreview?: boolean | null;
-  namespace?: string | null;
-  deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
+  environment: EnvironmentKindLike & {
+    id: string;
+    name: string;
+    namespace?: string | null;
+    deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
+  };
   releaseWindow: {
     startedAt: Date;
     finishedAt?: Date | null;
@@ -25,7 +27,7 @@ export async function getReleaseOperationalContext(input: {
   governanceEvents: ReleaseGovernanceEvent[];
 }> {
   const [serviceList, recentAuditLogs] = await Promise.all([
-    input.namespace
+    input.environment.namespace
       ? db.query.services.findMany({
           where: eq(services.projectId, input.projectId),
           columns: {
@@ -46,10 +48,10 @@ export async function getReleaseOperationalContext(input: {
       .limit(80),
   ]);
 
-  const infrastructureDiagnostics = input.namespace
+  const infrastructureDiagnostics = input.environment.namespace
     ? await getInfrastructureDiagnostics({
-        namespace: input.namespace,
-        deploymentStrategy: input.deploymentStrategy,
+        namespace: input.environment.namespace,
+        deploymentStrategy: input.environment.deploymentStrategy,
         workloads: serviceList,
         releaseWindow: {
           startedAt: input.releaseWindow.startedAt,
@@ -84,14 +86,15 @@ export async function getReleaseOperationalContext(input: {
 
       if (log.action === 'environment.preview_deleted') {
         return (
-          log.resourceId === input.environmentId || metadata?.environmentId === input.environmentId
+          log.resourceId === input.environment.id ||
+          metadata?.environmentId === input.environment.id
         );
       }
 
       const deletedIds = Array.isArray(metadata?.deletedIds) ? metadata.deletedIds : [];
       return (
-        deletedIds.includes(input.environmentId) ||
-        input.environmentIsPreview === true ||
+        deletedIds.includes(input.environment.id) ||
+        isPreviewEnvironment(input.environment) ||
         createdAt <= releaseUpdatedAt + 15 * 60 * 1000
       );
     })
@@ -104,7 +107,7 @@ export async function getReleaseOperationalContext(input: {
           key: `governance:${log.id}`,
           code: 'preview_deleted' as const,
           title: '平台已回收预览环境',
-          description: `${String(metadata?.environmentName ?? input.environmentName)} 已被手动回收`,
+          description: `${String(metadata?.environmentName ?? input.environment.name)} 已被手动回收`,
           at: log.createdAt,
           tone: 'warning' as const,
         };

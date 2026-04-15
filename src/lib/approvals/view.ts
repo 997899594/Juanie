@@ -3,7 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
-import { isPreviewEnvironment } from '@/lib/environments/model';
+import { type EnvironmentKindLike, isPreviewEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   getEnvironmentScopeLabel,
@@ -45,17 +45,15 @@ export interface ApprovalRunLike {
     name: string;
     type: string;
   };
-  environment: {
+  environment: EnvironmentKindLike & {
     name: string;
     branch?: string | null;
-    kind?: 'production' | 'persistent' | 'preview' | null;
     previewPrNumber?: number | null;
     expiresAt?: Date | string | null;
     domains?: Array<{
       hostname: string;
       isPrimary?: boolean | null;
     }> | null;
-    isPreview?: boolean | null;
   };
   project: {
     name: string;

@@ -1,4 +1,8 @@
-import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
+import {
+  type EnvironmentKindLike,
+  isPreviewEnvironment,
+  isProductionEnvironment,
+} from '@/lib/environments/model';
 
 export type ReleaseRiskLevel = 'low' | 'medium' | 'high';
 export type ReleaseIssueCode =
@@ -18,12 +22,7 @@ export type ReleaseIssueKind = 'approval' | 'migration' | 'deployment' | 'enviro
 interface ReleaseLike {
   status: string;
   errorMessage?: string | null;
-  environment?: {
-    kind?: 'production' | 'persistent' | 'preview' | null;
-    isProduction?: boolean | null;
-    isPreview?: boolean | null;
-    expiresAt?: Date | string | null;
-  } | null;
+  environment?: (EnvironmentKindLike & { expiresAt?: Date | string | null }) | null;
   deployments?: Array<{
     status: string;
     errorMessage?: string | null;
@@ -39,11 +38,7 @@ interface ReleaseLike {
 
 export interface MigrationAttentionLike {
   status: string;
-  environment?: {
-    kind?: 'production' | 'persistent' | 'preview' | null;
-    isPreview?: boolean | null;
-    expiresAt?: Date | string | null;
-  } | null;
+  environment?: (EnvironmentKindLike & { expiresAt?: Date | string | null }) | null;
 }
 
 export interface DatabaseManualControlInput {

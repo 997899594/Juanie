@@ -3,7 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
-import { isPreviewEnvironment } from '@/lib/environments/model';
+import { type EnvironmentKindLike, isPreviewEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   getEnvironmentScopeLabel,
@@ -66,29 +66,26 @@ export interface ProjectAttentionRunLike {
   service?: {
     name?: string;
   } | null;
-  environment?: {
-    name?: string | null;
-    kind?: 'production' | 'persistent' | 'preview' | null;
-    isPreview?: boolean | null;
-    previewPrNumber?: number | null;
-    branch?: string | null;
-    expiresAt?: Date | string | null;
-    domains?: Array<{
-      id: string;
-      hostname: string;
-      isCustom?: boolean | null;
-      isVerified?: boolean | null;
-    }> | null;
-  } | null;
+  environment?:
+    | (EnvironmentKindLike & {
+        name?: string | null;
+        previewPrNumber?: number | null;
+        branch?: string | null;
+        expiresAt?: Date | string | null;
+        domains?: Array<{
+          id: string;
+          hostname: string;
+          isCustom?: boolean | null;
+          isVerified?: boolean | null;
+        }> | null;
+      })
+    | null;
   release?: {
     id?: string;
     summary?: string | null;
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
-    environment?: {
-      kind?: 'production' | 'persistent' | 'preview' | null;
-      isPreview?: boolean | null;
-    } | null;
+    environment?: EnvironmentKindLike | null;
   } | null;
   previewReviewMetadata?: PreviewReviewMetadata | null;
 }
@@ -120,11 +117,9 @@ export interface ProjectReleaseLike {
   projectId?: string;
   status?: string;
   createdAt?: Date | string | null;
-  environment: {
+  environment: EnvironmentKindLike & {
     id: string;
     name?: string;
-    kind?: 'production' | 'persistent' | 'preview' | null;
-    isPreview?: boolean | null;
     previewPrNumber?: number | null;
     branch?: string | null;
     expiresAt?: Date | string | null;

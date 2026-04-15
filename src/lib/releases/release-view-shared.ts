@@ -3,7 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
-import { isPreviewEnvironment } from '@/lib/environments/model';
+import { type EnvironmentKindLike, isPreviewEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   getEnvironmentDatabaseStrategyLabel,
@@ -54,12 +54,9 @@ export interface ReleaseViewLike {
   configCommitSha?: string | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
-  environment: {
+  environment: EnvironmentKindLike & {
     id: string;
     name?: string;
-    kind?: 'production' | 'persistent' | 'preview' | null;
-    isProduction?: boolean | null;
-    isPreview?: boolean | null;
     previewPrNumber?: number | null;
     branch?: string | null;
     expiresAt?: Date | string | null;

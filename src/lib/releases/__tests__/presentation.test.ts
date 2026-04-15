@@ -7,7 +7,7 @@ describe('release presentation helpers', () => {
       buildDefaultReleaseSummary({
         sourceRef: 'refs/pull/42/merge',
         sourceCommitSha: 'abcdef123456',
-        isPreview: true,
+        environment: { kind: 'preview' },
       })
     ).toBe('PR #42 预览 · abcdef1');
   });
@@ -17,7 +17,7 @@ describe('release presentation helpers', () => {
       buildDefaultReleaseSummary({
         sourceRef: 'refs/heads/feature/release-intel',
         sourceCommitSha: 'abcdef123456',
-        isPreview: true,
+        environment: { kind: 'preview' },
       })
     ).toBe('feature/release-intel 预览 · abcdef1');
   });

@@ -1,7 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
-import { isPreviewEnvironment } from '@/lib/environments/model';
 import { getReleaseById } from '@/lib/releases';
 import { buildReleaseRecap, type ReleaseRecapRecord } from '@/lib/releases/recap';
 import { getReleaseOperationalContext } from '@/lib/releases/runtime-context';
@@ -17,11 +16,7 @@ export async function persistReleaseRecapById(
   const runtimeContext = await getReleaseOperationalContext({
     projectId: release.projectId,
     teamId: release.project.teamId,
-    environmentId: release.environmentId,
-    environmentName: release.environment.name,
-    environmentIsPreview: isPreviewEnvironment(release.environment),
-    namespace: release.environment.namespace,
-    deploymentStrategy: release.environment.deploymentStrategy,
+    environment: release.environment,
     releaseWindow: {
       startedAt: release.createdAt,
       finishedAt: release.updatedAt,

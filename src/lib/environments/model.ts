@@ -1,17 +1,17 @@
 import type { EnvironmentKind } from '@/lib/db/schema';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
 
-interface EnvironmentKindLike {
+export interface EnvironmentKindLike {
   kind?: EnvironmentKind | null;
   isPreview?: boolean | null;
   isProduction?: boolean | null;
 }
 
-interface EnvironmentNamespaceLike extends EnvironmentKindLike {
+export interface EnvironmentNamespaceLike extends EnvironmentKindLike {
   name: string;
 }
 
-interface EnvironmentIdentityLike extends EnvironmentKindLike {
+export interface EnvironmentIdentityLike extends EnvironmentKindLike {
   name?: string | null;
 }
 

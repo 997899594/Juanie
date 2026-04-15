@@ -566,11 +566,7 @@ export async function getReleaseDetailPageData(input: { projectId: string; relea
     getReleaseOperationalContext({
       projectId: release.projectId,
       teamId: release.project.teamId,
-      environmentId: release.environmentId,
-      environmentName: release.environment.name,
-      environmentIsPreview: isPreviewEnvironment(release.environment),
-      namespace: release.environment.namespace,
-      deploymentStrategy: release.environment.deploymentStrategy,
+      environment: release.environment,
       releaseWindow: {
         startedAt: release.createdAt,
         finishedAt: release.updatedAt,
