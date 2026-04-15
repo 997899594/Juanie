@@ -14,8 +14,11 @@ import { getReleaseOperationalContext } from '@/lib/releases/runtime-context';
 import {
   decorateReleaseDetail,
   decorateReleaseList,
+  isReleaseAttentionCandidate,
+  matchesReleaseRiskFilter,
   normalizeReleaseRiskFilterState,
 } from '@/lib/releases/view';
+import { isUuid } from '@/lib/uuid';
 
 export function buildProjectReleaseListData<
   TRelease extends Parameters<typeof decorateReleaseList>[0][number],
@@ -144,38 +147,20 @@ function filterLightweightReleaseItems(
   }
 ) {
   const envFilter = filters.env && filters.env !== 'all' ? filters.env : 'all';
-  const riskFilter = filters.risk ?? 'all';
+  const riskFilter = filters.risk ?? 'attention';
 
   return releases.filter((release) => {
     if (envFilter !== 'all' && (release.environment.name ?? '环境') !== envFilter) {
       return false;
     }
 
-    if (riskFilter === 'all') {
-      return true;
-    }
-
-    if (riskFilter === 'attention') {
-      return (
-        release.approvalRunsCount > 0 ||
-        release.failedMigrationRunsCount > 0 ||
-        [
-          'awaiting_external_completion',
-          'migration_pre_failed',
-          'failed',
-          'degraded',
-          'verification_failed',
-        ].includes(release.status)
-      );
-    }
-
-    if (riskFilter === 'approval') {
-      return release.approvalRunsCount > 0;
-    }
-
-    return (
-      release.failedMigrationRunsCount > 0 ||
-      ['failed', 'migration_pre_failed', 'verification_failed'].includes(release.status)
+    return matchesReleaseRiskFilter(
+      {
+        status: release.status,
+        approvalRunsCount: release.approvalRunsCount,
+        failedMigrationRunsCount: release.failedMigrationRunsCount,
+      },
+      riskFilter
     );
   });
 }
@@ -187,7 +172,13 @@ function buildLightweightReleaseListStats(
     { label: '发布', value: releases.length },
     {
       label: '待处理',
-      value: releases.filter((release) => release.approvalRunsCount > 0).length,
+      value: releases.filter((release) =>
+        isReleaseAttentionCandidate({
+          status: release.status,
+          approvalRunsCount: release.approvalRunsCount,
+          failedMigrationRunsCount: release.failedMigrationRunsCount,
+        })
+      ).length,
     },
     {
       label: '失败',
@@ -534,6 +525,10 @@ export function buildReleaseDetailPageData<
 }
 
 export async function getReleaseDetailPageData(input: { projectId: string; releaseId: string }) {
+  if (!isUuid(input.projectId) || !isUuid(input.releaseId)) {
+    return null;
+  }
+
   const release = await getReleaseById(input.releaseId);
   if (!release) {
     return null;

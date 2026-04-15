@@ -8,14 +8,18 @@ import {
   decorateHomeAttentionRuns,
   decorateHomeProjects,
 } from '@/lib/home/view';
-import { getAttentionStats } from '@/lib/migrations/attention';
+import { filterAttentionRuns, getAttentionStats } from '@/lib/migrations/attention';
 
-const homeQueueStatuses = ['awaiting_approval', 'awaiting_external_completion'] as const;
+const homeAttentionStatuses = [
+  'awaiting_approval',
+  'awaiting_external_completion',
+  'failed',
+] as const;
 
-type HomeQueueStatus = (typeof homeQueueStatuses)[number];
+type HomeAttentionStatus = (typeof homeAttentionStatuses)[number];
 
-function isHomeQueueStatus(status: string): status is HomeQueueStatus {
-  return homeQueueStatuses.includes(status as HomeQueueStatus);
+function isHomeAttentionStatus(status: string): status is HomeAttentionStatus {
+  return homeAttentionStatuses.includes(status as HomeAttentionStatus);
 }
 
 export function buildHomePageData<
@@ -70,13 +74,15 @@ export function buildHomePageData<
   userProjects: TProject[];
   attentionRuns: TAttentionRun[];
 }) {
-  const queueRuns = input.attentionRuns.filter((run) => isHomeQueueStatus(run.status));
-  const attentionStats = getAttentionStats(queueRuns);
+  const attentionRuns = filterAttentionRuns(
+    input.attentionRuns.filter((run) => isHomeAttentionStatus(run.status))
+  );
+  const attentionStats = getAttentionStats(attentionRuns);
   const rolesByTeamId = new Map(
     input.userTeams.map((membership) => [membership.teamId, membership.role])
   );
   const projectCards = decorateHomeProjects(input.userProjects, { rolesByTeamId });
-  const attentionItems = decorateHomeAttentionRuns(queueRuns);
+  const attentionItems = decorateHomeAttentionRuns(attentionRuns);
   const activeProjectCount = input.userProjects.filter(
     (project) => project.status === 'active' || project.status === 'running'
   ).length;
@@ -148,7 +154,7 @@ export async function getHomePageData(userId: string, userName?: string | null) 
           where: (run) =>
             and(
               inArray(run.projectId, teamProjectIds),
-              inArray(run.status, [...homeQueueStatuses])
+              inArray(run.status, [...homeAttentionStatuses])
             ),
           orderBy: (run, { desc }) => [desc(run.createdAt)],
           limit: 5,

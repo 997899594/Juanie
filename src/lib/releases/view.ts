@@ -3,6 +3,8 @@ export {
   buildReleaseListStats,
   decorateReleaseList,
   filterReleaseCards,
+  isReleaseAttentionCandidate,
+  matchesReleaseRiskFilter,
   normalizeReleaseRiskFilterState,
   type ReleaseDiffSummary,
   type ReleaseListDecorations,

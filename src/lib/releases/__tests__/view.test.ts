@@ -1,7 +1,43 @@
 import { describe, expect, it } from 'bun:test';
-import { decorateReleaseList } from '@/lib/releases/view';
+import {
+  buildReleaseListStats,
+  decorateReleaseList,
+  normalizeReleaseRiskFilterState,
+} from '@/lib/releases/view';
 
 describe('release list view', () => {
+  it('defaults release risk filter to attention', () => {
+    expect(normalizeReleaseRiskFilterState()).toBe('attention');
+    expect(normalizeReleaseRiskFilterState('weird')).toBe('attention');
+    expect(normalizeReleaseRiskFilterState('all')).toBe('all');
+  });
+
+  it('counts release attention stats from all actionable states', () => {
+    expect(
+      buildReleaseListStats([
+        {
+          status: 'awaiting_external_completion',
+          approvalRunsCount: 0,
+          failedMigrationRunsCount: 0,
+        },
+        {
+          status: 'succeeded',
+          approvalRunsCount: 1,
+          failedMigrationRunsCount: 0,
+        },
+        {
+          status: 'verification_failed',
+          approvalRunsCount: 0,
+          failedMigrationRunsCount: 1,
+        },
+      ])
+    ).toEqual([
+      { label: '发布', value: 3 },
+      { label: '待处理', value: 3 },
+      { label: '失败', value: 1 },
+    ]);
+  });
+
   it('adds intelligence and diff summaries in environment scope order', () => {
     const releases = decorateReleaseList([
       {

@@ -68,7 +68,51 @@ export interface ReleaseListDecorations {
 }
 
 export function normalizeReleaseRiskFilterState(value?: string | null): ReleaseRiskFilterState {
-  return value === 'attention' || value === 'approval' || value === 'failed' ? value : 'all';
+  return value === 'all' || value === 'approval' || value === 'failed' ? value : 'attention';
+}
+
+export function isReleaseAttentionCandidate(input: {
+  status: string;
+  approvalRunsCount: number;
+  failedMigrationRunsCount: number;
+}): boolean {
+  return (
+    input.approvalRunsCount > 0 ||
+    input.failedMigrationRunsCount > 0 ||
+    [
+      'awaiting_external_completion',
+      'migration_pre_failed',
+      'failed',
+      'degraded',
+      'verification_failed',
+    ].includes(input.status)
+  );
+}
+
+export function matchesReleaseRiskFilter(
+  input: {
+    status: string;
+    approvalRunsCount: number;
+    failedMigrationRunsCount: number;
+  },
+  riskFilter: ReleaseRiskFilterState
+): boolean {
+  if (riskFilter === 'all') {
+    return true;
+  }
+
+  if (riskFilter === 'attention') {
+    return isReleaseAttentionCandidate(input);
+  }
+
+  if (riskFilter === 'approval') {
+    return input.approvalRunsCount > 0;
+  }
+
+  return (
+    input.failedMigrationRunsCount > 0 ||
+    ['failed', 'migration_pre_failed', 'verification_failed'].includes(input.status)
+  );
 }
 
 export function filterReleaseCards<
@@ -81,50 +125,40 @@ export function filterReleaseCards<
   }
 ): T[] {
   const envFilter = filters.env && filters.env !== 'all' ? filters.env : 'all';
-  const riskFilter = filters.risk ?? 'all';
+  const riskFilter = filters.risk ?? 'attention';
 
   return releases.filter((release) => {
     if (envFilter !== 'all' && (release.environment.name ?? '环境') !== envFilter) {
       return false;
     }
 
-    if (riskFilter === 'all') {
-      return true;
-    }
-
-    if (riskFilter === 'attention') {
-      return (
-        release.approvalRunsCount > 0 ||
-        release.failedMigrationRunsCount > 0 ||
-        [
-          'awaiting_external_completion',
-          'migration_pre_failed',
-          'failed',
-          'degraded',
-          'verification_failed',
-        ].includes(release.status)
-      );
-    }
-
-    if (riskFilter === 'approval') {
-      return release.approvalRunsCount > 0;
-    }
-
-    return (
-      release.failedMigrationRunsCount > 0 ||
-      ['failed', 'migration_pre_failed', 'verification_failed'].includes(release.status)
+    return matchesReleaseRiskFilter(
+      {
+        status: release.status,
+        approvalRunsCount: release.approvalRunsCount,
+        failedMigrationRunsCount: release.failedMigrationRunsCount,
+      },
+      riskFilter
     );
   });
 }
 
-export function buildReleaseListStats<T extends ReleaseListDecorations>(
-  releases: T[]
-): ReleaseListStat[] {
+export function buildReleaseListStats<
+  T extends Pick<ReleaseListDecorations, 'approvalRunsCount' | 'failedMigrationRunsCount'> & {
+    status: string;
+  },
+>(releases: T[]): ReleaseListStat[] {
   return [
     { label: '发布', value: releases.length },
     {
       label: '待处理',
-      value: releases.filter((release) => release.approvalRunsCount > 0).length,
+      value: releases.filter((release) =>
+        isReleaseAttentionCandidate({
+          status: release.status,
+          approvalRunsCount: release.approvalRunsCount,
+          failedMigrationRunsCount: release.failedMigrationRunsCount,
+        })
+      ).length,
     },
     {
       label: '失败',

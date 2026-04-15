@@ -22,8 +22,41 @@ describe('home service', () => {
 
     expect(result.headerDescription).toBe('Find');
     expect(result.stats[0]?.value).toBe(1);
-    expect(result.stats[2]?.value).toBe(0);
+    expect(result.stats[2]?.value).toBe(1);
     expect(result.projectCards[0]?.statusLabel).toBe('运行中');
-    expect(result.attentionItems.length).toBe(0);
+    expect(result.attentionItems.length).toBe(1);
+  });
+
+  it('deduplicates queue attention by lockKey', () => {
+    const result = buildHomePageData({
+      userName: 'Find',
+      userTeams: [{ teamId: 'team-1', role: 'owner' }],
+      userProjects: [{ id: 'proj-1', teamId: 'team-1', name: 'demo', status: 'active' }],
+      attentionRuns: [
+        {
+          id: 'run-1',
+          lockKey: 'db-1:env-1',
+          projectId: 'proj-1',
+          releaseId: 'rel-1',
+          status: 'awaiting_approval',
+          createdAt: '2026-03-25T00:00:00.000Z',
+          database: { name: 'postgres' },
+          project: { name: 'demo' },
+        },
+        {
+          id: 'run-2',
+          lockKey: 'db-1:env-1',
+          projectId: 'proj-1',
+          releaseId: 'rel-2',
+          status: 'awaiting_approval',
+          createdAt: '2026-03-26T00:00:00.000Z',
+          database: { name: 'postgres' },
+          project: { name: 'demo' },
+        },
+      ],
+    });
+
+    expect(result.stats[2]?.value).toBe(1);
+    expect(result.attentionItems.map((run) => run.id)).toEqual(['run-2']);
   });
 });

@@ -21,8 +21,13 @@ import {
   buildTeamOverviewView,
   buildTeamSettingsView,
 } from '@/lib/teams/view';
+import { isUuid } from '@/lib/uuid';
 
 async function getTeamAccess(teamId: string, userId: string) {
+  if (!isUuid(teamId)) {
+    return null;
+  }
+
   const [team, member] = await Promise.all([
     db.query.teams.findFirst({
       where: eq(teams.id, teamId),

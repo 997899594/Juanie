@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  collapseRunsToLatestByLockKey,
   filterAttentionRuns,
   getAttentionStats,
   isAttentionMigrationRun,
@@ -39,6 +40,68 @@ describe('migration attention helpers', () => {
       failed: 1,
       canceled: 1,
       external: 0,
+    });
+  });
+
+  it('collapses historical retries to the latest lockKey state', () => {
+    const timeline = [
+      {
+        id: 'run-older-failed',
+        lockKey: 'db-1:env-1',
+        status: 'failed',
+        createdAt: '2026-04-01T00:00:00.000Z',
+      },
+      {
+        id: 'run-latest-failed',
+        lockKey: 'db-1:env-1',
+        status: 'failed',
+        createdAt: '2026-04-03T00:00:00.000Z',
+      },
+      {
+        id: 'run-success',
+        lockKey: 'db-2:env-1',
+        status: 'success',
+        createdAt: '2026-04-02T00:00:00.000Z',
+      },
+    ];
+
+    expect(collapseRunsToLatestByLockKey(timeline).map((run) => run.id)).toEqual([
+      'run-latest-failed',
+      'run-success',
+    ]);
+    expect(filterAttentionRuns(timeline).map((run) => run.id)).toEqual(['run-latest-failed']);
+    expect(getAttentionStats(timeline)).toEqual({
+      total: 1,
+      approval: 0,
+      external: 0,
+      failed: 1,
+      canceled: 0,
+    });
+  });
+
+  it('treats a later success as resolved attention for the same lockKey', () => {
+    const timeline = [
+      {
+        id: 'run-failed',
+        lockKey: 'db-1:env-1',
+        status: 'failed',
+        createdAt: '2026-04-01T00:00:00.000Z',
+      },
+      {
+        id: 'run-success',
+        lockKey: 'db-1:env-1',
+        status: 'success',
+        createdAt: '2026-04-02T00:00:00.000Z',
+      },
+    ];
+
+    expect(filterAttentionRuns(timeline)).toEqual([]);
+    expect(getAttentionStats(timeline)).toEqual({
+      total: 0,
+      approval: 0,
+      external: 0,
+      failed: 0,
+      canceled: 0,
     });
   });
 });

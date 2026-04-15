@@ -12,6 +12,7 @@ import {
   teamMembers,
   teams,
 } from '@/lib/db/schema';
+import { isUuid } from '@/lib/uuid';
 
 const OWNER_ADMIN_ROLES: readonly TeamRole[] = ['owner', 'admin'];
 
@@ -26,6 +27,10 @@ export async function requireSession(): Promise<Session & { user: { id: string }
 }
 
 export async function getTeamAccessOrThrow(teamId: string, userId: string) {
+  if (!isUuid(teamId)) {
+    throw accessError('not_found', 'Team not found');
+  }
+
   const [team, member] = await Promise.all([
     db.query.teams.findFirst({
       where: eq(teams.id, teamId),
@@ -47,6 +52,10 @@ export async function getTeamAccessOrThrow(teamId: string, userId: string) {
 }
 
 export async function getProjectAccessOrThrow(projectId: string, userId: string) {
+  if (!isUuid(projectId)) {
+    throw accessError('not_found', 'Project not found');
+  }
+
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
   });
@@ -93,6 +102,10 @@ export async function getProjectAccessWithRoleOrThrow(
 }
 
 export async function getProjectWithRepositoryAccessOrThrow(projectId: string, userId: string) {
+  if (!isUuid(projectId)) {
+    throw accessError('not_found', 'Project not found');
+  }
+
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
     with: {
@@ -119,6 +132,10 @@ export async function getProjectEnvironmentOrThrow(
   projectId: string,
   environmentId?: string | null
 ) {
+  if (!isUuid(projectId)) {
+    throw accessError('not_found', 'Project not found');
+  }
+
   if (!environmentId) {
     const environment = await db.query.environments.findFirst({
       where: eq(environments.projectId, projectId),
@@ -130,6 +147,10 @@ export async function getProjectEnvironmentOrThrow(
     }
 
     return environment;
+  }
+
+  if (!isUuid(environmentId)) {
+    throw accessError('not_found', 'Environment not found');
   }
 
   const environment = await db.query.environments.findFirst({
@@ -148,8 +169,16 @@ export async function getProjectEnvironmentOrThrow(
 }
 
 export async function getProjectServiceOrThrow(projectId: string, serviceId?: string | null) {
+  if (!isUuid(projectId)) {
+    throw accessError('not_found', 'Project not found');
+  }
+
   if (!serviceId) {
     return null;
+  }
+
+  if (!isUuid(serviceId)) {
+    throw accessError('not_found', 'Service not found');
   }
 
   const service = await db.query.services.findFirst({
@@ -168,6 +197,10 @@ export async function getProjectServiceOrThrow(projectId: string, serviceId?: st
 }
 
 export async function getReleaseAccessOrThrow(releaseId: string, userId: string) {
+  if (!isUuid(releaseId)) {
+    throw accessError('not_found', 'Release not found');
+  }
+
   const release = await db.query.releases.findFirst({
     where: eq(releases.id, releaseId),
     with: {

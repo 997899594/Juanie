@@ -32,6 +32,14 @@ export interface Env {
   // App
   NODE_ENV: 'development' | 'production' | 'test';
   JUANIE_BASE_DOMAIN?: string;
+  ENABLE_HISTORY_RETENTION?: 'true' | 'false';
+  HISTORY_RETENTION_SCHEDULE?: string;
+  DEPLOYMENT_LOG_RETENTION_DAYS?: string;
+  AUDIT_LOG_RETENTION_DAYS?: string;
+  AI_PLUGIN_RUN_RETENTION_DAYS?: string;
+  AI_PLUGIN_SNAPSHOT_RETENTION_DAYS?: string;
+  MIGRATION_RUN_RETENTION_DAYS?: string;
+  SCHEMA_REPAIR_ATLAS_RUN_RETENTION_DAYS?: string;
 
   // AI / 302.ai
   AI_ENABLED?: 'true' | 'false';
