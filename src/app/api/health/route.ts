@@ -1,16 +1,7 @@
-/**
- * 健康检查端点
- *
- * GET /api/health - 主健康检查
- * GET /api/health/ready - 就绪检查
- * GET /api/health/live - 存活检查
- * GET /api/health/startup - 启动检查
- */
-
-import Redis from 'ioredis';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getIsConnected, getK8sClient, initK8sClient } from '@/lib/k8s';
+import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 
 // ============================================
 // Health Check Response
@@ -56,18 +47,10 @@ async function checkDatabase(): Promise<HealthCheck> {
 
 async function checkRedis(): Promise<HealthCheck> {
   const start = Date.now();
-  const redis = process.env.REDIS_URL
-    ? new Redis(process.env.REDIS_URL, {
-        lazyConnect: true,
-        maxRetriesPerRequest: 1,
-      })
-    : new Redis({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379', 10),
-        password: process.env.REDIS_PASSWORD,
-        lazyConnect: true,
-        maxRetriesPerRequest: 1,
-      });
+  const redis = createRedisClient({
+    lazyConnect: true,
+    maxRetriesPerRequest: 1,
+  });
 
   try {
     await redis.connect();
@@ -156,8 +139,7 @@ export async function GET() {
   }
 
   // 检查 Redis (可选)
-  const redisEnabled = process.env.REDIS_HOST || process.env.REDIS_URL;
-  if (redisEnabled) {
+  if (isRedisConfigured()) {
     try {
       checks.redis = await checkRedis();
     } catch (error) {

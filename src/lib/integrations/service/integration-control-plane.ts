@@ -39,6 +39,7 @@ type ProviderErrorInput = {
 const resolveProvider = (session: IntegrationSession): GitProvider =>
   createGitProviderForSession({
     provider: session.provider,
+    serverUrl: session.serverUrl,
   });
 
 export const mapProviderError = (error: ProviderErrorInput): IntegrationError => {

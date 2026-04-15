@@ -345,6 +345,7 @@ export const integrationIdentities = pgTable(
     provider: gitProviderTypeEnum('provider').notNull(),
     externalUserId: varchar('externalUserId', { length: 255 }),
     username: varchar('username', { length: 255 }),
+    serverUrl: varchar('serverUrl', { length: 500 }),
     createdAt: timestamp('createdAt').defaultNow().notNull(),
     updatedAt: timestamp('updatedAt').defaultNow().notNull(),
   },

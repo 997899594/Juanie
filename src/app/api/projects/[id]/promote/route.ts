@@ -8,6 +8,7 @@ import {
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments, projects, releases, repositories } from '@/lib/db/schema';
+import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
@@ -192,10 +193,7 @@ async function createGitTag(
   }
 
   if (provider === 'gitlab' || provider === 'gitlab-self-hosted') {
-    const baseUrl =
-      provider === 'gitlab-self-hosted'
-        ? (process.env.GITLAB_URL ?? 'https://gitlab.com')
-        : 'https://gitlab.com';
+    const baseUrl = normalizeGitLabServerUrl(integrationSession.serverUrl);
     const encodedRepo = encodeURIComponent(repoFullName);
     const res = await fetch(`${baseUrl}/api/v4/projects/${encodedRepo}/repository/tags`, {
       method: 'POST',

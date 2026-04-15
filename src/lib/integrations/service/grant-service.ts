@@ -19,6 +19,7 @@ type UpsertGrantFromOAuthInput = {
   refreshToken?: string | null;
   expiresAt?: Date | null;
   scopeRaw?: string | null;
+  serverUrl?: string | null;
 };
 
 const splitScopes = (scopeRaw?: string | null): string[] => {
@@ -47,6 +48,7 @@ export const upsertGrantFromOAuth = async ({
   refreshToken,
   expiresAt,
   scopeRaw,
+  serverUrl,
 }: UpsertGrantFromOAuthInput) => {
   let identity = await db.query.integrationIdentities.findFirst({
     where: and(
@@ -61,10 +63,22 @@ export const upsertGrantFromOAuth = async ({
       .values({
         userId,
         provider,
+        serverUrl: serverUrl ?? null,
       })
       .returning();
 
     identity = created;
+  } else if (identity.serverUrl !== (serverUrl ?? null)) {
+    const [updated] = await db
+      .update(integrationIdentities)
+      .set({
+        serverUrl: serverUrl ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationIdentities.id, identity.id))
+      .returning();
+
+    identity = updated ?? identity;
   }
 
   await db

@@ -51,6 +51,7 @@ import {
 } from '@/lib/k8s';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
+import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
 
@@ -411,21 +412,6 @@ async function validateRepository(
   console.log('[validateRepository] Validation passed');
 }
 
-// Helper to build an IntegrationSession from legacy git provider result (temporary bridge)
-const _buildSessionFromGitProviderResult = (
-  result: { provider: any; client: any },
-  teamId: string
-) => {
-  return {
-    integrationId: result.provider.id,
-    provider: result.provider.type,
-    teamId,
-    grantId: '',
-    accessToken: result.provider.accessToken!,
-    capabilities: [], // capabilities not needed for current internal calls
-  } as const;
-};
-
 async function createRepository(project: typeof projects.$inferSelect) {
   console.log(`Creating repository for project ${project.name}`);
 
@@ -697,17 +683,24 @@ export function buildMigrationConfigLines(
   indent: string,
   inferred: ReturnType<typeof inferMigrationCommand>
 ): string[] {
+  if (!inferred) {
+    return [
+      `${indent}# Juanie could not infer a migration command for this service.`,
+      `${indent}# Add a migrate block manually before enabling managed migrations.`,
+    ];
+  }
+
   const lines = [
-    `${indent}# ${inferred?.comment ?? "TODO: replace with the repository's real migration command before running it from Juanie"}`,
+    `${indent}# ${inferred.comment}`,
     `${indent}migrate:`,
-    `${indent}  tool: ${inferred?.tool ?? 'custom'}`,
+    `${indent}  tool: ${inferred.tool}`,
     `${indent}  workingDirectory: .`,
-    `${indent}  command: ${inferred?.command ?? 'npm run db:migrate'}`,
+    `${indent}  command: ${inferred.command}`,
     `${indent}  phase: preDeploy`,
-    `${indent}  executionMode: ${inferred?.executionMode ?? 'manual_platform'}`,
+    `${indent}  executionMode: ${inferred.executionMode}`,
   ];
 
-  if (inferred?.approvalPolicy) {
+  if (inferred.approvalPolicy) {
     lines.push(`${indent}  approvalPolicy: ${inferred.approvalPolicy}`);
   }
 
@@ -2290,12 +2283,9 @@ export async function removeInjectedDatabaseEnvVars(
 
 export function createProjectInitWorker() {
   return new Worker<ProjectInitJobData>('project-init', processProjectInit, {
-    connection: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD,
+    connection: resolveRedisConnectionOptions({
       maxRetriesPerRequest: null,
-    },
+    }),
     concurrency: 5,
   });
 }

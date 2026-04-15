@@ -4,6 +4,7 @@ import { assertDeclaredDatabaseCapabilities } from '@/lib/databases/capabilities
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
+import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import {
   continueReleaseFromDeploymentStage,
   failReleaseForCurrentPhase,
@@ -89,12 +90,9 @@ export async function processRelease(job: Job<ReleaseJobData>) {
 
 export function createReleaseWorker() {
   return new Worker<ReleaseJobData>('release', processRelease, {
-    connection: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD,
+    connection: resolveRedisConnectionOptions({
       maxRetriesPerRequest: null,
-    },
+    }),
     concurrency: 5,
   });
 }

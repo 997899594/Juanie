@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
 import { getIsConnected } from '@/lib/k8s';
+import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { SupersededDeploymentError } from '@/lib/releases/deployment-coordination';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
 import { cleanupCandidateResources } from '@/lib/releases/workloads';
@@ -115,12 +116,9 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
 export function createDeploymentWorker() {
   return new Worker<DeploymentJobData>('deployment', processDeployment, {
-    connection: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD,
+    connection: resolveRedisConnectionOptions({
       maxRetriesPerRequest: null,
-    },
+    }),
     concurrency: 10,
   });
 }

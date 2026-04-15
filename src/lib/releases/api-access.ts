@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { integrationIdentities, repositories } from '@/lib/db/schema';
+import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
 
 export function resolveRepositoryVerificationTarget(
   repository: string,
@@ -8,6 +9,7 @@ export function resolveRepositoryVerificationTarget(
   repo: {
     webUrl: string | null;
     cloneUrl: string | null;
+    serverUrl?: string | null;
   }
 ): { url: string; headers: Record<string, string> } {
   if (provider === 'github') {
@@ -19,14 +21,13 @@ export function resolveRepositoryVerificationTarget(
     };
   }
 
-  const baseUrl =
-    provider === 'gitlab'
-      ? 'https://gitlab.com'
-      : repo.webUrl
-        ? new URL(repo.webUrl).origin
-        : repo.cloneUrl
-          ? new URL(repo.cloneUrl).origin
-          : null;
+  let baseUrl: string | null = null;
+
+  if (provider === 'gitlab') {
+    baseUrl = 'https://gitlab.com';
+  } else if (repo.serverUrl) {
+    baseUrl = normalizeGitLabServerUrl(repo.serverUrl);
+  }
 
   if (!baseUrl) {
     throw new Error('Unable to resolve Git provider URL for repository');
@@ -75,6 +76,7 @@ export async function verifyRepositoryAccess(repository: string, authHeader: str
   const target = resolveRepositoryVerificationTarget(repository, identity.provider, {
     webUrl: repo.webUrl,
     cloneUrl: repo.cloneUrl,
+    serverUrl: identity.serverUrl,
   });
 
   const repoRes = await fetch(target.url, {

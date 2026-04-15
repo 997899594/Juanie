@@ -12,6 +12,7 @@ import type { Capability } from '@/lib/integrations/domain/models';
 export type IntegrationSession = {
   integrationId: string;
   provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
+  serverUrl: string | null;
   teamId: string;
   grantId: string;
   accessToken: string;
@@ -57,6 +58,10 @@ export const createIntegrationSession = async ({
     throw toIntegrationError(integrationErrors.notBound());
   }
 
+  if (identity.provider === 'gitlab-self-hosted' && !identity.serverUrl) {
+    throw new Error('GitLab self-hosted integration is missing serverUrl');
+  }
+
   const grant = await db.query.integrationGrants.findFirst({
     where: and(
       eq(integrationGrants.integrationIdentityId, identity.id),
@@ -83,6 +88,7 @@ export const createIntegrationSession = async ({
   return {
     integrationId,
     provider: identity.provider,
+    serverUrl: identity.serverUrl,
     teamId,
     grantId: grant.id,
     accessToken: grant.accessToken,

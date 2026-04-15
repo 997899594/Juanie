@@ -245,13 +245,8 @@ export function generateDefaultConfig(
 
   if (options?.database === 'postgresql' || options?.database === 'mysql') {
     lines.push(
-      `    # TODO: replace with the repository's real migration command before running it from Juanie`,
-      `    migrate:`,
-      `      tool: custom`,
-      `      workingDirectory: .`,
-      `      command: npm run db:migrate`,
-      `      phase: preDeploy`,
-      `      executionMode: manual_platform`
+      `    # Juanie could not infer a migration command for this service.`,
+      `    # Add a migrate block manually before enabling managed migrations.`
     );
   }
 

@@ -50,3 +50,12 @@ export function getNormalizedDatabaseUrlFromEnv(): string {
 
   return normalizeDatabaseUrl(databaseUrl);
 }
+
+export function getNormalizedDatabaseUrlForSchemaTooling(): string {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    return 'postgresql://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable';
+  }
+
+  return normalizeDatabaseUrl(databaseUrl);
+}

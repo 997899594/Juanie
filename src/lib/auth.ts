@@ -7,6 +7,7 @@ import GitHub from 'next-auth/providers/github';
 import GitLab from 'next-auth/providers/gitlab';
 import { getDb } from '@/lib/db';
 import { type GitProviderType, users } from '@/lib/db/schema';
+import { resolveGitLabProviderType, resolveGitLabServerUrlFromEnv } from '@/lib/git/gitlab-server';
 import { revokeActiveGrants, upsertGrantFromOAuth } from '@/lib/integrations/service/grant-service';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -20,6 +21,7 @@ export const onOAuthGrantPersist = async ({
   refreshToken,
   expiresAt,
   scope,
+  serverUrl,
 }: {
   userId: string;
   provider: GitProviderType;
@@ -27,6 +29,7 @@ export const onOAuthGrantPersist = async ({
   refreshToken?: string | null;
   expiresAt?: number | null;
   scope?: string | null;
+  serverUrl?: string | null;
 }) => {
   return upsertGrantFromOAuth({
     userId,
@@ -35,6 +38,7 @@ export const onOAuthGrantPersist = async ({
     refreshToken,
     expiresAt: expiresAt ? new Date(expiresAt * 1000) : null,
     scopeRaw: scope,
+    serverUrl,
   });
 };
 
@@ -43,6 +47,9 @@ export const onAuthSignOut = async (userId: string) => {
 };
 
 function buildAuthConfig(): NextAuthConfig {
+  const gitLabServerUrl = resolveGitLabServerUrlFromEnv();
+  const gitLabProviderType = resolveGitLabProviderType(gitLabServerUrl);
+
   return {
     adapter: DrizzleAdapter(getDb()),
     session: {
@@ -82,6 +89,7 @@ function buildAuthConfig(): NextAuthConfig {
             GitLab({
               clientId: process.env.GITLAB_CLIENT_ID!,
               clientSecret: process.env.GITLAB_CLIENT_SECRET!,
+              baseUrl: gitLabServerUrl,
               authorization: {
                 params: {
                   scope: 'read_user read_repository api',
@@ -99,7 +107,7 @@ function buildAuthConfig(): NextAuthConfig {
 
         if (account) {
           token.accessToken = account.access_token;
-          token.provider = account.provider;
+          token.provider = account.provider === 'gitlab' ? gitLabProviderType : account.provider;
         }
 
         if (
@@ -107,13 +115,15 @@ function buildAuthConfig(): NextAuthConfig {
           account?.access_token &&
           (account.provider === 'github' || account.provider === 'gitlab')
         ) {
+          const provider = account.provider === 'gitlab' ? gitLabProviderType : account.provider;
           await onOAuthGrantPersist({
             userId: user.id!,
-            provider: account.provider,
+            provider,
             accessToken: account.access_token,
             refreshToken: account.refresh_token,
             expiresAt: account.expires_at,
             scope: account.scope,
+            serverUrl: provider === 'github' ? null : gitLabServerUrl,
           });
         }
 

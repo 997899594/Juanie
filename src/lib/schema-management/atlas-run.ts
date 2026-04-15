@@ -8,6 +8,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
+import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { createJob, deleteJob, getIsConnected } from '@/lib/k8s';
 import { resolveMigrationPath } from '@/lib/migrations/path';
@@ -21,12 +22,13 @@ function buildAuthenticatedCloneUrl(input: {
   fullName: string;
   provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
   accessToken: string;
+  serverUrl: string | null;
 }): string {
   const fallbackUrl =
     input.cloneUrl ??
     (input.provider === 'github'
       ? `https://github.com/${input.fullName}.git`
-      : `https://gitlab.com/${input.fullName}.git`);
+      : `${normalizeGitLabServerUrl(input.serverUrl)}/${input.fullName}.git`);
   const url = new URL(fallbackUrl);
 
   if (input.provider === 'github') {
@@ -517,6 +519,7 @@ export async function executeSchemaRepairAtlasRun(input: {
     fullName: project.repository.fullName,
     provider: session.provider,
     accessToken: session.accessToken,
+    serverUrl: session.serverUrl,
   });
   const baseBranch = project.repository.defaultBranch || 'main';
   const startTime = new Date();

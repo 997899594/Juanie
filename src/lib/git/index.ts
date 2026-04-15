@@ -78,6 +78,7 @@ export interface GitProviderConfig {
 
 export interface GitProviderSessionConfig {
   provider: GitProviderType;
+  serverUrl?: string | null;
 }
 
 export interface GitProvider {
@@ -164,7 +165,11 @@ export function createGitProvider(config: GitProviderConfig): GitProvider {
     case 'github':
       return new GitHubProvider(config);
     case 'gitlab':
+      return new GitLabProvider(config);
     case 'gitlab-self-hosted':
+      if (!config.serverUrl) {
+        throw new Error('GitLab self-hosted provider requires serverUrl');
+      }
       return new GitLabProvider(config);
     default:
       throw new Error(`Unsupported git provider: ${config.type}`);
@@ -174,6 +179,7 @@ export function createGitProvider(config: GitProviderConfig): GitProvider {
 export function createGitProviderForSession(config: GitProviderSessionConfig): GitProvider {
   return createGitProvider({
     type: config.provider,
+    serverUrl: config.serverUrl ?? undefined,
     clientId: '',
     clientSecret: '',
     redirectUri: '',

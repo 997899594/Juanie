@@ -2,6 +2,7 @@ import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { schemaRepairAtlasRuns } from '@/lib/db/schema';
+import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { executeSchemaRepairAtlasRun } from '@/lib/schema-management/atlas-run';
 import type { SchemaRepairAtlasJobData } from './index';
 
@@ -29,12 +30,9 @@ export async function processSchemaRepairAtlas(job: Job<SchemaRepairAtlasJobData
 
 export function createSchemaRepairAtlasWorker() {
   return new Worker<SchemaRepairAtlasJobData>('schema-repair-atlas', processSchemaRepairAtlas, {
-    connection: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD,
+    connection: resolveRedisConnectionOptions({
       maxRetriesPerRequest: null,
-    },
+    }),
     concurrency: 2,
   });
 }

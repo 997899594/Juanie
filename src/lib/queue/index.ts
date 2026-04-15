@@ -1,12 +1,10 @@
 import { type ConnectionOptions, Queue } from 'bullmq';
+import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 
 function getConnection(): ConnectionOptions {
-  return {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD,
+  return resolveRedisConnectionOptions({
     maxRetriesPerRequest: null,
-  };
+  }) as ConnectionOptions;
 }
 
 let _projectInitQueue: Queue | null = null;

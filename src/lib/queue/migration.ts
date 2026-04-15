@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
 import { executeMigrationRun } from '@/lib/migrations/runner';
+import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { resumeReleaseAfterSuccessfulMigration } from '@/lib/releases/orchestration';
 import type { MigrationJobData } from './index';
 
@@ -88,12 +89,9 @@ export async function processMigration(job: Job<MigrationJobData>) {
 
 export function createMigrationWorker() {
   return new Worker<MigrationJobData>('migration', processMigration, {
-    connection: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD,
+    connection: resolveRedisConnectionOptions({
       maxRetriesPerRequest: null,
-    },
+    }),
     concurrency: 5,
   });
 }

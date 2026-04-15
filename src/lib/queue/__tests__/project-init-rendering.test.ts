@@ -147,7 +147,7 @@ describe('project init migration inference', () => {
     expect(config).not.toContain('databases:\n      - role:');
   });
 
-  it('renders a conservative fallback for monorepos', () => {
+  it('renders a manual migration note for monorepos without inventing commands', () => {
     const config = renderJuanieConfig(
       {
         id: 'project_1',
@@ -196,9 +196,11 @@ describe('project init migration inference', () => {
       }
     );
 
-    expect(config).toContain("TODO: replace with the repository's real migration command");
-    expect(config).toContain('command: npm run db:migrate');
-    expect(config).toContain('executionMode: manual_platform');
+    expect(config).toContain('Juanie could not infer a migration command for this service.');
+    expect(config).toContain('Add a migrate block manually before enabling managed migrations.');
+    expect(config).not.toContain('command: npm run db:migrate');
+    expect(config).not.toContain('executionMode: manual_platform');
+    expect(config).not.toContain('migrate:');
   });
 
   it('builds yarn commands without run', () => {
