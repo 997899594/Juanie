@@ -15,6 +15,7 @@ import {
   buildPreviewEnvironmentActionSnapshot,
 } from '@/lib/environments/governance-view';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { buildEnvironmentGovernanceData } from '@/lib/environments/page-governance';
 import {
   attachEnvironmentRecentActivity,
@@ -31,7 +32,7 @@ export function buildProjectEnvironmentListData<
     ...environment,
     actions: {
       ...buildEnvironmentManageActionSnapshot(role, environment),
-      ...(environment.isPreview ? buildPreviewEnvironmentActionSnapshot(role) : {}),
+      ...(isPreviewEnvironment(environment) ? buildPreviewEnvironmentActionSnapshot(role) : {}),
     },
   }));
 }

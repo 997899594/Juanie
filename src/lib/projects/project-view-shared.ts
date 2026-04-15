@@ -3,6 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   getEnvironmentScopeLabel,
@@ -67,6 +68,7 @@ export interface ProjectAttentionRunLike {
   } | null;
   environment?: {
     name?: string | null;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
     previewPrNumber?: number | null;
     branch?: string | null;
@@ -84,6 +86,7 @@ export interface ProjectAttentionRunLike {
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
     environment?: {
+      kind?: 'production' | 'persistent' | 'preview' | null;
       isPreview?: boolean | null;
     } | null;
   } | null;
@@ -120,6 +123,7 @@ export interface ProjectReleaseLike {
   environment: {
     id: string;
     name?: string;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
     previewPrNumber?: number | null;
     branch?: string | null;
@@ -248,20 +252,21 @@ export function buildProjectEnvironmentPresentation(input: {
     environment: input.environment,
     reviewRequest: input.reviewRequest ?? null,
   });
-  const previewLifecycle = input.environment?.isPreview
-    ? buildPreviewLifecycleSummary({
-        sourceLabel: previewSourceMeta.label ?? environmentSourceLabel,
-        expiryLabel: environmentExpiryLabel,
-        primaryDomainUrl,
-        latestRelease:
-          input.releaseId && input.releaseTitle
-            ? {
-                id: input.releaseId,
-                title: input.releaseTitle,
-              }
-            : null,
-      })
-    : null;
+  const previewLifecycle =
+    input.environment && isPreviewEnvironment(input.environment)
+      ? buildPreviewLifecycleSummary({
+          sourceLabel: previewSourceMeta.label ?? environmentSourceLabel,
+          expiryLabel: environmentExpiryLabel,
+          primaryDomainUrl,
+          latestRelease:
+            input.releaseId && input.releaseTitle
+              ? {
+                  id: input.releaseId,
+                  title: input.releaseTitle,
+                }
+              : null,
+        })
+      : null;
 
   return {
     environmentScopeLabel,

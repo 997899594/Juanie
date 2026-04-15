@@ -1,3 +1,4 @@
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { buildReleaseDiff } from '@/lib/releases/diff';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
@@ -157,7 +158,8 @@ function buildReleaseTimeline(input: {
   }
 
   if (
-    release.environment?.isPreview &&
+    release.environment &&
+    isPreviewEnvironment(release.environment) &&
     input.primaryDomainUrl &&
     ['succeeded', 'degraded'].includes(release.status)
   ) {

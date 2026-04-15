@@ -1,4 +1,5 @@
 import type { TeamRole } from '@/lib/db/schema';
+import { isProductionEnvironment } from '@/lib/environments/model';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 
 export interface EnvironmentPageGovernanceSnapshot {
@@ -131,6 +132,7 @@ export function buildPreviewEnvironmentActionSnapshot(
 export function buildEnvironmentManageActionSnapshot(
   role: TeamRole,
   environment: {
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isProduction?: boolean | null;
   }
 ): EnvironmentManageActionSnapshot {
@@ -139,7 +141,7 @@ export function buildEnvironmentManageActionSnapshot(
   return {
     canConfigureStrategy,
     configureStrategySummary: canConfigureStrategy
-      ? environment.isProduction
+      ? isProductionEnvironment(environment)
         ? '可调整当前生产环境的发布策略'
         : '可调整当前环境的发布策略'
       : getEnvironmentGuardReason(environment),

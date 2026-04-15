@@ -5,6 +5,7 @@ import {
   requireSession,
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
+import { isProductionEnvironment } from '@/lib/environments/model';
 import { execInPod } from '@/lib/k8s';
 import { canExecInEnvironment } from '@/lib/policies/runtime-access';
 
@@ -25,7 +26,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!canExecInEnvironment(member.role, environment)) {
       return NextResponse.json(
         {
-          error: environment.isProduction
+          error: isProductionEnvironment(environment)
             ? '生产环境只允许 owner 或 admin 执行 Pod 命令'
             : '当前成员角色没有权限执行 Pod 命令',
         },

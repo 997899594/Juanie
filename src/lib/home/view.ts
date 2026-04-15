@@ -3,6 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   getEnvironmentScopeLabel,
@@ -68,6 +69,7 @@ export interface HomeProjectLike {
   environments?: Array<{
     id: string;
     name: string;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isProduction?: boolean | null;
     isPreview?: boolean | null;
   }>;
@@ -87,6 +89,7 @@ export interface HomeAttentionRunLike {
   } | null;
   environment?: {
     name?: string | null;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
     previewPrNumber?: number | null;
     branch?: string | null;
@@ -104,6 +107,7 @@ export interface HomeAttentionRunLike {
     sourceRef?: string | null;
     sourceCommitSha?: string | null;
     environment?: {
+      kind?: 'production' | 'persistent' | 'preview' | null;
       isPreview?: boolean | null;
     } | null;
   } | null;
@@ -213,19 +217,20 @@ export function decorateHomeAttentionRuns<TRun extends HomeAttentionRunLike>(
       environment: run.environment,
       reviewRequest: run.previewReviewMetadata ?? null,
     });
-    const previewLifecycle = run.environment?.isPreview
-      ? buildPreviewLifecycleSummary({
-          sourceLabel: previewSourceMeta.label ?? environmentSourceLabel,
-          expiryLabel: environmentExpiryLabel,
-          primaryDomainUrl,
-          latestRelease: run.release
-            ? {
-                id: run.release.id,
-                title: releaseTitle ?? '最近发布',
-              }
-            : null,
-        })
-      : null;
+    const previewLifecycle =
+      run.environment && isPreviewEnvironment(run.environment)
+        ? buildPreviewLifecycleSummary({
+            sourceLabel: previewSourceMeta.label ?? environmentSourceLabel,
+            expiryLabel: environmentExpiryLabel,
+            primaryDomainUrl,
+            latestRelease: run.release
+              ? {
+                  id: run.release.id,
+                  title: releaseTitle ?? '最近发布',
+                }
+              : null,
+          })
+        : null;
 
     return {
       ...run,

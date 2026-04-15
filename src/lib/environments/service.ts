@@ -35,7 +35,7 @@ async function resolvePreviewBaseEnvironmentId(projectId: string): Promise<strin
 
 function resolveEnvironmentKindForScaffold(input: {
   kind?: 'production' | 'persistent' | 'preview' | null;
-  isProduction: boolean;
+  isProduction?: boolean | null;
   isPreview?: boolean | null;
 }): 'production' | 'persistent' | 'preview' {
   if (input.kind) {
@@ -123,7 +123,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
         id: updated.id,
         name: updated.name,
         namespace: updated.namespace,
-        isPreview: updated.isPreview,
+        kind: updated.kind,
       },
       services: serviceList,
     });
@@ -150,7 +150,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
       id: created.id,
       name: created.name,
       namespace: created.namespace,
-      isPreview: created.isPreview,
+      kind: created.kind,
     },
     services: serviceList,
   });
@@ -172,8 +172,8 @@ export async function ensureEnvironmentScaffold(input: {
     id: string;
     name: string;
     namespace: string | null;
-    isProduction: boolean;
     kind?: 'production' | 'persistent' | 'preview' | null;
+    isProduction?: boolean | null;
     isPreview?: boolean | null;
   };
 }): Promise<void> {

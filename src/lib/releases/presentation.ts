@@ -1,3 +1,4 @@
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { extractBranchFromRef, extractPrNumberFromRef } from '@/lib/environments/preview';
 
 export interface ReleasePresentationLike {
@@ -5,6 +6,7 @@ export interface ReleasePresentationLike {
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
   environment?: {
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
   } | null;
 }
@@ -52,6 +54,6 @@ export function getReleaseDisplayTitle(release: ReleasePresentationLike): string
   return buildDefaultReleaseSummary({
     sourceRef: release.sourceRef,
     sourceCommitSha: release.sourceCommitSha,
-    isPreview: release.environment?.isPreview ?? false,
+    isPreview: release.environment ? isPreviewEnvironment(release.environment) : false,
   });
 }

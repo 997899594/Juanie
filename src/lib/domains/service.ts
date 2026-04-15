@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { domains } from '@/lib/db/schema';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import {
   createCiliumHTTPRoute,
   deleteCiliumHTTPRoute,
@@ -23,6 +24,7 @@ interface EnsureEnvironmentDomainsInput {
     id: string;
     name: string;
     namespace: string | null;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
   };
   services: Array<{
@@ -55,7 +57,7 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
     ),
   });
 
-  if (input.environment.isPreview && domainList.length === 0) {
+  if (isPreviewEnvironment(input.environment) && domainList.length === 0) {
     const service = pickDefaultPublicService(input.services);
 
     if (service) {

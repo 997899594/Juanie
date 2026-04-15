@@ -18,7 +18,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     await getProjectAccessOrThrow(id, session.user.id);
 
     const previewEnvironments = await db.query.environments.findMany({
-      where: and(eq(environments.projectId, id), eq(environments.isPreview, true)),
+      where: and(eq(environments.projectId, id), eq(environments.kind, 'preview')),
     });
 
     return NextResponse.json(previewEnvironments);

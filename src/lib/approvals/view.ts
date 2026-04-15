@@ -3,6 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   getEnvironmentScopeLabel,
@@ -47,6 +48,7 @@ export interface ApprovalRunLike {
   environment: {
     name: string;
     branch?: string | null;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     previewPrNumber?: number | null;
     expiresAt?: Date | string | null;
     domains?: Array<{
@@ -156,7 +158,7 @@ export function decorateApprovalRuns<TRun extends ApprovalRunLike>(
     const primaryDomainUrl = primaryDomain
       ? buildEnvironmentAccessUrl(primaryDomain.hostname)
       : null;
-    const previewLifecycle = run.environment.isPreview
+    const previewLifecycle = isPreviewEnvironment(run.environment)
       ? buildPreviewLifecycleSummary({
           sourceLabel: previewSourceMeta.label ?? environmentSource,
           expiryLabel: environmentExpiry,

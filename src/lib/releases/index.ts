@@ -9,6 +9,7 @@ import {
   repositories,
   services,
 } from '@/lib/db/schema';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
@@ -161,7 +162,7 @@ async function persistRelease(
         buildDefaultReleaseSummary({
           sourceRef: meta.sourceRef,
           sourceCommitSha: meta.sourceCommitSha ?? null,
-          isPreview: environment.isPreview,
+          isPreview: isPreviewEnvironment(environment),
         }),
     })
     .returning();

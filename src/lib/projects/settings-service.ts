@@ -2,7 +2,11 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { environments, projects, teamMembers, teams } from '@/lib/db/schema';
 import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governance-view';
-import { getEnvironmentKind } from '@/lib/environments/model';
+import {
+  getEnvironmentKind,
+  isPreviewEnvironment,
+  isProductionEnvironment,
+} from '@/lib/environments/model';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
 export async function getProjectSettingsPageData(projectId: string, userId: string) {
@@ -56,8 +60,8 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
         id: environment.id,
         name: environment.name,
         kind: getEnvironmentKind(environment),
-        isProduction: Boolean(environment.isProduction),
-        isPreview: Boolean(environment.isPreview),
+        isProduction: isProductionEnvironment(environment),
+        isPreview: isPreviewEnvironment(environment),
         deploymentStrategy: environment.deploymentStrategy,
         databaseStrategy: environment.databaseStrategy,
         actions: buildEnvironmentManageActionSnapshot(teamMember.role, environment),

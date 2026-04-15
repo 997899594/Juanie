@@ -1,6 +1,7 @@
 import type { TeamRole } from '@/lib/db/schema';
 import { auditLogs } from '@/lib/db/schema';
 import { buildEnvironmentPageGovernanceSnapshot } from '@/lib/environments/governance-view';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { isPreviewEnvironmentExpired } from '@/lib/environments/preview';
 import { formatPlatformTimeContext } from '@/lib/time/format';
 
@@ -99,13 +100,14 @@ export function buildGovernanceEventSnapshot(
 export function buildEnvironmentCleanupCounters<
   TEnvironment extends {
     id: string;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
     expiresAt?: Date | string | null;
   },
 >(environments: TEnvironment[], activeReleaseCountByEnvironment: Map<string, number>) {
   return environments.reduce(
     (accumulator, environment) => {
-      if (!environment.isPreview || !isPreviewEnvironmentExpired(environment)) {
+      if (!isPreviewEnvironment(environment) || !isPreviewEnvironmentExpired(environment)) {
         return accumulator;
       }
 
@@ -133,6 +135,7 @@ export function buildEnvironmentGovernanceData(input: {
   role: TeamRole;
   environments: Array<{
     id: string;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
     expiresAt?: Date | string | null;
   }>;

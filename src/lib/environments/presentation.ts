@@ -1,4 +1,5 @@
 import type { EnvironmentKind } from '@/lib/db/schema';
+import { getEnvironmentKind, isPreviewEnvironment } from '@/lib/environments/model';
 import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
 export interface PresentableEnvironment {
@@ -45,7 +46,7 @@ interface PreviewDatabaseLike {
 }
 
 export function getEnvironmentScopeLabel(environment: PresentableEnvironment): string | null {
-  const kind = resolveEnvironmentKind(environment);
+  const kind = getEnvironmentKind(environment);
 
   switch (kind) {
     case 'production':
@@ -58,7 +59,7 @@ export function getEnvironmentScopeLabel(environment: PresentableEnvironment): s
 }
 
 export function getEnvironmentSourceLabel(environment: PresentableEnvironment): string | null {
-  if (resolveEnvironmentKind(environment) === 'preview') {
+  if (isPreviewEnvironment(environment)) {
     if (environment.previewPrNumber) {
       return `PR #${environment.previewPrNumber}`;
     }
@@ -94,7 +95,7 @@ export function getEnvironmentSourceLabel(environment: PresentableEnvironment): 
 export function getEnvironmentInheritancePresentation(
   environment: PresentableEnvironment
 ): EnvironmentInheritancePresentation | null {
-  if (!environment.isPreview || !environment.baseEnvironment?.name) {
+  if (!isPreviewEnvironment(environment) || !environment.baseEnvironment?.name) {
     return null;
   }
 
@@ -126,7 +127,10 @@ export function getPreviewDatabasePresentation(input: {
     databases?: PreviewDatabaseLike[] | null;
   };
 }): PreviewDatabasePresentation | null {
-  if (!input.environment.isPreview || input.environment.databaseStrategy !== 'isolated_clone') {
+  if (
+    !isPreviewEnvironment(input.environment) ||
+    input.environment.databaseStrategy !== 'isolated_clone'
+  ) {
     return null;
   }
 
@@ -218,20 +222,4 @@ export function getEnvironmentDeploymentStrategyLabel(
     default:
       return null;
   }
-}
-
-function resolveEnvironmentKind(environment: PresentableEnvironment): EnvironmentKind {
-  if (environment.kind) {
-    return environment.kind;
-  }
-
-  if (environment.isPreview) {
-    return 'preview';
-  }
-
-  if (environment.isProduction) {
-    return 'production';
-  }
-
-  return 'persistent';
 }

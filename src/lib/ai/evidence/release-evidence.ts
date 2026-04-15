@@ -1,4 +1,5 @@
 import { loadAIReleaseContext } from '@/lib/ai/evidence/load-release-context';
+import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 
 export interface ReleaseEvidencePack {
@@ -76,8 +77,8 @@ export async function buildReleaseEvidencePack(input: {
     sourceCommitSha: decoratedRelease.sourceCommitSha,
     deploymentStrategy: decoratedRelease.environment.deploymentStrategy,
     databaseStrategy: decoratedRelease.environment.databaseStrategy,
-    isProduction: decoratedRelease.environment.isProduction,
-    isPreview: decoratedRelease.environment.isPreview ?? false,
+    isProduction: isProductionEnvironment(decoratedRelease.environment),
+    isPreview: isPreviewEnvironment(decoratedRelease.environment),
     artifactCount: decoratedRelease.artifacts.length,
     migrationCount: decoratedRelease.migrationRuns.length,
     changedServices: uniqueChangedServices,

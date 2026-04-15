@@ -3,6 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   getEnvironmentDeploymentStrategyLabel,
@@ -49,6 +50,7 @@ export interface ReleaseRecapSourceLike {
   environment: {
     id: string;
     name?: string;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isProduction?: boolean | null;
     isPreview?: boolean | null;
     previewPrNumber?: number | null;
@@ -338,17 +340,18 @@ export function buildReleaseRecap(release: ReleaseRecapSourceLike): ReleaseRecap
     environment: release.environment,
   });
   const environmentExpiry = formatEnvironmentExpiry(release.environment?.expiresAt);
-  const previewLifecycle = release.environment?.isPreview
-    ? buildPreviewLifecycleSummary({
-        sourceLabel: previewSourceMeta.label ?? environmentSource,
-        expiryLabel: environmentExpiry,
-        primaryDomainUrl,
-        latestRelease: {
-          id: release.id,
-          title: getReleaseDisplayTitle(release),
-        },
-      })
-    : null;
+  const previewLifecycle =
+    release.environment && isPreviewEnvironment(release.environment)
+      ? buildPreviewLifecycleSummary({
+          sourceLabel: previewSourceMeta.label ?? environmentSource,
+          expiryLabel: environmentExpiry,
+          primaryDomainUrl,
+          latestRelease: {
+            id: release.id,
+            title: getReleaseDisplayTitle(release),
+          },
+        })
+      : null;
 
   const platformSignals = buildPlatformSignalSnapshot({
     customSignals: [

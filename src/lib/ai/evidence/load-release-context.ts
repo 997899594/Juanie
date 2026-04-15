@@ -1,3 +1,4 @@
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
 import { getReleaseOperationalContext } from '@/lib/releases/runtime-context';
 import { decorateReleaseDetail } from '@/lib/releases/view';
@@ -19,7 +20,7 @@ export async function loadAIReleaseContext(input: { projectId: string; releaseId
       teamId: release.project.teamId,
       environmentId: release.environmentId,
       environmentName: release.environment.name,
-      environmentIsPreview: release.environment.isPreview,
+      environmentIsPreview: isPreviewEnvironment(release.environment),
       namespace: release.environment.namespace,
       deploymentStrategy: release.environment.deploymentStrategy,
       releaseWindow: {

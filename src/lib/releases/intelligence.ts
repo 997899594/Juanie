@@ -1,3 +1,5 @@
+import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
+
 export type ReleaseRiskLevel = 'low' | 'medium' | 'high';
 export type ReleaseIssueCode =
   | 'approval_blocked'
@@ -17,6 +19,7 @@ interface ReleaseLike {
   status: string;
   errorMessage?: string | null;
   environment?: {
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isProduction?: boolean | null;
     isPreview?: boolean | null;
     expiresAt?: Date | string | null;
@@ -37,6 +40,7 @@ interface ReleaseLike {
 export interface MigrationAttentionLike {
   status: string;
   environment?: {
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
     expiresAt?: Date | string | null;
   } | null;
@@ -267,7 +271,7 @@ export function getReleaseFailureSummary(release: ReleaseLike): string | null {
 }
 
 export function getReleaseIssueCode(release: ReleaseLike): ReleaseIssueCode | null {
-  const isPreview = release.environment?.isPreview === true;
+  const isPreview = release.environment ? isPreviewEnvironment(release.environment) : false;
   const previewExpiryState = isPreview
     ? getPreviewExpiryState(release.environment?.expiresAt)
     : null;
@@ -355,7 +359,7 @@ export function getMigrationAttentionIssueCode(
     return 'migration_canceled';
   }
 
-  const isPreview = run.environment?.isPreview === true;
+  const isPreview = run.environment ? isPreviewEnvironment(run.environment) : false;
   const previewExpiryState = isPreview ? getPreviewExpiryState(run.environment?.expiresAt) : null;
 
   if (previewExpiryState === 'expired') {
@@ -501,8 +505,8 @@ export function getReleaseIntelligenceSnapshot(release: ReleaseLike): ReleaseInt
   const reasons: string[] = [];
   let riskLevel: ReleaseRiskLevel = 'low';
 
-  const isProduction = release.environment?.isProduction === true;
-  const isPreview = release.environment?.isPreview === true;
+  const isProduction = release.environment ? isProductionEnvironment(release.environment) : false;
+  const isPreview = release.environment ? isPreviewEnvironment(release.environment) : false;
   const previewExpiryState = isPreview
     ? getPreviewExpiryState(release.environment?.expiresAt)
     : null;

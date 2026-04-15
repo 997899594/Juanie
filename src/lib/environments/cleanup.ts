@@ -1,6 +1,7 @@
 import { and, eq, isNotNull, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { databases, domains, environments, environmentVariables } from '@/lib/db/schema';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { deleteNamespace, getIsConnected, initK8sClient } from '@/lib/k8s';
 import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
 
@@ -26,7 +27,7 @@ export async function deletePreviewEnvironmentById(environmentId: string): Promi
     return { deleted: false, reason: 'not_found' };
   }
 
-  if (!environment.isPreview) {
+  if (!isPreviewEnvironment(environment)) {
     return { deleted: false, reason: 'not_preview' };
   }
 
@@ -65,7 +66,7 @@ export async function cleanupExpiredPreviewEnvironments(input?: { projectId?: st
 }> {
   const expiredEnvironments = await db.query.environments.findMany({
     where: and(
-      eq(environments.isPreview, true),
+      eq(environments.kind, 'preview'),
       isNotNull(environments.expiresAt),
       lt(environments.expiresAt, new Date()),
       input?.projectId ? eq(environments.projectId, input.projectId) : undefined

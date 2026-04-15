@@ -4,6 +4,7 @@ import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snaps
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
 import { environments, projects, releases, type TeamRole } from '@/lib/db/schema';
+import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import {
   getEnvironmentScopeLabel,
   getEnvironmentSourceLabel,
@@ -132,8 +133,8 @@ function buildProjectReleaseListItems<
     environment: {
       id: release.environment.id,
       name: release.environment.name,
-      isProduction: release.environment.isProduction,
-      isPreview: release.environment.isPreview,
+      isProduction: isProductionEnvironment(release.environment),
+      isPreview: isPreviewEnvironment(release.environment),
       scopeLabel: getEnvironmentScopeLabel(release.environment),
       sourceLabel: getEnvironmentSourceLabel(release.environment),
     },
@@ -567,7 +568,7 @@ export async function getReleaseDetailPageData(input: { projectId: string; relea
       teamId: release.project.teamId,
       environmentId: release.environmentId,
       environmentName: release.environment.name,
-      environmentIsPreview: release.environment.isPreview,
+      environmentIsPreview: isPreviewEnvironment(release.environment),
       namespace: release.environment.namespace,
       deploymentStrategy: release.environment.deploymentStrategy,
       releaseWindow: {

@@ -2,6 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { environments, projects, schemaRepairAtlasRuns, type TeamRole } from '@/lib/db/schema';
 import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governance-view';
+import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
 
@@ -74,8 +75,9 @@ export async function getProjectSchemaCenterData(projectId: string, role: TeamRo
   const environmentsWithSchema = environmentList.map((environment) => ({
     id: environment.id,
     name: environment.name,
-    isProduction: environment.isProduction,
-    isPreview: environment.isPreview,
+    kind: environment.kind,
+    isProduction: isProductionEnvironment(environment),
+    isPreview: isPreviewEnvironment(environment),
     actions: buildEnvironmentManageActionSnapshot(role, environment),
     databases: environment.databases.map((database) => {
       const latestRepairPlan = latestRepairPlans.get(database.id) ?? null;

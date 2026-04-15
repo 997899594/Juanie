@@ -3,6 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   formatEnvironmentTimestamp,
@@ -26,6 +27,7 @@ import { formatPlatformTimeContext } from '@/lib/time/format';
 interface EnvironmentViewLike {
   id: string;
   name: string;
+  kind?: 'production' | 'persistent' | 'preview' | null;
   baseEnvironment?: {
     id: string;
     name: string;
@@ -121,7 +123,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
         }
       : null;
     const policy = evaluateEnvironmentPolicy(environment);
-    const previewLifecycle = environment.isPreview
+    const previewLifecycle = isPreviewEnvironment(environment)
       ? buildPreviewLifecycleSummary({
           sourceLabel,
           expiryLabel,
@@ -130,7 +132,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
         })
       : null;
     const cleanupState = (() => {
-      if (!environment.isPreview) {
+      if (!isPreviewEnvironment(environment)) {
         return null;
       }
 

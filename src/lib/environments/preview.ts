@@ -1,7 +1,10 @@
+import { isPreviewEnvironment } from '@/lib/environments/model';
+
 interface PreviewEnvironmentLike {
   id: string;
   name: string;
   branch: string | null;
+  kind?: 'production' | 'persistent' | 'preview' | null;
   isPreview: boolean | null;
   previewPrNumber: number | null;
   expiresAt?: Date | string | null;
@@ -82,7 +85,7 @@ export function resolvePreviewEnvironment<T extends PreviewEnvironmentLike>(
   const prNumber = extractPrNumberFromRef(ref);
   if (prNumber !== null) {
     return environments.find(
-      (environment) => environment.isPreview && environment.previewPrNumber === prNumber
+      (environment) => isPreviewEnvironment(environment) && environment.previewPrNumber === prNumber
     );
   }
 
@@ -91,7 +94,9 @@ export function resolvePreviewEnvironment<T extends PreviewEnvironmentLike>(
     return undefined;
   }
 
-  return environments.find((environment) => environment.isPreview && environment.branch === branch);
+  return environments.find(
+    (environment) => isPreviewEnvironment(environment) && environment.branch === branch
+  );
 }
 
 export function isPreviewEnvironmentExpired(

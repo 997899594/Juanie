@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { databases, environments, projects } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { getIsConnected, initK8sClient } from '@/lib/k8s';
 import {
   injectDatabaseEnvVars,
@@ -34,7 +35,7 @@ export async function syncPreviewEnvironmentDatabases(input: {
     }),
   ]);
 
-  if (!project || !environment || !environment.isPreview) {
+  if (!project || !environment || !isPreviewEnvironment(environment)) {
     return;
   }
 

@@ -1,9 +1,11 @@
+import { isPreviewEnvironment } from '@/lib/environments/model';
 import { extractBranchFromRef, extractPrNumberFromRef } from '@/lib/environments/preview';
 import type { PreviewReviewMetadata } from '@/lib/environments/review-metadata';
 
 export interface PreviewSourceMetadataInput {
   sourceRef?: string | null;
   environment?: {
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
     previewPrNumber?: number | null;
     branch?: string | null;
@@ -30,7 +32,7 @@ export function buildPreviewSourceMetadata(
     (input.sourceRef ? extractPrNumberFromRef(input.sourceRef) : null);
   const branch =
     input.environment?.branch ?? (input.sourceRef ? extractBranchFromRef(input.sourceRef) : null);
-  const isPreview = input.environment?.isPreview === true;
+  const isPreview = input.environment ? isPreviewEnvironment(input.environment) : false;
 
   if (previewPrNumber !== null) {
     const reviewLabel =

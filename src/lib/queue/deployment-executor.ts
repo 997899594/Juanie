@@ -11,6 +11,7 @@ import {
   syncEnvVarsToK8s,
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
+import { getEnvironmentKind } from '@/lib/environments/model';
 import { ensureEnvironmentScaffold } from '@/lib/environments/service';
 import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
 import { assertDeploymentIsCurrent } from '@/lib/releases/deployment-coordination';
@@ -124,8 +125,7 @@ export async function executeDeploymentWorkload(
       id: environment.id,
       name: environment.name,
       namespace: environment.namespace,
-      isProduction: environment.isProduction,
-      isPreview: environment.isPreview,
+      kind: getEnvironmentKind(environment),
     },
   });
 
@@ -144,7 +144,7 @@ export async function executeDeploymentWorkload(
       id: targetEnvironment.id,
       name: targetEnvironment.name,
       namespace: targetEnvironment.namespace,
-      isPreview: targetEnvironment.isPreview,
+      kind: getEnvironmentKind(targetEnvironment),
     },
     services: serviceList.map((service) => ({
       id: service.id,
