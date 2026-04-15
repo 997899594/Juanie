@@ -45,9 +45,9 @@ bun run test             # Run Bun test suite
 bun run db:generate foo  # Generate a new Atlas migration from schema changes
 bun run db:hash          # Refresh Atlas migration checksums
 bun run db:validate      # Validate the Atlas migration directory
-bun run db:status        # Show Atlas migration status for DATABASE_URL
+bun run db:status        # Show Atlas migration status for the configured control-plane DB
 bun run db:push          # Apply Atlas migrations to the database
-bun run db:studio        # Open Drizzle Studio against DATABASE_URL
+bun run db:studio        # Open Drizzle Studio against the configured control-plane DB
 bun run db:seed          # Run seed script
 ```
 
@@ -386,8 +386,6 @@ Required environment variables (see `.env.example`):
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:password@localhost:5432/juanie
-# 或使用组件化配置（推荐给控制面部署）
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
 DATABASE_NAME=juanie

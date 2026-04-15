@@ -1,5 +1,4 @@
 export interface Env {
-  DATABASE_URL?: string;
   DATABASE_HOST?: string;
   DATABASE_PORT?: string;
   DATABASE_NAME?: string;
@@ -10,6 +9,7 @@ export interface Env {
   POSTGRES_USER?: string;
   POSTGRES_PASSWORD?: string;
   POSTGRES_PORT?: string;
+  ATLAS_DATABASE_URL?: string;
 
   // NextAuth
   NEXTAUTH_URL: string;

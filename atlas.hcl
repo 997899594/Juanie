@@ -9,7 +9,7 @@ data "external_schema" "drizzle" {
 }
 
 env "juanie" {
-  url = getenv("DATABASE_URL")
+  url = getenv("ATLAS_DATABASE_URL")
   src = data.external_schema.drizzle.url
   dev = "docker://postgres/16/dev?search_path=public"
 

@@ -56,9 +56,8 @@ describe('database connection url resolution', () => {
     );
   });
 
-  it('prefers component-based config over a stale DATABASE_URL', () => {
+  it('prefers component-based config over a stale raw url env', () => {
     resetDatabaseEnv();
-    process.env.DATABASE_URL = 'postgresql://postgres:secret@postgres:5432/juanie?sslmode=require';
     process.env.DATABASE_HOST = 'postgres';
     process.env.DATABASE_PORT = '5432';
     process.env.DATABASE_NAME = 'juanie';
@@ -71,14 +70,13 @@ describe('database connection url resolution', () => {
     );
   });
 
-  it('falls back to DATABASE_URL when component config is incomplete', () => {
+  it('throws when component config is incomplete', () => {
     resetDatabaseEnv();
-    process.env.DATABASE_URL = 'postgresql://postgres:secret@postgres:5432/juanie';
     process.env.DATABASE_HOST = 'postgres';
     process.env.DATABASE_NAME = 'juanie';
 
-    expect(getNormalizedDatabaseUrlFromEnv()).toBe(
-      'postgresql://postgres:secret@postgres:5432/juanie'
+    expect(() => getNormalizedDatabaseUrlFromEnv()).toThrow(
+      'DATABASE_HOST, DATABASE_NAME, DATABASE_USER, and DATABASE_PASSWORD are required'
     );
   });
 

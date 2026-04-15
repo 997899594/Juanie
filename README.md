@@ -45,7 +45,11 @@ bun install
 cp .env.example .env
 
 # Configure your .env file
-# DATABASE_URL=postgresql://...
+# DATABASE_HOST=localhost
+# DATABASE_PORT=5432
+# DATABASE_NAME=juanie
+# DATABASE_USER=postgres
+# DATABASE_PASSWORD=...
 # NEXTAUTH_SECRET=...
 # GITHUB_CLIENT_ID=...
 # GITHUB_CLIENT_SECRET=...
@@ -72,9 +76,9 @@ Commands:
 bun run db:generate add_feature   # Generate a new Atlas migration
 bun run db:hash                   # Refresh migrations/atlas.sum
 bun run db:validate               # Validate replayability of the migration directory
-bun run db:status                 # Show pending migrations for DATABASE_URL
+bun run db:status                 # Show pending migrations for the configured control-plane DB
 bun run db:push                   # Apply Atlas migrations
-bun run db:studio                 # Open Drizzle Studio against DATABASE_URL
+bun run db:studio                 # Open Drizzle Studio against the configured control-plane DB
 ```
 
 Notes:
@@ -87,12 +91,11 @@ Notes:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| DATABASE_URL | Conditional | PostgreSQL connection string when component env vars are not provided |
-| DATABASE_HOST | Conditional | PostgreSQL host for component-based runtime config |
-| DATABASE_PORT | Conditional | PostgreSQL port for component-based runtime config |
-| DATABASE_NAME | Conditional | PostgreSQL database name for component-based runtime config |
-| DATABASE_USER | Conditional | PostgreSQL username for component-based runtime config |
-| DATABASE_PASSWORD | Conditional | PostgreSQL password for component-based runtime config |
+| DATABASE_HOST | Yes | PostgreSQL host for control-plane runtime config |
+| DATABASE_PORT | No | PostgreSQL port for control-plane runtime config |
+| DATABASE_NAME | Yes | PostgreSQL database name for control-plane runtime config |
+| DATABASE_USER | Yes | PostgreSQL username for control-plane runtime config |
+| DATABASE_PASSWORD | Yes | PostgreSQL password for control-plane runtime config |
 | NEXTAUTH_URL | Yes | Your app URL |
 | NEXTAUTH_SECRET | Yes | Secret for NextAuth |
 | GITHUB_CLIENT_ID | Yes | GitHub OAuth app client ID |

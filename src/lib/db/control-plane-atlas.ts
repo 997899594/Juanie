@@ -62,7 +62,7 @@ function runProcess(command: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
-      env: process.env,
+      env: resolveAtlasProcessEnv(),
     });
 
     child.on('error', reject);
@@ -75,6 +75,17 @@ function runProcess(command: string, args: string[]): Promise<void> {
       reject(new Error(`${command} ${args.join(' ')} exited with code ${code ?? 'unknown'}`));
     });
   });
+}
+
+function resolveAtlasProcessEnv(): NodeJS.ProcessEnv {
+  try {
+    return {
+      ...process.env,
+      ATLAS_DATABASE_URL: getNormalizedDatabaseUrlFromEnv(),
+    };
+  } catch {
+    return process.env;
+  }
 }
 
 async function runAtlas(

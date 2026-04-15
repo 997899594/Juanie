@@ -1723,7 +1723,9 @@ async function provisionSharedPostgreSQL(
   try {
     adminUrl = getNormalizedDatabaseUrlFromEnv();
   } catch {
-    throw new Error('DATABASE_URL not set; cannot provision shared PostgreSQL');
+    throw new Error(
+      'Control-plane database config is incomplete; cannot provision shared PostgreSQL'
+    );
   }
 
   const environment = database.environmentId

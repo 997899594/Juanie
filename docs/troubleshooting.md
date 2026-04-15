@@ -99,7 +99,7 @@ kubectl run test-db --rm -it --restart=Never --image=pgvector/pgvector:pg16 -n j
 
 **常见原因：**
 
-- DATABASE_URL 配置错误
+- 控制面数据库组件配置不完整
 - 数据库密码不匹配
 - AUTH_TRUST_HOST 未设置
 
@@ -167,4 +167,4 @@ echo "完成！"
 1. **使用 shared-gateway** - 不要创建新的 Gateway
 2. **证书包含两个域名** - `*.juanie.art` 和 `juanie.art`
 3. **设置 AUTH_TRUST_HOST=true** - NextAuth v5 必需
-4. **正确的 DATABASE_URL** - 包含完整连接信息
+4. **正确的数据库组件配置** - host/name/user/password/sslmode 必须一致

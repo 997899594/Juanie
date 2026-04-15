@@ -25,9 +25,7 @@ WORKDIR /app
 COPY --from=source /app ./
 
 ARG NEXT_PUBLIC_API_URL
-ARG DATABASE_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-ENV DATABASE_URL=${DATABASE_URL}
 
 RUN mkdir -p public && bun run build
 

@@ -39,16 +39,16 @@ bun run format
 bun run db:generate foo # Generate a new Atlas migration from schema changes
 bun run db:hash         # Refresh Atlas migration checksums
 bun run db:validate     # Validate the Atlas migration directory
-bun run db:status       # Show Atlas migration status for DATABASE_URL
+bun run db:status       # Show Atlas migration status for the configured control-plane DB
 bun run db:push         # Apply Atlas migrations to database
-bun run db:studio      # Open Drizzle Studio
+bun run db:studio       # Open Drizzle Studio against the configured control-plane DB
 bun run db:seed        # Seed database
 ```
 
 ## Runtime Prerequisites
 
 - Bun + Node.js 22+
-- PostgreSQL (`DATABASE_URL`)
+- PostgreSQL (`DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`)
 - Redis for queue processing (`REDIS_HOST`, `REDIS_PORT`, optional `REDIS_PASSWORD`)
 - Optional Kubernetes access (`KUBECONFIG`) for real cluster operations
 - Auth-related env vars for NextAuth and OAuth providers (GitHub/GitLab)

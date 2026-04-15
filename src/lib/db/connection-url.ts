@@ -1,7 +1,7 @@
 export function normalizeDatabaseUrl(rawUrl: string): string {
   const normalized = rawUrl.trim();
   if (!normalized) {
-    throw new Error('DATABASE_URL is required');
+    throw new Error('Database URL is required');
   }
 
   let parsed: URL;
@@ -82,16 +82,11 @@ export function buildNormalizedPostgresUrl(input: {
 
 export function getNormalizedDatabaseUrlFromEnv(): string {
   const components = getDatabaseUrlComponentsFromEnv();
-  if (components) {
-    return buildNormalizedPostgresUrl(components);
-  }
-
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
+  if (!components) {
     throw new Error(
-      'DATABASE_URL is required when DATABASE_HOST/DATABASE_NAME/DATABASE_USER/DATABASE_PASSWORD are not set'
+      'DATABASE_HOST, DATABASE_NAME, DATABASE_USER, and DATABASE_PASSWORD are required'
     );
   }
 
-  return normalizeDatabaseUrl(databaseUrl);
+  return buildNormalizedPostgresUrl(components);
 }
