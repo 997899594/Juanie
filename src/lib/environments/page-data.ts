@@ -76,6 +76,13 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
             name: true,
           },
         },
+        deliveryRules: {
+          columns: {
+            kind: true,
+            pattern: true,
+            priority: true,
+          },
+        },
         domains: {
           with: {
             service: true,

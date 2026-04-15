@@ -29,7 +29,10 @@ import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 interface ManualReleaseEnvironment {
   id: string;
   name: string;
+  kind?: 'production' | 'persistent' | 'preview' | null;
   isProduction: boolean;
+  scopeLabel?: string | null;
+  sourceLabel?: string | null;
 }
 
 interface ManualReleaseSource {
@@ -140,7 +143,9 @@ export function ManualReleaseDialog({
         ? '没有可复用发布'
         : null;
   const defaultEnvironmentId =
-    environments.find((environment) => !environment.isProduction)?.id ?? environments[0]?.id ?? '';
+    environments.find((environment) => environment.kind !== 'production')?.id ??
+    environments[0]?.id ??
+    '';
   const defaultSourceId = successfulSources[0]?.id ?? '';
 
   const [open, setOpen] = useState(false);

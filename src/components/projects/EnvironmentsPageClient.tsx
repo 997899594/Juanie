@@ -76,6 +76,7 @@ interface EnvironmentActivityItem {
 interface EnvironmentRecord {
   id: string;
   name: string;
+  kind?: 'production' | 'persistent' | 'preview' | null;
   namespace: string | null;
   isProduction: boolean | null;
   autoDeploy: boolean;
@@ -507,16 +508,27 @@ function EnvironmentRecentActivityPanel({ items }: { items: EnvironmentRecord['r
   );
 }
 
+function getEnvironmentPriority(environment: EnvironmentRecord): number {
+  switch (environment.kind) {
+    case 'production':
+      return 2;
+    case 'persistent':
+      return 1;
+    case 'preview':
+      return 0;
+    default:
+      if (environment.isProduction) {
+        return 2;
+      }
+
+      return environment.isPreview ? 0 : 1;
+  }
+}
+
 function buildEnvironmentHeaderMeta(environment: EnvironmentRecord): string {
   return [
     environment.namespace ?? '尚未部署',
-    environment.isPreview
-      ? environment.scopeLabel
-      : environment.isProduction
-        ? '生产'
-        : environment.autoDeploy
-          ? '自动部署'
-          : null,
+    environment.scopeLabel,
     environment.sourceLabel,
     environment.expiryLabel,
     environment.latestReleaseCard?.shortCommitSha
@@ -555,8 +567,7 @@ function EnvironmentCardHeader({
             )}
           />
           <span className="text-sm font-semibold capitalize">{environment.name}</span>
-          {environment.isProduction && <Badge variant="outline">生产</Badge>}
-          {environment.isPreview && <Badge variant="outline">预览</Badge>}
+          {environment.scopeLabel && <Badge variant="outline">{environment.scopeLabel}</Badge>}
           {environment.previewLifecycle && (
             <Badge variant="secondary">{environment.previewLifecycle.stateLabel}</Badge>
           )}
@@ -976,10 +987,13 @@ export function EnvironmentsPageClient({
   const standardEnvironments = useMemo(
     () =>
       [...environments]
-        .filter((environment) => !environment.isPreview)
+        .filter((environment) => environment.kind !== 'preview' && !environment.isPreview)
         .sort((left, right) => {
-          if (left.isProduction !== right.isProduction) {
-            return left.isProduction ? 1 : -1;
+          const leftPriority = getEnvironmentPriority(left);
+          const rightPriority = getEnvironmentPriority(right);
+
+          if (leftPriority !== rightPriority) {
+            return leftPriority - rightPriority;
           }
 
           return left.name.localeCompare(right.name);
@@ -989,7 +1003,7 @@ export function EnvironmentsPageClient({
   const previewEnvironments = useMemo(
     () =>
       [...environments]
-        .filter((environment) => environment.isPreview)
+        .filter((environment) => environment.kind === 'preview' || environment.isPreview)
         .sort((left, right) => left.name.localeCompare(right.name)),
     [environments]
   );

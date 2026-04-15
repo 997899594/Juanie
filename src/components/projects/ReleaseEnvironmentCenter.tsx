@@ -48,10 +48,7 @@ export function ReleaseEnvironmentCenter({
               <span className="text-sm font-medium">{environment.name}</span>
             </div>
             <div className="mt-2 text-[11px] text-muted-foreground">
-              {[
-                environment.isProduction ? '生产' : environment.isPreview ? '预览' : '非生产',
-                environment.deploymentStrategy,
-              ]
+              {[environment.scopeLabel, environment.sourceLabel, environment.deploymentStrategy]
                 .filter(Boolean)
                 .join(' · ')}
             </div>

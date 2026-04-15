@@ -1,8 +1,11 @@
+import type { EnvironmentKind } from '@/lib/db/schema';
 import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
 export interface PresentableEnvironment {
   id?: string;
+  kind?: EnvironmentKind | null;
   isPreview?: boolean | null;
+  isProduction?: boolean | null;
   previewPrNumber?: number | null;
   branch?: string | null;
   expiresAt?: Date | string | null;
@@ -12,6 +15,11 @@ export interface PresentableEnvironment {
     id: string;
     name: string;
   } | null;
+  deliveryRules?: Array<{
+    kind: 'branch' | 'tag' | 'pull_request' | 'manual';
+    pattern: string | null;
+    priority?: number | null;
+  }> | null;
 }
 
 export interface EnvironmentInheritancePresentation {
@@ -37,27 +45,50 @@ interface PreviewDatabaseLike {
 }
 
 export function getEnvironmentScopeLabel(environment: PresentableEnvironment): string | null {
-  if (!environment.isPreview) {
-    return null;
-  }
+  const kind = resolveEnvironmentKind(environment);
 
-  return '预览';
+  switch (kind) {
+    case 'production':
+      return '生产';
+    case 'preview':
+      return '预览';
+    default:
+      return '长期环境';
+  }
 }
 
 export function getEnvironmentSourceLabel(environment: PresentableEnvironment): string | null {
-  if (!environment.isPreview) {
+  if (resolveEnvironmentKind(environment) === 'preview') {
+    if (environment.previewPrNumber) {
+      return `PR #${environment.previewPrNumber}`;
+    }
+
+    if (environment.branch) {
+      return environment.branch;
+    }
+  }
+
+  const rules = [...(environment.deliveryRules ?? [])].sort(
+    (left, right) => (left.priority ?? 100) - (right.priority ?? 100)
+  );
+  const primaryRule = rules[0];
+
+  if (!primaryRule) {
     return null;
   }
 
-  if (environment.previewPrNumber) {
-    return `PR #${environment.previewPrNumber}`;
+  switch (primaryRule.kind) {
+    case 'branch':
+      return primaryRule.pattern ? `分支 ${primaryRule.pattern}` : '分支路由';
+    case 'tag':
+      return primaryRule.pattern ? `标签 ${primaryRule.pattern}` : '标签路由';
+    case 'pull_request':
+      return 'PR 路由';
+    case 'manual':
+      return '手动触发';
+    default:
+      return null;
   }
-
-  if (environment.branch) {
-    return environment.branch;
-  }
-
-  return null;
 }
 
 export function getEnvironmentInheritancePresentation(
@@ -187,4 +218,20 @@ export function getEnvironmentDeploymentStrategyLabel(
     default:
       return null;
   }
+}
+
+function resolveEnvironmentKind(environment: PresentableEnvironment): EnvironmentKind {
+  if (environment.kind) {
+    return environment.kind;
+  }
+
+  if (environment.isPreview) {
+    return 'preview';
+  }
+
+  if (environment.isProduction) {
+    return 'production';
+  }
+
+  return 'persistent';
 }

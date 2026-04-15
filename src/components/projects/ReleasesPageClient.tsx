@@ -113,22 +113,14 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       latestRelease,
     };
   });
-
-  const stagingEnv = environments.find(
-    (environment) => environment.autoDeploy && !environment.isProduction
-  );
-  const latestStagingRelease = stagingEnv
-    ? releaseItems.find(
-        (release) =>
-          release.environment.id === stagingEnv.id &&
-          release.status === 'succeeded' &&
-          release.artifacts.length > 0
-      )
+  const hasPromotionTarget = initialData.hasPromotionTarget;
+  const sourcePromotionReleaseId = promotePlan?.sourceRelease?.id ?? null;
+  const latestPromotionSourceRelease = sourcePromotionReleaseId
+    ? (releaseItems.find((release) => release.id === sourcePromotionReleaseId) ?? null)
     : null;
-  const hasStagingProdSplit = initialData.hasStagingProdSplit;
   const canPromote =
-    hasStagingProdSplit &&
-    !!latestStagingRelease &&
+    hasPromotionTarget &&
+    !!latestPromotionSourceRelease &&
     governance.promoteToProduction.allowed &&
     (promotePlan?.plan.canCreate ?? true) &&
     !promotePlan?.plan.blockingReason;
@@ -177,7 +169,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                 router.refresh();
               }}
             />
-            {hasStagingProdSplit && (
+            {hasPromotionTarget && (
               <Button
                 size="sm"
                 className="h-9 rounded-xl px-4"
@@ -231,7 +223,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         onPromote={handlePromote}
       />
 
-      {hasStagingProdSplit && promotePanel && (
+      {hasPromotionTarget && promotePanel && (
         <div className="console-panel px-4 py-4">
           <PlatformSignalChipList chips={promotePanel.chips} className="items-center" />
           {promotePanel.blockingReason && (
@@ -288,7 +280,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               router.refresh();
             }}
           />
-          {hasStagingProdSplit && (
+          {hasPromotionTarget && (
             <Button
               size="sm"
               className="rounded-xl"

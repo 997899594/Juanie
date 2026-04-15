@@ -398,6 +398,14 @@ export async function buildPromotionPlan(projectId: string): Promise<{
     summary: string | null;
     sourceCommitSha: string | null;
   } | null;
+  sourceEnvironment: {
+    id: string;
+    name: string;
+  } | null;
+  targetEnvironment: {
+    id: string;
+    name: string;
+  } | null;
   plan: ReleasePlanningSnapshot;
 }> {
   const project = await db.query.projects.findFirst({
@@ -425,6 +433,8 @@ export async function buildPromotionPlan(projectId: string): Promise<{
   if (!prodEnv) {
     return {
       sourceRelease: null,
+      sourceEnvironment: null,
+      targetEnvironment: null,
       plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'No production environment found',
@@ -437,6 +447,11 @@ export async function buildPromotionPlan(projectId: string): Promise<{
   if (!stagingEnv) {
     return {
       sourceRelease: null,
+      sourceEnvironment: null,
+      targetEnvironment: {
+        id: prodEnv.id,
+        name: prodEnv.name,
+      },
       plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'No staging environment found',
@@ -464,6 +479,14 @@ export async function buildPromotionPlan(projectId: string): Promise<{
   if (!sourceRelease || sourceRelease.artifacts.length === 0) {
     return {
       sourceRelease: null,
+      sourceEnvironment: {
+        id: stagingEnv.id,
+        name: stagingEnv.name,
+      },
+      targetEnvironment: {
+        id: prodEnv.id,
+        name: prodEnv.name,
+      },
       plan: buildStaticPlanningSnapshot({
         canCreate: false,
         blockingReason: 'No successful staging release found to promote',
@@ -490,6 +513,14 @@ export async function buildPromotionPlan(projectId: string): Promise<{
       id: sourceRelease.id,
       summary: sourceRelease.summary,
       sourceCommitSha: sourceRelease.sourceCommitSha,
+    },
+    sourceEnvironment: {
+      id: stagingEnv.id,
+      name: stagingEnv.name,
+    },
+    targetEnvironment: {
+      id: prodEnv.id,
+      name: prodEnv.name,
     },
     plan,
   };

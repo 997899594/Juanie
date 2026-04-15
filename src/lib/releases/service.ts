@@ -4,6 +4,10 @@ import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snaps
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
 import { environments, projects, releases, type TeamRole } from '@/lib/db/schema';
+import {
+  getEnvironmentScopeLabel,
+  getEnvironmentSourceLabel,
+} from '@/lib/environments/presentation';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import { buildMigrationFilePreviewByRunId } from '@/lib/migrations/file-preview';
 import { getPreviousReleaseByScope, getReleaseById } from '@/lib/releases';
@@ -130,6 +134,8 @@ function buildProjectReleaseListItems<
       name: release.environment.name,
       isProduction: release.environment.isProduction,
       isPreview: release.environment.isPreview,
+      scopeLabel: getEnvironmentScopeLabel(release.environment),
+      sourceLabel: getEnvironmentSourceLabel(release.environment),
     },
     artifacts: release.artifacts.map((artifact) => ({
       id: artifact.id ?? `${release.id}-${artifact.service.id}`,
@@ -325,6 +331,7 @@ export function buildProjectReleasesPageData(input: {
   environments: Array<{
     id: string;
     name: string;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     autoDeploy: boolean;
     isProduction: boolean;
     isPreview?: boolean | null;
@@ -332,6 +339,13 @@ export function buildProjectReleasesPageData(input: {
     previewPrNumber?: number | null;
     branch?: string | null;
     expiresAt?: Date | string | null;
+    deliveryRules?: Array<{
+      kind: 'branch' | 'tag' | 'pull_request' | 'manual';
+      pattern: string | null;
+      priority?: number | null;
+    }>;
+    scopeLabel?: string | null;
+    sourceLabel?: string | null;
   }>;
   role: TeamRole;
   promotePlan: Awaited<ReturnType<typeof buildPromotionPlan>> | null;
@@ -384,7 +398,7 @@ export function buildProjectReleasesPageData(input: {
     ],
     promotePlan: input.promotePlan,
     promoteAI: input.promoteAI ?? null,
-    hasStagingProdSplit: input.environments.some((environment) => environment.isProduction),
+    hasPromotionTarget: Boolean(input.promotePlan?.targetEnvironment),
   };
 }
 
@@ -412,6 +426,13 @@ export async function getProjectReleasesPageData(input: {
             name: true,
           },
         },
+        deliveryRules: {
+          columns: {
+            kind: true,
+            pattern: true,
+            priority: true,
+          },
+        },
         databases: {
           columns: {
             id: true,
@@ -425,23 +446,20 @@ export async function getProjectReleasesPageData(input: {
     buildPromotionPlan(input.projectId).catch(() => null),
   ]);
 
-  const stagingRelease = releaseCards.find(
-    (release) =>
-      release.environment.isProduction !== true &&
-      release.environment.isPreview !== true &&
-      release.status === 'succeeded' &&
-      release.artifacts.length > 0
-  );
+  const sourceReleaseId = promotePlan?.sourceRelease?.id ?? null;
+  const sourcePromotionRelease = sourceReleaseId
+    ? (releaseCards.find((release) => release.id === sourceReleaseId) ?? null)
+    : null;
 
   const promoteAI =
-    project && stagingRelease
+    project && sourcePromotionRelease
       ? await resolveAIPluginSnapshot<ReleasePlan>({
           pluginId: 'release-intelligence',
           context: {
             teamId: project.teamId,
             projectId: input.projectId,
-            environmentId: stagingRelease.environment.id,
-            releaseId: stagingRelease.id,
+            environmentId: sourcePromotionRelease.environment.id,
+            releaseId: sourcePromotionRelease.id,
           },
         }).then((snapshot) => {
           const output = snapshot.snapshot?.output ?? null;
@@ -482,7 +500,11 @@ export async function getProjectReleasesPageData(input: {
   return buildProjectReleasesPageData({
     releaseItems: buildProjectReleaseListItems(releaseCards),
     manualReleaseSources: buildManualReleaseSources(releaseCards),
-    environments: environmentList,
+    environments: environmentList.map((environment) => ({
+      ...environment,
+      scopeLabel: getEnvironmentScopeLabel(environment),
+      sourceLabel: getEnvironmentSourceLabel(environment),
+    })),
     role: input.role,
     promotePlan,
     promoteAI,

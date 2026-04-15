@@ -74,7 +74,7 @@ export function ReleasePromoteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
-          <DialogTitle>发布到生产</DialogTitle>
+          <DialogTitle>发布到 {promotePlan?.targetEnvironment?.name ?? '目标环境'}</DialogTitle>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -88,7 +88,8 @@ export function ReleasePromoteDialog({
                     <div className="console-surface rounded-2xl px-4 py-3">
                       <div className="text-xs text-muted-foreground">来源发布</div>
                       <div className="mt-1 text-foreground">
-                        {promotePlan.sourceRelease.summary ?? '最近一次 staging 成功版本'}
+                        {promotePlan.sourceRelease.summary ??
+                          `最近一次 ${promotePlan.sourceEnvironment?.name ?? '来源环境'} 成功版本`}
                       </div>
                       {promotePlan.sourceRelease.sourceCommitSha && (
                         <code className="mt-2 inline-flex rounded-lg bg-secondary px-2 py-1 text-xs text-muted-foreground">
