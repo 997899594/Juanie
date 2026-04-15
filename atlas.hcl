@@ -4,7 +4,7 @@ data "external_schema" "drizzle" {
     "drizzle-kit",
     "export",
     "--config",
-    "drizzle.config.ts",
+    "drizzle.schema.config.ts",
   ]
 }
 

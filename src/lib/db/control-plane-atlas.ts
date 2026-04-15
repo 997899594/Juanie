@@ -10,7 +10,7 @@ const ATLAS_DOCKER_IMAGE =
 const MIGRATIONS_DIR_URL = 'file://migrations';
 const REVISIONS_SCHEMA = 'public';
 const DEFAULT_DEV_URL = 'docker://postgres/16/dev?search_path=public';
-const DRIZZLE_CONFIG_PATH = 'drizzle.config.ts';
+const DRIZZLE_SCHEMA_CONFIG_PATH = 'drizzle.schema.config.ts';
 const EXPORTED_SCHEMA_PATH = path.join('.atlas', 'control-plane.sql');
 const ATLAS_REVISIONS_TABLE = 'atlas_schema_revisions';
 const LEGACY_MIGRATIONS_TABLE = '_migrations';
@@ -176,12 +176,16 @@ async function getAtlasBaselineVersion(): Promise<string> {
 async function exportDesiredSchema(): Promise<void> {
   await mkdir(path.dirname(EXPORTED_SCHEMA_PATH), { recursive: true });
 
-  const output = spawnSync('bunx', ['drizzle-kit', 'export', '--config', DRIZZLE_CONFIG_PATH], {
-    cwd: process.cwd(),
-    env: process.env,
-    encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024,
-  });
+  const output = spawnSync(
+    'bunx',
+    ['drizzle-kit', 'export', '--config', DRIZZLE_SCHEMA_CONFIG_PATH],
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+    }
+  );
 
   if (output.status !== 0) {
     throw new Error(output.stderr || output.stdout || 'drizzle export failed');

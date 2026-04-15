@@ -24,7 +24,7 @@
     "db:hash": "bun src/lib/db/control-plane-atlas.ts hash",
     "db:status": "bun src/lib/db/control-plane-atlas.ts status",
     "db:validate": "bun src/lib/db/control-plane-atlas.ts validate",
-    "db:studio": "bunx drizzle-kit studio",
+    "db:studio": "bunx drizzle-kit studio --config drizzle.studio.config.ts",
     "db:seed": "tsx seed.ts"
   },
   "dependencies": {

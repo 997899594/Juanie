@@ -74,18 +74,20 @@ bun run db:hash                   # Refresh migrations/atlas.sum
 bun run db:validate               # Validate replayability of the migration directory
 bun run db:status                 # Show pending migrations for DATABASE_URL
 bun run db:push                   # Apply Atlas migrations
+bun run db:studio                 # Open Drizzle Studio against DATABASE_URL
 ```
 
 Notes:
 
 - CI validates Atlas migrations and checksum, but does not run interactive local hooks.
 - Drizzle remains the schema authoring layer, not the runtime migration executor.
+- `drizzle.schema.config.ts` is for offline schema export only; `drizzle.studio.config.ts` is for live database tooling.
 
 ### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| DATABASE_URL | Yes | PostgreSQL connection string |
+| DATABASE_URL | Yes | PostgreSQL connection string for runtime, `db:status`, `db:push`, and `db:studio` |
 | NEXTAUTH_URL | Yes | Your app URL |
 | NEXTAUTH_SECRET | Yes | Secret for NextAuth |
 | GITHUB_CLIENT_ID | Yes | GitHub OAuth app client ID |

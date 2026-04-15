@@ -47,7 +47,7 @@ bun run db:hash          # Refresh Atlas migration checksums
 bun run db:validate      # Validate the Atlas migration directory
 bun run db:status        # Show Atlas migration status for DATABASE_URL
 bun run db:push          # Apply Atlas migrations to the database
-bun run db:studio        # Open Drizzle Studio
+bun run db:studio        # Open Drizzle Studio against DATABASE_URL
 bun run db:seed          # Run seed script
 ```
 
