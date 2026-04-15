@@ -68,7 +68,7 @@ export function DeploymentLogs({ projectId, deploymentId, status }: DeploymentLo
   }, [logs]);
 
   return (
-    <div className="max-h-56 overflow-y-auto rounded-[20px] border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs">
+    <div className="max-h-56 overflow-y-auto rounded-[20px] bg-zinc-950 p-4 font-mono text-xs shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_10px_26px_rgba(15,23,42,0.18)]">
       {loading ? (
         <span className="text-zinc-500">正在加载日志…</span>
       ) : logs.length === 0 ? (

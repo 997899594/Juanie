@@ -8,10 +8,12 @@ import { db } from '@/lib/db';
 import type { InitStepStatus } from '@/lib/db/schema';
 import {
   databases,
+  deliveryRules,
   domains,
   environments,
   projectInitSteps,
   projects,
+  promotionFlows,
   services,
   teamMembers,
   teams,
@@ -212,6 +214,7 @@ export async function POST(request: Request) {
         .values({
           projectId: createdProject.id,
           name: 'staging',
+          kind: 'persistent',
           branch: productionBranch,
           autoDeploy,
           isProduction: false,
@@ -224,13 +227,48 @@ export async function POST(request: Request) {
         throw new Error('Failed to create staging environment');
       }
 
-      await tx.insert(environments).values({
+      const [productionEnv] = await tx
+        .insert(environments)
+        .values({
+          projectId: createdProject.id,
+          name: 'production',
+          kind: 'production',
+          autoDeploy: false,
+          isProduction: true,
+          databaseStrategy: 'direct',
+          deploymentStrategy: productionDeploymentStrategy ?? 'controlled',
+        })
+        .returning();
+
+      if (!productionEnv) {
+        throw new Error('Failed to create production environment');
+      }
+
+      await tx.insert(deliveryRules).values([
+        {
+          projectId: createdProject.id,
+          environmentId: stagingEnv.id,
+          kind: 'branch',
+          pattern: productionBranch,
+          priority: 100,
+          autoCreateEnvironment: false,
+        },
+        {
+          projectId: createdProject.id,
+          environmentId: stagingEnv.id,
+          kind: 'pull_request',
+          pattern: '*',
+          priority: 100,
+          autoCreateEnvironment: true,
+        },
+      ]);
+
+      await tx.insert(promotionFlows).values({
         projectId: createdProject.id,
-        name: 'production',
-        autoDeploy: false,
-        isProduction: true,
-        databaseStrategy: 'direct',
-        deploymentStrategy: productionDeploymentStrategy ?? 'controlled',
+        sourceEnvironmentId: stagingEnv.id,
+        targetEnvironmentId: productionEnv.id,
+        requiresApproval: true,
+        strategy: 'reuse_release_artifacts',
       });
 
       const createdServices = new Map<string, string>();

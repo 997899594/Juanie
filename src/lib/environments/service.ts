@@ -3,10 +3,15 @@ import { syncPreviewEnvironmentDatabases } from '@/lib/databases/preview';
 import { db } from '@/lib/db';
 import { environments, services } from '@/lib/db/schema';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
+import {
+  buildEnvironmentNamespace,
+  isPersistentEnvironment,
+  isPreviewEnvironment,
+  isProductionEnvironment,
+} from '@/lib/environments/model';
 import { createNamespace, getIsConnected, upsertService } from '@/lib/k8s';
 import {
   buildPreviewEnvironmentName,
-  buildPreviewNamespace,
   calculatePreviewExpiry,
   extractBranchFromRef,
   extractPrNumberFromRef,
@@ -19,28 +24,33 @@ async function resolvePreviewBaseEnvironmentId(projectId: string): Promise<strin
 
   const preferred =
     environmentList.find(
-      (environment) => !environment.isPreview && !environment.isProduction && environment.autoDeploy
+      (environment) => isPersistentEnvironment(environment) && environment.name === 'staging'
     ) ??
-    environmentList.find((environment) => !environment.isPreview && !environment.isProduction) ??
-    environmentList.find((environment) => !environment.isPreview) ??
+    environmentList.find((environment) => isPersistentEnvironment(environment)) ??
+    environmentList.find((environment) => !isPreviewEnvironment(environment)) ??
     null;
 
   return preferred?.id ?? null;
 }
 
-export function buildEnvironmentNamespace(
-  projectSlug: string,
-  environment: {
-    name: string;
-    isProduction: boolean;
-    isPreview?: boolean | null;
-  }
-): string {
-  if (environment.isPreview) {
-    return buildPreviewNamespace(projectSlug, environment.name);
+function resolveEnvironmentKindForScaffold(input: {
+  kind?: 'production' | 'persistent' | 'preview' | null;
+  isProduction: boolean;
+  isPreview?: boolean | null;
+}): 'production' | 'persistent' | 'preview' {
+  if (input.kind) {
+    return input.kind;
   }
 
-  return environment.isProduction ? `juanie-${projectSlug}-prod` : `juanie-${projectSlug}`;
+  if (isPreviewEnvironment(input)) {
+    return 'preview';
+  }
+
+  if (isProductionEnvironment(input)) {
+    return 'production';
+  }
+
+  return 'persistent';
 }
 
 export async function ensurePreviewEnvironmentForRef(input: {
@@ -49,7 +59,8 @@ export async function ensurePreviewEnvironmentForRef(input: {
   ref: string;
   ttlHours?: number;
   databaseStrategy?: 'inherit' | 'isolated_clone';
-}) {
+  baseEnvironmentId?: string | null;
+}): Promise<typeof environments.$inferSelect | null> {
   const prNumber = extractPrNumberFromRef(input.ref);
   const branch = extractBranchFromRef(input.ref);
 
@@ -65,11 +76,15 @@ export async function ensurePreviewEnvironmentForRef(input: {
   const existingEnvironment = await db.query.environments.findFirst({
     where: and(eq(environments.projectId, input.projectId), eq(environments.name, environmentName)),
   });
-  const baseEnvironmentId = await resolvePreviewBaseEnvironmentId(input.projectId);
+  const baseEnvironmentId =
+    input.baseEnvironmentId === undefined
+      ? await resolvePreviewBaseEnvironmentId(input.projectId)
+      : input.baseEnvironmentId;
 
   const values = {
     projectId: input.projectId,
     name: environmentName,
+    kind: 'preview' as const,
     branch,
     isPreview: true,
     previewPrNumber: prNumber,
@@ -79,7 +94,10 @@ export async function ensurePreviewEnvironmentForRef(input: {
     autoDeploy: true,
     isProduction: false,
     deploymentStrategy: 'rolling' as const,
-    namespace: buildPreviewNamespace(input.projectSlug, environmentName),
+    namespace: buildEnvironmentNamespace(input.projectSlug, {
+      name: environmentName,
+      kind: 'preview',
+    }),
   };
 
   if (existingEnvironment) {
@@ -155,9 +173,10 @@ export async function ensureEnvironmentScaffold(input: {
     name: string;
     namespace: string | null;
     isProduction: boolean;
+    kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
   };
-}) {
+}): Promise<void> {
   if (!getIsConnected()) {
     return;
   }
@@ -166,8 +185,7 @@ export async function ensureEnvironmentScaffold(input: {
     input.environment.namespace ||
     buildEnvironmentNamespace(input.project.slug, {
       name: input.environment.name,
-      isProduction: input.environment.isProduction,
-      isPreview: input.environment.isPreview ?? false,
+      kind: resolveEnvironmentKindForScaffold(input.environment),
     });
 
   if (!input.environment.namespace) {

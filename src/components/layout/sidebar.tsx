@@ -34,8 +34,8 @@ export function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-screen w-60 p-4 lg:block">
-      <div className="glass flex h-full flex-col overflow-hidden rounded-[28px] border border-border/60 shadow-lg">
-        <div className="border-b border-border/70 px-5 py-5">
+      <div className="glass flex h-full flex-col overflow-hidden rounded-[28px] shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_16px_36px_rgba(55,53,47,0.045)]">
+        <div className="console-divider-bottom px-5 py-5">
           <BrandLockup
             href="/"
             size={44}

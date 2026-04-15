@@ -185,7 +185,7 @@ export function DeploymentRollbackAction({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+        <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
           <Button
             variant="outline"
             className="w-full rounded-xl sm:w-auto"

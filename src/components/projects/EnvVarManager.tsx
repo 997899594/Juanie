@@ -185,13 +185,13 @@ function EnvVarDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
-        <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>{isEdit ? '编辑变量' : '添加变量'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
             <div className="space-y-4">
-              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+              <div className="console-surface p-4 sm:p-5">
                 <div className="space-y-1.5">
                   <Label htmlFor="env-key">变量名</Label>
                   <Input
@@ -243,7 +243,7 @@ function EnvVarDialog({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 rounded-[24px] border border-border bg-secondary/20 px-4 py-4">
+              <div className="console-card flex items-center gap-3 rounded-[24px] px-4 py-4">
                 <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">密文变量</p>
@@ -256,20 +256,20 @@ function EnvVarDialog({
               </div>
 
               {disabledSummary && (
-                <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
               {error && (
-                <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                   {error}
                 </div>
               )}
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+          <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
             <Button
               type="button"
               variant="outline"
@@ -340,7 +340,7 @@ function EnvVarRow({
           {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <code className="truncate text-sm font-mono">{envVar.key}</code>
           {envVar.isSecret && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
               <KeyRound className="h-3 w-3" />
               密文
             </span>
@@ -429,7 +429,7 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
           {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <code className="truncate text-sm font-mono">{envVar.key}</code>
           {envVar.isSecret && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
               <KeyRound className="h-3 w-3" />
               密文
             </span>
@@ -452,7 +452,7 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
           {(badges ?? []).map((badge) => (
             <span
               key={`${envVar.id}-${badge}`}
-              className="inline-flex items-center rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+              className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]"
             >
               {badge}
             </span>
@@ -476,8 +476,8 @@ function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
   return (
     <div className="space-y-3">
       {groups.map((group) => (
-        <div key={group.serviceId} className="overflow-hidden rounded-[20px] border border-border">
-          <div className="border-b border-border/70 bg-secondary/30 px-4 py-3 sm:px-5">
+        <div key={group.serviceId} className="console-grid-table overflow-hidden rounded-[20px]">
+          <div className="console-grid-table-head bg-secondary/30 px-4 py-3 sm:px-5">
             <div className="flex items-center gap-2">
               <code className="text-sm font-medium">{group.serviceName}</code>
               <span className="text-xs text-muted-foreground">
@@ -485,7 +485,7 @@ function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
               </span>
             </div>
           </div>
-          <div className="divide-y divide-border/70 bg-background">
+          <div className="console-list bg-background">
             {group.variables.map((variable) => (
               <ReadonlyEnvVarRow
                 key={variable.id}
@@ -603,8 +603,8 @@ export function EnvVarManager({
         </TabsList>
 
         <TabsContent value="direct">
-          <div className="overflow-hidden rounded-[20px] border border-border bg-background">
-            <div className="hidden items-center gap-3 border-b border-border/70 bg-secondary/30 px-5 py-3 sm:flex">
+          <div className="console-grid-table overflow-hidden rounded-[20px] bg-background">
+            <div className="console-grid-table-head hidden items-center gap-3 bg-secondary/30 px-5 py-3 sm:flex">
               <span className="w-56 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 变量名
               </span>
@@ -614,7 +614,7 @@ export function EnvVarManager({
             </div>
 
             {loading ? (
-              <div className="divide-y divide-border/70">
+              <div className="console-list">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -650,7 +650,7 @@ export function EnvVarManager({
                 />
               </div>
             ) : (
-              <div className={cn('divide-y divide-border/70')}>
+              <div className={cn('console-list')}>
                 {directVars.map((v) => (
                   <EnvVarRow
                     key={v.id}
@@ -669,9 +669,9 @@ export function EnvVarManager({
         </TabsContent>
 
         <TabsContent value="effective">
-          <div className="overflow-hidden rounded-[20px] border border-border bg-background">
+          <div className="console-grid-table overflow-hidden rounded-[20px] bg-background">
             {loading ? (
-              <div className="divide-y divide-border/70">
+              <div className="console-list">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -688,7 +688,7 @@ export function EnvVarManager({
                 <p className="text-sm text-muted-foreground">没有生效变量</p>
               </div>
             ) : (
-              <div className="divide-y divide-border/70">
+              <div className="console-list">
                 {effectiveVars.map((envVar) => (
                   <ReadonlyEnvVarRow
                     key={envVar.id}
@@ -702,7 +702,7 @@ export function EnvVarManager({
         </TabsContent>
 
         <TabsContent value="service">
-          <div className="mb-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+          <div className="console-card mb-3 rounded-2xl px-4 py-3 text-sm text-muted-foreground">
             这些变量按服务生效，会在对应容器启动时追加注入；如果键名相同，会覆盖环境级同名变量。
           </div>
 
@@ -711,7 +711,7 @@ export function EnvVarManager({
               {[1, 2].map((item) => (
                 <div
                   key={item}
-                  className="h-24 animate-pulse rounded-[20px] border border-border bg-muted"
+                  className="h-24 animate-pulse rounded-[20px] bg-muted shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]"
                 />
               ))}
             </div>

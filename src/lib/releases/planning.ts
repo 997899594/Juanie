@@ -1,10 +1,18 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { deployments, environments, projects, releases, services } from '@/lib/db/schema';
+import {
+  deployments,
+  environments,
+  projects,
+  promotionFlows,
+  releases,
+  services,
+} from '@/lib/db/schema';
 import {
   getEnvironmentDatabaseStrategyLabel,
   getEnvironmentInheritancePresentation,
 } from '@/lib/environments/presentation';
+import { resolvePrimaryPromotionFlow } from '@/lib/environments/promotion';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
 import {
   type EnvironmentPolicySnapshot,
@@ -404,10 +412,15 @@ export async function buildPromotionPlan(projectId: string): Promise<{
   const envList = await db.query.environments.findMany({
     where: eq(environments.projectId, projectId),
   });
-  const stagingEnv = envList.find(
-    (environment) => environment.autoDeploy && !environment.isProduction
+  const flowList = await db.query.promotionFlows.findMany({
+    where: eq(promotionFlows.projectId, projectId),
+  });
+  const { sourceEnvironment: stagingEnv, targetEnvironment: prodEnv } = resolvePrimaryPromotionFlow(
+    {
+      environments: envList,
+      promotionFlows: flowList,
+    }
   );
-  const prodEnv = envList.find((environment) => environment.isProduction);
 
   if (!prodEnv) {
     return {

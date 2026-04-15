@@ -81,13 +81,13 @@ export default async function InvitePage({ params }: Props) {
                 {invitation.team.name}
               </div>
               <div className="mt-6 grid gap-3">
-                <div className="rounded-[18px] border border-border/70 bg-secondary/40 px-5 py-4">
+                <div className="console-surface rounded-[18px] px-5 py-4">
                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                     角色
                   </div>
                   <div className="mt-3 text-sm font-semibold capitalize">{invitation.role}</div>
                 </div>
-                <div className="rounded-[18px] border border-border/70 bg-secondary/40 px-5 py-4">
+                <div className="console-surface rounded-[18px] px-5 py-4">
                   <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                     过期时间
                   </div>

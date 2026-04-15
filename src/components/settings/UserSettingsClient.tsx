@@ -144,7 +144,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
 
             <div className="space-y-2">
               <Label className="text-sm">邮箱地址</Label>
-              <div className="rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+              <div className="console-surface rounded-xl px-4 py-3 text-sm text-muted-foreground">
                 {user.email}
               </div>
             </div>
@@ -159,20 +159,17 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
       </div>
 
       <div className="console-panel overflow-hidden">
-        <div className="border-b border-border px-5 py-4">
+        <div className="console-divider-bottom px-5 py-4">
           <div className="text-sm font-semibold">代码托管连接</div>
         </div>
         <div className="space-y-2 p-3">
           {initialData.overview.integrations.length === 0 ? (
-            <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
+            <div className="console-surface flex min-h-40 items-center justify-center rounded-2xl text-sm text-muted-foreground">
               暂无代码托管连接
             </div>
           ) : (
             initialData.overview.integrations.map((integration) => (
-              <div
-                key={integration.id}
-                className="rounded-2xl border border-transparent bg-secondary/20 px-4 py-4"
-              >
+              <div key={integration.id} className="console-card rounded-2xl px-4 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">{integration.provider}</div>

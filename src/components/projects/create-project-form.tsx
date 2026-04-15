@@ -683,7 +683,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         {currentStep === 'mode' && (
           <div className="space-y-6">
             {selectedTeam && (
-              <div className="rounded-[20px] border border-border bg-secondary/30 p-4">
+              <div className="console-card rounded-[20px] p-4">
                 <div className="text-sm font-medium">{selectedTeam.name}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {selectedTeam.roleLabel} ·{' '}
@@ -771,7 +771,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
         {currentStep === 'repository' && (
           <div className="space-y-6">
-            <div className="rounded-[20px] border border-border bg-secondary/30 p-4">
+            <div className="console-card rounded-[20px] p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium">{selectedTeam?.name}</div>
@@ -806,7 +806,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   />
                 </div>
 
-                <div className="max-h-96 overflow-y-auto rounded-[20px] border border-border">
+                <div className="console-grid-table max-h-96 overflow-y-auto rounded-[20px]">
                   {!selectedTeam?.importEnabled ? (
                     <div className="p-8 text-center text-muted-foreground">
                       没有可用代码托管授权
@@ -872,10 +872,10 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, isPrivate: false }))}
                         className={cn(
-                          'rounded-[18px] border px-4 py-4 text-left transition-colors',
+                          'rounded-[18px] px-4 py-4 text-left shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
                           !formData.isPrivate
-                            ? 'border-foreground bg-secondary/40'
-                            : 'border-border hover:bg-secondary/40'
+                            ? 'bg-secondary/40'
+                            : 'bg-background/88 hover:bg-secondary/40'
                         )}
                       >
                         <div className="flex items-center gap-2 font-medium">
@@ -888,10 +888,10 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, isPrivate: true }))}
                         className={cn(
-                          'rounded-[18px] border px-4 py-4 text-left transition-colors',
+                          'rounded-[18px] px-4 py-4 text-left shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
                           formData.isPrivate
-                            ? 'border-foreground bg-secondary/40'
-                            : 'border-border hover:bg-secondary/40'
+                            ? 'bg-secondary/40'
+                            : 'bg-background/88 hover:bg-secondary/40'
                         )}
                       >
                         <div className="flex items-center gap-2 font-medium">
@@ -907,7 +907,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 <div className="space-y-2">
                   <Label>模板</Label>
                   {templates.length === 0 ? (
-                    <div className="rounded-[20px] border border-dashed border-border px-5 py-8 text-sm text-muted-foreground">
+                    <div className="console-surface rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
                       没有可用模板
                     </div>
                   ) : (
@@ -927,10 +927,10 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                             }))
                           }
                           className={cn(
-                            'rounded-[18px] border px-4 py-4 text-left transition-colors',
+                            'rounded-[18px] px-4 py-4 text-left shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
                             formData.template === template.id
-                              ? 'border-foreground bg-secondary/40'
-                              : 'border-border hover:bg-secondary/40'
+                              ? 'bg-secondary/40'
+                              : 'bg-background/88 hover:bg-secondary/40'
                           )}
                         >
                           <div className="font-medium">{template.name}</div>
@@ -957,7 +957,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             ) : null}
 
             {analyzeError ? (
-              <div className="rounded-[20px] border border-border bg-secondary/30 p-4">
+              <div className="console-card rounded-[20px] p-4">
                 <p className="text-sm text-foreground">{analyzeError}</p>
                 <p className="mt-1 text-xs text-muted-foreground">已回退到平台默认服务配置</p>
               </div>
@@ -1031,7 +1031,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
               <div className="space-y-2">
                 <Label>交付节奏</Label>
-                <div className="rounded-[18px] border border-border px-4 py-3">
+                <div className="console-surface rounded-[18px] px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">基础环境自动部署</div>
@@ -1058,10 +1058,10 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                     type="button"
                     onClick={() => updateRuntimeProfile(profile.value)}
                     className={cn(
-                      'rounded-[18px] border px-4 py-4 text-left transition-colors',
+                      'rounded-[18px] px-4 py-4 text-left shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
                       formData.runtimeProfile === profile.value
-                        ? 'border-foreground bg-secondary/40'
-                        : 'border-border hover:bg-secondary/40'
+                        ? 'bg-secondary/40'
+                        : 'bg-background/88 hover:bg-secondary/40'
                     )}
                   >
                     <div className="font-medium">{profile.label}</div>
@@ -1087,10 +1087,10 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                       }))
                     }
                     className={cn(
-                      'rounded-[18px] border px-4 py-4 text-left transition-colors',
+                      'rounded-[18px] px-4 py-4 text-left shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
                       formData.productionDeploymentStrategy === strategy.value
-                        ? 'border-foreground bg-secondary/40'
-                        : 'border-border hover:bg-secondary/40'
+                        ? 'bg-secondary/40'
+                        : 'bg-background/88 hover:bg-secondary/40'
                     )}
                   >
                     <div className="font-medium">{strategy.label}</div>
@@ -1116,10 +1116,10 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                       }))
                     }
                     className={cn(
-                      'rounded-[18px] border px-4 py-4 text-left transition-colors',
+                      'rounded-[18px] px-4 py-4 text-left shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
                       formData.previewDatabaseStrategy === strategy.value
-                        ? 'border-foreground bg-secondary/40'
-                        : 'border-border hover:bg-secondary/40'
+                        ? 'bg-secondary/40'
+                        : 'bg-background/88 hover:bg-secondary/40'
                     )}
                   >
                     <div className="font-medium">{strategy.label}</div>
@@ -1129,7 +1129,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </div>
             </div>
 
-            <div className="rounded-[20px] border border-border">
+            <div className="console-grid-table rounded-[20px]">
               <button
                 type="button"
                 onClick={() => setConfigAdvancedOpen((current) => !current)}
@@ -1146,9 +1146,9 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </button>
 
               {configAdvancedOpen && (
-                <div className="space-y-4 border-t border-border px-4 py-4">
+                <div className="console-divider-top space-y-4 px-4 py-4">
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between rounded-[18px] border border-border px-4 py-3">
+                    <div className="console-surface flex items-center justify-between rounded-[18px] px-4 py-3">
                       <div className="text-sm font-medium">自定义域名</div>
                       <Switch
                         checked={formData.useCustomDomain}
@@ -1180,7 +1180,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-[20px] border border-border px-4 py-4">
+              <div className="console-surface rounded-[20px] px-4 py-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   项目
                 </div>
@@ -1210,7 +1210,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-border px-4 py-4">
+              <div className="console-surface rounded-[20px] px-4 py-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   交付策略
                 </div>
@@ -1246,18 +1246,18 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </div>
             )}
 
-            <div className="rounded-[20px] border border-border bg-secondary/20 p-4">
+            <div className="console-card rounded-[20px] p-4">
               <div className="text-sm font-medium">最终会创建这些能力</div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-[16px] border border-border bg-background px-4 py-3">
+                <div className="console-surface rounded-[16px] px-4 py-3">
                   <div className="text-xs text-muted-foreground">启用服务</div>
                   <div className="mt-1 text-sm font-medium">{activeServices.length} 个</div>
                 </div>
-                <div className="rounded-[16px] border border-border bg-background px-4 py-3">
+                <div className="console-surface rounded-[16px] px-4 py-3">
                   <div className="text-xs text-muted-foreground">数据库</div>
                   <div className="mt-1 text-sm font-medium">{formData.databases.length} 个</div>
                 </div>
-                <div className="rounded-[16px] border border-border bg-background px-4 py-3">
+                <div className="console-surface rounded-[16px] px-4 py-3">
                   <div className="text-xs text-muted-foreground">默认链路</div>
                   <div className="mt-1 text-sm font-medium">
                     {deploymentStrategyLabel} · {previewDatabaseStrategyLabel}
@@ -1266,7 +1266,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </div>
             </div>
 
-            <div className="rounded-[20px] border border-border">
+            <div className="console-grid-table rounded-[20px]">
               <button
                 type="button"
                 onClick={() => setReviewServicesOpen((current) => !current)}
@@ -1286,16 +1286,13 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </button>
 
               {reviewServicesOpen && (
-                <div className="border-t border-border px-4 py-4">
-                  <div className="overflow-hidden rounded-[20px] border border-border">
+                <div className="console-divider-top px-4 py-4">
+                  <div className="console-grid-table overflow-hidden rounded-[20px]">
                     {formData.services.length === 0 ? (
                       <div className="p-5 text-sm text-muted-foreground">没有识别到服务。</div>
                     ) : (
                       formData.services.map((service) => (
-                        <div
-                          key={service._id}
-                          className="border-b border-border px-4 py-4 last:border-b-0"
-                        >
+                        <div key={service._id} className="console-grid-table-row px-4 py-4">
                           <div className="flex flex-wrap items-start justify-between gap-4">
                             <div className="space-y-1">
                               <div className="flex items-center gap-3">
@@ -1324,7 +1321,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                           {!service.disabled && (
                             <div className="mt-4 space-y-4 pl-11">
                               {service.type === 'web' && (
-                                <div className="flex items-center justify-between rounded-[16px] border border-border px-4 py-3">
+                                <div className="console-surface flex items-center justify-between rounded-[16px] px-4 py-3">
                                   <div>
                                     <div className="text-sm font-medium">公网入口</div>
                                     <div className="mt-1 text-xs text-muted-foreground">
@@ -1491,7 +1488,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               )}
             </div>
 
-            <div className="rounded-[20px] border border-border">
+            <div className="console-grid-table rounded-[20px]">
               <button
                 type="button"
                 onClick={() => setReviewDatabasesOpen((current) => !current)}
@@ -1514,7 +1511,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </button>
 
               {reviewDatabasesOpen && (
-                <div className="space-y-3 border-t border-border px-4 py-4">
+                <div className="console-divider-top space-y-3 px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap gap-2">
                       {DATABASE_TYPE_OPTIONS.map((databaseType) => (
@@ -1540,7 +1537,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                     </div>
                   </div>
 
-                  <div className="overflow-hidden rounded-[20px] border border-border">
+                  <div className="console-grid-table overflow-hidden rounded-[20px]">
                     {formData.databases.length === 0 ? (
                       <div className="flex flex-col items-center gap-2 p-6 text-center text-muted-foreground">
                         <Database className="h-5 w-5 opacity-40" />
@@ -1563,7 +1560,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         return (
                           <div
                             key={database._id}
-                            className="space-y-4 border-b border-border px-4 py-4 last:border-b-0"
+                            className="console-grid-table-row space-y-4 px-4 py-4"
                           >
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
@@ -1684,7 +1681,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         )}
       </div>
 
-      <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-20 mt-6 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:px-0 md:py-0">
+      <div className="console-divider-top sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-20 mt-6 -mx-4 bg-background/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:bg-transparent md:px-0 md:py-0">
         <div className="flex items-center justify-between gap-3">
           <Button
             variant="outline"

@@ -83,7 +83,7 @@ export default async function HomePage() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <section className="console-panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="console-divider-bottom flex items-center justify-between px-5 py-4">
             <div className="text-sm font-semibold">项目入口</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
               <Link href="/projects">
@@ -94,7 +94,7 @@ export default async function HomePage() {
           </div>
           <div className="p-3">
             {projectCards.length === 0 ? (
-              <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
+              <div className="console-surface flex min-h-64 flex-col items-center justify-center rounded-2xl p-6 text-center">
                 <div className="mb-4 rounded-2xl bg-secondary p-3">
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
@@ -137,7 +137,7 @@ export default async function HomePage() {
         </section>
 
         <section className="console-panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="console-divider-bottom flex items-center justify-between px-5 py-4">
             <div className="text-sm font-semibold">待处理详情</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
               <Link href="/inbox">
@@ -148,7 +148,7 @@ export default async function HomePage() {
           </div>
           <div className="p-3">
             {attentionItems.length === 0 ? (
-              <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
+              <div className="console-surface flex min-h-64 flex-col items-center justify-center rounded-2xl p-6 text-center">
                 <div className="mb-4 rounded-2xl bg-secondary p-3">
                   <AlertTriangle className="h-5 w-5 text-muted-foreground" />
                 </div>

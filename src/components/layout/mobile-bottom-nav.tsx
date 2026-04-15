@@ -10,7 +10,7 @@ export function MobileBottomNav() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)+0.6rem)] pt-2 lg:hidden">
-      <nav className="glass grid grid-cols-4 gap-1 rounded-[24px] border border-border/70 p-1">
+      <nav className="glass grid grid-cols-4 gap-1 rounded-[24px] p-1 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)]">
         {mobileMainNav.map((item) => {
           const Icon = item.icon;
           const isActive = isNavItemActive(pathname, item.href);

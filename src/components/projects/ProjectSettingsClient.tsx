@@ -287,7 +287,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             </div>
             <div className="space-y-3 px-5 py-4">
               {project.environments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
+                <div className="console-surface rounded-2xl px-4 py-6 text-sm text-muted-foreground">
                   没有环境。
                 </div>
               ) : (

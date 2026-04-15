@@ -171,12 +171,9 @@ export function ProjectInitializingClient({
         </div>
       </div>
 
-      <div className="console-panel overflow-hidden px-0 py-0">
+      <div className="console-panel console-list overflow-hidden px-0 py-0">
         {overview.steps.map((step) => (
-          <div
-            key={step.id}
-            className="flex gap-4 border-b border-border/70 px-5 py-4 last:border-b-0"
-          >
+          <div key={step.id} className="flex gap-4 px-5 py-4">
             <div className="mt-0.5 shrink-0">
               <StepIcon status={step.status} />
             </div>

@@ -276,7 +276,7 @@ export function ManualReleaseDialog({
         </Button>
       </DialogTrigger>
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
-        <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>手动发布</DialogTitle>
         </DialogHeader>
 
@@ -284,12 +284,12 @@ export function ManualReleaseDialog({
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
-                <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
-              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+              <div className="console-surface p-4 sm:p-5">
                 <div className="mb-4 text-sm font-semibold text-foreground">发布来源</div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -337,7 +337,7 @@ export function ManualReleaseDialog({
               </div>
 
               {error && (
-                <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                   {error}
                 </div>
               )}
@@ -348,7 +348,7 @@ export function ManualReleaseDialog({
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">来源</div>
                   {selectedArtifacts.length > 0 && (
-                    <div className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                    <div className="rounded-full bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
                       {selectedArtifacts.length} 个服务
                     </div>
                   )}
@@ -374,7 +374,7 @@ export function ManualReleaseDialog({
                         {selectedArtifacts.map((artifact) => (
                           <span
                             key={artifact.service.id}
-                            className="inline-flex items-center rounded-full border border-border bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+                            className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]"
                           >
                             {artifact.service.name}
                           </span>
@@ -433,7 +433,7 @@ export function ManualReleaseDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+        <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
           <Button
             variant="outline"
             className="w-full rounded-xl sm:w-auto"

@@ -97,7 +97,7 @@ export default async function InboxPage({
                         pulse={statusConfig.pulse}
                         label={formatApprovalStatusLabel(run.status)}
                       />
-                      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
+                      <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
                         {run.project.name}
                       </span>
                       <span className="text-[11px] text-muted-foreground">
@@ -127,7 +127,7 @@ export default async function InboxPage({
                     </div>
 
                     {run.errorMessage && (
-                      <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                         {run.errorMessage}
                       </div>
                     )}

@@ -204,6 +204,40 @@ pre,
       0 6px 18px rgba(55, 53, 47, 0.025);
   }
 
+  .console-divider-top {
+    box-shadow: inset 0 1px 0 rgba(232, 227, 219, 0.72);
+  }
+
+  .console-divider-bottom {
+    box-shadow: inset 0 -1px 0 rgba(232, 227, 219, 0.72);
+  }
+
+  .console-list > * + * {
+    box-shadow: inset 0 1px 0 rgba(232, 227, 219, 0.6);
+  }
+
+  .console-grid-table {
+    overflow: hidden;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.72) inset,
+      0 8px 24px rgba(55, 53, 47, 0.03);
+  }
+
+  .console-grid-table-head {
+    background: rgba(241, 239, 235, 0.88);
+    box-shadow: inset 0 -1px 0 rgba(232, 227, 219, 0.72);
+  }
+
+  .console-grid-table-row {
+    box-shadow: inset 0 -1px 0 rgba(232, 227, 219, 0.6);
+  }
+
+  .console-grid-table-row:last-child {
+    box-shadow: none;
+  }
+
   .console-grid {
     position: relative;
   }

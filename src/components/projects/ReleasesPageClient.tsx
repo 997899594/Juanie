@@ -194,18 +194,16 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       />
 
       {error && (
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-foreground">
-          {error}
-        </div>
+        <div className="console-surface rounded-2xl px-4 py-3 text-sm text-foreground">{error}</div>
       )}
 
       {promoteResult && (
         <div
           className={cn(
-            'rounded-2xl border px-4 py-3 text-sm',
+            'rounded-2xl px-4 py-3 text-sm',
             promoteResult.startsWith('错误')
-              ? 'border-destructive/20 bg-background text-destructive'
-              : 'border-border bg-secondary/20 text-foreground'
+              ? 'bg-destructive/[0.06] text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]'
+              : 'bg-secondary/20 text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_18px_rgba(55,53,47,0.025)]'
           )}
         >
           {promoteResult}
@@ -274,7 +272,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       <ReleaseCardList projectId={projectId} releases={filtered} />
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-        <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="flex items-center gap-2 rounded-[24px] bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
           <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
             <Link href={`/projects/${projectId}/runtime/logs`}>
               <ScrollText className="h-3.5 w-3.5" />

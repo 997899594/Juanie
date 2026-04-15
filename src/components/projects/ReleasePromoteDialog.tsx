@@ -73,7 +73,7 @@ export function ReleasePromoteDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
-        <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>发布到生产</DialogTitle>
         </DialogHeader>
 
@@ -182,7 +182,7 @@ export function ReleasePromoteDialog({
                     ) : null}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
+                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
                     加载中...
                   </div>
                 )}
@@ -191,7 +191,7 @@ export function ReleasePromoteDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+        <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
           <Button
             variant="outline"
             className="w-full rounded-xl sm:w-auto"

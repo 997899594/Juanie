@@ -31,6 +31,7 @@ import {
 import { buildDeployImageRepository } from '@/lib/deploy-images';
 import { buildDomainRouteName, pickDefaultPublicService } from '@/lib/domains/defaults';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
+import { buildEnvironmentNamespace } from '@/lib/environments/model';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
@@ -1445,23 +1446,17 @@ async function setupNamespace(
   hasK8s: boolean,
   onProgress?: (p: number) => Promise<void>
 ) {
-  // staging → juanie-{slug}, production → juanie-{slug}-prod
-  const stagingNamespace = `juanie-${project.slug}`;
-  const productionNamespace = `juanie-${project.slug}-prod`;
-
   const envList = await db.query.environments.findMany({
     where: eq(environments.projectId, project.id),
   });
 
-  // Assign namespaces by role
-  for (const env of envList) {
-    const ns = env.isProduction ? productionNamespace : stagingNamespace;
-    await db.update(environments).set({ namespace: ns }).where(eq(environments.id, env.id));
-  }
+  const namespacesToCreate = new Set<string>();
 
-  const namespacesToCreate = envList.some((e) => e.isProduction)
-    ? [stagingNamespace, productionNamespace]
-    : [stagingNamespace];
+  for (const env of envList) {
+    const ns = buildEnvironmentNamespace(project.slug, env);
+    await db.update(environments).set({ namespace: ns }).where(eq(environments.id, env.id));
+    namespacesToCreate.add(ns);
+  }
 
   if (hasK8s) {
     for (const ns of namespacesToCreate) {

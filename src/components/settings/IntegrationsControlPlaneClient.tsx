@@ -31,20 +31,17 @@ export function IntegrationsControlPlaneClient({
       </div>
 
       <div className="console-panel overflow-hidden">
-        <div className="border-b border-border px-5 py-4">
+        <div className="console-divider-bottom px-5 py-4">
           <div className="text-sm font-semibold">授权</div>
         </div>
         <div className="space-y-2 p-3">
           {overview.integrations.length === 0 ? (
-            <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
+            <div className="console-surface flex min-h-40 items-center justify-center rounded-2xl text-sm text-muted-foreground">
               {overview.emptySummary}
             </div>
           ) : (
             overview.integrations.map((integration) => (
-              <div
-                key={integration.id}
-                className="rounded-2xl border border-transparent bg-secondary/20 px-4 py-4"
-              >
+              <div key={integration.id} className="console-card rounded-2xl px-4 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">{integration.providerLabel}</div>
@@ -62,10 +59,10 @@ export function IntegrationsControlPlaneClient({
                     : '暂无能力快照'}
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                  <div className="console-surface rounded-xl px-3 py-3 text-xs text-muted-foreground">
                     {integration.repositoryCountLabel}
                   </div>
-                  <div className="rounded-xl border border-border bg-background px-3 py-3 text-xs text-muted-foreground">
+                  <div className="console-surface rounded-xl px-3 py-3 text-xs text-muted-foreground">
                     {integration.boundProjectsLabel}
                   </div>
                 </div>
@@ -78,20 +75,17 @@ export function IntegrationsControlPlaneClient({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="console-panel overflow-hidden">
-          <div className="border-b border-border px-5 py-4">
+          <div className="console-divider-bottom px-5 py-4">
             <div className="text-sm font-semibold">仓库记录</div>
           </div>
           <div className="space-y-2 p-3">
             {overview.repositories.length === 0 ? (
-              <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
+              <div className="console-surface flex min-h-40 items-center justify-center rounded-2xl text-sm text-muted-foreground">
                 暂无仓库
               </div>
             ) : (
               overview.repositories.map((repository) => (
-                <div
-                  key={repository.id}
-                  className="rounded-2xl border border-transparent bg-secondary/20 px-4 py-4"
-                >
+                <div key={repository.id} className="console-card rounded-2xl px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold">{repository.fullName}</div>
@@ -124,20 +118,17 @@ export function IntegrationsControlPlaneClient({
         </div>
 
         <div className="console-panel overflow-hidden">
-          <div className="border-b border-border px-5 py-4">
+          <div className="console-divider-bottom px-5 py-4">
             <div className="text-sm font-semibold">团队范围</div>
           </div>
           <div className="space-y-2 p-3">
             {overview.teamScopes.length === 0 ? (
-              <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
+              <div className="console-surface flex min-h-40 items-center justify-center rounded-2xl text-sm text-muted-foreground">
                 暂无团队
               </div>
             ) : (
               overview.teamScopes.map((team) => (
-                <div
-                  key={team.id}
-                  className="rounded-2xl border border-transparent bg-secondary/20 px-4 py-4"
-                >
+                <div key={team.id} className="console-card rounded-2xl px-4 py-4">
                   <div className="flex items-center gap-3">
                     <div className="rounded-2xl bg-background p-3">
                       <FolderGit2 className="h-4 w-4 text-muted-foreground" />

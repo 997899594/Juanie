@@ -65,7 +65,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         pulse={release.statusDecoration.pulse}
                         label={release.statusDecoration.label}
                       />
-                      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
+                      <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
                         {release.environment.name}
                       </span>
                       <span

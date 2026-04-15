@@ -7,7 +7,8 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import { environments, projects, releases, repositories } from '@/lib/db/schema';
+import { environments, projects, promotionFlows, releases, repositories } from '@/lib/db/schema';
+import { resolvePrimaryPromotionFlow } from '@/lib/environments/promotion';
 import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
@@ -24,7 +25,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const envList = await db.query.environments.findMany({
       where: eq(environments.projectId, id),
     });
-    const prodEnv = envList.find((environment) => environment.isProduction);
+    const flowList = await db.query.promotionFlows.findMany({
+      where: eq(promotionFlows.projectId, id),
+    });
+    const { targetEnvironment: prodEnv } = resolvePrimaryPromotionFlow({
+      environments: envList,
+      promotionFlows: flowList,
+    });
 
     if (prodEnv && !canManageEnvironment(member.role, prodEnv)) {
       return NextResponse.json({ error: getEnvironmentGuardReason(prodEnv) }, { status: 403 });
@@ -53,16 +60,23 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const session = await requireSession();
     const { project, member } = await getProjectWithRepositoryAccessOrThrow(id, session.user.id);
 
-    // Find staging (autoDeploy=true) and production (isProduction=true) environments
     const envList = await db.query.environments.findMany({
       where: eq(environments.projectId, id),
     });
-
-    const stagingEnv = envList.find((e) => e.autoDeploy && !e.isProduction);
-    const prodEnv = envList.find((e) => e.isProduction);
+    const flowList = await db.query.promotionFlows.findMany({
+      where: eq(promotionFlows.projectId, id),
+    });
+    const {
+      flow: promotionFlow,
+      sourceEnvironment: stagingEnv,
+      targetEnvironment: prodEnv,
+    } = resolvePrimaryPromotionFlow({
+      environments: envList,
+      promotionFlows: flowList,
+    });
 
     if (!stagingEnv) {
-      return NextResponse.json({ error: 'No staging environment found' }, { status: 400 });
+      return NextResponse.json({ error: 'No promotion source environment found' }, { status: 400 });
     }
     if (!prodEnv) {
       return NextResponse.json({ error: 'No production environment found' }, { status: 400 });
@@ -120,7 +134,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       configCommitSha: sourceRelease.configCommitSha,
       triggeredBy: 'manual',
       triggeredByUserId: session.user.id,
-      summary: `Promote ${sourceRelease.sourceCommitSha?.slice(0, 7) ?? 'release'} to production`,
+      summary: `Promote ${sourceRelease.sourceCommitSha?.slice(0, 7) ?? 'release'} to ${prodEnv.name}`,
     });
 
     // Create git tag (best-effort, don't fail if this errors)
@@ -143,6 +157,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
           imageUrl: artifact.imageUrl,
         })),
         commitSha: sourceRelease.sourceCommitSha,
+        promotionFlowId: promotionFlow?.id ?? null,
         tagName,
       },
       { status: 202 }

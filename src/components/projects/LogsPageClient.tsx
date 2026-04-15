@@ -266,8 +266,8 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
         </div>
       </div>
 
-      <div className="h-[56vh] overflow-hidden rounded-[20px] border border-zinc-800 bg-zinc-950 md:h-[calc(100vh-320px)]">
-        <div className="border-b border-zinc-800 bg-zinc-950/90 px-4 py-3">
+      <div className="h-[56vh] overflow-hidden rounded-[20px] bg-zinc-950 shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_12px_32px_rgba(15,23,42,0.18)] md:h-[calc(100vh-320px)]">
+        <div className="bg-zinc-950/90 px-4 py-3 shadow-[inset_0_-1px_0_rgba(63,63,70,0.75)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
@@ -317,7 +317,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
       </div>
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-        <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="flex items-center gap-2 rounded-[24px] bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
           <Button
             variant="ghost"
             size="sm"

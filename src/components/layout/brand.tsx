@@ -23,7 +23,7 @@ export function BrandMark({ size = 40, className, priority = false }: BrandMarkP
   return (
     <div
       className={cn(
-        'shrink-0 overflow-hidden rounded-2xl border border-border/60 bg-card',
+        'shrink-0 overflow-hidden rounded-2xl bg-card shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.03)]',
         className
       )}
       style={{ height: size, width: size }}

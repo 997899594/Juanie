@@ -87,7 +87,7 @@ export function ReleaseNarrativeSection({
     <div className="console-panel p-5">
       <div className="mb-4 text-sm font-semibold">摘要</div>
       <div className="space-y-4">
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+        <div className="console-card rounded-2xl px-4 py-4">
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             阻塞
           </div>
@@ -101,7 +101,7 @@ export function ReleaseNarrativeSection({
           )}
         </div>
         {release.infrastructureDiagnostics && (
-          <div className="rounded-2xl border border-border bg-background px-4 py-4">
+          <div className="console-surface rounded-2xl px-4 py-4">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               容量
             </div>
@@ -283,7 +283,7 @@ export function ReleaseDiffSection({
             )}
           </div>
           {release.diff.changedArtifacts.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
+            <div className="console-surface rounded-2xl px-4 py-6 text-sm text-muted-foreground">
               没有镜像变化。
             </div>
           ) : (
@@ -322,7 +322,7 @@ export function ReleaseDiffSection({
             )}
           </div>
           {release.diff.changedMigrations.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-6 text-sm text-muted-foreground">
+            <div className="console-surface rounded-2xl px-4 py-6 text-sm text-muted-foreground">
               没有迁移变化。
             </div>
           ) : (
@@ -344,16 +344,13 @@ export function ReleaseDiffSection({
               真实环境差异
             </div>
             {runtimeMigrationDiffItems.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-4 text-sm text-muted-foreground">
+              <div className="console-surface rounded-2xl px-4 py-4 text-sm text-muted-foreground">
                 没有运行差异。
               </div>
             ) : (
               <div className="space-y-2">
                 {runtimeMigrationDiffItems.map((item) => (
-                  <div
-                    key={item.runId}
-                    className="rounded-2xl border border-border bg-background px-4 py-3"
-                  >
+                  <div key={item.runId} className="console-surface rounded-2xl px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-medium">
                         {item.serviceName} · {item.databaseName}
@@ -493,7 +490,7 @@ export function ReleaseExecutionSections({
             部署进度
           </div>
           {release.deployments.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-8 text-center text-sm text-muted-foreground">
+            <div className="console-surface rounded-2xl px-4 py-8 text-center text-sm text-muted-foreground">
               没有部署记录。
             </div>
           ) : (
@@ -520,7 +517,7 @@ export function ReleaseExecutionSections({
                     />
                   </div>
                   {deployment.errorMessage && (
-                    <div className="mb-3 rounded-2xl border border-destructive/20 bg-background px-3 py-2 text-xs text-destructive">
+                    <div className="mb-3 rounded-2xl bg-destructive/[0.06] px-3 py-2 text-xs text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                       {deployment.errorMessage}
                     </div>
                   )}
@@ -540,7 +537,7 @@ export function ReleaseExecutionSections({
         <section className="console-panel p-5">
           <div className="mb-4 text-sm font-semibold">迁移记录</div>
           {release.migrationRuns.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-8 text-center text-sm text-muted-foreground">
+            <div className="console-surface rounded-2xl px-4 py-8 text-center text-sm text-muted-foreground">
               没有迁移记录。
             </div>
           ) : (
@@ -582,7 +579,7 @@ export function ReleaseExecutionSections({
           <div className="mt-4 space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               {release.sourceCommitSha && (
-                <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+                <div className="console-card rounded-2xl px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     来源提交
                   </div>
@@ -591,7 +588,7 @@ export function ReleaseExecutionSections({
                   </code>
                 </div>
               )}
-              <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+              <div className="console-card rounded-2xl px-4 py-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   仓库与更新时间
                 </div>
@@ -607,7 +604,7 @@ export function ReleaseExecutionSections({
               releasePlan={releasePlanSnapshot}
               incidentAnalysis={incidentSnapshot}
             />
-            <details className="rounded-2xl border border-border bg-background px-4 py-4">
+            <details className="console-surface rounded-2xl px-4 py-4">
               <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
                 详细信息
               </summary>
@@ -658,7 +655,7 @@ export function ReleaseMobileActions({
 }) {
   return (
     <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-      <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+      <div className="flex items-center gap-2 rounded-[24px] bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
         <Button asChild size="sm" className="min-w-0 flex-1 rounded-xl">
           <Link href={environmentLogsHref}>日志</Link>
         </Button>

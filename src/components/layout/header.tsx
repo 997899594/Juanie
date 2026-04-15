@@ -43,7 +43,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 px-4 pt-4 md:px-6 lg:px-6">
-      <div className="glass hidden items-center justify-between rounded-[20px] border border-border/70 px-4 py-3 lg:flex">
+      <div className="glass hidden items-center justify-between rounded-[20px] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_30px_rgba(55,53,47,0.035)] lg:flex">
         <nav className="flex min-w-0 items-center text-sm">
           {breadcrumbs.map((item, index) => (
             <React.Fragment key={item.title}>
@@ -66,7 +66,7 @@ export function Header() {
       </div>
 
       <div className="lg:hidden">
-        <div className="glass flex items-center justify-between gap-3 rounded-[20px] border border-border/70 px-4 py-3">
+        <div className="glass flex items-center justify-between gap-3 rounded-[20px] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_30px_rgba(55,53,47,0.035)]">
           <div className="flex min-w-0 items-center gap-3">
             <Button
               variant="outline"
@@ -115,10 +115,10 @@ export function Header() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                      'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)] transition-colors',
                       isActive
-                        ? 'border-border bg-secondary text-foreground'
-                        : 'border-border bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
+                        ? 'bg-secondary text-foreground'
+                        : 'bg-card/90 text-muted-foreground hover:bg-secondary hover:text-foreground'
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -135,7 +135,7 @@ export function Header() {
         <DialogContent className="left-0 top-0 h-[100dvh] max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 sm:left-0 sm:top-0 sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-none">
           <DialogTitle className="sr-only">移动端导航</DialogTitle>
           <div className="flex h-full flex-col bg-background">
-            <div className="border-b border-border px-5 py-5">
+            <div className="console-divider-bottom px-5 py-5">
               <BrandLockup
                 href="/"
                 size={36}
@@ -162,10 +162,10 @@ export function Header() {
                         href={item.href}
                         onClick={() => setMobileMenuOpen(false)}
                         className={cn(
-                          'flex items-center gap-3 rounded-[20px] border px-4 py-3.5 text-sm font-medium transition-colors',
+                          'flex items-center gap-3 rounded-[20px] px-4 py-3.5 text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
                           isActive
-                            ? 'border-border bg-secondary text-foreground'
-                            : 'border-border bg-card text-foreground hover:bg-secondary'
+                            ? 'bg-secondary text-foreground'
+                            : 'bg-card text-foreground hover:bg-secondary'
                         )}
                       >
                         <Icon className="h-4 w-4" />
@@ -198,10 +198,10 @@ export function Header() {
                           href={item.href}
                           onClick={() => setMobileMenuOpen(false)}
                           className={cn(
-                            'flex items-center gap-3 rounded-[20px] border px-4 py-3.5 text-sm font-medium transition-colors',
+                            'flex items-center gap-3 rounded-[20px] px-4 py-3.5 text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_20px_rgba(55,53,47,0.028)] transition-colors',
                             isActive
-                              ? 'border-border bg-secondary text-foreground'
-                              : 'border-border bg-card text-foreground hover:bg-secondary'
+                              ? 'bg-secondary text-foreground'
+                              : 'bg-card text-foreground hover:bg-secondary'
                           )}
                         >
                           <Icon className="h-4 w-4" />

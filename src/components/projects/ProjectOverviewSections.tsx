@@ -74,7 +74,7 @@ export function ProjectDefinitionSection({
 }) {
   return (
     <section className="console-panel overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
+      <div className="console-divider-bottom px-5 py-4">
         <div className="text-sm font-semibold">项目定义</div>
       </div>
       <div className="space-y-4 px-5 py-4">
@@ -115,7 +115,7 @@ export function ProjectDefinitionSection({
         </div>
 
         {services.length > 0 && (
-          <div className="space-y-3 border-t border-border pt-4">
+          <div className="space-y-3 pt-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               服务模型
             </div>
@@ -154,7 +154,7 @@ export function ProjectOperationsSection({
 }) {
   return (
     <section className="console-panel overflow-hidden">
-      <div className="border-b border-border px-5 py-4">
+      <div className="console-divider-bottom px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm font-semibold">项目动态</div>
           <div className="flex flex-wrap gap-2">
@@ -174,7 +174,7 @@ export function ProjectOperationsSection({
             待处理
           </div>
           {attentionItems.length === 0 ? (
-            <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
+            <div className="console-surface flex min-h-52 flex-col items-center justify-center rounded-2xl p-6 text-center">
               <AlertTriangle className="mb-3 h-5 w-5 text-muted-foreground" />
               <div className="text-sm font-medium">没有待处理项</div>
             </div>
@@ -220,7 +220,7 @@ export function ProjectOperationsSection({
             最近发布
           </div>
           {recentReleaseCards.length === 0 ? (
-            <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
+            <div className="console-surface flex min-h-40 items-center justify-center rounded-2xl text-sm text-muted-foreground">
               没有发布
             </div>
           ) : (

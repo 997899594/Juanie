@@ -261,12 +261,12 @@ function PreviewEnvironmentDialog({
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
               <div className="space-y-4">
                 {disabledSummary && (
-                  <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                  <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                     {disabledSummary}
                   </div>
                 )}
 
-                <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                <div className="console-surface p-4 sm:p-5">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="preview-branch">分支</Label>
@@ -328,7 +328,7 @@ function PreviewEnvironmentDialog({
                 </div>
 
                 {error && (
-                  <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                  <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                     {error}
                   </div>
                 )}
@@ -365,7 +365,7 @@ function PreviewEnvironmentDialog({
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+          <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
             <Button
               type="button"
               variant="outline"
@@ -461,20 +461,17 @@ function EnvironmentRecentActivityPanel({ items }: { items: EnvironmentRecord['r
   }
 
   return (
-    <div className="mb-4 rounded-2xl border border-border bg-background px-4 py-4">
+    <div className="console-surface mb-4 rounded-2xl px-4 py-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium">最近活动</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            把发布、迁移、部署和治理收敛到同一条主链里。
-          </div>
         </div>
       </div>
       <div className="space-y-3">
         {items.map((item) => (
           <div
             key={item.key}
-            className="flex flex-col gap-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3 lg:flex-row lg:items-start lg:justify-between"
+            className="console-card flex flex-col gap-3 rounded-2xl px-4 py-3 lg:flex-row lg:items-start lg:justify-between"
           >
             <div className="min-w-0 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
@@ -605,7 +602,7 @@ function EnvironmentRuntimePanel({
       )}
 
       {environment.latestReleaseCard && (
-        <div className="mt-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+        <div className="console-card mt-4 rounded-2xl px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">最近发布</Badge>
             <Badge variant="outline">{environment.latestReleaseCard.statusDecoration.label}</Badge>
@@ -645,7 +642,7 @@ function EnvironmentPolicyPanel({
   ) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-background px-4 py-4">
+    <div className="console-surface rounded-2xl px-4 py-4">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium">策略</div>
@@ -814,7 +811,7 @@ function EnvironmentAdvancedPanel({
                 href={`https://${domain.hostname}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground"
+                className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1.5 text-xs text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]"
               >
                 <Globe className="h-3.5 w-3.5" />
                 <span>{domain.hostname}</span>

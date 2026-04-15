@@ -120,8 +120,14 @@ export const environmentDeploymentStrategies = [
   'blue_green',
 ] as const;
 export type EnvironmentDeploymentStrategy = (typeof environmentDeploymentStrategies)[number];
+export const environmentKinds = ['production', 'persistent', 'preview'] as const;
+export type EnvironmentKind = (typeof environmentKinds)[number];
 export const environmentDatabaseStrategies = ['direct', 'inherit', 'isolated_clone'] as const;
 export type EnvironmentDatabaseStrategy = (typeof environmentDatabaseStrategies)[number];
+export const deliveryRuleKinds = ['branch', 'tag', 'pull_request', 'manual'] as const;
+export type DeliveryRuleKind = (typeof deliveryRuleKinds)[number];
+export const promotionFlowStrategies = ['reuse_release_artifacts', 'rebuild_from_ref'] as const;
+export type PromotionFlowStrategy = (typeof promotionFlowStrategies)[number];
 export const environmentSchemaStateStatuses = [
   'aligned',
   'pending_migrations',
@@ -199,10 +205,13 @@ export const environmentDeploymentStrategyEnum = pgEnum(
   'environmentDeploymentStrategy',
   environmentDeploymentStrategies
 );
+export const environmentKindEnum = pgEnum('environmentKind', environmentKinds);
 export const environmentDatabaseStrategyEnum = pgEnum(
   'environmentDatabaseStrategy',
   environmentDatabaseStrategies
 );
+export const deliveryRuleKindEnum = pgEnum('deliveryRuleKind', deliveryRuleKinds);
+export const promotionFlowStrategyEnum = pgEnum('promotionFlowStrategy', promotionFlowStrategies);
 export const environmentSchemaStateStatusEnum = pgEnum(
   'environmentSchemaStateStatus',
   environmentSchemaStateStatuses
@@ -587,6 +596,7 @@ export const environments = pgTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
 
     name: varchar('name', { length: 100 }).notNull(),
+    kind: environmentKindEnum('kind').default('persistent').notNull(),
     branch: varchar('branch', { length: 100 }),
     tagPattern: varchar('tagPattern', { length: 100 }),
     isPreview: boolean('isPreview').default(false),
@@ -615,6 +625,70 @@ export const environments = pgTable(
     previewIdx: index('environment_preview_idx').on(table.projectId, table.isPreview),
     previewPrIdx: index('environment_preview_pr_idx').on(table.projectId, table.previewPrNumber),
     baseEnvironmentIdx: index('environment_base_env_idx').on(table.baseEnvironmentId),
+  })
+);
+
+export const deliveryRules = pgTable(
+  'deliveryRule',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    environmentId: uuid('environmentId').references(() => environments.id, {
+      onDelete: 'cascade',
+    }),
+    kind: deliveryRuleKindEnum('kind').notNull(),
+    pattern: varchar('pattern', { length: 255 }),
+    isActive: boolean('isActive').default(true).notNull(),
+    priority: integer('priority').default(100).notNull(),
+    autoCreateEnvironment: boolean('autoCreateEnvironment').default(false).notNull(),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('deliveryRule_projectId_idx').on(table.projectId),
+    environmentIdIdx: index('deliveryRule_environmentId_idx').on(table.environmentId),
+    kindPriorityIdx: index('deliveryRule_kind_priority_idx').on(
+      table.projectId,
+      table.kind,
+      table.priority
+    ),
+  })
+);
+
+export const promotionFlows = pgTable(
+  'promotionFlow',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    projectId: uuid('projectId')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    sourceEnvironmentId: uuid('sourceEnvironmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    targetEnvironmentId: uuid('targetEnvironmentId')
+      .notNull()
+      .references(() => environments.id, { onDelete: 'cascade' }),
+    requiresApproval: boolean('requiresApproval').default(true).notNull(),
+    strategy: promotionFlowStrategyEnum('strategy').default('reuse_release_artifacts').notNull(),
+    isActive: boolean('isActive').default(true).notNull(),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+    updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    projectIdIdx: index('promotionFlow_projectId_idx').on(table.projectId),
+    sourceEnvironmentIdIdx: index('promotionFlow_sourceEnvironmentId_idx').on(
+      table.sourceEnvironmentId
+    ),
+    targetEnvironmentIdIdx: index('promotionFlow_targetEnvironmentId_idx').on(
+      table.targetEnvironmentId
+    ),
+    sourceTargetUnique: unique('promotionFlow_source_target_unique').on(
+      table.projectId,
+      table.sourceEnvironmentId,
+      table.targetEnvironmentId
+    ),
   })
 );
 
@@ -1427,6 +1501,8 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   }),
   services: many(services),
   environments: many(environments),
+  deliveryRules: many(deliveryRules),
+  promotionFlows: many(promotionFlows),
   databases: many(databases),
   domains: many(domains),
   environmentVariables: many(environmentVariables),
@@ -1471,6 +1547,13 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
   derivedEnvironments: many(environments, {
     relationName: 'environment_inheritance',
   }),
+  deliveryRules: many(deliveryRules),
+  promotionSourceFlows: many(promotionFlows, {
+    relationName: 'promotion_flow_source_environment',
+  }),
+  promotionTargetFlows: many(promotionFlows, {
+    relationName: 'promotion_flow_target_environment',
+  }),
   domains: many(domains),
   releases: many(releases),
   deployments: many(deployments),
@@ -1478,6 +1561,34 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
   databases: many(databases),
   aiPluginRuns: many(aiPluginRuns),
   aiPluginSnapshots: many(aiPluginSnapshots),
+}));
+
+export const deliveryRulesRelations = relations(deliveryRules, ({ one }) => ({
+  project: one(projects, {
+    fields: [deliveryRules.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [deliveryRules.environmentId],
+    references: [environments.id],
+  }),
+}));
+
+export const promotionFlowsRelations = relations(promotionFlows, ({ one }) => ({
+  project: one(projects, {
+    fields: [promotionFlows.projectId],
+    references: [projects.id],
+  }),
+  sourceEnvironment: one(environments, {
+    fields: [promotionFlows.sourceEnvironmentId],
+    references: [environments.id],
+    relationName: 'promotion_flow_source_environment',
+  }),
+  targetEnvironment: one(environments, {
+    fields: [promotionFlows.targetEnvironmentId],
+    references: [environments.id],
+    relationName: 'promotion_flow_target_environment',
+  }),
 }));
 
 export const databasesRelations = relations(databases, ({ one, many }) => ({

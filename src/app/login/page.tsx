@@ -22,26 +22,17 @@ export default async function LoginPage() {
               <div className="space-y-1">
                 <div className="console-eyebrow">Release Console</div>
                 <h1 className="pt-2 text-3xl font-semibold tracking-tight">登录</h1>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  在一条稳定主链里管理发布、迁移、审批和运行状态，不再来回切页面找动作。
-                </p>
               </div>
             </div>
 
             <div className="console-surface rounded-[24px] p-4">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                进入前你会得到
+                控制台
               </div>
               <div className="mt-3 grid gap-2">
-                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">
-                  更清晰的项目入口
-                </div>
-                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">
-                  统一的发布与运行视图
-                </div>
-                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">
-                  更少跳转的团队协作流程
-                </div>
+                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">项目</div>
+                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">交付</div>
+                <div className="rounded-2xl bg-background/70 px-3 py-3 text-sm">运行</div>
               </div>
             </div>
 
@@ -88,7 +79,7 @@ export default async function LoginPage() {
         </div>
 
         <div className="hidden console-panel overflow-hidden lg:flex lg:flex-col lg:justify-between">
-          <div className="console-grid border-b border-border/70 px-8 py-8">
+          <div className="console-grid console-divider-bottom px-8 py-8">
             <BrandLockup
               href="/"
               size={40}
@@ -97,10 +88,7 @@ export default async function LoginPage() {
               nameClassName="text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
             />
             <div className="mt-4 max-w-xl text-5xl font-semibold leading-tight tracking-tight">
-              为现代应用团队整理出一条能真正落地的交付主链。
-            </div>
-            <div className="mt-4 max-w-lg text-sm leading-6 text-muted-foreground">
-              Juanie 把“要看什么、先做什么、卡在哪里”放进一个连续界面，减少临时判断成本。
+              统一交付台
             </div>
           </div>
 
@@ -110,23 +98,21 @@ export default async function LoginPage() {
                 发布
               </div>
               <div className="mt-3 text-3xl font-semibold tracking-tight">1 条主链</div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                迁移、部署、审批被放到同一节奏里
-              </div>
+              <div className="mt-1 text-sm text-muted-foreground">迁移、部署、审批同屏</div>
             </div>
             <div className="console-surface rounded-[18px] px-5 py-4">
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 可观测
               </div>
               <div className="mt-3 text-3xl font-semibold tracking-tight">实时</div>
-              <div className="mt-1 text-sm text-muted-foreground">日志、状态、待处理项同步对齐</div>
+              <div className="mt-1 text-sm text-muted-foreground">日志、状态、待处理同步</div>
             </div>
             <div className="console-surface rounded-[18px] px-5 py-4">
               <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 团队
               </div>
               <div className="mt-3 text-3xl font-semibold tracking-tight">共享</div>
-              <div className="mt-1 text-sm text-muted-foreground">项目、成员、环境共用同一视角</div>
+              <div className="mt-1 text-sm text-muted-foreground">项目、成员、环境同视角</div>
             </div>
           </div>
         </div>

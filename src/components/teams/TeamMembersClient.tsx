@@ -252,12 +252,12 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                 </Button>
               </DialogTrigger>
               <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
-                <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
+                <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
                   <DialogTitle>生成邀请链接</DialogTitle>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
                   <div className="space-y-4">
-                    <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                    <div className="console-surface p-4 sm:p-5">
                       <div className="space-y-2">
                         <Label className="text-sm">新成员角色</Label>
                         <Select value={linkRole} onValueChange={setLinkRole}>
@@ -296,7 +296,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                     </div>
                   </div>
                 </div>
-                <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+                <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
                   <Button
                     type="button"
                     variant="outline"
@@ -326,12 +326,12 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
               </DialogTrigger>
               <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
                 <form onSubmit={handleInvite} className="flex min-h-0 flex-1 flex-col">
-                  <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
+                  <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
                     <DialogTitle>邀请成员</DialogTitle>
                   </DialogHeader>
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
                     <div className="space-y-4">
-                      <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+                      <div className="console-surface p-4 sm:p-5">
                         <div className="space-y-2">
                           <Label htmlFor="email" className="text-sm">
                             邮箱
@@ -361,7 +361,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                       </div>
                     </div>
                   </div>
-                  <DialogFooter className="shrink-0 border-t border-border/70 bg-background px-4 py-4 sm:px-6">
+                  <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
                     <Button
                       type="button"
                       variant="outline"
@@ -397,13 +397,13 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       </div>
 
       {errorMessage && (
-        <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+        <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
           {errorMessage}
         </div>
       )}
 
       <section className="console-panel overflow-hidden">
-        <div className="border-b border-border px-5 py-4">
+        <div className="console-divider-bottom px-5 py-4">
           <div className="text-sm font-semibold">治理</div>
         </div>
         <div className="space-y-4 px-5 py-4">
@@ -423,11 +423,11 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
           </Button>
         </div>
       ) : (
-        <div className="console-panel overflow-hidden px-0 py-0">
+        <div className="console-panel console-list overflow-hidden px-0 py-0">
           {overview.members.map((member) => (
             <div
               key={member.id}
-              className="flex flex-col gap-4 border-b border-border/70 px-5 py-4 last:border-b-0 md:flex-row md:items-center md:justify-between"
+              className="flex flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between"
             >
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10 rounded-xl">
@@ -492,11 +492,11 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       {overview.invitations.length > 0 && (
         <div className="space-y-2">
           <div className="text-sm font-medium text-muted-foreground">待处理邀请链接</div>
-          <div className="console-panel overflow-hidden px-0 py-0">
+          <div className="console-panel console-list overflow-hidden px-0 py-0">
             {overview.invitations.map((invitation) => (
               <div
                 key={invitation.id}
-                className="flex items-center justify-between gap-4 border-b border-border/70 px-5 py-4 last:border-b-0"
+                className="flex items-center justify-between gap-4 px-5 py-4"
               >
                 <div className="space-y-0.5">
                   <p className="text-sm font-semibold">{invitation.roleLabel}</p>

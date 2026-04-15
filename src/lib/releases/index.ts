@@ -1,6 +1,7 @@
 import { and, desc, eq, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
+  deliveryRules,
   environments,
   projects,
   releaseArtifacts,
@@ -8,18 +9,19 @@ import {
   repositories,
   services,
 } from '@/lib/db/schema';
-import { resolvePreviewEnvironment } from '@/lib/environments/preview';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
+import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import {
   inspectReleaseSchemaGate,
   ReleaseSchemaGateBlockedError,
 } from '@/lib/releases/schema-gate';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
+type DeliveryRuleRecord = typeof deliveryRules.$inferSelect;
 
 export interface ReleaseServiceInput {
   id?: string;
@@ -54,33 +56,18 @@ export interface CreateProjectReleaseInput {
   summary?: string | null;
 }
 
-function matchesGlob(pattern: string, value: string): boolean {
-  const regex = new RegExp(
-    `^${pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`
-  );
-  return regex.test(value);
-}
-
 export function resolveEnvironment(
   ref: string,
-  envs: EnvironmentRecord[]
+  envs: EnvironmentRecord[],
+  rules: DeliveryRuleRecord[] = []
 ): EnvironmentRecord | undefined {
-  const previewEnvironment = resolvePreviewEnvironment(ref, envs);
-  if (previewEnvironment) {
-    return previewEnvironment;
-  }
-
-  if (ref.startsWith('refs/tags/')) {
-    const tag = ref.slice('refs/tags/'.length);
-    const byTag = envs.find((env) => env.tagPattern && matchesGlob(env.tagPattern, tag));
-    if (byTag) {
-      return byTag;
-    }
-    return envs.find((env) => env.branch === 'main' || env.branch === 'master');
-  }
-
-  const branch = ref.replace('refs/heads/', '');
-  return envs.find((env) => env.branch === branch);
+  return (
+    resolveEnvironmentRoute({
+      ref,
+      environments: envs,
+      deliveryRules: rules,
+    }).environment ?? undefined
+  );
 }
 
 async function resolveReleaseServices(
@@ -230,6 +217,7 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
   const project = await db.query.projects.findFirst({
     where: eq(projects.repositoryId, repo.id),
     with: {
+      deliveryRules: true,
       environments: true,
       services: true,
     },
@@ -239,13 +227,23 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
     throw new Error(`No project linked to repository ${input.repository}`);
   }
 
-  let environment = resolveEnvironment(input.ref, project.environments);
+  const route = resolveEnvironmentRoute({
+    ref: input.ref,
+    environments: project.environments,
+    deliveryRules: project.deliveryRules,
+  });
+
+  let environment = route.environment;
   if (!environment) {
-    const previewEnvironment = await ensurePreviewEnvironmentForRef({
-      projectId: project.id,
-      projectSlug: project.slug,
-      ref: input.ref,
-    });
+    const previewEnvironment =
+      route.rule?.kind === 'pull_request' && route.rule.autoCreateEnvironment
+        ? await ensurePreviewEnvironmentForRef({
+            projectId: project.id,
+            projectSlug: project.slug,
+            ref: input.ref,
+            baseEnvironmentId: route.rule.environmentId ?? null,
+          })
+        : null;
 
     if (previewEnvironment) {
       environment = previewEnvironment;

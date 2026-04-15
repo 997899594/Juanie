@@ -74,7 +74,7 @@ export default async function TeamsPage() {
 
           <Link
             href="/teams/new"
-            className="flex min-h-40 flex-col items-center justify-center rounded-[20px] border border-dashed border-border bg-background px-5 py-4 text-center transition-colors hover:bg-secondary/30"
+            className="console-surface flex min-h-40 flex-col items-center justify-center rounded-[20px] px-5 py-4 text-center transition-colors hover:bg-secondary/30"
           >
             <div className="mb-3 rounded-2xl bg-muted p-3">
               <Plus className="h-4 w-4 text-muted-foreground" />
