@@ -55,7 +55,7 @@ export function ProjectOverviewHero({
         <div className="console-stat px-4 py-3">
           <div className="text-xs text-muted-foreground">待处理</div>
           <div className="mt-2 line-clamp-2 text-sm font-medium">
-            {primaryAttention?.issueLabel ?? '当前无阻塞项'}
+            {primaryAttention?.issueLabel ?? '无阻塞'}
           </div>
         </div>
       </div>
@@ -176,7 +176,7 @@ export function ProjectOperationsSection({
           {attentionItems.length === 0 ? (
             <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 p-6 text-center">
               <AlertTriangle className="mb-3 h-5 w-5 text-muted-foreground" />
-              <div className="text-sm font-medium">当前没有待处理项</div>
+              <div className="text-sm font-medium">没有待处理项</div>
             </div>
           ) : (
             <div className="space-y-2">

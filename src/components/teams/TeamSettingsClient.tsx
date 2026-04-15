@@ -114,7 +114,6 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="设置"
-        description={overview.headerDescription}
         actions={
           overview.canEdit ? (
             <Button
@@ -160,7 +159,6 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             <Input value={team.slug} className="h-11 rounded-xl text-muted-foreground" disabled />
           </div>
         </div>
-        <div className="mt-4 text-xs text-muted-foreground">{overview.saveSummary}</div>
         {saveMsg && (
           <div
             className={`mt-4 text-xs ${saveMsg.startsWith('错误') ? 'text-destructive' : 'text-muted-foreground'}`}
@@ -181,7 +179,6 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">AI Control Plane</div>
-            <div className="mt-1 text-xs text-muted-foreground">{aiControlPlane.summary}</div>
           </div>
           {overview.canEdit ? (
             <Button type="submit" className="h-9 rounded-xl px-4" disabled={savingAI}>
@@ -191,7 +188,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[280px_1fr]">
-          <div className="space-y-4 rounded-[24px] border border-border bg-secondary/20 p-4">
+          <div className="console-card space-y-4 p-4">
             <div className="space-y-2">
               <Label className="text-sm">团队套餐</Label>
               <Select
@@ -213,7 +210,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               </Select>
             </div>
 
-            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+            <div className="console-surface rounded-2xl px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Provider
               </div>
@@ -245,7 +242,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             {aiPlugins.map((plugin) => (
               <div
                 key={plugin.id}
-                className="rounded-[24px] border border-border bg-background px-4 py-4"
+                className="rounded-[24px] bg-background/90 px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_24px_rgba(55,53,47,0.03)]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
@@ -295,9 +292,6 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">最近 AI 活动</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              只展示控制面变更和手动刷新，避免把 AI 面板做成第二个审计中心。
-            </div>
           </div>
         </div>
 
@@ -306,7 +300,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             aiActivity.map((item) => (
               <div
                 key={item.id}
-                className="flex flex-col gap-2 rounded-[24px] border border-border bg-background px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
+                className="console-surface flex flex-col gap-2 rounded-[24px] px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="space-y-1">
                   <div className="text-sm font-medium">{item.title}</div>
@@ -318,20 +312,18 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               </div>
             ))
           ) : (
-            <div className="rounded-[24px] border border-dashed border-border bg-secondary/20 px-4 py-5 text-sm text-muted-foreground">
-              还没有 AI 配置或手动刷新记录。
+            <div className="console-card rounded-[24px] px-4 py-5 text-sm text-muted-foreground">
+              暂无记录
             </div>
           )}
         </div>
       </section>
 
-      <section className="console-panel border-destructive/20 px-5 py-5">
-        <div className="flex flex-col gap-4 rounded-[24px] border border-destructive/20 bg-destructive/[0.03] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+      <section className="console-panel px-5 py-5">
+        <div className="flex flex-col gap-4 rounded-[24px] bg-destructive/[0.05] p-4 shadow-[0_1px_0_rgba(255,255,255,0.5)_inset,0_12px_28px_rgba(127,29,29,0.06)] sm:p-5 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
             <div className="text-sm font-semibold text-destructive">删除团队</div>
-            <div className="text-xs text-muted-foreground">
-              会永久删除团队和所有关联项目。这个动作无法恢复。
-            </div>
+            <div className="text-xs text-muted-foreground">该操作无法恢复。</div>
           </div>
           {overview.canDelete ? (
             <AlertDialog>
@@ -347,12 +339,10 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>删除 &ldquo;{team.name}&rdquo;？</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    这会永久删除团队及其关联项目和部署，且无法恢复。
-                  </AlertDialogDescription>
+                  <AlertDialogDescription>关联项目会一起删除。</AlertDialogDescription>
                 </AlertDialogHeader>
-                <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-                  如果你只是想限制访问，优先考虑调整成员和治理策略。删除团队会直接移除该团队下的全部项目视图。
+                <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                  团队和关联项目会一起删除。
                 </div>
                 <AlertDialogFooter>
                   <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
@@ -369,7 +359,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               </AlertDialogContent>
             </AlertDialog>
           ) : (
-            <div className="text-xs text-muted-foreground">只有 owner 可以删除团队。</div>
+            <div className="text-xs text-muted-foreground">仅 owner 可删除。</div>
           )}
         </div>
       </section>

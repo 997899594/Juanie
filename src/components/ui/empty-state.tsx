@@ -17,7 +17,7 @@ export function EmptyState({ icon, title, description, action, className }: Empt
   return (
     <div
       className={cn(
-        'flex min-h-48 flex-col items-center justify-center rounded-[20px] border border-dashed border-border bg-secondary/20 p-8 text-center animate-in fade-in-50',
+        'flex min-h-48 flex-col items-center justify-center rounded-[20px] bg-secondary/20 p-8 text-center shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_28px_rgba(55,53,47,0.03)] animate-in fade-in-50',
         className
       )}
     >

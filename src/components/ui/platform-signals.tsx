@@ -22,10 +22,10 @@ export function PlatformSignalChipList({ chips, className }: PlatformSignalChipL
         <span
           key={chip.key}
           className={cn(
-            'rounded-full border px-2.5 py-1',
+            'rounded-full px-2.5 py-1 shadow-[0_1px_2px_rgba(55,53,47,0.03)]',
             chip.tone === 'danger'
-              ? 'border-destructive/20 bg-background text-destructive'
-              : 'border-border bg-background text-foreground'
+              ? 'bg-[rgba(196,85,77,0.12)] text-destructive'
+              : 'bg-[rgba(255,255,255,0.84)] text-foreground'
           )}
         >
           {chip.label}
@@ -51,7 +51,12 @@ export function PlatformSignalSummary({
   }
 
   return (
-    <div className={cn('rounded-2xl border border-border bg-secondary/20 px-4 py-3', className)}>
+    <div
+      className={cn(
+        'rounded-2xl bg-secondary/20 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_24px_rgba(55,53,47,0.03)]',
+        className
+      )}
+    >
       {summary && <div className="text-sm text-foreground">{summary}</div>}
       {nextActionLabel && (
         <div className={cn(summary ? 'mt-2' : null, 'text-xs text-muted-foreground')}>

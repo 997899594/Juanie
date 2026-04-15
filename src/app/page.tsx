@@ -22,7 +22,6 @@ export default async function HomePage() {
   const nextPriorityItems: PriorityDeckItem[] = [
     {
       key: 'primary',
-      eyebrow: '主入口',
       title: commandCenter.primaryAction.label,
       href: commandCenter.primaryAction.href,
       actionLabel: '进入',
@@ -33,7 +32,6 @@ export default async function HomePage() {
   if (commandCenter.focusItems[0]) {
     nextPriorityItems.push({
       key: 'queue',
-      eyebrow: '优先处理',
       title: commandCenter.focusItems[0].title,
       href: commandCenter.focusItems[0].href,
       actionLabel: commandCenter.focusItems[0].meta,
@@ -44,7 +42,6 @@ export default async function HomePage() {
   if (projectCards[0]) {
     nextPriorityItems.push({
       key: 'project',
-      eyebrow: '项目',
       title: projectCards[0].name,
       href: `/projects/${projectCards[0].id}`,
       actionLabel: '进入',
@@ -53,8 +50,7 @@ export default async function HomePage() {
   } else {
     nextPriorityItems.push({
       key: 'project-empty',
-      eyebrow: '开始',
-      title: '先创建第一个项目',
+      title: '创建项目',
       href: '/projects/new',
       actionLabel: '新建项目',
       tone: 'success',

@@ -62,7 +62,7 @@ export function DeploymentRollbackAction({
       })
       .catch((fetchError) => {
         if (!cancelled) {
-          setError(fetchError instanceof Error ? fetchError.message : '加载回滚预检失败');
+          setError(fetchError instanceof Error ? fetchError.message : '加载回滚检查失败');
         }
       })
       .finally(() => {
@@ -110,52 +110,52 @@ export function DeploymentRollbackAction({
         </Button>
       </DialogTrigger>
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
-        <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
-          <DialogTitle>回滚预检</DialogTitle>
+        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
+          <DialogTitle>回滚检查</DialogTitle>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
             <div className="space-y-4">
               {disabledSummary && (
-                <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
-              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
+              <div className="console-surface p-4 sm:p-5">
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">回滚来源</div>
                 </div>
 
                 {planningPanel?.sourceImageUrl ? (
-                  <div className="mt-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+                  <div className="console-card mt-4 rounded-2xl px-4 py-3">
                     <div className="text-xs text-muted-foreground">来源镜像</div>
                     <code className="mt-2 block break-all text-xs text-foreground">
                       {planningPanel.sourceImageUrl}
                     </code>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
+                  <div className="console-card mt-4 rounded-2xl px-4 py-8 text-sm text-muted-foreground">
                     暂无来源镜像
                   </div>
                 )}
               </div>
 
               {error && (
-                <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                   {error}
                 </div>
               )}
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-3 text-sm font-semibold text-foreground">回滚预检</div>
+              <div className="console-surface p-4 sm:p-5">
+                <div className="mb-3 text-sm font-semibold text-foreground">回滚检查</div>
 
                 {loadingPlan ? (
-                  <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
-                    正在加载回滚预检...
+                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                    加载中...
                   </div>
                 ) : planningPanel ? (
                   <div className="space-y-3">
@@ -166,7 +166,7 @@ export function DeploymentRollbackAction({
                     />
 
                     {planningPanel.blockingReason && (
-                      <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                         {planningPanel.blockingReason}
                       </div>
                     )}
@@ -176,8 +176,8 @@ export function DeploymentRollbackAction({
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
-                    暂无预检
+                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                    暂无结果
                   </div>
                 )}
               </div>

@@ -62,7 +62,7 @@ export function ReleaseAIRefreshActions(input: {
         throw new Error(data?.error ?? 'AI 刷新失败');
       }
 
-      setMessage('AI 分析已刷新');
+      setMessage('已刷新');
       setStatus('success');
       router.refresh();
     } catch (error) {
@@ -84,7 +84,7 @@ export function ReleaseAIRefreshActions(input: {
     <Sparkles className="h-3.5 w-3.5" />
   );
 
-  const buttonTitle = message ?? '刷新 AI 分析';
+  const buttonTitle = message ?? '刷新 AI';
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +103,7 @@ export function ReleaseAIRefreshActions(input: {
         aria-label={buttonTitle}
       >
         {icon}
-        {!input.compact && (refreshing ? '刷新中...' : '刷新 AI 分析')}
+        {!input.compact && (refreshing ? '刷新中...' : '刷新 AI')}
       </Button>
       {(input.showMessage ?? true) && message && (
         <div className="text-xs text-muted-foreground">{message}</div>

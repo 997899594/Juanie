@@ -201,7 +201,7 @@ export function ManualReleaseDialog({
       })
       .catch((requestError) => {
         if (!cancelled) {
-          setError(requestError instanceof Error ? requestError.message : '加载发布预检失败');
+          setError(requestError instanceof Error ? requestError.message : '加载发布检查失败');
           setPlan(null);
         }
       })
@@ -344,7 +344,7 @@ export function ManualReleaseDialog({
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
+              <div className="console-card p-4 sm:p-5">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">来源</div>
                   {selectedArtifacts.length > 0 && (
@@ -356,7 +356,7 @@ export function ManualReleaseDialog({
 
                 {selectedSourceRelease ? (
                   <div className="space-y-3 text-sm">
-                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                    <div className="console-surface rounded-2xl px-4 py-3">
                       <div className="text-xs text-muted-foreground">来源标识</div>
                       <div className="mt-1 font-medium text-foreground">
                         {selectedSourceRelease.sourceRef}
@@ -368,7 +368,7 @@ export function ManualReleaseDialog({
                       )}
                     </div>
 
-                    <div className="space-y-2 rounded-2xl border border-border bg-background px-4 py-3">
+                    <div className="console-surface space-y-2 rounded-2xl px-4 py-3">
                       <div className="text-xs text-muted-foreground">包含服务</div>
                       <div className="flex flex-wrap gap-2">
                         {selectedArtifacts.map((artifact) => (
@@ -383,7 +383,7 @@ export function ManualReleaseDialog({
                     </div>
 
                     {(summary || selectedSourceRelease.summary) && (
-                      <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                      <div className="console-surface rounded-2xl px-4 py-3">
                         <div className="text-xs text-muted-foreground">最终摘要</div>
                         <div className="mt-1 text-sm leading-6 text-foreground">
                           {summary || selectedSourceRelease.summary}
@@ -392,17 +392,17 @@ export function ManualReleaseDialog({
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-sm text-muted-foreground">
-                    先选来源发布。
+                  <div className="console-surface rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                    选择来源
                   </div>
                 )}
               </div>
 
-              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-3 text-sm font-semibold text-foreground">预检</div>
+              <div className="console-surface p-4 sm:p-5">
+                <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {loadingPlan ? (
-                  <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
+                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
                     加载中...
                   </div>
                 ) : planningPanel ? (
@@ -414,7 +414,7 @@ export function ManualReleaseDialog({
                     />
 
                     {planningPanel.blockingReason && (
-                      <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                         {planningPanel.blockingReason}
                       </div>
                     )}
@@ -424,8 +424,8 @@ export function ManualReleaseDialog({
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
-                    选择来源后生成结果。
+                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                    选择来源后查看
                   </div>
                 )}
               </div>

@@ -67,7 +67,7 @@ interface EnvVarOverview {
 
 interface EnvVarManagerProps {
   projectId: string;
-  environmentId: string; // 当前环境 ID
+  environmentId: string;
   environmentName: string;
   canManage?: boolean;
   disabledSummary?: string | null;
@@ -401,7 +401,7 @@ function EnvVarRow({
                 <AlertDialogTitle>删除变量？</AlertDialogTitle>
                 <AlertDialogDescription>
                   <code className="font-mono font-semibold text-foreground">{envVar.key}</code>{' '}
-                  会被永久删除，并从当前环境移除。
+                  会被永久删除，并从环境移除。
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -468,7 +468,7 @@ function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
         <KeyRound className="h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">当前没有服务级覆盖变量</p>
+        <p className="text-sm text-muted-foreground">没有服务级变量</p>
       </div>
     );
   }
@@ -554,7 +554,7 @@ export function EnvVarManager({
             <p className="text-xs text-muted-foreground mt-0.5">
               {[
                 directVars.length === 0
-                  ? '当前环境没有直接变量'
+                  ? '没有直接变量'
                   : `${directPlainCount} 个普通变量${directSecretCount > 0 ? `，${directSecretCount} 个密文变量` : ''}`,
                 effectiveVars.length > 0 ? `实际生效 ${effectiveVars.length} 个` : null,
                 serviceOverrideCount > 0 ? `服务覆盖 ${serviceOverrideCount} 个` : null,
@@ -592,7 +592,7 @@ export function EnvVarManager({
       <Tabs defaultValue="direct" className="space-y-4">
         <TabsList className="h-11 rounded-[18px] bg-secondary/70 p-1">
           <TabsTrigger value="direct" className="rounded-xl px-4">
-            当前环境
+            直配变量
           </TabsTrigger>
           <TabsTrigger value="effective" className="rounded-xl px-4">
             实际生效
@@ -603,10 +603,6 @@ export function EnvVarManager({
         </TabsList>
 
         <TabsContent value="direct">
-          <div className="mb-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-            这里只展示当前环境直接配置的变量。项目级变量和继承来的环境变量会在“实际生效”里一起看到。
-          </div>
-
           <div className="overflow-hidden rounded-[20px] border border-border bg-background">
             <div className="hidden items-center gap-3 border-b border-border/70 bg-secondary/30 px-5 py-3 sm:flex">
               <span className="w-56 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -632,7 +628,7 @@ export function EnvVarManager({
             ) : directVars.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
                 <KeyRound className="h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">当前环境还没有直接变量</p>
+                <p className="text-sm text-muted-foreground">还没有直接变量</p>
                 <EnvVarDialog
                   projectId={projectId}
                   environmentId={environmentId}
@@ -673,10 +669,6 @@ export function EnvVarManager({
         </TabsContent>
 
         <TabsContent value="effective">
-          <div className="mb-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-            这里展示当前环境最终会注入的环境级变量。来源可能是项目级、当前环境，或继承链上的基础环境。
-          </div>
-
           <div className="overflow-hidden rounded-[20px] border border-border bg-background">
             {loading ? (
               <div className="divide-y divide-border/70">
@@ -693,7 +685,7 @@ export function EnvVarManager({
             ) : effectiveVars.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
                 <KeyRound className="h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">当前没有可生效的环境级变量</p>
+                <p className="text-sm text-muted-foreground">没有生效变量</p>
               </div>
             ) : (
               <div className="divide-y divide-border/70">

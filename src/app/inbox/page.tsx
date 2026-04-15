@@ -63,7 +63,7 @@ export default async function InboxPage({
             筛选
           </div>
           <Button asChild variant={filterState === 'all' ? 'default' : 'outline'} size="sm">
-            <Link href={buildApprovalsFilterHref('all')}>全部</Link>
+            <Link href={buildApprovalsFilterHref('all')}>待处理</Link>
           </Button>
           <Button asChild variant={filterState === 'approval' ? 'default' : 'outline'} size="sm">
             <Link href={buildApprovalsFilterHref('approval')}>待审批</Link>

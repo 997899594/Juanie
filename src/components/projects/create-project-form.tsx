@@ -397,7 +397,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         const response = await fetch(url);
         if (!response.ok) {
           const error = await response.json();
-          setAnalyzeError(error.error || '分析仓库失败');
+          setAnalyzeError(error.error || '识别仓库失败');
           setFormData((prev) => ({
             ...prev,
             services: buildImportFallbackServices(prev.runtimeProfile),
@@ -424,7 +424,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         }));
       } catch (error) {
         console.error('Failed to analyze repository:', error);
-        setAnalyzeError('分析仓库失败');
+        setAnalyzeError('识别仓库失败');
         setFormData((prev) => ({
           ...prev,
           services: buildImportFallbackServices(prev.runtimeProfile),
@@ -809,7 +809,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 <div className="max-h-96 overflow-y-auto rounded-[20px] border border-border">
                   {!selectedTeam?.importEnabled ? (
                     <div className="p-8 text-center text-muted-foreground">
-                      当前团队没有可用的仓库读取授权
+                      没有可用代码托管授权
                     </div>
                   ) : repositories.length === 0 ? (
                     <div className="p-8 text-center text-muted-foreground">没有找到仓库</div>
@@ -908,7 +908,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   <Label>模板</Label>
                   {templates.length === 0 ? (
                     <div className="rounded-[20px] border border-dashed border-border px-5 py-8 text-sm text-muted-foreground">
-                      当前没有可用模板，先补充模板目录后再开放创建。
+                      没有可用模板
                     </div>
                   ) : (
                     <div className="grid gap-3 md:grid-cols-2">
@@ -952,7 +952,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             {isLoadingAnalyze ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Loader2 className="mb-4 h-8 w-8 animate-spin text-foreground" />
-                <p className="text-sm text-muted-foreground">正在分析仓库结构与服务入口...</p>
+                <p className="text-sm text-muted-foreground">正在识别仓库结构...</p>
               </div>
             ) : null}
 

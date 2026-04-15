@@ -157,12 +157,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader
-        title="设置"
-        description={initialData.overview.headerDescription}
-        eyebrow="设置"
-        meta="只改规则。"
-      />
+      <PageHeader title="设置" />
 
       <div className="grid gap-3 md:grid-cols-3">
         {initialData.overview.stats.map((stat) => (
@@ -196,7 +191,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="general">
           <div className="console-panel overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
+            <div className="px-5 py-4">
               <div className="text-sm font-semibold">常规</div>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
@@ -223,13 +218,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="console-card bg-secondary/20 px-4 py-3">
+                <div className="console-card px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     团队
                   </div>
                   <div className="mt-2 text-sm font-medium">{project.teamName}</div>
                 </div>
-                <div className="console-card bg-secondary/20 px-4 py-3">
+                <div className="console-card px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     状态
                   </div>
@@ -251,13 +246,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="git">
           <div className="console-panel overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
+            <div className="px-5 py-4">
               <div className="text-sm font-semibold">代码仓库</div>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
               <div className="space-y-2">
                 <Label htmlFor="gitRepository">仓库地址</Label>
-                <div className="rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+                <div className="rounded-xl bg-secondary/30 px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
                   {project.repositoryFullName ?? '未绑定仓库'}
                 </div>
               </div>
@@ -287,7 +282,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="environments">
           <div className="console-panel overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
+            <div className="px-5 py-4">
               <div className="text-sm font-semibold">环境策略</div>
             </div>
             <div className="space-y-3 px-5 py-4">
@@ -299,19 +294,19 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                 project.environments.map((environment) => (
                   <div
                     key={environment.id}
-                    className="rounded-2xl border border-border bg-secondary/20 px-4 py-4"
+                    className="rounded-2xl bg-secondary/20 px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_24px_rgba(55,53,47,0.03)]"
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-semibold">{environment.name}</div>
                           {environment.isProduction && (
-                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
+                            <span className="rounded-full bg-background/90 px-2.5 py-1 text-[11px] text-foreground shadow-[0_1px_2px_rgba(55,53,47,0.03)]">
                               生产
                             </span>
                           )}
                           {environment.isPreview && (
-                            <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-foreground">
+                            <span className="rounded-full bg-background/90 px-2.5 py-1 text-[11px] text-foreground shadow-[0_1px_2px_rgba(55,53,47,0.03)]">
                               预览
                             </span>
                           )}
@@ -361,7 +356,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
         <TabsContent value="governance">
           <div className="console-panel overflow-hidden">
-            <div className="border-b border-border px-5 py-4">
+            <div className="px-5 py-4">
               <div className="text-sm font-semibold">治理</div>
             </div>
             <div className="px-5 py-4">
@@ -371,18 +366,16 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
         </TabsContent>
 
         <TabsContent value="danger">
-          <div className="overflow-hidden rounded-[20px] border border-destructive/40 bg-background">
-            <div className="border-b border-destructive/30 px-5 py-4">
+          <div className="console-panel overflow-hidden">
+            <div className="px-5 py-4">
               <div className="text-sm font-semibold text-destructive">危险操作</div>
             </div>
             <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
-                <div className="flex flex-col gap-4 rounded-[24px] border border-destructive/20 bg-destructive/[0.03] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-4 rounded-[24px] bg-destructive/[0.05] p-4 shadow-[0_1px_0_rgba(255,255,255,0.5)_inset,0_12px_28px_rgba(127,29,29,0.06)] sm:p-5 md:flex-row md:items-center md:justify-between">
                   <div className="space-y-1">
                     <div className="text-sm font-medium text-foreground">删除项目</div>
-                    <div className="text-sm text-muted-foreground">
-                      这会移除项目记录、环境配置和关联的发布视图。该操作无法撤销。
-                    </div>
+                    <div className="text-sm text-muted-foreground">该操作无法撤销。</div>
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -396,12 +389,11 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                         <AlertDialogTitle>删除项目</AlertDialogTitle>
                         <AlertDialogDescription>
                           确认删除{' '}
-                          <span className="font-medium text-foreground">{project.name}</span>
-                          ？该操作无法撤销。
+                          <span className="font-medium text-foreground">{project.name}</span>？
                         </AlertDialogDescription>
                       </AlertDialogHeader>
-                      <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-                        删除后，项目主页、环境设置、发布记录入口都会被移除。若你只是想停止发布，应该优先调整环境或治理策略，而不是删项目。
+                      <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                        项目、环境和发布记录会一起删除。
                       </div>
                       <AlertDialogFooter>
                         <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
@@ -418,7 +410,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                   </AlertDialog>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">只有项目拥有者可以删除项目。</p>
+                <p className="text-sm text-muted-foreground">仅 owner 可删除。</p>
               )}
             </div>
           </div>

@@ -33,7 +33,7 @@ export function PriorityDeck({ title, items, className }: PriorityDeckProps) {
 
   return (
     <section className={cn('console-panel overflow-hidden', className)}>
-      <div className="border-b border-border px-4 py-3">
+      <div className="px-4 py-3">
         <div className="text-sm font-semibold text-foreground">{title}</div>
       </div>
       <div className="grid gap-2.5 p-2.5 xl:grid-cols-3">

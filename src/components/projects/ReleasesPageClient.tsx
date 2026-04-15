@@ -87,7 +87,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     if (nextEnv === 'all') params.delete('env');
     else params.set('env', nextEnv);
 
-    if (nextRisk === 'all') params.delete('risk');
+    if (nextRisk === 'attention') params.delete('risk');
     else params.set('risk', nextRisk);
 
     const query = params.toString();
@@ -218,7 +218,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         onShowRecords={(environmentName) =>
           updateFilters({
             env: environmentName,
-            risk: 'all',
+            risk: 'attention',
           })
         }
       />

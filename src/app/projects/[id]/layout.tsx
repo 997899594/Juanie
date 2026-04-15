@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
 import { ProjectProvider } from '@/lib/project-context';
+import { isUuid } from '@/lib/uuid';
 
 export default async function ProjectLayout({
   children,
@@ -16,6 +17,10 @@ export default async function ProjectLayout({
   if (!session?.user?.id) redirect('/login');
 
   const { id } = await params;
+
+  if (!isUuid(id)) {
+    notFound();
+  }
 
   const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
   if (!project) notFound();

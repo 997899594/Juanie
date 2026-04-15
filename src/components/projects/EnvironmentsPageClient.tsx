@@ -29,7 +29,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -253,11 +252,8 @@ function PreviewEnvironmentDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
-        <DialogHeader className="shrink-0 border-b border-border/70 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>新建预览环境</DialogTitle>
-          <DialogDescription>
-            输入分支或 PR 号。平台会读取远端最新提交并直接启动预览部署，不需要你再补一次提交。
-          </DialogDescription>
         </DialogHeader>
 
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
@@ -294,10 +290,6 @@ function PreviewEnvironmentDialog({
                       />
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-muted-foreground">
-                    分支和 PR 号二选一。创建后会按对应远端来源的最新提交直接启动部署。
-                  </div>
-
                   <div className="mt-4 space-y-2">
                     <Label htmlFor="preview-ttl">保留时长（小时）</Label>
                     <Input
@@ -343,32 +335,25 @@ function PreviewEnvironmentDialog({
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
-                  <div className="space-y-1">
-                    <div className="text-sm font-semibold text-foreground">创建说明</div>
-                    <div className="text-xs leading-5 text-muted-foreground">
-                      预览环境会按分支或 PR 建立临时作用域，并立刻发起一次可访问的预览发布。
-                    </div>
-                  </div>
-
+                <div className="rounded-[24px] bg-secondary/20 p-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_24px_rgba(55,53,47,0.03)] sm:p-5">
                   <div className="mt-4 space-y-3 text-sm">
-                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                    <div className="rounded-2xl bg-background/90 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
                       <div className="text-xs text-muted-foreground">标识来源</div>
                       <div className="mt-1 text-foreground">
                         {branch ? `分支 ${branch}` : prNumber ? `PR #${prNumber}` : '等待输入'}
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                    <div className="rounded-2xl bg-background/90 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
                       <div className="text-xs text-muted-foreground">启动方式</div>
                       <div className="mt-1 text-foreground">按远端最新提交直接发布</div>
                     </div>
-                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                    <div className="rounded-2xl bg-background/90 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
                       <div className="text-xs text-muted-foreground">保留时长</div>
                       <div className="mt-1 text-foreground">
                         {ttlHours ? `${ttlHours} 小时` : '默认 72 小时'}
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                    <div className="rounded-2xl bg-background/90 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
                       <div className="text-xs text-muted-foreground">数据库方案</div>
                       <div className="mt-1 text-foreground">
                         {databaseStrategy === 'isolated_clone' ? '独立预览库' : '继承基础数据库'}
@@ -600,7 +585,7 @@ function EnvironmentRuntimePanel({
   environment: EnvironmentRecord;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-background px-4 py-4">
+    <div className="console-surface rounded-2xl px-4 py-4">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium">环境</div>
@@ -671,7 +656,7 @@ function EnvironmentPolicyPanel({
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+        <div className="console-card px-4 py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             环境定位
           </div>
@@ -680,7 +665,7 @@ function EnvironmentPolicyPanel({
               '固定环境'}
           </div>
         </div>
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+        <div className="console-card px-4 py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             数据库策略
           </div>
@@ -693,7 +678,7 @@ function EnvironmentPolicyPanel({
       </div>
 
       {(environment.previewLifecycle || environment.cleanupState) && (
-        <div className="mt-3 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+        <div className="console-card mt-3 px-4 py-3">
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             生命周期
           </div>
@@ -757,22 +742,22 @@ function EnvironmentAdvancedPanel({
   ).length;
 
   return (
-    <details className="rounded-2xl border border-border bg-background px-4 py-4">
+    <details className="console-surface rounded-2xl px-4 py-4">
       <summary className="cursor-pointer list-none text-sm font-medium">环境细节</summary>
       <div className="mt-4 space-y-4">
         {environment.databases.length > 0 && (
-          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+          <div className="console-card px-4 py-4">
             <div className="mb-3">
               <div className="text-sm font-medium">数据库纳管</div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-border bg-background px-4 py-3">
+              <div className="console-surface px-4 py-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   摘要
                 </div>
                 <div className="mt-2 text-sm text-foreground">
                   {[
-                    `当前环境直连 ${environment.databaseBindingSummary.directCount} 个`,
+                    `直连 ${environment.databaseBindingSummary.directCount} 个`,
                     `实际使用 ${environment.databaseBindingSummary.effectiveCount} 个`,
                     environment.databaseBindingSummary.inheritedCount > 0
                       ? `继承 ${environment.databaseBindingSummary.inheritedCount} 个`
@@ -785,7 +770,7 @@ function EnvironmentAdvancedPanel({
                   {`门禁阻塞 ${blockingCount} · 待迁移 ${pendingCount}`}
                 </div>
               </div>
-              <div className="rounded-2xl border border-border bg-background px-4 py-3">
+              <div className="console-surface px-4 py-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   入口
                 </div>
@@ -797,10 +782,7 @@ function EnvironmentAdvancedPanel({
             <div className="mt-3 space-y-2">
               {environment.databases.map((database) => {
                 return (
-                  <div
-                    key={database.id}
-                    className="rounded-2xl border border-border bg-background px-4 py-3"
-                  >
+                  <div key={database.id} className="console-surface rounded-2xl px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-medium text-foreground">{database.name}</div>
                       <Badge variant="secondary">{database.type}</Badge>
@@ -841,12 +823,12 @@ function EnvironmentAdvancedPanel({
             ))}
           </div>
         )}
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+        <div className="console-card px-4 py-4">
           <div className="mb-3">
             <div className="text-sm font-medium">运行子页</div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+            <div className="console-surface px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 变量
               </div>
@@ -856,7 +838,7 @@ function EnvironmentAdvancedPanel({
                 </Link>
               </Button>
             </div>
-            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+            <div className="console-surface px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 日志
               </div>
@@ -864,7 +846,7 @@ function EnvironmentAdvancedPanel({
                 <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>日志</Link>
               </Button>
             </div>
-            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+            <div className="console-surface px-4 py-3">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 诊断
               </div>
@@ -1123,7 +1105,7 @@ export function EnvironmentsPageClient({
         parts.push(`${result.skipped.length} 个仍被活跃发布阻塞`);
       }
 
-      setFeedback(parts.join(' · ') || '当前没有可回收的过期预览环境');
+      setFeedback(parts.join(' · ') || '没有可回收项');
       await fetchEnvironments();
       setTimeout(() => setFeedback(null), 5000);
     } catch (error) {
@@ -1183,7 +1165,7 @@ export function EnvironmentsPageClient({
       />
 
       {feedback && (
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-foreground">
+        <div className="console-surface rounded-2xl px-4 py-3 text-sm text-foreground">
           {feedback}
         </div>
       )}
@@ -1227,7 +1209,7 @@ export function EnvironmentsPageClient({
               核心环境
             </div>
             {standardEnvironments.length === 0 ? (
-              <div className="rounded-[20px] border border-dashed border-border bg-secondary/20 px-5 py-8 text-sm text-muted-foreground">
+              <div className="console-surface rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
                 暂无环境
               </div>
             ) : (
@@ -1243,7 +1225,7 @@ export function EnvironmentsPageClient({
                       />
 
                       {isExpanded && (
-                        <div className="border-t border-border/70 px-5 py-4">
+                        <div className="px-5 py-4">
                           <EnvironmentExpandedContent
                             projectId={projectId}
                             environment={environment}
@@ -1268,7 +1250,7 @@ export function EnvironmentsPageClient({
             </div>
 
             {previewEnvironments.length === 0 ? (
-              <div className="rounded-[20px] border border-dashed border-border bg-secondary/20 px-5 py-8 text-sm text-muted-foreground">
+              <div className="console-surface rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
                 暂无预览环境
               </div>
             ) : (
@@ -1311,13 +1293,13 @@ export function EnvironmentsPageClient({
                                 <span className="font-medium text-foreground">
                                   {environment.name}
                                 </span>{' '}
-                                及其关联资源会被一并删除。若仍存在活跃 release，平台会拒绝执行。
+                                及关联资源会一起删除。
                               </AlertDialogDescription>
                             </AlertDialogHeader>
-                            <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
+                            <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                               {environment.cleanupState?.state === 'expired_ready'
-                                ? '这个预览环境已经过期，当前可以直接回收。删除后会释放域名、变量、数据库和运行资源。'
-                                : '预览环境适合短期验证，删除后不会影响正式环境，但会回收该预览环境的域名、变量和运行资源。'}
+                                ? '已过期，可直接回收。'
+                                : '会回收域名、变量、数据库和运行资源。'}
                             </div>
                             <AlertDialogFooter>
                               <AlertDialogCancel className="w-full rounded-xl sm:w-auto">
@@ -1338,7 +1320,7 @@ export function EnvironmentsPageClient({
                       </div>
 
                       {isExpanded && (
-                        <div className="border-t border-border/70 px-5 py-4">
+                        <div className="px-5 py-4">
                           <EnvironmentExpandedContent
                             projectId={projectId}
                             environment={environment}
@@ -1359,7 +1341,7 @@ export function EnvironmentsPageClient({
       )}
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-        <div className="flex items-center gap-2 rounded-[24px] border border-border bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="flex items-center gap-2 rounded-[24px] bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
           <Button asChild variant="outline" size="sm" className="min-w-0 flex-1 rounded-xl">
             <Link href={`/projects/${projectId}/delivery`}>
               <Rocket className="h-4 w-4" />

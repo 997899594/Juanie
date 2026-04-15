@@ -105,19 +105,19 @@ function getSuggestionStatusLabel(repairPlan: DatabaseSchemaRepairPlan): string 
   }
 
   if (!isSuggestionRequired(repairPlan.kind)) {
-    return '无需生成建议';
+    return '无需处理';
   }
 
   switch (repairPlan.atlasExecutionStatus) {
     case 'queued':
     case 'running':
-      return '建议生成中';
+      return '处理中';
     case 'succeeded':
-      return repairPlan.reviewUrl ? '已确认修复' : '建议已就绪';
+      return repairPlan.reviewUrl ? '已创建修复' : '已生成';
     case 'failed':
-      return '建议失败';
+      return '失败';
     default:
-      return '待生成建议';
+      return '待处理';
   }
 }
 
@@ -172,17 +172,15 @@ function getSuggestionSummary(
 
   switch (repairPlan.atlasExecutionStatus) {
     case 'queued':
-      return '平台正在排队生成修复建议，稍后会展示迁移详情。';
+      return '排队中';
     case 'running':
-      return '平台正在分析数据库与仓库差异，稍后会展示迁移详情。';
+      return '生成中';
     case 'succeeded':
-      return latestAtlasRun?.diffSummary
-        ? '修复建议已生成。先看迁移详情，再决定确认还是丢弃。'
-        : '修复建议已生成，请确认结果。';
+      return latestAtlasRun?.diffSummary ? '已生成' : '等待确认';
     case 'failed':
-      return repairPlan.errorMessage ?? '修复建议生成失败，请重试。';
+      return repairPlan.errorMessage ?? '执行失败';
     default:
-      return '先生成修复建议，再决定是否采用。';
+      return '待处理';
   }
 }
 
@@ -255,7 +253,7 @@ export function SchemaCenterClient({
       />
 
       {feedback ? (
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-foreground">
+        <div className="console-surface rounded-2xl px-4 py-3 text-sm text-foreground">
           {feedback}
         </div>
       ) : null}
@@ -289,7 +287,7 @@ export function SchemaCenterClient({
                 const versionSummary =
                   state?.actualVersion || state?.expectedVersion
                     ? [
-                        state?.actualVersion ? `当前 ${state.actualVersion}` : null,
+                        state?.actualVersion ? `实际 ${state.actualVersion}` : null,
                         state?.expectedVersion ? `期望 ${state.expectedVersion}` : null,
                       ]
                         .filter(Boolean)
@@ -361,14 +359,14 @@ export function SchemaCenterClient({
                               database.id,
                               'inspect',
                               () => inspectDatabaseSchemaState(projectId, database.id),
-                              'Schema 状态已更新'
+                              '已更新'
                             )
                           }
                         >
                           {isPendingAction(database.id, 'inspect') ? (
                             <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                           ) : null}
-                          检查 schema
+                          检查
                         </Button>
 
                         {state?.status === 'aligned_untracked' ? (
@@ -382,14 +380,14 @@ export function SchemaCenterClient({
                                 database.id,
                                 'markAligned',
                                 () => markDatabaseSchemaAligned(projectId, database.id),
-                                '数据库账本已标记为对齐'
+                                '已标记对齐'
                               )
                             }
                           >
                             {isPendingAction(database.id, 'markAligned') ? (
                               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                             ) : null}
-                            标记为已对齐
+                            标记对齐
                           </Button>
                         ) : null}
 
@@ -404,14 +402,14 @@ export function SchemaCenterClient({
                                 database.id,
                                 'generateSuggestion',
                                 () => generateSuggestion(database.id),
-                                '修复建议已生成'
+                                '已生成'
                               )
                             }
                           >
                             {isPendingAction(database.id, 'generateSuggestion') ? (
                               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                             ) : null}
-                            生成修复建议
+                            生成
                           </Button>
                         ) : null}
 
@@ -427,15 +425,17 @@ export function SchemaCenterClient({
                                 'confirm',
                                 () => createDatabaseRepairReviewRequest(projectId, database.id),
                                 repairPlan?.kind === 'manual_investigation'
-                                  ? '排查 PR 已创建'
-                                  : '修复 PR 已创建'
+                                  ? '已创建排查 PR'
+                                  : '已创建修复 PR'
                               )
                             }
                           >
                             {isPendingAction(database.id, 'confirm') ? (
                               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                             ) : null}
-                            {repairPlan?.kind === 'manual_investigation' ? '确认排查' : '确认修复'}
+                            {repairPlan?.kind === 'manual_investigation'
+                              ? '创建排查 PR'
+                              : '创建修复 PR'}
                           </Button>
                         ) : null}
 
@@ -450,7 +450,7 @@ export function SchemaCenterClient({
                                 database.id,
                                 'discard',
                                 () => discardDatabaseRepairPlan(projectId, database.id),
-                                '修复建议已丢弃'
+                                '已丢弃'
                               )
                             }
                           >
@@ -473,19 +473,19 @@ export function SchemaCenterClient({
                     </div>
 
                     {repairPlan && suggestionSummary ? (
-                      <div className="mt-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3">
-                        <div className="text-sm font-medium text-foreground">修复建议</div>
+                      <div className="console-card mt-4 px-4 py-3">
+                        <div className="text-sm font-medium text-foreground">处理</div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {repairPlan.summary}
                         </div>
-                        <div className="mt-2 rounded-2xl border border-border bg-background px-3 py-2 text-sm text-foreground">
+                        <div className="console-surface mt-2 rounded-2xl px-3 py-2 text-sm text-foreground">
                           {suggestionSummary}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
                           {[
                             repairPlan.riskLevel ? `风险 ${repairPlan.riskLevel}` : null,
                             repairPlan.atlasExecutionFinishedAt
-                              ? `建议生成于 ${formatTimestamp(repairPlan.atlasExecutionFinishedAt)}`
+                              ? `完成于 ${formatTimestamp(repairPlan.atlasExecutionFinishedAt)}`
                               : null,
                           ]
                             .filter(Boolean)
@@ -495,7 +495,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.diffSummary ? (
-                      <div className="mt-4 rounded-2xl border border-border bg-background px-4 py-3">
+                      <div className="console-surface mt-4 rounded-2xl px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">迁移详情</Badge>
                           <Badge variant="outline">
@@ -515,7 +515,7 @@ export function SchemaCenterClient({
                             {Object.entries(latestAtlasRun.artifactFiles).map(([file, content]) => (
                               <div
                                 key={`${database.id}-schema-center-artifact-${file}`}
-                                className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
+                                className="console-card rounded-2xl px-4 py-3"
                               >
                                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                   {file}
@@ -531,7 +531,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.log ? (
-                      <details className="mt-4 rounded-2xl border border-border bg-background px-4 py-3">
+                      <details className="console-surface mt-4 rounded-2xl px-4 py-3">
                         <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
                           执行日志
                         </summary>

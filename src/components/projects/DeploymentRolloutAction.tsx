@@ -66,7 +66,7 @@ export function DeploymentRolloutAction({
       })
       .catch((fetchError) => {
         if (!cancelled) {
-          setError(fetchError instanceof Error ? fetchError.message : '加载放量预检失败');
+          setError(fetchError instanceof Error ? fetchError.message : '加载放量检查失败');
         }
       })
       .finally(() => {
@@ -150,12 +150,12 @@ export function DeploymentRolloutAction({
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-3 text-sm font-semibold text-foreground">放量预检</div>
+              <div className="console-surface p-4 sm:p-5">
+                <div className="mb-3 text-sm font-semibold text-foreground">放量检查</div>
 
                 {loadingPlan ? (
-                  <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
-                    正在加载放量预检...
+                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                    加载中...
                   </div>
                 ) : plan ? (
                   <div className="space-y-3">
@@ -166,14 +166,14 @@ export function DeploymentRolloutAction({
                     />
 
                     {plan.plan.blockingReason && (
-                      <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                         {plan.plan.blockingReason}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-border bg-secondary/10 px-4 py-8 text-sm text-muted-foreground">
-                    暂无预检
+                  <div className="console-card rounded-2xl px-4 py-8 text-sm text-muted-foreground">
+                    暂无结果
                   </div>
                 )}
               </div>

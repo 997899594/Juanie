@@ -113,7 +113,7 @@ export function MigrationSpecDetails({
               ))}
             </div>
           ) : (
-            <div className="mt-2 text-xs text-muted-foreground">当前没有待执行迁移文件。</div>
+            <div className="mt-2 text-xs text-muted-foreground">没有待执行迁移文件。</div>
           )}
           {specification.filePreview.truncated && (
             <div className="mt-2 text-xs text-muted-foreground">

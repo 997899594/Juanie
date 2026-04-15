@@ -175,7 +175,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
   return (
     <div className="space-y-4">
       {(diagnostics.summary || diagnostics.nextActionLabel) && (
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+        <div className="console-card px-4 py-4">
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-background p-2 text-foreground">
               <AlertTriangle className="h-4 w-4" />
@@ -198,14 +198,11 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
       )}
 
       {diagnostics.recommendations.length > 0 && (
-        <div className="rounded-2xl border border-border bg-background px-4 py-4">
-          <div className="text-sm font-medium">建议</div>
+        <div className="console-surface px-4 py-4">
+          <div className="text-sm font-medium">动作</div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             {diagnostics.recommendations.map((recommendation) => (
-              <div
-                key={recommendation.key}
-                className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
-              >
+              <div key={recommendation.key} className="console-card px-4 py-3">
                 <div className="text-sm font-medium">{recommendation.label}</div>
                 <div className="mt-1 text-sm text-muted-foreground">{recommendation.summary}</div>
               </div>
@@ -215,7 +212,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
       )}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+        <div className="console-card px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <ServerCrash className="h-3.5 w-3.5" />
             集群容量
@@ -231,7 +228,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
               : ''}
           </div>
         </div>
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+        <div className="console-card px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <Database className="h-3.5 w-3.5" />
             平台占用
@@ -240,10 +237,10 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
             {diagnostics.capacity.platformRequestedMemoryLabel}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            环境当前请求 {diagnostics.capacity.environmentRequestedMemoryLabel}
+            环境请求 {diagnostics.capacity.environmentRequestedMemoryLabel}
           </div>
         </div>
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+        <div className="console-card px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <Boxes className="h-3.5 w-3.5" />
             放量增量
@@ -253,7 +250,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
           </div>
           <div className="mt-1 text-xs text-muted-foreground">预计新增请求</div>
         </div>
-        <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-4">
+        <div className="console-card px-4 py-4">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <Clock3 className="h-3.5 w-3.5" />
             异常残留
@@ -266,7 +263,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-2xl border border-border bg-background px-4 py-4">
+        <div className="console-surface px-4 py-4">
           <div className="text-sm font-medium">异常资源</div>
           <div className="mt-3 space-y-3">
             {[
@@ -277,10 +274,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
               diagnostics.abnormalResources.clusterTerminatingPods,
               diagnostics.abnormalResources.clusterLongPendingPods,
             ].map((bucket) => (
-              <div
-                key={bucket.label}
-                className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
-              >
+              <div key={bucket.label} className="console-card px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium">{bucket.label}</div>
                   <div className="text-xs text-muted-foreground">{bucket.count}</div>
@@ -296,22 +290,14 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-background px-4 py-4">
+        <div className="console-surface px-4 py-4">
           <div className="text-sm font-medium">基础设施事件线</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            只保留会影响发布结果的事件，不再直接把原始 Event 全量摊给你。
-          </div>
           <div className="mt-4 space-y-3">
             {diagnostics.incidents.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-4 py-8 text-sm text-muted-foreground">
-                最近没有发现会影响发布的基础设施异常。
-              </div>
+              <div className="console-card px-4 py-8 text-sm text-muted-foreground">暂无异常</div>
             ) : (
               diagnostics.incidents.map((incident) => (
-                <div
-                  key={incident.key}
-                  className="rounded-2xl border border-border bg-secondary/20 px-4 py-3"
-                >
+                <div key={incident.key} className="console-card px-4 py-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className={cn('text-sm font-medium', toneClassName(incident.tone))}>
                       {incident.title}
@@ -336,7 +322,6 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
 export function EnvironmentResourcePanel({
   projectId,
   environmentId,
-  environmentName,
   canManage = false,
   manageSummary,
 }: EnvironmentResourcePanelProps) {
@@ -449,14 +434,10 @@ export function EnvironmentResourcePanel({
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-background px-4 py-4">
+    <div className="console-surface rounded-2xl px-4 py-4">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium">容量与异常</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            先看 {environmentName} 已归因后的容量、阻塞和异常残留。只有需要更底层细节时， 再切到原始
-            K8s 资源。
-          </div>
         </div>
         <Button asChild variant="outline" size="sm" className="rounded-xl">
           <Link href={`/projects/${projectId}/runtime/logs?env=${environmentId}`}>
@@ -513,13 +494,13 @@ export function EnvironmentResourcePanel({
       )}
 
       {remediationFeedback && (
-        <div className="mb-4 rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-foreground">
+        <div className="console-card mb-4 px-4 py-3 text-sm text-foreground">
           {remediationFeedback}
         </div>
       )}
 
       {resourceError ? (
-        <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+        <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
           {resourceError}
         </div>
       ) : loading ? (
@@ -531,7 +512,7 @@ export function EnvironmentResourcePanel({
       ) : resourceType === 'diagnostics' ? (
         <DiagnosticsOverview diagnostics={diagnostics} />
       ) : resources.length === 0 ? (
-        <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-secondary/20 text-sm text-muted-foreground">
+        <div className="console-card flex min-h-40 items-center justify-center text-sm text-muted-foreground">
           没有可用的 {resourceTypeLabel[resourceType]}
         </div>
       ) : resourceType === 'pods' ? (
@@ -635,13 +616,10 @@ export function EnvironmentResourcePanel({
       )}
 
       {selectedPod && (
-        <section className="mt-4 overflow-hidden rounded-2xl border border-border">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <section className="console-surface mt-4 overflow-hidden rounded-2xl">
+          <div className="flex items-center justify-between px-4 py-3">
             <div>
               <div className="text-sm font-medium">Pod 原始日志 · {selectedPod}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                单个 Pod 细节放在这里；整条链路日志请直接看环境日志。
-              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button asChild variant="outline" size="sm" className="rounded-xl">

@@ -311,7 +311,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                     onClick={handleGenerateLink}
                     disabled={generatingLink}
                   >
-                    {generatingLink ? '生成中...' : generatedLink ? '重新生成' : '生成'}
+                    {generatingLink ? '处理中...' : generatedLink ? '重新生成' : '生成'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -523,10 +523,10 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>移除成员？</AlertDialogTitle>
-            <AlertDialogDescription>该成员会失去当前团队的访问权限。</AlertDialogDescription>
+            <AlertDialogDescription>将移除该成员的团队访问权限。</AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3 text-sm text-muted-foreground">
-            移除后不会删除该用户账号，只会撤销他在当前团队中的成员关系。
+          <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+            仅移除团队成员关系。
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel className="w-full rounded-xl sm:w-auto">取消</AlertDialogCancel>

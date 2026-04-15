@@ -80,15 +80,15 @@ export function ReleasePromoteDialog({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
             <div className="space-y-4">
-              <div className="rounded-[24px] border border-border bg-secondary/20 p-4 sm:p-5">
+              <div className="console-card p-4 sm:p-5">
                 <div className="text-sm font-semibold text-foreground">来源</div>
 
                 {promotePlan?.sourceRelease ? (
                   <div className="mt-4 space-y-3 text-sm">
-                    <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                    <div className="console-surface rounded-2xl px-4 py-3">
                       <div className="text-xs text-muted-foreground">来源发布</div>
                       <div className="mt-1 text-foreground">
-                        {promotePlan.sourceRelease.summary ?? '沿用最近一次预发（staging）成功版本'}
+                        {promotePlan.sourceRelease.summary ?? '最近一次 staging 成功版本'}
                       </div>
                       {promotePlan.sourceRelease.sourceCommitSha && (
                         <code className="mt-2 inline-flex rounded-lg bg-secondary px-2 py-1 text-xs text-muted-foreground">
@@ -98,7 +98,7 @@ export function ReleasePromoteDialog({
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-sm text-muted-foreground">
+                  <div className="console-surface mt-4 rounded-2xl px-4 py-8 text-sm text-muted-foreground">
                     没有可用版本。
                   </div>
                 )}
@@ -106,8 +106,8 @@ export function ReleasePromoteDialog({
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-[24px] border border-border bg-background p-4 sm:p-5">
-                <div className="mb-3 text-sm font-semibold text-foreground">预检</div>
+              <div className="console-surface p-4 sm:p-5">
+                <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {promotePanel ? (
                   <div className="space-y-3">
@@ -118,7 +118,7 @@ export function ReleasePromoteDialog({
                     />
 
                     {promoteAI?.summary && (
-                      <div className="rounded-2xl border border-border bg-secondary/20 px-4 py-3">
+                      <div className="console-card rounded-2xl px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           {promoteAI.strategy && (
                             <Badge variant="outline">{getStrategyLabel(promoteAI.strategy)}</Badge>
@@ -150,13 +150,13 @@ export function ReleasePromoteDialog({
                     )}
 
                     {promotePanel.blockingReason && (
-                      <div className="rounded-2xl border border-destructive/20 bg-background px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                         {promotePanel.blockingReason}
                       </div>
                     )}
 
                     {!promoteAI?.summary && promoteAI?.errorMessage && (
-                      <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                      <div className="console-surface rounded-2xl px-4 py-3 text-sm text-muted-foreground">
                         {promoteAI.errorMessage}
                       </div>
                     )}
@@ -166,7 +166,7 @@ export function ReleasePromoteDialog({
                     )}
 
                     {promoteAI?.checks.length ? (
-                      <div className="space-y-2 rounded-2xl border border-border bg-background px-4 py-3">
+                      <div className="console-surface space-y-2 rounded-2xl px-4 py-3">
                         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           检查
                         </div>

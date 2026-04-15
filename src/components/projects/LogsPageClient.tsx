@@ -295,7 +295,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
         </div>
         <div className="h-full overflow-y-auto p-4 font-mono text-xs leading-5">
           {status === 'idle' && !podName ? (
-            <span className="text-zinc-500">先选择环境和 Pod。</span>
+            <span className="text-zinc-500">选择环境和 Pod</span>
           ) : status === 'connecting' ? (
             <span className="animate-pulse text-zinc-500">正在连接 {podName}…</span>
           ) : errorMsg ? (
