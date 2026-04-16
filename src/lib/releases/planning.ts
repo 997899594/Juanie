@@ -2,6 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   deployments,
+  type EnvironmentKind,
   environments,
   type PromotionFlowStrategy,
   projects,
@@ -35,6 +36,7 @@ import {
   type ReleaseEntryPoint,
 } from '@/lib/releases/admission';
 import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
+import { inspectPreviewDatabaseGuard } from '@/lib/releases/preview-database-guard';
 import {
   inspectReleaseSchemaGate,
   type ReleaseSchemaGateSnapshot,
@@ -63,6 +65,7 @@ interface PlanningMigrationSpecLike {
 
 interface PlanningEnvironmentLike {
   id?: string;
+  kind?: EnvironmentKind | null;
   isProduction?: boolean | null;
   isPreview?: boolean | null;
   deliveryMode?: 'direct' | 'promote_only' | null;
@@ -286,13 +289,18 @@ export function summarizeReleasePlan(input: {
       specification: spec.specification,
     })),
   });
+  const previewDatabaseGuard = inspectPreviewDatabaseGuard({
+    environment: input.environment,
+    migrationSpecs: input.migrationSpecs,
+  });
   const requiresExternalCompletion = preDeployExternalCount > 0;
   const migrationBlockingReason =
     preDeployManualPlatformCount > 0 || preDeployExternalCount > 0
       ? '存在未满足的前置迁移门禁'
       : null;
   const schemaGate = input.schemaGate ?? null;
-  const blockingReason = schemaGate?.blockingReason ?? migrationBlockingReason;
+  const blockingReason =
+    previewDatabaseGuard.blockingReason ?? schemaGate?.blockingReason ?? migrationBlockingReason;
   const issue = releasePolicy.requiresApproval ? buildIssueSnapshot('approval_blocked') : null;
   const totalAutomatic = automaticSpecs.length;
   const environmentInheritance = getEnvironmentInheritancePresentation(input.environment);
@@ -301,6 +309,7 @@ export function summarizeReleasePlan(input: {
   );
   const platformSignals = buildPlatformSignalSnapshot({
     customSignals: [
+      ...previewDatabaseGuard.customSignals,
       ...(environmentInheritance
         ? [
             {
@@ -313,8 +322,9 @@ export function summarizeReleasePlan(input: {
       ...(schemaGate?.customSignals ?? []),
     ],
     issue,
-    customSummary: schemaGate?.summary ?? null,
-    customNextActionLabel: schemaGate?.nextActionLabel ?? null,
+    customSummary: previewDatabaseGuard.summary ?? schemaGate?.summary ?? null,
+    customNextActionLabel:
+      previewDatabaseGuard.nextActionLabel ?? schemaGate?.nextActionLabel ?? null,
     environmentPolicySignals: environmentPolicy.signals,
     environmentPolicySignal: environmentPolicy.primarySignal,
     releasePolicySignals: releasePolicy.signals,
@@ -324,7 +334,7 @@ export function summarizeReleasePlan(input: {
   });
 
   return {
-    canCreate: schemaGate?.canCreate ?? true,
+    canCreate: (schemaGate?.canCreate ?? true) && previewDatabaseGuard.canCreate,
     blockingReason,
     services: input.services,
     environmentPolicy,
@@ -354,6 +364,7 @@ export function summarizeReleasePlan(input: {
     environmentDatabaseStrategy,
     summary:
       blockingReason ??
+      previewDatabaseGuard.summary ??
       schemaGate?.summary ??
       releasePolicy.summary ??
       environmentPolicy.summary ??

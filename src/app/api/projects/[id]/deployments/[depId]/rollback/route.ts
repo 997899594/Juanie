@@ -8,6 +8,7 @@ import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/
 import { createProjectRelease } from '@/lib/releases';
 import { getProjectDeploymentContextOrThrow } from '@/lib/releases/deployment-access';
 import { buildRollbackPlan } from '@/lib/releases/planning';
+import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
 export async function GET(
@@ -114,6 +115,13 @@ export async function POST(
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
+    }
+
+    if (
+      error instanceof ReleaseSchemaGateBlockedError ||
+      error instanceof PreviewDatabaseGuardBlockedError
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

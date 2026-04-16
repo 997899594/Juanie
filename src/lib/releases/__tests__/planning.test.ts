@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { summarizeReleasePlan } from '@/lib/releases/planning';
+import { previewDatabaseGuardMessage } from '@/lib/releases/preview-database-guard';
 
 describe('release planning', () => {
   it('summarizes approval-gated production plans', () => {
@@ -156,6 +157,38 @@ describe('release planning', () => {
     expect(plan.schema.blockingCount).toBe(0);
     expect(
       plan.platformSignals.chips.some((chip) => chip.key === 'schema:pending_migrations')
+    ).toBe(true);
+  });
+
+  it('blocks inherited preview databases from running branch migrations', () => {
+    const plan = summarizeReleasePlan({
+      environment: {
+        kind: 'preview',
+        isProduction: false,
+        isPreview: true,
+        databaseStrategy: 'inherit',
+      },
+      services: [{ id: 'svc-1', name: 'web', image: 'ghcr.io/demo/web:1' }],
+      migrationSpecs: [
+        {
+          environment: { isProduction: false, isPreview: true },
+          specification: {
+            executionMode: 'automatic',
+            phase: 'preDeploy',
+            compatibility: 'backward_compatible',
+            approvalPolicy: 'auto',
+          },
+        },
+      ],
+    });
+
+    expect(plan.canCreate).toBe(false);
+    expect(plan.blockingReason).toBe(previewDatabaseGuardMessage);
+    expect(plan.summary).toBe(previewDatabaseGuardMessage);
+    expect(
+      plan.platformSignals.chips.some(
+        (chip) => chip.key === 'preview-database:inherit-migration-blocked'
+      )
     ).toBe(true);
   });
 });

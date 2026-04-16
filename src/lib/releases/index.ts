@@ -19,6 +19,10 @@ import { addReleaseJob } from '@/lib/queue';
 import { assertReleaseEntryPointAllowed, type ReleaseEntryPoint } from '@/lib/releases/admission';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
+import {
+  inspectPreviewDatabaseGuardForRelease,
+  PreviewDatabaseGuardBlockedError,
+} from '@/lib/releases/preview-database-guard';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
 import {
   inspectReleaseSchemaGate,
@@ -140,6 +144,19 @@ async function persistRelease(
   }
 
   const artifacts = await resolveReleaseServices(project.id, project.services, requestedServices);
+  const previewDatabaseGuard = await inspectPreviewDatabaseGuardForRelease({
+    projectId: project.id,
+    environmentId: environment.id,
+    environment,
+    serviceIds: artifacts.map((artifact) => artifact.service.id),
+    sourceRef: meta.sourceRef,
+    sourceCommitSha: meta.sourceCommitSha ?? null,
+  });
+
+  if (!previewDatabaseGuard.canCreate) {
+    throw new PreviewDatabaseGuardBlockedError(previewDatabaseGuard);
+  }
+
   const schemaGate = await inspectReleaseSchemaGate({
     projectId: project.id,
     environmentId: environment.id,

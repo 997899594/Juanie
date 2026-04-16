@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createRepositoryRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
+import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
 export async function POST(request: Request) {
@@ -46,7 +47,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const status =
-      error instanceof ReleaseSchemaGateBlockedError || error instanceof ReleaseAdmissionError
+      error instanceof ReleaseSchemaGateBlockedError ||
+      error instanceof PreviewDatabaseGuardBlockedError ||
+      error instanceof ReleaseAdmissionError
         ? 409
         : message.includes('Token does not have access') || message.includes('Missing bearer token')
           ? 401

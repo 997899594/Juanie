@@ -20,6 +20,7 @@ import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/
 import { createProjectRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
 import { buildProjectReleasePlan } from '@/lib/releases/planning';
+import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -220,6 +221,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     if (error instanceof ReleaseSchemaGateBlockedError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+
+    if (error instanceof PreviewDatabaseGuardBlockedError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
