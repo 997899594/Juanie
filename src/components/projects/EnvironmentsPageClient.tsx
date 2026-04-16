@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronUp, GitBranch, Globe, Plus, Rocket, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
 import {
   AlertDialog,
@@ -1293,6 +1293,7 @@ interface EnvironmentsPageClientProps {
   projectId: string;
   initialEnvId?: string | null;
   focusMode?: boolean;
+  initialCreateOpen?: boolean;
   initialData: {
     governance: {
       roleLabel: string;
@@ -1335,6 +1336,7 @@ export function EnvironmentsPageClient({
   projectId,
   initialEnvId,
   focusMode = false,
+  initialCreateOpen = false,
   initialData,
 }: EnvironmentsPageClientProps) {
   const defaultExpandedEnvId =
@@ -1353,7 +1355,7 @@ export function EnvironmentsPageClient({
   const [promotionFlows, setPromotionFlows] = useState<PromotionFlowInput[]>(
     initialData.deliveryControl.promotionFlows.map(toEditablePromotionFlow)
   );
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(initialCreateOpen);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1362,6 +1364,12 @@ export function EnvironmentsPageClient({
   const [editingDeliveryControl, setEditingDeliveryControl] = useState(false);
   const [savingDeliveryControl, setSavingDeliveryControl] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialCreateOpen) {
+      setDialogOpen(true);
+    }
+  }, [initialCreateOpen]);
 
   const fetchEnvironments = useCallback(async () => {
     try {
