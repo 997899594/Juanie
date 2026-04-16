@@ -1151,9 +1151,7 @@ function EnvironmentDetailsPanel({
     )
   );
   const showDomainsSection = environment.domains.length > (environment.primaryDomainUrl ? 1 : 0);
-  const showDatabaseSection =
-    environment.databases.length > 0 &&
-    (problemDatabases.length > 0 || environment.databaseBindingSummary.effectiveCount > 0);
+  const showDatabaseSection = problemDatabases.length > 0;
 
   return (
     <div className="console-surface rounded-2xl px-4 py-4">
@@ -1206,37 +1204,34 @@ function EnvironmentDetailsPanel({
             <div className="text-xs text-muted-foreground">数据库</div>
             <div className="console-card px-4 py-3 text-sm text-foreground">
               {[
-                `实际使用 ${environment.databaseBindingSummary.effectiveCount} 个`,
-                environment.databaseBindingSummary.inheritedCount > 0
-                  ? `继承 ${environment.databaseBindingSummary.inheritedCount} 个`
-                  : null,
                 blockingCount > 0 ? `阻塞 ${blockingCount}` : null,
                 pendingCount > 0 ? `待迁移 ${pendingCount}` : null,
+                problemDatabases.length > pendingCount + blockingCount
+                  ? `异常 ${problemDatabases.length} 个`
+                  : null,
               ]
                 .filter(Boolean)
                 .join(' · ')}
             </div>
-            {problemDatabases.length > 0 ? (
-              <div className="space-y-2">
-                {problemDatabases.map((database) => (
-                  <div key={database.id} className="console-surface rounded-2xl px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-medium text-foreground">{database.name}</div>
-                      <Badge variant="secondary">{database.type}</Badge>
-                      <Badge
-                        variant="outline"
-                        className={getSchemaStateBadgeClass(database.schemaState?.status)}
-                      >
-                        {database.schemaState?.statusLabel ?? '未纳管'}
-                      </Badge>
-                    </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      {database.schemaState?.summary ?? '尚未识别 schema 状态'}
-                    </div>
+            <div className="space-y-2">
+              {problemDatabases.map((database) => (
+                <div key={database.id} className="console-surface rounded-2xl px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-medium text-foreground">{database.name}</div>
+                    <Badge variant="secondary">{database.type}</Badge>
+                    <Badge
+                      variant="outline"
+                      className={getSchemaStateBadgeClass(database.schemaState?.status)}
+                    >
+                      {database.schemaState?.statusLabel ?? '未纳管'}
+                    </Badge>
                   </div>
-                ))}
-              </div>
-            ) : null}
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {database.schemaState?.summary ?? '尚未识别 schema 状态'}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
 

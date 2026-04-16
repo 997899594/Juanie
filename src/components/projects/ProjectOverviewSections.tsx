@@ -45,6 +45,28 @@ function getEnvironmentGitSummary(
     : `Git ${environment.gitTracking.trackingBranchName}`;
 }
 
+function getEnvironmentSecondaryLine(
+  environment: ProjectOverviewPageData['environmentCards'][number]
+): string | null {
+  return (
+    getEnvironmentGitSummary(environment) ?? environment.platformSignals.nextActionLabel ?? null
+  );
+}
+
+function getRenderedSecondaryLine(
+  environment: ProjectOverviewPageData['environmentCards'][number]
+): string | null {
+  const secondaryLine = getEnvironmentSecondaryLine(environment);
+
+  if (!secondaryLine) {
+    return null;
+  }
+
+  return secondaryLine === environment.platformSignals.nextActionLabel
+    ? `下一步：${secondaryLine}`
+    : secondaryLine;
+}
+
 export function ProjectEnvironmentIndex({
   projectId,
   environments,
@@ -94,15 +116,9 @@ export function ProjectEnvironmentIndex({
                   <div className="truncate text-sm text-foreground">
                     {getEnvironmentSummary(environment)}
                   </div>
-                  {getEnvironmentGitSummary(environment) ? (
+                  {getRenderedSecondaryLine(environment) ? (
                     <div className="truncate text-xs text-muted-foreground">
-                      {getEnvironmentGitSummary(environment)}
-                    </div>
-                  ) : null}
-                  {environment.platformSignals.nextActionLabel &&
-                  !getEnvironmentGitSummary(environment) ? (
-                    <div className="text-xs text-muted-foreground">
-                      下一步：{environment.platformSignals.nextActionLabel}
+                      {getRenderedSecondaryLine(environment)}
                     </div>
                   ) : null}
                 </div>
