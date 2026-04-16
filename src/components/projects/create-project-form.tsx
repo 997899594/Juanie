@@ -726,7 +726,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               <div className="space-y-2">
                 <Label>团队</Label>
                 <Select value={formData.teamId} onValueChange={updateTeamId}>
-                  <SelectTrigger className="h-12 rounded-[20px]">
+                  <SelectTrigger className="h-12">
                     <SelectValue placeholder="选择团队" />
                   </SelectTrigger>
                   <SelectContent>
@@ -905,7 +905,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 <div className="space-y-2">
                   <Label>模板</Label>
                   {templates.length === 0 ? (
-                    <div className="ui-floating rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
+                    <div className="ui-floating px-5 py-8 text-sm text-muted-foreground">
                       没有可用模板
                     </div>
                   ) : (
@@ -1024,7 +1024,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
               <div className="space-y-2">
                 <Label>交付节奏</Label>
-                <div className="ui-floating rounded-[18px] px-4 py-3">
+                <div className="ui-control flex items-center justify-between gap-3 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">基础环境自动部署</div>
@@ -1178,7 +1178,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               {configAdvancedOpen && (
                 <div className="console-divider-top space-y-4 px-4 py-4">
                   <div className="space-y-3">
-                    <div className="ui-floating flex items-center justify-between px-4 py-3">
+                    <div className="ui-control flex items-center justify-between px-4 py-3">
                       <div className="text-sm font-medium">自定义域名</div>
                       <Switch
                         checked={formData.useCustomDomain}
@@ -1210,7 +1210,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="ui-floating rounded-[20px] px-4 py-4">
+              <div className="ui-floating px-4 py-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   项目
                 </div>
@@ -1244,7 +1244,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 </div>
               </div>
 
-              <div className="ui-floating rounded-[20px] px-4 py-4">
+              <div className="ui-floating px-4 py-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   交付策略
                 </div>
@@ -1274,7 +1274,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             </div>
 
             {selectedTeam && (
-              <div className="ui-floating rounded-[18px] p-3 text-sm text-muted-foreground">
+              <div className="px-1 text-sm text-muted-foreground">
                 {formData.mode === 'import'
                   ? selectedTeam.importSummary
                   : selectedTeam.createSummary}
@@ -1284,15 +1284,15 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             <div className="ui-control p-4">
               <div className="text-sm font-medium">最终会创建这些能力</div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="ui-control-muted rounded-[16px] px-4 py-3">
+                <div className="ui-control-muted px-4 py-3">
                   <div className="text-xs text-muted-foreground">启用服务</div>
                   <div className="mt-1 text-sm font-medium">{activeServices.length} 个</div>
                 </div>
-                <div className="ui-control-muted rounded-[16px] px-4 py-3">
+                <div className="ui-control-muted px-4 py-3">
                   <div className="text-xs text-muted-foreground">数据库</div>
                   <div className="mt-1 text-sm font-medium">{formData.databases.length} 个</div>
                 </div>
-                <div className="ui-control-muted rounded-[16px] px-4 py-3">
+                <div className="ui-control-muted px-4 py-3">
                   <div className="text-xs text-muted-foreground">默认链路</div>
                   <div className="mt-1 text-sm font-medium">{environmentTemplateLabel}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
@@ -1713,7 +1713,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
       </div>
 
       <div className="pointer-events-none sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-20 mt-6 -mx-4 px-4 py-3 md:static md:mx-0 md:px-0 md:py-0">
-        <div className="pointer-events-auto ui-floating flex items-center justify-between gap-3 rounded-[24px] p-3 md:bg-transparent md:p-0 md:shadow-none">
+        <div className="pointer-events-auto ui-floating flex items-center justify-between gap-3 p-3 md:bg-transparent md:p-0 md:shadow-none">
           <Button
             variant="outline"
             className="px-4"

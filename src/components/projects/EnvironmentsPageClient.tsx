@@ -356,7 +356,7 @@ function PreviewEnvironmentDialog({
                       }
                       disabled={loading || disabled}
                     >
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger>
                         <SelectValue placeholder="选择数据库策略" />
                       </SelectTrigger>
                       <SelectContent>
@@ -380,25 +380,25 @@ function PreviewEnvironmentDialog({
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-[24px] bg-secondary/20 p-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_24px_rgba(55,53,47,0.03)] sm:p-5">
+                <div className="ui-control-muted p-4 sm:p-5">
                   <div className="mt-4 space-y-3 text-sm">
-                    <div className="rounded-2xl bg-background/90 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
+                    <div className="rounded-2xl bg-background/85 px-4 py-3">
                       <div className="text-xs text-muted-foreground">标识来源</div>
                       <div className="mt-1 text-foreground">
                         {branch ? `分支 ${branch}` : prNumber ? `PR #${prNumber}` : '等待输入'}
                       </div>
                     </div>
-                    <div className="rounded-2xl bg-background/90 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
+                    <div className="rounded-2xl bg-background/85 px-4 py-3">
                       <div className="text-xs text-muted-foreground">启动方式</div>
                       <div className="mt-1 text-foreground">按远端最新提交直接发布</div>
                     </div>
-                    <div className="rounded-2xl bg-background/90 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
+                    <div className="rounded-2xl bg-background/85 px-4 py-3">
                       <div className="text-xs text-muted-foreground">保留时长</div>
                       <div className="mt-1 text-foreground">
                         {ttlHours ? `${ttlHours} 小时` : '默认 72 小时'}
                       </div>
                     </div>
-                    <div className="rounded-2xl bg-background/90 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_8px_18px_rgba(55,53,47,0.03)]">
+                    <div className="rounded-2xl bg-background/85 px-4 py-3">
                       <div className="text-xs text-muted-foreground">数据库方案</div>
                       <div className="mt-1 text-foreground">
                         {databaseStrategy === 'isolated_clone' ? '独立预览库' : '继承基础数据库'}
@@ -414,16 +414,12 @@ function PreviewEnvironmentDialog({
             <Button
               type="button"
               variant="outline"
-              className="w-full rounded-xl sm:w-auto"
+              className="w-full sm:w-auto"
               onClick={() => onOpenChange(false)}
             >
               取消
             </Button>
-            <Button
-              type="submit"
-              className="w-full rounded-xl sm:w-auto"
-              disabled={loading || disabled}
-            >
+            <Button type="submit" className="w-full sm:w-auto" disabled={loading || disabled}>
               {loading ? '启动中...' : '启动预览环境'}
             </Button>
           </DialogFooter>
@@ -629,22 +625,17 @@ function DeliveryControlPanel({
         </div>
         <div className="flex items-center gap-2">
           {editing && (
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={onReset}>
+            <Button variant="outline" size="sm" onClick={onReset}>
               丢弃
             </Button>
           )}
           {deliveryControl.editable ? (
             editing ? (
-              <Button
-                size="sm"
-                className="rounded-xl"
-                disabled={saving}
-                onClick={() => void onSave()}
-              >
+              <Button size="sm" disabled={saving} onClick={() => void onSave()}>
                 {saving ? '保存中...' : '保存链路'}
               </Button>
             ) : (
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={onToggleEditing}>
+              <Button variant="outline" size="sm" onClick={onToggleEditing}>
                 编辑链路
               </Button>
             )
@@ -652,7 +643,7 @@ function DeliveryControlPanel({
         </div>
       </div>
 
-      <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+      <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
         {deliveryControl.editSummary}
       </div>
 
@@ -663,15 +654,12 @@ function DeliveryControlPanel({
           </div>
           <div className="space-y-3 px-4 py-4">
             {displayedRoutingRules.length === 0 ? (
-              <div className="ui-control-muted rounded-[18px] px-4 py-4 text-sm text-muted-foreground">
+              <div className="ui-control-muted px-4 py-4 text-sm text-muted-foreground">
                 还没有路由规则
               </div>
             ) : (
               displayedRoutingRules.map((rule, index) => (
-                <div
-                  key={rule.id ?? `${rule.kind}-${index}`}
-                  className="console-surface rounded-[18px] px-4 py-4"
-                >
+                <div key={rule.id ?? `${rule.kind}-${index}`} className="console-surface px-4 py-4">
                   {editing ? (
                     <div className="space-y-3">
                       {(() => {
@@ -688,7 +676,7 @@ function DeliveryControlPanel({
                                     onUpdateRule(index, { ...editableRule, environmentId: value })
                                   }
                                 >
-                                  <SelectTrigger className="rounded-xl">
+                                  <SelectTrigger>
                                     <SelectValue placeholder="选择环境" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -716,7 +704,7 @@ function DeliveryControlPanel({
                                     })
                                   }
                                 >
-                                  <SelectTrigger className="rounded-xl">
+                                  <SelectTrigger>
                                     <SelectValue placeholder="选择规则类型" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -842,7 +830,7 @@ function DeliveryControlPanel({
           </div>
           <div className="space-y-3 px-4 py-4">
             {displayedPromotionFlows.length === 0 ? (
-              <div className="ui-control-muted rounded-[18px] px-4 py-4 text-sm text-muted-foreground">
+              <div className="ui-control-muted px-4 py-4 text-sm text-muted-foreground">
                 还没有推广链路
               </div>
             ) : (
@@ -851,7 +839,7 @@ function DeliveryControlPanel({
                   key={
                     flow.id ?? `${flow.sourceEnvironmentId}-${flow.targetEnvironmentId}-${index}`
                   }
-                  className="console-surface rounded-[18px] px-4 py-4"
+                  className="console-surface px-4 py-4"
                 >
                   {editing ? (
                     <div className="space-y-3">
@@ -872,7 +860,7 @@ function DeliveryControlPanel({
                                     })
                                   }
                                 >
-                                  <SelectTrigger className="rounded-xl">
+                                  <SelectTrigger>
                                     <SelectValue placeholder="选择源环境" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -895,7 +883,7 @@ function DeliveryControlPanel({
                                     })
                                   }
                                 >
-                                  <SelectTrigger className="rounded-xl">
+                                  <SelectTrigger>
                                     <SelectValue placeholder="选择目标环境" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -916,7 +904,7 @@ function DeliveryControlPanel({
                                   onUpdateFlow(index, { ...editableFlow, strategy: value })
                                 }
                               >
-                                <SelectTrigger className="rounded-xl">
+                                <SelectTrigger>
                                   <SelectValue placeholder="选择策略" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1104,14 +1092,14 @@ function EnvironmentRuntimePanel({
       {(environment.latestReleaseCard || environment.primaryDomainUrl) && (
         <div className="mt-4 flex flex-wrap gap-2">
           {environment.latestReleaseCard ? (
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
+            <Button asChild variant="outline" size="sm">
               <Link href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}>
                 交付
               </Link>
             </Button>
           ) : null}
           {environment.primaryDomainUrl ? (
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
+            <Button asChild variant="outline" size="sm">
               <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
                 地址
               </a>

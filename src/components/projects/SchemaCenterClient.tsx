@@ -253,27 +253,22 @@ export function SchemaCenterClient({
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {focusedEnvironment ? (
-              <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <Button asChild variant="outline" size="sm">
                 <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}`}>
                   环境
                 </Link>
               </Button>
             ) : (
-              <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <Button asChild variant="outline" size="sm">
                 <Link href={`/projects/${projectId}/environments`}>环境</Link>
               </Button>
             )}
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <Link href={`/projects/${projectId}/delivery`}>交付</Link>
-            </Button>
           </div>
         }
       />
 
       {feedback ? (
-        <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-foreground">
-          {feedback}
-        </div>
+        <div className="ui-control-muted px-4 py-3 text-sm text-foreground">{feedback}</div>
       ) : null}
 
       <div className="ui-control-muted px-4 py-3">
@@ -288,12 +283,14 @@ export function SchemaCenterClient({
       <div className="space-y-4">
         {data.environments.map((environment) => (
           <section key={environment.id} className="ui-floating px-4 py-4">
-            <div className="mb-4 flex items-center gap-2">
-              <Database className="h-4 w-4" />
-              <div className="text-sm font-semibold">{environment.name}</div>
-              {environment.isProduction ? <Badge variant="outline">生产</Badge> : null}
-              {environment.isPreview ? <Badge variant="outline">预览</Badge> : null}
-            </div>
+            {!focusedEnvironment && (
+              <div className="mb-4 flex items-center gap-2">
+                <Database className="h-4 w-4" />
+                <div className="text-sm font-semibold">{environment.name}</div>
+                {environment.isProduction ? <Badge variant="outline">生产</Badge> : null}
+                {environment.isPreview ? <Badge variant="outline">预览</Badge> : null}
+              </div>
+            )}
 
             <div className="space-y-3">
               {environment.databases.map((database) => {
@@ -370,7 +367,6 @@ export function SchemaCenterClient({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="rounded-xl"
                           disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                           onClick={() =>
                             runAction(
@@ -391,7 +387,6 @@ export function SchemaCenterClient({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="rounded-xl"
                             disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                             onClick={() =>
                               runAction(
@@ -413,7 +408,6 @@ export function SchemaCenterClient({
                           <Button
                             variant="default"
                             size="sm"
-                            className="rounded-xl"
                             disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                             onClick={() =>
                               runAction(
@@ -435,7 +429,6 @@ export function SchemaCenterClient({
                           <Button
                             variant="default"
                             size="sm"
-                            className="rounded-xl"
                             disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                             onClick={() =>
                               runAction(
@@ -461,7 +454,6 @@ export function SchemaCenterClient({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="rounded-xl"
                             disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                             onClick={() =>
                               runAction(
@@ -480,7 +472,7 @@ export function SchemaCenterClient({
                         ) : null}
 
                         {repairPlan?.reviewUrl ? (
-                          <Button asChild variant="outline" size="sm" className="rounded-xl">
+                          <Button asChild variant="outline" size="sm">
                             <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
                               打开修复 PR
                               <ExternalLink className="ml-1 h-3.5 w-3.5" />
@@ -491,12 +483,12 @@ export function SchemaCenterClient({
                     </div>
 
                     {repairPlan && suggestionSummary ? (
-                      <div className="ui-control mt-4 px-4 py-3">
+                      <div className="mt-4 rounded-2xl bg-background/70 px-4 py-3">
                         <div className="text-sm font-medium text-foreground">处理</div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {repairPlan.summary}
                         </div>
-                        <div className="ui-control-muted mt-2 rounded-2xl px-3 py-2 text-sm text-foreground">
+                        <div className="ui-control-muted mt-2 px-3 py-2 text-sm text-foreground">
                           {suggestionSummary}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -513,7 +505,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.diffSummary ? (
-                      <div className="ui-control-muted mt-4 rounded-2xl px-4 py-3">
+                      <div className="ui-control-muted mt-4 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">迁移详情</Badge>
                           <Badge variant="outline">
@@ -533,7 +525,7 @@ export function SchemaCenterClient({
                             {Object.entries(latestAtlasRun.artifactFiles).map(([file, content]) => (
                               <div
                                 key={`${database.id}-schema-center-artifact-${file}`}
-                                className="ui-control rounded-2xl px-4 py-3"
+                                className="rounded-2xl bg-background/75 px-4 py-3"
                               >
                                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                   {file}
@@ -549,7 +541,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.log ? (
-                      <details className="ui-control-muted mt-4 rounded-2xl px-4 py-3">
+                      <details className="ui-control-muted mt-4 px-4 py-3">
                         <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
                           执行日志
                         </summary>

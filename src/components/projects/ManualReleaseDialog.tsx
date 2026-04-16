@@ -272,7 +272,6 @@ export function ManualReleaseDialog({
         <Button
           variant="outline"
           size="sm"
-          className="h-9 rounded-xl px-4"
           disabled={Boolean(unavailableReason)}
           title={unavailableReason ?? undefined}
         >
@@ -289,9 +288,7 @@ export function ManualReleaseDialog({
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
-                <div className="ui-control px-4 py-3 text-sm text-muted-foreground">
-                  {disabledSummary}
-                </div>
+                <div className="px-1 text-sm text-muted-foreground">{disabledSummary}</div>
               )}
 
               <div className="ui-control-muted p-4 sm:p-5">
@@ -301,7 +298,7 @@ export function ManualReleaseDialog({
                   <div className="space-y-2">
                     <Label>目标环境</Label>
                     <Select value={environmentId} onValueChange={setEnvironmentId}>
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger>
                         <SelectValue placeholder="选择环境" />
                       </SelectTrigger>
                       <SelectContent>
@@ -316,7 +313,7 @@ export function ManualReleaseDialog({
                   <div className="space-y-2">
                     <Label>来源发布</Label>
                     <Select value={sourceReleaseId} onValueChange={setSourceReleaseId}>
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger>
                         <SelectValue placeholder="选择来源" />
                       </SelectTrigger>
                       <SelectContent>
@@ -336,13 +333,13 @@ export function ManualReleaseDialog({
                     value={summary}
                     onChange={(event) => setSummary(event.target.value)}
                     placeholder="可留空"
-                    className="min-h-[112px] rounded-2xl"
+                    className="min-h-[112px]"
                   />
                 </div>
               </div>
 
               {error && (
-                <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
@@ -353,7 +350,7 @@ export function ManualReleaseDialog({
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">来源</div>
                   {selectedArtifacts.length > 0 && (
-                    <div className="rounded-full bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]">
+                    <div className="inline-flex items-center rounded-full bg-secondary/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
                       {selectedArtifacts.length} 个服务
                     </div>
                   )}
@@ -379,7 +376,7 @@ export function ManualReleaseDialog({
                         {selectedArtifacts.map((artifact) => (
                           <span
                             key={artifact.service.id}
-                            className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]"
+                            className="inline-flex items-center rounded-full bg-secondary/70 px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
                           >
                             {artifact.service.name}
                           </span>
@@ -419,7 +416,7 @@ export function ManualReleaseDialog({
                     />
 
                     {planningPanel.blockingReason && (
-                      <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {planningPanel.blockingReason}
                       </div>
                     )}
@@ -439,15 +436,11 @@ export function ManualReleaseDialog({
         </div>
 
         <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
-          <Button
-            variant="outline"
-            className="w-full rounded-xl sm:w-auto"
-            onClick={() => setOpen(false)}
-          >
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setOpen(false)}>
             关闭
           </Button>
           <Button
-            className="w-full rounded-xl sm:w-auto"
+            className="w-full sm:w-auto"
             onClick={handleCreate}
             disabled={
               submitting ||

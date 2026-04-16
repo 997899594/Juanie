@@ -243,7 +243,7 @@ function EnvVarDialog({
                 </div>
               </div>
 
-              <div className="ui-control flex items-center gap-3 rounded-[24px] px-4 py-4">
+              <div className="ui-control flex items-center gap-3 px-4 py-4">
                 <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">密文变量</p>
@@ -256,7 +256,7 @@ function EnvVarDialog({
               </div>
 
               {disabledSummary && (
-                <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
@@ -343,7 +343,7 @@ function EnvVarRow({
           )}
         </div>
 
-        <div className="min-w-0 rounded-xl bg-secondary/20 px-3 py-2 sm:rounded-none sm:bg-transparent sm:px-0 sm:py-0">
+        <div className="min-w-0 px-1 sm:px-0">
           {envVar.isSecret ? (
             <span className="select-none font-mono text-sm tracking-widest text-muted-foreground">
               ••••••••••••
@@ -432,7 +432,7 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
           )}
         </div>
 
-        <div className="min-w-0 rounded-xl bg-secondary/20 px-3 py-2 sm:rounded-none sm:bg-transparent sm:px-0 sm:py-0">
+        <div className="min-w-0 px-1 sm:px-0">
           {envVar.isSecret ? (
             <span className="select-none font-mono text-sm tracking-widest text-muted-foreground">
               ••••••••••••
@@ -569,8 +569,7 @@ export function EnvVarManager({
           trigger={
             <Button
               size="sm"
-              variant="outline"
-              className=""
+              variant="default"
               disabled={!canManage}
               title={!canManage ? (disabledSummary ?? undefined) : undefined}
             >
@@ -692,7 +691,7 @@ export function EnvVarManager({
         </TabsContent>
 
         <TabsContent value="service">
-          <div className="ui-control-muted mb-3 rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+          <div className="mb-3 px-1 text-sm text-muted-foreground">
             这些变量按服务生效，会在对应容器启动时追加注入；如果键名相同，会覆盖环境级同名变量。
           </div>
 

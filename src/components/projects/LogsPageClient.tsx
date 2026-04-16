@@ -198,7 +198,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
         </div>
         <div className="flex flex-wrap items-center gap-3 overflow-x-auto pb-1">
           <Select value={envId} onValueChange={setEnvId}>
-            <SelectTrigger className="h-10 w-40 rounded-xl text-xs">
+            <SelectTrigger className="h-10 w-40 text-xs">
               <SelectValue placeholder="环境" />
             </SelectTrigger>
             <SelectContent>
@@ -211,7 +211,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
           </Select>
 
           <Select value={podName} onValueChange={setPodName} disabled={pods.length === 0}>
-            <SelectTrigger className="h-10 w-72 rounded-xl text-xs font-mono">
+            <SelectTrigger className="h-10 w-72 text-xs font-mono">
               <SelectValue placeholder={pods.length === 0 ? '没有 Pod' : '选择 Pod'} />
             </SelectTrigger>
             <SelectContent>
@@ -224,7 +224,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
           </Select>
 
           <Select value={tail} onValueChange={setTail}>
-            <SelectTrigger className="h-10 w-32 rounded-xl text-xs">
+            <SelectTrigger className="h-10 w-32 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -239,16 +239,16 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             <Button
               variant="ghost"
               size="sm"
-              className={cn('rounded-xl', follow && 'text-foreground')}
+              className={cn(follow && 'text-foreground')}
               onClick={() => setFollow((f) => !f)}
             >
               {follow ? '自动跟随中' : '开启跟随'}
             </Button>
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={startStream}>
+            <Button variant="outline" size="sm" onClick={startStream}>
               <RefreshCw className="h-3.5 w-3.5" />
               重连
             </Button>
-            <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => setLines([])}>
+            <Button variant="ghost" size="sm" onClick={() => setLines([])}>
               <X className="h-3.5 w-3.5" />
               清空
             </Button>
@@ -307,30 +307,20 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
       </div>
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-        <div className="flex items-center gap-2 rounded-[24px] bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="flex items-center gap-2 rounded-2xl bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
           <Button
             variant="ghost"
             size="sm"
-            className={cn('min-w-0 flex-1 rounded-xl', follow && 'text-foreground')}
+            className={cn('min-w-0 flex-1', follow && 'text-foreground')}
             onClick={() => setFollow((f) => !f)}
           >
             {follow ? '跟随中' : '跟随'}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-w-0 flex-1 rounded-xl"
-            onClick={startStream}
-          >
+          <Button variant="outline" size="sm" className="min-w-0 flex-1" onClick={startStream}>
             <RefreshCw className="h-3.5 w-3.5" />
             重连
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-w-0 flex-1 rounded-xl"
-            onClick={() => setLines([])}
-          >
+          <Button variant="ghost" size="sm" className="min-w-0 flex-1" onClick={() => setLines([])}>
             <X className="h-3.5 w-3.5" />
             清空
           </Button>
