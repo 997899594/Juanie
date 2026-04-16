@@ -31,7 +31,7 @@ export function buildProjectCommandCenter(
         '项目页只做索引，真正的工作都放到具体环境里继续处理。',
       primaryAction: {
         label: '打开环境',
-        href: `/projects/${projectId}/runtime?env=${primaryEnvironment.id}`,
+        href: `/projects/${projectId}/environments/${primaryEnvironment.id}`,
         description:
           primaryEnvironment.platformSignals.nextActionLabel ??
           '进入后先看当前版本、诊断和下一步动作。',
@@ -67,7 +67,7 @@ export function buildProjectCommandCenter(
       },
       secondaryAction: {
         label: '查看环境',
-        href: `/projects/${projectId}/runtime`,
+        href: `/projects/${projectId}/environments`,
       },
     };
   }
@@ -78,7 +78,7 @@ export function buildProjectCommandCenter(
     summary: '先补齐环境和第一次发布，让项目先形成可进入的主链路。',
     primaryAction: {
       label: '查看环境',
-      href: `/projects/${projectId}/runtime`,
+      href: `/projects/${projectId}/environments`,
       description: '先把项目内的环境结构建立起来。',
     },
     secondaryAction: {

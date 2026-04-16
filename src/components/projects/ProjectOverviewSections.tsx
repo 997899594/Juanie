@@ -1,8 +1,14 @@
-import { AlertTriangle, ArrowRight, ExternalLink, GitBranch, ScrollText } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  ExternalLink,
+  GitBranch,
+  ScrollText,
+  Settings2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
 import type { ProjectCommandCenterSnapshot } from '@/lib/projects/overview-command-center';
 import type { ProjectOverviewPageData } from '@/lib/projects/service';
 import { getStatusDotClass } from '@/lib/releases/status-presentation';
@@ -75,10 +81,12 @@ export function ProjectDefinitionSection({
   project,
   overview,
   services,
+  productionEnvironment,
 }: {
   project: ProjectOverviewPageData['project'];
   overview: ProjectOverviewPageData['overview'];
   services: ProjectOverviewPageData['serviceCards'];
+  productionEnvironment: ProjectOverviewPageData['environmentCards'][number] | null;
 }) {
   return (
     <section className="ui-floating overflow-hidden">
@@ -123,27 +131,32 @@ export function ProjectDefinitionSection({
           </div>
         )}
 
-        {services.length > 0 && (
-          <div className="space-y-3 pt-2">
+        {productionEnvironment?.primaryDomainUrl ? (
+          <div className="space-y-1">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              服务
+              正式环境地址
             </div>
-            <div className="flex flex-wrap gap-2">
-              {services.slice(0, 5).map((service) => (
-                <div
-                  key={service.id}
-                  className="ui-control inline-flex items-center gap-2 rounded-full px-3 py-1.5"
-                >
-                  <span
-                    className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(service.status)}`}
-                  />
-                  <span className="text-sm font-medium">{service.name}</span>
-                  <span className="text-xs text-muted-foreground capitalize">{service.type}</span>
-                </div>
-              ))}
-            </div>
+            <a
+              href={productionEnvironment.primaryDomainUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+            >
+              {productionEnvironment.primaryDomainUrl.replace(/^https?:\/\//, '')}
+              <ExternalLink className="h-3 w-3" />
+            </a>
           </div>
-        )}
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <div className="ui-control-muted inline-flex items-center gap-2 rounded-full px-3 py-1.5">
+            <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-medium">{services.length} 个服务</span>
+          </div>
+          {productionEnvironment ? (
+            <div className="text-muted-foreground">{productionEnvironment.name} 为正式环境</div>
+          ) : null}
+        </div>
       </div>
     </section>
   );
@@ -162,7 +175,7 @@ export function ProjectEnvironmentIndex({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm font-semibold">环境</div>
           <Button asChild variant="outline" size="sm" className="h-8 px-3">
-            <Link href={`/projects/${projectId}/runtime`}>查看全部</Link>
+            <Link href={`/projects/${projectId}/environments`}>查看全部</Link>
           </Button>
         </div>
       </div>
@@ -176,7 +189,7 @@ export function ProjectEnvironmentIndex({
           environments.map((environment) => (
             <div key={environment.id} className="ui-control rounded-[22px] px-4 py-4">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1 space-y-3">
+                <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
                       className={`h-2 w-2 rounded-full ${
@@ -188,12 +201,6 @@ export function ProjectEnvironmentIndex({
                       }`}
                     />
                     <div className="text-sm font-semibold">{environment.name}</div>
-                    {environment.scopeLabel ? (
-                      <Badge variant="outline">{environment.scopeLabel}</Badge>
-                    ) : null}
-                    {environment.previewLifecycle ? (
-                      <Badge variant="secondary">{environment.previewLifecycle.stateLabel}</Badge>
-                    ) : null}
                     {environment.latestReleaseCard ? (
                       <Badge variant="outline">
                         {environment.latestReleaseCard.statusDecoration.label}
@@ -201,42 +208,31 @@ export function ProjectEnvironmentIndex({
                     ) : null}
                   </div>
 
-                  <PlatformSignalChipList chips={environment.platformSignals.chips.slice(0, 3)} />
-                  <PlatformSignalSummary
-                    summary={
-                      environment.platformSignals.primarySummary ??
-                      (environment.latestReleaseCard
+                  <div className="text-xs text-muted-foreground">
+                    {[
+                      environment.latestReleaseCard
                         ? `当前版本 ${environment.latestReleaseCard.title}`
-                        : environment.primaryDomainUrl
-                          ? '环境已接入，可直接进入查看状态'
-                          : '环境已建立，进入后可查看部署、变量、日志和诊断')
-                    }
-                    nextActionLabel={
-                      environment.platformSignals.nextActionLabel ??
-                      [environment.sourceLabel, environment.expiryLabel].filter(Boolean).join(' · ')
-                    }
-                  />
+                        : null,
+                      environment.scopeLabel,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') ||
+                      environment.previewLifecycle?.stateLabel ||
+                      '进入环境'}
+                  </div>
                 </div>
 
                 <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
                   <Button asChild variant="outline" size="sm" className="h-8 px-3">
-                    <Link href={`/projects/${projectId}/runtime?env=${environment.id}`}>
+                    <Link href={`/projects/${projectId}/environments/${environment.id}`}>
                       进入环境
                     </Link>
                   </Button>
-                  <Button asChild variant="outline" size="sm" className="h-8 px-3">
-                    <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>
-                      <ScrollText className="h-3.5 w-3.5" />
-                      日志
-                    </Link>
-                  </Button>
-                  {environment.latestReleaseCard ? (
+                  {environment.isProduction && environment.primaryDomainUrl ? (
                     <Button asChild variant="outline" size="sm" className="h-8 px-3">
-                      <Link
-                        href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}
-                      >
-                        发布
-                      </Link>
+                      <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+                        地址
+                      </a>
                     </Button>
                   ) : null}
                 </div>

@@ -11,17 +11,26 @@ const runtimeNav = [
   { label: '诊断', href: '/diagnostics' },
 ] as const;
 
-export function RuntimeSectionNav({ projectId }: { projectId: string }) {
+export function RuntimeSectionNav({
+  projectId,
+  environmentId,
+}: {
+  projectId: string;
+  environmentId?: string | null;
+}) {
   const pathname = usePathname();
+  const basePath = environmentId
+    ? `/projects/${projectId}/environments/${environmentId}`
+    : `/projects/${projectId}/environments`;
 
   return (
     <div className="ui-control-muted rounded-[24px] px-3 py-3">
       <div className="flex flex-wrap gap-2">
         {runtimeNav.map((item) => {
-          const href = `/projects/${projectId}/runtime${item.href}`;
+          const href = `${basePath}${item.href}`;
           const isActive =
             item.href === ''
-              ? pathname === `/projects/${projectId}/runtime`
+              ? pathname === basePath
               : pathname === href || pathname.startsWith(`${href}/`);
 
           return (

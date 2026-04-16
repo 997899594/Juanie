@@ -8,7 +8,6 @@ import { ReleaseAISnapshotPanel } from '@/components/projects/ReleaseAISnapshotP
 import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { TeamRole } from '@/lib/db/schema';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
@@ -52,13 +51,6 @@ export function ReleaseTopSummarySection({ release }: { release: ReleasePageData
             .filter(Boolean)
             .join(' · ')}
         </div>
-        {(release.platformSignals.primarySummary || release.platformSignals.nextActionLabel) && (
-          <PlatformSignalSummary
-            summary={release.platformSignals.primarySummary}
-            nextActionLabel={release.platformSignals.nextActionLabel}
-            className="mt-4"
-          />
-        )}
       </div>
       {release.stats.map((stat) => (
         <div key={stat.label} className="ui-control-muted rounded-[20px] px-5 py-4">

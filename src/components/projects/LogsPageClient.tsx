@@ -175,7 +175,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader title="运行日志" />
-      <RuntimeSectionNav projectId={projectId} />
+      <RuntimeSectionNav projectId={projectId} environmentId={envId || null} />
 
       <div className="ui-control-muted px-4 py-3">
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -190,7 +190,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             {pods.length > 0 ? `${runningPodCount} 运行中 / ${readyPodCount} 就绪` : '等待识别'}
           </span>
           <Button asChild variant="outline" size="sm" className="ml-auto rounded-xl">
-            <Link href={`/projects/${projectId}/runtime?env=${envId}`}>返回运行</Link>
+            <Link href={`/projects/${projectId}/environments/${envId}`}>返回环境</Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="rounded-xl">
             <Link href={`/projects/${projectId}/delivery`}>

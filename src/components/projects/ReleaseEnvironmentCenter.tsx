@@ -57,11 +57,6 @@ export function ReleaseEnvironmentCenter({
               {latestRelease ? (
                 <>
                   <div className="text-sm font-medium">{latestRelease.displayTitle}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {latestRelease.recap?.primarySummary ??
-                      latestRelease.platformSignals.primarySummary ??
-                      '详情'}
-                  </div>
                   <div className="mt-2 text-[11px] text-muted-foreground">
                     {[
                       latestRelease.statusDecoration.label,
@@ -80,7 +75,7 @@ export function ReleaseEnvironmentCenter({
 
             <div className="mt-4 flex flex-wrap gap-2">
               <Button asChild variant="outline" size="sm" className="rounded-xl">
-                <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>日志</Link>
+                <Link href={`/projects/${projectId}/environments/${environment.id}`}>环境</Link>
               </Button>
               {latestRelease ? (
                 <Button asChild size="sm" className="rounded-xl">

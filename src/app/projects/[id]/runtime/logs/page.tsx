@@ -1,7 +1,5 @@
 import { redirect } from 'next/navigation';
-import { LogsPageClient } from '@/components/projects/LogsPageClient';
 import { auth } from '@/lib/auth';
-import { getProjectObservabilityPageData } from '@/lib/observability/page-data';
 
 export default async function RuntimeLogsPage({
   params,
@@ -17,19 +15,5 @@ export default async function RuntimeLogsPage({
   if (!session?.user?.id) {
     redirect('/login');
   }
-
-  const pageData = await getProjectObservabilityPageData(id, session.user.id);
-
-  if (!pageData) {
-    redirect('/projects');
-  }
-
-  return (
-    <LogsPageClient
-      projectId={id}
-      projectName={pageData.project.name}
-      initialData={pageData}
-      initialEnvId={env}
-    />
-  );
+  redirect(env ? `/projects/${id}/environments/${env}/logs` : `/projects/${id}/environments`);
 }

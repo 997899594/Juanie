@@ -89,12 +89,6 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                       {release.previewSourceMeta.title ? (
                         <PreviewSourceSummary meta={release.previewSourceMeta} />
                       ) : null}
-                      {(release.recap?.primarySummary ||
-                        release.platformSignals.primarySummary) && (
-                        <div className="text-[11px] text-muted-foreground">
-                          {release.recap?.primarySummary ?? release.platformSignals.primarySummary}
-                        </div>
-                      )}
                       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                         {release.sourceCommitSha && (
                           <div className="flex items-center gap-1.5">
@@ -156,7 +150,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         className="min-w-0 flex-1 sm:flex-none"
                       >
                         <Link
-                          href={`/projects/${projectId}/runtime/logs?env=${release.environment.id}`}
+                          href={`/projects/${projectId}/environments/${release.environment.id}/logs`}
                         >
                           日志
                         </Link>

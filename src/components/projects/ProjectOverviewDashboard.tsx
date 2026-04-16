@@ -20,6 +20,8 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
   const { project, overview, serviceCards, attentionItems, recentReleaseCards, environmentCards } =
     pageData;
   const commandCenter = buildProjectCommandCenter(projectId, pageData);
+  const productionEnvironment =
+    environmentCards.find((environment) => environment.isProduction) ?? environmentCards[0] ?? null;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -44,7 +46,12 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
       <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
           <ProjectEnvironmentIndex projectId={projectId} environments={environmentCards} />
-          <ProjectDefinitionSection project={project} overview={overview} services={serviceCards} />
+          <ProjectDefinitionSection
+            project={project}
+            overview={overview}
+            services={serviceCards}
+            productionEnvironment={productionEnvironment}
+          />
         </div>
 
         <ProjectActivitySection

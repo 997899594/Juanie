@@ -11,7 +11,7 @@ import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar
 import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { createProductionRelease } from '@/lib/releases/client-actions';
@@ -149,9 +149,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               pulse={isConnected}
             />
             <Button asChild variant="outline" size="sm" className="h-9 px-4">
-              <Link href={`/projects/${projectId}/runtime/logs`}>
+              <Link href={`/projects/${projectId}/environments`}>
                 <ScrollText className="h-3.5 w-3.5" />
-                日志
+                环境
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className="h-9 px-4">
@@ -231,11 +231,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           {promotePanel.blockingReason && (
             <div className="mt-3 text-sm text-muted-foreground">{promotePanel.blockingReason}</div>
           )}
-          <PlatformSignalSummary
-            summary={promotePanel.issueSummary}
-            nextActionLabel={promotePanel.nextActionLabel}
-            className="mt-3"
-          />
           {!promotePanel.blockingReason && promotePanel.warningChips.length > 0 && (
             <PlatformSignalChipList
               chips={promotePanel.warningChips.slice(0, 3)}
@@ -268,9 +263,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
         <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
           <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-            <Link href={`/projects/${projectId}/runtime/logs`}>
+            <Link href={`/projects/${projectId}/environments`}>
               <ScrollText className="h-3.5 w-3.5" />
-              日志
+              环境
             </Link>
           </Button>
           <ManualReleaseDialog

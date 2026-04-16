@@ -37,7 +37,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalSummary } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -494,7 +493,10 @@ function EnvironmentQuickActions({
         </Button>
       )}
       <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>日志</Link>
+        <Link href={`/projects/${projectId}/environments/${environment.id}`}>概览</Link>
+      </Button>
+      <Button asChild variant="outline" size="sm" className="rounded-xl">
+        <Link href={`/projects/${projectId}/environments/${environment.id}/logs`}>日志</Link>
       </Button>
       {environment.latestReleaseCard && (
         <Button asChild variant="outline" size="sm" className="rounded-xl">
@@ -504,7 +506,7 @@ function EnvironmentQuickActions({
         </Button>
       )}
       <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>诊断</Link>
+        <Link href={`/projects/${projectId}/environments/${environment.id}/diagnostics`}>诊断</Link>
       </Button>
     </div>
   );
@@ -1120,15 +1122,6 @@ function EnvironmentRuntimePanel({
         )}
       </div>
 
-      {(environment.platformSignals.primarySummary ||
-        environment.platformSignals.nextActionLabel) && (
-        <PlatformSignalSummary
-          summary={environment.platformSignals.primarySummary}
-          nextActionLabel={environment.platformSignals.nextActionLabel}
-          className="border-border bg-secondary/20"
-        />
-      )}
-
       {environment.latestReleaseCard && (
         <div className="console-card mt-4 rounded-2xl px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -1208,18 +1201,11 @@ function EnvironmentPolicyPanel({
             生命周期
           </div>
           <div className="mt-2 text-sm text-foreground">
-            {environment.previewLifecycle?.summary ??
-              (environment.cleanupState
-                ? `${environment.cleanupState.label} · ${environment.cleanupState.summary}`
-                : '稳定')}
+            {environment.previewLifecycle?.stateLabel ??
+              environment.cleanupState?.label ??
+              environment.expiryLabel ??
+              '稳定'}
           </div>
-          {(environment.previewLifecycle?.nextActionLabel || environment.expiryLabel) && (
-            <div className="mt-1 text-xs text-muted-foreground">
-              {[environment.previewLifecycle?.nextActionLabel, environment.expiryLabel]
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-          )}
         </div>
       )}
 
@@ -1358,7 +1344,7 @@ function EnvironmentAdvancedPanel({
                 变量
               </div>
               <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                <Link href={`/projects/${projectId}/runtime/variables?env=${environment.id}`}>
+                <Link href={`/projects/${projectId}/environments/${environment.id}/variables`}>
                   变量
                 </Link>
               </Button>
@@ -1368,7 +1354,9 @@ function EnvironmentAdvancedPanel({
                 日志
               </div>
               <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                <Link href={`/projects/${projectId}/runtime/logs?env=${environment.id}`}>日志</Link>
+                <Link href={`/projects/${projectId}/environments/${environment.id}/logs`}>
+                  日志
+                </Link>
               </Button>
             </div>
             <div className="console-surface px-4 py-3">
@@ -1376,7 +1364,7 @@ function EnvironmentAdvancedPanel({
                 诊断
               </div>
               <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                <Link href={`/projects/${projectId}/runtime/diagnostics?env=${environment.id}`}>
+                <Link href={`/projects/${projectId}/environments/${environment.id}/diagnostics`}>
                   诊断
                 </Link>
               </Button>
@@ -1422,6 +1410,7 @@ function EnvironmentExpandedContent({
 interface EnvironmentsPageClientProps {
   projectId: string;
   initialEnvId?: string | null;
+  focusMode?: boolean;
   initialData: {
     governance: {
       roleLabel: string;
@@ -1463,6 +1452,7 @@ interface EnvironmentsPageClientProps {
 export function EnvironmentsPageClient({
   projectId,
   initialEnvId,
+  focusMode = false,
   initialData,
 }: EnvironmentsPageClientProps) {
   const defaultExpandedEnvId =
@@ -1538,6 +1528,9 @@ export function EnvironmentsPageClient({
         .sort((left, right) => left.name.localeCompare(right.name)),
     [environments]
   );
+  const focusedEnvironment =
+    (initialEnvId ? environments.find((environment) => environment.id === initialEnvId) : null) ??
+    null;
 
   const toggleExpanded = (envId: string) => {
     setExpanded((prev) => ({ ...prev, [envId]: !prev[envId] }));
@@ -1687,34 +1680,51 @@ export function EnvironmentsPageClient({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="环境"
-        description="先进入具体环境，再看这个环境里的发布、变量、日志和诊断。"
+        title={focusMode && focusedEnvironment ? focusedEnvironment.name : '环境'}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {focusMode && focusedEnvironment ? (
+              <Button asChild variant="outline">
+                <Link href={`/projects/${projectId}/environments`}>全部环境</Link>
+              </Button>
+            ) : null}
+            <Button asChild variant="outline">
+              <Link href={`/projects/${projectId}/environments`}>
+                <Globe className="h-4 w-4" />
+                环境
+              </Link>
+            </Button>
             <Button asChild variant="outline">
               <Link href={`/projects/${projectId}/delivery`}>
                 <Rocket className="h-4 w-4" />
-                交付
+                发布
               </Link>
             </Button>
-            <Button asChild variant="outline">
-              <Link href={`/projects/${projectId}/runtime/logs`}>
-                <ScrollText className="h-4 w-4" />
-                日志
-              </Link>
-            </Button>
-            <Button
-              onClick={() => setDialogOpen(true)}
-              disabled={!governance.createPreview.allowed}
-            >
-              <Plus className="h-4 w-4" />
-              启动预览环境
-            </Button>
+            {focusedEnvironment ? (
+              <Button asChild variant="outline">
+                <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}/logs`}>
+                  <ScrollText className="h-4 w-4" />
+                  日志
+                </Link>
+              </Button>
+            ) : null}
+            {!focusMode ? (
+              <Button
+                onClick={() => setDialogOpen(true)}
+                disabled={!governance.createPreview.allowed}
+              >
+                <Plus className="h-4 w-4" />
+                启动预览环境
+              </Button>
+            ) : null}
           </div>
         }
       />
 
-      <RuntimeSectionNav projectId={projectId} />
+      <RuntimeSectionNav
+        projectId={projectId}
+        environmentId={focusMode ? focusedEnvironment?.id : null}
+      />
 
       <PreviewEnvironmentDialog
         open={dialogOpen}
@@ -1750,140 +1760,159 @@ export function EnvironmentsPageClient({
         />
       ) : (
         <div className="space-y-6">
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Globe className="h-4 w-4" />
-              核心环境
-            </div>
-            {standardEnvironments.length === 0 ? (
-              <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
-                暂无环境
+          {focusMode && focusedEnvironment ? (
+            <section className="space-y-3">
+              <div className="text-sm font-semibold">当前环境</div>
+              <div className="console-panel overflow-hidden">
+                <div className="px-5 py-4">
+                  <EnvironmentExpandedContent
+                    projectId={projectId}
+                    environment={focusedEnvironment}
+                    savingStrategy={savingStrategyId === focusedEnvironment.id}
+                    onStrategyChange={(value) => handleStrategyChange(focusedEnvironment.id, value)}
+                  />
+                </div>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {standardEnvironments.map((environment) => {
-                  const isExpanded = !!expanded[environment.id];
-                  return (
-                    <div key={environment.id} className="console-panel overflow-hidden">
-                      <EnvironmentCardHeader
-                        environment={environment}
-                        expanded={isExpanded}
-                        onToggle={() => toggleExpanded(environment.id)}
-                      />
-
-                      {isExpanded && (
-                        <div className="px-5 py-4">
-                          <EnvironmentExpandedContent
-                            projectId={projectId}
-                            environment={environment}
-                            savingStrategy={savingStrategyId === environment.id}
-                            onStrategyChange={(value) =>
-                              handleStrategyChange(environment.id, value)
-                            }
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <GitBranch className="h-4 w-4" />
-              预览环境
-            </div>
-
-            {previewEnvironments.length === 0 ? (
-              <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
-                暂无预览环境
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {previewEnvironments.map((environment) => {
-                  const isExpanded = !!expanded[environment.id];
-
-                  return (
-                    <div key={environment.id} className="console-panel overflow-hidden">
-                      <div className="flex items-start justify-between gap-3 px-5 py-4">
-                        <div className="min-w-0 flex-1">
+            </section>
+          ) : (
+            <>
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Globe className="h-4 w-4" />
+                  核心环境
+                </div>
+                {standardEnvironments.length === 0 ? (
+                  <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
+                    暂无环境
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {standardEnvironments.map((environment) => {
+                      const isExpanded = !!expanded[environment.id];
+                      return (
+                        <div key={environment.id} className="console-panel overflow-hidden">
                           <EnvironmentCardHeader
                             environment={environment}
                             expanded={isExpanded}
                             onToggle={() => toggleExpanded(environment.id)}
                           />
-                        </div>
 
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-9 shrink-0"
-                              disabled={
-                                deletingId === environment.id || !environment.actions?.canDelete
-                              }
-                              title={environment.actions?.deleteSummary}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              {environment.cleanupState?.state === 'expired_ready'
-                                ? '立即回收'
-                                : '结束环境'}
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>结束预览环境？</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                <span className="font-medium text-foreground">
-                                  {environment.name}
-                                </span>{' '}
-                                及关联资源会一起删除。
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
-                              {environment.cleanupState?.state === 'expired_ready'
-                                ? '已过期，可直接回收。'
-                                : '会回收域名、变量、数据库和运行资源。'}
-                            </div>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="w-full sm:w-auto">
-                                取消
-                              </AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeletePreview(environment.id)}
-                                className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
-                                disabled={
-                                  deletingId === environment.id || !environment.actions?.canDelete
+                          {isExpanded && (
+                            <div className="px-5 py-4">
+                              <EnvironmentExpandedContent
+                                projectId={projectId}
+                                environment={environment}
+                                savingStrategy={savingStrategyId === environment.id}
+                                onStrategyChange={(value) =>
+                                  handleStrategyChange(environment.id, value)
                                 }
-                              >
-                                {deletingId === environment.id ? '处理中...' : '确认结束'}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="px-5 py-4">
-                          <EnvironmentExpandedContent
-                            projectId={projectId}
-                            environment={environment}
-                            savingStrategy={savingStrategyId === environment.id}
-                            onStrategyChange={(value) =>
-                              handleStrategyChange(environment.id, value)
-                            }
-                          />
+                              />
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <GitBranch className="h-4 w-4" />
+                  预览环境
+                </div>
+
+                {previewEnvironments.length === 0 ? (
+                  <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
+                    暂无预览环境
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {previewEnvironments.map((environment) => {
+                      const isExpanded = !!expanded[environment.id];
+
+                      return (
+                        <div key={environment.id} className="console-panel overflow-hidden">
+                          <div className="flex items-start justify-between gap-3 px-5 py-4">
+                            <div className="min-w-0 flex-1">
+                              <EnvironmentCardHeader
+                                environment={environment}
+                                expanded={isExpanded}
+                                onToggle={() => toggleExpanded(environment.id)}
+                              />
+                            </div>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 shrink-0"
+                                  disabled={
+                                    deletingId === environment.id || !environment.actions?.canDelete
+                                  }
+                                  title={environment.actions?.deleteSummary}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  {environment.cleanupState?.state === 'expired_ready'
+                                    ? '立即回收'
+                                    : '结束环境'}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>结束预览环境？</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    <span className="font-medium text-foreground">
+                                      {environment.name}
+                                    </span>{' '}
+                                    及关联资源会一起删除。
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                                  {environment.cleanupState?.state === 'expired_ready'
+                                    ? '已过期，可直接回收。'
+                                    : '会回收域名、变量、数据库和运行资源。'}
+                                </div>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="w-full sm:w-auto">
+                                    取消
+                                  </AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeletePreview(environment.id)}
+                                    className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                                    disabled={
+                                      deletingId === environment.id ||
+                                      !environment.actions?.canDelete
+                                    }
+                                  >
+                                    {deletingId === environment.id ? '处理中...' : '确认结束'}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="px-5 py-4">
+                              <EnvironmentExpandedContent
+                                projectId={projectId}
+                                environment={environment}
+                                savingStrategy={savingStrategyId === environment.id}
+                                onStrategyChange={(value) =>
+                                  handleStrategyChange(environment.id, value)
+                                }
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
 
           <details className="ui-floating overflow-hidden">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
@@ -1967,25 +1996,35 @@ export function EnvironmentsPageClient({
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
         <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
           <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-            <Link href={`/projects/${projectId}/delivery`}>
-              <Rocket className="h-4 w-4" />
-              交付
+            <Link href={`/projects/${projectId}/environments`}>
+              <Globe className="h-4 w-4" />
+              环境
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-            <Link href={`/projects/${projectId}/runtime/logs`}>
-              <ScrollText className="h-4 w-4" />
-              日志
+            <Link href={`/projects/${projectId}/delivery`}>
+              <Rocket className="h-4 w-4" />
+              发布
             </Link>
           </Button>
-          <Button
-            size="sm"
-            onClick={() => setDialogOpen(true)}
-            disabled={!governance.createPreview.allowed}
-          >
-            <Plus className="h-4 w-4" />
-            预览
-          </Button>
+          {focusedEnvironment ? (
+            <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
+              <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}/logs`}>
+                <ScrollText className="h-4 w-4" />
+                日志
+              </Link>
+            </Button>
+          ) : null}
+          {!focusMode ? (
+            <Button
+              size="sm"
+              onClick={() => setDialogOpen(true)}
+              disabled={!governance.createPreview.allowed}
+            >
+              <Plus className="h-4 w-4" />
+              预览
+            </Button>
+          ) : null}
         </div>
       </div>
     </div>

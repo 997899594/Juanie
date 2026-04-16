@@ -174,7 +174,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
 
   return (
     <div className="space-y-4">
-      {(diagnostics.summary || diagnostics.nextActionLabel) && (
+      {diagnostics.summary && (
         <div className="ui-control rounded-[22px] px-4 py-4">
           <div className="flex items-start gap-3">
             <div className="ui-control-muted rounded-full p-2 text-foreground">
@@ -187,26 +187,7 @@ function DiagnosticsOverview({ diagnostics }: { diagnostics: EnvironmentDiagnost
               {diagnostics.summary && (
                 <div className="mt-2 text-sm text-muted-foreground">{diagnostics.summary}</div>
               )}
-              {diagnostics.nextActionLabel && (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  {diagnostics.nextActionLabel}
-                </div>
-              )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {diagnostics.recommendations.length > 0 && (
-        <div className="ui-control-muted rounded-[22px] px-4 py-4">
-          <div className="text-sm font-medium">动作</div>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {diagnostics.recommendations.map((recommendation) => (
-              <div key={recommendation.key} className="ui-control rounded-[18px] px-4 py-3">
-                <div className="text-sm font-medium">{recommendation.label}</div>
-                <div className="mt-1 text-sm text-muted-foreground">{recommendation.summary}</div>
-              </div>
-            ))}
           </div>
         </div>
       )}
@@ -442,7 +423,7 @@ export function EnvironmentResourcePanel({
           <div className="text-sm font-medium">容量与异常</div>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link href={`/projects/${projectId}/runtime/logs?env=${environmentId}`}>
+          <Link href={`/projects/${projectId}/environments/${environmentId}/logs`}>
             查看环境日志
           </Link>
         </Button>
@@ -616,7 +597,7 @@ export function EnvironmentResourcePanel({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button asChild variant="outline" size="sm">
-                <Link href={`/projects/${projectId}/runtime/logs?env=${environmentId}`}>
+                <Link href={`/projects/${projectId}/environments/${environmentId}/logs`}>
                   环境日志
                 </Link>
               </Button>
