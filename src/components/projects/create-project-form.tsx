@@ -280,10 +280,30 @@ function createDatabaseDraft(type: DatabaseWithId['type']): DatabaseWithId {
 
 function getChoiceCardClass(selected: boolean): string {
   return cn(
-    'relative cursor-pointer rounded-[18px] px-4 py-4 text-left transition-all duration-150',
+    'relative cursor-pointer rounded-[20px] px-4 py-4 text-left transition-all duration-150',
     selected
-      ? 'ui-floating ring-2 ring-foreground/20 shadow-[0_0_0_1px_rgba(55,53,47,0.05),0_18px_40px_rgba(55,53,47,0.08)]'
-      : 'ui-control hover:bg-secondary/70 hover:shadow-[0_12px_30px_rgba(55,53,47,0.06)]'
+      ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,246,242,0.94))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(55,53,47,0.07),0_18px_40px_rgba(55,53,47,0.08)]'
+      : 'bg-[rgba(255,255,255,0.78)] shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_8px_24px_rgba(55,53,47,0.03)] hover:-translate-y-px hover:bg-[rgba(255,255,255,0.9)] hover:shadow-[0_1px_0_rgba(255,255,255,0.82)_inset,0_14px_28px_rgba(55,53,47,0.055)]'
+  );
+}
+
+function getCompactChoiceCardClass(selected: boolean): string {
+  return cn(
+    'rounded-[18px] px-4 py-4 text-left transition-all duration-150',
+    selected
+      ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,246,242,0.94))] shadow-[0_1px_0_rgba(255,255,255,0.88)_inset,0_0_0_1px_rgba(55,53,47,0.06),0_14px_30px_rgba(55,53,47,0.07)]'
+      : 'bg-[rgba(255,255,255,0.74)] shadow-[0_1px_0_rgba(255,255,255,0.74)_inset,0_8px_22px_rgba(55,53,47,0.028)] hover:-translate-y-px hover:bg-[rgba(255,255,255,0.88)] hover:shadow-[0_1px_0_rgba(255,255,255,0.82)_inset,0_12px_26px_rgba(55,53,47,0.05)]'
+  );
+}
+
+function getPillChoiceClass(selected: boolean, disabled = false): string {
+  return cn(
+    'rounded-full px-3.5 py-2 text-xs font-medium transition-all duration-150',
+    disabled
+      ? 'cursor-not-allowed bg-[rgba(255,255,255,0.42)] text-muted-foreground/70 opacity-45 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset]'
+      : selected
+        ? 'bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(55,53,47,0.16)]'
+        : 'bg-[rgba(255,255,255,0.78)] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.78)_inset,0_6px_18px_rgba(55,53,47,0.03)] hover:bg-[rgba(255,255,255,0.94)] hover:text-foreground'
   );
 }
 
@@ -723,12 +743,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 <button
                   type="button"
                   onClick={() => switchMode('import')}
-                  className={cn(
-                    'rounded-[22px] px-5 py-5 text-left transition-colors',
-                    formData.mode === 'import'
-                      ? 'ui-control-muted ring-1 ring-foreground/10'
-                      : 'ui-control hover:bg-secondary/70'
-                  )}
+                  className={cn(getCompactChoiceCardClass(formData.mode === 'import'), 'px-5 py-5')}
                 >
                   <div className="font-medium">导入仓库</div>
                   <div className="mt-1 text-sm text-muted-foreground">
@@ -744,12 +759,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 <button
                   type="button"
                   onClick={() => switchMode('create')}
-                  className={cn(
-                    'rounded-[22px] px-5 py-5 text-left transition-colors',
-                    formData.mode === 'create'
-                      ? 'ui-control-muted ring-1 ring-foreground/10'
-                      : 'ui-control hover:bg-secondary/70'
-                  )}
+                  className={cn(getCompactChoiceCardClass(formData.mode === 'create'), 'px-5 py-5')}
                 >
                   <div className="font-medium">新建仓库</div>
                   <div className="mt-1 text-sm text-muted-foreground">
@@ -768,7 +778,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
         {currentStep === 'repository' && (
           <div className="space-y-6">
-            <div className="ui-control-muted rounded-[20px] p-4">
+            <div className="ui-floating rounded-[22px] p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium">{selectedTeam?.name}</div>
@@ -803,7 +813,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   />
                 </div>
 
-                <div className="ui-control max-h-96 overflow-y-auto">
+                <div className="ui-floating max-h-96 overflow-y-auto">
                   {!selectedTeam?.importEnabled ? (
                     <div className="p-8 text-center text-muted-foreground">
                       没有可用代码托管授权
@@ -817,8 +827,9 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         type="button"
                         onClick={() => selectRepository(repository)}
                         className={cn(
-                          'flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-secondary/40',
-                          formData.repositoryId === repository.id && 'bg-secondary/40'
+                          'flex w-full items-center justify-between px-4 py-4 text-left transition-all hover:bg-secondary/48',
+                          formData.repositoryId === repository.id &&
+                            'bg-[rgba(241,239,235,0.82)] shadow-[inset_0_1px_0_rgba(255,255,255,0.62)]'
                         )}
                       >
                         <div>
@@ -868,12 +879,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                       <button
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, isPrivate: false }))}
-                        className={cn(
-                          'rounded-[18px] px-4 py-4 text-left transition-colors',
-                          !formData.isPrivate
-                            ? 'ui-control-muted ring-1 ring-foreground/10'
-                            : 'ui-control hover:bg-secondary/70'
-                        )}
+                        className={getCompactChoiceCardClass(!formData.isPrivate)}
                       >
                         <div className="flex items-center gap-2 font-medium">
                           <Globe className="h-4 w-4" />
@@ -884,12 +890,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                       <button
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, isPrivate: true }))}
-                        className={cn(
-                          'rounded-[18px] px-4 py-4 text-left transition-colors',
-                          formData.isPrivate
-                            ? 'ui-control-muted ring-1 ring-foreground/10'
-                            : 'ui-control hover:bg-secondary/70'
-                        )}
+                        className={getCompactChoiceCardClass(formData.isPrivate)}
                       >
                         <div className="flex items-center gap-2 font-medium">
                           <Shield className="h-4 w-4" />
@@ -904,7 +905,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 <div className="space-y-2">
                   <Label>模板</Label>
                   {templates.length === 0 ? (
-                    <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
+                    <div className="ui-floating rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
                       没有可用模板
                     </div>
                   ) : (
@@ -923,12 +924,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                               ),
                             }))
                           }
-                          className={cn(
-                            'rounded-[18px] px-4 py-4 text-left transition-colors',
-                            formData.template === template.id
-                              ? 'ui-control-muted ring-1 ring-foreground/10'
-                              : 'ui-control hover:bg-secondary/70'
-                          )}
+                          className={getCompactChoiceCardClass(formData.template === template.id)}
                         >
                           <div className="font-medium">{template.name}</div>
                           <div className="mt-1 text-sm text-muted-foreground">
@@ -954,7 +950,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             ) : null}
 
             {analyzeError ? (
-              <div className="ui-control p-4">
+              <div className="ui-floating p-4">
                 <p className="text-sm text-foreground">{analyzeError}</p>
                 <p className="mt-1 text-xs text-muted-foreground">已回退到平台默认服务配置</p>
               </div>
@@ -1028,7 +1024,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
               <div className="space-y-2">
                 <Label>交付节奏</Label>
-                <div className="ui-control-muted rounded-[18px] px-4 py-3">
+                <div className="ui-floating rounded-[18px] px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">基础环境自动部署</div>
@@ -1182,7 +1178,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               {configAdvancedOpen && (
                 <div className="console-divider-top space-y-4 px-4 py-4">
                   <div className="space-y-3">
-                    <div className="ui-control-muted flex items-center justify-between px-4 py-3">
+                    <div className="ui-floating flex items-center justify-between px-4 py-3">
                       <div className="text-sm font-medium">自定义域名</div>
                       <Switch
                         checked={formData.useCustomDomain}
@@ -1214,7 +1210,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="ui-control-muted rounded-[20px] px-4 py-4">
+              <div className="ui-floating rounded-[20px] px-4 py-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   项目
                 </div>
@@ -1248,7 +1244,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 </div>
               </div>
 
-              <div className="ui-control-muted rounded-[20px] px-4 py-4">
+              <div className="ui-floating rounded-[20px] px-4 py-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   交付策略
                 </div>
@@ -1278,7 +1274,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             </div>
 
             {selectedTeam && (
-              <div className="ui-control-muted rounded-[18px] p-3 text-sm text-muted-foreground">
+              <div className="ui-floating rounded-[18px] p-3 text-sm text-muted-foreground">
                 {formData.mode === 'import'
                   ? selectedTeam.importSummary
                   : selectedTeam.createSummary}
@@ -1674,14 +1670,9 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                                       onClick={() =>
                                         updateDatabase({ provisionType: option.value })
                                       }
-                                      className={cn(
-                                        'rounded-full border px-3 py-1.5 text-xs transition-colors',
-                                        database.provisionType === option.value
-                                          ? 'border-foreground bg-foreground text-background'
-                                          : 'border-border bg-background hover:bg-secondary/40',
-                                        option.value === 'shared' &&
-                                          sharedDisabled &&
-                                          'cursor-not-allowed opacity-40'
+                                      className={getPillChoiceClass(
+                                        database.provisionType === option.value,
+                                        option.value === 'shared' && sharedDisabled
                                       )}
                                     >
                                       {option.label}

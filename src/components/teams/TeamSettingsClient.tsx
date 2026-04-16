@@ -160,7 +160,11 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         </div>
         {saveMsg && (
           <div
-            className={`mt-4 text-xs ${saveMsg.startsWith('错误') ? 'text-destructive' : 'text-muted-foreground'}`}
+            className={`mt-4 rounded-full px-3 py-1.5 text-xs ${
+              saveMsg.startsWith('错误')
+                ? 'bg-destructive/[0.08] text-destructive'
+                : 'bg-[rgba(255,255,255,0.74)] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_6px_18px_rgba(55,53,47,0.03)]'
+            }`}
           >
             {saveMsg}
           </div>
@@ -187,7 +191,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[280px_1fr]">
-          <div className="ui-control space-y-4 p-4">
+          <div className="ui-floating space-y-4 p-4">
             <div className="space-y-2">
               <Label className="text-sm">团队套餐</Label>
               <Select
@@ -209,7 +213,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               </Select>
             </div>
 
-            <div className="ui-control-muted rounded-2xl px-4 py-3">
+            <div className="bg-[rgba(248,246,242,0.84)] rounded-[20px] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset,0_8px_20px_rgba(55,53,47,0.022)]">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Provider
               </div>
@@ -239,7 +243,10 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
 
           <div className="space-y-3">
             {aiPlugins.map((plugin) => (
-              <div key={plugin.id} className="ui-control px-4 py-4">
+              <div
+                key={plugin.id}
+                className="bg-[rgba(255,255,255,0.82)] px-4 py-4 rounded-[22px] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_10px_26px_rgba(55,53,47,0.032)]"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -277,7 +284,11 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
 
         {aiMessage && (
           <div
-            className={`mt-4 text-xs ${aiMessage.startsWith('错误') ? 'text-destructive' : 'text-muted-foreground'}`}
+            className={`mt-4 rounded-full px-3 py-1.5 text-xs ${
+              aiMessage.startsWith('错误')
+                ? 'bg-destructive/[0.08] text-destructive'
+                : 'bg-[rgba(255,255,255,0.74)] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_6px_18px_rgba(55,53,47,0.03)]'
+            }`}
           >
             {aiMessage}
           </div>
