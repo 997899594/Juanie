@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -305,14 +306,20 @@ function PreviewEnvironmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+      <DialogContent
+        size="workspace"
+        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+      >
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>新建预览环境</DialogTitle>
+          <DialogDescription>
+            直接基于远端分支或 PR 的最新提交启动预览环境，不需要额外再提交一次代码。
+          </DialogDescription>
         </DialogHeader>
 
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
               <div className="space-y-4">
                 {disabledSummary && (
                   <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
@@ -390,6 +397,7 @@ function PreviewEnvironmentDialog({
 
               <div className="space-y-4">
                 <div className="ui-control-muted p-4 sm:p-5">
+                  <div className="mb-4 text-sm font-semibold text-foreground">启动概览</div>
                   <div className="mt-4 space-y-3 text-sm">
                     <div className="rounded-2xl bg-background/85 px-4 py-3">
                       <div className="text-xs text-muted-foreground">标识来源</div>
@@ -412,6 +420,10 @@ function PreviewEnvironmentDialog({
                       <div className="mt-1 text-foreground">
                         {databaseStrategy === 'isolated_clone' ? '独立预览库' : '继承基础数据库'}
                       </div>
+                    </div>
+                    <div className="rounded-2xl bg-background/85 px-4 py-3 text-xs leading-6 text-muted-foreground">
+                      创建后会先解析远端最新提交；如果同一提交已有可复用产物，会直接部署；否则进入构建中状态并等待
+                      CI 完成。
                     </div>
                   </div>
                 </div>
