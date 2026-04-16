@@ -64,11 +64,13 @@ export function ProjectOverviewHero({
 }
 
 export function ProjectDefinitionSection({
+  projectId,
   project,
   overview,
   services,
   productionEnvironment,
 }: {
+  projectId: string;
   project: ProjectOverviewPageData['project'];
   overview: ProjectOverviewPageData['overview'];
   services: ProjectOverviewPageData['serviceCards'];
@@ -86,6 +88,9 @@ export function ProjectDefinitionSection({
             <span className="font-medium capitalize">{overview.statusLabel}</span>
           </div>
           <div className="text-muted-foreground">{overview.createdDateLabel}</div>
+          <Button asChild variant="ghost" size="sm" className="h-8 px-3">
+            <Link href={`/projects/${projectId}/settings`}>项目设置</Link>
+          </Button>
         </div>
 
         <div className="space-y-3 text-sm">
@@ -150,12 +155,14 @@ export function ProjectEnvironmentIndex({
 
       <div className="space-y-3 p-3">
         {environments.length === 0 ? (
-          <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
-            还没有环境
-          </div>
+          <div className="ui-control-muted px-5 py-8 text-sm text-muted-foreground">还没有环境</div>
         ) : (
           environments.map((environment) => (
-            <div key={environment.id} className="ui-control rounded-[22px] px-4 py-4">
+            <Link
+              key={environment.id}
+              href={`/projects/${projectId}/environments/${environment.id}`}
+              className="ui-control block px-4 py-4 transition-colors hover:bg-secondary/55"
+            >
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -193,13 +200,12 @@ export function ProjectEnvironmentIndex({
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center xl:justify-end">
-                  <Button asChild variant="outline" size="sm" className="h-8 px-3">
-                    <Link href={`/projects/${projectId}/environments/${environment.id}`}>打开</Link>
-                  </Button>
+                <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground xl:justify-end">
+                  <span>进入环境</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </div>
               </div>
-            </div>
+            </Link>
           ))
         )}
       </div>

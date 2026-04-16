@@ -184,7 +184,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         onPromote={handlePromote}
       />
 
-      <div className="ui-control-muted rounded-[20px] px-4 py-3">
+      <div className="ui-control-muted px-4 py-3">
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <StatusIndicator
             status={isConnected ? 'success' : 'neutral'}
@@ -193,9 +193,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
           <span>{governance.roleLabel}</span>
           {hasPromotionTarget ? (
             <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2.5">
-              <Link href={`/projects/${projectId}/environments`}>
+              <Link href={`/projects/${projectId}`}>
                 <ScrollText className="h-3.5 w-3.5" />
-                环境
+                项目
               </Link>
             </Button>
           ) : null}
@@ -220,9 +220,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
         <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
           <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-            <Link href={`/projects/${projectId}/environments`}>
+            <Link href={`/projects/${projectId}`}>
               <ScrollText className="h-3.5 w-3.5" />
-              环境
+              项目
             </Link>
           </Button>
           <ManualReleaseDialog

@@ -48,29 +48,6 @@ export const mobileMainNav = [mainNav[0], mainNav[1], mainNav[2], mainNav[4]].fi
   Boolean
 ) as NavItem[];
 
-export const projectNav: NavItem[] = [
-  {
-    title: '总览',
-    href: '',
-    icon: Home,
-  },
-  {
-    title: '环境',
-    href: '/environments',
-    icon: Globe,
-  },
-  {
-    title: '交付',
-    href: '/delivery',
-    icon: Rocket,
-  },
-  {
-    title: '设置',
-    href: '/settings',
-    icon: Settings,
-  },
-];
-
 export const environmentNav: NavItem[] = [
   {
     title: '概览',
@@ -105,20 +82,6 @@ export function isNavItemActive(pathname: string, href: string): boolean {
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-export function buildProjectNavHref(projectId: string, href: string): string {
-  return `/projects/${projectId}${href}`;
-}
-
-export function isProjectNavItemActive(pathname: string, projectId: string, href: string): boolean {
-  const fullHref = buildProjectNavHref(projectId, href);
-
-  if (href === '') {
-    return pathname === fullHref;
-  }
-
-  return isNavItemActive(pathname, fullHref);
 }
 
 export function buildEnvironmentNavHref(

@@ -1577,7 +1577,7 @@ export function EnvironmentsPageClient({
           <div className="flex flex-wrap items-center gap-2">
             {focusMode && focusedEnvironment ? (
               <Button asChild variant="outline">
-                <Link href={`/projects/${projectId}/environments`}>全部环境</Link>
+                <Link href={`/projects/${projectId}`}>项目</Link>
               </Button>
             ) : null}
             {!focusMode ? (

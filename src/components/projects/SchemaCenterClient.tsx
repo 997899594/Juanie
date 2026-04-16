@@ -260,7 +260,7 @@ export function SchemaCenterClient({
               </Button>
             ) : (
               <Button asChild variant="outline" size="sm">
-                <Link href={`/projects/${projectId}/environments`}>环境</Link>
+                <Link href={`/projects/${projectId}`}>项目</Link>
               </Button>
             )}
           </div>

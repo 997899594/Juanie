@@ -1,16 +1,14 @@
 import { redirect } from 'next/navigation';
-import { EnvironmentsPageClient } from '@/components/projects/EnvironmentsPageClient';
 import { auth } from '@/lib/auth';
 import { getProjectMemberRole } from '@/lib/environments/page-context';
-import { getProjectEnvironmentListData } from '@/lib/environments/page-data';
 
 export default async function ProjectEnvironmentsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
   const { id } = await params;
+  const session = await auth();
 
   if (!session?.user?.id) {
     redirect('/login');
@@ -21,7 +19,5 @@ export default async function ProjectEnvironmentsPage({
     redirect('/projects');
   }
 
-  const initialData = await getProjectEnvironmentListData(id, access.member.role);
-
-  return <EnvironmentsPageClient projectId={id} initialData={initialData} />;
+  redirect(`/projects/${id}`);
 }
