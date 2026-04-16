@@ -29,17 +29,20 @@ function getEnvironmentGitSummary(
     return `Git 追踪待建立 · ${environment.gitTracking.trackingBranchName}`;
   }
 
-  return [
-    `Git ${environment.gitTracking.trackingBranchName}`,
-    environment.gitTracking.shortCommitSha
-      ? `提交 ${environment.gitTracking.shortCommitSha}`
-      : null,
-    environment.gitTracking.expectsPromotionTag && environment.gitTracking.releaseTagName
-      ? '已记录提升标签'
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  if (environment.gitTracking.expectsPromotionTag) {
+    return [
+      environment.gitTracking.shortCommitSha
+        ? `当前追踪 ${environment.gitTracking.shortCommitSha}`
+        : null,
+      environment.gitTracking.releaseTagName ? '已生成提升标签' : '等待提升标签',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+  return environment.gitTracking.shortCommitSha
+    ? `当前追踪 ${environment.gitTracking.shortCommitSha}`
+    : `Git ${environment.gitTracking.trackingBranchName}`;
 }
 
 export function ProjectEnvironmentIndex({
@@ -96,7 +99,8 @@ export function ProjectEnvironmentIndex({
                       {getEnvironmentGitSummary(environment)}
                     </div>
                   ) : null}
-                  {environment.platformSignals.nextActionLabel ? (
+                  {environment.platformSignals.nextActionLabel &&
+                  !getEnvironmentGitSummary(environment) ? (
                     <div className="text-xs text-muted-foreground">
                       下一步：{environment.platformSignals.nextActionLabel}
                     </div>

@@ -1004,6 +1004,19 @@ function EnvironmentRuntimePanel({
   projectId: string;
   environment: EnvironmentRecord;
 }) {
+  const gitTrackingSummary = environment.gitTracking
+    ? [
+        environment.gitTracking.summary,
+        environment.gitTracking.shortCommitSha
+          ? `提交 ${environment.gitTracking.shortCommitSha}`
+          : null,
+        environment.gitTracking.expectsPromotionTag
+          ? (environment.gitTracking.releaseTagName ?? '等待提升标签')
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
   const quickLinks = [
     environment.primaryDomainUrl
       ? {
@@ -1077,52 +1090,12 @@ function EnvironmentRuntimePanel({
         ) : null}
 
         {environment.gitTracking ? (
-          <div className="rounded-xl border border-border/60 bg-background/70 px-3 py-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <div className="console-card px-4 py-3 text-sm text-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <GitBranch className="h-3.5 w-3.5" />
               <span>Git 追踪</span>
             </div>
-            <div className="mt-2 text-sm text-foreground">{environment.gitTracking.summary}</div>
-            <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
-              <div className="space-y-1">
-                <div className="text-muted-foreground">追踪分支</div>
-                <div className="break-all font-mono text-foreground">
-                  {environment.gitTracking.trackingBranchName}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-muted-foreground">来源</div>
-                <div className="break-all text-foreground">
-                  {environment.gitTracking.sourceRef ?? environment.branch ?? '等待首次成功发布'}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-muted-foreground">当前提交</div>
-                <div className="font-mono text-foreground">
-                  {environment.gitTracking.shortCommitSha ?? '尚未建立'}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <div className="text-muted-foreground">
-                  {environment.gitTracking.expectsPromotionTag ? '提升标签' : '最近同步'}
-                </div>
-                <div className="break-all font-mono text-foreground">
-                  {environment.gitTracking.expectsPromotionTag
-                    ? (environment.gitTracking.releaseTagName ?? '首次成功提升后生成')
-                    : (environment.gitTracking.syncedAtLabel ?? '等待首次成功发布')}
-                </div>
-              </div>
-            </div>
-            {environment.gitTracking.releaseId ? (
-              <div className="mt-3">
-                <Link
-                  href={`/projects/${projectId}/delivery/${environment.gitTracking.releaseId}`}
-                  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  查看已同步的 release
-                </Link>
-              </div>
-            ) : null}
+            <div className="mt-2">{gitTrackingSummary}</div>
           </div>
         ) : null}
       </div>
@@ -1141,6 +1114,13 @@ function EnvironmentRuntimePanel({
             </Button>
           )
         )}
+        {environment.gitTracking?.releaseId ? (
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/projects/${projectId}/delivery/${environment.gitTracking.releaseId}`}>
+              已同步版本
+            </Link>
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -1220,21 +1200,6 @@ function EnvironmentDetailsPanel({
             </div>
           )}
         </div>
-
-        {environment.gitTracking ? (
-          <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">Git 追踪</div>
-            <div className="console-card px-4 py-3 text-sm text-foreground">
-              {[
-                environment.gitTracking.summary,
-                environment.gitTracking.trackingBranchName,
-                environment.gitTracking.releaseTagName,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-          </div>
-        ) : null}
 
         {showDatabaseSection ? (
           <div className="space-y-3">
@@ -1843,24 +1808,29 @@ export function EnvironmentsPageClient({
               </summary>
 
               <div className="console-divider-top space-y-6 px-4 py-4">
-                <div className="ui-control-muted rounded-[20px] px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                    <span>
-                      {governance.manageEnvVars.allowed
-                        ? '可管理变量'
-                        : governance.manageEnvVars.summary}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="ml-auto"
-                      onClick={handleCleanupExpiredPreviews}
-                      disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
-                    >
-                      {cleaningExpired ? '治理中...' : '治理预览'}
-                    </Button>
+                {(governance.cleanupPreviews.expiredCount > 0 ||
+                  !governance.manageEnvVars.allowed) && (
+                  <div className="ui-control-muted rounded-[20px] px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                      <span>
+                        {governance.cleanupPreviews.expiredCount > 0
+                          ? governance.cleanupPreviews.summary
+                          : governance.manageEnvVars.summary}
+                      </span>
+                      {governance.cleanupPreviews.expiredCount > 0 ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="ml-auto"
+                          onClick={handleCleanupExpiredPreviews}
+                          disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
+                        >
+                          {cleaningExpired ? '治理中...' : '治理预览'}
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <DeliveryControlPanel
                   deliveryControl={deliveryControl}
