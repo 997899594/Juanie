@@ -203,13 +203,13 @@ export function ProjectInitializingClient({
       <div className="flex flex-wrap justify-center gap-3">
         {overview.status === 'active' && (
           <Link href={`/projects/${projectId}`}>
-            <Button className="rounded-xl px-4">进入项目</Button>
+            <Button className="px-4">进入项目</Button>
           </Link>
         )}
         {overview.status === 'failed' && (
           <>
             {overview.recoveryAction?.kind === 'retry' ? (
-              <Button className="rounded-xl px-4" onClick={handleRetry} disabled={retrying}>
+              <Button className="px-4" onClick={handleRetry} disabled={retrying}>
                 {retrying ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -221,16 +221,16 @@ export function ProjectInitializingClient({
               </Button>
             ) : overview.recoveryAction?.kind === 'link' && overview.recoveryAction.href ? (
               <Link href={overview.recoveryAction.href}>
-                <Button className="rounded-xl px-4">{overview.recoveryAction.label}</Button>
+                <Button className="px-4">{overview.recoveryAction.label}</Button>
               </Link>
             ) : overview.recoveryAction?.kind === 'wait' ? (
-              <Button className="rounded-xl px-4" disabled>
+              <Button className="px-4" disabled>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {overview.recoveryAction.label}
               </Button>
             ) : null}
             <Link href="/projects/new">
-              <Button variant="outline" className="rounded-xl px-4">
+              <Button variant="outline" className="px-4">
                 返回创建页
               </Button>
             </Link>

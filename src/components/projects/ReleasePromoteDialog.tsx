@@ -195,13 +195,13 @@ export function ReleasePromoteDialog({
         <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
           <Button
             variant="outline"
-            className="w-full rounded-xl sm:w-auto"
+            className="w-full sm:w-auto"
             onClick={() => onOpenChange(false)}
           >
             关闭
           </Button>
           <Button
-            className="w-full rounded-xl sm:w-auto"
+            className="w-full sm:w-auto"
             onClick={onPromote}
             disabled={promoting || !canPromote}
           >

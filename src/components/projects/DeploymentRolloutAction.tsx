@@ -166,7 +166,7 @@ export function DeploymentRolloutAction({
                     />
 
                     {plan.plan.blockingReason && (
-                      <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {plan.plan.blockingReason}
                       </div>
                     )}
@@ -180,15 +180,11 @@ export function DeploymentRolloutAction({
         </div>
 
         <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
-          <Button
-            variant="outline"
-            className="w-full rounded-xl sm:w-auto"
-            onClick={() => setOpen(false)}
-          >
+          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setOpen(false)}>
             关闭
           </Button>
           <Button
-            className="w-full rounded-xl sm:w-auto"
+            className="w-full sm:w-auto"
             onClick={handleFinalize}
             disabled={submitting || loadingPlan || !plan?.plan.canFinalize}
           >

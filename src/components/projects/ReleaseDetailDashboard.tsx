@@ -56,13 +56,13 @@ export function ReleaseDetailDashboard({
         meta="看这次发生了什么。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild size="sm" className="h-9 rounded-xl px-4">
+            <Button asChild size="sm" className="h-9 px-4">
               <Link href={environmentLogsHref}>
                 <ScrollText className="h-3.5 w-3.5" />
                 日志
               </Link>
             </Button>
-            <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+            <Button asChild variant="outline" size="sm" className="h-9 px-4">
               <Link href={releasesHref}>
                 <ArrowLeft className="h-3.5 w-3.5" />
                 返回

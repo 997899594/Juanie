@@ -161,7 +161,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
       <div className="grid gap-2 md:grid-cols-3">
         {initialData.overview.stats.map((stat) => (
-          <div key={stat.label} className="ui-control-muted rounded-[20px] px-4 py-3">
+          <div key={stat.label} className="ui-control-muted px-4 py-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -206,13 +206,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="ui-control-muted rounded-[18px] px-4 py-3">
+                <div className="ui-control-muted px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     团队
                   </div>
                   <div className="mt-2 text-sm font-medium">{project.teamName}</div>
                 </div>
-                <div className="ui-control-muted rounded-[18px] px-4 py-3">
+                <div className="ui-control-muted px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     状态
                   </div>
@@ -240,7 +240,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
               <div className="space-y-2">
                 <Label htmlFor="gitRepository">仓库地址</Label>
-                <div className="ui-control-muted rounded-[18px] px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
                   {project.repositoryFullName ?? '未绑定仓库'}
                 </div>
               </div>
@@ -279,7 +279,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                 </div>
               ) : (
                 project.environments.map((environment) => (
-                  <div key={environment.id} className="ui-control-muted rounded-[22px] px-4 py-4">
+                  <div key={environment.id} className="ui-control-muted px-4 py-4">
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -356,7 +356,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             </div>
             <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
-                <div className="flex flex-col gap-4 rounded-[24px] bg-destructive/[0.05] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-4 rounded-2xl bg-destructive/[0.05] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
                   <div className="space-y-1">
                     <div className="text-sm font-medium text-foreground">删除项目</div>
                     <div className="text-sm text-muted-foreground">该操作无法撤销。</div>
@@ -376,7 +376,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                           <span className="font-medium text-foreground">{project.name}</span>？
                         </AlertDialogDescription>
                       </AlertDialogHeader>
-                      <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                      <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
                         项目、环境和发布记录会一起删除。
                       </div>
                       <AlertDialogFooter>
