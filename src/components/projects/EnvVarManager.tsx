@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -184,9 +185,15 @@ function EnvVarDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+      <DialogContent
+        size="form"
+        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+      >
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>{isEdit ? '编辑变量' : '添加变量'}</DialogTitle>
+          <DialogDescription>
+            变量只作用于当前环境，密文值不会回显，更新时需要重新输入。
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">

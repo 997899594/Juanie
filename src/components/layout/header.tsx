@@ -136,7 +136,7 @@ export function Header() {
       </div>
 
       <Dialog open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-        <DialogContent className="left-0 top-0 h-[100dvh] max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 sm:left-0 sm:top-0 sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-none">
+        <DialogContent className="left-0 top-0 h-[100dvh] max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0 sm:left-0 sm:top-0 sm:!w-screen sm:max-w-none sm:translate-x-0 sm:translate-y-0 sm:rounded-none">
           <DialogTitle className="sr-only">移动端导航</DialogTitle>
           <div className="flex h-full flex-col bg-background">
             <div className="console-divider-bottom px-5 py-5">

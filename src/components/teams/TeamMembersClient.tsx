@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -251,9 +252,15 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   邀请链接
                 </Button>
               </DialogTrigger>
-              <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+              <DialogContent
+                size="form"
+                className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+              >
                 <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
                   <DialogTitle>生成邀请链接</DialogTitle>
+                  <DialogDescription>
+                    先选成员角色，再生成可直接分享的团队邀请链接。
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
                   <div className="space-y-4">
@@ -324,10 +331,16 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                   邀请成员
                 </Button>
               </DialogTrigger>
-              <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+              <DialogContent
+                size="form"
+                className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+              >
                 <form onSubmit={handleInvite} className="flex min-h-0 flex-1 flex-col">
                   <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
                     <DialogTitle>邀请成员</DialogTitle>
+                    <DialogDescription>
+                      通过邮箱邀请新成员加入团队，并直接设置初始角色。
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
                     <div className="space-y-4">

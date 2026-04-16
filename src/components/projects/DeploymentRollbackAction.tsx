@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -109,13 +110,19 @@ export function DeploymentRollbackAction({
           回滚
         </Button>
       </DialogTrigger>
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+      <DialogContent
+        size="workspace"
+        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+      >
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>回滚检查</DialogTitle>
+          <DialogDescription>
+            回到上一个稳定版本前，先确认当前候选镜像和阻断条件。
+          </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
             <div className="space-y-4">
               {disabledSummary && (
                 <div className="ui-control px-4 py-3 text-sm text-muted-foreground">

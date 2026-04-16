@@ -13,6 +13,26 @@ import type {
   TriggerReleaseBuildOptions,
 } from './index';
 
+function mapGitHubWorkflowDispatchError(message?: string | null): string {
+  const normalizedMessage = message?.trim();
+
+  if (normalizedMessage === "Workflow does not have 'workflow_dispatch' trigger") {
+    return '当前仓库的 .github/workflows/juanie-ci.yml 还没有启用 workflow_dispatch，Juanie 暂时无法直接按远端分支最新提交启动预览环境。请在 workflow 的 on: 下加入 workflow_dispatch 后重试。';
+  }
+
+  if (
+    normalizedMessage === 'Workflow does not exist or does not have a workflow_dispatch trigger'
+  ) {
+    return '当前仓库缺少可用于直启预览环境的 .github/workflows/juanie-ci.yml，或者它还没有启用 workflow_dispatch。请检查 workflow 文件后重试。';
+  }
+
+  if (normalizedMessage === 'Workflow was disabled manually') {
+    return '当前仓库的 .github/workflows/juanie-ci.yml 已被禁用，Juanie 无法触发预览构建。请先在 GitHub Actions 中重新启用该 workflow。';
+  }
+
+  return normalizedMessage || 'Failed to trigger GitHub preview build workflow';
+}
+
 export class GitHubProvider implements GitProvider {
   type = 'github' as const;
   private clientId: string;
@@ -279,9 +299,9 @@ export class GitHubProvider implements GitProvider {
     if (!res.ok) {
       const error = await res.json().catch(() => null);
       throw new Error(
-        error && typeof error.message === 'string'
-          ? error.message
-          : 'Failed to trigger GitHub preview build workflow'
+        mapGitHubWorkflowDispatchError(
+          error && typeof error.message === 'string' ? error.message : null
+        )
       );
     }
   }
