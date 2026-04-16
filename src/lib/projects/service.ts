@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   databases,
@@ -11,6 +11,7 @@ import {
   services,
   teamMembers,
   teams,
+  users,
 } from '@/lib/db/schema';
 import { buildPreviewReviewMetadataByItemId } from '@/lib/environments/review-metadata';
 import { decorateEnvironmentList } from '@/lib/environments/view';
@@ -37,6 +38,17 @@ import {
   type ProjectServiceLike,
 } from '@/lib/projects/view';
 
+interface ProjectCollaborationMemberInput {
+  id: string;
+  role: 'owner' | 'admin' | 'member';
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    image: string | null;
+  };
+}
+
 export function buildProjectOverviewPageData<
   TProject extends ProjectOverviewProjectLike & { name: string },
   TTeam extends { name?: string | null } | null | undefined,
@@ -46,10 +58,13 @@ export function buildProjectOverviewPageData<
   TRelease extends ProjectReleaseLike,
   TMigrationRun extends ProjectAttentionRunLike & ProjectMigrationRunLike,
   TDeployment extends ProjectDeploymentLike,
+  TMember extends ProjectCollaborationMemberInput,
 >(input: {
   project: TProject;
   manualMigrationCapability?: ProjectGovernanceCapability | null;
   team: TTeam;
+  teamMemberCount: number;
+  teamMembersPreview: TMember[];
   projectEnvironments: Array<{
     id: string;
     name: string;
@@ -112,6 +127,11 @@ export function buildProjectOverviewPageData<
   return {
     project: input.project,
     overview: buildProjectOverviewDetails(input.team?.name, input.project),
+    collaboration: {
+      teamName: input.team?.name ?? null,
+      memberCount: input.teamMemberCount,
+      members: input.teamMembersPreview,
+    },
     stats: buildProjectOverviewStats({
       serviceCount: input.projectServices.length,
       databaseCount: input.projectDatabases.length,
@@ -178,6 +198,8 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
   const [
     team,
     member,
+    teamMemberCountResult,
+    teamMembersPreview,
     projectEnvironments,
     environmentTrackingReleases,
     projectServices,
@@ -191,6 +213,23 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
     db.query.teamMembers.findFirst({
       where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
     }),
+    db.select({ count: count() }).from(teamMembers).where(eq(teamMembers.teamId, project.teamId)),
+    db
+      .select({
+        id: teamMembers.id,
+        role: teamMembers.role,
+        user: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          image: users.image,
+        },
+      })
+      .from(teamMembers)
+      .innerJoin(users, eq(users.id, teamMembers.userId))
+      .where(eq(teamMembers.teamId, project.teamId))
+      .orderBy(teamMembers.createdAt)
+      .limit(3),
     db.query.environments.findMany({
       where: eq(environments.projectId, projectId),
       with: {
@@ -304,6 +343,8 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
         environments: projectEnvironments,
       }).capabilities.find((item) => item.key === 'manual_migration') ?? null,
     team,
+    teamMemberCount: teamMemberCountResult[0]?.count ?? 0,
+    teamMembersPreview,
     projectEnvironments,
     environmentTrackingReleases,
     projectServices,

@@ -20,6 +20,19 @@ describe('project overview service', () => {
       } as never,
       manualMigrationCapability: null,
       team: { id: 'team-1', name: '平台团队' } as never,
+      teamMemberCount: 3,
+      teamMembersPreview: [
+        {
+          id: 'member-1',
+          role: 'owner',
+          user: {
+            id: 'user-1',
+            name: 'Alice',
+            email: 'alice@example.com',
+            image: null,
+          },
+        },
+      ] as never,
       projectEnvironments: [
         {
           id: 'env-1',
@@ -75,6 +88,8 @@ describe('project overview service', () => {
     });
 
     expect(result.overview.headerDescription).toBe('平台团队 · 运行中');
+    expect(result.collaboration.teamName).toBe('平台团队');
+    expect(result.collaboration.memberCount).toBe(3);
     expect(result.stats[0]?.value).toBe(1);
     expect(result.environmentCards[0]?.name).toBe('production');
     expect(result.environmentCards[0]?.gitTracking?.trackingBranchName).toBe(
