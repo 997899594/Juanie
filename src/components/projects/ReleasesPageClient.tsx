@@ -172,7 +172,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   return (
     <div className="space-y-6">
       <PageHeader
-        title="交付"
+        title="发布"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusIndicator

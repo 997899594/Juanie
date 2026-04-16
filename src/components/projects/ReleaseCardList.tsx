@@ -162,7 +162,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         className="min-w-0 flex-1 sm:flex-none"
                       >
                         <Link href={`/projects/${projectId}/delivery/${release.id}`}>
-                          交付
+                          发布
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
                       </Button>

@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects, releases } from '@/lib/db/schema';
+import { extractBranchFromRef, extractPrNumberFromRef } from '@/lib/environments/preview';
 import { setPreviewEnvironmentBuildState } from '@/lib/environments/preview-build-state';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import {
@@ -136,6 +137,40 @@ async function triggerPreviewBuild(input: {
   });
 }
 
+export function buildPreviewLaunchRef(input: {
+  branch?: string | null;
+  prNumber?: number | null;
+}): string {
+  if (input.prNumber) {
+    return `refs/pull/${input.prNumber}/merge`;
+  }
+
+  const branch = input.branch?.trim();
+  if (!branch) {
+    throw new Error('预览环境需要分支或 PR 号');
+  }
+
+  if (branch.startsWith('refs/heads/')) {
+    return branch;
+  }
+
+  return `refs/heads/${branch}`;
+}
+
+export function buildPreviewLaunchMissingRefMessage(ref: string): string {
+  const branch = extractBranchFromRef(ref);
+  if (branch) {
+    return `无法解析远端分支 "${branch}" 的最新提交，请确认该分支已经 push 到仓库远端；如果它只在本地工作区里，请先 push 再启动预览环境。`;
+  }
+
+  const prNumber = extractPrNumberFromRef(ref);
+  if (prNumber !== null) {
+    return `无法解析 PR / MR #${prNumber} 的最新提交，请确认它在远端仓库中仍然存在，并且当前集成身份可访问。`;
+  }
+
+  return '无法解析该来源的最新提交，请确认它在远端仓库中存在并且当前集成身份可访问。';
+}
+
 export async function launchPreviewEnvironmentFromRef(input: {
   projectId: string;
   ref: string;
@@ -194,7 +229,7 @@ export async function launchPreviewEnvironmentFromRef(input: {
   });
 
   if (!sourceCommitSha) {
-    throw new Error('无法解析该分支或 PR 的最新提交，请确认它在远端仓库中存在');
+    throw new Error(buildPreviewLaunchMissingRefMessage(input.ref));
   }
 
   const previewRoute = resolveEnvironmentRoute({

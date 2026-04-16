@@ -246,10 +246,6 @@ interface EnvironmentRecord {
   };
 }
 
-type SchemaStateStatus = NonNullable<
-  EnvironmentRecord['databases'][number]['schemaState']
->['status'];
-
 const deploymentStrategyOptions = [
   { value: 'rolling', label: '滚动发布' },
   { value: 'controlled', label: '受控放量' },
@@ -440,25 +436,6 @@ function PreviewEnvironmentDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-function getSchemaStateBadgeClass(status: SchemaStateStatus | null | undefined): string {
-  switch (status) {
-    case 'aligned':
-      return 'border-success/40 text-success';
-    case 'pending_migrations':
-      return 'border-warning/40 text-warning';
-    case 'aligned_untracked':
-      return 'border-warning/40 text-warning';
-    case 'drifted':
-      return 'border-destructive/40 text-destructive';
-    case 'blocked':
-      return 'border-destructive/40 text-destructive';
-    case 'unmanaged':
-      return 'border-muted-foreground/40 text-muted-foreground';
-    default:
-      return 'border-muted-foreground/40 text-muted-foreground';
-  }
 }
 
 function getEnvironmentPriority(environment: EnvironmentRecord): number {
@@ -997,65 +974,33 @@ function EnvironmentCardHeader({
   );
 }
 
-function EnvironmentRuntimePanel({
-  projectId,
-  environment,
-}: {
-  projectId: string;
-  environment: EnvironmentRecord;
-}) {
-  const gitTrackingSummary = environment.gitTracking
-    ? [
-        environment.gitTracking.summary,
-        environment.gitTracking.shortCommitSha
-          ? `提交 ${environment.gitTracking.shortCommitSha}`
-          : null,
-        environment.gitTracking.expectsPromotionTag
-          ? (environment.gitTracking.releaseTagName ?? '等待提升标签')
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : null;
-  const quickLinks = [
-    environment.primaryDomainUrl
-      ? {
-          href: environment.primaryDomainUrl,
-          label: '访问地址',
-          external: true,
-        }
-      : null,
-    environment.latestReleaseCard
-      ? {
-          href: `/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`,
-          label: '交付',
-          external: false,
-        }
-      : null,
-    {
-      href: `/projects/${projectId}/environments/${environment.id}/variables`,
-      label: '变量',
-      external: false,
-    },
-    {
-      href: `/projects/${projectId}/schema?env=${environment.id}`,
-      label: '数据',
-      external: false,
-    },
-    {
-      href: `/projects/${projectId}/environments/${environment.id}/logs`,
-      label: '日志',
-      external: false,
-    },
-  ].filter(Boolean) as Array<{
-    href: string;
-    label: string;
-    external: boolean;
-  }>;
-
+function EnvironmentRuntimePanel({ environment }: { environment: EnvironmentRecord }) {
   return (
     <div className="console-surface rounded-2xl px-4 py-4">
       <div className="space-y-3">
+        {environment.primaryDomainUrl ? (
+          <div className="console-card px-4 py-3">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              访问地址
+            </div>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <a
+                href={environment.primaryDomainUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="truncate text-sm font-medium text-foreground transition-colors hover:text-foreground/80"
+              >
+                {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
+              </a>
+              <Button asChild size="sm" className="shrink-0">
+                <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+                  打开地址
+                </a>
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2">
           {environment.policy.primarySignal ? (
             <Badge variant="outline">{environment.policy.primarySignal.label}</Badge>
@@ -1065,62 +1010,16 @@ function EnvironmentRuntimePanel({
               {environment.latestReleaseCard.statusDecoration.label}
             </Badge>
           ) : null}
-          {environment.strategyLabel ? (
-            <Badge variant="outline">{environment.strategyLabel}</Badge>
+          {environment.previewLifecycle ? (
+            <Badge variant="outline">{environment.previewLifecycle.stateLabel}</Badge>
           ) : null}
         </div>
 
         <div className="text-sm text-foreground">
           {environment.platformSignals.primarySummary ??
-            environment.gitTracking?.summary ??
             buildEnvironmentHeaderMeta(environment) ??
             '当前环境可直接继续操作'}
         </div>
-
-        {environment.latestReleaseCard ? (
-          <div className="text-xs text-muted-foreground">
-            {[
-              environment.latestReleaseCard.title,
-              environment.latestReleaseCard.shortCommitSha,
-              environment.latestReleaseCard.createdAtLabel,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </div>
-        ) : null}
-
-        {environment.gitTracking ? (
-          <div className="console-card px-4 py-3 text-sm text-foreground">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <GitBranch className="h-3.5 w-3.5" />
-              <span>Git 追踪</span>
-            </div>
-            <div className="mt-2">{gitTrackingSummary}</div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {quickLinks.map((item) =>
-          item.external ? (
-            <Button key={item.href} asChild variant="outline" size="sm">
-              <a href={item.href} target="_blank" rel="noreferrer">
-                {item.label}
-              </a>
-            </Button>
-          ) : (
-            <Button key={item.href} asChild variant="outline" size="sm">
-              <Link href={item.href}>{item.label}</Link>
-            </Button>
-          )
-        )}
-        {environment.gitTracking?.releaseId ? (
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/projects/${projectId}/delivery/${environment.gitTracking.releaseId}`}>
-              已同步版本
-            </Link>
-          </Button>
-        ) : null}
       </div>
     </div>
   );
@@ -1137,125 +1036,46 @@ function EnvironmentDetailsPanel({
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
 }) {
-  const blockingCount = environment.databases.filter((database) =>
-    ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
-      database.schemaState?.status ?? 'unmanaged'
-    )
-  ).length;
-  const pendingCount = environment.databases.filter(
-    (database) => database.schemaState?.status === 'pending_migrations'
-  ).length;
-  const problemDatabases = environment.databases.filter((database) =>
-    ['aligned_untracked', 'drifted', 'unmanaged', 'blocked', 'pending_migrations'].includes(
-      database.schemaState?.status ?? 'unmanaged'
-    )
-  );
-  const showDomainsSection = environment.domains.length > (environment.primaryDomainUrl ? 1 : 0);
-  const showDatabaseSection = problemDatabases.length > 0;
+  const hasStrategyControl = environment.actions.canConfigureStrategy;
+  const strategyHelper = hasStrategyControl
+    ? environment.actions.configureStrategySummary
+    : environment.actions.configureStrategySummary !== environment.strategyLabel
+      ? environment.actions.configureStrategySummary
+      : null;
 
   return (
     <div className="console-surface rounded-2xl px-4 py-4">
       <div className="space-y-3">
-        <div className="console-card px-4 py-3 text-sm text-foreground">
-          {[
-            [environment.scopeLabel, environment.sourceLabel].filter(Boolean).join(' · ') ||
-              '固定环境',
-            [environment.databaseStrategyLabel, environment.inheritanceLabel]
-              .filter(Boolean)
-              .join(' · ') || '默认数据库策略',
-            environment.previewLifecycle?.stateLabel ??
-              environment.cleanupState?.label ??
-              environment.expiryLabel,
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </div>
-
-        <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">发布策略</div>
-          {environment.actions.canConfigureStrategy ? (
-            <Select
-              value={environment.deploymentStrategy ?? 'rolling'}
-              onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
-                onStrategyChange(value)
-              }
-              disabled={savingStrategy}
-            >
-              <SelectTrigger className="max-w-sm">
-                <SelectValue placeholder="选择发布策略" />
-              </SelectTrigger>
-              <SelectContent>
-                {deploymentStrategyOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              {environment.actions.configureStrategySummary}
-            </div>
-          )}
-        </div>
-
-        {showDatabaseSection ? (
+        {hasStrategyControl || strategyHelper ? (
           <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">数据库</div>
+            <div className="text-xs text-muted-foreground">发布策略</div>
             <div className="console-card px-4 py-3 text-sm text-foreground">
-              {[
-                blockingCount > 0 ? `阻塞 ${blockingCount}` : null,
-                pendingCount > 0 ? `待迁移 ${pendingCount}` : null,
-                problemDatabases.length > pendingCount + blockingCount
-                  ? `异常 ${problemDatabases.length} 个`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-            <div className="space-y-2">
-              {problemDatabases.map((database) => (
-                <div key={database.id} className="console-surface rounded-2xl px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-sm font-medium text-foreground">{database.name}</div>
-                    <Badge variant="secondary">{database.type}</Badge>
-                    <Badge
-                      variant="outline"
-                      className={getSchemaStateBadgeClass(database.schemaState?.status)}
-                    >
-                      {database.schemaState?.statusLabel ?? '未纳管'}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {database.schemaState?.summary ?? '尚未识别 schema 状态'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {showDomainsSection ? (
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">更多地址</div>
-            <div className="flex flex-wrap gap-2">
-              {environment.domains
-                .filter((domain) => `https://${domain.hostname}` !== environment.primaryDomainUrl)
-                .map((domain) => (
-                  <a
-                    key={domain.id}
-                    href={`https://${domain.hostname}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1.5 text-xs text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]"
+              <div className="space-y-3">
+                <div>{environment.strategyLabel ?? '未设置发布策略'}</div>
+                {hasStrategyControl ? (
+                  <Select
+                    value={environment.deploymentStrategy ?? 'rolling'}
+                    onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
+                      onStrategyChange(value)
+                    }
+                    disabled={savingStrategy}
                   >
-                    <Globe className="h-3.5 w-3.5" />
-                    <span>{domain.hostname}</span>
-                    {domain.service?.name && (
-                      <Badge variant="secondary">{domain.service.name}</Badge>
-                    )}
-                  </a>
-                ))}
+                    <SelectTrigger className="max-w-sm">
+                      <SelectValue placeholder="选择发布策略" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {deploymentStrategyOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+                {strategyHelper ? (
+                  <div className="text-xs text-muted-foreground">{strategyHelper}</div>
+                ) : null}
+              </div>
             </div>
           </div>
         ) : null}
@@ -1265,12 +1085,10 @@ function EnvironmentDetailsPanel({
 }
 
 function EnvironmentExpandedContent({
-  projectId,
   environment,
   savingStrategy,
   onStrategyChange,
 }: {
-  projectId: string;
   environment: EnvironmentRecord;
   savingStrategy: boolean;
   onStrategyChange: (
@@ -1279,7 +1097,7 @@ function EnvironmentExpandedContent({
 }) {
   return (
     <div className="space-y-4">
-      <EnvironmentRuntimePanel projectId={projectId} environment={environment} />
+      <EnvironmentRuntimePanel environment={environment} />
       <EnvironmentDetailsPanel
         environment={environment}
         savingStrategy={savingStrategy}
@@ -1636,7 +1454,6 @@ export function EnvironmentsPageClient({
               <div className="console-panel overflow-hidden">
                 <div className="px-5 py-4">
                   <EnvironmentExpandedContent
-                    projectId={projectId}
                     environment={focusedEnvironment}
                     savingStrategy={savingStrategyId === focusedEnvironment.id}
                     onStrategyChange={(value) => handleStrategyChange(focusedEnvironment.id, value)}
@@ -1670,7 +1487,6 @@ export function EnvironmentsPageClient({
                           {isExpanded && (
                             <div className="px-5 py-4">
                               <EnvironmentExpandedContent
-                                projectId={projectId}
                                 environment={environment}
                                 savingStrategy={savingStrategyId === environment.id}
                                 onStrategyChange={(value) =>
@@ -1766,7 +1582,6 @@ export function EnvironmentsPageClient({
                           {isExpanded && (
                             <div className="px-5 py-4">
                               <EnvironmentExpandedContent
-                                projectId={projectId}
                                 environment={environment}
                                 savingStrategy={savingStrategyId === environment.id}
                                 onStrategyChange={(value) =>

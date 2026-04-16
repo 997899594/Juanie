@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { collectReusableReleaseServices } from '@/lib/environments/preview-launch';
+import {
+  buildPreviewLaunchMissingRefMessage,
+  buildPreviewLaunchRef,
+  collectReusableReleaseServices,
+} from '@/lib/environments/preview-launch';
 
 describe('preview launch artifact reuse', () => {
   it('reuses same-sha artifacts when every current service has an image', () => {
@@ -73,5 +77,22 @@ describe('preview launch artifact reuse', () => {
     });
 
     expect(services).toBe(null);
+  });
+
+  it('normalizes branch and PR launch refs', () => {
+    expect(buildPreviewLaunchRef({ branch: 'codex/evidence-event-knowledge-os' })).toBe(
+      'refs/heads/codex/evidence-event-knowledge-os'
+    );
+    expect(buildPreviewLaunchRef({ branch: 'refs/heads/codex/evidence-event-knowledge-os' })).toBe(
+      'refs/heads/codex/evidence-event-knowledge-os'
+    );
+    expect(buildPreviewLaunchRef({ prNumber: 42 })).toBe('refs/pull/42/merge');
+  });
+
+  it('builds precise missing-ref messages for branches and PRs', () => {
+    expect(
+      buildPreviewLaunchMissingRefMessage('refs/heads/codex/evidence-event-knowledge-os')
+    ).toContain('已经 push 到仓库远端');
+    expect(buildPreviewLaunchMissingRefMessage('refs/pull/42/merge')).toContain('PR / MR #42');
   });
 });

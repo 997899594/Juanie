@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 
 const environmentNav = [
   { label: '概览', href: '' },
+  { label: '发布', href: '/delivery' },
   { label: '数据', href: '/schema' },
   { label: '变量', href: '/variables' },
   { label: '日志', href: '/logs' },
@@ -26,20 +27,26 @@ export function EnvironmentSectionNav({
       <div className="flex flex-wrap gap-2">
         {environmentNav.map((item) => {
           const href =
-            item.href === '/schema'
+            item.href === '/delivery'
               ? environmentId
-                ? `/projects/${projectId}/schema?env=${environmentId}`
-                : `/projects/${projectId}/schema`
-              : `${environmentId ? `/projects/${projectId}/environments/${environmentId}` : `/projects/${projectId}/environments`}${item.href}`;
+                ? `/projects/${projectId}/delivery?env=${environmentId}`
+                : `/projects/${projectId}/delivery`
+              : item.href === '/schema'
+                ? environmentId
+                  ? `/projects/${projectId}/schema?env=${environmentId}`
+                  : `/projects/${projectId}/schema`
+                : `${environmentId ? `/projects/${projectId}/environments/${environmentId}` : `/projects/${projectId}/environments`}${item.href}`;
           const isActive =
             item.href === ''
               ? pathname ===
                 (environmentId
                   ? `/projects/${projectId}/environments/${environmentId}`
                   : `/projects/${projectId}/environments`)
-              : item.href === '/schema'
-                ? pathname === `/projects/${projectId}/schema`
-                : pathname === href || pathname.startsWith(`${href}/`);
+              : item.href === '/delivery'
+                ? pathname === `/projects/${projectId}/delivery`
+                : item.href === '/schema'
+                  ? pathname === `/projects/${projectId}/schema`
+                  : pathname === href || pathname.startsWith(`${href}/`);
 
           return (
             <Link

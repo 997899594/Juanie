@@ -9,7 +9,10 @@ import {
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments } from '@/lib/db/schema';
-import { launchPreviewEnvironmentFromRef } from '@/lib/environments/preview-launch';
+import {
+  buildPreviewLaunchRef,
+  launchPreviewEnvironmentFromRef,
+} from '@/lib/environments/preview-launch';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -80,7 +83,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    const ref = prNumber ? `refs/pull/${prNumber}/merge` : `refs/heads/${branch}`;
+    const ref = buildPreviewLaunchRef({
+      branch,
+      prNumber,
+    });
 
     const result = await launchPreviewEnvironmentFromRef({
       projectId: id,
