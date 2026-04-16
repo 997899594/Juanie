@@ -37,6 +37,12 @@ export interface CreateBranchOptions {
   fromBranch: string;
 }
 
+export interface SyncBranchRefOptions {
+  repoFullName: string;
+  branch: string;
+  commitSha: string;
+}
+
 export interface CreateReviewRequestOptions {
   repoFullName: string;
   title: string;
@@ -114,6 +120,7 @@ export interface GitProvider {
   ): Promise<string | null>;
   triggerReleaseBuild(accessToken: string, options: TriggerReleaseBuildOptions): Promise<void>;
   createBranch(accessToken: string, options: CreateBranchOptions): Promise<void>;
+  syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void>;
   createReviewRequest(
     accessToken: string,
     options: CreateReviewRequestOptions

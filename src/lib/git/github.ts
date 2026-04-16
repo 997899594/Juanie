@@ -8,6 +8,7 @@ import type {
   GitReviewRequest,
   GitUser,
   PushOptions,
+  SyncBranchRefOptions,
   TriggerReleaseBuildOptions,
 } from './index';
 
@@ -337,6 +338,83 @@ export class GitHubProvider implements GitProvider {
     if (!res.ok && res.status !== 422) {
       const error = await res.json();
       throw new Error(error.message || `Failed to create branch ${options.branch}`);
+    }
+  }
+
+  async syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void> {
+    const [owner, repo] = options.repoFullName.split('/');
+    const branchPath = `heads/${options.branch}`;
+    const currentSha = await this.resolveRefToCommitSha(
+      accessToken,
+      options.repoFullName,
+      `refs/heads/${options.branch}`
+    );
+
+    if (currentSha === options.commitSha) {
+      return;
+    }
+
+    if (currentSha) {
+      const updateRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/refs/${branchPath}`,
+        {
+          method: 'PATCH',
+          headers: this.getHeaders(accessToken),
+          body: JSON.stringify({
+            sha: options.commitSha,
+            force: true,
+          }),
+        }
+      );
+
+      if (!updateRes.ok) {
+        const error = await updateRes.json().catch(() => null);
+        throw new Error(
+          (error as { message?: string } | null)?.message ??
+            `Failed to sync branch ${options.branch}`
+        );
+      }
+
+      return;
+    }
+
+    const createRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        ref: `refs/heads/${options.branch}`,
+        sha: options.commitSha,
+      }),
+    });
+
+    if (!createRes.ok && createRes.status !== 422) {
+      const error = await createRes.json().catch(() => null);
+      throw new Error(
+        (error as { message?: string } | null)?.message ??
+          `Failed to create branch ${options.branch}`
+      );
+    }
+
+    if (createRes.status === 422) {
+      const retryRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/git/refs/${branchPath}`,
+        {
+          method: 'PATCH',
+          headers: this.getHeaders(accessToken),
+          body: JSON.stringify({
+            sha: options.commitSha,
+            force: true,
+          }),
+        }
+      );
+
+      if (!retryRes.ok) {
+        const error = await retryRes.json().catch(() => null);
+        throw new Error(
+          (error as { message?: string } | null)?.message ??
+            `Failed to sync branch ${options.branch}`
+        );
+      }
     }
   }
 

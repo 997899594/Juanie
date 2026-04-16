@@ -8,6 +8,7 @@ import type {
   GitReviewRequest,
   GitUser,
   PushOptions,
+  SyncBranchRefOptions,
   TriggerReleaseBuildOptions,
 } from './index';
 
@@ -299,6 +300,57 @@ export class GitLabProvider implements GitProvider {
     if (!res.ok && res.status !== 400) {
       const error = await res.json();
       throw new Error(error.message || `Failed to create branch ${options.branch}`);
+    }
+  }
+
+  async syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void> {
+    const encodedPath = encodeURIComponent(options.repoFullName);
+    const encodedBranch = encodeURIComponent(options.branch);
+    const currentSha = await this.resolveRefToCommitSha(
+      accessToken,
+      options.repoFullName,
+      `refs/heads/${options.branch}`
+    );
+
+    if (currentSha === options.commitSha) {
+      return;
+    }
+
+    if (currentSha) {
+      const deleteRes = await fetch(
+        `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/branches/${encodedBranch}`,
+        {
+          method: 'DELETE',
+          headers: this.getHeaders(accessToken),
+        }
+      );
+
+      if (!deleteRes.ok && deleteRes.status !== 404) {
+        const error = await deleteRes.json().catch(() => null);
+        throw new Error(
+          (error as { message?: string } | null)?.message ??
+            `Failed to reset branch ${options.branch}`
+        );
+      }
+    }
+
+    const createRes = await fetch(
+      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/branches`,
+      {
+        method: 'POST',
+        headers: this.getHeaders(accessToken),
+        body: JSON.stringify({
+          branch: options.branch,
+          ref: options.commitSha,
+        }),
+      }
+    );
+
+    if (!createRes.ok) {
+      const error = await createRes.json().catch(() => null);
+      throw new Error(
+        (error as { message?: string } | null)?.message ?? `Failed to sync branch ${options.branch}`
+      );
     }
   }
 

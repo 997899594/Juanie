@@ -10,6 +10,7 @@ import {
 import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
 import { addDeploymentJob, addMigrationJob } from '@/lib/queue';
 import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
+import { syncReleaseEnvironmentTrackingBranchSafely } from '@/lib/releases/environment-tracking';
 import { persistReleaseRecapById } from '@/lib/releases/recap-service';
 import {
   getObservedDeploymentTerminalStatus,
@@ -375,6 +376,7 @@ export async function completeReleaseAfterDeployments(releaseId: string) {
   }
   await runReleaseMigrationPhase(release, 'postDeploy');
   await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[2]);
+  await syncReleaseEnvironmentTrackingBranchSafely(releaseId);
   await persistReleaseRecapSafely(releaseId);
 }
 
@@ -463,6 +465,7 @@ export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
     }
 
     await updateReleaseStatus(run.releaseId, 'succeeded');
+    await syncReleaseEnvironmentTrackingBranchSafely(run.releaseId);
     await persistReleaseRecapSafely(run.releaseId);
     return { resumed: true, reason: 'postdeploy_healed' as const };
   }

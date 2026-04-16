@@ -9,6 +9,7 @@ import type {
   GitRepository,
   GitReviewRequest,
   PushOptions,
+  SyncBranchRefOptions,
   TriggerReleaseBuildOptions,
 } from '@/lib/git';
 import { createGitProviderForSession } from '@/lib/git';
@@ -241,6 +242,11 @@ export const gateway = {
   async createBranch(session: IntegrationSession, options: CreateBranchOptions): Promise<void> {
     const provider = resolveProvider(session);
     return provider.createBranch(session.accessToken, options);
+  },
+
+  async syncBranchRef(session: IntegrationSession, options: SyncBranchRefOptions): Promise<void> {
+    const provider = resolveProvider(session);
+    return provider.syncBranchRef(session.accessToken, options);
   },
 
   async createReviewRequest(
