@@ -6,9 +6,17 @@ import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
 import { getProjectSchemaCenterData } from '@/lib/schema-management/page-data';
 
-export default async function ProjectSchemaPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProjectSchemaPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ env?: string }>;
+}) {
   const session = await auth();
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const envId = resolvedSearchParams?.env ?? null;
 
   if (!session?.user?.id) {
     redirect('/login');
@@ -30,7 +38,7 @@ export default async function ProjectSchemaPage({ params }: { params: Promise<{ 
     redirect('/projects');
   }
 
-  const initialData = await getProjectSchemaCenterData(id, member.role);
+  const initialData = await getProjectSchemaCenterData(id, member.role, envId);
 
-  return <SchemaCenterClient projectId={id} initialData={initialData} />;
+  return <SchemaCenterClient projectId={id} initialData={initialData} initialEnvId={envId} />;
 }

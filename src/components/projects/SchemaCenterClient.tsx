@@ -76,6 +76,7 @@ interface SchemaCenterEnvironmentRecord {
 interface SchemaCenterData {
   projectName: string;
   roleLabel: string;
+  selectedEnvId?: string | null;
   environments: SchemaCenterEnvironmentRecord[];
   summary: {
     databaseCount: number;
@@ -187,9 +188,11 @@ function getSuggestionSummary(
 export function SchemaCenterClient({
   projectId,
   initialData,
+  initialEnvId,
 }: {
   projectId: string;
   initialData: SchemaCenterData;
+  initialEnvId?: string | null;
 }) {
   const [data, setData] = useState(initialData);
   const [pendingAction, setPendingAction] = useState<{
@@ -199,9 +202,12 @@ export function SchemaCenterClient({
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const next = await fetchProjectSchemaCenter<SchemaCenterData>(projectId);
+    const next = await fetchProjectSchemaCenter<SchemaCenterData>(
+      projectId,
+      initialEnvId ?? initialData.selectedEnvId ?? null
+    );
     setData(next);
-  }, [projectId]);
+  }, [initialData.selectedEnvId, initialEnvId, projectId]);
 
   const isPendingAction = (databaseId: string, action: SchemaCenterActionKey): boolean =>
     pendingAction?.databaseId === databaseId && pendingAction?.action === action;
@@ -235,16 +241,28 @@ export function SchemaCenterClient({
 
     return plan;
   };
+  const focusedEnvironment =
+    (initialEnvId
+      ? data.environments.find((environment) => environment.id === initialEnvId)
+      : null) ?? null;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="数据"
+        title={focusedEnvironment ? `${focusedEnvironment.name} · 数据` : '数据'}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <Link href={`/projects/${projectId}/environments`}>环境</Link>
-            </Button>
+            {focusedEnvironment ? (
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}`}>
+                  环境
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <Link href={`/projects/${projectId}/environments`}>环境</Link>
+              </Button>
+            )}
             <Button asChild variant="outline" size="sm" className="rounded-xl">
               <Link href={`/projects/${projectId}/delivery`}>交付</Link>
             </Button>

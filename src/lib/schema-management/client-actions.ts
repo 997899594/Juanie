@@ -19,7 +19,16 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export async function fetchProjectSchemaCenter<T>(projectId: string): Promise<T> {
-  const response = await fetch(`/api/projects/${projectId}/schema`);
+export async function fetchProjectSchemaCenter<T>(
+  projectId: string,
+  envId?: string | null
+): Promise<T> {
+  const params = new URLSearchParams();
+  if (envId) {
+    params.set('env', envId);
+  }
+
+  const query = params.toString();
+  const response = await fetch(`/api/projects/${projectId}/schema${query ? `?${query}` : ''}`);
   return parseJsonResponse<T>(response);
 }

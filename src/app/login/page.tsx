@@ -28,7 +28,7 @@ export default async function LoginPage() {
               <div className="grid gap-2">
                 <div className="ui-control px-3 py-3 text-sm">项目</div>
                 <div className="ui-control px-3 py-3 text-sm">交付</div>
-                <div className="ui-control px-3 py-3 text-sm">运行</div>
+                <div className="ui-control px-3 py-3 text-sm">环境</div>
               </div>
             </div>
 

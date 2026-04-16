@@ -3,13 +3,15 @@ import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { getProjectSchemaCenterData } from '@/lib/schema-management/page-data';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const envId = searchParams.get('env');
     const session = await requireSession();
     const { member } = await getProjectAccessOrThrow(id, session.user.id);
 
-    return NextResponse.json(await getProjectSchemaCenterData(id, member.role));
+    return NextResponse.json(await getProjectSchemaCenterData(id, member.role, envId));
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

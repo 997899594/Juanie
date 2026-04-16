@@ -10,7 +10,9 @@ import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
 import { BrandLockup } from './brand';
 import {
+  buildEnvironmentNavHref,
   buildProjectNavHref,
+  environmentNav,
   isNavItemActive,
   isProjectNavItemActive,
   mainNav,
@@ -30,16 +32,45 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const currentTitle = breadcrumbs[breadcrumbs.length - 1]?.title ?? '首页';
   const projectId = project?.projectId ?? null;
+  const environmentIdMatch = pathname.match(/\/projects\/[^/]+\/environments\/([^/]+)/);
+  const environmentId = environmentIdMatch?.[1] ?? null;
   const mobileProjectTabs = useMemo(() => {
     if (!projectId) {
       return [];
+    }
+
+    if (environmentId) {
+      return environmentNav.map((item) => ({
+        ...item,
+        href: buildEnvironmentNavHref(projectId, environmentId, item.href),
+      }));
     }
 
     return projectNav.map((item) => ({
       ...item,
       href: buildProjectNavHref(projectId, item.href),
     }));
-  }, [projectId]);
+  }, [environmentId, projectId]);
+  const isMobileTabActive = (href: string) => {
+    if (!projectId) {
+      return false;
+    }
+
+    if (environmentId) {
+      if (href.includes('/schema?env=')) {
+        return pathname === `/projects/${projectId}/schema`;
+      }
+
+      const baseHref = `/projects/${projectId}/environments/${environmentId}`;
+      if (href === baseHref) {
+        return pathname === baseHref;
+      }
+
+      return pathname === href || pathname.startsWith(`${href}/`);
+    }
+
+    return isProjectNavItemActive(pathname, projectId, href.replace(`/projects/${projectId}`, ''));
+  };
 
   return (
     <header className="sticky top-0 z-30 px-4 pt-4 md:px-6 lg:px-6">
@@ -102,13 +133,7 @@ export function Header() {
             <nav className="flex min-w-max items-center gap-2">
               {mobileProjectTabs.map((item) => {
                 const Icon = item.icon;
-                const isActive = projectId
-                  ? isProjectNavItemActive(
-                      pathname,
-                      projectId,
-                      item.href.replace(`/projects/${projectId}`, '')
-                    )
-                  : false;
+                const isActive = isMobileTabActive(item.href);
 
                 return (
                   <Link
@@ -179,18 +204,12 @@ export function Header() {
               {mobileProjectTabs.length > 0 && (
                 <div className="mt-6">
                   <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    {project?.projectName ?? '项目'}
+                    {environmentId ? '当前环境' : (project?.projectName ?? '项目')}
                   </div>
                   <nav className="space-y-2">
                     {mobileProjectTabs.map((item) => {
                       const Icon = item.icon;
-                      const isActive = projectId
-                        ? isProjectNavItemActive(
-                            pathname,
-                            projectId,
-                            item.href.replace(`/projects/${projectId}`, '')
-                          )
-                        : false;
+                      const isActive = isMobileTabActive(item.href);
 
                       return (
                         <Link
@@ -245,7 +264,7 @@ function generateBreadcrumbs(
     members: '成员',
     new: '新建',
     schema: '数据',
-    runtime: '运行',
+    runtime: '环境',
   };
 
   const breadcrumbs: BreadcrumbItem[] = [{ title: '首页', href: '/' }];

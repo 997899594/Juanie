@@ -64,17 +64,7 @@ export function ReleaseTopSummarySection({ release }: { release: ReleasePageData
   );
 }
 
-export function ReleaseNarrativeSection({
-  release,
-  environmentLogsHref,
-  environmentDetailHref,
-  releasesHref,
-}: {
-  release: ReleasePageData['release'];
-  environmentLogsHref: string;
-  environmentDetailHref: string;
-  releasesHref: string;
-}) {
+export function ReleaseNarrativeSection({ release }: { release: ReleasePageData['release'] }) {
   return (
     <div className="ui-floating p-5">
       <div className="mb-4 text-sm font-semibold">摘要</div>
@@ -160,44 +150,15 @@ export function ReleaseNarrativeSection({
             </div>
           </div>
         )}
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button asChild size="sm">
-            <Link href={environmentLogsHref}>日志</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={environmentDetailHref}>环境</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={releasesHref}>返回</Link>
-          </Button>
-        </div>
       </div>
     </div>
   );
 }
 
-export function ReleaseTimelineSection({
-  release,
-  environmentLogsHref,
-  environmentDiagnosticsHref,
-}: {
-  release: ReleasePageData['release'];
-  environmentLogsHref: string;
-  environmentDiagnosticsHref: string;
-}) {
+export function ReleaseTimelineSection({ release }: { release: ReleasePageData['release'] }) {
   return (
     <div className="ui-floating p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm font-semibold">时间线</div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={environmentLogsHref}>日志</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={environmentDiagnosticsHref}>诊断</Link>
-          </Button>
-        </div>
-      </div>
+      <div className="mb-4 text-sm font-semibold">时间线</div>
       <div className="space-y-3">
         {release.timeline.map((item, index) => (
           <div key={item.key} className="flex gap-3">
@@ -337,7 +298,7 @@ export function ReleaseDiffSection({
             </div>
             {runtimeMigrationDiffItems.length === 0 ? (
               <div className="ui-control-muted rounded-2xl px-4 py-4 text-sm text-muted-foreground">
-                没有运行差异。
+                没有环境差异。
               </div>
             ) : (
               <div className="space-y-2">
@@ -625,32 +586,6 @@ export function ReleaseExecutionSections({
             </details>
           </div>
         </details>
-      </div>
-    </div>
-  );
-}
-
-export function ReleaseMobileActions({
-  environmentLogsHref,
-  environmentDetailHref,
-  releasesHref,
-}: {
-  environmentLogsHref: string;
-  environmentDetailHref: string;
-  releasesHref: string;
-}) {
-  return (
-    <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-      <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
-        <Button asChild size="sm" className="min-w-0 flex-1">
-          <Link href={environmentLogsHref}>日志</Link>
-        </Button>
-        <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-          <Link href={environmentDetailHref}>环境</Link>
-        </Button>
-        <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-          <Link href={releasesHref}>发布中心</Link>
-        </Button>
       </div>
     </div>
   );

@@ -112,7 +112,7 @@ export function buildEnvironmentRecentActivity(input: {
       createdAtLabel: formatPlatformTimeContext(input.latestDeployment.createdAt),
       href: input.latestDeployment.releaseId
         ? `/projects/${input.projectId}/delivery/${input.latestDeployment.releaseId}`
-        : `/projects/${input.projectId}/runtime/logs?env=${input.environmentId}`,
+        : `/projects/${input.projectId}/environments/${input.environmentId}/logs`,
       actionLabel: input.latestDeployment.releaseId ? '查看交付' : '查看日志',
       statusDecoration,
       timestamp: toTimestamp(input.latestDeployment.createdAt),
@@ -160,7 +160,7 @@ export function buildEnvironmentRecentActivity(input: {
       createdAtLabel: formatPlatformTimeContext(input.latestMigration.createdAt),
       href: input.latestMigration.releaseId
         ? `/projects/${input.projectId}/delivery/${input.latestMigration.releaseId}`
-        : `/projects/${input.projectId}/runtime/logs?env=${input.environmentId}`,
+        : `/projects/${input.projectId}/environments/${input.environmentId}/logs`,
       actionLabel: input.latestMigration.releaseId ? '查看交付' : '查看日志',
       statusDecoration,
       timestamp: toTimestamp(input.latestMigration.createdAt),

@@ -6,7 +6,9 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { BrandLockup } from './brand';
 import {
+  buildEnvironmentNavHref,
   buildProjectNavHref,
+  environmentNav,
   isNavItemActive,
   isProjectNavItemActive,
   mainNav,
@@ -17,10 +19,16 @@ import { UserMenu } from './user-menu';
 export function Sidebar() {
   const pathname = usePathname();
   const [projectName, setProjectName] = useState('');
+  const [environmentName, setEnvironmentName] = useState('');
 
   const projectIdMatch = pathname.match(/\/projects\/([^/]+)/);
   const projectId = projectIdMatch?.[1];
   const isInProject = !!projectId;
+  const environmentIdMatch = pathname.match(/\/projects\/[^/]+\/environments\/([^/]+)/);
+  const schemaEnvironmentId =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('env') : null;
+  const environmentId = environmentIdMatch?.[1] ?? schemaEnvironmentId;
+  const isInEnvironment = !!projectId && !!environmentId;
 
   useEffect(() => {
     if (!projectId) {
@@ -32,6 +40,18 @@ export function Sidebar() {
       .then((data) => setProjectName(data?.name ?? ''))
       .catch(() => {});
   }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || !environmentId) {
+      setEnvironmentName('');
+      return;
+    }
+
+    fetch(`/api/projects/${projectId}/environments/${environmentId}`)
+      .then((r) => r.json())
+      .then((data) => setEnvironmentName(data?.name ?? ''))
+      .catch(() => {});
+  }, [environmentId, projectId]);
 
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-screen w-60 p-4 lg:block">
@@ -79,6 +99,43 @@ export function Sidebar() {
                   const href = buildProjectNavHref(projectId, item.href);
                   const isActive = isProjectNavItemActive(pathname, projectId, item.href);
                   const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition-all',
+                        isActive
+                          ? 'bg-secondary text-foreground'
+                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
+
+          {isInEnvironment && projectId && environmentId && (
+            <div className="mt-6">
+              <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                {environmentName || '环境'}
+              </div>
+              <nav className="space-y-1">
+                {environmentNav.map((item) => {
+                  const href = buildEnvironmentNavHref(projectId, environmentId, item.href);
+                  const isActive =
+                    item.href === '/schema'
+                      ? pathname === `/projects/${projectId}/schema` &&
+                        schemaEnvironmentId === environmentId
+                      : item.href === ''
+                        ? pathname === `/projects/${projectId}/environments/${environmentId}`
+                        : pathname === href || pathname.startsWith(`${href}/`);
+                  const Icon = item.icon;
+
                   return (
                     <Link
                       key={item.href}

@@ -55,19 +55,14 @@ export const projectNav: NavItem[] = [
     icon: Home,
   },
   {
+    title: '环境',
+    href: '/environments',
+    icon: Globe,
+  },
+  {
     title: '交付',
     href: '/delivery',
     icon: Rocket,
-  },
-  {
-    title: '数据',
-    href: '/schema',
-    icon: Database,
-  },
-  {
-    title: '运行',
-    href: '/runtime',
-    icon: Globe,
   },
   {
     title: '设置',
@@ -75,6 +70,34 @@ export const projectNav: NavItem[] = [
     icon: Settings,
   },
 ];
+
+export const environmentNav: NavItem[] = [
+  {
+    title: '概览',
+    href: '',
+    icon: Home,
+  },
+  {
+    title: '数据',
+    href: '/schema',
+    icon: Database,
+  },
+  {
+    title: '变量',
+    href: '/variables',
+    icon: Settings,
+  },
+  {
+    title: '日志',
+    href: '/logs',
+    icon: Globe,
+  },
+  {
+    title: '诊断',
+    href: '/diagnostics',
+    icon: Rocket,
+  },
+] as const;
 
 export function isNavItemActive(pathname: string, href: string): boolean {
   if (href === '/') {
@@ -96,4 +119,16 @@ export function isProjectNavItemActive(pathname: string, projectId: string, href
   }
 
   return isNavItemActive(pathname, fullHref);
+}
+
+export function buildEnvironmentNavHref(
+  projectId: string,
+  environmentId: string,
+  href: string
+): string {
+  if (href === '/schema') {
+    return `/projects/${projectId}/schema?env=${environmentId}`;
+  }
+
+  return `/projects/${projectId}/environments/${environmentId}${href}`;
 }

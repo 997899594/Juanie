@@ -4,7 +4,6 @@ import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSy
 import {
   ReleaseDiffSection,
   ReleaseExecutionSections,
-  ReleaseMobileActions,
   ReleaseNarrativeSection,
   ReleaseTimelineSection,
   ReleaseTopSummarySection,
@@ -39,8 +38,6 @@ export function ReleaseDetailDashboard({
   const { release, previousReleaseLink } = pageData;
   const environmentId = release.environment?.id ?? release.environmentId;
   const environmentLogsHref = `/projects/${projectId}/environments/${environmentId}/logs`;
-  const environmentDetailHref = `/projects/${projectId}/environments/${environmentId}`;
-  const environmentDiagnosticsHref = `/projects/${projectId}/environments/${environmentId}/diagnostics`;
   const releasesHref = `/projects/${projectId}/delivery`;
   const releaseStateKey = buildReleaseEventStateKey(release);
 
@@ -65,13 +62,6 @@ export function ReleaseDetailDashboard({
                 日志
               </Link>
             </Button>
-            {release.primaryDomainUrl && (
-              <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
-                <a href={release.primaryDomainUrl} target="_blank" rel="noreferrer">
-                  环境
-                </a>
-              </Button>
-            )}
             <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
               <Link href={releasesHref}>
                 <ArrowLeft className="h-3.5 w-3.5" />
@@ -85,17 +75,8 @@ export function ReleaseDetailDashboard({
       <ReleaseTopSummarySection release={release} />
 
       <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-        <ReleaseNarrativeSection
-          release={release}
-          environmentLogsHref={environmentLogsHref}
-          environmentDetailHref={environmentDetailHref}
-          releasesHref={releasesHref}
-        />
-        <ReleaseTimelineSection
-          release={release}
-          environmentLogsHref={environmentLogsHref}
-          environmentDiagnosticsHref={environmentDiagnosticsHref}
-        />
+        <ReleaseNarrativeSection release={release} />
+        <ReleaseTimelineSection release={release} />
       </section>
 
       <ReleaseDiffSection
@@ -111,12 +92,6 @@ export function ReleaseDetailDashboard({
         release={release}
         releasePlanSnapshot={releasePlanSnapshot}
         incidentSnapshot={incidentSnapshot}
-      />
-
-      <ReleaseMobileActions
-        environmentLogsHref={environmentLogsHref}
-        environmentDetailHref={environmentDetailHref}
-        releasesHref={releasesHref}
       />
     </div>
   );

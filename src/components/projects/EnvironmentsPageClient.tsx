@@ -1,18 +1,9 @@
 'use client';
 
-import {
-  ChevronDown,
-  ChevronUp,
-  GitBranch,
-  Globe,
-  Plus,
-  Rocket,
-  ScrollText,
-  Trash2,
-} from 'lucide-react';
+import { ChevronDown, ChevronUp, GitBranch, Globe, Plus, Rocket, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
-import { RuntimeSectionNav } from '@/components/projects/RuntimeSectionNav';
+import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -474,42 +465,6 @@ function getSchemaStateBadgeClass(status: SchemaStateStatus | null | undefined):
     default:
       return 'border-muted-foreground/40 text-muted-foreground';
   }
-}
-
-function EnvironmentQuickActions({
-  projectId,
-  environment,
-}: {
-  projectId: string;
-  environment: EnvironmentRecord;
-}) {
-  return (
-    <div className="mb-4 flex flex-wrap gap-2">
-      {environment.primaryDomainUrl && (
-        <Button asChild variant="outline" size="sm" className="rounded-xl">
-          <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-            环境
-          </a>
-        </Button>
-      )}
-      <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/environments/${environment.id}`}>概览</Link>
-      </Button>
-      <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/environments/${environment.id}/logs`}>日志</Link>
-      </Button>
-      {environment.latestReleaseCard && (
-        <Button asChild variant="outline" size="sm" className="rounded-xl">
-          <Link href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}>
-            交付
-          </Link>
-        </Button>
-      )}
-      <Button asChild variant="outline" size="sm" className="rounded-xl">
-        <Link href={`/projects/${projectId}/environments/${environment.id}/diagnostics`}>诊断</Link>
-      </Button>
-    </div>
-  );
 }
 
 function EnvironmentRecentActivityPanel({ items }: { items: EnvironmentRecord['recentActivity'] }) {
@@ -1047,8 +1002,7 @@ function DeliveryControlPanel({
 function buildEnvironmentHeaderMeta(environment: EnvironmentRecord): string {
   return [
     environment.namespace ?? '尚未部署',
-    environment.scopeLabel,
-    environment.sourceLabel,
+    [environment.scopeLabel, environment.sourceLabel].filter(Boolean).join(' · ') || null,
     environment.expiryLabel,
     environment.latestReleaseCard?.shortCommitSha
       ? `最近发布 ${environment.latestReleaseCard.shortCommitSha}`
@@ -1086,9 +1040,10 @@ function EnvironmentCardHeader({
             )}
           />
           <span className="text-sm font-semibold capitalize">{environment.name}</span>
-          {environment.scopeLabel && <Badge variant="outline">{environment.scopeLabel}</Badge>}
           {environment.previewLifecycle && (
-            <Badge variant="secondary">{environment.previewLifecycle.stateLabel}</Badge>
+            <span className="text-xs text-muted-foreground">
+              {environment.previewLifecycle.stateLabel}
+            </span>
           )}
         </div>
         <div className="truncate text-[11px] text-muted-foreground">
@@ -1116,10 +1071,12 @@ function EnvironmentRuntimePanel({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-medium">环境</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {[environment.scopeLabel, environment.sourceLabel].filter(Boolean).join(' · ') ||
+              environment.namespace ||
+              '已部署'}
+          </div>
         </div>
-        {environment.previewLifecycle && (
-          <Badge variant="outline">{environment.previewLifecycle.stateLabel}</Badge>
-        )}
       </div>
 
       {environment.latestReleaseCard && (
@@ -1144,71 +1101,97 @@ function EnvironmentRuntimePanel({
         </div>
       )}
 
-      <div className="mt-4">
-        <EnvironmentQuickActions projectId={projectId} environment={environment} />
-      </div>
+      {(environment.latestReleaseCard || environment.primaryDomainUrl) && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {environment.latestReleaseCard ? (
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <Link href={`/projects/${projectId}/delivery/${environment.latestReleaseCard.id}`}>
+                交付
+              </Link>
+            </Button>
+          ) : null}
+          {environment.primaryDomainUrl ? (
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+                地址
+              </a>
+            </Button>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
 
-function EnvironmentPolicyPanel({
+function EnvironmentDetailsPanel({
+  projectId,
   environment,
   savingStrategy,
   onStrategyChange,
 }: {
+  projectId: string;
   environment: EnvironmentRecord;
   savingStrategy: boolean;
   onStrategyChange: (
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
 }) {
+  const blockingCount = environment.databases.filter((database) =>
+    ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
+      database.schemaState?.status ?? 'unmanaged'
+    )
+  ).length;
+  const pendingCount = environment.databases.filter(
+    (database) => database.schemaState?.status === 'pending_migrations'
+  ).length;
+
   return (
     <div className="console-surface rounded-2xl px-4 py-4">
-      <div className="mb-4 text-sm font-medium">策略</div>
+      <div className="mb-4 text-sm font-medium">细节</div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="console-card px-4 py-3">
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            环境定位
-          </div>
-          <div className="mt-2 text-sm text-foreground">
-            {[environment.scopeLabel, environment.sourceLabel].filter(Boolean).join(' · ') ||
-              '固定环境'}
-          </div>
-        </div>
-        <div className="console-card px-4 py-3">
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            数据库策略
-          </div>
-          <div className="mt-2 text-sm text-foreground">
-            {[environment.databaseStrategyLabel, environment.inheritanceLabel]
+      <div className="space-y-3">
+        <div className="console-card px-4 py-3 text-sm text-foreground">
+          {[
+            [environment.scopeLabel, environment.sourceLabel].filter(Boolean).join(' · ') ||
+              '固定环境',
+            [environment.databaseStrategyLabel, environment.inheritanceLabel]
               .filter(Boolean)
-              .join(' · ') || '使用默认数据库策略'}
-          </div>
-        </div>
-      </div>
-
-      {(environment.previewLifecycle || environment.cleanupState) && (
-        <div className="console-card mt-3 px-4 py-3">
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            生命周期
-          </div>
-          <div className="mt-2 text-sm text-foreground">
-            {environment.previewLifecycle?.stateLabel ??
+              .join(' · ') || '默认数据库策略',
+            environment.previewLifecycle?.stateLabel ??
               environment.cleanupState?.label ??
-              environment.expiryLabel ??
-              '稳定'}
-          </div>
+              environment.expiryLabel,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </div>
-      )}
 
-      <div className="mt-4 space-y-2">
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          发布策略
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+          <Link
+            href={`/projects/${projectId}/environments/${environment.id}/variables`}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            变量
+          </Link>
+          <Link
+            href={`/projects/${projectId}/environments/${environment.id}/logs`}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            日志
+          </Link>
+          <Link
+            href={`/projects/${projectId}/environments/${environment.id}/diagnostics`}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            诊断
+          </Link>
+          <Link
+            href={`/projects/${projectId}/schema?env=${environment.id}`}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            数据
+          </Link>
         </div>
-        <div className="text-xs text-muted-foreground">
-          {environment.actions.configureStrategySummary}
-        </div>
+
         <Select
           value={environment.deploymentStrategy ?? 'rolling'}
           onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
@@ -1227,133 +1210,75 @@ function EnvironmentPolicyPanel({
             ))}
           </SelectContent>
         </Select>
+
+        {environment.databases.length > 0 && (
+          <details>
+            <summary className="cursor-pointer list-none text-sm text-muted-foreground">
+              数据库
+            </summary>
+            <div className="mt-3 space-y-3">
+              <div className="console-card px-4 py-3 text-sm text-foreground">
+                {[
+                  `直连 ${environment.databaseBindingSummary.directCount} 个`,
+                  `实际使用 ${environment.databaseBindingSummary.effectiveCount} 个`,
+                  environment.databaseBindingSummary.inheritedCount > 0
+                    ? `继承 ${environment.databaseBindingSummary.inheritedCount} 个`
+                    : null,
+                  `门禁阻塞 ${blockingCount}`,
+                  `待迁移 ${pendingCount}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </div>
+              {environment.databases.map((database) => (
+                <div key={database.id} className="console-surface rounded-2xl px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-medium text-foreground">{database.name}</div>
+                    <Badge variant="secondary">{database.type}</Badge>
+                    <Badge variant="outline">{database.usageLabel}</Badge>
+                    <Badge
+                      variant="outline"
+                      className={getSchemaStateBadgeClass(database.schemaState?.status)}
+                    >
+                      {database.schemaState?.statusLabel ?? '未纳管'}
+                    </Badge>
+                    {database.latestRepairPlan ? (
+                      <Badge variant="outline">{database.latestRepairPlan.status}</Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {database.schemaState?.summary ?? '尚未识别 schema 状态'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
+        {environment.domains.length > 0 && (
+          <details>
+            <summary className="cursor-pointer list-none text-sm text-muted-foreground">
+              域名
+            </summary>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {environment.domains.map((domain) => (
+                <a
+                  key={domain.id}
+                  href={`https://${domain.hostname}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1.5 text-xs text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]"
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  <span>{domain.hostname}</span>
+                  {domain.service?.name && <Badge variant="secondary">{domain.service.name}</Badge>}
+                </a>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
     </div>
-  );
-}
-
-function EnvironmentAdvancedPanel({
-  projectId,
-  environment,
-}: {
-  projectId: string;
-  environment: EnvironmentRecord;
-}) {
-  const blockingCount = environment.databases.filter((database) =>
-    ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
-      database.schemaState?.status ?? 'unmanaged'
-    )
-  ).length;
-  const pendingCount = environment.databases.filter(
-    (database) => database.schemaState?.status === 'pending_migrations'
-  ).length;
-
-  return (
-    <details className="console-surface rounded-2xl px-4 py-4">
-      <summary className="cursor-pointer list-none text-sm font-medium">更多</summary>
-      <div className="mt-4 space-y-4">
-        {environment.databases.length > 0 && (
-          <div className="console-card px-4 py-4">
-            <div className="mb-3">
-              <div className="text-sm font-medium">数据库纳管</div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="console-surface px-4 py-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  摘要
-                </div>
-                <div className="mt-2 text-sm text-foreground">
-                  {[
-                    `直连 ${environment.databaseBindingSummary.directCount} 个`,
-                    `实际使用 ${environment.databaseBindingSummary.effectiveCount} 个`,
-                    environment.databaseBindingSummary.inheritedCount > 0
-                      ? `继承 ${environment.databaseBindingSummary.inheritedCount} 个`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {`门禁阻塞 ${blockingCount} · 待迁移 ${pendingCount}`}
-                </div>
-              </div>
-              <div className="console-surface px-4 py-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  数据
-                </div>
-                <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                  <Link href={`/projects/${projectId}/schema?env=${environment.id}`}>数据</Link>
-                </Button>
-              </div>
-            </div>
-            <div className="mt-3 space-y-2">
-              {environment.databases.map((database) => {
-                return (
-                  <div key={database.id} className="console-surface rounded-2xl px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-medium text-foreground">{database.name}</div>
-                      <Badge variant="secondary">{database.type}</Badge>
-                      <Badge variant="outline">{database.usageLabel}</Badge>
-                      <Badge
-                        variant="outline"
-                        className={getSchemaStateBadgeClass(database.schemaState?.status)}
-                      >
-                        {database.schemaState?.statusLabel ?? '未纳管'}
-                      </Badge>
-                      {database.latestRepairPlan ? (
-                        <Badge variant="outline">{database.latestRepairPlan.status}</Badge>
-                      ) : null}
-                    </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      {database.schemaState?.summary ?? '尚未识别 schema 状态'}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        {environment.domains.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {environment.domains.map((domain) => (
-              <a
-                key={domain.id}
-                href={`https://${domain.hostname}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1.5 text-xs text-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.03)]"
-              >
-                <Globe className="h-3.5 w-3.5" />
-                <span>{domain.hostname}</span>
-                {domain.service?.name && <Badge variant="secondary">{domain.service.name}</Badge>}
-              </a>
-            ))}
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={`/projects/${projectId}/environments/${environment.id}/variables`}>
-              变量
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={`/projects/${projectId}/environments/${environment.id}/logs`}>日志</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={`/projects/${projectId}/environments/${environment.id}/diagnostics`}>
-              诊断
-            </Link>
-          </Button>
-          {environment.primaryDomainUrl ? (
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                地址
-              </a>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </details>
   );
 }
 
@@ -1376,14 +1301,12 @@ function EnvironmentExpandedContent({
         <EnvironmentRuntimePanel projectId={projectId} environment={environment} />
         <EnvironmentRecentActivityPanel items={environment.recentActivity} />
       </div>
-      <div className="space-y-4">
-        <EnvironmentPolicyPanel
-          environment={environment}
-          savingStrategy={savingStrategy}
-          onStrategyChange={onStrategyChange}
-        />
-        <EnvironmentAdvancedPanel projectId={projectId} environment={environment} />
-      </div>
+      <EnvironmentDetailsPanel
+        projectId={projectId}
+        environment={environment}
+        savingStrategy={savingStrategy}
+        onStrategyChange={onStrategyChange}
+      />
     </div>
   );
 }
@@ -1669,20 +1592,6 @@ export function EnvironmentsPageClient({
                 <Link href={`/projects/${projectId}/environments`}>全部环境</Link>
               </Button>
             ) : null}
-            <Button asChild variant="outline">
-              <Link href={`/projects/${projectId}/delivery`}>
-                <Rocket className="h-4 w-4" />
-                发布
-              </Link>
-            </Button>
-            {focusedEnvironment ? (
-              <Button asChild variant="outline">
-                <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}/logs`}>
-                  <ScrollText className="h-4 w-4" />
-                  日志
-                </Link>
-              </Button>
-            ) : null}
             {!focusMode ? (
               <Button
                 onClick={() => setDialogOpen(true)}
@@ -1696,7 +1605,7 @@ export function EnvironmentsPageClient({
         }
       />
 
-      <RuntimeSectionNav
+      <EnvironmentSectionNav
         projectId={projectId}
         environmentId={focusMode ? focusedEnvironment?.id : null}
       />
@@ -1967,41 +1876,6 @@ export function EnvironmentsPageClient({
           </details>
         </div>
       )}
-
-      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-        <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
-          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-            <Link href={`/projects/${projectId}/environments`}>
-              <Globe className="h-4 w-4" />
-              环境
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-            <Link href={`/projects/${projectId}/delivery`}>
-              <Rocket className="h-4 w-4" />
-              发布
-            </Link>
-          </Button>
-          {focusedEnvironment ? (
-            <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
-              <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}/logs`}>
-                <ScrollText className="h-4 w-4" />
-                日志
-              </Link>
-            </Button>
-          ) : null}
-          {!focusMode ? (
-            <Button
-              size="sm"
-              onClick={() => setDialogOpen(true)}
-              disabled={!governance.createPreview.allowed}
-            >
-              <Plus className="h-4 w-4" />
-              预览
-            </Button>
-          ) : null}
-        </div>
-      </div>
     </div>
   );
 }

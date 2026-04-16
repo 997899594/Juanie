@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { EnvVarManager } from '@/components/projects/EnvVarManager';
-import { RuntimeSectionNav } from '@/components/projects/RuntimeSectionNav';
+import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
 import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { getProjectEnvironmentOrNull, getProjectMemberRole } from '@/lib/environments/page-context';
@@ -33,7 +33,7 @@ export default async function ProjectEnvironmentVariablesPage({
         title="变量"
         description={`${environment.name} 的直接配置、实际生效变量与服务级覆盖`}
       />
-      <RuntimeSectionNav projectId={id} environmentId={envId} />
+      <EnvironmentSectionNav projectId={id} environmentId={envId} />
       <EnvVarManager
         projectId={id}
         environmentId={environment.id}

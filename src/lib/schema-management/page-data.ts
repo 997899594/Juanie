@@ -6,7 +6,11 @@ import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environment
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
 
-export async function getProjectSchemaCenterData(projectId: string, role: TeamRole) {
+export async function getProjectSchemaCenterData(
+  projectId: string,
+  role: TeamRole,
+  selectedEnvId?: string | null
+) {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
     columns: {
@@ -123,7 +127,11 @@ export async function getProjectSchemaCenterData(projectId: string, role: TeamRo
     }),
   }));
 
-  const allDatabases = environmentsWithSchema.flatMap((environment) => environment.databases);
+  const selectedEnvironment = selectedEnvId
+    ? (environmentsWithSchema.find((environment) => environment.id === selectedEnvId) ?? null)
+    : null;
+  const visibleEnvironments = selectedEnvironment ? [selectedEnvironment] : environmentsWithSchema;
+  const allDatabases = visibleEnvironments.flatMap((environment) => environment.databases);
   const blockingCount = allDatabases.filter((database) =>
     ['aligned_untracked', 'drifted', 'unmanaged', 'blocked'].includes(
       database.schemaState?.status ?? 'unmanaged'
@@ -136,7 +144,8 @@ export async function getProjectSchemaCenterData(projectId: string, role: TeamRo
   return {
     projectName: project.name,
     roleLabel: role,
-    environments: environmentsWithSchema,
+    environments: visibleEnvironments,
+    selectedEnvId: selectedEnvironment?.id ?? null,
     summary: {
       databaseCount: allDatabases.length,
       blockingCount,

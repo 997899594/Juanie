@@ -1,9 +1,8 @@
 'use client';
 
-import { ExternalLink, RefreshCw, ScrollText, X } from 'lucide-react';
-import Link from 'next/link';
+import { RefreshCw, ScrollText, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RuntimeSectionNav } from '@/components/projects/RuntimeSectionNav';
+import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import {
@@ -174,8 +173,8 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="运行日志" />
-      <RuntimeSectionNav projectId={projectId} environmentId={envId || null} />
+      <PageHeader title="环境日志" />
+      <EnvironmentSectionNav projectId={projectId} environmentId={envId || null} />
 
       <div className="ui-control-muted px-4 py-3">
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
@@ -189,15 +188,6 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
           <span>
             {pods.length > 0 ? `${runningPodCount} 运行中 / ${readyPodCount} 就绪` : '等待识别'}
           </span>
-          <Button asChild variant="outline" size="sm" className="ml-auto rounded-xl">
-            <Link href={`/projects/${projectId}/environments/${envId}`}>返回环境</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={`/projects/${projectId}/delivery`}>
-              交付
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
         </div>
       </div>
 

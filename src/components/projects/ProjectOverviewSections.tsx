@@ -88,59 +88,46 @@ export function ProjectDefinitionSection({
           <div className="text-muted-foreground">{overview.createdDateLabel}</div>
         </div>
 
-        {overview.repository && (
-          <div className="space-y-1">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              仓库
+        <div className="space-y-3 text-sm">
+          {overview.repository && (
+            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+              <span>仓库</span>
+              <a
+                href={overview.repository.webUrl || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-medium text-foreground hover:underline"
+              >
+                {overview.repository.fullName}
+                <ExternalLink className="h-3 w-3" />
+              </a>
             </div>
-            <a
-              href={overview.repository.webUrl || '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
-            >
-              {overview.repository.fullName}
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-        )}
+          )}
 
-        {overview.productionBranch && (
-          <div className="space-y-1">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              主分支
+          <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
+            {overview.productionBranch ? (
+              <div className="inline-flex items-center gap-2">
+                <GitBranch className="h-3.5 w-3.5" />
+                <span className="font-mono text-foreground">{overview.productionBranch}</span>
+              </div>
+            ) : null}
+            <div className="inline-flex items-center gap-2">
+              <Settings2 className="h-3.5 w-3.5" />
+              <span className="text-foreground">{services.length} 个服务</span>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-secondary/70 px-3 py-1.5 text-sm">
-              <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="font-mono">{overview.productionBranch}</span>
-            </div>
+            {productionEnvironment ? <span>{productionEnvironment.name} 为正式环境</span> : null}
           </div>
-        )}
 
-        {productionEnvironment?.primaryDomainUrl ? (
-          <div className="space-y-1">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              正式环境地址
-            </div>
+          {productionEnvironment?.primaryDomainUrl ? (
             <a
               href={productionEnvironment.primaryDomainUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+              className="inline-flex items-center gap-1.5 font-medium text-foreground hover:underline"
             >
               {productionEnvironment.primaryDomainUrl.replace(/^https?:\/\//, '')}
               <ExternalLink className="h-3 w-3" />
             </a>
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <div className="ui-control-muted inline-flex items-center gap-2 rounded-full px-3 py-1.5">
-            <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-medium">{services.length} 个服务</span>
-          </div>
-          {productionEnvironment ? (
-            <div className="text-muted-foreground">{productionEnvironment.name} 为正式环境</div>
           ) : null}
         </div>
       </div>
@@ -158,12 +145,7 @@ export function ProjectEnvironmentIndex({
   return (
     <section className="ui-floating overflow-hidden">
       <div className="console-divider-bottom px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm font-semibold">环境</div>
-          <Button asChild variant="outline" size="sm" className="h-8 px-3">
-            <Link href={`/projects/${projectId}/environments`}>查看全部</Link>
-          </Button>
-        </div>
+        <div className="text-sm font-semibold">环境</div>
       </div>
 
       <div className="space-y-3 p-3">
@@ -200,6 +182,9 @@ export function ProjectEnvironmentIndex({
                         ? `当前版本 ${environment.latestReleaseCard.title}`
                         : null,
                       environment.scopeLabel,
+                      environment.isProduction && environment.primaryDomainUrl
+                        ? environment.primaryDomainUrl.replace(/^https?:\/\//, '')
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(' · ') ||
@@ -208,19 +193,10 @@ export function ProjectEnvironmentIndex({
                   </div>
                 </div>
 
-                <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
+                <div className="flex shrink-0 items-center xl:justify-end">
                   <Button asChild variant="outline" size="sm" className="h-8 px-3">
-                    <Link href={`/projects/${projectId}/environments/${environment.id}`}>
-                      进入环境
-                    </Link>
+                    <Link href={`/projects/${projectId}/environments/${environment.id}`}>打开</Link>
                   </Button>
-                  {environment.isProduction && environment.primaryDomainUrl ? (
-                    <Button asChild variant="outline" size="sm" className="h-8 px-3">
-                      <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                        地址
-                      </a>
-                    </Button>
-                  ) : null}
                 </div>
               </div>
             </div>

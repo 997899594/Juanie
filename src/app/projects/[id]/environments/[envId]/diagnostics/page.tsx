@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { EnvironmentResourcePanel } from '@/components/projects/EnvironmentResourcePanel';
-import { RuntimeSectionNav } from '@/components/projects/RuntimeSectionNav';
+import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
 import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { getProjectEnvironmentOrNull, getProjectMemberRole } from '@/lib/environments/page-context';
@@ -30,7 +30,7 @@ export default async function ProjectEnvironmentDiagnosticsPage({
   return (
     <div className="space-y-6">
       <PageHeader title="诊断" description={`${environment.name} 的资源与诊断视图`} />
-      <RuntimeSectionNav projectId={id} environmentId={envId} />
+      <EnvironmentSectionNav projectId={id} environmentId={envId} />
       <EnvironmentResourcePanel
         projectId={id}
         environmentId={environment.id}
