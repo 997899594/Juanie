@@ -1,5 +1,10 @@
-import type { DeploymentStatus, EnvironmentKind } from '@/lib/db/schema';
-import { getEnvironmentKind, isPreviewEnvironment } from '@/lib/environments/model';
+import type { DeploymentStatus, EnvironmentDeliveryMode, EnvironmentKind } from '@/lib/db/schema';
+import {
+  getEnvironmentDeliveryMode,
+  getEnvironmentKind,
+  isPreviewEnvironment,
+  isPromoteOnlyEnvironment,
+} from '@/lib/environments/model';
 import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
 export interface PresentableEnvironment {
@@ -10,6 +15,7 @@ export interface PresentableEnvironment {
   previewPrNumber?: number | null;
   branch?: string | null;
   expiresAt?: Date | string | null;
+  deliveryMode?: EnvironmentDeliveryMode | null;
   databaseStrategy?: 'direct' | 'inherit' | 'isolated_clone' | null;
   deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
   baseEnvironment?: {
@@ -86,6 +92,10 @@ export function getEnvironmentSourceLabel(environment: PresentableEnvironment): 
     }
   }
 
+  if (isPromoteOnlyEnvironment(environment)) {
+    return '仅接受提升';
+  }
+
   const rules = [...(environment.deliveryRules ?? [])].sort(
     (left, right) => (left.priority ?? 100) - (right.priority ?? 100)
   );
@@ -107,6 +117,12 @@ export function getEnvironmentSourceLabel(environment: PresentableEnvironment): 
     default:
       return null;
   }
+}
+
+export function getEnvironmentDeliveryModeLabel(
+  environment: Pick<PresentableEnvironment, 'deliveryMode' | 'isProduction' | 'kind'>
+): string | null {
+  return getEnvironmentDeliveryMode(environment) === 'promote_only' ? '仅接受提升' : '可直接发布';
 }
 
 export function getEnvironmentInheritancePresentation(

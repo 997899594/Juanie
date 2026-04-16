@@ -15,6 +15,12 @@ describe('environment presentation helpers', () => {
       'feature/release-intel'
     );
     expect(getEnvironmentSourceLabel({ isPreview: false, branch: 'main' })).toBe(null);
+    expect(
+      getEnvironmentSourceLabel({
+        kind: 'production',
+        deliveryMode: 'promote_only',
+      })
+    ).toBe('仅接受提升');
   });
 
   it('formats expiry in relative Chinese labels', () => {

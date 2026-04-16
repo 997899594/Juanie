@@ -231,6 +231,7 @@ export async function POST(request: Request) {
             projectId: createdProject.id,
             name: environment.name,
             kind: environment.kind,
+            deliveryMode: environment.deliveryMode,
             branch: environment.branch,
             autoDeploy: environment.autoDeploy,
             isProduction: environment.isProduction,

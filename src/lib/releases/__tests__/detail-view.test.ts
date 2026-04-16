@@ -8,6 +8,19 @@ describe('release detail view', () => {
         id: 'rel-2',
         status: 'degraded',
         errorMessage: null,
+        projectId: 'proj-1',
+        sourceRelease: {
+          id: 'rel-1',
+          summary: 'staging 发布 · abc1234',
+          sourceRef: 'refs/heads/main',
+          sourceCommitSha: 'abc123456789',
+          environment: {
+            id: 'env-staging',
+            name: 'staging',
+            isPreview: false,
+            isProduction: false,
+          },
+        },
         environment: {
           id: 'env-1',
           name: 'preview-pr-42',
@@ -55,6 +68,12 @@ describe('release detail view', () => {
     expect(
       release.metadataItems.some((item) => item.label === '发布 ID' && item.mono === true)
     ).toBe(true);
+    expect(
+      release.metadataItems.some(
+        (item) => item.label === '来源发布' && item.value.includes('staging')
+      )
+    ).toBe(true);
+    expect(release.timeline.some((item) => item.key === 'source-release-rel-1')).toBe(true);
     expect(release.deploymentItems[0]?.serviceName).toBe('web');
     expect(release.migrationItems[0]?.imageUrl).toBe('ghcr.io/demo/web:2');
   });

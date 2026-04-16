@@ -54,6 +54,18 @@ export interface ReleaseViewLike {
   configCommitSha?: string | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
+  sourceRelease?: {
+    id: string;
+    summary?: string | null;
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+    environment?: {
+      id: string;
+      name?: string | null;
+      isPreview?: boolean | null;
+      isProduction?: boolean | null;
+    } | null;
+  } | null;
   environment: EnvironmentKindLike & {
     id: string;
     name?: string;

@@ -122,6 +122,8 @@ export const environmentDeploymentStrategies = [
 export type EnvironmentDeploymentStrategy = (typeof environmentDeploymentStrategies)[number];
 export const environmentKinds = ['production', 'persistent', 'preview'] as const;
 export type EnvironmentKind = (typeof environmentKinds)[number];
+export const environmentDeliveryModes = ['direct', 'promote_only'] as const;
+export type EnvironmentDeliveryMode = (typeof environmentDeliveryModes)[number];
 export const environmentDatabaseStrategies = ['direct', 'inherit', 'isolated_clone'] as const;
 export type EnvironmentDatabaseStrategy = (typeof environmentDatabaseStrategies)[number];
 export const deliveryRuleKinds = ['branch', 'tag', 'pull_request', 'manual'] as const;
@@ -206,6 +208,10 @@ export const environmentDeploymentStrategyEnum = pgEnum(
   environmentDeploymentStrategies
 );
 export const environmentKindEnum = pgEnum('environmentKind', environmentKinds);
+export const environmentDeliveryModeEnum = pgEnum(
+  'environmentDeliveryMode',
+  environmentDeliveryModes
+);
 export const environmentDatabaseStrategyEnum = pgEnum(
   'environmentDatabaseStrategy',
   environmentDatabaseStrategies
@@ -597,6 +603,7 @@ export const environments = pgTable(
 
     name: varchar('name', { length: 100 }).notNull(),
     kind: environmentKindEnum('kind').default('persistent').notNull(),
+    deliveryMode: environmentDeliveryModeEnum('deliveryMode').default('direct').notNull(),
     branch: varchar('branch', { length: 100 }),
     tagPattern: varchar('tagPattern', { length: 100 }),
     isPreview: boolean('isPreview').default(false),
@@ -1117,6 +1124,9 @@ export const releases = pgTable(
     sourceRef: varchar('sourceRef', { length: 255 }).notNull(),
     sourceCommitSha: varchar('sourceCommitSha', { length: 100 }),
     configCommitSha: varchar('configCommitSha', { length: 100 }),
+    sourceReleaseId: uuid('sourceReleaseId').references((): AnyPgColumn => releases.id, {
+      onDelete: 'set null',
+    }),
     status: releaseStatusEnum('status').notNull().default('queued'),
     triggeredBy: varchar('triggeredBy', { length: 20 }).notNull().default('api'),
     triggeredByUserId: uuid('triggeredByUserId').references(() => users.id, {
@@ -1132,6 +1142,7 @@ export const releases = pgTable(
   (table) => ({
     projectIdIdx: index('release_projectId_idx').on(table.projectId),
     environmentIdIdx: index('release_environmentId_idx').on(table.environmentId),
+    sourceReleaseIdIdx: index('release_sourceReleaseId_idx').on(table.sourceReleaseId),
     statusIdx: index('release_status_idx').on(table.status),
     sourceRepoIdx: index('release_sourceRepository_idx').on(table.sourceRepository),
   })
@@ -1795,6 +1806,14 @@ export const releasesRelations = relations(releases, ({ one, many }) => ({
   triggeredByUser: one(users, {
     fields: [releases.triggeredByUserId],
     references: [users.id],
+  }),
+  sourceRelease: one(releases, {
+    fields: [releases.sourceReleaseId],
+    references: [releases.id],
+    relationName: 'release_lineage',
+  }),
+  derivedReleases: many(releases, {
+    relationName: 'release_lineage',
   }),
   artifacts: many(releaseArtifacts),
   deployments: many(deployments),

@@ -1,6 +1,7 @@
 import type { deliveryRules, environments, promotionFlows, TeamRole } from '@/lib/db/schema';
 import {
   compareEnvironmentDisplayOrder,
+  getEnvironmentDeliveryMode,
   getEnvironmentKind,
   isPreviewEnvironment,
 } from '@/lib/environments/model';
@@ -20,6 +21,7 @@ export interface DeliveryControlSnapshot {
     id: string;
     name: string;
     kind: ReturnType<typeof getEnvironmentKind>;
+    deliveryMode: ReturnType<typeof getEnvironmentDeliveryMode>;
     scopeLabel: string | null;
     sourceLabel: string | null;
   }>;
@@ -71,6 +73,7 @@ export function buildDeliveryControlSnapshot(input: {
         id: environment.id,
         name: environment.name,
         kind: getEnvironmentKind(environment),
+        deliveryMode: getEnvironmentDeliveryMode(environment),
         scopeLabel: getEnvironmentScopeLabel(environment),
         sourceLabel: getEnvironmentSourceLabel(environment),
       })),

@@ -95,9 +95,11 @@ export async function POST(
         : `refs/heads/${project.productionBranch ?? 'main'}`,
       sourceCommitSha: targetDeployment.commitSha ?? null,
       configCommitSha: targetDeployment.commitSha ?? null,
+      sourceReleaseId: targetDeployment.releaseId ?? null,
       triggeredBy: 'manual',
       triggeredByUserId: session.user.id,
       summary: `Rollback to ${targetDeployment.commitSha?.slice(0, 7) ?? 'previous image'}`,
+      entryPoint: 'rollback',
     });
 
     return NextResponse.json(

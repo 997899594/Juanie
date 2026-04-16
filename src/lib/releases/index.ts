@@ -16,6 +16,7 @@ import {
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
+import { assertReleaseEntryPointAllowed, type ReleaseEntryPoint } from '@/lib/releases/admission';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
 import { resolveEnvironmentRoute } from '@/lib/releases/routing';
@@ -55,9 +56,11 @@ export interface CreateProjectReleaseInput {
   sourceRef: string;
   sourceCommitSha?: string | null;
   configCommitSha?: string | null;
+  sourceReleaseId?: string | null;
   triggeredBy?: 'api' | 'manual';
   triggeredByUserId?: string | null;
   summary?: string | null;
+  entryPoint?: ReleaseEntryPoint;
 }
 
 export function resolveEnvironment(
@@ -115,6 +118,7 @@ async function persistRelease(
     sourceRef: string;
     sourceCommitSha?: string | null;
     configCommitSha?: string | null;
+    sourceReleaseId?: string | null;
     triggeredBy?: 'api' | 'manual';
     triggeredByUserId?: string | null;
     summary?: string | null;
@@ -157,6 +161,7 @@ async function persistRelease(
       sourceRef: meta.sourceRef,
       sourceCommitSha: meta.sourceCommitSha ?? null,
       configCommitSha: meta.configCommitSha ?? meta.sourceCommitSha ?? null,
+      sourceReleaseId: meta.sourceReleaseId ?? null,
       status: 'queued',
       triggeredBy: meta.triggeredBy ?? 'api',
       triggeredByUserId: meta.triggeredByUserId ?? null,
@@ -204,6 +209,11 @@ async function persistRelease(
     where: eq(releases.id, release.id),
     with: {
       environment: true,
+      sourceRelease: {
+        with: {
+          environment: true,
+        },
+      },
       artifacts: {
         with: {
           service: true,
@@ -261,6 +271,8 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
   if (!environment) {
     throw new Error(`No environment configured for ref ${input.ref}`);
   }
+
+  assertReleaseEntryPointAllowed(environment, 'repository_route');
 
   const requestedServices =
     input.services && input.services.length > 0
@@ -320,11 +332,14 @@ export async function createProjectRelease(input: CreateProjectReleaseInput) {
     throw new Error(`Environment ${input.environmentId} not found`);
   }
 
+  assertReleaseEntryPointAllowed(environment, input.entryPoint ?? 'manual_release');
+
   return persistRelease(project, environment, input.services, {
     sourceRepository: input.sourceRepository,
     sourceRef: input.sourceRef,
     sourceCommitSha: input.sourceCommitSha ?? null,
     configCommitSha: input.configCommitSha ?? input.sourceCommitSha ?? null,
+    sourceReleaseId: input.sourceReleaseId ?? null,
     triggeredBy: input.triggeredBy,
     triggeredByUserId: input.triggeredByUserId ?? null,
     summary: input.summary ?? null,
@@ -359,6 +374,19 @@ export async function getReleaseById(releaseId: string) {
           domains: {
             with: {
               service: true,
+            },
+          },
+        },
+      },
+      sourceRelease: {
+        with: {
+          environment: {
+            columns: {
+              id: true,
+              name: true,
+              kind: true,
+              isProduction: true,
+              isPreview: true,
             },
           },
         },

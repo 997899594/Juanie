@@ -224,6 +224,7 @@ export async function fetchManualReleasePlan(input: {
 export async function createManualRelease(input: {
   projectId: string;
   environmentId: string;
+  sourceReleaseId?: string | null;
   sourceRef: string;
   sourceCommitSha?: string | null;
   summary?: string | null;
@@ -236,6 +237,7 @@ export async function createManualRelease(input: {
     },
     body: JSON.stringify({
       environmentId: input.environmentId,
+      sourceReleaseId: input.sourceReleaseId ?? null,
       ref: input.sourceRef,
       commitSha: input.sourceCommitSha ?? null,
       commitMessage: input.summary ?? null,

@@ -16,6 +16,18 @@ describe('release service', () => {
         sourceRef: 'refs/pull/42/head',
         sourceCommitSha: 'abcdef1234567890',
         sourceRepository: 'demo/repo',
+        sourceRelease: {
+          id: 'rel-source',
+          summary: 'Promote staging · abcdef1',
+          sourceRef: 'refs/heads/main',
+          sourceCommitSha: 'abcdef1234567890',
+          environment: {
+            id: 'env-staging',
+            name: 'staging',
+            isPreview: false,
+            isProduction: false,
+          },
+        },
         environment: {
           id: 'env-1',
           name: 'preview-pr-42',
@@ -64,6 +76,11 @@ describe('release service', () => {
     expect(result?.previousReleaseLink).toEqual({
       id: 'rel-1',
       title: 'main 发布 · 1234567',
+    });
+    expect(result?.sourceReleaseLink).toEqual({
+      id: 'rel-source',
+      title: 'Promote staging · abcdef1',
+      environmentName: 'staging',
     });
   });
 

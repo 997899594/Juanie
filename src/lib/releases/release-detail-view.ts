@@ -106,6 +106,25 @@ function buildReleaseTimeline(input: {
     sortValue: release.createdAt ? new Date(release.createdAt).getTime() : 0,
   });
 
+  if (release.sourceRelease) {
+    items.push({
+      key: `source-release-${release.sourceRelease.id}`,
+      at: formatTimelineTimestamp(release.createdAt),
+      title: '复用来源发布',
+      description: [
+        release.sourceRelease.environment?.name ?? '来源环境',
+        getReleaseDisplayTitle(release.sourceRelease),
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      tone: 'info',
+      href: release.projectId
+        ? `/projects/${release.projectId}/delivery/${release.sourceRelease.id}`
+        : null,
+      sortValue: release.createdAt ? new Date(release.createdAt).getTime() : 0,
+    });
+  }
+
   for (const run of release.migrationRuns) {
     items.push({
       key: `migration-${run.id ?? `${run.serviceId ?? 'service'}-${run.status}`}`,
@@ -321,6 +340,14 @@ export function decorateReleaseDetail<T extends ReleaseViewLike>(
         label: '配置提交',
         value: release.configCommitSha?.slice(0, 7) ?? '—',
       },
+      ...(release.sourceRelease
+        ? [
+            {
+              label: '来源发布',
+              value: `${release.sourceRelease.environment?.name ?? '来源环境'} · ${getReleaseDisplayTitle(release.sourceRelease)}`,
+            },
+          ]
+        : []),
       {
         label: '更新时间',
         value: formatReleaseMetadataValue(release.updatedAt),

@@ -71,6 +71,7 @@ interface DeliveryControlEnvironmentOption {
   id: string;
   name: string;
   kind?: 'production' | 'persistent' | 'preview' | null;
+  deliveryMode?: 'direct' | 'promote_only' | null;
   scopeLabel: string | null;
   sourceLabel: string | null;
 }
@@ -613,6 +614,9 @@ function DeliveryControlPanel({
   const persistentEnvironments = deliveryControl.environments.filter(
     (environment) => environment.kind !== 'preview'
   );
+  const routingTargetEnvironments = persistentEnvironments.filter(
+    (environment) => environment.deliveryMode !== 'promote_only'
+  );
   const displayedRoutingRules = editing ? routingRules : deliveryControl.routingRules;
   const displayedPromotionFlows = editing ? promotionFlows : deliveryControl.promotionFlows;
 
@@ -680,7 +684,7 @@ function DeliveryControlPanel({
                                     <SelectValue placeholder="选择环境" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {persistentEnvironments.map((environment) => (
+                                    {routingTargetEnvironments.map((environment) => (
                                       <SelectItem key={environment.id} value={environment.id}>
                                         {environment.name}
                                       </SelectItem>
@@ -1830,7 +1834,11 @@ export function EnvironmentsPageClient({
                 onAddRule={() =>
                   setRoutingRules((current) => [
                     ...current,
-                    createRuleDraft(deliveryControl.environments),
+                    createRuleDraft(
+                      deliveryControl.environments.filter(
+                        (environment) => environment.deliveryMode !== 'promote_only'
+                      )
+                    ),
                   ])
                 }
                 onUpdateRule={(index, rule) =>

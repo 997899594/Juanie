@@ -7,11 +7,13 @@ import { db } from '@/lib/db';
 import {
   type DeliveryRuleKind,
   deliveryRules,
+  type EnvironmentDeliveryMode,
   environments,
   type PromotionFlowStrategy,
   promotionFlows,
 } from '@/lib/db/schema';
 import { canEditDeliveryControl } from '@/lib/environments/control-plane';
+import { canCreateReleaseWithEntryPoint } from '@/lib/releases/admission';
 
 const deliveryRuleKinds: [DeliveryRuleKind, ...DeliveryRuleKind[]] = [
   'branch',
@@ -49,7 +51,14 @@ const updateDeliveryControlSchema = z.object({
 });
 
 function validateRoutingRules(
-  environmentIds: Set<string>,
+  environmentById: Map<
+    string,
+    {
+      id: string;
+      name: string;
+      deliveryMode: EnvironmentDeliveryMode;
+    }
+  >,
   rules: Array<{
     id?: string;
     environmentId: string;
@@ -61,8 +70,13 @@ function validateRoutingRules(
   }>
 ): string | null {
   for (const rule of rules) {
-    if (!environmentIds.has(rule.environmentId)) {
+    const environment = environmentById.get(rule.environmentId);
+    if (!environment) {
       return '存在不属于当前项目的路由目标环境';
+    }
+
+    if (!canCreateReleaseWithEntryPoint(environment, 'repository_route')) {
+      return `${environment.name} 只接受提升，不能配置 Git 路由`;
     }
 
     if (rule.kind === 'manual') {
@@ -144,17 +158,21 @@ export async function PATCH(request: Request, context: { params: Promise<unknown
       where: eq(environments.projectId, id),
       columns: {
         id: true,
+        name: true,
+        deliveryMode: true,
       },
     });
-    const environmentIds = new Set(environmentList.map((environment) => environment.id));
+    const environmentById = new Map(
+      environmentList.map((environment) => [environment.id, environment])
+    );
 
-    const routingValidationError = validateRoutingRules(environmentIds, parsed.data.routingRules);
+    const routingValidationError = validateRoutingRules(environmentById, parsed.data.routingRules);
     if (routingValidationError) {
       return NextResponse.json({ error: routingValidationError }, { status: 400 });
     }
 
     const promotionValidationError = validatePromotionFlows(
-      environmentIds,
+      new Set(environmentList.map((environment) => environment.id)),
       parsed.data.promotionFlows
     );
     if (promotionValidationError) {

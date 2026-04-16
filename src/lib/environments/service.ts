@@ -85,6 +85,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
     projectId: input.projectId,
     name: environmentName,
     kind: 'preview' as const,
+    deliveryMode: 'direct' as const,
     branch,
     isPreview: true,
     previewPrNumber: prNumber,

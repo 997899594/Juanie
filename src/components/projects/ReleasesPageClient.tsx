@@ -98,8 +98,10 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const riskFilter = initialData.selectedRisk;
   const filtered = initialData.filteredReleaseItems;
   const promotePlan = initialData.promotePlan;
-  const manageableEnvironments = environments.filter((environment) =>
-    governance.manageableEnvironmentIds.includes(environment.id)
+  const manageableEnvironments = environments.filter(
+    (environment) =>
+      governance.manageableEnvironmentIds.includes(environment.id) &&
+      environment.deliveryMode !== 'promote_only'
   );
   const hasPromotionTarget = initialData.hasPromotionTarget;
   const sourcePromotionReleaseId = promotePlan?.sourceRelease?.id ?? null;

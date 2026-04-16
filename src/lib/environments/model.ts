@@ -1,10 +1,14 @@
-import type { EnvironmentKind } from '@/lib/db/schema';
+import type { EnvironmentDeliveryMode, EnvironmentKind } from '@/lib/db/schema';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
 
 export interface EnvironmentKindLike {
   kind?: EnvironmentKind | null;
   isPreview?: boolean | null;
   isProduction?: boolean | null;
+}
+
+export interface EnvironmentDeliveryModeLike extends EnvironmentKindLike {
+  deliveryMode?: EnvironmentDeliveryMode | null;
 }
 
 export interface EnvironmentNamespaceLike extends EnvironmentKindLike {
@@ -54,6 +58,28 @@ export function isProductionEnvironment(environment: EnvironmentKindLike): boole
 
 export function isPersistentEnvironment(environment: EnvironmentKindLike): boolean {
   return getEnvironmentKind(environment) === 'persistent';
+}
+
+export function getEnvironmentDeliveryMode(
+  environment: EnvironmentDeliveryModeLike
+): EnvironmentDeliveryMode {
+  if (environment.deliveryMode) {
+    return environment.deliveryMode;
+  }
+
+  return isProductionEnvironment(environment) ? 'promote_only' : 'direct';
+}
+
+export function isPromoteOnlyEnvironment(environment: EnvironmentDeliveryModeLike): boolean {
+  return getEnvironmentDeliveryMode(environment) === 'promote_only';
+}
+
+export function allowsGitRouting(environment: EnvironmentDeliveryModeLike): boolean {
+  return getEnvironmentDeliveryMode(environment) === 'direct';
+}
+
+export function allowsDirectReleaseCreation(environment: EnvironmentDeliveryModeLike): boolean {
+  return getEnvironmentDeliveryMode(environment) === 'direct';
 }
 
 export function getEnvironmentSortRank(environment: EnvironmentKindLike): number {

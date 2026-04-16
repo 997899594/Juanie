@@ -1,6 +1,7 @@
 import type {
   DeliveryRuleKind,
   EnvironmentDatabaseStrategy,
+  EnvironmentDeliveryMode,
   EnvironmentDeploymentStrategy,
   EnvironmentKind,
   PromotionFlowStrategy,
@@ -22,6 +23,7 @@ export interface EnvironmentTopologyBlueprint {
     key: string;
     name: string;
     kind: EnvironmentKind;
+    deliveryMode: EnvironmentDeliveryMode;
     branch: string | null;
     autoDeploy: boolean;
     isProduction: boolean;
@@ -85,6 +87,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             key: 'mainline',
             name: 'mainline',
             kind: 'persistent',
+            deliveryMode: 'direct',
             branch: input.productionBranch,
             autoDeploy: input.autoDeploy,
             isProduction: false,
@@ -95,6 +98,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             key: 'production',
             name: 'production',
             kind: 'production',
+            deliveryMode: 'promote_only',
             branch: null,
             autoDeploy: false,
             isProduction: true,
@@ -137,6 +141,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             key: 'dev',
             name: 'dev',
             kind: 'persistent',
+            deliveryMode: 'direct',
             branch: 'develop',
             autoDeploy: true,
             isProduction: false,
@@ -147,6 +152,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             key: 'test',
             name: 'test',
             kind: 'persistent',
+            deliveryMode: 'direct',
             branch: 'test',
             autoDeploy: true,
             isProduction: false,
@@ -157,6 +163,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             key: 'staging',
             name: 'staging',
             kind: 'persistent',
+            deliveryMode: 'direct',
             branch: input.productionBranch,
             autoDeploy: input.autoDeploy,
             isProduction: false,
@@ -167,6 +174,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             key: 'production',
             name: 'production',
             kind: 'production',
+            deliveryMode: 'promote_only',
             branch: null,
             autoDeploy: false,
             isProduction: true,
@@ -237,6 +245,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             key: 'staging',
             name: 'staging',
             kind: 'persistent',
+            deliveryMode: 'direct',
             branch: input.productionBranch,
             autoDeploy: input.autoDeploy,
             isProduction: false,
@@ -247,6 +256,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             key: 'production',
             name: 'production',
             kind: 'production',
+            deliveryMode: 'promote_only',
             branch: null,
             autoDeploy: false,
             isProduction: true,

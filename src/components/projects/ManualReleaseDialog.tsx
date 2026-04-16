@@ -242,6 +242,7 @@ export function ManualReleaseDialog({
       const data = await createManualRelease({
         environmentId,
         projectId,
+        sourceReleaseId: sourceRelease.id,
         sourceRef: sourceRelease.sourceRef,
         sourceCommitSha: sourceRelease.sourceCommitSha,
         summary: summary || sourceRelease.summary || null,

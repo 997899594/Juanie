@@ -237,6 +237,7 @@ export async function launchPreviewEnvironmentFromRef(input: {
       triggeredBy: 'manual',
       triggeredByUserId: input.triggeredByUserId,
       summary: `Preview deploy ${sourceCommitSha.slice(0, 7)}`,
+      entryPoint: 'preview_launch',
     });
 
     return {

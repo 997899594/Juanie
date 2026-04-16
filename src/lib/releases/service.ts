@@ -333,6 +333,7 @@ export function buildProjectReleasesPageData(input: {
     id: string;
     name: string;
     kind?: 'production' | 'persistent' | 'preview' | null;
+    deliveryMode?: 'direct' | 'promote_only' | null;
     autoDeploy: boolean;
     isProduction: boolean;
     isPreview?: boolean | null;
@@ -538,6 +539,13 @@ export function buildReleaseDetailPageData<
 
   return {
     release: decorateReleaseDetail(input.release, input.previousRelease ?? null),
+    sourceReleaseLink: input.release.sourceRelease
+      ? {
+          id: input.release.sourceRelease.id,
+          title: getReleaseDisplayTitle(input.release.sourceRelease),
+          environmentName: input.release.sourceRelease.environment?.name ?? '来源环境',
+        }
+      : null,
     previousReleaseLink: input.previousRelease
       ? {
           id: input.previousRelease.id,

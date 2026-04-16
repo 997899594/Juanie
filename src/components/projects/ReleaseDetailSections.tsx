@@ -186,10 +186,12 @@ export function ReleaseTimelineSection({ release }: { release: ReleasePageData['
 
 export function ReleaseDiffSection({
   projectId,
+  sourceReleaseLink,
   previousReleaseLink,
   release,
 }: {
   projectId: string;
+  sourceReleaseLink: ReleasePageData['sourceReleaseLink'];
   previousReleaseLink: ReleasePageData['previousReleaseLink'];
   release: ReleasePageData['release'];
 }) {
@@ -224,6 +226,40 @@ export function ReleaseDiffSection({
           <Badge variant="outline">首次发布</Badge>
         )}
       </div>
+
+      {(sourceReleaseLink || previousReleaseLink) && (
+        <div className="mb-4 grid gap-3 md:grid-cols-2">
+          {sourceReleaseLink ? (
+            <div className="ui-control rounded-2xl px-4 py-3">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <GitBranch className="h-3.5 w-3.5" />
+                来源发布
+              </div>
+              <div className="text-sm font-medium text-foreground">
+                {sourceReleaseLink.environmentName}
+              </div>
+              <Button asChild variant="ghost" size="sm" className="-ml-2 mt-2 h-8 px-2">
+                <Link href={`/projects/${projectId}/delivery/${sourceReleaseLink.id}`}>
+                  {sourceReleaseLink.title}
+                </Link>
+              </Button>
+            </div>
+          ) : null}
+
+          {previousReleaseLink ? (
+            <div className="ui-control-muted rounded-2xl px-4 py-3">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                上一版
+              </div>
+              <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2">
+                <Link href={`/projects/${projectId}/delivery/${previousReleaseLink.id}`}>
+                  {previousReleaseLink.title}
+                </Link>
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <div className="space-y-3">

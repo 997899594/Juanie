@@ -8,9 +8,17 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import { deployments, environments, migrationRuns, projects, services } from '@/lib/db/schema';
+import {
+  deployments,
+  environments,
+  migrationRuns,
+  projects,
+  releases,
+  services,
+} from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
+import { ReleaseAdmissionError } from '@/lib/releases/admission';
 import { buildProjectReleasePlan } from '@/lib/releases/planning';
 import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
@@ -114,6 +122,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       serviceName,
       image,
       services: releaseServices,
+      sourceReleaseId,
       dryRun,
     } = await request.json();
 
@@ -155,6 +164,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       requestedServiceIds.map((candidateId) => getProjectServiceOrThrow(id, candidateId))
     );
 
+    if (typeof sourceReleaseId === 'string') {
+      const sourceRelease = await db.query.releases.findFirst({
+        where: eq(releases.id, sourceReleaseId),
+        columns: {
+          id: true,
+          projectId: true,
+        },
+      });
+
+      if (!sourceRelease || sourceRelease.projectId !== id) {
+        return NextResponse.json({ error: '来源发布不属于当前项目' }, { status: 400 });
+      }
+    }
+
     if (requestedServices.length === 0) {
       return NextResponse.json(
         { error: 'Releases require image metadata. Provide image or services[]' },
@@ -169,6 +192,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         services: requestedServices,
         sourceRef: ref ?? `refs/heads/${environment.branch ?? project.productionBranch ?? 'main'}`,
         sourceCommitSha: commitSha ?? null,
+        entryPoint: 'manual_release',
       });
 
       return NextResponse.json({ plan });
@@ -182,15 +206,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       sourceRef: ref ?? `refs/heads/${environment.branch ?? project.productionBranch ?? 'main'}`,
       sourceCommitSha: commitSha ?? null,
       configCommitSha: commitSha ?? null,
+      sourceReleaseId: typeof sourceReleaseId === 'string' ? sourceReleaseId : null,
       triggeredBy: 'manual',
       triggeredByUserId: session.user.id,
       summary: commitMessage ?? null,
+      entryPoint: 'manual_release',
     });
 
     return NextResponse.json(release, { status: 202 });
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
+    }
+
+    if (error instanceof ReleaseSchemaGateBlockedError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+
+    if (error instanceof ReleaseAdmissionError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

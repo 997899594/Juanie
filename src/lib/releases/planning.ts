@@ -23,6 +23,11 @@ import {
   type ReleasePolicySnapshot,
 } from '@/lib/policies/delivery';
 import type { ReleaseServiceInput } from '@/lib/releases';
+import {
+  canCreateReleaseWithEntryPoint,
+  getReleaseEntryPointGuardReason,
+  type ReleaseEntryPoint,
+} from '@/lib/releases/admission';
 import { buildIssueSnapshot, type ReleaseIssueSnapshot } from '@/lib/releases/intelligence';
 import {
   inspectReleaseSchemaGate,
@@ -54,6 +59,7 @@ interface PlanningEnvironmentLike {
   id?: string;
   isProduction?: boolean | null;
   isPreview?: boolean | null;
+  deliveryMode?: 'direct' | 'promote_only' | null;
   databaseStrategy?: 'direct' | 'inherit' | 'isolated_clone' | null;
   baseEnvironment?: {
     id: string;
@@ -334,6 +340,7 @@ export async function buildProjectReleasePlan(input: {
   services: ReleaseServiceInput[];
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
+  entryPoint?: ReleaseEntryPoint;
 }): Promise<ReleasePlanningSnapshot> {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, input.projectId),
@@ -360,6 +367,15 @@ export async function buildProjectReleasePlan(input: {
 
   if (!environment || environment.projectId !== project.id) {
     throw new Error(`Environment ${input.environmentId} not found`);
+  }
+
+  const entryPoint = input.entryPoint ?? 'manual_release';
+  if (!canCreateReleaseWithEntryPoint(environment, entryPoint)) {
+    return buildStaticPlanningSnapshot({
+      canCreate: false,
+      blockingReason: getReleaseEntryPointGuardReason(environment, entryPoint),
+      environment,
+    });
   }
 
   const plannedServices = resolvePlanningServices(project.id, project.services, input.services);
@@ -504,8 +520,9 @@ export async function buildPromotionPlan(projectId: string): Promise<{
       image: artifact.imageUrl,
       digest: artifact.imageDigest,
     })),
-    sourceRef: `refs/heads/${prodEnv.branch ?? project.productionBranch ?? 'main'}`,
+    sourceRef: sourceRelease.sourceRef,
     sourceCommitSha: sourceRelease.sourceCommitSha,
+    entryPoint: 'promotion',
   });
 
   return {
@@ -605,6 +622,7 @@ export async function buildRollbackPlan(input: {
       ? `refs/heads/${targetDeployment.branch}`
       : `refs/heads/${project.productionBranch ?? 'main'}`,
     sourceCommitSha: targetDeployment.commitSha ?? null,
+    entryPoint: 'rollback',
   });
 
   return {

@@ -132,9 +132,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       sourceRef: sourceRelease.sourceRef ?? `refs/heads/${project.productionBranch ?? 'main'}`,
       sourceCommitSha: sourceRelease.sourceCommitSha,
       configCommitSha: sourceRelease.configCommitSha,
+      sourceReleaseId: sourceRelease.id,
       triggeredBy: 'manual',
       triggeredByUserId: session.user.id,
       summary: `Promote ${sourceRelease.sourceCommitSha?.slice(0, 7) ?? 'release'} to ${prodEnv.name}`,
+      entryPoint: 'promotion',
     });
 
     // Create git tag (best-effort, don't fail if this errors)

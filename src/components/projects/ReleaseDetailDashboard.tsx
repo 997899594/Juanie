@@ -35,7 +35,7 @@ export function ReleaseDetailDashboard({
   releasePlanSnapshot,
   incidentSnapshot,
 }: ReleaseDetailDashboardProps) {
-  const { release, previousReleaseLink } = pageData;
+  const { release, previousReleaseLink, sourceReleaseLink } = pageData;
   const environmentId = release.environment?.id ?? release.environmentId;
   const environmentLogsHref = `/projects/${projectId}/environments/${environmentId}/logs`;
   const releasesHref = `/projects/${projectId}/delivery`;
@@ -81,6 +81,7 @@ export function ReleaseDetailDashboard({
 
       <ReleaseDiffSection
         projectId={projectId}
+        sourceReleaseLink={sourceReleaseLink}
         previousReleaseLink={previousReleaseLink}
         release={release}
       />
