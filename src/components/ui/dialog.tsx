@@ -10,6 +10,15 @@ const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
 const DialogClose = DialogPrimitive.Close;
 
+const dialogContentSizeClasses = {
+  compact: 'sm:[--dialog-content-width:34rem]',
+  form: 'sm:[--dialog-content-width:44rem] lg:[--dialog-content-width:58rem]',
+  workspace:
+    'sm:[--dialog-content-width:48rem] lg:[--dialog-content-width:72rem] xl:[--dialog-content-width:84rem]',
+} as const;
+
+type DialogContentSize = keyof typeof dialogContentSizeClasses;
+
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -27,14 +36,17 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    size?: DialogContentSize;
+  }
+>(({ className, children, size = 'compact', ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 grid max-h-[88dvh] w-full gap-5 overflow-y-auto bg-[rgba(250,249,247,0.96)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 shadow-[0_-24px_80px_rgba(55,53,47,0.08)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:max-h-[90vh] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[24px] sm:px-6 sm:pb-6 sm:pt-6 sm:shadow-[0_28px_80px_rgba(55,53,47,0.1)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
+        'fixed inset-x-0 bottom-0 z-50 grid max-h-[88dvh] w-full gap-5 overflow-y-auto bg-[rgba(250,249,247,0.98)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 shadow-[0_-24px_80px_rgba(55,53,47,0.08)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:max-h-[90vh] sm:w-[min(calc(100vw-2.5rem),var(--dialog-content-width,34rem))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[28px] sm:px-6 sm:pb-6 sm:pt-6 sm:shadow-[0_32px_96px_rgba(55,53,47,0.14)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
+        dialogContentSizeClasses[size],
         className
       )}
       {...props}
