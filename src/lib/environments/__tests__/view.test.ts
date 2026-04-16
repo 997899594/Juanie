@@ -87,6 +87,6 @@ describe('environment list view', () => {
 
     expect(environment?.gitTracking?.state).toBe('pending');
     expect(environment?.gitTracking?.trackingBranchName).toBe('juanie-env-staging');
-    expect(environment?.gitTracking?.shortCommitSha).toBeNull();
+    expect(environment?.gitTracking?.shortCommitSha).toBe(null);
   });
 });
