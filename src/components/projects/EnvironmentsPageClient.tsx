@@ -1164,14 +1164,7 @@ function EnvironmentPolicyPanel({
 }) {
   return (
     <div className="console-surface rounded-2xl px-4 py-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium">策略</div>
-        </div>
-        <div className="max-w-[220px] text-right text-xs text-muted-foreground">
-          {environment.actions.configureStrategySummary}
-        </div>
-      </div>
+      <div className="mb-4 text-sm font-medium">策略</div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="console-card px-4 py-3">
@@ -1212,6 +1205,9 @@ function EnvironmentPolicyPanel({
       <div className="mt-4 space-y-2">
         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           发布策略
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {environment.actions.configureStrategySummary}
         </div>
         <Select
           value={environment.deploymentStrategy ?? 'rolling'}
@@ -1254,7 +1250,7 @@ function EnvironmentAdvancedPanel({
 
   return (
     <details className="console-surface rounded-2xl px-4 py-4">
-      <summary className="cursor-pointer list-none text-sm font-medium">环境细节</summary>
+      <summary className="cursor-pointer list-none text-sm font-medium">更多</summary>
       <div className="mt-4 space-y-4">
         {environment.databases.length > 0 && (
           <div className="console-card px-4 py-4">
@@ -1283,7 +1279,7 @@ function EnvironmentAdvancedPanel({
               </div>
               <div className="console-surface px-4 py-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  入口
+                  数据
                 </div>
                 <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
                   <Link href={`/projects/${projectId}/schema?env=${environment.id}`}>数据</Link>
@@ -1334,42 +1330,27 @@ function EnvironmentAdvancedPanel({
             ))}
           </div>
         )}
-        <div className="console-card px-4 py-4">
-          <div className="mb-3">
-            <div className="text-sm font-medium">运行子页</div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="console-surface px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                变量
-              </div>
-              <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                <Link href={`/projects/${projectId}/environments/${environment.id}/variables`}>
-                  变量
-                </Link>
-              </Button>
-            </div>
-            <div className="console-surface px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                日志
-              </div>
-              <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                <Link href={`/projects/${projectId}/environments/${environment.id}/logs`}>
-                  日志
-                </Link>
-              </Button>
-            </div>
-            <div className="console-surface px-4 py-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                诊断
-              </div>
-              <Button asChild variant="outline" size="sm" className="mt-3 rounded-xl">
-                <Link href={`/projects/${projectId}/environments/${environment.id}/diagnostics`}>
-                  诊断
-                </Link>
-              </Button>
-            </div>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm" className="rounded-xl">
+            <Link href={`/projects/${projectId}/environments/${environment.id}/variables`}>
+              变量
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="rounded-xl">
+            <Link href={`/projects/${projectId}/environments/${environment.id}/logs`}>日志</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="rounded-xl">
+            <Link href={`/projects/${projectId}/environments/${environment.id}/diagnostics`}>
+              诊断
+            </Link>
+          </Button>
+          {environment.primaryDomainUrl ? (
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+                地址
+              </a>
+            </Button>
+          ) : null}
         </div>
       </div>
     </details>
@@ -1688,12 +1669,6 @@ export function EnvironmentsPageClient({
                 <Link href={`/projects/${projectId}/environments`}>全部环境</Link>
               </Button>
             ) : null}
-            <Button asChild variant="outline">
-              <Link href={`/projects/${projectId}/environments`}>
-                <Globe className="h-4 w-4" />
-                环境
-              </Link>
-            </Button>
             <Button asChild variant="outline">
               <Link href={`/projects/${projectId}/delivery`}>
                 <Rocket className="h-4 w-4" />

@@ -6,17 +6,14 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
-import { ReleaseEnvironmentCenter } from '@/components/projects/ReleaseEnvironmentCenter';
 import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar';
 import { ReleasePromoteDialog } from '@/components/projects/ReleasePromoteDialog';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { PlatformSignalChipList } from '@/components/ui/platform-signals';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
 import { createProductionRelease } from '@/lib/releases/client-actions';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
-import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
 import { cn } from '@/lib/utils';
 
@@ -104,15 +101,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const manageableEnvironments = environments.filter((environment) =>
     governance.manageableEnvironmentIds.includes(environment.id)
   );
-  const environmentReleaseCenter = environments.map((environment) => {
-    const latestRelease =
-      releaseItems.find((release) => release.environment.id === environment.id) ?? null;
-
-    return {
-      environment,
-      latestRelease,
-    };
-  });
   const hasPromotionTarget = initialData.hasPromotionTarget;
   const sourcePromotionReleaseId = promotePlan?.sourceRelease?.id ?? null;
   const latestPromotionSourceRelease = sourcePromotionReleaseId
@@ -124,12 +112,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     governance.promoteToProduction.allowed &&
     (promotePlan?.plan.canCreate ?? true) &&
     !promotePlan?.plan.blockingReason;
-  const promotePanel = promotePlan
-    ? buildReleasePlanningPanel({
-        plan: promotePlan.plan,
-        sourceCommitSha: promotePlan.sourceRelease?.sourceCommitSha,
-      })
-    : null;
   const promoteAI = initialData.promoteAI;
   const manualReleaseSources = initialData.manualReleaseSources.map((release) => ({
     ...release,
@@ -148,18 +130,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               label={isConnected ? '在线' : '离线'}
               pulse={isConnected}
             />
-            <Button asChild variant="outline" size="sm" className="h-9 px-4">
-              <Link href={`/projects/${projectId}/environments`}>
-                <ScrollText className="h-3.5 w-3.5" />
-                环境
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className="h-9 px-4">
-              <Link href={`/projects/${projectId}/schema`}>
-                <Database className="h-3.5 w-3.5" />
-                数据
-              </Link>
-            </Button>
             <ManualReleaseDialog
               projectId={projectId}
               environments={manageableEnvironments}
@@ -204,17 +174,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         </div>
       )}
 
-      <ReleaseEnvironmentCenter
-        projectId={projectId}
-        items={environmentReleaseCenter}
-        onShowRecords={(environmentName) =>
-          updateFilters({
-            env: environmentName,
-            risk: 'attention',
-          })
-        }
-      />
-
       <ReleasePromoteDialog
         open={promoteDialogOpen}
         onOpenChange={setPromoteDialogOpen}
@@ -225,21 +184,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         onPromote={handlePromote}
       />
 
-      {hasPromotionTarget && promotePanel && (
-        <div className="console-panel px-4 py-4">
-          <PlatformSignalChipList chips={promotePanel.chips} className="items-center" />
-          {promotePanel.blockingReason && (
-            <div className="mt-3 text-sm text-muted-foreground">{promotePanel.blockingReason}</div>
-          )}
-          {!promotePanel.blockingReason && promotePanel.warningChips.length > 0 && (
-            <PlatformSignalChipList
-              chips={promotePanel.warningChips.slice(0, 3)}
-              className="mt-3"
-            />
-          )}
-        </div>
-      )}
-
       <div className="ui-control-muted rounded-[20px] px-4 py-3">
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <StatusIndicator
@@ -247,7 +191,20 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             label={isConnected ? '实时同步' : '未连接'}
           />
           <span>{governance.roleLabel}</span>
-          <span>{governance.promoteToProduction.summary}</span>
+          {hasPromotionTarget ? (
+            <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2.5">
+              <Link href={`/projects/${projectId}/environments`}>
+                <ScrollText className="h-3.5 w-3.5" />
+                环境
+              </Link>
+            </Button>
+          ) : null}
+          <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2.5">
+            <Link href={`/projects/${projectId}/schema`}>
+              <Database className="h-3.5 w-3.5" />
+              数据
+            </Link>
+          </Button>
         </div>
       </div>
 

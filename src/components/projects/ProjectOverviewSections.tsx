@@ -1,12 +1,10 @@
-import { AlertTriangle, ArrowRight, ExternalLink, GitBranch, Settings2 } from 'lucide-react';
+import { ArrowRight, ExternalLink, GitBranch, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ProjectCommandCenterSnapshot } from '@/lib/projects/overview-command-center';
 import type { ProjectOverviewPageData } from '@/lib/projects/service';
-import { getStatusDotClass } from '@/lib/releases/status-presentation';
 import { getRuntimeStatusDotClass } from '@/lib/runtime/status-presentation';
-import { formatPlatformDateTime } from '@/lib/time/format';
 
 interface ProjectOverviewHeroProps {
   commandCenter: ProjectCommandCenterSnapshot;
@@ -21,18 +19,13 @@ export function ProjectOverviewHero({
 }: ProjectOverviewHeroProps) {
   return (
     <section className="ui-floating px-5 py-5">
-      <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]">
         <div className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {commandCenter.eyebrow}
-            </div>
+          <div className="space-y-1.5">
             <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
               {commandCenter.title}
             </h2>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              {commandCenter.summary}
-            </p>
+            <p className="max-w-2xl text-sm text-muted-foreground">{commandCenter.summary}</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button asChild size="sm" className="h-10 px-4">
@@ -59,9 +52,9 @@ export function ProjectOverviewHero({
             <span className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(projectStatus)}`} />
             <span>{projectStatusLabel}</span>
           </div>
-          {commandCenter.primaryAction.description ? (
-            <div className="mt-3 text-sm text-muted-foreground">
-              {commandCenter.primaryAction.description}
+          {commandCenter.eyebrow ? (
+            <div className="mt-3 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+              {commandCenter.eyebrow}
             </div>
           ) : null}
         </div>
@@ -233,116 +226,6 @@ export function ProjectEnvironmentIndex({
             </div>
           ))
         )}
-      </div>
-    </section>
-  );
-}
-
-export function ProjectActivitySection({
-  projectId,
-  attentionItems,
-  recentReleaseCards,
-}: {
-  projectId: string;
-  attentionItems: ProjectOverviewPageData['attentionItems'];
-  recentReleaseCards: ProjectOverviewPageData['recentReleaseCards'];
-}) {
-  return (
-    <section className="ui-floating overflow-hidden">
-      <div className="console-divider-bottom px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm font-semibold">动态</div>
-          <Button asChild variant="outline" size="sm" className="h-8 px-3">
-            <Link href={`/projects/${projectId}/delivery`}>查看交付</Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="space-y-5 p-3">
-        <div className="space-y-2">
-          <div className="px-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            待处理
-          </div>
-          {attentionItems.length === 0 ? (
-            <div className="ui-control-muted flex min-h-36 flex-col items-center justify-center rounded-2xl p-6 text-center">
-              <AlertTriangle className="mb-3 h-5 w-5 text-muted-foreground" />
-              <div className="text-sm font-medium">没有阻塞项</div>
-            </div>
-          ) : (
-            attentionItems.slice(0, 3).map((run) => (
-              <Link
-                key={run.id}
-                href={
-                  run.releaseId
-                    ? `/projects/${projectId}/delivery/${run.releaseId}`
-                    : `/projects/${projectId}/delivery`
-                }
-                className="ui-control rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/70"
-              >
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`h-2 w-2 rounded-full ${getStatusDotClass(run.status, 'migration')}`}
-                      />
-                      <div className="truncate text-sm font-medium">
-                        {run.releaseTitle ?? run.issueLabel ?? run.database?.name ?? '待处理项'}
-                      </div>
-                    </div>
-                    <div className="mt-1 truncate text-xs text-muted-foreground">
-                      {run.platformSignals.primarySummary ??
-                        run.platformSignals.nextActionLabel ??
-                        run.actionLabel ??
-                        '处理'}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatPlatformDateTime(run.createdAt, { includeYear: false }) ?? '—'}
-                  </div>
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <div className="px-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            最近发布
-          </div>
-          {recentReleaseCards.length === 0 ? (
-            <div className="ui-control-muted flex min-h-32 items-center justify-center rounded-2xl text-sm text-muted-foreground">
-              没有发布
-            </div>
-          ) : (
-            recentReleaseCards.slice(0, 3).map((release) => (
-              <Link
-                key={release.id}
-                href={`/projects/${projectId}/delivery/${release.id}`}
-                className="ui-control rounded-2xl px-4 py-3 transition-colors hover:bg-secondary/70"
-              >
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`h-2 w-2 rounded-full ${getStatusDotClass(release.status ?? '', 'release')}`}
-                      />
-                      <span className="truncate text-sm font-medium">{release.title}</span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span>{release.environment.name ?? '环境'}</span>
-                      {release.platformSignals.primarySummary ? (
-                        <span className="truncate">{release.platformSignals.primarySummary}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatPlatformDateTime(release.createdAt, { includeYear: false }) ?? '—'}
-                  </div>
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
       </div>
     </section>
   );

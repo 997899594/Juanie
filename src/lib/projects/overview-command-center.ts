@@ -3,7 +3,6 @@ import type { ProjectOverviewPageData } from '@/lib/projects/service';
 interface ProjectOverviewAction {
   label: string;
   href: string;
-  description?: string;
 }
 
 export interface ProjectCommandCenterSnapshot {
@@ -24,17 +23,12 @@ export function buildProjectCommandCenter(
 
   if (primaryEnvironment) {
     return {
-      eyebrow: '从环境开始',
+      eyebrow: 'environment first',
       title: `先进入 ${primaryEnvironment.name}`,
-      summary:
-        primaryEnvironment.platformSignals.primarySummary ??
-        '项目页只做索引，真正的工作都放到具体环境里继续处理。',
+      summary: primaryEnvironment.platformSignals.primarySummary ?? '项目页只保留入口。',
       primaryAction: {
         label: '打开环境',
         href: `/projects/${projectId}/environments/${primaryEnvironment.id}`,
-        description:
-          primaryEnvironment.platformSignals.nextActionLabel ??
-          '进入后先看当前版本、诊断和下一步动作。',
       },
       secondaryAction: primaryAttention
         ? {
@@ -54,16 +48,15 @@ export function buildProjectCommandCenter(
 
   if (currentRelease) {
     return {
-      eyebrow: '先补主链',
+      eyebrow: 'latest release',
       title: currentRelease.title,
       summary:
         currentRelease.platformSignals.primarySummary ??
         currentRelease.sourceSummary ??
-        '先确认最新发布，再决定下一步去哪个环境处理。',
+        '查看最新发布。',
       primaryAction: {
         label: '查看最新发布',
         href: `/projects/${projectId}/delivery/${currentRelease.id}`,
-        description: '确认这次发布影响了哪个环境，再继续处理。',
       },
       secondaryAction: {
         label: '查看环境',
@@ -73,13 +66,12 @@ export function buildProjectCommandCenter(
   }
 
   return {
-    eyebrow: '项目初始化',
+    eyebrow: 'setup',
     title: '继续完成项目配置',
-    summary: '先补齐环境和第一次发布，让项目先形成可进入的主链路。',
+    summary: '先补齐环境和第一次发布。',
     primaryAction: {
       label: '查看环境',
       href: `/projects/${projectId}/environments`,
-      description: '先把项目内的环境结构建立起来。',
     },
     secondaryAction: {
       label: '查看设置',

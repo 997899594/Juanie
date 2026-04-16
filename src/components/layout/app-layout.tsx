@@ -20,8 +20,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <Sidebar />
       <div className="min-h-screen lg:pl-60">
-        <Header />
-        <main className="relative px-4 pb-24 pt-5 md:px-6 lg:pb-8 lg:pt-6">
+        <div className="lg:hidden">
+          <Header />
+        </div>
+        <main className="relative px-4 pb-24 pt-5 md:px-6 lg:pb-8 lg:pt-8">
           <div className="mx-auto max-w-[1400px]">{children}</div>
         </main>
       </div>

@@ -12,6 +12,7 @@ import {
   mainNav,
   projectNav,
 } from './navigation';
+import { UserMenu } from './user-menu';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -97,6 +98,10 @@ export function Sidebar() {
               </nav>
             </div>
           )}
+        </div>
+
+        <div className="console-divider-top p-3">
+          <UserMenu variant="sidebar" />
         </div>
       </div>
     </aside>
