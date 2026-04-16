@@ -12,9 +12,10 @@ export interface ReleasePageGovernanceSnapshot {
   roleLabel: string;
   primarySummary: string;
   manageableEnvironmentIds: string[];
-  promoteToProduction: {
+  promotion: {
     allowed: boolean;
     summary: string;
+    manageableTargetIds: string[];
   };
   manualMigration: {
     allowed: boolean;
@@ -56,14 +57,15 @@ export function buildReleaseEnvironmentActionSnapshot(
 export function buildReleasePageGovernanceSnapshot(input: {
   role: TeamRole;
   environments: GovernanceEnvironmentLike[];
+  promotionTargets?: GovernanceEnvironmentLike[];
 }): ReleasePageGovernanceSnapshot {
   const manageableEnvironmentIds = input.environments
     .filter((environment) => canManageEnvironment(input.role, environment))
     .map((environment) => environment.id);
-  const productionEnvironments = input.environments.filter((environment) =>
-    isProductionEnvironment(environment)
-  );
-  const canPromoteToProduction = productionEnvironments.every((environment) =>
+  const promotionTargets =
+    input.promotionTargets ??
+    input.environments.filter((environment) => isProductionEnvironment(environment));
+  const manageablePromotionTargets = promotionTargets.filter((environment) =>
     canManageEnvironment(input.role, environment)
   );
   const canRunManualMigration = input.role === 'owner' || input.role === 'admin';
@@ -74,17 +76,20 @@ export function buildReleasePageGovernanceSnapshot(input: {
       input.role === 'owner'
         ? '你可以管理全部发布、生产回滚和迁移审批'
         : input.role === 'admin'
-          ? '你可以管理生产发布、回滚和人工迁移，但不能删除项目'
-          : '你可以管理非生产发布，生产和人工迁移受保护',
+          ? '你可以管理受保护环境提升、回滚和人工迁移，但不能删除项目'
+          : '你可以管理非生产发布，受保护环境提升和人工迁移受限',
     manageableEnvironmentIds,
-    promoteToProduction: {
-      allowed: canPromoteToProduction,
+    promotion: {
+      allowed: manageablePromotionTargets.length > 0,
       summary:
-        productionEnvironments.length === 0
-          ? '当前项目还没有生产环境'
-          : canPromoteToProduction
-            ? '可执行生产发布和生产回滚'
-            : '生产发布和回滚只允许 owner 或 admin',
+        promotionTargets.length === 0
+          ? '当前项目还没有配置环境提升链路'
+          : manageablePromotionTargets.length === 0
+            ? '当前提升链路的目标环境受保护'
+            : manageablePromotionTargets.length === promotionTargets.length
+              ? '可执行环境提升与回滚'
+              : '部分提升链路受保护，当前仅可操作可管理目标环境',
+      manageableTargetIds: manageablePromotionTargets.map((environment) => environment.id),
     },
     manualMigration: {
       allowed: canRunManualMigration,

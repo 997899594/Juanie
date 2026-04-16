@@ -10,6 +10,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
 import { formatPlatformDateTime } from '@/lib/time/format';
@@ -44,11 +51,25 @@ function getAILevelLabel(level?: 'low' | 'medium' | 'high' | null): string | nul
   }
 }
 
+function getPromotionStrategyLabel(
+  strategy?: 'reuse_release_artifacts' | 'rebuild_from_ref' | null
+): string | null {
+  switch (strategy) {
+    case 'reuse_release_artifacts':
+      return '复用已有制品';
+    case 'rebuild_from_ref':
+      return '重新构建';
+    default:
+      return null;
+  }
+}
+
 interface ReleasePromoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  promotePlan: Awaited<ReturnType<typeof getProjectReleasesPageData>>['promotePlan'];
-  promoteAI: Awaited<ReturnType<typeof getProjectReleasesPageData>>['promoteAI'];
+  promotionPlans: Awaited<ReturnType<typeof getProjectReleasesPageData>>['promotionPlans'];
+  selectedFlowId: string | null;
+  onSelectedFlowIdChange: (flowId: string | null) => void;
   canPromote: boolean;
   promoting: boolean;
   onPromote: () => void;
@@ -57,16 +78,21 @@ interface ReleasePromoteDialogProps {
 export function ReleasePromoteDialog({
   open,
   onOpenChange,
-  promotePlan,
-  promoteAI,
+  promotionPlans,
+  selectedFlowId,
+  onSelectedFlowIdChange,
   canPromote,
   promoting,
   onPromote,
 }: ReleasePromoteDialogProps) {
-  const promotePanel = promotePlan
+  const selectedPlan =
+    promotionPlans.find((plan) => plan.flowId === selectedFlowId) ?? promotionPlans[0] ?? null;
+  const selectedFlowValue = selectedPlan?.flowId ?? '__default__';
+  const promoteAI = selectedPlan?.ai ?? null;
+  const promotePanel = selectedPlan
     ? buildReleasePlanningPanel({
-        plan: promotePlan.plan,
-        sourceCommitSha: promotePlan.sourceRelease?.sourceCommitSha,
+        plan: selectedPlan.plan,
+        sourceCommitSha: selectedPlan.sourceRelease?.sourceCommitSha,
       })
     : null;
 
@@ -74,33 +100,91 @@ export function ReleasePromoteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
-          <DialogTitle>发布到 {promotePlan?.targetEnvironment?.name ?? '目标环境'}</DialogTitle>
+          <DialogTitle>提升到 {selectedPlan?.targetEnvironment?.name ?? '目标环境'}</DialogTitle>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
             <div className="space-y-4">
               <div className="ui-control p-4 sm:p-5">
-                <div className="text-sm font-semibold text-foreground">来源</div>
+                <div className="text-sm font-semibold text-foreground">提升链路</div>
 
-                {promotePlan?.sourceRelease ? (
+                {promotionPlans.length > 1 ? (
+                  <div className="mt-4">
+                    <Select
+                      value={selectedFlowValue}
+                      onValueChange={(value) =>
+                        onSelectedFlowIdChange(value === '__default__' ? null : value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="选择提升链路" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {promotionPlans.map((plan) => (
+                          <SelectItem
+                            key={plan.flowId ?? '__default__'}
+                            value={plan.flowId ?? '__default__'}
+                          >
+                            {(plan.sourceEnvironment?.name ?? '来源环境') +
+                              ' -> ' +
+                              (plan.targetEnvironment?.name ?? '目标环境')}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+
+                {selectedPlan ? (
                   <div className="mt-4 space-y-3 text-sm">
-                    <div className="ui-control-muted px-4 py-3">
-                      <div className="text-xs text-muted-foreground">来源发布</div>
-                      <div className="mt-1 text-foreground">
-                        {promotePlan.sourceRelease.summary ??
-                          `最近一次 ${promotePlan.sourceEnvironment?.name ?? '来源环境'} 成功版本`}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">
+                        {selectedPlan.sourceEnvironment?.name ?? '来源环境'}
+                      </Badge>
+                      <span className="text-muted-foreground">→</span>
+                      <Badge variant="outline">
+                        {selectedPlan.targetEnvironment?.name ?? '目标环境'}
+                      </Badge>
+                      {getPromotionStrategyLabel(selectedPlan.strategy) ? (
+                        <Badge variant="outline">
+                          {getPromotionStrategyLabel(selectedPlan.strategy)}
+                        </Badge>
+                      ) : null}
+                      {selectedPlan.requiresApproval ? (
+                        <Badge variant="outline">需要审批</Badge>
+                      ) : null}
+                    </div>
+
+                    {selectedPlan.sourceRelease ? (
+                      <div className="ui-control-muted px-4 py-3">
+                        <div className="text-xs text-muted-foreground">来源发布</div>
+                        <div className="mt-1 text-foreground">
+                          {selectedPlan.sourceRelease.summary ??
+                            `最近一次 ${selectedPlan.sourceEnvironment?.name ?? '来源环境'} 成功版本`}
+                        </div>
+                        {selectedPlan.sourceRelease.sourceCommitSha && (
+                          <code className="mt-2 inline-flex rounded-lg bg-secondary px-2 py-1 text-xs text-muted-foreground">
+                            {selectedPlan.sourceRelease.sourceCommitSha.slice(0, 12)}
+                          </code>
+                        )}
                       </div>
-                      {promotePlan.sourceRelease.sourceCommitSha && (
-                        <code className="mt-2 inline-flex rounded-lg bg-secondary px-2 py-1 text-xs text-muted-foreground">
-                          {promotePlan.sourceRelease.sourceCommitSha.slice(0, 12)}
-                        </code>
-                      )}
+                    ) : (
+                      <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
+                        {selectedPlan.sourceEnvironment?.name ?? '来源环境'} 暂无可复用的成功发布。
+                      </div>
+                    )}
+
+                    <div className="ui-control-muted px-4 py-3">
+                      <div className="text-xs text-muted-foreground">目标环境</div>
+                      <div className="mt-1 text-foreground">
+                        {selectedPlan.targetEnvironment?.name ?? '目标环境'}
+                      </div>
                     </div>
                   </div>
                 ) : (
                   <div className="ui-control-muted mt-4 px-4 py-8 text-sm text-muted-foreground">
-                    没有可用版本。
+                    没有可用的提升链路。
                   </div>
                 )}
               </div>
@@ -205,7 +289,7 @@ export function ReleasePromoteDialog({
             onClick={onPromote}
             disabled={promoting || !canPromote}
           >
-            {promoting ? '发布中...' : '确认发布'}
+            {promoting ? '提升中...' : '确认提升'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -3,7 +3,7 @@
 import { ArrowUpCircle, Database, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
 import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar';
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatusIndicator } from '@/components/ui/status-indicator';
 import { useReleases } from '@/hooks/useReleases';
-import { createProductionRelease } from '@/lib/releases/client-actions';
+import { createPromotionRelease } from '@/lib/releases/client-actions';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,15 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const [promoting, setPromoting] = useState(false);
   const [promoteResult, setPromoteResult] = useState<string | null>(null);
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
+  const [selectedPromotionFlowId, setSelectedPromotionFlowId] = useState<string | null>(
+    initialData.promotionPlans.find((plan) =>
+      plan.targetEnvironment
+        ? initialData.governance.promotion.manageableTargetIds.includes(plan.targetEnvironment.id)
+        : false
+    )?.flowId ??
+      initialData.promotionPlans[0]?.flowId ??
+      null
+  );
   const initialLatestRelease = initialData.releaseItems[0];
   const initialLatestReleaseState = buildReleaseEventStateKey(
     initialLatestRelease
@@ -52,20 +61,51 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     onRelease: () => router.refresh(),
   });
 
+  useEffect(() => {
+    const hasSelectedFlow = initialData.promotionPlans.some(
+      (plan) => plan.flowId === selectedPromotionFlowId
+    );
+
+    if (hasSelectedFlow) {
+      return;
+    }
+
+    setSelectedPromotionFlowId(
+      initialData.promotionPlans.find((plan) =>
+        plan.targetEnvironment
+          ? initialData.governance.promotion.manageableTargetIds.includes(plan.targetEnvironment.id)
+          : false
+      )?.flowId ??
+        initialData.promotionPlans[0]?.flowId ??
+        null
+    );
+  }, [
+    initialData.governance.promotion.manageableTargetIds,
+    initialData.promotionPlans,
+    selectedPromotionFlowId,
+  ]);
+
   const handlePromote = async () => {
     if (promoting) return;
     setPromoting(true);
     setPromoteResult(null);
 
     try {
-      const data = await createProductionRelease({ projectId });
+      const data = await createPromotionRelease({
+        projectId,
+        flowId: selectedPromotionFlowId,
+      });
 
-      setPromoteResult(data.tagName ? `已创建生产发布 · ${data.tagName}` : '已创建生产发布');
+      setPromoteResult(
+        data.tagName
+          ? `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'} · ${data.tagName}`
+          : `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'}`
+      );
       setPromoteDialogOpen(false);
       router.refresh();
     } catch (promoteError) {
       setPromoteResult(
-        `错误：${promoteError instanceof Error ? promoteError.message : '创建生产发布失败'}`
+        `错误：${promoteError instanceof Error ? promoteError.message : '创建提升发布失败'}`
       );
     } finally {
       setPromoting(false);
@@ -91,30 +131,38 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
-  const releaseItems = initialData.releaseItems;
   const environments = initialData.environments;
   const governance = initialData.governance;
   const filter = initialData.selectedEnv;
   const riskFilter = initialData.selectedRisk;
   const filtered = initialData.filteredReleaseItems;
-  const promotePlan = initialData.promotePlan;
+  const promotionPlans = initialData.promotionPlans;
   const manageableEnvironments = environments.filter(
     (environment) =>
       governance.manageableEnvironmentIds.includes(environment.id) &&
       environment.deliveryMode !== 'promote_only'
   );
   const hasPromotionTarget = initialData.hasPromotionTarget;
-  const sourcePromotionReleaseId = promotePlan?.sourceRelease?.id ?? null;
-  const latestPromotionSourceRelease = sourcePromotionReleaseId
-    ? (releaseItems.find((release) => release.id === sourcePromotionReleaseId) ?? null)
-    : null;
+  const selectedPromotionPlan =
+    promotionPlans.find((plan) => plan.flowId === selectedPromotionFlowId) ??
+    promotionPlans[0] ??
+    null;
+  const canManageSelectedTarget = selectedPromotionPlan?.targetEnvironment
+    ? governance.promotion.manageableTargetIds.includes(selectedPromotionPlan.targetEnvironment.id)
+    : false;
   const canPromote =
     hasPromotionTarget &&
-    !!latestPromotionSourceRelease &&
-    governance.promoteToProduction.allowed &&
-    (promotePlan?.plan.canCreate ?? true) &&
-    !promotePlan?.plan.blockingReason;
-  const promoteAI = initialData.promoteAI;
+    !!selectedPromotionPlan?.sourceRelease &&
+    canManageSelectedTarget &&
+    (selectedPromotionPlan.plan.canCreate ?? true) &&
+    !selectedPromotionPlan.plan.blockingReason;
+  const promoteButtonTitle =
+    !selectedPromotionPlan || !selectedPromotionPlan.targetEnvironment
+      ? governance.promotion.summary
+      : !canManageSelectedTarget
+        ? governance.promotion.summary
+        : (selectedPromotionPlan.plan.blockingReason ??
+          `将 ${selectedPromotionPlan.sourceEnvironment?.name ?? '来源环境'} 提升到 ${selectedPromotionPlan.targetEnvironment.name}`);
   const manualReleaseSources = initialData.manualReleaseSources.map((release) => ({
     ...release,
     sourceRef: release.sourceRef ?? '',
@@ -146,11 +194,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                 size="sm"
                 className="h-9 px-4"
                 onClick={() => setPromoteDialogOpen(true)}
-                disabled={promoting || !canPromote}
-                title={governance.promoteToProduction.summary}
+                disabled={promoting || !governance.promotion.allowed}
+                title={promoteButtonTitle}
               >
                 <ArrowUpCircle className="h-3.5 w-3.5" />
-                {promoting ? '发布中...' : '发布到生产'}
+                {promoting ? '提升中...' : '提升发布'}
               </Button>
             )}
           </div>
@@ -179,8 +227,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       <ReleasePromoteDialog
         open={promoteDialogOpen}
         onOpenChange={setPromoteDialogOpen}
-        promotePlan={promotePlan}
-        promoteAI={promoteAI}
+        promotionPlans={promotionPlans}
+        selectedFlowId={selectedPromotionFlowId}
+        onSelectedFlowIdChange={setSelectedPromotionFlowId}
         canPromote={canPromote}
         promoting={promoting}
         onPromote={handlePromote}
@@ -240,11 +289,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             <Button
               size="sm"
               onClick={() => setPromoteDialogOpen(true)}
-              disabled={promoting || !canPromote}
-              title={governance.promoteToProduction.summary}
+              disabled={promoting || !governance.promotion.allowed}
+              title={promoteButtonTitle}
             >
               <ArrowUpCircle className="h-3.5 w-3.5" />
-              生产
+              提升
             </Button>
           )}
         </div>

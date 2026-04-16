@@ -7,8 +7,7 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import { environments, projects, promotionFlows, releases, repositories } from '@/lib/db/schema';
-import { resolvePrimaryPromotionFlow } from '@/lib/environments/promotion';
+import { environments, projects, releases, repositories } from '@/lib/db/schema';
 import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
@@ -16,28 +15,34 @@ import { createProjectRelease } from '@/lib/releases';
 import { buildPromotionPlan } from '@/lib/releases/planning';
 import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const session = await requireSession();
     const { member } = await getProjectAccessOrThrow(id, session.user.id);
 
-    const envList = await db.query.environments.findMany({
-      where: eq(environments.projectId, id),
-    });
-    const flowList = await db.query.promotionFlows.findMany({
-      where: eq(promotionFlows.projectId, id),
-    });
-    const { targetEnvironment: prodEnv } = resolvePrimaryPromotionFlow({
-      environments: envList,
-      promotionFlows: flowList,
+    const url = new URL(request.url);
+    const flowId = url.searchParams.get('flowId');
+    const promotion = await buildPromotionPlan(id, {
+      flowId,
     });
 
-    if (prodEnv && !canManageEnvironment(member.role, prodEnv)) {
-      return NextResponse.json({ error: getEnvironmentGuardReason(prodEnv) }, { status: 403 });
+    if (!promotion.targetEnvironment && flowId) {
+      return NextResponse.json(
+        { error: promotion.plan.blockingReason ?? '未找到对应的提升链路' },
+        { status: 404 }
+      );
     }
 
-    const promotion = await buildPromotionPlan(id);
+    if (
+      promotion.targetEnvironment &&
+      !canManageEnvironment(member.role, promotion.targetEnvironment)
+    ) {
+      return NextResponse.json(
+        { error: getEnvironmentGuardReason(promotion.targetEnvironment) },
+        { status: 403 }
+      );
+    }
 
     return NextResponse.json(promotion);
   } catch (error) {
@@ -54,44 +59,47 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 }
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const session = await requireSession();
     const { project, member } = await getProjectWithRepositoryAccessOrThrow(id, session.user.id);
-
-    const envList = await db.query.environments.findMany({
-      where: eq(environments.projectId, id),
-    });
-    const flowList = await db.query.promotionFlows.findMany({
-      where: eq(promotionFlows.projectId, id),
-    });
-    const {
-      flow: promotionFlow,
-      sourceEnvironment: stagingEnv,
-      targetEnvironment: prodEnv,
-    } = resolvePrimaryPromotionFlow({
-      environments: envList,
-      promotionFlows: flowList,
+    const body = await request.json().catch(() => ({}));
+    const flowId = typeof body?.flowId === 'string' ? body.flowId : undefined;
+    const promotion = await buildPromotionPlan(id, {
+      flowId,
     });
 
-    if (!stagingEnv) {
-      return NextResponse.json({ error: 'No promotion source environment found' }, { status: 400 });
-    }
-    if (!prodEnv) {
-      return NextResponse.json({ error: 'No production environment found' }, { status: 400 });
-    }
-    if (!canManageEnvironment(member.role, prodEnv)) {
-      return NextResponse.json({ error: getEnvironmentGuardReason(prodEnv) }, { status: 403 });
-    }
-    if (!prodEnv.namespace) {
+    if (!promotion.sourceEnvironment) {
       return NextResponse.json(
-        { error: 'Production environment namespace not provisioned yet' },
+        { error: promotion.plan.blockingReason ?? '没有可用的提升来源环境' },
+        { status: 400 }
+      );
+    }
+    if (!promotion.targetEnvironment) {
+      return NextResponse.json(
+        { error: promotion.plan.blockingReason ?? '没有可用的提升目标环境' },
+        { status: flowId ? 404 : 400 }
+      );
+    }
+    if (!canManageEnvironment(member.role, promotion.targetEnvironment)) {
+      return NextResponse.json(
+        { error: getEnvironmentGuardReason(promotion.targetEnvironment) },
+        { status: 403 }
+      );
+    }
+    const targetEnvironment = await db.query.environments.findFirst({
+      where: eq(environments.id, promotion.targetEnvironment.id),
+    });
+    const targetNamespace = targetEnvironment?.namespace ?? null;
+
+    if (!targetNamespace) {
+      return NextResponse.json(
+        { error: `${promotion.targetEnvironment.name} 环境命名空间尚未准备完成` },
         { status: 400 }
       );
     }
 
-    const promotion = await buildPromotionPlan(id);
     const sourceRelease = promotion.sourceRelease
       ? await db.query.releases.findFirst({
           where: eq(releases.id, promotion.sourceRelease.id),
@@ -107,21 +115,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
     if (!promotion.plan.canCreate) {
       return NextResponse.json(
-        { error: promotion.plan.blockingReason ?? 'Unable to promote' },
+        { error: promotion.plan.blockingReason ?? '当前无法执行提升' },
         { status: 400 }
       );
     }
 
     if (!sourceRelease || sourceRelease.artifacts.length === 0) {
       return NextResponse.json(
-        { error: 'Staging release has no artifacts — trigger a fresh release first' },
+        { error: `${promotion.sourceEnvironment.name} 来源发布缺少可复用制品，请先重新发布` },
         { status: 400 }
       );
     }
 
-    const prodRelease = await createProjectRelease({
+    const promotedRelease = await createProjectRelease({
       projectId: id,
-      environmentId: prodEnv.id,
+      environmentId: promotion.targetEnvironment.id,
       services: sourceRelease.artifacts.map((artifact) => ({
         id: artifact.serviceId,
         name: artifact.service.name,
@@ -135,14 +143,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       sourceReleaseId: sourceRelease.id,
       triggeredBy: 'manual',
       triggeredByUserId: session.user.id,
-      summary: `Promote ${sourceRelease.sourceCommitSha?.slice(0, 7) ?? 'release'} to ${prodEnv.name}`,
+      summary: `提升 ${sourceRelease.sourceCommitSha?.slice(0, 7) ?? 'release'} 到 ${promotion.targetEnvironment.name}`,
       entryPoint: 'promotion',
     });
 
-    // Create git tag (best-effort, don't fail if this errors)
     const tagName = await createGitTag(
       project,
       sourceRelease.sourceCommitSha,
+      promotion.targetEnvironment.name,
       session.user.id
     ).catch((e) => {
       console.warn('Failed to create git tag:', e);
@@ -152,14 +160,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return NextResponse.json(
       {
         success: true,
-        releaseId: prodRelease?.id,
+        releaseId: promotedRelease?.id,
         plan: promotion.plan,
-        artifacts: prodRelease?.artifacts.map((artifact) => ({
+        artifacts: promotedRelease?.artifacts.map((artifact) => ({
           service: artifact.service.name,
           imageUrl: artifact.imageUrl,
         })),
         commitSha: sourceRelease.sourceCommitSha,
-        promotionFlowId: promotionFlow?.id ?? null,
+        promotionFlowId: promotion.flowId,
+        targetEnvironmentName: promotion.targetEnvironment.name,
         tagName,
       },
       { status: 202 }
@@ -177,11 +186,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 async function createGitTag(
   project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
   commitSha: string | null,
+  environmentName: string,
   actingUserId?: string | null
 ): Promise<string | null> {
   if (!commitSha || !project.repository) return null;
 
-  const tag = `v${new Date().toISOString().slice(0, 10).replace(/-/g, '.')}-${commitSha.slice(0, 7)}`;
+  const tag = `juanie-${sanitizeTagSegment(environmentName)}-${new Date()
+    .toISOString()
+    .slice(0, 10)
+    .replace(/-/g, '.')}-${commitSha.slice(0, 7)}`;
 
   const integrationSession = await getTeamIntegrationSession({
     teamId: project.teamId,
@@ -228,4 +241,13 @@ async function createGitTag(
   }
 
   return null;
+}
+
+function sanitizeTagSegment(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
 }

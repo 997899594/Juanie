@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import {
   deployments,
   environments,
+  type PromotionFlowStrategy,
   projects,
   promotionFlows,
   releases,
@@ -12,7 +13,12 @@ import {
   getEnvironmentDatabaseStrategyLabel,
   getEnvironmentInheritancePresentation,
 } from '@/lib/environments/presentation';
-import { resolvePrimaryPromotionFlow } from '@/lib/environments/promotion';
+import {
+  type PromotionFlowResolution,
+  resolvePrimaryPromotionFlow,
+  resolvePromotionFlow,
+  resolvePromotionFlows,
+} from '@/lib/environments/promotion';
 import { resolveMigrationSpecifications } from '@/lib/migrations';
 import {
   type EnvironmentPolicySnapshot,
@@ -97,6 +103,28 @@ export interface ReleasePlanningSnapshot {
   environmentInheritance: string | null;
   environmentDatabaseStrategy: string | null;
   summary: string | null;
+}
+
+export interface PromotionPlanSnapshot {
+  flowId: string | null;
+  strategy: PromotionFlowStrategy | null;
+  requiresApproval: boolean;
+  sourceRelease: {
+    id: string;
+    summary: string | null;
+    sourceCommitSha: string | null;
+  } | null;
+  sourceEnvironment: {
+    id: string;
+    name: string;
+    isProduction: boolean;
+  } | null;
+  targetEnvironment: {
+    id: string;
+    name: string;
+    isProduction: boolean;
+  } | null;
+  plan: ReleasePlanningSnapshot;
 }
 
 function buildStaticPlanningSnapshot(input: {
@@ -408,22 +436,139 @@ export async function buildProjectReleasePlan(input: {
   });
 }
 
-export async function buildPromotionPlan(projectId: string): Promise<{
-  sourceRelease: {
-    id: string;
-    summary: string | null;
-    sourceCommitSha: string | null;
-  } | null;
-  sourceEnvironment: {
-    id: string;
-    name: string;
-  } | null;
-  targetEnvironment: {
-    id: string;
-    name: string;
-  } | null;
-  plan: ReleasePlanningSnapshot;
-}> {
+function buildStaticPromotionPlan(input: {
+  sourceEnvironment?: PromotionPlanSnapshot['sourceEnvironment'];
+  targetEnvironment?: PromotionPlanSnapshot['targetEnvironment'];
+  flowId?: string | null;
+  strategy?: PromotionFlowStrategy | null;
+  requiresApproval?: boolean;
+  blockingReason: string;
+  environment?: PlanningEnvironmentLike;
+}): PromotionPlanSnapshot {
+  return {
+    flowId: input.flowId ?? null,
+    strategy: input.strategy ?? null,
+    requiresApproval: input.requiresApproval ?? false,
+    sourceRelease: null,
+    sourceEnvironment: input.sourceEnvironment ?? null,
+    targetEnvironment: input.targetEnvironment ?? null,
+    plan: buildStaticPlanningSnapshot({
+      canCreate: false,
+      blockingReason: input.blockingReason,
+      environment: input.environment ?? input.targetEnvironment ?? { isProduction: false },
+    }),
+  };
+}
+
+function toPromotionPlanEnvironment(
+  environment: typeof environments.$inferSelect | null
+): PromotionPlanSnapshot['targetEnvironment'] {
+  if (!environment) {
+    return null;
+  }
+
+  return {
+    id: environment.id,
+    name: environment.name,
+    isProduction: environment.isProduction,
+  };
+}
+
+async function buildPromotionPlanForResolution(
+  projectId: string,
+  resolution: PromotionFlowResolution
+): Promise<PromotionPlanSnapshot> {
+  const sourceEnvironment = toPromotionPlanEnvironment(resolution.sourceEnvironment);
+  const targetEnvironment = toPromotionPlanEnvironment(resolution.targetEnvironment);
+  const strategy = resolution.flow?.strategy ?? 'reuse_release_artifacts';
+  const requiresApproval =
+    resolution.flow?.requiresApproval ?? Boolean(resolution.targetEnvironment?.isProduction);
+
+  if (!resolution.targetEnvironment) {
+    return buildStaticPromotionPlan({
+      sourceEnvironment,
+      flowId: resolution.flow?.id ?? null,
+      strategy,
+      requiresApproval,
+      blockingReason: '没有可用的提升目标环境',
+      environment: { isProduction: false },
+    });
+  }
+
+  if (!resolution.sourceEnvironment) {
+    return buildStaticPromotionPlan({
+      targetEnvironment,
+      flowId: resolution.flow?.id ?? null,
+      strategy,
+      requiresApproval,
+      blockingReason: '没有可用的提升来源环境',
+      environment: resolution.targetEnvironment,
+    });
+  }
+
+  const sourceRelease = await db.query.releases.findFirst({
+    where: and(
+      eq(releases.projectId, projectId),
+      eq(releases.environmentId, resolution.sourceEnvironment.id),
+      eq(releases.status, 'succeeded')
+    ),
+    orderBy: [desc(releases.createdAt)],
+    with: {
+      artifacts: {
+        with: {
+          service: true,
+        },
+      },
+    },
+  });
+
+  if (!sourceRelease || sourceRelease.artifacts.length === 0) {
+    return buildStaticPromotionPlan({
+      sourceEnvironment,
+      targetEnvironment,
+      flowId: resolution.flow?.id ?? null,
+      strategy,
+      requiresApproval,
+      blockingReason: `${resolution.sourceEnvironment.name} 暂无可复用的成功发布`,
+      environment: resolution.targetEnvironment,
+    });
+  }
+
+  const plan = await buildProjectReleasePlan({
+    projectId,
+    environmentId: resolution.targetEnvironment.id,
+    services: sourceRelease.artifacts.map((artifact) => ({
+      id: artifact.serviceId,
+      name: artifact.service.name,
+      image: artifact.imageUrl,
+      digest: artifact.imageDigest,
+    })),
+    sourceRef: sourceRelease.sourceRef,
+    sourceCommitSha: sourceRelease.sourceCommitSha,
+    entryPoint: 'promotion',
+  });
+
+  return {
+    flowId: resolution.flow?.id ?? null,
+    strategy,
+    requiresApproval,
+    sourceRelease: {
+      id: sourceRelease.id,
+      summary: sourceRelease.summary,
+      sourceCommitSha: sourceRelease.sourceCommitSha,
+    },
+    sourceEnvironment,
+    targetEnvironment,
+    plan,
+  };
+}
+
+export async function buildPromotionPlan(
+  projectId: string,
+  input?: {
+    flowId?: string | null;
+  }
+): Promise<PromotionPlanSnapshot> {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
     with: { repository: true },
@@ -439,108 +584,60 @@ export async function buildPromotionPlan(projectId: string): Promise<{
   const flowList = await db.query.promotionFlows.findMany({
     where: eq(promotionFlows.projectId, projectId),
   });
-  const { sourceEnvironment: stagingEnv, targetEnvironment: prodEnv } = resolvePrimaryPromotionFlow(
-    {
-      environments: envList,
-      promotionFlows: flowList,
-    }
+  const resolution = input?.flowId
+    ? resolvePromotionFlow({
+        environments: envList,
+        promotionFlows: flowList,
+        flowId: input.flowId,
+      })
+    : resolvePrimaryPromotionFlow({
+        environments: envList,
+        promotionFlows: flowList,
+      });
+
+  if (!resolution.targetEnvironment && input?.flowId) {
+    return buildStaticPromotionPlan({
+      flowId: input.flowId,
+      blockingReason: '未找到对应的提升链路',
+      environment: { isProduction: false },
+    });
+  }
+
+  return buildPromotionPlanForResolution(projectId, resolution);
+}
+
+export async function buildPromotionPlans(projectId: string): Promise<PromotionPlanSnapshot[]> {
+  const project = await db.query.projects.findFirst({
+    where: eq(projects.id, projectId),
+    columns: {
+      id: true,
+    },
+  });
+
+  if (!project) {
+    throw new Error('Project not found');
+  }
+
+  const [envList, flowList] = await Promise.all([
+    db.query.environments.findMany({
+      where: eq(environments.projectId, projectId),
+    }),
+    db.query.promotionFlows.findMany({
+      where: eq(promotionFlows.projectId, projectId),
+    }),
+  ]);
+  const resolutions = resolvePromotionFlows({
+    environments: envList,
+    promotionFlows: flowList,
+  });
+
+  if (resolutions.length === 0) {
+    return [];
+  }
+
+  return Promise.all(
+    resolutions.map((resolution) => buildPromotionPlanForResolution(projectId, resolution))
   );
-
-  if (!prodEnv) {
-    return {
-      sourceRelease: null,
-      sourceEnvironment: null,
-      targetEnvironment: null,
-      plan: buildStaticPlanningSnapshot({
-        canCreate: false,
-        blockingReason: 'No production environment found',
-        environment: { isProduction: false },
-        summary: null,
-      }),
-    };
-  }
-
-  if (!stagingEnv) {
-    return {
-      sourceRelease: null,
-      sourceEnvironment: null,
-      targetEnvironment: {
-        id: prodEnv.id,
-        name: prodEnv.name,
-      },
-      plan: buildStaticPlanningSnapshot({
-        canCreate: false,
-        blockingReason: 'No staging environment found',
-        environment: prodEnv,
-      }),
-    };
-  }
-
-  const sourceRelease = await db.query.releases.findFirst({
-    where: and(
-      eq(releases.projectId, projectId),
-      eq(releases.environmentId, stagingEnv.id),
-      eq(releases.status, 'succeeded')
-    ),
-    orderBy: [desc(releases.createdAt)],
-    with: {
-      artifacts: {
-        with: {
-          service: true,
-        },
-      },
-    },
-  });
-
-  if (!sourceRelease || sourceRelease.artifacts.length === 0) {
-    return {
-      sourceRelease: null,
-      sourceEnvironment: {
-        id: stagingEnv.id,
-        name: stagingEnv.name,
-      },
-      targetEnvironment: {
-        id: prodEnv.id,
-        name: prodEnv.name,
-      },
-      plan: buildStaticPlanningSnapshot({
-        canCreate: false,
-        blockingReason: 'No successful staging release found to promote',
-        environment: prodEnv,
-      }),
-    };
-  }
-
-  const plan = await buildProjectReleasePlan({
-    projectId,
-    environmentId: prodEnv.id,
-    services: sourceRelease.artifacts.map((artifact) => ({
-      id: artifact.serviceId,
-      name: artifact.service.name,
-      image: artifact.imageUrl,
-      digest: artifact.imageDigest,
-    })),
-    sourceRef: sourceRelease.sourceRef,
-    sourceCommitSha: sourceRelease.sourceCommitSha,
-    entryPoint: 'promotion',
-  });
-
-  return {
-    sourceRelease: {
-      id: sourceRelease.id,
-      summary: sourceRelease.summary,
-      sourceCommitSha: sourceRelease.sourceCommitSha,
-    },
-    sourceEnvironment: {
-      id: stagingEnv.id,
-      name: stagingEnv.name,
-    },
-    targetEnvironment: {
-      id: prodEnv.id,
-      name: prodEnv.name,
-    },
-    plan,
-  };
 }
 
 export async function buildRollbackPlan(input: {

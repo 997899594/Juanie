@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { environments, promotionFlows } from '@/lib/db/schema';
-import { resolvePrimaryPromotionFlow } from '@/lib/environments/promotion';
+import { resolvePrimaryPromotionFlow, resolvePromotionFlows } from '@/lib/environments/promotion';
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 type PromotionFlowRecord = typeof promotionFlows.$inferSelect;
@@ -81,5 +81,54 @@ describe('resolvePrimaryPromotionFlow', () => {
     expect(result.flow).toBe(null);
     expect(result.sourceEnvironment?.id).toBe('env_staging');
     expect(result.targetEnvironment?.id).toBe('env_production');
+  });
+
+  it('returns every active promotion flow in topology order', () => {
+    const extendedEnvironments = [
+      {
+        ...environmentsList[0],
+        id: 'env_dev',
+        name: 'dev',
+        branch: 'develop',
+        autoDeploy: true,
+      },
+      environmentsList[0],
+      environmentsList[1],
+    ] as EnvironmentRecord[];
+    const flows = [
+      {
+        id: 'flow_prod',
+        projectId: 'project_1',
+        sourceEnvironmentId: 'env_staging',
+        targetEnvironmentId: 'env_production',
+        requiresApproval: true,
+        strategy: 'reuse_release_artifacts',
+        isActive: true,
+        createdAt: new Date('2026-04-16T01:00:00.000Z'),
+        updatedAt: new Date('2026-04-16T01:00:00.000Z'),
+      },
+      {
+        id: 'flow_test',
+        projectId: 'project_1',
+        sourceEnvironmentId: 'env_dev',
+        targetEnvironmentId: 'env_staging',
+        requiresApproval: false,
+        strategy: 'reuse_release_artifacts',
+        isActive: true,
+        createdAt: new Date('2026-04-16T02:00:00.000Z'),
+        updatedAt: new Date('2026-04-16T02:00:00.000Z'),
+      },
+    ] as PromotionFlowRecord[];
+
+    const result = resolvePromotionFlows({
+      environments: extendedEnvironments,
+      promotionFlows: flows,
+    });
+
+    expect(result.map((flow) => flow.flow?.id)).toEqual(['flow_test', 'flow_prod']);
+    expect(result[0]?.sourceEnvironment?.id).toBe('env_dev');
+    expect(result[0]?.targetEnvironment?.id).toBe('env_staging');
+    expect(result[1]?.sourceEnvironment?.id).toBe('env_staging');
+    expect(result[1]?.targetEnvironment?.id).toBe('env_production');
   });
 });

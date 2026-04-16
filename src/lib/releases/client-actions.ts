@@ -188,6 +188,8 @@ export interface PromoteReleaseResponse {
   success: boolean;
   releaseId?: string;
   tagName?: string | null;
+  promotionFlowId?: string | null;
+  targetEnvironmentName?: string | null;
 }
 
 export interface MigrationRunActionResponse {
@@ -308,14 +310,27 @@ export async function finalizeDeploymentRolloutAction(input: {
   }>(response, '推进放量失败');
 }
 
-export async function createProductionRelease(input: {
+export async function createPromotionRelease(input: {
   projectId: string;
+  flowId?: string | null;
 }): Promise<PromoteReleaseResponse> {
   const response = await fetch(`/api/projects/${input.projectId}/promote`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      flowId: input.flowId ?? null,
+    }),
   });
 
-  return parseJsonResponse<PromoteReleaseResponse>(response, '创建生产发布失败');
+  return parseJsonResponse<PromoteReleaseResponse>(response, '创建提升发布失败');
+}
+
+export async function createProductionRelease(input: {
+  projectId: string;
+}): Promise<PromoteReleaseResponse> {
+  return createPromotionRelease(input);
 }
 
 export async function executeMigrationRunAction(input: {
