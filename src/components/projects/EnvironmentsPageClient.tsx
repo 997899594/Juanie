@@ -928,15 +928,34 @@ function DeliveryControlPanel({
 function buildEnvironmentHeaderMeta(environment: EnvironmentRecord): string {
   return [
     [environment.scopeLabel, environment.sourceLabel].filter(Boolean).join(' · ') || null,
-    environment.primaryDomainUrl?.replace(/^https?:\/\//, '') ?? null,
-    environment.gitTracking?.shortCommitSha
-      ? `当前跟踪 ${environment.gitTracking.shortCommitSha}`
-      : null,
-    environment.platformSignals.primarySummary,
     environment.expiryLabel,
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+function buildEnvironmentStatusSummary(environment: EnvironmentRecord): string {
+  if (environment.policy.primarySignal?.summary) {
+    return environment.policy.primarySignal.summary;
+  }
+
+  if (environment.previewLifecycle?.summary) {
+    return environment.previewLifecycle.summary;
+  }
+
+  if (environment.platformSignals.primarySummary) {
+    return environment.platformSignals.primarySummary;
+  }
+
+  if (environment.cleanupState?.summary) {
+    return environment.cleanupState.summary;
+  }
+
+  if (environment.namespace) {
+    return '运行正常，可以继续发布、查看数据或排查日志。';
+  }
+
+  return '环境已创建，相关状态会在这里持续更新。';
 }
 
 function EnvironmentCardHeader({
@@ -987,9 +1006,14 @@ function EnvironmentCardHeader({
 }
 
 function EnvironmentRuntimePanel({ environment }: { environment: EnvironmentRecord }) {
+  const statusBadges = [
+    environment.policy.primarySignal?.label ?? null,
+    environment.previewLifecycle?.stateLabel ?? null,
+  ].filter(Boolean);
+
   return (
     <div className="console-surface rounded-2xl px-4 py-4">
-      <div className="space-y-3">
+      <div className="space-y-4">
         {environment.primaryDomainUrl ? (
           <div className="console-card px-4 py-3">
             <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -1013,24 +1037,20 @@ function EnvironmentRuntimePanel({ environment }: { environment: EnvironmentReco
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {environment.policy.primarySignal ? (
-            <Badge variant="outline">{environment.policy.primarySignal.label}</Badge>
-          ) : null}
-          {environment.latestReleaseCard ? (
-            <Badge variant="secondary">
-              {environment.latestReleaseCard.statusDecoration.label}
-            </Badge>
-          ) : null}
-          {environment.previewLifecycle ? (
-            <Badge variant="outline">{environment.previewLifecycle.stateLabel}</Badge>
-          ) : null}
-        </div>
-
-        <div className="text-sm text-foreground">
-          {environment.platformSignals.primarySummary ??
-            buildEnvironmentHeaderMeta(environment) ??
-            '当前环境可直接继续操作'}
+        <div className="console-card px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              当前状态
+            </div>
+            {statusBadges.map((label) => (
+              <Badge key={label} variant="outline">
+                {label}
+              </Badge>
+            ))}
+          </div>
+          <div className="mt-2 text-sm leading-6 text-foreground">
+            {buildEnvironmentStatusSummary(environment)}
+          </div>
         </div>
       </div>
     </div>
@@ -1060,7 +1080,7 @@ function EnvironmentDetailsPanel({
       <div className="space-y-3">
         {hasStrategyControl || strategyHelper ? (
           <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">发布策略</div>
+            <div className="text-xs text-muted-foreground">发布方式</div>
             <div className="console-card px-4 py-3 text-sm text-foreground">
               <div className="space-y-3">
                 <div>{environment.strategyLabel ?? '未设置发布策略'}</div>
