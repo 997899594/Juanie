@@ -2,6 +2,7 @@ import type {
   CreateBranchOptions,
   CreateRepoOptions,
   CreateReviewRequestOptions,
+  CreateTagOptions,
   GitProvider,
   GitProviderConfig,
   GitRepository,
@@ -415,6 +416,25 @@ export class GitHubProvider implements GitProvider {
             `Failed to sync branch ${options.branch}`
         );
       }
+    }
+  }
+
+  async createTag(accessToken: string, options: CreateTagOptions): Promise<void> {
+    const [owner, repo] = options.repoFullName.split('/');
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        ref: `refs/tags/${options.tag}`,
+        sha: options.commitSha,
+      }),
+    });
+
+    if (!res.ok && res.status !== 422) {
+      const error = await res.json().catch(() => null);
+      throw new Error(
+        (error as { message?: string } | null)?.message ?? `Failed to create tag ${options.tag}`
+      );
     }
   }
 

@@ -98,7 +98,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
 
       setPromoteResult(
         data.tagName
-          ? `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'} · ${data.tagName}`
+          ? `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'} · 成功后写入 ${data.tagName}`
           : `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'}`
       );
       setPromoteDialogOpen(false);

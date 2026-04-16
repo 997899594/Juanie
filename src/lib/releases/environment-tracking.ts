@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
-import { isPreviewEnvironment } from '@/lib/environments/model';
+import { isPreviewEnvironment, isPromoteOnlyEnvironment } from '@/lib/environments/model';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -22,7 +22,27 @@ export function buildEnvironmentTrackingBranchName(environmentName: string): str
   return `juanie-env-${slugifyBranchSegment(environmentName)}`;
 }
 
-export async function syncReleaseEnvironmentTrackingBranch(releaseId: string): Promise<boolean> {
+export function buildReleaseEnvironmentTagName(input: {
+  environmentName: string;
+  createdAt: Date | string;
+  sourceCommitSha: string | null;
+}): string | null {
+  if (!input.sourceCommitSha) {
+    return null;
+  }
+
+  const createdAt = input.createdAt instanceof Date ? input.createdAt : new Date(input.createdAt);
+
+  return `juanie-${slugifyBranchSegment(input.environmentName)}-${createdAt
+    .toISOString()
+    .slice(0, 10)
+    .replace(/-/g, '.')}-${input.sourceCommitSha.slice(0, 7)}`;
+}
+
+export async function syncReleaseGitTracking(releaseId: string): Promise<{
+  branchSynced: boolean;
+  tagSynced: boolean;
+}> {
   const release = await db.query.releases.findFirst({
     where: eq(releases.id, releaseId),
     with: {
@@ -51,7 +71,10 @@ export async function syncReleaseEnvironmentTrackingBranch(releaseId: string): P
     !release.project.repository ||
     isPreviewEnvironment(release.environment)
   ) {
-    return false;
+    return {
+      branchSynced: false,
+      tagSynced: false,
+    };
   }
 
   const session = await getTeamIntegrationSession({
@@ -66,11 +89,32 @@ export async function syncReleaseEnvironmentTrackingBranch(releaseId: string): P
     commitSha: release.sourceCommitSha,
   });
 
-  return true;
+  let tagSynced = false;
+  const tagName = isPromoteOnlyEnvironment(release.environment)
+    ? buildReleaseEnvironmentTagName({
+        environmentName: release.environment.name,
+        createdAt: release.createdAt,
+        sourceCommitSha: release.sourceCommitSha,
+      })
+    : null;
+
+  if (tagName) {
+    await gateway.createTag(session, {
+      repoFullName: release.project.repository.fullName,
+      tag: tagName,
+      commitSha: release.sourceCommitSha,
+    });
+    tagSynced = true;
+  }
+
+  return {
+    branchSynced: true,
+    tagSynced,
+  };
 }
 
-export async function syncReleaseEnvironmentTrackingBranchSafely(releaseId: string): Promise<void> {
-  await syncReleaseEnvironmentTrackingBranch(releaseId).catch((error) => {
-    console.warn(`[Release] Failed to sync environment tracking branch for ${releaseId}:`, error);
+export async function syncReleaseGitTrackingSafely(releaseId: string): Promise<void> {
+  await syncReleaseGitTracking(releaseId).catch((error) => {
+    console.warn(`[Release] Failed to sync release git tracking for ${releaseId}:`, error);
   });
 }

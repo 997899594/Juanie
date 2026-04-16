@@ -7,11 +7,11 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import { environments, projects, releases, repositories } from '@/lib/db/schema';
-import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
-import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { environments, releases } from '@/lib/db/schema';
+import { isPromoteOnlyEnvironment } from '@/lib/environments/model';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { createProjectRelease } from '@/lib/releases';
+import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildPromotionPlan } from '@/lib/releases/planning';
 import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
@@ -146,16 +146,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       summary: `提升 ${sourceRelease.sourceCommitSha?.slice(0, 7) ?? 'release'} 到 ${promotion.targetEnvironment.name}`,
       entryPoint: 'promotion',
     });
-
-    const tagName = await createGitTag(
-      project,
-      sourceRelease.sourceCommitSha,
-      promotion.targetEnvironment.name,
-      session.user.id
-    ).catch((e) => {
-      console.warn('Failed to create git tag:', e);
-      return null;
-    });
+    const tagName =
+      promotedRelease?.environment && isPromoteOnlyEnvironment(promotedRelease.environment)
+        ? buildReleaseEnvironmentTagName({
+            environmentName: promotedRelease.environment.name,
+            createdAt: promotedRelease.createdAt,
+            sourceCommitSha: promotedRelease.sourceCommitSha,
+          })
+        : null;
 
     return NextResponse.json(
       {
@@ -181,73 +179,4 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
-}
-
-async function createGitTag(
-  project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
-  commitSha: string | null,
-  environmentName: string,
-  actingUserId?: string | null
-): Promise<string | null> {
-  if (!commitSha || !project.repository) return null;
-
-  const tag = `juanie-${sanitizeTagSegment(environmentName)}-${new Date()
-    .toISOString()
-    .slice(0, 10)
-    .replace(/-/g, '.')}-${commitSha.slice(0, 7)}`;
-
-  const integrationSession = await getTeamIntegrationSession({
-    teamId: project.teamId,
-    actingUserId,
-    requiredCapabilities: [],
-  });
-
-  const { provider, accessToken } = integrationSession;
-  const repoFullName = project.repository.fullName;
-
-  if (provider === 'github') {
-    const res = await fetch(`https://api.github.com/repos/${repoFullName}/git/refs`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ref: `refs/tags/${tag}`, sha: commitSha }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(`GitHub tag creation failed: ${JSON.stringify(err)}`);
-    }
-    return tag;
-  }
-
-  if (provider === 'gitlab' || provider === 'gitlab-self-hosted') {
-    const baseUrl = normalizeGitLabServerUrl(integrationSession.serverUrl);
-    const encodedRepo = encodeURIComponent(repoFullName);
-    const res = await fetch(`${baseUrl}/api/v4/projects/${encodedRepo}/repository/tags`, {
-      method: 'POST',
-      headers: {
-        'PRIVATE-TOKEN': accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ tag_name: tag, ref: commitSha }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(`GitLab tag creation failed: ${JSON.stringify(err)}`);
-    }
-    return tag;
-  }
-
-  return null;
-}
-
-function sanitizeTagSegment(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
 }

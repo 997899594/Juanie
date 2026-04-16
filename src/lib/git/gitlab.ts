@@ -2,6 +2,7 @@ import type {
   CreateBranchOptions,
   CreateRepoOptions,
   CreateReviewRequestOptions,
+  CreateTagOptions,
   GitProvider,
   GitProviderConfig,
   GitRepository,
@@ -351,6 +352,32 @@ export class GitLabProvider implements GitProvider {
       throw new Error(
         (error as { message?: string } | null)?.message ?? `Failed to sync branch ${options.branch}`
       );
+    }
+  }
+
+  async createTag(accessToken: string, options: CreateTagOptions): Promise<void> {
+    const encodedPath = encodeURIComponent(options.repoFullName);
+    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/repository/tags`, {
+      method: 'POST',
+      headers: this.getHeaders(accessToken),
+      body: JSON.stringify({
+        tag_name: options.tag,
+        ref: options.commitSha,
+      }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => null);
+      const message =
+        typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message?: string }).message)
+          : null;
+
+      if (res.status === 400 && message?.includes('already exists')) {
+        return;
+      }
+
+      throw new Error(message ?? `Failed to create tag ${options.tag}`);
     }
   }
 

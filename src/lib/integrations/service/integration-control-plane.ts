@@ -5,6 +5,7 @@ import type {
   CreateBranchOptions,
   CreateRepoOptions,
   CreateReviewRequestOptions,
+  CreateTagOptions,
   GitProvider,
   GitRepository,
   GitReviewRequest,
@@ -247,6 +248,11 @@ export const gateway = {
   async syncBranchRef(session: IntegrationSession, options: SyncBranchRefOptions): Promise<void> {
     const provider = resolveProvider(session);
     return provider.syncBranchRef(session.accessToken, options);
+  },
+
+  async createTag(session: IntegrationSession, options: CreateTagOptions): Promise<void> {
+    const provider = resolveProvider(session);
+    return provider.createTag(session.accessToken, options);
   },
 
   async createReviewRequest(
