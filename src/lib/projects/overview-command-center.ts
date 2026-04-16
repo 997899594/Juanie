@@ -22,66 +22,52 @@ export function buildProjectCommandCenter(
   const primaryAttention = pageData.attentionItems[0] ?? null;
   const primaryEnvironment = pageData.environmentCards[0] ?? null;
 
-  if (primaryAttention) {
+  if (primaryEnvironment) {
     return {
-      eyebrow: '待处理优先',
-      title: primaryAttention.releaseTitle ?? primaryAttention.issueLabel ?? '处理当前阻塞项',
+      eyebrow: '从环境开始',
+      title: `先进入 ${primaryEnvironment.name}`,
       summary:
-        primaryAttention.platformSignals.primarySummary ??
-        '当前有迁移审批或失败项需要先处理，处理完再继续推进发布。',
+        primaryEnvironment.platformSignals.primarySummary ??
+        '项目页只做索引，真正的工作都放到具体环境里继续处理。',
       primaryAction: {
-        label: '打开待处理项',
-        href: primaryAttention.releaseId
-          ? `/projects/${projectId}/delivery/${primaryAttention.releaseId}`
-          : `/projects/${projectId}/delivery`,
+        label: '打开环境',
+        href: `/projects/${projectId}/runtime?env=${primaryEnvironment.id}`,
         description:
-          primaryAttention.platformSignals.nextActionLabel ??
-          '优先处理当前阻塞，再回到主链继续推进。',
+          primaryEnvironment.platformSignals.nextActionLabel ??
+          '进入后先看当前版本、诊断和下一步动作。',
       },
-      secondaryAction: primaryEnvironment
+      secondaryAction: primaryAttention
         ? {
-            label: '查看环境日志',
-            href: `/projects/${projectId}/runtime/logs?env=${primaryEnvironment.id}`,
+            label: '查看待处理',
+            href: primaryAttention.releaseId
+              ? `/projects/${projectId}/delivery/${primaryAttention.releaseId}`
+              : `/projects/${projectId}/delivery`,
           }
-        : null,
+        : currentRelease
+          ? {
+              label: '查看最新发布',
+              href: `/projects/${projectId}/delivery/${currentRelease.id}`,
+            }
+          : null,
     };
   }
 
   if (currentRelease) {
     return {
-      eyebrow: '当前主链路',
+      eyebrow: '先补主链',
       title: currentRelease.title,
       summary:
         currentRelease.platformSignals.primarySummary ??
         currentRelease.sourceSummary ??
-        '进入发布详情查看时间线、迁移和部署进度。',
+        '先确认最新发布，再决定下一步去哪个环境处理。',
       primaryAction: {
-        label: '打开当前发布',
+        label: '查看最新发布',
         href: `/projects/${projectId}/delivery/${currentRelease.id}`,
-        description: '先确认当前版本和风险，再决定是否继续推进发布。',
+        description: '确认这次发布影响了哪个环境，再继续处理。',
       },
       secondaryAction: {
-        label: '查看环境日志',
-        href: `/projects/${projectId}/runtime/logs?env=${currentRelease.environment.id}`,
-      },
-    };
-  }
-
-  if (primaryEnvironment) {
-    return {
-      eyebrow: '从环境开始',
-      title: `进入 ${primaryEnvironment.name}`,
-      summary:
-        primaryEnvironment.platformSignals.primarySummary ??
-        '先进入环境确认 live 状态、发布记录和诊断信息。',
-      primaryAction: {
-        label: '打开运行',
+        label: '查看环境',
         href: `/projects/${projectId}/runtime`,
-        description: '先确认当前环境状态，再决定是否回到交付或数据链路。',
-      },
-      secondaryAction: {
-        label: '查看交付',
-        href: `/projects/${projectId}/delivery`,
       },
     };
   }
@@ -89,11 +75,11 @@ export function buildProjectCommandCenter(
   return {
     eyebrow: '项目初始化',
     title: '继续完成项目配置',
-    summary: '先补齐环境和第一次发布，平台主链路才会完整运行起来。',
+    summary: '先补齐环境和第一次发布，让项目先形成可进入的主链路。',
     primaryAction: {
-      label: '查看运行',
+      label: '查看环境',
       href: `/projects/${projectId}/runtime`,
-      description: '先把环境和第一次发布基线补齐。',
+      description: '先把项目内的环境结构建立起来。',
     },
     secondaryAction: {
       label: '查看设置',

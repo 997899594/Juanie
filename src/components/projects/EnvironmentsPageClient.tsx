@@ -565,17 +565,17 @@ function EnvironmentRecentActivityPanel({ items }: { items: EnvironmentRecord['r
 function getEnvironmentPriority(environment: EnvironmentRecord): number {
   switch (environment.kind) {
     case 'production':
-      return 2;
+      return 0;
     case 'persistent':
       return 1;
     case 'preview':
-      return 0;
+      return 2;
     default:
       if (environment.isProduction) {
-        return 2;
+        return 0;
       }
 
-      return environment.isPreview ? 0 : 1;
+      return environment.isPreview ? 2 : 1;
   }
 }
 
@@ -1687,7 +1687,8 @@ export function EnvironmentsPageClient({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title="运行"
+        title="环境"
+        description="先进入具体环境，再看这个环境里的发布、变量、日志和诊断。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline">
@@ -1738,28 +1739,6 @@ export function EnvironmentsPageClient({
         </div>
       )}
 
-      <div className="ui-control-muted rounded-[20px] px-4 py-3">
-        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <span>{governance.roleLabel}</span>
-          <span>
-            预览 {governance.cleanupPreviews.eligibleCount} 可回收 /{' '}
-            {governance.cleanupPreviews.blockedCount} 阻塞
-          </span>
-          <span>
-            {governance.manageEnvVars.allowed ? '可管理变量' : governance.manageEnvVars.summary}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            onClick={handleCleanupExpiredPreviews}
-            disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
-          >
-            {cleaningExpired ? '治理中...' : '治理预览'}
-          </Button>
-        </div>
-      </div>
-
       {environments.length === 0 ? (
         <EmptyState
           icon={<Globe className="h-12 w-12" />}
@@ -1771,45 +1750,6 @@ export function EnvironmentsPageClient({
         />
       ) : (
         <div className="space-y-6">
-          <DeliveryControlPanel
-            deliveryControl={deliveryControl}
-            routingRules={routingRules}
-            promotionFlows={promotionFlows}
-            editing={editingDeliveryControl}
-            saving={savingDeliveryControl}
-            onToggleEditing={() => setEditingDeliveryControl(true)}
-            onReset={resetDeliveryControlEditor}
-            onSave={handleSaveDeliveryControl}
-            onAddRule={() =>
-              setRoutingRules((current) => [
-                ...current,
-                createRuleDraft(deliveryControl.environments),
-              ])
-            }
-            onUpdateRule={(index, rule) =>
-              setRoutingRules((current) =>
-                current.map((item, itemIndex) => (itemIndex === index ? rule : item))
-              )
-            }
-            onRemoveRule={(index) =>
-              setRoutingRules((current) => current.filter((_, itemIndex) => itemIndex !== index))
-            }
-            onAddFlow={() =>
-              setPromotionFlows((current) => [
-                ...current,
-                createFlowDraft(deliveryControl.environments),
-              ])
-            }
-            onUpdateFlow={(index, flow) =>
-              setPromotionFlows((current) =>
-                current.map((item, itemIndex) => (itemIndex === index ? flow : item))
-              )
-            }
-            onRemoveFlow={(index) =>
-              setPromotionFlows((current) => current.filter((_, itemIndex) => itemIndex !== index))
-            }
-          />
-
           <section className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Globe className="h-4 w-4" />
@@ -1944,6 +1884,83 @@ export function EnvironmentsPageClient({
               </div>
             )}
           </section>
+
+          <details className="ui-floating overflow-hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold">链路与治理</div>
+                <div className="text-xs text-muted-foreground">
+                  {governance.roleLabel} · 预览 {governance.cleanupPreviews.eligibleCount} 可回收 /{' '}
+                  {governance.cleanupPreviews.blockedCount} 阻塞
+                </div>
+              </div>
+              <Badge variant="outline">次级控制面</Badge>
+            </summary>
+
+            <div className="console-divider-top space-y-6 px-4 py-4">
+              <div className="ui-control-muted rounded-[20px] px-4 py-3">
+                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                  <span>
+                    {governance.manageEnvVars.allowed
+                      ? '可管理变量'
+                      : governance.manageEnvVars.summary}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={handleCleanupExpiredPreviews}
+                    disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
+                  >
+                    {cleaningExpired ? '治理中...' : '治理预览'}
+                  </Button>
+                </div>
+              </div>
+
+              <DeliveryControlPanel
+                deliveryControl={deliveryControl}
+                routingRules={routingRules}
+                promotionFlows={promotionFlows}
+                editing={editingDeliveryControl}
+                saving={savingDeliveryControl}
+                onToggleEditing={() => setEditingDeliveryControl(true)}
+                onReset={resetDeliveryControlEditor}
+                onSave={handleSaveDeliveryControl}
+                onAddRule={() =>
+                  setRoutingRules((current) => [
+                    ...current,
+                    createRuleDraft(deliveryControl.environments),
+                  ])
+                }
+                onUpdateRule={(index, rule) =>
+                  setRoutingRules((current) =>
+                    current.map((item, itemIndex) => (itemIndex === index ? rule : item))
+                  )
+                }
+                onRemoveRule={(index) =>
+                  setRoutingRules((current) =>
+                    current.filter((_, itemIndex) => itemIndex !== index)
+                  )
+                }
+                onAddFlow={() =>
+                  setPromotionFlows((current) => [
+                    ...current,
+                    createFlowDraft(deliveryControl.environments),
+                  ])
+                }
+                onUpdateFlow={(index, flow) =>
+                  setPromotionFlows((current) =>
+                    current.map((item, itemIndex) => (itemIndex === index ? flow : item))
+                  )
+                }
+                onRemoveFlow={(index) =>
+                  setPromotionFlows((current) =>
+                    current.filter((_, itemIndex) => itemIndex !== index)
+                  )
+                }
+              />
+            </div>
+          </details>
         </div>
       )}
 

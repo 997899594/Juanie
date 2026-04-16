@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const runtimeNav = [
-  { label: '环境', href: '' },
+  { label: '概览', href: '' },
   { label: '变量', href: '/variables' },
   { label: '日志', href: '/logs' },
   { label: '诊断', href: '/diagnostics' },

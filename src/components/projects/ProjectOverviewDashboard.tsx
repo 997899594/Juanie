@@ -1,8 +1,9 @@
 import { Settings } from 'lucide-react';
 import Link from 'next/link';
 import {
+  ProjectActivitySection,
   ProjectDefinitionSection,
-  ProjectOperationsSection,
+  ProjectEnvironmentIndex,
   ProjectOverviewHero,
 } from '@/components/projects/ProjectOverviewSections';
 import { Button } from '@/components/ui/button';
@@ -16,9 +17,8 @@ interface ProjectOverviewDashboardProps {
 }
 
 export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOverviewDashboardProps) {
-  const { project, overview, serviceCards, attentionItems, recentReleaseCards } = pageData;
-  const currentRelease = recentReleaseCards[0] ?? null;
-  const primaryAttention = attentionItems[0] ?? null;
+  const { project, overview, serviceCards, attentionItems, recentReleaseCards, environmentCards } =
+    pageData;
   const commandCenter = buildProjectCommandCenter(projectId, pageData);
 
   return (
@@ -37,16 +37,17 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
       />
 
       <ProjectOverviewHero
-        currentRelease={currentRelease}
-        primaryAttention={primaryAttention}
         commandCenter={commandCenter}
+        projectStatus={project.status ?? null}
+        projectStatusLabel={overview.statusLabel}
       />
-      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
+          <ProjectEnvironmentIndex projectId={projectId} environments={environmentCards} />
           <ProjectDefinitionSection project={project} overview={overview} services={serviceCards} />
         </div>
 
-        <ProjectOperationsSection
+        <ProjectActivitySection
           projectId={projectId}
           attentionItems={attentionItems}
           recentReleaseCards={recentReleaseCards}
