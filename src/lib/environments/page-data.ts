@@ -296,6 +296,8 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
             ).length,
         },
         latestRelease: runtimeIndexes.latestReleaseByEnvironment.get(environment.id) ?? null,
+        latestSuccessfulRelease:
+          runtimeIndexes.latestSuccessfulReleaseByEnvironment.get(environment.id) ?? null,
         activeReleaseCount: runtimeIndexes.activeReleaseCountByEnvironment.get(environment.id) ?? 0,
         latestDeployment: runtimeIndexes.latestDeploymentByEnvironment.get(environment.id) ?? null,
         latestMigrationRun: runtimeIndexes.latestMigrationByEnvironment.get(environment.id) ?? null,

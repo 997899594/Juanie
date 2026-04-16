@@ -34,6 +34,16 @@ describe('project overview service', () => {
           baseEnvironment: null,
         },
       ],
+      environmentTrackingReleases: [
+        {
+          id: 'rel-1',
+          environmentId: 'env-1',
+          status: 'succeeded',
+          sourceCommitSha: 'abc1234def5678',
+          sourceRef: 'refs/heads/main',
+          createdAt: '2026-04-16T02:00:00.000Z',
+        },
+      ],
       projectServices: [
         { id: 'svc-1', name: 'web', status: 'active', port: 3000, type: 'web' },
       ] as never,
@@ -67,6 +77,9 @@ describe('project overview service', () => {
     expect(result.overview.headerDescription).toBe('平台团队 · 运行中');
     expect(result.stats[0]?.value).toBe(1);
     expect(result.environmentCards[0]?.name).toBe('production');
+    expect(result.environmentCards[0]?.gitTracking?.trackingBranchName).toBe(
+      'juanie-env-production'
+    );
     expect(result.serviceCards[0]?.name).toBe('web');
     expect(result.domainCards[0]?.url).toBe('https://demo.juanie.run');
     expect(result.recentReleaseCards[0]?.title).toBe('main 发布 · abc1234');

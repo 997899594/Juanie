@@ -45,4 +45,48 @@ describe('environment list view', () => {
     expect(environment?.platformSignals.primarySummary).toContain('平台已触发仓库构建');
     expect(environment?.platformSignals.nextActionLabel !== null).toBe(true);
   });
+
+  it('builds git tracking state from the latest successful release', () => {
+    const [environment] = decorateEnvironmentList([
+      {
+        id: 'env-prod',
+        name: 'production',
+        kind: 'production' as const,
+        deliveryMode: 'promote_only' as const,
+        latestRelease: {
+          id: 'rel-failed',
+          status: 'failed',
+          sourceCommitSha: 'deadbeef1234567',
+          createdAt: '2026-04-16T12:40:00.000Z',
+        },
+        latestSuccessfulRelease: {
+          id: 'rel-success',
+          sourceRef: 'refs/heads/release/2026-04-16',
+          sourceCommitSha: 'abcdef1234567890',
+          createdAt: '2026-04-16T12:34:56.000Z',
+        },
+      },
+    ]);
+
+    expect(environment?.gitTracking?.state).toBe('synced');
+    expect(environment?.gitTracking?.trackingBranchName).toBe('juanie-env-production');
+    expect(environment?.gitTracking?.shortCommitSha).toBe('abcdef1');
+    expect(environment?.gitTracking?.releaseTagName).toBe('juanie-production-2026.04.16-abcdef1');
+    expect(environment?.gitTracking?.releaseId).toBe('rel-success');
+  });
+
+  it('keeps persistent environments pending before the first successful release', () => {
+    const [environment] = decorateEnvironmentList([
+      {
+        id: 'env-staging',
+        name: 'staging',
+        kind: 'persistent' as const,
+        branch: 'release/staging',
+      },
+    ]);
+
+    expect(environment?.gitTracking?.state).toBe('pending');
+    expect(environment?.gitTracking?.trackingBranchName).toBe('juanie-env-staging');
+    expect(environment?.gitTracking?.shortCommitSha).toBeNull();
+  });
 });

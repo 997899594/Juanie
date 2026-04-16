@@ -57,6 +57,7 @@ export function buildProjectOverviewPageData<
       id: string;
       name: string;
     } | null;
+    deliveryMode?: 'direct' | 'promote_only' | null;
     databaseStrategy?: 'direct' | 'inherit' | 'isolated_clone' | null;
     isProduction?: boolean | null;
     isPreview?: boolean | null;
@@ -77,6 +78,14 @@ export function buildProjectOverviewPageData<
       sourceDatabaseId?: string | null;
     }> | null;
   }>;
+  environmentTrackingReleases: Array<{
+    id: string;
+    environmentId: string;
+    status: string;
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+    createdAt?: Date | string | null;
+  }>;
   projectServices: TService[];
   projectDatabases: TDatabase[];
   projectDomains: TDomain[];
@@ -86,6 +95,19 @@ export function buildProjectOverviewPageData<
 }) {
   const attentionRuns = filterAttentionRuns(input.recentMigrationRuns);
   const attentionStats = getAttentionStats(attentionRuns);
+  const latestSuccessfulReleaseByEnvironment = new Map<
+    string,
+    (typeof input.environmentTrackingReleases)[number]
+  >();
+
+  for (const release of input.environmentTrackingReleases) {
+    if (
+      release.status === 'succeeded' &&
+      !latestSuccessfulReleaseByEnvironment.has(release.environmentId)
+    ) {
+      latestSuccessfulReleaseByEnvironment.set(release.environmentId, release);
+    }
+  }
 
   return {
     project: input.project,
@@ -100,6 +122,8 @@ export function buildProjectOverviewPageData<
       input.projectEnvironments.map((environment) => {
         const latestRelease =
           input.recentReleases.find((release) => release.environment.id === environment.id) ?? null;
+        const latestSuccessfulRelease =
+          latestSuccessfulReleaseByEnvironment.get(environment.id) ?? null;
 
         return {
           ...environment,
@@ -112,6 +136,14 @@ export function buildProjectOverviewPageData<
                 sourceCommitSha: latestRelease.sourceCommitSha,
                 createdAt: latestRelease.createdAt,
                 environment: latestRelease.environment,
+              }
+            : null,
+          latestSuccessfulRelease: latestSuccessfulRelease
+            ? {
+                id: latestSuccessfulRelease.id,
+                sourceRef: latestSuccessfulRelease.sourceRef,
+                sourceCommitSha: latestSuccessfulRelease.sourceCommitSha,
+                createdAt: latestSuccessfulRelease.createdAt,
               }
             : null,
         };
@@ -147,6 +179,7 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
     team,
     member,
     projectEnvironments,
+    environmentTrackingReleases,
     projectServices,
     projectDatabases,
     projectDomains,
@@ -176,6 +209,18 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
             sourceDatabaseId: true,
           },
         },
+      },
+    }),
+    db.query.releases.findMany({
+      where: eq(releases.projectId, projectId),
+      orderBy: [desc(releases.createdAt)],
+      columns: {
+        id: true,
+        environmentId: true,
+        status: true,
+        sourceRef: true,
+        sourceCommitSha: true,
+        createdAt: true,
       },
     }),
     db.query.services.findMany({ where: eq(services.projectId, projectId) }),
@@ -260,6 +305,7 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
       }).capabilities.find((item) => item.key === 'manual_migration') ?? null,
     team,
     projectEnvironments,
+    environmentTrackingReleases,
     projectServices,
     projectDatabases,
     projectDomains,

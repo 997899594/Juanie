@@ -3,7 +3,7 @@ import {
   buildPreviewLifecycleSummary,
   type PreviewLifecycleSummary,
 } from '@/lib/environments/lifecycle-summary';
-import { isPreviewEnvironment } from '@/lib/environments/model';
+import { isPreviewEnvironment, isPromoteOnlyEnvironment } from '@/lib/environments/model';
 import {
   formatEnvironmentExpiry,
   formatEnvironmentTimestamp,
@@ -17,6 +17,10 @@ import {
 } from '@/lib/environments/presentation';
 import { isPreviewEnvironmentExpired } from '@/lib/environments/preview';
 import { type EnvironmentPolicySnapshot, evaluateEnvironmentPolicy } from '@/lib/policies/delivery';
+import {
+  buildEnvironmentTrackingBranchName,
+  buildReleaseEnvironmentTagName,
+} from '@/lib/releases/environment-tracking-names';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import {
   getReleaseStatusDecoration,
@@ -33,6 +37,7 @@ interface EnvironmentViewLike {
     id: string;
     name: string;
   } | null;
+  deliveryMode?: 'direct' | 'promote_only' | null;
   databaseStrategy?: 'direct' | 'inherit' | 'isolated_clone' | null;
   isProduction?: boolean | null;
   isPreview?: boolean | null;
@@ -67,6 +72,12 @@ interface EnvironmentViewLike {
       isPreview?: boolean | null;
     } | null;
   } | null;
+  latestSuccessfulRelease?: {
+    id: string;
+    sourceRef?: string | null;
+    sourceCommitSha?: string | null;
+    createdAt?: Date | string | null;
+  } | null;
   activeReleaseCount?: number;
 }
 
@@ -89,11 +100,78 @@ export interface EnvironmentListDecorations {
     createdAtLabel: string | null;
     statusDecoration: ReleaseStatusDecoration;
   } | null;
+  gitTracking: {
+    state: 'pending' | 'synced';
+    releaseId: string | null;
+    trackingBranchName: string;
+    expectsPromotionTag: boolean;
+    releaseTagName: string | null;
+    sourceRef: string | null;
+    commitSha: string | null;
+    shortCommitSha: string | null;
+    syncedAtLabel: string | null;
+    summary: string;
+  } | null;
   cleanupState: {
     state: 'active' | 'expired_ready' | 'expired_blocked';
     label: string;
     summary: string;
   } | null;
+}
+
+function buildEnvironmentGitTracking(
+  environment: EnvironmentViewLike
+): EnvironmentListDecorations['gitTracking'] {
+  if (isPreviewEnvironment(environment)) {
+    return null;
+  }
+
+  const expectsPromotionTag = isPromoteOnlyEnvironment(environment);
+  const trackingBranchName = buildEnvironmentTrackingBranchName(environment.name);
+  const trackedRelease =
+    environment.latestSuccessfulRelease ??
+    (environment.latestRelease?.status === 'succeeded' ? environment.latestRelease : null);
+
+  if (!trackedRelease?.sourceCommitSha) {
+    return {
+      state: 'pending',
+      releaseId: null,
+      trackingBranchName,
+      expectsPromotionTag,
+      releaseTagName: null,
+      sourceRef: environment.branch ?? null,
+      commitSha: null,
+      shortCommitSha: null,
+      syncedAtLabel: null,
+      summary: expectsPromotionTag
+        ? '当前环境还没有成功提升，首次成功后会建立追踪分支并生成提升标签。'
+        : '当前环境还没有成功发布，首次成功后会建立追踪分支。',
+    };
+  }
+
+  const shortCommitSha = trackedRelease.sourceCommitSha.slice(0, 7);
+  const releaseTagName = expectsPromotionTag
+    ? buildReleaseEnvironmentTagName({
+        environmentName: environment.name,
+        createdAt: trackedRelease.createdAt ?? new Date().toISOString(),
+        sourceCommitSha: trackedRelease.sourceCommitSha,
+      })
+    : null;
+
+  return {
+    state: 'synced',
+    releaseId: trackedRelease.id,
+    trackingBranchName,
+    expectsPromotionTag,
+    releaseTagName,
+    sourceRef: trackedRelease.sourceRef ?? environment.branch ?? null,
+    commitSha: trackedRelease.sourceCommitSha,
+    shortCommitSha,
+    syncedAtLabel: formatPlatformTimeContext(trackedRelease.createdAt),
+    summary: expectsPromotionTag
+      ? `当前环境已同步到 ${shortCommitSha}，并保留可复用的提升标签。`
+      : `当前环境已同步到 ${shortCommitSha}。`,
+  };
 }
 
 export function decorateEnvironmentList<T extends EnvironmentViewLike>(
@@ -128,6 +206,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
           statusDecoration: getReleaseStatusDecoration(environment.latestRelease.status),
         }
       : null;
+    const gitTracking = buildEnvironmentGitTracking(environment);
     const policy = evaluateEnvironmentPolicy(environment);
     const previewLifecycle = isPreviewEnvironment(environment)
       ? buildPreviewLifecycleSummary({
@@ -215,6 +294,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
       primaryDomainUrl,
       previewLifecycle,
       latestReleaseCard,
+      gitTracking,
       cleanupState,
     };
   });

@@ -3,6 +3,45 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import type { ProjectOverviewPageData } from '@/lib/projects/service';
 
+function getEnvironmentSummary(
+  environment: ProjectOverviewPageData['environmentCards'][number]
+): string {
+  return (
+    (environment.isProduction && environment.primaryDomainUrl
+      ? environment.primaryDomainUrl.replace(/^https?:\/\//, '')
+      : null) ??
+    environment.platformSignals.primarySummary ??
+    (environment.latestReleaseCard ? `当前版本 ${environment.latestReleaseCard.title}` : null) ??
+    environment.previewLifecycle?.stateLabel ??
+    environment.scopeLabel ??
+    '进入环境'
+  );
+}
+
+function getEnvironmentGitSummary(
+  environment: ProjectOverviewPageData['environmentCards'][number]
+): string | null {
+  if (!environment.gitTracking) {
+    return null;
+  }
+
+  if (environment.gitTracking.state === 'pending') {
+    return `Git 追踪待建立 · ${environment.gitTracking.trackingBranchName}`;
+  }
+
+  return [
+    `Git ${environment.gitTracking.trackingBranchName}`,
+    environment.gitTracking.shortCommitSha
+      ? `提交 ${environment.gitTracking.shortCommitSha}`
+      : null,
+    environment.gitTracking.expectsPromotionTag && environment.gitTracking.releaseTagName
+      ? '已记录提升标签'
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 export function ProjectEnvironmentIndex({
   projectId,
   environments,
@@ -44,23 +83,24 @@ export function ProjectEnvironmentIndex({
                         {environment.latestReleaseCard.statusDecoration.label}
                       </Badge>
                     ) : null}
+                    {environment.previewLifecycle ? (
+                      <Badge variant="secondary">{environment.previewLifecycle.stateLabel}</Badge>
+                    ) : null}
                   </div>
 
-                  <div className="text-xs text-muted-foreground">
-                    {[
-                      environment.latestReleaseCard
-                        ? `当前版本 ${environment.latestReleaseCard.title}`
-                        : null,
-                      environment.scopeLabel,
-                      environment.isProduction && environment.primaryDomainUrl
-                        ? environment.primaryDomainUrl.replace(/^https?:\/\//, '')
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') ||
-                      environment.previewLifecycle?.stateLabel ||
-                      '进入环境'}
+                  <div className="truncate text-sm text-foreground">
+                    {getEnvironmentSummary(environment)}
                   </div>
+                  {getEnvironmentGitSummary(environment) ? (
+                    <div className="truncate text-xs text-muted-foreground">
+                      {getEnvironmentGitSummary(environment)}
+                    </div>
+                  ) : null}
+                  {environment.platformSignals.nextActionLabel ? (
+                    <div className="text-xs text-muted-foreground">
+                      下一步：{environment.platformSignals.nextActionLabel}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground xl:justify-end">

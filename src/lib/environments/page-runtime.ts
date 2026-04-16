@@ -7,6 +7,7 @@ export function buildEnvironmentRuntimeIndexes<
   TMigrationRun extends { environmentId: string },
 >(input: { releases: TRelease[]; deployments: TDeployment[]; migrationRuns: TMigrationRun[] }) {
   const latestReleaseByEnvironment = new Map<string, TRelease>();
+  const latestSuccessfulReleaseByEnvironment = new Map<string, TRelease>();
   const activeReleaseCountByEnvironment = new Map<string, number>();
   const latestDeploymentByEnvironment = new Map<string, TDeployment>();
   const latestMigrationByEnvironment = new Map<string, TMigrationRun>();
@@ -14,6 +15,13 @@ export function buildEnvironmentRuntimeIndexes<
   for (const release of input.releases) {
     if (!latestReleaseByEnvironment.has(release.environmentId)) {
       latestReleaseByEnvironment.set(release.environmentId, release);
+    }
+
+    if (
+      release.status === 'succeeded' &&
+      !latestSuccessfulReleaseByEnvironment.has(release.environmentId)
+    ) {
+      latestSuccessfulReleaseByEnvironment.set(release.environmentId, release);
     }
 
     if (isActivePreviewReleaseStatus(release.status)) {
@@ -38,6 +46,7 @@ export function buildEnvironmentRuntimeIndexes<
 
   return {
     latestReleaseByEnvironment,
+    latestSuccessfulReleaseByEnvironment,
     activeReleaseCountByEnvironment,
     latestDeploymentByEnvironment,
     latestMigrationByEnvironment,
