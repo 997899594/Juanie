@@ -46,6 +46,7 @@ describe('approvals view', () => {
         createdAt: '2026-03-26T00:00:00.000Z',
         database: { name: 'postgres', type: 'postgresql' },
         environment: {
+          id: 'env-preview-42',
           name: 'preview-pr-42',
           branch: 'main',
           isPreview: true,
@@ -77,6 +78,7 @@ describe('approvals view', () => {
         createdAt: '2026-03-26T00:00:00.000Z',
         database: { name: 'postgres', type: 'postgresql' },
         environment: {
+          id: 'env-production',
           name: 'production',
           isPreview: false,
           domains: [],
