@@ -8,7 +8,7 @@ import {
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments, projects, teams } from '@/lib/db/schema';
-import { deleteNamespace, getIsConnected, initK8sClient } from '@/lib/k8s';
+import { deleteNamespace, getIsConnected, initK8sClient, waitForNamespaceDeleted } from '@/lib/k8s';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -118,7 +118,26 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     initK8sClient();
     if (getIsConnected()) {
       const namespaces = [...new Set(envList.map((e) => e.namespace).filter(Boolean) as string[])];
-      await Promise.allSettled(namespaces.map((ns) => deleteNamespace(ns)));
+      await Promise.all(namespaces.map((ns) => deleteNamespace(ns)));
+
+      const cleanupResults = await Promise.all(
+        namespaces.map(async (namespace) => ({
+          namespace,
+          deleted: await waitForNamespaceDeleted({ name: namespace }),
+        }))
+      );
+      const pendingNamespaces = cleanupResults
+        .filter((result) => !result.deleted)
+        .map((result) => result.namespace);
+
+      if (pendingNamespaces.length > 0) {
+        return NextResponse.json(
+          {
+            error: `项目资源仍在清理中，请稍后重试删除：${pendingNamespaces.join(', ')}`,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     await db.delete(projects).where(eq(projects.id, id));

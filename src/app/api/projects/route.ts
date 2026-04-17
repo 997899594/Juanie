@@ -18,7 +18,12 @@ import {
   teamMembers,
   teams,
 } from '@/lib/db/schema';
-import { buildPrimaryEnvironmentHostname } from '@/lib/domains/defaults';
+import {
+  allocateManagedHostnameBaseWithDb,
+  buildManagedEnvironmentHostname,
+  type HostnameAllocatorExecutor,
+} from '@/lib/domains/managed';
+import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { ensureRepository } from '@/lib/integrations/service/repository-service';
 import type { CreateRuntimeProfile } from '@/lib/projects/create-defaults';
@@ -193,6 +198,11 @@ export async function POST(request: Request) {
     const initStepsData = mode === 'import' ? importSteps : createSteps;
 
     const project = await db.transaction(async (tx) => {
+      const managedHostnameBase = await allocateManagedHostnameBaseWithDb({
+        executor: tx as unknown as HostnameAllocatorExecutor,
+        preferredSlug: slug,
+      });
+
       const [createdProject] = await tx
         .insert(projects)
         .values({
@@ -214,6 +224,10 @@ export async function POST(request: Request) {
               productionDeploymentStrategy: productionDeploymentStrategy ?? 'controlled',
               previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
               environmentTemplate: environmentTemplate ?? 'staging_production_preview',
+            },
+            routing: {
+              vanitySlug: slug,
+              managedHostnameBase,
             },
           },
           status: 'initializing',
@@ -248,9 +262,14 @@ export async function POST(request: Request) {
         ])
       );
       const primaryEnvironment = environmentByKey.get(topology.primaryEnvironmentKey);
+      const productionEnvironment =
+        createdEnvironments.find((environment) => isProductionEnvironment(environment)) ?? null;
 
       if (!primaryEnvironment) {
         throw new Error('Failed to create primary environment');
+      }
+      if (!productionEnvironment) {
+        throw new Error('Failed to create production environment');
       }
 
       await tx.insert(deliveryRules).values(
@@ -353,21 +372,30 @@ export async function POST(request: Request) {
         });
       }
 
+      await tx.insert(domains).values(
+        createdEnvironments
+          .filter((environment) => !isPreviewEnvironment(environment))
+          .map((environment) => ({
+            projectId: createdProject.id,
+            environmentId: environment.id,
+            hostname: buildManagedEnvironmentHostname(managedHostnameBase, {
+              name: environment.name,
+              kind: environment.kind,
+              isProduction: environment.isProduction,
+              isPreview: environment.isPreview,
+            }),
+            isCustom: false,
+            isVerified: true,
+          }))
+      );
+
       if (useCustomDomain && domain) {
         await tx.insert(domains).values({
           projectId: createdProject.id,
-          environmentId: primaryEnvironment.id,
+          environmentId: productionEnvironment.id,
           hostname: domain,
           isCustom: true,
           isVerified: false,
-        });
-      } else {
-        await tx.insert(domains).values({
-          projectId: createdProject.id,
-          environmentId: primaryEnvironment.id,
-          hostname: buildPrimaryEnvironmentHostname(slug),
-          isCustom: false,
-          isVerified: true,
         });
       }
 

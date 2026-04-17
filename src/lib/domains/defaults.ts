@@ -48,15 +48,19 @@ export function getPlatformBaseDomain(): string {
   return process.env.JUANIE_BASE_DOMAIN?.trim() || DEFAULT_PLATFORM_BASE_DOMAIN;
 }
 
+export function buildPlatformHostname(label: string): string {
+  return `${shortenDnsLabel(label)}.${getPlatformBaseDomain()}`;
+}
+
 export function buildPrimaryEnvironmentHostname(projectSlug: string): string {
-  return `${shortenDnsLabel(projectSlug)}.${getPlatformBaseDomain()}`;
+  return buildPlatformHostname(projectSlug);
 }
 
 export function buildPreviewEnvironmentHostname(
   projectSlug: string,
   environment: Pick<DomainEnvironmentLike, 'name'>
 ): string {
-  return `${shortenDnsLabel(`${projectSlug}-${environment.name}`)}.${getPlatformBaseDomain()}`;
+  return buildPlatformHostname(`${projectSlug}-${environment.name}`);
 }
 
 export function buildDomainRouteName(hostname: string): string {

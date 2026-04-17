@@ -2,7 +2,7 @@ import { and, eq, isNotNull, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { databases, domains, environments, environmentVariables } from '@/lib/db/schema';
 import { isPreviewEnvironment } from '@/lib/environments/model';
-import { deleteNamespace, getIsConnected, initK8sClient } from '@/lib/k8s';
+import { deleteNamespace, getIsConnected, initK8sClient, waitForNamespaceDeleted } from '@/lib/k8s';
 import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
 
 export function isActivePreviewReleaseStatus(status: string): boolean {
@@ -41,6 +41,10 @@ export async function deletePreviewEnvironmentById(environmentId: string): Promi
   initK8sClient();
   if (getIsConnected() && environment.namespace) {
     await deleteNamespace(environment.namespace);
+    const deleted = await waitForNamespaceDeleted({ name: environment.namespace });
+    if (!deleted) {
+      return { deleted: false, reason: 'namespace_cleanup_pending' };
+    }
   }
 
   if (environment.domains.length > 0) {

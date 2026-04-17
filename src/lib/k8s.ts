@@ -134,6 +134,42 @@ export async function deleteNamespace(name: string): Promise<void> {
   }
 }
 
+async function doesNamespaceExist(name: string): Promise<boolean> {
+  const { core } = getK8sClient();
+
+  try {
+    await core.readNamespace({ name });
+    return true;
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      return false;
+    }
+
+    throw e;
+  }
+}
+
+export async function waitForNamespaceDeleted(input: {
+  name: string;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}): Promise<boolean> {
+  const timeoutMs = input.timeoutMs ?? 90_000;
+  const pollIntervalMs = input.pollIntervalMs ?? 2_000;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (!(await doesNamespaceExist(input.name))) {
+      return true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return !(await doesNamespaceExist(input.name));
+}
+
 export async function deletePod(
   namespace: string,
   name: string,

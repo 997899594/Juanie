@@ -56,6 +56,7 @@ function resolveEnvironmentKindForScaffold(input: {
 export async function ensurePreviewEnvironmentForRef(input: {
   projectId: string;
   projectSlug: string;
+  projectConfigJson?: unknown;
   ref: string;
   ttlHours?: number;
   databaseStrategy?: 'inherit' | 'isolated_clone';
@@ -119,6 +120,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
       project: {
         id: input.projectId,
         slug: input.projectSlug,
+        configJson: input.projectConfigJson,
       },
       environment: {
         id: updated.id,
@@ -146,6 +148,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
     project: {
       id: input.projectId,
       slug: input.projectSlug,
+      configJson: input.projectConfigJson,
     },
     environment: {
       id: created.id,

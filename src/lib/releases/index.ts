@@ -275,6 +275,7 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
         ? await ensurePreviewEnvironmentForRef({
             projectId: project.id,
             projectSlug: project.slug,
+            projectConfigJson: project.configJson,
             ref: input.ref,
             baseEnvironmentId: route.rule.environmentId ?? null,
           })

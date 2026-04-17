@@ -139,6 +139,7 @@ export async function executeDeploymentWorkload(
     project: {
       id: project.id,
       slug: project.slug,
+      configJson: project.configJson,
     },
     environment: {
       id: targetEnvironment.id,

@@ -15,6 +15,7 @@ interface PreviewLaunchProject {
   id: string;
   slug: string;
   teamId: string;
+  configJson: unknown;
   repository: {
     id: string;
     fullName: string;
@@ -184,6 +185,7 @@ export async function launchPreviewEnvironmentFromRef(input: {
       id: true,
       slug: true,
       teamId: true,
+      configJson: true,
     },
     with: {
       environments: true,
@@ -217,6 +219,7 @@ export async function launchPreviewEnvironmentFromRef(input: {
     id: project.id,
     slug: project.slug,
     teamId: project.teamId,
+    configJson: project.configJson,
     repository: project.repository,
     services: project.services,
   };
@@ -241,6 +244,7 @@ export async function launchPreviewEnvironmentFromRef(input: {
   const environment = await ensurePreviewEnvironmentForRef({
     projectId: launchProject.id,
     projectSlug: launchProject.slug,
+    projectConfigJson: launchProject.configJson,
     ref: input.ref,
     ttlHours: input.ttlHours,
     databaseStrategy: input.databaseStrategy,

@@ -14,11 +14,13 @@ import {
   buildPreviewEnvironmentHostname,
   pickDefaultPublicService,
 } from './defaults';
+import { resolveProjectManagedHostnameBase } from './managed';
 
 interface EnsureEnvironmentDomainsInput {
   project: {
     id: string;
     slug: string;
+    configJson?: unknown;
   };
   environment: {
     id: string;
@@ -61,13 +63,14 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
     const service = pickDefaultPublicService(input.services);
 
     if (service) {
+      const managedHostnameBase = resolveProjectManagedHostnameBase(input.project);
       const [domain] = await db
         .insert(domains)
         .values({
           projectId: input.project.id,
           environmentId: input.environment.id,
           serviceId: service.id,
-          hostname: buildPreviewEnvironmentHostname(input.project.slug, {
+          hostname: buildPreviewEnvironmentHostname(managedHostnameBase, {
             name: input.environment.name,
           }),
           isCustom: false,

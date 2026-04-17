@@ -49,6 +49,7 @@ import {
   getK8sClient,
   initK8sClient,
   reconcileCiliumHTTPRoutesForHostname,
+  upsertService,
 } from '@/lib/k8s';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
@@ -1484,8 +1485,9 @@ async function deployServices(
   const serviceList = await db.query.services.findMany({
     where: eq(services.projectId, project.id),
   });
-
-  const namespace = `juanie-${project.slug}`;
+  const environmentList = await db.query.environments.findMany({
+    where: eq(environments.projectId, project.id),
+  });
 
   if (!hasK8s) {
     console.log('⚠️  Skipping service deployment (no K8s cluster)');
@@ -1496,18 +1498,26 @@ async function deployServices(
   // The Deployment (Pod) is intentionally NOT created here — it will be created
   // by the deployment worker on the first CI/CD push with the correct image,
   // envFrom (ConfigMap/Secret refs), and imagePullSecrets.
-  for (let i = 0; i < serviceList.length; i++) {
-    const service = serviceList[i];
-    const resourceName = `${project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
-    const port = service.port || 3000;
+  const targets = environmentList.flatMap((environment) =>
+    serviceList.map((service) => ({ environment, service }))
+  );
 
-    console.log(`[deployServices] Creating K8s Service for ${service.name}...`);
-    await createService(namespace, resourceName, { port, targetPort: port });
-    console.log(`✅ Created K8s Service ${resourceName}`);
+  for (let i = 0; i < targets.length; i++) {
+    const target = targets[i];
+    const namespace =
+      target.environment.namespace || buildEnvironmentNamespace(project.slug, target.environment);
+    const resourceName = `${project.slug}-${target.service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+    const port = target.service.port || 3000;
+
+    console.log(
+      `[deployServices] Ensuring K8s Service ${resourceName} in ${target.environment.name}...`
+    );
+    await upsertService(namespace, resourceName, { port, targetPort: port });
+    console.log(`✅ Ensured K8s Service ${resourceName} in ${namespace}`);
 
     // Mark as pending — the Deployment (and pod) will be created by the first CI/CD deploy
-    await db.update(services).set({ status: 'pending' }).where(eq(services.id, service.id));
-    await onProgress?.(Math.round(((i + 1) / serviceList.length) * 100));
+    await db.update(services).set({ status: 'pending' }).where(eq(services.id, target.service.id));
+    await onProgress?.(Math.round(((i + 1) / targets.length) * 100));
   }
 }
 
@@ -2005,14 +2015,18 @@ async function configureDns(
   const domainList = await db.query.domains.findMany({
     where: eq(domains.projectId, project.id),
     with: {
+      environment: true,
       service: true,
     },
   });
 
-  const namespace = `juanie-${project.slug}`;
-
   for (let i = 0; i < domainList.length; i++) {
     const domain = domainList[i];
+    const namespace =
+      domain.environment?.namespace ||
+      (domain.environment
+        ? buildEnvironmentNamespace(project.slug, domain.environment)
+        : `juanie-${project.slug}`);
     if (hasK8s) {
       console.log(`Configuring DNS for ${domain.hostname}`);
 
