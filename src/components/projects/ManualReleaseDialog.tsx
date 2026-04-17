@@ -28,6 +28,7 @@ import { createManualRelease, fetchManualReleasePlan } from '@/lib/releases/clie
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
+import { cn } from '@/lib/utils';
 
 interface ManualReleaseEnvironment {
   id: string;
@@ -126,6 +127,11 @@ interface ManualReleaseDialogProps {
   disabledSummary?: string | null;
   onCreated?: () => Promise<void> | void;
 }
+
+const dialogPanelClassName =
+  'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] p-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)] sm:p-6';
+const dialogSubtleClassName =
+  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
 
 export function ManualReleaseDialog({
   projectId,
@@ -303,7 +309,7 @@ export function ManualReleaseDialog({
                 </div>
               )}
 
-              <div className="ui-control-muted rounded-[24px] p-5 sm:p-6">
+              <div className={dialogPanelClassName}>
                 <div className="mb-5 text-sm font-semibold text-foreground">发布配置</div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -358,7 +364,7 @@ export function ManualReleaseDialog({
             </div>
 
             <div className="space-y-4">
-              <div className="ui-control rounded-[24px] p-5 sm:p-6">
+              <div className={dialogPanelClassName}>
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">来源</div>
                   {selectedArtifacts.length > 0 && (
@@ -370,9 +376,9 @@ export function ManualReleaseDialog({
 
                 {selectedSourceRelease ? (
                   <div className="space-y-3 text-sm">
-                    <div className="ui-control-muted rounded-[20px] px-4 py-3">
+                    <div className={dialogSubtleClassName}>
                       <div className="text-xs text-muted-foreground">来源标识</div>
-                      <div className="mt-1 font-medium text-foreground">
+                      <div className="mt-1 break-all font-medium text-foreground">
                         {selectedSourceRelease.sourceRef}
                       </div>
                       {selectedSourceRelease.sourceCommitSha && (
@@ -382,7 +388,7 @@ export function ManualReleaseDialog({
                       )}
                     </div>
 
-                    <div className="ui-control-muted rounded-[20px] space-y-2 px-4 py-3">
+                    <div className={cn(dialogSubtleClassName, 'space-y-2')}>
                       <div className="text-xs text-muted-foreground">包含服务</div>
                       <div className="flex flex-wrap gap-2">
                         {selectedArtifacts.map((artifact) => (
@@ -397,7 +403,7 @@ export function ManualReleaseDialog({
                     </div>
 
                     {(summary || selectedSourceRelease.summary) && (
-                      <div className="ui-control-muted rounded-[20px] px-4 py-3">
+                      <div className={dialogSubtleClassName}>
                         <div className="text-xs text-muted-foreground">最终摘要</div>
                         <div className="mt-1 text-sm leading-6 text-foreground">
                           {summary || selectedSourceRelease.summary}
@@ -410,7 +416,7 @@ export function ManualReleaseDialog({
                 )}
               </div>
 
-              <div className="ui-control-muted rounded-[24px] p-5 sm:p-6">
+              <div className={dialogPanelClassName}>
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {loadingPlan ? (

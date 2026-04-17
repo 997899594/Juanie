@@ -3,7 +3,7 @@
 import { Check, Circle, Loader2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { PlatformSignalBlock } from '@/components/ui/platform-signals';
@@ -42,24 +42,44 @@ export function ProjectInitializingClient({
   const [streamError, setStreamError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [streamToken, setStreamToken] = useState(0);
+  const reconnectTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    let closed = false;
     const eventSource = new EventSource(
       `/api/projects/${projectId}/init/stream?token=${streamToken}`
     );
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      clearReconnectTimer();
+      reconnectTimerRef.current = window.setTimeout(() => {
+        setStreamToken((value) => value + 1);
+      }, 1500);
+    };
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
       if (data.type === 'progress') {
+        setStreamError(null);
         setOverview(data.overview);
       } else if (data.type === 'complete') {
+        clearReconnectTimer();
         setOverview(data.overview);
+        setStreamError(null);
         eventSource.close();
         setTimeout(() => {
           router.push(`/projects/${projectId}`);
         }, 2000);
       } else if (data.type === 'error') {
+        clearReconnectTimer();
         if (data.overview) {
           setOverview(data.overview);
         }
@@ -70,22 +90,45 @@ export function ProjectInitializingClient({
 
     eventSource.onerror = async () => {
       eventSource.close();
+      if (closed) {
+        return;
+      }
 
       try {
         const response = await fetch(`/api/projects/${projectId}/init/status`);
         if (!response.ok) {
-          setStreamError('刷新初始化状态失败');
+          setStreamError('实时连接中断，正在重试…');
+          scheduleReconnect();
           return;
         }
 
         const data = await response.json();
         setOverview(data.overview);
+
+        if (data.overview?.status === 'active') {
+          setStreamError(null);
+          setTimeout(() => {
+            router.push(`/projects/${projectId}`);
+          }, 800);
+          return;
+        }
+
+        if (data.overview?.status === 'failed' && data.overview?.recoveryAction?.kind !== 'wait') {
+          setStreamError(data.overview?.primarySummary ?? '初始化失败');
+          return;
+        }
+
+        setStreamError('实时连接中断，正在恢复进度…');
+        scheduleReconnect();
       } catch {
-        setStreamError('刷新初始化状态失败');
+        setStreamError('实时连接中断，正在重试…');
+        scheduleReconnect();
       }
     };
 
     return () => {
+      closed = true;
+      clearReconnectTimer();
       eventSource.close();
     };
   }, [projectId, router, streamToken]);

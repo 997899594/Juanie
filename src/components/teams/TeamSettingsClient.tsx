@@ -30,11 +30,17 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { deleteTeam, updateTeamAISettings, updateTeamSettings } from '@/lib/teams/client-actions';
 import type { getTeamSettingsPageData } from '@/lib/teams/service';
+import { cn } from '@/lib/utils';
 
 interface TeamSettingsClientProps {
   teamId: string;
   initialData: NonNullable<Awaited<ReturnType<typeof getTeamSettingsPageData>>>;
 }
+
+const settingsPanelClassName =
+  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+const settingsSubtleClassName =
+  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
 
 export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientProps) {
   const router = useRouter();
@@ -130,7 +136,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
 
       <div className="grid gap-2 md:grid-cols-3">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className="ui-control-muted rounded-[20px] px-4 py-3">
+          <div key={stat.label} className={settingsSubtleClassName}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -139,7 +145,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         ))}
       </div>
 
-      <form id="team-settings-form" onSubmit={handleSave} className="ui-floating px-5 py-5">
+      <form id="team-settings-form" onSubmit={handleSave} className={settingsPanelClassName}>
         <div className="grid gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="name" className="text-sm">
@@ -171,14 +177,14 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         )}
       </form>
 
-      <section className="ui-floating px-5 py-5">
+      <section className={settingsPanelClassName}>
         <div className="text-sm font-semibold">治理</div>
         <div className="mt-4">
           <TeamGovernancePanel governance={overview.governance} />
         </div>
       </section>
 
-      <form onSubmit={handleSaveAI} className="ui-floating px-5 py-5">
+      <form onSubmit={handleSaveAI} className={settingsPanelClassName}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">AI Control Plane</div>
@@ -191,7 +197,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[280px_1fr]">
-          <div className="ui-floating space-y-4 p-4">
+          <div className={cn(settingsSubtleClassName, 'space-y-4 p-4')}>
             <div className="space-y-2">
               <Label className="text-sm">团队套餐</Label>
               <Select
@@ -213,7 +219,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               </Select>
             </div>
 
-            <div className="bg-[rgba(248,246,242,0.84)] rounded-[20px] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset,0_8px_20px_rgba(55,53,47,0.022)]">
+            <div className={settingsSubtleClassName}>
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Provider
               </div>
@@ -245,7 +251,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             {aiPlugins.map((plugin) => (
               <div
                 key={plugin.id}
-                className="bg-[rgba(255,255,255,0.82)] px-4 py-4 rounded-[22px] shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_10px_26px_rgba(55,53,47,0.032)]"
+                className="rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(248,245,240,0.9))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_12px_26px_rgba(55,53,47,0.04)]"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
@@ -295,7 +301,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
         )}
       </form>
 
-      <section className="ui-floating px-5 py-5">
+      <section className={settingsPanelClassName}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">最近 AI 活动</div>
@@ -307,7 +313,10 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             aiActivity.map((item) => (
               <div
                 key={item.id}
-                className="ui-control-muted flex flex-col gap-2 rounded-[24px] px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
+                className={cn(
+                  settingsSubtleClassName,
+                  'flex flex-col gap-2 rounded-[20px] sm:flex-row sm:items-start sm:justify-between'
+                )}
               >
                 <div className="space-y-1">
                   <div className="text-sm font-medium">{item.title}</div>
@@ -319,15 +328,20 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
               </div>
             ))
           ) : (
-            <div className="ui-control-muted rounded-[24px] px-4 py-5 text-sm text-muted-foreground">
+            <div
+              className={cn(
+                settingsSubtleClassName,
+                'rounded-[20px] py-5 text-sm text-muted-foreground'
+              )}
+            >
               暂无记录
             </div>
           )}
         </div>
       </section>
 
-      <section className="ui-floating px-5 py-5">
-        <div className="flex flex-col gap-4 rounded-[24px] bg-destructive/[0.05] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+      <section className={settingsPanelClassName}>
+        <div className="flex flex-col gap-4 rounded-[22px] bg-[linear-gradient(180deg,rgba(196,85,77,0.08),rgba(255,255,255,0.92))] p-4 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(196,85,77,0.08)] sm:p-5 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
             <div className="text-sm font-semibold text-destructive">删除团队</div>
             <div className="text-xs text-muted-foreground">该操作无法恢复。</div>

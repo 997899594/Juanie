@@ -140,7 +140,7 @@ function buildReleaseNarrativeSummary(input: {
     `${input.riskLabel}${input.environmentStrategy ? ` · ${input.environmentStrategy}` : ''}`;
 
   const resultParts = [getReleaseStatusLabel(input.release.status)];
-  if (input.approvalRunsCount > 0) resultParts.push(`${input.approvalRunsCount} 个待处理门禁`);
+  if (input.approvalRunsCount > 0) resultParts.push(`${input.approvalRunsCount} 个待审批`);
   if (input.retryableRunsCount > 0) resultParts.push(`${input.retryableRunsCount} 个可重试`);
   if (input.previewLifecycle?.stateLabel) resultParts.push(input.previewLifecycle.stateLabel);
   if ((input.governanceEvents?.length ?? 0) > 0) {

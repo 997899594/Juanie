@@ -64,20 +64,22 @@ export function ProjectEnvironmentIndex({
   environments: ProjectOverviewPageData['environmentCards'];
 }) {
   return (
-    <section className="ui-floating overflow-hidden">
+    <section className="overflow-hidden rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]">
       <div className="console-divider-bottom px-5 py-4">
         <div className="text-sm font-semibold">环境</div>
       </div>
 
       <div className="space-y-3 p-3">
         {environments.length === 0 ? (
-          <div className="ui-control-muted px-5 py-8 text-sm text-muted-foreground">还没有环境</div>
+          <div className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-5 py-8 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
+            还没有环境
+          </div>
         ) : (
           environments.map((environment) => (
             <Link
               key={environment.id}
               href={`/projects/${projectId}/environments/${environment.id}`}
-              className="ui-control block px-4 py-4 transition-colors hover:bg-secondary/55"
+              className="block rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)] transition-colors hover:bg-white/90"
             >
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0 flex-1 space-y-2">
@@ -96,8 +98,7 @@ export function ProjectEnvironmentIndex({
                       <Badge variant="outline">
                         {environment.latestReleaseCard.statusDecoration.label}
                       </Badge>
-                    ) : null}
-                    {environment.previewLifecycle ? (
+                    ) : environment.previewLifecycle ? (
                       <Badge variant="secondary">{environment.previewLifecycle.stateLabel}</Badge>
                     ) : null}
                   </div>

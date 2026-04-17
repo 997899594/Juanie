@@ -43,7 +43,7 @@ function getSchemaStatusChip(status: ReleaseSchemaGateState['status']): Platform
     case 'pending_migrations':
       return {
         key: 'schema:pending_migrations',
-        label: '待迁移',
+        label: '待执行迁移',
         tone: 'neutral',
       };
     case 'aligned_untracked':
@@ -94,7 +94,7 @@ function buildReleaseSchemaGateSnapshot(
   if (states.some((state) => state.status === 'pending_migrations')) {
     customSignals.push({
       key: 'schema:pending_migrations',
-      label: `待迁移 ${states.filter((state) => state.status === 'pending_migrations').length} 项`,
+      label: `待执行迁移 ${states.filter((state) => state.status === 'pending_migrations').length} 项`,
       tone: 'neutral',
     });
   }

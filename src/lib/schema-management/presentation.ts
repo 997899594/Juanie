@@ -7,7 +7,7 @@ export function getEnvironmentSchemaStateLabel(
     case 'aligned':
       return '已对齐';
     case 'pending_migrations':
-      return '待迁移';
+      return '待执行迁移';
     case 'aligned_untracked':
       return '账本缺失';
     case 'drifted':

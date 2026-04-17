@@ -236,7 +236,7 @@ function generateBreadcrumbs(
 
   const pathMap: Record<string, string> = {
     projects: '项目',
-    inbox: '行动',
+    inbox: '待处理',
     approvals: '审批',
     teams: '团队',
     settings: '设置',

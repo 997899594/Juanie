@@ -13,12 +13,14 @@ interface TeamOverviewClientProps {
 
 export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientProps) {
   const overview = initialData.overview;
+  const shellClassName =
+    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
 
   return (
     <div className="space-y-6">
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className="ui-control px-5 py-4">
+          <div key={stat.label} className={`${shellClassName} px-5 py-4`}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -40,15 +42,6 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         </div>
       </div>
 
-      <div className="ui-control px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium">项目</div>
-            <div className="mt-1 text-sm text-muted-foreground">团队内所有项目都从这里进入。</div>
-          </div>
-        </div>
-      </div>
-
       {overview.projects.length === 0 ? (
         <EmptyState
           icon={<FolderKanban className="h-8 w-8 text-muted-foreground" />}
@@ -62,9 +55,9 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
             <Link
               key={project.id}
               href={`/projects/${project.id}`}
-              className="ui-control flex items-start gap-4 px-5 py-4 transition-colors hover:bg-secondary/60"
+              className={`${shellClassName} flex items-start gap-4 px-5 py-4 transition-colors hover:bg-white/90`}
             >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-secondary/80">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] bg-secondary/80">
                 <FolderKanban className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="min-w-0">

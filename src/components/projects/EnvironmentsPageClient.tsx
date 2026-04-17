@@ -528,7 +528,7 @@ function buildEnvironmentDatabaseSummary(environment: EnvironmentRecord): string
 
   return [
     `${totalCount} 个数据库`,
-    issueCount > 0 ? `${issueCount} 个待处理` : null,
+    issueCount > 0 ? `${issueCount} 个需处理` : null,
     inheritedCount > 0 ? `${inheritedCount} 个继承` : null,
   ]
     .filter(Boolean)
@@ -693,7 +693,6 @@ function EnvironmentOverviewPanel({
               >
                 {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
               </a>
-              <div className="mt-3 text-sm text-muted-foreground">当前环境主访问入口</div>
             </div>
             <Button asChild variant="outline" className="h-11 shrink-0 rounded-full px-5 text-sm">
               <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
@@ -778,9 +777,9 @@ function EnvironmentOverviewPanel({
               {environment.strategyLabel ?? '未设置'}
             </div>
           )}
-          <div className={summaryClassName}>
-            {strategyHelper ?? environment.strategyLabel ?? '当前环境未配置发布策略'}
-          </div>
+          {strategyHelper || environment.strategyLabel ? (
+            <div className={summaryClassName}>{strategyHelper ?? environment.strategyLabel}</div>
+          ) : null}
         </div>
 
         <div className={shellClassName}>

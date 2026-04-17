@@ -57,6 +57,9 @@ export default async function HomePage() {
     });
   }
 
+  const shellClassName =
+    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
@@ -82,7 +85,7 @@ export default async function HomePage() {
       <PriorityDeck title="下一步" items={nextPriorityItems} />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <section className="ui-floating overflow-hidden">
+        <section className={`${shellClassName} overflow-hidden`}>
           <div className="console-divider-bottom flex items-center justify-between px-5 py-4">
             <div className="text-sm font-semibold">项目入口</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
@@ -94,12 +97,12 @@ export default async function HomePage() {
           </div>
           <div className="p-3">
             {projectCards.length === 0 ? (
-              <div className="ui-control-muted flex min-h-64 flex-col items-center justify-center p-6 text-center">
-                <div className="mb-4 rounded-2xl bg-background/80 p-3">
+              <div className="flex min-h-64 flex-col items-center justify-center rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] p-6 text-center shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
+                <div className="mb-4 rounded-[18px] bg-background/80 p-3">
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="text-sm font-medium">没有项目</div>
-                <Button asChild className="mt-5 rounded-xl">
+                <Button asChild variant="outline" className="mt-5 rounded-full">
                   <Link href="/projects/new">
                     <Plus className="h-3.5 w-3.5" />
                     新建项目
@@ -112,7 +115,7 @@ export default async function HomePage() {
                   <Link
                     key={project.id}
                     href={`/projects/${project.id}`}
-                    className="ui-control-muted flex items-center justify-between px-4 py-3 transition-colors hover:bg-secondary/70"
+                    className="flex items-center justify-between rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)] transition-colors hover:bg-white/90"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-background/90 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
@@ -136,9 +139,9 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="ui-floating overflow-hidden">
+        <section className={`${shellClassName} overflow-hidden`}>
           <div className="console-divider-bottom flex items-center justify-between px-5 py-4">
-            <div className="text-sm font-semibold">待处理详情</div>
+            <div className="text-sm font-semibold">待处理</div>
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-xl text-xs">
               <Link href="/inbox">
                 全部
@@ -148,8 +151,8 @@ export default async function HomePage() {
           </div>
           <div className="p-3">
             {attentionItems.length === 0 ? (
-              <div className="ui-control-muted flex min-h-64 flex-col items-center justify-center p-6 text-center">
-                <div className="mb-4 rounded-2xl bg-background/80 p-3">
+              <div className="flex min-h-64 flex-col items-center justify-center rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] p-6 text-center shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
+                <div className="mb-4 rounded-[18px] bg-background/80 p-3">
                   <AlertTriangle className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="text-sm font-medium">没有待处理项</div>
@@ -160,7 +163,7 @@ export default async function HomePage() {
                   <Link
                     key={run.id}
                     href={run.href}
-                    className="ui-control-muted flex items-center justify-between px-4 py-3 transition-colors hover:bg-secondary/70"
+                    className="flex items-center justify-between rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)] transition-colors hover:bg-white/90"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div
@@ -188,19 +191,9 @@ export default async function HomePage() {
                             {run.platformSignals.primarySummary}
                           </div>
                         )}
-                        {(run.platformSignals.nextActionLabel || run.actionLabel) && (
+                        {run.platformSignals.nextActionLabel && (
                           <div className="mt-1 text-[11px] text-muted-foreground">
-                            {run.platformSignals.nextActionLabel ?? run.actionLabel}
-                          </div>
-                        )}
-                        {(run.releaseTitle || run.primaryDomainUrl) && (
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            {run.releaseTitle && <span>{run.releaseTitle}</span>}
-                            {run.primaryDomainUrl && (
-                              <span className="text-foreground underline underline-offset-4">
-                                环境
-                              </span>
-                            )}
+                            {run.platformSignals.nextActionLabel}
                           </div>
                         )}
                       </div>
@@ -217,9 +210,9 @@ export default async function HomePage() {
       <div className="grid gap-4 xl:grid-cols-2">
         <Link
           href="/projects/new"
-          className="ui-control flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/60"
+          className={`${shellClassName} flex items-center gap-4 px-5 py-4 transition-colors hover:bg-white/90`}
         >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-black text-white">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-black text-white">
             <Plus className="h-4 w-4" />
           </div>
           <div>
@@ -229,9 +222,9 @@ export default async function HomePage() {
 
         <Link
           href="/teams"
-          className="ui-control flex items-center gap-4 px-5 py-4 transition-colors hover:bg-secondary/60"
+          className={`${shellClassName} flex items-center gap-4 px-5 py-4 transition-colors hover:bg-white/90`}
         >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 text-foreground">
+          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-secondary/80 text-foreground">
             <Users className="h-4 w-4" />
           </div>
           <div>

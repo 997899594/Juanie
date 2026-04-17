@@ -14,6 +14,27 @@ export interface ProjectInitPageData {
   overview: ReturnType<typeof buildProjectInitOverview>;
 }
 
+function mapProjectInitStep(step: typeof projectInitSteps.$inferSelect) {
+  return {
+    id: step.id,
+    step: step.step,
+    status: step.status,
+    message: step.message,
+    progress: step.progress,
+    errorCode: step.errorCode,
+    error: step.error,
+  };
+}
+
+export async function getProjectInitOverviewSnapshot(projectId: string) {
+  const steps = await db.query.projectInitSteps.findMany({
+    where: eq(projectInitSteps.projectId, projectId),
+    orderBy: (step, { asc }) => [asc(step.createdAt)],
+  });
+
+  return buildProjectInitOverview(steps.map(mapProjectInitStep));
+}
+
 function resolveProjectInitMode(
   configJson: unknown,
   steps: Array<{ step: string }>
@@ -78,17 +99,7 @@ export async function getProjectInitRetryContext(
   }
 
   const metadata = resolveProjectInitMode(project.configJson, steps);
-  const overview = buildProjectInitOverview(
-    steps.map((step) => ({
-      id: step.id,
-      step: step.step,
-      status: step.status,
-      message: step.message,
-      progress: step.progress,
-      errorCode: step.errorCode,
-      error: step.error,
-    }))
-  );
+  const overview = buildProjectInitOverview(steps.map(mapProjectInitStep));
 
   return {
     projectId: project.id,
@@ -126,27 +137,12 @@ export async function getProjectInitPageData(
     return null;
   }
 
-  const steps = await db.query.projectInitSteps.findMany({
-    where: eq(projectInitSteps.projectId, projectId),
-    orderBy: (step, { asc }) => [asc(step.createdAt)],
-  });
-
   return {
     project: {
       id: project.id,
       name: project.name,
       status: project.status,
     },
-    overview: buildProjectInitOverview(
-      steps.map((step) => ({
-        id: step.id,
-        step: step.step,
-        status: step.status,
-        message: step.message,
-        progress: step.progress,
-        errorCode: step.errorCode,
-        error: step.error,
-      }))
-    ),
+    overview: await getProjectInitOverviewSnapshot(projectId),
   };
 }

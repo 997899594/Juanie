@@ -22,6 +22,12 @@ import {
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
 import { formatPlatformDateTime } from '@/lib/time/format';
+import { cn } from '@/lib/utils';
+
+const dialogPanelClassName =
+  'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] p-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)] sm:p-6';
+const dialogSubtleClassName =
+  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
 
 function getStrategyLabel(
   strategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null
@@ -114,7 +120,7 @@ export function ReleasePromoteDialog({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7 sm:py-6">
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.92fr)]">
             <div className="space-y-4">
-              <div className="ui-control rounded-[24px] p-5 sm:p-6">
+              <div className={dialogPanelClassName}>
                 <div className="text-sm font-semibold text-foreground">提升配置</div>
 
                 {promotionPlans.length > 1 ? (
@@ -167,7 +173,7 @@ export function ReleasePromoteDialog({
                     </div>
 
                     {selectedPlan.sourceRelease ? (
-                      <div className="ui-control-muted rounded-[20px] px-4 py-3">
+                      <div className={dialogSubtleClassName}>
                         <div className="text-xs text-muted-foreground">来源发布</div>
                         <div className="mt-1 text-foreground">
                           {selectedPlan.sourceRelease.summary ??
@@ -180,12 +186,12 @@ export function ReleasePromoteDialog({
                         )}
                       </div>
                     ) : (
-                      <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+                      <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
                         {selectedPlan.sourceEnvironment?.name ?? '来源环境'} 暂无可复用的成功发布。
                       </div>
                     )}
 
-                    <div className="ui-control-muted rounded-[20px] px-4 py-3">
+                    <div className={dialogSubtleClassName}>
                       <div className="text-xs text-muted-foreground">目标环境</div>
                       <div className="mt-1 text-foreground">
                         {selectedPlan.targetEnvironment?.name ?? '目标环境'}
@@ -199,7 +205,7 @@ export function ReleasePromoteDialog({
             </div>
 
             <div className="space-y-4">
-              <div className="ui-control-muted rounded-[24px] p-5 sm:p-6">
+              <div className={dialogPanelClassName}>
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {promotePanel ? (
@@ -212,7 +218,7 @@ export function ReleasePromoteDialog({
                     />
 
                     {promoteAI?.summary && (
-                      <div className="ui-control rounded-[20px] px-4 py-3">
+                      <div className={dialogSubtleClassName}>
                         <div className="flex flex-wrap items-center gap-2">
                           {promoteAI.strategy && (
                             <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
@@ -256,7 +262,7 @@ export function ReleasePromoteDialog({
                     )}
 
                     {!promoteAI?.summary && promoteAI?.errorMessage && (
-                      <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+                      <div className={cn(dialogSubtleClassName, 'text-sm text-muted-foreground')}>
                         {promoteAI.errorMessage}
                       </div>
                     )}
@@ -266,7 +272,7 @@ export function ReleasePromoteDialog({
                     )}
 
                     {promoteAI?.checks.length ? (
-                      <div className="ui-control-muted rounded-[20px] space-y-2 px-4 py-3">
+                      <div className={cn(dialogSubtleClassName, 'space-y-2')}>
                         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           检查
                         </div>

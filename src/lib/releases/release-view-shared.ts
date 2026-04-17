@@ -374,7 +374,7 @@ export function buildReleaseSignalChips(input: {
   if ((input.approvalRunsCount ?? 0) > 0) {
     chips.push({
       key: 'approval-runs',
-      label: `${input.approvalRunsCount} 个待处理门禁`,
+      label: `${input.approvalRunsCount} 个待审批`,
       tone: 'neutral',
     });
   }

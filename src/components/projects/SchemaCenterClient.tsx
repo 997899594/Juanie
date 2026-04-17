@@ -118,7 +118,7 @@ function getSuggestionStatusLabel(repairPlan: DatabaseSchemaRepairPlan): string 
     case 'failed':
       return '失败';
     default:
-      return '待处理';
+      return '待生成';
   }
 }
 
@@ -181,7 +181,7 @@ function getSuggestionSummary(
     case 'failed':
       return repairPlan.errorMessage ?? '执行失败';
     default:
-      return '待处理';
+      return '待生成';
   }
 }
 
@@ -275,7 +275,7 @@ export function SchemaCenterClient({
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <span>{data.summary.databaseCount} 个数据库</span>
           <span>{data.summary.blockingCount} 个门禁阻塞</span>
-          <span>{data.summary.pendingCount} 个待迁移</span>
+          <span>{data.summary.pendingCount} 个待执行迁移</span>
           <span className="ml-auto">{data.roleLabel}</span>
         </div>
       </div>

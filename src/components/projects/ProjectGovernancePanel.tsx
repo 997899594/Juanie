@@ -8,7 +8,7 @@ interface ProjectGovernancePanelProps {
 export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelProps) {
   return (
     <div className="space-y-4">
-      <div className="console-surface rounded-2xl px-4 py-3">
+      <div className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
         <div className="text-sm font-medium">{governance.primarySummary}</div>
         <div className="mt-1 text-xs text-muted-foreground">{governance.roleLabel}</div>
       </div>
@@ -17,7 +17,10 @@ export function ProjectGovernancePanel({ governance }: ProjectGovernancePanelPro
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {governance.capabilities.map((capability) => (
-          <div key={capability.key} className="console-card bg-secondary/20 px-4 py-3">
+          <div
+            key={capability.key}
+            className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]"
+          >
             <div className="flex items-center gap-2">
               <div
                 className={

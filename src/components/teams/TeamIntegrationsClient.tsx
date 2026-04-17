@@ -73,6 +73,8 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
       setPendingBindingId(null);
     }
   };
+  const shellClassName =
+    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
 
   return (
     <div className="space-y-6">
@@ -97,7 +99,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
 
       <div className="grid gap-3 md:grid-cols-3">
         {overview.stats.map((stat) => (
-          <div key={stat.label} className="ui-control px-5 py-4">
+          <div key={stat.label} className={`${shellClassName} px-5 py-4`}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -108,7 +110,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
 
       <div className="space-y-3">
         {overview.bindings.length === 0 ? (
-          <div className="ui-floating px-5 py-8 text-center text-sm text-muted-foreground">
+          <div className={`${shellClassName} px-5 py-8 text-center text-sm text-muted-foreground`}>
             暂无集成
           </div>
         ) : (
@@ -116,7 +118,7 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
             const isPending = pendingBindingId === binding.id;
 
             return (
-              <div key={binding.id} className="ui-floating px-5 py-4">
+              <div key={binding.id} className={`${shellClassName} px-5 py-4`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">

@@ -22,6 +22,12 @@ import {
 } from '@/lib/releases/client-actions';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
+import { cn } from '@/lib/utils';
+
+const dialogPanelClassName =
+  'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] p-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)] sm:p-6';
+const dialogSubtleClassName =
+  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
 
 interface DeploymentRollbackActionProps {
   projectId: string;
@@ -134,14 +140,14 @@ export function DeploymentRollbackAction({
                 </div>
               )}
 
-              <div className="ui-control rounded-[24px] p-5 sm:p-6">
+              <div className={dialogPanelClassName}>
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">回滚来源</div>
                   <div className="text-sm text-muted-foreground">确认要回到的稳定版本来源。</div>
                 </div>
 
                 {planningPanel?.sourceImageUrl ? (
-                  <div className="ui-control-muted mt-4 rounded-[20px] px-4 py-3">
+                  <div className={cn(dialogSubtleClassName, 'mt-4')}>
                     <div className="text-xs text-muted-foreground">来源镜像</div>
                     <code className="mt-2 block break-all text-xs text-foreground">
                       {planningPanel.sourceImageUrl}
@@ -160,7 +166,7 @@ export function DeploymentRollbackAction({
             </div>
 
             <div className="space-y-4">
-              <div className="ui-control-muted rounded-[24px] p-5 sm:p-6">
+              <div className={dialogPanelClassName}>
                 <div className="mb-3 space-y-1">
                   <div className="text-sm font-semibold text-foreground">回滚检查</div>
                   <div className="text-sm text-muted-foreground">

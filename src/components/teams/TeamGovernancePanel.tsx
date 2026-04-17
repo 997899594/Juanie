@@ -49,7 +49,10 @@ function GovernanceCapabilityGrid(props: {
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {props.items.map((item) => (
-        <div key={item.key} className="ui-control-muted px-4 py-3">
+        <div
+          key={item.key}
+          className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]"
+        >
           <div className="flex items-center gap-2">
             <div
               className={
@@ -70,7 +73,7 @@ function GovernanceCapabilityGrid(props: {
 export function TeamGovernancePanel({ governance }: TeamGovernancePanelProps) {
   return (
     <div className="space-y-4">
-      <div className="ui-control-muted px-4 py-3">
+      <div className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
         <div className="text-sm font-medium">{governance.primarySummary}</div>
         <div className="mt-1 text-xs text-muted-foreground">{governance.roleLabel}</div>
       </div>
@@ -78,9 +81,8 @@ export function TeamGovernancePanel({ governance }: TeamGovernancePanelProps) {
       <GovernanceCapabilityGrid items={governance.capabilities} />
       <GovernanceMatrix title="团队治理" rows={governance.matrix} />
 
-      <div className="ui-control-muted px-4 py-3">
+      <div className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]">
         <div className="text-sm font-medium">{governance.platformSummary}</div>
-        <div className="mt-1 text-xs text-muted-foreground">项目和环境操作边界</div>
       </div>
       <GovernanceCapabilityGrid items={governance.platformCapabilities} />
       <GovernanceMatrix title="平台能力" rows={governance.platformMatrix} />

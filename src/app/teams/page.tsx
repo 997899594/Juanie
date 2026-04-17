@@ -15,6 +15,8 @@ export default async function TeamsPage() {
   }
 
   const { teamCards } = await getTeamsListPageData(session.user.id);
+  const shellClassName =
+    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -31,12 +33,14 @@ export default async function TeamsPage() {
       />
 
       {teamCards.length === 0 ? (
-        <div className="ui-floating flex min-h-80 flex-col items-center justify-center text-center">
-          <div className="mb-4 rounded-2xl bg-secondary/80 p-4">
+        <div
+          className={`${shellClassName} flex min-h-80 flex-col items-center justify-center text-center`}
+        >
+          <div className="mb-4 rounded-[18px] bg-secondary/80 p-4">
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">还没有团队</h2>
-          <Button asChild className="mt-5 rounded-xl">
+          <Button asChild variant="outline" className="mt-5 rounded-full">
             <Link href="/teams/new">
               <Plus className="h-4 w-4" />
               新建团队
@@ -50,12 +54,12 @@ export default async function TeamsPage() {
               <Link
                 key={team.id}
                 href={`/teams/${team.id}`}
-                className="ui-control px-5 py-4 transition-colors hover:bg-secondary/60"
+                className={`${shellClassName} px-5 py-4 transition-colors hover:bg-white/90`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 rounded-xl">
-                      <AvatarFallback className="rounded-xl bg-secondary/80 text-xs font-semibold">
+                    <Avatar className="h-10 w-10 rounded-[18px]">
+                      <AvatarFallback className="rounded-[18px] bg-secondary/80 text-xs font-semibold">
                         {team.initials}
                       </AvatarFallback>
                     </Avatar>
@@ -74,9 +78,12 @@ export default async function TeamsPage() {
 
           <Link
             href="/teams/new"
-            className="ui-control-muted flex min-h-40 flex-col items-center justify-center px-5 py-4 text-center transition-colors hover:bg-secondary/70"
+            className={
+              shellClassName +
+              ' flex min-h-40 flex-col items-center justify-center px-5 py-4 text-center transition-colors hover:bg-white/90'
+            }
           >
-            <div className="mb-3 rounded-2xl bg-background/80 p-3">
+            <div className="mb-3 rounded-[18px] bg-background/80 p-3">
               <Plus className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-sm font-semibold">新建团队</div>

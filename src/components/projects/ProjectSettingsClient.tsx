@@ -29,6 +29,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { updateEnvironmentStrategy } from '@/lib/environments/client-actions';
 import type { ProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
+import { cn } from '@/lib/utils';
 
 interface ProjectSettingsClientProps {
   projectId: string;
@@ -81,6 +82,11 @@ const databaseStrategyLabels: Record<'direct' | 'inherit' | 'isolated_clone', st
   inherit: '继承基础环境数据库',
   isolated_clone: '独立预览库',
 };
+
+const settingsPanelClassName =
+  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+const settingsSubtleClassName =
+  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
 
 export function ProjectSettingsClient({ projectId, initialData }: ProjectSettingsClientProps) {
   const router = useRouter();
@@ -161,7 +167,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
       <div className="grid gap-2 md:grid-cols-3">
         {initialData.overview.stats.map((stat) => (
-          <div key={stat.label} className="ui-control-muted px-4 py-3">
+          <div key={stat.label} className={settingsSubtleClassName}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -180,7 +186,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
         </TabsList>
 
         <TabsContent value="general">
-          <div className="console-panel overflow-hidden">
+          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
             <div className="console-divider-bottom px-5 py-4">
               <div className="text-sm font-semibold">常规</div>
             </div>
@@ -206,13 +212,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="ui-control-muted px-4 py-3">
+                <div className={settingsSubtleClassName}>
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     团队
                   </div>
                   <div className="mt-2 text-sm font-medium">{project.teamName}</div>
                 </div>
-                <div className="ui-control-muted px-4 py-3">
+                <div className={settingsSubtleClassName}>
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     状态
                   </div>
@@ -233,14 +239,16 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
         </TabsContent>
 
         <TabsContent value="git">
-          <div className="console-panel overflow-hidden">
+          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
             <div className="console-divider-bottom px-5 py-4">
               <div className="text-sm font-semibold">代码仓库</div>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4 px-5 py-4">
               <div className="space-y-2">
                 <Label htmlFor="gitRepository">仓库地址</Label>
-                <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
+                <div
+                  className={cn(settingsSubtleClassName, 'break-all text-sm text-muted-foreground')}
+                >
                   {project.repositoryFullName ?? '未绑定仓库'}
                 </div>
               </div>
@@ -268,34 +276,34 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
         </TabsContent>
 
         <TabsContent value="environments">
-          <div className="console-panel overflow-hidden">
+          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
             <div className="console-divider-bottom px-5 py-4">
               <div className="text-sm font-semibold">环境策略</div>
             </div>
             <div className="space-y-3 px-5 py-4">
               {project.environments.length === 0 ? (
-                <div className="console-surface rounded-2xl px-4 py-6 text-sm text-muted-foreground">
+                <div className={cn(settingsSubtleClassName, 'py-6 text-sm text-muted-foreground')}>
                   没有环境。
                 </div>
               ) : (
                 project.environments.map((environment) => (
-                  <div key={environment.id} className="ui-control-muted px-4 py-4">
+                  <div key={environment.id} className={cn(settingsSubtleClassName, 'px-4 py-4')}>
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="space-y-2">
+                      <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-semibold">{environment.name}</div>
                           {environment.isProduction && (
-                            <span className="ui-control rounded-full px-2.5 py-1 text-[11px] text-foreground">
+                            <span className="rounded-full bg-white/84 px-2.5 py-1 text-[11px] text-foreground shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(17,17,17,0.04)]">
                               生产
                             </span>
                           )}
                           {environment.isPreview && (
-                            <span className="ui-control rounded-full px-2.5 py-1 text-[11px] text-foreground">
+                            <span className="rounded-full bg-white/84 px-2.5 py-1 text-[11px] text-foreground shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(17,17,17,0.04)]">
                               预览
                             </span>
                           )}
                         </div>
-                        <div className="text-sm text-muted-foreground">
+                        <div className="break-words text-sm text-muted-foreground">
                           {environment.actions.configureStrategySummary}
                         </div>
                       </div>
@@ -339,7 +347,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
         </TabsContent>
 
         <TabsContent value="governance">
-          <div className="console-panel overflow-hidden">
+          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
             <div className="console-divider-bottom px-5 py-4">
               <div className="text-sm font-semibold">治理</div>
             </div>
@@ -350,13 +358,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
         </TabsContent>
 
         <TabsContent value="danger">
-          <div className="console-panel overflow-hidden">
+          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
             <div className="px-5 py-4">
               <div className="text-sm font-semibold text-destructive">危险操作</div>
             </div>
             <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
-                <div className="ui-control rounded-[24px] bg-destructive/[0.05] p-4 sm:p-5 md:flex md:items-center md:justify-between">
+                <div className="rounded-[22px] bg-[linear-gradient(180deg,rgba(196,85,77,0.08),rgba(255,255,255,0.92))] p-4 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(196,85,77,0.08)] sm:p-5 md:flex md:items-center md:justify-between">
                   <div className="space-y-1">
                     <div className="text-sm font-medium text-foreground">删除项目</div>
                     <div className="text-sm text-muted-foreground">该操作无法撤销。</div>

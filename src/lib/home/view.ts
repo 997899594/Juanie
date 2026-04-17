@@ -278,7 +278,7 @@ export function buildHomeCommandCenter<
           firstAttention.platformSignals.primarySummary ??
           `${firstAttention.projectName} 有待确认的数据库变更或迁移结果。`,
         primaryAction: {
-          label: '打开待处理项',
+          label: '打开事项',
           href: firstAttention.href,
           description: `下一步：${firstAttention.platformSignals.nextActionLabel ?? firstAttention.actionLabel ?? '进入详情处理'}`,
           tone: firstAttention.status === 'failed' ? 'danger' : 'neutral',
@@ -322,7 +322,7 @@ export function buildHomeCommandCenter<
           tone: 'neutral',
         } satisfies HomeCommandCenterAction,
         secondaryAction: {
-          label: '查看审批',
+          label: '查看待处理',
           href: '/inbox',
         },
       };

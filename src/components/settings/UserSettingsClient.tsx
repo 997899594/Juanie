@@ -85,6 +85,10 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
 
     return email[0]?.toUpperCase() ?? '?';
   };
+  const shellClassName =
+    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+  const subtleClassName =
+    'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
 
   return (
     <div className="space-y-6">
@@ -104,7 +108,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {initialData.overview.stats.map((stat) => (
-          <div key={stat.label} className="ui-control-muted rounded-[20px] px-4 py-3">
+          <div key={stat.label} className={`${subtleClassName} rounded-[20px]`}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
@@ -113,7 +117,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         ))}
       </div>
 
-      <div className="ui-floating px-5 py-5">
+      <div className={`${shellClassName} px-5 py-5`}>
         <div className="flex flex-col gap-6 md:flex-row md:items-start">
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 rounded-2xl">
@@ -143,9 +147,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
 
             <div className="space-y-2">
               <Label className="text-sm">邮箱地址</Label>
-              <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
-                {user.email}
-              </div>
+              <div className={`${subtleClassName} text-sm text-muted-foreground`}>{user.email}</div>
             </div>
 
             <div className="flex justify-end">
@@ -157,18 +159,20 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         </div>
       </div>
 
-      <div className="ui-floating overflow-hidden">
+      <div className={`${shellClassName} overflow-hidden`}>
         <div className="console-divider-bottom px-5 py-4">
           <div className="text-sm font-semibold">代码托管连接</div>
         </div>
         <div className="space-y-2 p-3">
           {initialData.overview.integrations.length === 0 ? (
-            <div className="ui-control-muted flex min-h-40 items-center justify-center text-sm text-muted-foreground">
+            <div
+              className={`${subtleClassName} flex min-h-40 items-center justify-center text-sm text-muted-foreground`}
+            >
               暂无代码托管连接
             </div>
           ) : (
             initialData.overview.integrations.map((integration) => (
-              <div key={integration.id} className="ui-control px-4 py-4">
+              <div key={integration.id} className={`${subtleClassName} px-4 py-4`}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">{integration.provider}</div>
@@ -185,7 +189,9 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
                     ? integration.capabilities.join(' · ')
                     : '未识别能力'}
                 </div>
-                <div className="mt-3 text-xs text-muted-foreground">{integration.summary}</div>
+                {integration.summary ? (
+                  <div className="mt-3 text-xs text-muted-foreground">{integration.summary}</div>
+                ) : null}
                 <div className="mt-1 text-[11px] text-muted-foreground">
                   最近记录：{integration.connectedAtLabel}
                 </div>

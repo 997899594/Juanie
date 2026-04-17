@@ -28,7 +28,7 @@ export const mainNav: NavItem[] = [
     icon: FolderKanban,
   },
   {
-    title: '行动',
+    title: '待处理',
     href: '/inbox',
     icon: Bell,
   },

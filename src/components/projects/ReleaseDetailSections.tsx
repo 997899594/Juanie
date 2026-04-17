@@ -15,8 +15,16 @@ import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getReleaseDetailPageData } from '@/lib/releases/service';
 import { formatPlatformDateTime } from '@/lib/time/format';
+import { cn } from '@/lib/utils';
 
 type ReleasePageData = NonNullable<Awaited<ReturnType<typeof getReleaseDetailPageData>>>;
+
+const releaseShellClassName =
+  'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+const releaseSubtleClassName =
+  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
+const releaseSectionTitleClassName =
+  'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
 
 function getToneClass(tone: ReleasePageData['release']['timeline'][number]['tone']) {
   if (tone === 'danger') return 'text-destructive';
@@ -38,7 +46,7 @@ function formatArtifactReference(value?: string | null): string | null {
 export function ReleaseTopSummarySection({ release }: { release: ReleasePageData['release'] }) {
   return (
     <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-      <div className="ui-control px-5 py-4">
+      <div className={releaseShellClassName}>
         <div className="mb-2">
           <StatusIndicator
             status={release.statusDecoration.color}
@@ -54,10 +62,8 @@ export function ReleaseTopSummarySection({ release }: { release: ReleasePageData
         </div>
       </div>
       {release.stats.map((stat) => (
-        <div key={stat.label} className="ui-control-muted rounded-[20px] px-5 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {stat.label}
-          </div>
+        <div key={stat.label} className={releaseShellClassName}>
+          <div className={releaseSectionTitleClassName}>{stat.label}</div>
           <div className="mt-3 text-2xl font-semibold tracking-tight md:text-3xl">{stat.value}</div>
         </div>
       ))}
@@ -67,13 +73,11 @@ export function ReleaseTopSummarySection({ release }: { release: ReleasePageData
 
 export function ReleaseNarrativeSection({ release }: { release: ReleasePageData['release'] }) {
   return (
-    <div className="ui-floating p-5">
+    <div className={releaseShellClassName}>
       <div className="mb-4 text-sm font-semibold">摘要</div>
       <div className="space-y-4">
-        <div className="ui-control rounded-2xl px-4 py-4">
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            阻塞
-          </div>
+        <div className={releaseSubtleClassName}>
+          <div className={releaseSectionTitleClassName}>阻塞</div>
           <div className="mt-2 text-sm font-medium text-foreground">
             {release.blockingReason?.label ?? '无'}
           </div>
@@ -84,10 +88,8 @@ export function ReleaseNarrativeSection({ release }: { release: ReleasePageData[
           )}
         </div>
         {release.infrastructureDiagnostics && (
-          <div className="ui-control-muted rounded-2xl px-4 py-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              容量
-            </div>
+          <div className={releaseSubtleClassName}>
+            <div className={releaseSectionTitleClassName}>容量</div>
             <div className="mt-2 text-sm font-medium text-foreground">
               剩余 {release.infrastructureDiagnostics.capacity.availableMemoryLabel}
               {release.infrastructureDiagnostics.capacity.saturationLabel
@@ -114,28 +116,20 @@ export function ReleaseNarrativeSection({ release }: { release: ReleasePageData[
           </div>
         )}
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            变更
-          </div>
+          <div className={releaseSectionTitleClassName}>变更</div>
           <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.changed}</div>
         </div>
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            风险
-          </div>
+          <div className={releaseSectionTitleClassName}>风险</div>
           <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.risk}</div>
         </div>
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            结果
-          </div>
+          <div className={releaseSectionTitleClassName}>结果</div>
           <div className="mt-2 text-sm text-foreground">{release.narrativeSummary.result}</div>
         </div>
         {release.narrativeSummary.governance && (
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              处理
-            </div>
+            <div className={releaseSectionTitleClassName}>处理</div>
             <div className="mt-2 text-sm text-foreground">
               {release.narrativeSummary.governance}
             </div>
@@ -143,9 +137,7 @@ export function ReleaseNarrativeSection({ release }: { release: ReleasePageData[
         )}
         {release.narrativeSummary.nextAction && (
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              动作
-            </div>
+            <div className={releaseSectionTitleClassName}>动作</div>
             <div className="mt-2 text-sm text-foreground">
               {release.narrativeSummary.nextAction}
             </div>
@@ -158,7 +150,7 @@ export function ReleaseNarrativeSection({ release }: { release: ReleasePageData[
 
 export function ReleaseTimelineSection({ release }: { release: ReleasePageData['release'] }) {
   return (
-    <div className="ui-floating p-5">
+    <div className={releaseShellClassName}>
       <div className="mb-4 text-sm font-semibold">时间线</div>
       <div className="space-y-3">
         {release.timeline.map((item, index) => (
@@ -214,7 +206,7 @@ export function ReleaseDiffSection({
     }));
 
   return (
-    <section className="ui-floating p-5">
+    <section className={releaseShellClassName}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm font-semibold">变更</div>
         {previousReleaseLink ? (
@@ -237,8 +229,8 @@ export function ReleaseDiffSection({
       {(sourceReleaseLink || previousReleaseLink) && (
         <div className="mb-4 grid gap-3 md:grid-cols-2">
           {sourceReleaseLink ? (
-            <div className="ui-control rounded-2xl px-4 py-3">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <div className={releaseSubtleClassName}>
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 <GitBranch className="h-3.5 w-3.5" />
                 来源发布
               </div>
@@ -260,8 +252,8 @@ export function ReleaseDiffSection({
           ) : null}
 
           {previousReleaseLink ? (
-            <div className="ui-control-muted rounded-2xl px-4 py-3">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <div className={releaseSubtleClassName}>
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 上一版
               </div>
               <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2">
@@ -440,14 +432,14 @@ export function ReleaseExecutionSections({
               deployment.status === 'awaiting_rollout' ||
               deployment.status === 'verification_failed'
           ) && (
-            <section className="ui-floating p-5">
+            <section className={releaseShellClassName}>
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
                 <Rocket className="h-4 w-4" />
                 放量推进
               </div>
               <div className="space-y-3">
                 {release.deploymentItems.map((deployment) => (
-                  <div key={`rollout-${deployment.id}`} className="ui-control-muted px-4 py-3">
+                  <div key={`rollout-${deployment.id}`} className={releaseSubtleClassName}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-sm font-medium">{deployment.serviceName}</div>
@@ -471,14 +463,17 @@ export function ReleaseExecutionSections({
             </section>
           )}
 
-        <section className="ui-floating p-5">
+        <section className={releaseShellClassName}>
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
             <Package2 className="h-4 w-4" />
             镜像
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {release.artifacts.map((artifact) => (
-              <div key={artifact.id ?? artifact.service.id} className="ui-control-muted px-4 py-3">
+              <div
+                key={artifact.id ?? artifact.service.id}
+                className={cn(releaseSubtleClassName, 'break-all')}
+              >
                 <div className="mb-1 text-sm font-medium">{artifact.service.name}</div>
                 <div className="break-all text-xs text-muted-foreground">{artifact.imageUrl}</div>
               </div>
@@ -486,7 +481,7 @@ export function ReleaseExecutionSections({
           </div>
         </section>
 
-        <section className="ui-floating p-5">
+        <section className={releaseShellClassName}>
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
             <Rocket className="h-4 w-4" />
             部署进度
@@ -498,7 +493,7 @@ export function ReleaseExecutionSections({
           ) : (
             <div className="space-y-3">
               {release.deploymentItems.map((deployment) => (
-                <div key={deployment.id} className="ui-control-muted px-4 py-3">
+                <div key={deployment.id} className={releaseSubtleClassName}>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusIndicator
@@ -537,7 +532,7 @@ export function ReleaseExecutionSections({
       </div>
 
       <div className="space-y-4">
-        <section className="ui-floating p-5">
+        <section className={releaseShellClassName}>
           <div className="mb-4 text-sm font-semibold">迁移记录</div>
           {release.migrationRuns.length === 0 ? (
             <div className="ui-control-muted rounded-2xl px-4 py-8 text-center text-sm text-muted-foreground">
@@ -546,7 +541,7 @@ export function ReleaseExecutionSections({
           ) : (
             <div className="space-y-3">
               {release.migrationItems.map((run) => (
-                <div key={run.id} className="ui-control-muted px-4 py-3">
+                <div key={run.id} className={releaseSubtleClassName}>
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusIndicator
@@ -577,24 +572,20 @@ export function ReleaseExecutionSections({
           )}
         </section>
 
-        <details className="ui-floating p-5">
+        <details className={releaseShellClassName}>
           <summary className="cursor-pointer list-none text-sm font-semibold">分析</summary>
           <div className="mt-4 space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
               {release.sourceCommitSha && (
-                <div className="ui-control px-4 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    来源提交
-                  </div>
+                <div className={releaseSubtleClassName}>
+                  <div className={releaseSectionTitleClassName}>来源提交</div>
                   <code className="mt-2 block text-sm font-mono text-foreground">
                     {release.sourceCommitSha.slice(0, 7)}
                   </code>
                 </div>
               )}
-              <div className="ui-control px-4 py-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  仓库与更新时间
-                </div>
+              <div className={releaseSubtleClassName}>
+                <div className={releaseSectionTitleClassName}>仓库与更新时间</div>
                 <div className="mt-2 text-sm text-foreground">{release.sourceRepository}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {formatPlatformDateTime(release.updatedAt) ?? '—'}
@@ -607,7 +598,7 @@ export function ReleaseExecutionSections({
               releasePlan={releasePlanSnapshot}
               incidentAnalysis={incidentSnapshot}
             />
-            <details className="ui-control-muted rounded-2xl px-4 py-4">
+            <details className={releaseSubtleClassName}>
               <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
                 详细信息
               </summary>

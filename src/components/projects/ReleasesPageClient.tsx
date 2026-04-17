@@ -193,11 +193,18 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     ((selectedEnvironment.deliveryRules?.length ?? 0) > 0 ||
       incomingPromotionPlans.length > 0 ||
       outgoingPromotionPlans.length > 0);
+  const shellClassName =
+    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title={selectedEnvironment ? `${selectedEnvironment.name} 发布` : '发布总览'}
+        description={
+          selectedEnvironment
+            ? '只看当前环境的发布、进入方式和后续提升。'
+            : '只保留发布链路本身，不重复环境里的其它信息。'
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusIndicator
@@ -267,60 +274,60 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         onPromote={handlePromote}
       />
 
-      <div className="ui-control-muted px-4 py-3">
-        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-          <StatusIndicator
-            status={isConnected ? 'success' : 'neutral'}
-            label={isConnected ? '实时同步' : '未连接'}
-          />
-          <span>{governance.roleLabel}</span>
-          {selectedEnvironment ? <span>{selectedEnvironment.name}</span> : null}
-          {!selectedEnvironment && hasPromotionTarget ? (
-            <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2.5">
-              <Link href={`/projects/${projectId}`}>
-                <ScrollText className="h-3.5 w-3.5" />
-                项目
-              </Link>
-            </Button>
-          ) : null}
-          {selectedEnvironment ? (
-            <>
-              <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2.5">
-                <Link href={`/projects/${projectId}/schema?env=${selectedEnvironment.id}`}>
+      <section className={cn(shellClassName, 'px-4 py-4')}>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5 text-sm text-muted-foreground">
+            <StatusIndicator
+              status={isConnected ? 'success' : 'neutral'}
+              label={isConnected ? '实时同步' : '未连接'}
+            />
+            <span>{governance.roleLabel}</span>
+            {selectedEnvironment ? <span>{selectedEnvironment.name}</span> : null}
+            {!selectedEnvironment ? <span>跨环境发布记录</span> : <span>当前环境发布视图</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!selectedEnvironment && hasPromotionTarget ? (
+              <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+                <Link href={`/projects/${projectId}`}>
+                  <ScrollText className="h-3.5 w-3.5" />
+                  项目
+                </Link>
+              </Button>
+            ) : null}
+            {selectedEnvironment ? (
+              <>
+                <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+                  <Link href={`/projects/${projectId}/schema?env=${selectedEnvironment.id}`}>
+                    <Database className="h-3.5 w-3.5" />
+                    数据
+                  </Link>
+                </Button>
+                <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+                  <Link href={`/projects/${projectId}/environments/${selectedEnvironment.id}/logs`}>
+                    <ScrollText className="h-3.5 w-3.5" />
+                    日志
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
+                <Link href={`/projects/${projectId}/schema`}>
                   <Database className="h-3.5 w-3.5" />
                   数据
                 </Link>
               </Button>
-              <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2.5">
-                <Link href={`/projects/${projectId}/environments/${selectedEnvironment.id}/logs`}>
-                  <ScrollText className="h-3.5 w-3.5" />
-                  日志
-                </Link>
-              </Button>
-            </>
-          ) : (
-            <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2.5">
-              <Link href={`/projects/${projectId}/schema`}>
-                <Database className="h-3.5 w-3.5" />
-                数据
-              </Link>
-            </Button>
-          )}
-        </div>
-        {!selectedEnvironment ? (
-          <div className="mt-2 text-xs text-muted-foreground">
-            这里只看跨环境发布记录。进入环境后再执行发布。
+            )}
           </div>
-        ) : null}
-      </div>
+        </div>
+      </section>
 
       {shouldShowEnvironmentFlow ? (
         <section className="grid gap-3 lg:grid-cols-3">
-          <div className="console-surface rounded-[24px] px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          <div className={shellClassName}>
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               当前环境
             </div>
-            <div className="mt-2 text-sm font-semibold text-foreground">
+            <div className="mt-3 text-xl font-semibold tracking-tight text-foreground">
               {selectedEnvironment?.name}
             </div>
             <div className="mt-2 text-sm text-muted-foreground">
@@ -345,58 +352,60 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             ) : null}
           </div>
 
-          <div className="console-surface rounded-[24px] px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          <div className={shellClassName}>
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               进入方式
             </div>
             {incomingPromotionPlans.length > 0 ? (
-              <div className="mt-2 space-y-2">
+              <div className="mt-3 space-y-2.5">
                 {incomingPromotionPlans.slice(0, 3).map((plan) => (
                   <div
                     key={
                       plan.flowId ?? `${plan.sourceEnvironment?.id}-${plan.targetEnvironment?.id}`
                     }
-                    className="text-sm text-foreground"
+                    className="rounded-2xl bg-secondary/72 px-3 py-2.5 text-sm text-foreground"
                   >
                     {`${plan.sourceEnvironment?.name ?? '来源环境'} -> ${plan.targetEnvironment?.name ?? '当前环境'}`}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="mt-2 text-sm text-foreground">直接在当前环境发布</div>
+              <div className="mt-3 text-lg font-semibold tracking-tight text-foreground">
+                直接在当前环境发布
+              </div>
             )}
-            <div className="mt-3 text-xs text-muted-foreground">
-              {incomingPromotionPlans.some((plan) => plan.requiresApproval)
-                ? '部分进入链路需要审批。'
-                : '当前进入链路不需要额外审批。'}
-            </div>
+            {incomingPromotionPlans.some((plan) => plan.requiresApproval) ? (
+              <div className="mt-3 text-xs text-muted-foreground">部分进入链路需要审批。</div>
+            ) : null}
           </div>
 
-          <div className="console-surface rounded-[24px] px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          <div className={shellClassName}>
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               后续去向
             </div>
             {outgoingPromotionPlans.length > 0 ? (
-              <div className="mt-2 space-y-2">
+              <div className="mt-3 space-y-2.5">
                 {outgoingPromotionPlans.slice(0, 3).map((plan) => (
                   <div
                     key={
                       plan.flowId ?? `${plan.sourceEnvironment?.id}-${plan.targetEnvironment?.id}`
                     }
-                    className="text-sm text-foreground"
+                    className="rounded-2xl bg-secondary/72 px-3 py-2.5 text-sm text-foreground"
                   >
                     {`${plan.sourceEnvironment?.name ?? '当前环境'} -> ${plan.targetEnvironment?.name ?? '目标环境'}`}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="mt-2 text-sm text-foreground">当前环境没有后续提升链路</div>
+              <div className="mt-3 text-lg font-semibold tracking-tight text-foreground">
+                当前环境没有后续提升链路
+              </div>
             )}
-            <div className="mt-3 text-xs text-muted-foreground">
-              {outgoingPromotionPlans.some((plan) => plan.requiresApproval)
-                ? '提升到后续环境时可能需要审批。'
-                : '没有额外的后续提升限制。'}
-            </div>
+            {outgoingPromotionPlans.some((plan) => plan.requiresApproval) ? (
+              <div className="mt-3 text-xs text-muted-foreground">
+                提升到后续环境时可能需要审批。
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}

@@ -360,9 +360,9 @@ function ChoiceCardButton({
     >
       <div className="flex w-full flex-col items-start gap-3">
         <div className="flex w-full items-start justify-between gap-3">
-          <div className="flex items-center gap-2 font-medium text-foreground">
+          <div className="flex min-w-0 items-center gap-2 font-medium text-foreground">
             {icon}
-            <span>{title}</span>
+            <span className="min-w-0 break-words">{title}</span>
           </div>
           {selected ? (
             <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
@@ -370,7 +370,9 @@ function ChoiceCardButton({
             </span>
           ) : null}
         </div>
-        {description ? <div className="text-sm text-muted-foreground">{description}</div> : null}
+        {description ? (
+          <div className="min-w-0 break-words text-sm text-muted-foreground">{description}</div>
+        ) : null}
       </div>
     </Button>
   );
@@ -1222,11 +1224,13 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 <div className="mt-3 space-y-3 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground">名称</span>
-                    <span className="font-medium">{formData.name || '-'}</span>
+                    <span className="min-w-0 max-w-[60%] break-words text-right font-medium">
+                      {formData.name || '-'}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground">仓库</span>
-                    <span className="font-medium">
+                    <span className="min-w-0 max-w-[60%] break-all text-right font-medium">
                       {formData.mode === 'import'
                         ? formData.repositoryFullName
                         : `${formData.repositoryName}（${formData.isPrivate ? '私有' : '公开'}）`}
@@ -1234,15 +1238,19 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground">生产分支</span>
-                    <span className="font-medium">{formData.productionBranch}</span>
+                    <span className="min-w-0 max-w-[60%] break-all text-right font-medium">
+                      {formData.productionBranch}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground">环境拓扑</span>
-                    <span className="font-medium">{environmentTemplateLabel}</span>
+                    <span className="min-w-0 max-w-[60%] break-words text-right font-medium">
+                      {environmentTemplateLabel}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-muted-foreground">主域名</span>
-                    <span className="font-medium">
+                    <span className="min-w-0 max-w-[60%] break-all text-right font-medium">
                       {formData.useCustomDomain ? formData.domain : '平台默认域名'}
                     </span>
                   </div>
@@ -1312,8 +1320,8 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   formData.services.map((service) => (
                     <div key={service._id} className="console-grid-table-row px-4 py-4">
                       <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-3">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex min-w-0 items-center gap-3">
                             <Switch
                               checked={!service.disabled}
                               onCheckedChange={() =>
@@ -1323,17 +1331,19 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                                 }))
                               }
                             />
-                            <div className="font-medium">{service.name}</div>
+                            <div className="min-w-0 break-words font-medium">{service.name}</div>
                             <Badge variant="outline">{service.type}</Badge>
                           </div>
-                          <div className="pl-11 text-xs text-muted-foreground">
+                          <div className="min-w-0 break-all pl-11 text-xs text-muted-foreground">
                             {service.appDir} · 启动命令 {service.run.command}
                             {typeof service.run.port === 'number'
                               ? ` · port ${service.run.port}`
                               : ''}
                           </div>
                         </div>
-                        <Badge variant="secondary">{getServiceRuntimeSummary(service)}</Badge>
+                        <Badge variant="secondary" className="max-w-full break-words text-left">
+                          {getServiceRuntimeSummary(service)}
+                        </Badge>
                       </div>
 
                       {!service.disabled && (
@@ -1558,12 +1568,12 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                         className="console-grid-table-row space-y-4 px-4 py-4"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
                             <Database className="h-4 w-4 text-muted-foreground" />
                             <Input
                               value={database.name}
                               onChange={(event) => updateDatabase({ name: event.target.value })}
-                              className="h-9 w-44"
+                              className="h-9 w-44 min-w-0"
                             />
                             <Badge variant="outline">
                               {

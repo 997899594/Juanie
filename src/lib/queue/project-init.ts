@@ -53,6 +53,7 @@ import {
 } from '@/lib/k8s';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
+import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
@@ -187,6 +188,8 @@ type ProjectInitErrorCode =
   | 'dns_config_failed'
   | 'init_step_failed';
 
+type StepProgressReporter = (progress: number, message?: string) => Promise<void>;
+
 function isAutoRetryableProjectInitError(code: ProjectInitErrorCode): boolean {
   return (
     code === 'k8s_namespace_failed' ||
@@ -207,25 +210,53 @@ async function updateStepStatus(
   status: 'running' | 'completed' | 'failed' | 'skipped',
   data?: { message?: string; progress?: number; error?: string; errorCode?: ProjectInitErrorCode }
 ) {
+  const hasField = (field: keyof NonNullable<typeof data>) =>
+    Boolean(data && Object.hasOwn(data, field));
+
+  const updatePayload: Record<string, unknown> = {
+    status,
+    startedAt: status === 'running' ? new Date() : undefined,
+    completedAt: status === 'completed' || status === 'skipped' ? new Date() : undefined,
+  };
+
+  if (hasField('message')) {
+    updatePayload.message =
+      status === 'running' || status === 'completed' || status === 'skipped'
+        ? (data?.message ?? null)
+        : data?.message;
+  }
+
+  if (hasField('progress')) {
+    updatePayload.progress = data?.progress ?? null;
+  }
+
+  if (hasField('errorCode')) {
+    updatePayload.errorCode =
+      status === 'running' || status === 'completed' || status === 'skipped'
+        ? null
+        : data?.errorCode;
+  }
+
+  if (hasField('error')) {
+    updatePayload.error =
+      status === 'running' || status === 'completed' || status === 'skipped' ? null : data?.error;
+  }
+
   await db
     .update(projectInitSteps)
-    .set({
-      status,
-      message:
-        status === 'running' || status === 'completed' || status === 'skipped'
-          ? (data?.message ?? null)
-          : data?.message,
-      progress: data?.progress,
-      errorCode:
-        status === 'running' || status === 'completed' || status === 'skipped'
-          ? null
-          : data?.errorCode,
-      error:
-        status === 'running' || status === 'completed' || status === 'skipped' ? null : data?.error,
-      startedAt: status === 'running' ? new Date() : undefined,
-      completedAt: status === 'completed' || status === 'skipped' ? new Date() : undefined,
-    })
+    .set(updatePayload)
     .where(and(eq(projectInitSteps.projectId, projectId), eq(projectInitSteps.step, step)));
+
+  await publishProjectInitRealtimeEvent({
+    kind: 'step_updated',
+    projectId,
+    step,
+    status,
+    progress: hasField('progress') ? (data?.progress ?? null) : null,
+    timestamp: Date.now(),
+  }).catch((error) => {
+    console.warn(`Failed to publish project init realtime event for ${projectId}/${step}:`, error);
+  });
 }
 
 function classifyProjectInitError(step: StepName, error: unknown): ProjectInitErrorCode {
@@ -282,17 +313,25 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
 
   for (const step of steps) {
     try {
+      const reportStepProgress: StepProgressReporter = (progress, message) =>
+        updateStepStatus(projectId, step, 'running', {
+          progress,
+          ...(message !== undefined ? { message } : {}),
+        });
+
       await updateStepStatus(projectId, step, 'running', {
         progress: 0,
-        message: currentAttempt > 1 ? `平台正在自动重试（第 ${currentAttempt} 次尝试）` : undefined,
+        ...(currentAttempt > 1
+          ? { message: `平台正在自动重试（第 ${currentAttempt} 次尝试）` }
+          : {}),
       });
 
       switch (step) {
         case 'validate_repository':
-          await validateRepository(project);
+          await validateRepository(project, reportStepProgress);
           break;
         case 'create_repository': {
-          await createRepository(project);
+          await createRepository(project, reportStepProgress);
           // Refetch project to get updated repository relation
           const updatedProject = await db.query.projects.findFirst({
             where: eq(projects.id, projectId),
@@ -304,33 +343,25 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
           break;
         }
         case 'push_cicd_config':
-          await pushCicdConfig(project);
+          await pushCicdConfig(project, reportStepProgress);
           break;
         case 'push_template':
-          await pushTemplate(project, template);
+          await pushTemplate(project, template, reportStepProgress);
           break;
         case 'configure_release_trigger':
-          await configureReleaseTrigger(project);
+          await configureReleaseTrigger(project, reportStepProgress);
           break;
         case 'setup_namespace':
-          await setupNamespace(project, hasK8s, (p) =>
-            updateStepStatus(projectId, step, 'running', { progress: p })
-          );
+          await setupNamespace(project, hasK8s, reportStepProgress);
           break;
         case 'deploy_services':
-          await deployServices(project, hasK8s, (p) =>
-            updateStepStatus(projectId, step, 'running', { progress: p })
-          );
+          await deployServices(project, hasK8s, reportStepProgress);
           break;
         case 'provision_databases':
-          await provisionDatabases(project, hasK8s, (p) =>
-            updateStepStatus(projectId, step, 'running', { progress: p })
-          );
+          await provisionDatabases(project, hasK8s, reportStepProgress);
           break;
         case 'configure_dns':
-          await configureDns(project, hasK8s, (p) =>
-            updateStepStatus(projectId, step, 'running', { progress: p })
-          );
+          await configureDns(project, hasK8s, reportStepProgress);
           break;
       }
 
@@ -383,20 +414,24 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
 }
 
 async function validateRepository(
-  project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null }
+  project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
+  onProgress?: StepProgressReporter
 ) {
   console.log(`[validateRepository] Starting for project ${project.name}`);
+  await onProgress?.(10, '检查仓库绑定');
 
   if (!project.repository) {
     console.log('[validateRepository] No repository linked');
     if (isDev) {
       console.log('⚠️  Skipping repository validation (dev mode)');
+      await onProgress?.(100, '开发模式下跳过仓库校验');
       return;
     }
     throw new Error('No repository linked to project');
   }
 
   console.log(`[validateRepository] Repository: ${project.repository.fullName}`);
+  await onProgress?.(45, '验证团队仓库授权');
 
   // Obtain integration session with required capability
   const session = await getTeamIntegrationSession({
@@ -404,6 +439,7 @@ async function validateRepository(
     requiredCapabilities: requiredCapabilitiesForStep('validate_repository'),
   });
 
+  await onProgress?.(80, '读取仓库元数据');
   const repo = await gateway.getRepository(session, project.repository.fullName);
   console.log(`[validateRepository] Repository access ${repo ? 'granted' : 'denied'}`);
 
@@ -411,11 +447,16 @@ async function validateRepository(
     throw new Error('No access to repository');
   }
 
+  await onProgress?.(100, '仓库访问已确认');
   console.log('[validateRepository] Validation passed');
 }
 
-async function createRepository(project: typeof projects.$inferSelect) {
+async function createRepository(
+  project: typeof projects.$inferSelect,
+  onProgress?: StepProgressReporter
+) {
   console.log(`Creating repository for project ${project.name}`);
+  await onProgress?.(10, '准备创建仓库');
 
   // Obtain integration session with required capability
   const session = await getTeamIntegrationSession({
@@ -434,6 +475,7 @@ async function createRepository(project: typeof projects.$inferSelect) {
   const isPrivate =
     typeof projectInitConfig?.isPrivate === 'boolean' ? projectInitConfig.isPrivate : true;
 
+  await onProgress?.(40, '向代码仓库提供方申请新仓库');
   const repo = await gateway.createRepository(session, {
     name: project.slug,
     description: project.description || undefined,
@@ -442,11 +484,13 @@ async function createRepository(project: typeof projects.$inferSelect) {
   });
 
   // Create repository record in database
+  await onProgress?.(75, '写入 Juanie 项目绑定');
   const dbRepoId = await insertRepositoryRecord(repo, session.integrationId);
 
   // Update project with repository ID
   await db.update(projects).set({ repositoryId: dbRepoId }).where(eq(projects.id, project.id));
 
+  await onProgress?.(100, '仓库创建完成');
   console.log(`✅ Created repository: ${repo.fullName}`);
 }
 
@@ -454,9 +498,11 @@ async function pushTemplate(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
   },
-  template?: string
+  template?: string,
+  onProgress?: StepProgressReporter
 ) {
   console.log(`Pushing template to project ${project.name}`);
+  await onProgress?.(10, '准备模板内容');
 
   if (!project.repository) {
     throw new Error('Project has no repository');
@@ -469,6 +515,7 @@ async function pushTemplate(
 
   // Use gateway to push files instead of direct client
   const templateId = template || 'default';
+  await onProgress?.(45, '渲染模板文件');
   const files = await new TemplateService(templateId, {
     projectName: project.name,
     projectSlug: project.slug,
@@ -477,6 +524,7 @@ async function pushTemplate(
     description: project.description || '',
   }).renderToMemory();
 
+  await onProgress?.(85, '推送模板到仓库');
   await gateway.pushFiles(session, {
     repoFullName: project.repository.fullName,
     branch: project.productionBranch || 'main',
@@ -484,6 +532,7 @@ async function pushTemplate(
     message: 'Initial commit from Juanie template',
   });
 
+  await onProgress?.(100, '模板已推送');
   console.log(`✅ Pushed ${files.size} files to repository`);
 }
 
@@ -859,12 +908,15 @@ export function renderJuanieConfig(
 async function pushCicdConfig(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
-  }
+  },
+  onProgress?: StepProgressReporter
 ) {
   console.log(`Pushing CI/CD config for project ${project.name}`);
+  await onProgress?.(5, '准备注入 Juanie CI/CD 配置');
 
   if (!project.repository) {
     console.log('No repository linked, skipping CI/CD config');
+    await onProgress?.(100, '项目还没有仓库，跳过 CI/CD 注入');
     return;
   }
 
@@ -882,6 +934,7 @@ async function pushCicdConfig(
   let packageJson: RepoAutomationContext['packageJson'] = null;
 
   try {
+    await onProgress?.(20, '扫描仓库根目录与构建入口');
     rootFiles = await gateway.listRootFiles(
       session,
       project.repository.fullName,
@@ -892,6 +945,7 @@ async function pushCicdConfig(
 
     if (rootFiles.includes('package.json')) {
       try {
+        await onProgress?.(35, '读取 package.json 分析运行时');
         const packageJsonContent = await gateway.getFileContent(
           session,
           project.repository.fullName,
@@ -914,6 +968,7 @@ async function pushCicdConfig(
       bakeDefinition = bakeDefinitionPath;
 
       try {
+        await onProgress?.(50, '分析 docker-bake 定义');
         const bakeContent = await gateway.getFileContent(
           session,
           project.repository.fullName,
@@ -934,6 +989,7 @@ async function pushCicdConfig(
     console.warn('Failed to inspect repository root, falling back to generated skeleton:', error);
   }
 
+  await onProgress?.(65, '生成 Juanie 配置文件');
   const [serviceList, databaseList] = await Promise.all([
     db.query.services.findMany({
       where: eq(services.projectId, project.id),
@@ -978,6 +1034,7 @@ async function pushCicdConfig(
   files['.env.juanie.example'] = envTemplate;
 
   if (Object.keys(files).length > 0) {
+    await onProgress?.(90, '推送 Juanie 配置到仓库');
     await gateway.pushFiles(session, {
       repoFullName: project.repository.fullName,
       branch: project.productionBranch || 'main',
@@ -1000,6 +1057,7 @@ async function pushCicdConfig(
     })
     .where(eq(projects.id, project.id));
 
+  await onProgress?.(100, 'Juanie CI/CD 配置已注入');
   console.log(`✅ Pushed CI/CD config (monorepo: ${isMonorepo ? monorepoType : 'none'})`);
 }
 
@@ -1407,17 +1465,21 @@ async function renderEnvTemplate(
 async function configureReleaseTrigger(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
-  }
+  },
+  onProgress?: StepProgressReporter
 ) {
   console.log(`Configuring release trigger for project ${project.name}`);
+  await onProgress?.(20, '准备发布触发配置');
 
   if (!project.repository) {
     console.log('No repository linked, skipping release trigger configuration');
+    await onProgress?.(100, '项目还没有仓库，跳过发布触发配置');
     return;
   }
 
   // Update project config with image name
   const config = (project.configJson as Record<string, unknown>) || {};
+  await onProgress?.(60, '计算镜像仓库地址');
   const imageName = buildImageName(project.repository);
 
   await db
@@ -1431,6 +1493,7 @@ async function configureReleaseTrigger(
     })
     .where(eq(projects.id, project.id));
 
+  await onProgress?.(100, '发布触发配置完成');
   console.log(`✅ Configured release trigger for ${project.repository.fullName}`);
   console.log(`   Juanie CI will call /api/releases after image push`);
 }
@@ -1445,7 +1508,7 @@ function buildImageName(repo: typeof repositories.$inferSelect): string {
 async function setupNamespace(
   project: typeof projects.$inferSelect,
   hasK8s: boolean,
-  onProgress?: (p: number) => Promise<void>
+  onProgress?: StepProgressReporter
 ) {
   const envList = await db.query.environments.findMany({
     where: eq(environments.projectId, project.id),
@@ -1459,28 +1522,38 @@ async function setupNamespace(
     namespacesToCreate.add(ns);
   }
 
+  if (namespacesToCreate.size === 0) {
+    await onProgress?.(100, '没有需要创建的命名空间');
+    return;
+  }
+
   if (hasK8s) {
-    for (const ns of namespacesToCreate) {
+    const namespaceList = [...namespacesToCreate];
+    for (let index = 0; index < namespaceList.length; index += 1) {
+      const ns = namespaceList[index];
       try {
         await createNamespace(ns);
+        await onProgress?.(
+          Math.round(((index + 1) / namespaceList.length) * 100),
+          `已确保命名空间 ${ns}`
+        );
       } catch (error) {
         console.error(`Failed to create namespace ${ns}:`, error);
         throw error;
       }
     }
-    await onProgress?.(85);
   } else {
     for (const ns of namespacesToCreate) {
       console.log(`[Mock] Would create namespace: ${ns}`);
     }
+    await onProgress?.(100, '当前没有可用 Kubernetes，已跳过命名空间创建');
   }
-  await onProgress?.(40);
 }
 
 async function deployServices(
   project: typeof projects.$inferSelect,
   hasK8s: boolean,
-  onProgress?: (p: number) => Promise<void>
+  onProgress?: StepProgressReporter
 ) {
   const serviceList = await db.query.services.findMany({
     where: eq(services.projectId, project.id),
@@ -1491,6 +1564,7 @@ async function deployServices(
 
   if (!hasK8s) {
     console.log('⚠️  Skipping service deployment (no K8s cluster)');
+    await onProgress?.(100, '当前没有可用 Kubernetes，已跳过服务初始化');
     return;
   }
 
@@ -1501,6 +1575,11 @@ async function deployServices(
   const targets = environmentList.flatMap((environment) =>
     serviceList.map((service) => ({ environment, service }))
   );
+
+  if (targets.length === 0) {
+    await onProgress?.(100, '没有需要初始化的服务');
+    return;
+  }
 
   for (let i = 0; i < targets.length; i++) {
     const target = targets[i];
@@ -1517,18 +1596,26 @@ async function deployServices(
 
     // Mark as pending — the Deployment (and pod) will be created by the first CI/CD deploy
     await db.update(services).set({ status: 'pending' }).where(eq(services.id, target.service.id));
-    await onProgress?.(Math.round(((i + 1) / targets.length) * 100));
+    await onProgress?.(
+      Math.round(((i + 1) / targets.length) * 100),
+      `已确保 ${target.environment.name} 环境中的 ${target.service.name} Service`
+    );
   }
 }
 
 async function provisionDatabases(
   project: typeof projects.$inferSelect,
   hasK8s: boolean,
-  onProgress?: (p: number) => Promise<void>
+  onProgress?: StepProgressReporter
 ) {
   const databaseList = await db.query.databases.findMany({
     where: eq(databases.projectId, project.id),
   });
+
+  if (databaseList.length === 0) {
+    await onProgress?.(100, '没有需要创建的数据库');
+    return;
+  }
 
   for (let i = 0; i < databaseList.length; i++) {
     const database = databaseList[i];
@@ -1542,7 +1629,10 @@ async function provisionDatabases(
       await injectDatabaseEnvVars(updated, project, updated.environmentId ?? null);
     }
     // Reserve last 10% for K8s sync
-    await onProgress?.(Math.round(((i + 1) / databaseList.length) * 90));
+    await onProgress?.(
+      Math.round(((i + 1) / databaseList.length) * 90),
+      `数据库 ${database.name} 已完成供应`
+    );
   }
 
   // Sync all injected env vars to K8s ConfigMap/Secret for each affected environment
@@ -1556,6 +1646,8 @@ async function provisionDatabases(
       );
     }
   }
+
+  await onProgress?.(100, '数据库配置与环境变量同步完成');
 }
 
 /**
@@ -2006,7 +2098,7 @@ function getConnectionString(
 async function configureDns(
   project: typeof projects.$inferSelect,
   hasK8s: boolean,
-  onProgress?: (p: number) => Promise<void>
+  onProgress?: StepProgressReporter
 ) {
   const serviceList = await db.query.services.findMany({
     where: eq(services.projectId, project.id),
@@ -2019,6 +2111,11 @@ async function configureDns(
       service: true,
     },
   });
+
+  if (domainList.length === 0) {
+    await onProgress?.(100, '没有需要配置的域名');
+    return;
+  }
 
   for (let i = 0; i < domainList.length; i++) {
     const domain = domainList[i];
@@ -2071,7 +2168,10 @@ async function configureDns(
       // See note above about isVerified semantics
       await db.update(domains).set({ isVerified: true }).where(eq(domains.id, domain.id));
     }
-    await onProgress?.(Math.round(((i + 1) / domainList.length) * 100));
+    await onProgress?.(
+      Math.round(((i + 1) / domainList.length) * 100),
+      `域名 ${domain.hostname} 已配置`
+    );
   }
 }
 

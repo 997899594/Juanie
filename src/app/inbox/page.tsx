@@ -43,28 +43,27 @@ export default async function InboxPage({
     teamIds,
     filterState,
   });
+  const shellClassName =
+    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader title="待处理" />
 
-      <div className="ui-control-muted flex flex-wrap items-center gap-2 px-4 py-3">
-        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          概览
-        </span>
-        <span className="text-muted-foreground/50">/</span>
-        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          {stats.map((stat) => (
-            <span key={stat.label}>
-              {stat.label} {stat.value}
-            </span>
-          ))}
-        </div>
+      <div className="grid gap-2 md:grid-cols-5">
+        {stats.map((stat) => (
+          <div key={stat.label} className={`${shellClassName} px-4 py-3`}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              {stat.label}
+            </div>
+            <div className="mt-2 text-sm font-semibold text-foreground">{stat.value}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="ui-control px-4 py-4">
+      <div className={`${shellClassName} px-4 py-4`}>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="mr-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <div className="mr-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
             筛选
           </div>
           <Button asChild variant={filterState === 'all' ? 'default' : 'outline'} size="sm">
@@ -93,7 +92,7 @@ export default async function InboxPage({
             const statusConfig = getMigrationStatusDecoration(run.status);
 
             return (
-              <div key={run.id} className="ui-floating overflow-hidden">
+              <div key={run.id} className={`${shellClassName} overflow-hidden`}>
                 <div className="flex flex-col gap-3 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -102,7 +101,7 @@ export default async function InboxPage({
                         pulse={statusConfig.pulse}
                         label={formatApprovalStatusLabel(run.status)}
                       />
-                      <span className="ui-control rounded-full px-2.5 py-1 text-xs font-medium text-foreground">
+                      <span className="rounded-full bg-secondary/78 px-2.5 py-1 text-xs font-medium text-foreground">
                         {run.project.name}
                       </span>
                       <span className="text-[11px] text-muted-foreground">
@@ -132,7 +131,7 @@ export default async function InboxPage({
                     </div>
 
                     {run.errorMessage && (
-                      <div className="ui-control rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                      <div className="rounded-[18px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
                         {run.errorMessage}
                       </div>
                     )}
