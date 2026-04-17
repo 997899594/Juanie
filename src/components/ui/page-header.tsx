@@ -10,24 +10,37 @@ interface PageHeaderProps {
   meta?: React.ReactNode;
 }
 
-export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+  className,
+  eyebrow,
+  meta,
+}: PageHeaderProps) {
   return (
     <header
       className={cn(
-        'flex flex-col gap-3 pb-1 md:flex-row md:items-start md:justify-between',
+        'flex flex-col gap-4 pb-1 md:flex-row md:items-start md:justify-between',
         className
       )}
     >
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0 space-y-2">
+        {eyebrow ? (
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {eyebrow}
+          </div>
+        ) : null}
         <h1 className="text-2xl font-semibold tracking-tight text-balance md:text-[2rem]">
           {title}
         </h1>
         {description ? (
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
         ) : null}
+        {meta ? <div className="text-xs text-muted-foreground">{meta}</div> : null}
       </div>
       {actions && (
-        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
+        <div className="flex w-full flex-wrap items-center gap-2 pt-1 md:w-auto md:justify-end md:pt-0">
           {actions}
         </div>
       )}
@@ -51,7 +64,7 @@ export function PageHeaderAction({
   variant = 'default',
 }: PageHeaderActionProps) {
   return (
-    <Button onClick={onClick} variant={variant} className="px-4" asChild={!!href}>
+    <Button onClick={onClick} variant={variant} className="h-10 rounded-full px-4" asChild={!!href}>
       {href ? (
         <a href={href}>
           {icon}

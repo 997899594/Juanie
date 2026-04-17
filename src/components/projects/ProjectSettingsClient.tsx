@@ -356,7 +356,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             </div>
             <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
-                <div className="flex flex-col gap-4 rounded-2xl bg-destructive/[0.05] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+                <div className="ui-control rounded-[24px] bg-destructive/[0.05] p-4 sm:p-5 md:flex md:items-center md:justify-between">
                   <div className="space-y-1">
                     <div className="text-sm font-medium text-foreground">删除项目</div>
                     <div className="text-sm text-muted-foreground">该操作无法撤销。</div>
@@ -376,7 +376,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                           <span className="font-medium text-foreground">{project.name}</span>？
                         </AlertDialogDescription>
                       </AlertDialogHeader>
-                      <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
+                      <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
                         项目、环境和发布记录会一起删除。
                       </div>
                       <AlertDialogFooter>

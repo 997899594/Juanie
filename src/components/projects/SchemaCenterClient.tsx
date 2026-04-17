@@ -247,7 +247,7 @@ export function SchemaCenterClient({
       : null) ?? null;
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title={focusedEnvironment ? `${focusedEnvironment.name} · 数据` : '数据'}
         actions={

@@ -24,7 +24,7 @@ const AlertDialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Overlay
     className={cn(
-      'fixed inset-0 z-50 bg-black/18 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      'fixed inset-0 z-50 bg-[rgba(28,27,24,0.14)] backdrop-blur-[3px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className
     )}
     {...props}
@@ -44,7 +44,7 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 grid max-h-[80dvh] w-full gap-5 overflow-y-auto bg-[rgba(250,249,247,0.98)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 shadow-[0_-24px_80px_rgba(55,53,47,0.08)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:max-h-[90vh] sm:w-[min(calc(100vw-2.5rem),var(--alert-dialog-content-width,36rem))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[28px] sm:px-6 sm:pb-6 sm:pt-6 sm:shadow-[0_32px_96px_rgba(55,53,47,0.14)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
+        'fixed inset-x-0 bottom-0 z-50 grid max-h-[80dvh] w-full gap-5 overflow-y-auto bg-[linear-gradient(180deg,rgba(252,251,249,0.99),rgba(247,245,241,0.985))] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 shadow-[0_-24px_80px_rgba(55,53,47,0.08)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:max-h-[90vh] sm:w-[min(calc(100vw-2.5rem),var(--alert-dialog-content-width,36rem))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[30px] sm:border sm:border-black/6 sm:px-6 sm:pb-6 sm:pt-6 sm:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(255,255,255,0.34)_inset,0_32px_96px_rgba(55,53,47,0.14)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
         alertDialogContentSizeClasses[size],
         className
       )}
@@ -55,13 +55,13 @@ const AlertDialogContent = React.forwardRef<
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex flex-col gap-2 text-left', className)} {...props} />
+  <div className={cn('flex flex-col gap-2.5 text-left', className)} {...props} />
 );
 AlertDialogHeader.displayName = 'AlertDialogHeader';
 
 const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+    className={cn('flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end', className)}
     {...props}
   />
 );
@@ -73,7 +73,7 @@ const AlertDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Title
     ref={ref}
-    className={cn('text-lg font-semibold', className)}
+    className={cn('text-xl font-semibold tracking-tight', className)}
     {...props}
   />
 ));

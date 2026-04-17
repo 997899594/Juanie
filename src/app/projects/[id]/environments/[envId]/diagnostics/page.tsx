@@ -28,7 +28,7 @@ export default async function ProjectEnvironmentDiagnosticsPage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader title="诊断" description={environment.name} />
       <EnvironmentSectionNav projectId={id} environmentId={envId} />
       <EnvironmentResourcePanel

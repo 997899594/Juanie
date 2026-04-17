@@ -10,7 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PlatformSignalBlock, PlatformSignalChipList } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -101,20 +102,20 @@ export function ReleasePromoteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         size="workspace"
-        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[92vh]"
       >
-        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-5 py-6 sm:px-7">
           <DialogTitle>提升到 {selectedPlan?.targetEnvironment?.name ?? '目标环境'}</DialogTitle>
           <DialogDescription>
             沿着已配置的提升链路复用制品或重新构建，避免环境之间的代码漂移。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7 sm:py-6">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.92fr)]">
             <div className="space-y-4">
-              <div className="ui-control p-4 sm:p-5">
-                <div className="text-sm font-semibold text-foreground">提升链路</div>
+              <div className="ui-control rounded-[24px] p-5 sm:p-6">
+                <div className="text-sm font-semibold text-foreground">提升配置</div>
 
                 {promotionPlans.length > 1 ? (
                   <div className="mt-4">
@@ -146,25 +147,27 @@ export function ReleasePromoteDialog({
                 {selectedPlan ? (
                   <div className="mt-4 space-y-3 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">
+                      <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
                         {selectedPlan.sourceEnvironment?.name ?? '来源环境'}
                       </Badge>
                       <span className="text-muted-foreground">→</span>
-                      <Badge variant="outline">
+                      <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
                         {selectedPlan.targetEnvironment?.name ?? '目标环境'}
                       </Badge>
                       {getPromotionStrategyLabel(selectedPlan.strategy) ? (
-                        <Badge variant="outline">
+                        <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
                           {getPromotionStrategyLabel(selectedPlan.strategy)}
                         </Badge>
                       ) : null}
                       {selectedPlan.requiresApproval ? (
-                        <Badge variant="outline">需要审批</Badge>
+                        <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
+                          需要审批
+                        </Badge>
                       ) : null}
                     </div>
 
                     {selectedPlan.sourceRelease ? (
-                      <div className="ui-control-muted px-4 py-3">
+                      <div className="ui-control-muted rounded-[20px] px-4 py-3">
                         <div className="text-xs text-muted-foreground">来源发布</div>
                         <div className="mt-1 text-foreground">
                           {selectedPlan.sourceRelease.summary ??
@@ -177,12 +180,12 @@ export function ReleasePromoteDialog({
                         )}
                       </div>
                     ) : (
-                      <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
+                      <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
                         {selectedPlan.sourceEnvironment?.name ?? '来源环境'} 暂无可复用的成功发布。
                       </div>
                     )}
 
-                    <div className="ui-control-muted px-4 py-3">
+                    <div className="ui-control-muted rounded-[20px] px-4 py-3">
                       <div className="text-xs text-muted-foreground">目标环境</div>
                       <div className="mt-1 text-foreground">
                         {selectedPlan.targetEnvironment?.name ?? '目标环境'}
@@ -190,36 +193,41 @@ export function ReleasePromoteDialog({
                     </div>
                   </div>
                 ) : (
-                  <div className="ui-control-muted mt-4 px-4 py-8 text-sm text-muted-foreground">
-                    没有可用的提升链路。
-                  </div>
+                  <EmptyState title="没有可用的提升链路" className="mt-4 min-h-40 rounded-[20px]" />
                 )}
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="ui-control-muted p-4 sm:p-5">
+              <div className="ui-control-muted rounded-[24px] p-5 sm:p-6">
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {promotePanel ? (
                   <div className="space-y-3">
-                    <PlatformSignalChipList chips={promotePanel.chips} />
-                    <PlatformSignalSummary
+                    <PlatformSignalBlock
+                      chips={promotePanel.chips}
                       summary={promotePanel.issueSummary}
                       nextActionLabel={promotePanel.nextActionLabel}
+                      summaryClassName="rounded-[20px]"
                     />
 
                     {promoteAI?.summary && (
-                      <div className="ui-control px-4 py-3">
+                      <div className="ui-control rounded-[20px] px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           {promoteAI.strategy && (
-                            <Badge variant="outline">{getStrategyLabel(promoteAI.strategy)}</Badge>
+                            <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
+                              {getStrategyLabel(promoteAI.strategy)}
+                            </Badge>
                           )}
                           {promoteAI.riskLevel && (
-                            <Badge variant="outline">{getAILevelLabel(promoteAI.riskLevel)}</Badge>
+                            <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
+                              {getAILevelLabel(promoteAI.riskLevel)}
+                            </Badge>
                           )}
                           {promoteAI.confidence && (
-                            <Badge variant="outline">{promoteAI.confidence}</Badge>
+                            <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
+                              {promoteAI.confidence}
+                            </Badge>
                           )}
                         </div>
                         <div className="mt-2 text-sm font-medium text-foreground">
@@ -242,13 +250,13 @@ export function ReleasePromoteDialog({
                     )}
 
                     {promotePanel.blockingReason && (
-                      <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                      <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {promotePanel.blockingReason}
                       </div>
                     )}
 
                     {!promoteAI?.summary && promoteAI?.errorMessage && (
-                      <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
+                      <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
                         {promoteAI.errorMessage}
                       </div>
                     )}
@@ -258,7 +266,7 @@ export function ReleasePromoteDialog({
                     )}
 
                     {promoteAI?.checks.length ? (
-                      <div className="ui-control-muted space-y-2 px-4 py-3">
+                      <div className="ui-control-muted rounded-[20px] space-y-2 px-4 py-3">
                         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           检查
                         </div>
@@ -274,25 +282,23 @@ export function ReleasePromoteDialog({
                     ) : null}
                   </div>
                 ) : (
-                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">
-                    加载中...
-                  </div>
+                  <EmptyState title="加载中" className="min-h-40 rounded-[20px]" />
                 )}
               </div>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
+        <DialogFooter className="console-divider-top shrink-0 bg-background px-5 py-4 sm:px-7">
           <Button
             variant="outline"
-            className="w-full sm:w-auto"
+            className="w-full rounded-full sm:w-auto"
             onClick={() => onOpenChange(false)}
           >
             关闭
           </Button>
           <Button
-            className="w-full sm:w-auto"
+            className="w-full rounded-full sm:w-auto"
             onClick={onPromote}
             disabled={promoting || !canPromote}
           >

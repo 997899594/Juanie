@@ -28,7 +28,7 @@ export default async function ProjectEnvironmentVariablesPage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader title="变量" description={environment.name} />
       <EnvironmentSectionNav projectId={id} environmentId={envId} />
       <EnvVarManager

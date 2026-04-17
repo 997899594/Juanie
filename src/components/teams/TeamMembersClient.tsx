@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/ui/page-header';
@@ -299,7 +300,12 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
                             </Button>
                           </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <EmptyState
+                          title="生成后显示链接"
+                          className="mt-4 min-h-32 rounded-[20px]"
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -410,7 +416,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       </div>
 
       {errorMessage && (
-        <div className="rounded-2xl bg-destructive/[0.08] px-4 py-3 text-sm text-destructive">
+        <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
           {errorMessage}
         </div>
       )}
@@ -425,16 +431,12 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
       </section>
 
       {overview.members.length === 0 ? (
-        <div className="ui-control-muted flex min-h-80 flex-col items-center justify-center rounded-[20px] text-center">
-          <div className="mb-4 rounded-2xl bg-muted p-4">
-            <Users className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h2 className="text-lg font-medium">没有成员</h2>
-          <Button className="mt-5" onClick={() => setIsOpen(true)}>
-            <Plus className="h-4 w-4" />
-            邀请成员
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Users className="h-8 w-8 text-muted-foreground" />}
+          title="没有成员"
+          action={{ label: '邀请成员', onClick: () => setIsOpen(true) }}
+          className="min-h-80"
+        />
       ) : (
         <div className="ui-floating console-list overflow-hidden px-0 py-0">
           {overview.members.map((member) => (

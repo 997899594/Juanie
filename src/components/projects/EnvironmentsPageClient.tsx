@@ -291,7 +291,10 @@ function PreviewEnvironmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
+      <DialogContent
+        size="workspace"
+        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+      >
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>新建预览环境</DialogTitle>
           <DialogDescription>基于分支或 PR 直接启动。</DialogDescription>
@@ -301,12 +304,12 @@ function PreviewEnvironmentDialog({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
             <div className="space-y-4">
               {disabledSummary && (
-                <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
-              <div className="console-surface p-4 sm:p-5">
+              <div className="ui-control-muted rounded-[24px] p-4 sm:p-5">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="preview-branch">分支</Label>
@@ -370,7 +373,7 @@ function PreviewEnvironmentDialog({
               </div>
 
               {error && (
-                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
@@ -468,10 +471,11 @@ function EnvironmentListCard({
     environment.policy.primarySignal?.label ?? null,
     environment.previewLifecycle?.stateLabel ?? null,
   ].filter(Boolean);
+  const summary = buildEnvironmentListSummary(environment);
 
   return (
-    <div className="console-panel overflow-hidden">
-      <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="console-surface rounded-[24px] p-4 sm:p-5">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div
@@ -486,19 +490,32 @@ function EnvironmentListCard({
             />
             <span className="text-sm font-semibold capitalize">{environment.name}</span>
             {statusBadges.map((label) => (
-              <Badge key={label} variant="outline">
+              <Badge key={label} variant="outline" className="rounded-full px-2.5 py-0.5">
                 {label}
               </Badge>
             ))}
           </div>
 
-          {meta ? <div className="text-[11px] text-muted-foreground">{meta}</div> : null}
+          {meta ? (
+            <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              {meta}
+            </div>
+          ) : null}
 
-          <div className="text-sm text-foreground">{buildEnvironmentListSummary(environment)}</div>
+          <div
+            className={cn(
+              'text-foreground',
+              environment.primaryDomainUrl
+                ? 'truncate text-xl font-semibold tracking-tight'
+                : 'text-sm leading-6'
+            )}
+          >
+            {summary}
+          </div>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm" className="h-9 rounded-full px-4">
             <Link href={`/projects/${projectId}/environments/${environment.id}`}>
               进入环境
               <ArrowRight className="h-3.5 w-3.5" />
@@ -511,59 +528,7 @@ function EnvironmentListCard({
   );
 }
 
-function EnvironmentRuntimePanel({ environment }: { environment: EnvironmentRecord }) {
-  const statusBadges = [
-    environment.policy.primarySignal?.label ?? null,
-    environment.previewLifecycle?.stateLabel ?? null,
-  ].filter(Boolean);
-
-  return (
-    <div className="console-surface rounded-2xl px-4 py-4">
-      <div className="space-y-4">
-        {environment.primaryDomainUrl ? (
-          <div className="console-card px-4 py-3">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              访问地址
-            </div>
-            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <a
-                href={environment.primaryDomainUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="truncate text-sm font-medium text-foreground transition-colors hover:text-foreground/80"
-              >
-                {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
-              </a>
-              <Button asChild size="sm" className="shrink-0">
-                <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                  打开地址
-                </a>
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="console-card px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              当前状态
-            </div>
-            {statusBadges.map((label) => (
-              <Badge key={label} variant="outline">
-                {label}
-              </Badge>
-            ))}
-          </div>
-          <div className="mt-2 text-sm leading-6 text-foreground">
-            {buildEnvironmentStatusSummary(environment)}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EnvironmentDetailsPanel({
+function EnvironmentOverviewPanel({
   environment,
   savingStrategy,
   onStrategyChange,
@@ -574,6 +539,10 @@ function EnvironmentDetailsPanel({
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
 }) {
+  const statusBadges = [
+    environment.policy.primarySignal?.label ?? null,
+    environment.previewLifecycle?.stateLabel ?? null,
+  ].filter(Boolean);
   const hasStrategyControl = environment.actions.canConfigureStrategy;
   const strategyHelper = hasStrategyControl
     ? environment.actions.configureStrategySummary
@@ -582,24 +551,77 @@ function EnvironmentDetailsPanel({
       : null;
 
   return (
-    <div className="console-surface rounded-2xl px-4 py-4">
-      <div className="space-y-3">
-        {hasStrategyControl || strategyHelper ? (
-          <div className="space-y-3">
-            <div className="console-card px-4 py-3 text-sm text-foreground">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      发布策略
-                    </div>
-                    <div className="mt-1">{environment.strategyLabel ?? '未设置'}</div>
-                  </div>
-                  {savingStrategy ? (
-                    <div className="text-xs text-muted-foreground">保存中...</div>
-                  ) : null}
+    <div className="console-surface rounded-[28px] p-4 sm:p-5">
+      <div className="space-y-4">
+        {environment.primaryDomainUrl ? (
+          <div className="console-card rounded-[24px] px-5 py-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  访问地址
                 </div>
-                {hasStrategyControl ? (
+                <a
+                  href={environment.primaryDomainUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 block truncate text-2xl font-semibold tracking-tight text-foreground transition-colors hover:text-foreground/80"
+                >
+                  {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
+                </a>
+              </div>
+              <Button asChild size="sm" className="h-10 shrink-0 rounded-full px-5">
+                <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+                  打开地址
+                </a>
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          className={cn(
+            'grid gap-4',
+            hasStrategyControl || strategyHelper ? 'lg:grid-cols-[1.15fr_0.85fr]' : undefined
+          )}
+        >
+          <div className="console-card rounded-[24px] px-5 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                当前状态
+              </div>
+              {statusBadges.map((label) => (
+                <Badge key={label} variant="outline" className="rounded-full px-2.5 py-0.5">
+                  {label}
+                </Badge>
+              ))}
+            </div>
+            <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+              {environment.policy.primarySignal?.label ??
+                environment.previewLifecycle?.stateLabel ??
+                '运行中'}
+            </div>
+            <div className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {buildEnvironmentStatusSummary(environment)}
+            </div>
+          </div>
+
+          {hasStrategyControl || strategyHelper ? (
+            <div className="console-card rounded-[24px] px-5 py-4 text-sm text-foreground">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                    发布策略
+                  </div>
+                  <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+                    {environment.strategyLabel ?? '未设置'}
+                  </div>
+                </div>
+                {savingStrategy ? (
+                  <div className="text-xs text-muted-foreground">保存中...</div>
+                ) : null}
+              </div>
+              {hasStrategyControl ? (
+                <div className="mt-4">
                   <Select
                     value={environment.deploymentStrategy ?? 'rolling'}
                     onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
@@ -607,7 +629,7 @@ function EnvironmentDetailsPanel({
                     }
                     disabled={savingStrategy}
                   >
-                    <SelectTrigger className="max-w-sm">
+                    <SelectTrigger className="h-11 max-w-sm rounded-2xl">
                       <SelectValue placeholder="选择发布策略" />
                     </SelectTrigger>
                     <SelectContent>
@@ -618,14 +640,14 @@ function EnvironmentDetailsPanel({
                       ))}
                     </SelectContent>
                   </Select>
-                ) : null}
-                {strategyHelper ? (
-                  <div className="text-xs text-muted-foreground">{strategyHelper}</div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
+              {strategyHelper ? (
+                <div className="mt-3 text-xs leading-5 text-muted-foreground">{strategyHelper}</div>
+              ) : null}
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -643,14 +665,11 @@ function EnvironmentExpandedContent({
   ) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <EnvironmentRuntimePanel environment={environment} />
-      <EnvironmentDetailsPanel
-        environment={environment}
-        savingStrategy={savingStrategy}
-        onStrategyChange={onStrategyChange}
-      />
-    </div>
+    <EnvironmentOverviewPanel
+      environment={environment}
+      savingStrategy={savingStrategy}
+      onStrategyChange={onStrategyChange}
+    />
   );
 }
 
@@ -758,6 +777,9 @@ export function EnvironmentsPageClient({
   const focusedEnvironment =
     (initialEnvId ? environments.find((environment) => environment.id === initialEnvId) : null) ??
     null;
+  const focusedEnvironmentMeta = focusedEnvironment
+    ? buildEnvironmentHeaderMeta(focusedEnvironment)
+    : undefined;
 
   const handleCreatePreview = async (input: {
     branch: string;
@@ -850,15 +872,17 @@ export function EnvironmentsPageClient({
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title={focusMode && focusedEnvironment ? focusedEnvironment.name : '环境'}
+        description={focusMode ? focusedEnvironmentMeta : undefined}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {focusMode && focusedEnvironment ? (
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" className="h-10 rounded-full px-5">
                 <Link href={`/projects/${projectId}/environments`}>返回环境列表</Link>
               </Button>
             ) : null}
             {!focusMode ? (
               <Button
+                className="h-10 rounded-full px-5"
                 onClick={() => setDialogOpen(true)}
                 disabled={!governance.createPreview.allowed}
               >
@@ -892,7 +916,7 @@ export function EnvironmentsPageClient({
       />
 
       {feedback && (
-        <div className="console-surface rounded-2xl px-4 py-3 text-sm text-foreground">
+        <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-foreground">
           {feedback}
         </div>
       )}
@@ -909,24 +933,24 @@ export function EnvironmentsPageClient({
       ) : (
         <div className="space-y-6">
           {focusMode && focusedEnvironment ? (
-            <section className="space-y-3">
-              <div className="text-sm font-semibold">当前环境</div>
-              <div className="console-panel overflow-hidden">
-                <div className="px-5 py-4">
-                  <EnvironmentExpandedContent
-                    environment={focusedEnvironment}
-                    savingStrategy={savingStrategyId === focusedEnvironment.id}
-                    onStrategyChange={(value) => handleStrategyChange(focusedEnvironment.id, value)}
-                  />
-                </div>
-              </div>
-            </section>
+            <EnvironmentExpandedContent
+              environment={focusedEnvironment}
+              savingStrategy={savingStrategyId === focusedEnvironment.id}
+              onStrategyChange={(value) => handleStrategyChange(focusedEnvironment.id, value)}
+            />
           ) : (
             <>
               <section className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Globe className="h-4 w-4" />
-                  核心环境
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Globe className="h-4 w-4" />
+                    核心环境
+                  </div>
+                  {standardEnvironments.length > 0 ? (
+                    <div className="text-xs text-muted-foreground">
+                      {standardEnvironments.length} 个
+                    </div>
+                  ) : null}
                 </div>
                 {standardEnvironments.length === 0 ? (
                   <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
@@ -946,15 +970,20 @@ export function EnvironmentsPageClient({
               </section>
 
               <section className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <GitBranch className="h-4 w-4" />
-                  预览环境
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <GitBranch className="h-4 w-4" />
+                    预览环境
+                  </div>
+                  {previewEnvironments.length > 0 ? (
+                    <div className="text-xs text-muted-foreground">
+                      {previewEnvironments.length} 个
+                    </div>
+                  ) : null}
                 </div>
 
                 {previewEnvironments.length === 0 ? (
-                  <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
-                    暂无预览环境
-                  </div>
+                  <EmptyState title="暂无预览环境" className="min-h-40 rounded-[20px]" />
                 ) : (
                   <div className="space-y-3">
                     {previewEnvironments.map((environment) => (
@@ -968,6 +997,7 @@ export function EnvironmentsPageClient({
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="h-9 rounded-full px-4"
                                 disabled={
                                   deletingId === environment.id || !environment.actions?.canDelete
                                 }

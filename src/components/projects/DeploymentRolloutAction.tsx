@@ -13,7 +13,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PlatformSignalBlock } from '@/components/ui/platform-signals';
 import {
   type DeploymentRolloutPlanResponse,
   fetchDeploymentRolloutPlan,
@@ -125,61 +126,62 @@ export function DeploymentRolloutAction({
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
             <div className="space-y-4">
               {disabledSummary && (
-                <div className="ui-control px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
-              <div className="ui-control-muted p-4 sm:p-5">
+              <div className="ui-control rounded-[24px] p-5 sm:p-6">
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">候选切换上下文</div>
+                  <div className="text-sm text-muted-foreground">确认当前待切换版本是否正确。</div>
                 </div>
 
                 {plan?.deployment?.candidateImage ? (
-                  <div className="ui-control mt-4 px-4 py-3">
+                  <div className="ui-control-muted mt-4 rounded-[20px] px-4 py-3">
                     <div className="text-xs text-muted-foreground">候选版本镜像</div>
                     <code className="mt-2 block break-all text-xs text-foreground">
                       {plan.deployment.candidateImage}
                     </code>
                   </div>
                 ) : (
-                  <div className="ui-control mt-4 px-4 py-8 text-sm text-muted-foreground">
-                    暂无候选镜像
-                  </div>
+                  <EmptyState title="暂无候选镜像" className="mt-4 min-h-40 rounded-[20px]" />
                 )}
               </div>
 
               {error && (
-                <div className="ui-control bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
             </div>
 
             <div className="space-y-4">
-              <div className="ui-control-muted p-4 sm:p-5">
-                <div className="mb-3 text-sm font-semibold text-foreground">放量检查</div>
+              <div className="ui-control-muted rounded-[24px] p-5 sm:p-6">
+                <div className="mb-3 space-y-1">
+                  <div className="text-sm font-semibold text-foreground">放量检查</div>
+                  <div className="text-sm text-muted-foreground">只在检查通过后继续推进。</div>
+                </div>
 
                 {loadingPlan ? (
-                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">
-                    加载中...
-                  </div>
+                  <EmptyState title="加载中" className="min-h-40 rounded-[20px]" />
                 ) : plan ? (
                   <div className="space-y-3">
-                    <PlatformSignalChipList chips={plan.plan.platformSignals.chips} />
-                    <PlatformSignalSummary
+                    <PlatformSignalBlock
+                      chips={plan.plan.platformSignals.chips}
                       summary={plan.plan.platformSignals.primarySummary}
                       nextActionLabel={plan.plan.platformSignals.nextActionLabel}
+                      summaryClassName="rounded-[20px]"
                     />
 
                     {plan.plan.blockingReason && (
-                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                      <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {plan.plan.blockingReason}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">暂无结果</div>
+                  <EmptyState title="暂无结果" className="min-h-40 rounded-[20px]" />
                 )}
               </div>
             </div>

@@ -195,7 +195,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       outgoingPromotionPlans.length > 0);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title={selectedEnvironment ? `${selectedEnvironment.name} 发布` : '发布总览'}
         actions={

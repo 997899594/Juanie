@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -237,14 +238,16 @@ function EnvVarDialog({
                       disabled={disabled}
                     />
                     {form.isSecret && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => setShowValue((v) => !v)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-1.5 top-1/2 h-8 w-8 -translate-y-1/2 rounded-xl text-muted-foreground"
                         tabIndex={-1}
                       >
                         {showValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -263,13 +266,13 @@ function EnvVarDialog({
               </div>
 
               {disabledSummary && (
-                <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
+                <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}
 
               {error && (
-                <div className="rounded-2xl bg-destructive/[0.08] px-4 py-3 text-sm text-destructive">
+                <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
@@ -469,10 +472,11 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
 function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-        <KeyRound className="h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">没有服务级变量</p>
-      </div>
+      <EmptyState
+        icon={<KeyRound className="h-8 w-8 text-muted-foreground/40" />}
+        title="没有服务级变量"
+        className="min-h-44"
+      />
     );
   }
 

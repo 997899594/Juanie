@@ -13,8 +13,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Label } from '@/components/ui/label';
-import { PlatformSignalChipList, PlatformSignalSummary } from '@/components/ui/platform-signals';
+import { PlatformSignalBlock, PlatformSignalChipList } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -283,24 +284,26 @@ export function ManualReleaseDialog({
       </DialogTrigger>
       <DialogContent
         size="workspace"
-        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[92vh]"
       >
-        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-5 py-6 sm:px-7">
           <DialogTitle>手动发布</DialogTitle>
           <DialogDescription>
             复用已经构建成功的产物，直接发到目标环境，不改动源码分支。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7 sm:py-6">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.92fr)]">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
-                <div className="px-1 text-sm text-muted-foreground">{disabledSummary}</div>
+                <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+                  {disabledSummary}
+                </div>
               )}
 
-              <div className="ui-control-muted p-4 sm:p-5">
-                <div className="mb-4 text-sm font-semibold text-foreground">发布来源</div>
+              <div className="ui-control-muted rounded-[24px] p-5 sm:p-6">
+                <div className="mb-5 text-sm font-semibold text-foreground">发布配置</div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
@@ -347,14 +350,14 @@ export function ManualReleaseDialog({
               </div>
 
               {error && (
-                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                   {error}
                 </div>
               )}
             </div>
 
             <div className="space-y-4">
-              <div className="ui-control p-4 sm:p-5">
+              <div className="ui-control rounded-[24px] p-5 sm:p-6">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="text-sm font-semibold text-foreground">来源</div>
                   {selectedArtifacts.length > 0 && (
@@ -366,7 +369,7 @@ export function ManualReleaseDialog({
 
                 {selectedSourceRelease ? (
                   <div className="space-y-3 text-sm">
-                    <div className="ui-control-muted px-4 py-3">
+                    <div className="ui-control-muted rounded-[20px] px-4 py-3">
                       <div className="text-xs text-muted-foreground">来源标识</div>
                       <div className="mt-1 font-medium text-foreground">
                         {selectedSourceRelease.sourceRef}
@@ -378,7 +381,7 @@ export function ManualReleaseDialog({
                       )}
                     </div>
 
-                    <div className="ui-control-muted space-y-2 px-4 py-3">
+                    <div className="ui-control-muted rounded-[20px] space-y-2 px-4 py-3">
                       <div className="text-xs text-muted-foreground">包含服务</div>
                       <div className="flex flex-wrap gap-2">
                         {selectedArtifacts.map((artifact) => (
@@ -393,7 +396,7 @@ export function ManualReleaseDialog({
                     </div>
 
                     {(summary || selectedSourceRelease.summary) && (
-                      <div className="ui-control-muted px-4 py-3">
+                      <div className="ui-control-muted rounded-[20px] px-4 py-3">
                         <div className="text-xs text-muted-foreground">最终摘要</div>
                         <div className="mt-1 text-sm leading-6 text-foreground">
                           {summary || selectedSourceRelease.summary}
@@ -402,29 +405,26 @@ export function ManualReleaseDialog({
                     )}
                   </div>
                 ) : (
-                  <div className="ui-control-muted px-4 py-8 text-sm text-muted-foreground">
-                    选择来源
-                  </div>
+                  <EmptyState title="选择来源" className="min-h-40 rounded-[20px]" />
                 )}
               </div>
 
-              <div className="ui-control-muted p-4 sm:p-5">
+              <div className="ui-control-muted rounded-[24px] p-5 sm:p-6">
                 <div className="mb-3 text-sm font-semibold text-foreground">检查</div>
 
                 {loadingPlan ? (
-                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">
-                    加载中...
-                  </div>
+                  <EmptyState title="加载中" className="min-h-40 rounded-[20px]" />
                 ) : planningPanel ? (
                   <div className="space-y-3">
-                    <PlatformSignalChipList chips={planningPanel.chips} />
-                    <PlatformSignalSummary
+                    <PlatformSignalBlock
+                      chips={planningPanel.chips}
                       summary={planningPanel.issueSummary}
                       nextActionLabel={planningPanel.nextActionLabel}
+                      summaryClassName="rounded-[20px]"
                     />
 
                     {planningPanel.blockingReason && (
-                      <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                      <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
                         {planningPanel.blockingReason}
                       </div>
                     )}
@@ -434,21 +434,23 @@ export function ManualReleaseDialog({
                     )}
                   </div>
                 ) : (
-                  <div className="ui-control px-4 py-8 text-sm text-muted-foreground">
-                    选择来源后查看
-                  </div>
+                  <EmptyState title="选择来源后查看" className="min-h-40 rounded-[20px]" />
                 )}
               </div>
             </div>
           </div>
         </div>
 
-        <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
-          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setOpen(false)}>
+        <DialogFooter className="console-divider-top shrink-0 bg-background px-5 py-4 sm:px-7">
+          <Button
+            variant="outline"
+            className="w-full rounded-full sm:w-auto"
+            onClick={() => setOpen(false)}
+          >
             关闭
           </Button>
           <Button
-            className="w-full sm:w-auto"
+            className="w-full rounded-full sm:w-auto"
             onClick={handleCreate}
             disabled={
               submitting ||
