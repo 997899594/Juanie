@@ -632,6 +632,13 @@ function EnvironmentOverviewPanel({
     : environment.actions.configureStrategySummary !== environment.strategyLabel
       ? environment.actions.configureStrategySummary
       : null;
+  const shellClassName =
+    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+  const titleClassName =
+    'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
+  const valueClassName =
+    'mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.03em] text-foreground';
+  const summaryClassName = 'mt-2 text-sm leading-6 text-muted-foreground';
 
   useEffect(() => {
     let cancelled = false;
@@ -672,138 +679,124 @@ function EnvironmentOverviewPanel({
   }, [environment.id, projectId]);
 
   return (
-    <div className="console-surface rounded-[28px] p-4 sm:p-5">
-      <div className="space-y-4">
-        {environment.primaryDomainUrl ? (
-          <div className="console-card rounded-[24px] px-5 py-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                  访问地址
-                </div>
-                <a
-                  href={environment.primaryDomainUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 block truncate text-2xl font-semibold tracking-tight text-foreground transition-colors hover:text-foreground/80"
-                >
-                  {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
-                </a>
-              </div>
-              <Button asChild size="sm" className="h-10 shrink-0 rounded-full px-5">
-                <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
-                  打开地址
-                </a>
-              </Button>
+    <div className="space-y-4">
+      {environment.primaryDomainUrl ? (
+        <section className={cn(shellClassName, 'px-6 py-6 sm:px-7')}>
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className={titleClassName}>访问地址</div>
+              <a
+                href={environment.primaryDomainUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 block truncate text-[2.35rem] font-semibold leading-none tracking-[-0.045em] text-foreground transition-colors hover:text-foreground/78 sm:text-[2.8rem]"
+              >
+                {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
+              </a>
+              <div className="mt-3 text-sm text-muted-foreground">当前环境主访问入口</div>
             </div>
+            <Button asChild variant="outline" className="h-11 shrink-0 rounded-full px-5 text-sm">
+              <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
+                打开地址
+              </a>
+            </Button>
           </div>
-        ) : null}
+        </section>
+      ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="console-card rounded-[24px] px-5 py-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              当前来源
-            </div>
-            <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-              {sourceSummary.label}
-            </div>
-            <div className="mt-2 text-sm leading-6 text-muted-foreground">
-              {sourceSummary.summary}
-            </div>
+      <section className="grid gap-3 xl:grid-cols-[1.1fr_1fr_1fr]">
+        <div className={shellClassName}>
+          <div className={titleClassName}>当前来源</div>
+          <div className={valueClassName}>{sourceSummary.label}</div>
+          <div className={summaryClassName}>{sourceSummary.summary}</div>
+        </div>
+
+        <div className={shellClassName}>
+          <div className={titleClassName}>当前版本</div>
+          <div className={valueClassName}>{versionSummary.label}</div>
+          <div className={summaryClassName}>{versionSummary.summary}</div>
+        </div>
+
+        <div className={shellClassName}>
+          <div className={titleClassName}>当前状态</div>
+          <div className={valueClassName}>
+            {environment.policy.primarySignal?.label ??
+              environment.previewLifecycle?.stateLabel ??
+              '运行中'}
           </div>
-
-          <div className="console-card rounded-[24px] px-5 py-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              当前版本
-            </div>
-            <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-              {versionSummary.label}
-            </div>
-            <div className="mt-2 text-sm leading-6 text-muted-foreground">
-              {versionSummary.summary}
-            </div>
-          </div>
-
-          <div className="console-card rounded-[24px] px-5 py-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                当前状态
-              </div>
+          <div className={summaryClassName}>{buildEnvironmentStatusSummary(environment)}</div>
+          {statusBadges.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
               {statusBadges.map((label) => (
-                <Badge key={label} variant="outline" className="rounded-full px-2.5 py-0.5">
+                <Badge
+                  key={label}
+                  variant="secondary"
+                  className="rounded-full bg-secondary/88 px-3 py-1 text-[11px] font-medium text-foreground shadow-none"
+                >
                   {label}
                 </Badge>
               ))}
             </div>
-            <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-              {environment.policy.primarySignal?.label ??
-                environment.previewLifecycle?.stateLabel ??
-                '运行中'}
+          ) : null}
+        </div>
+      </section>
+
+      <section className="grid gap-3 lg:grid-cols-3">
+        <div
+          className={cn(
+            shellClassName,
+            'bg-[linear-gradient(180deg,rgba(244,241,234,0.92),rgba(255,255,255,0.94))]'
+          )}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className={titleClassName}>发布方式</div>
+            {savingStrategy ? <div className="text-xs text-muted-foreground">保存中...</div> : null}
+          </div>
+          {hasStrategyControl ? (
+            <div className="mt-4">
+              <Select
+                value={environment.deploymentStrategy ?? 'rolling'}
+                onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
+                  onStrategyChange(value)
+                }
+                disabled={savingStrategy}
+              >
+                <SelectTrigger className="h-12 rounded-[18px] bg-white/88">
+                  <SelectValue placeholder="选择发布策略" />
+                </SelectTrigger>
+                <SelectContent>
+                  {deploymentStrategyOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="mt-2 text-sm leading-6 text-muted-foreground">
-              {buildEnvironmentStatusSummary(environment)}
+          ) : (
+            <div className="mt-3 text-xl font-semibold tracking-tight text-foreground">
+              {environment.strategyLabel ?? '未设置'}
             </div>
+          )}
+          <div className={summaryClassName}>
+            {strategyHelper ?? environment.strategyLabel ?? '当前环境未配置发布策略'}
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="console-card rounded-[24px] px-5 py-4 text-sm text-foreground">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                发布方式
-              </div>
-              {savingStrategy ? (
-                <div className="text-xs text-muted-foreground">保存中...</div>
-              ) : null}
-            </div>
-            {hasStrategyControl ? (
-              <div className="mt-3">
-                <Select
-                  value={environment.deploymentStrategy ?? 'rolling'}
-                  onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
-                    onStrategyChange(value)
-                  }
-                  disabled={savingStrategy}
-                >
-                  <SelectTrigger className="h-11 rounded-2xl">
-                    <SelectValue placeholder="选择发布策略" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {deploymentStrategyOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div className="mt-3 text-lg font-semibold text-foreground">
-                {environment.strategyLabel ?? '未设置'}
-              </div>
-            )}
-            <div className="mt-2 text-sm leading-6 text-muted-foreground">
-              {strategyHelper ?? environment.strategyLabel ?? '当前环境未配置发布策略'}
-            </div>
-          </div>
-
-          <div className="console-card rounded-[24px] px-5 py-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              数据库状态
-            </div>
-            <div className="mt-3 text-lg font-semibold text-foreground">
-              {buildEnvironmentDatabaseSummary(environment)}
-            </div>
-          </div>
-
-          <div className="console-card rounded-[24px] px-5 py-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              变量状态
-            </div>
-            <div className="mt-3 text-lg font-semibold text-foreground">{variableSummary}</div>
+        <div className={shellClassName}>
+          <div className={titleClassName}>数据库状态</div>
+          <div className="mt-3 text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground">
+            {buildEnvironmentDatabaseSummary(environment)}
           </div>
         </div>
-      </div>
+
+        <div className={shellClassName}>
+          <div className={titleClassName}>变量状态</div>
+          <div className="mt-3 text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground">
+            {variableSummary}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
