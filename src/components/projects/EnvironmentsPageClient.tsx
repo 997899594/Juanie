@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronUp, GitBranch, Globe, Plus, Rocket, Trash2 } from 'lucide-react';
+import { ArrowRight, GitBranch, Globe, Plus, Rocket, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
@@ -955,50 +955,81 @@ function buildEnvironmentStatusSummary(environment: EnvironmentRecord): string {
   return '环境已创建，相关状态会在这里持续更新。';
 }
 
-function EnvironmentCardHeader({
+function buildEnvironmentListSummary(environment: EnvironmentRecord): string {
+  if (environment.primaryDomainUrl) {
+    return environment.primaryDomainUrl.replace(/^https?:\/\//, '');
+  }
+
+  return buildEnvironmentStatusSummary(environment);
+}
+
+function EnvironmentListCard({
+  projectId,
   environment,
-  expanded,
-  onToggle,
+  deleteAction,
 }: {
+  projectId: string;
   environment: EnvironmentRecord;
-  expanded: boolean;
-  onToggle: () => void;
+  deleteAction?: React.ReactNode;
 }) {
+  const meta = buildEnvironmentHeaderMeta(environment);
+  const statusBadges = [
+    environment.policy.primarySignal?.label ?? null,
+    environment.previewLifecycle?.stateLabel ?? null,
+  ].filter(Boolean);
+
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition-colors hover:bg-secondary/20"
-    >
-      <div className="min-w-0 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            className={cn(
-              'h-2 w-2 rounded-full',
-              environment.isPreview
-                ? 'bg-info'
-                : environment.namespace
-                  ? 'bg-success'
-                  : 'bg-warning'
-            )}
-          />
-          <span className="text-sm font-semibold capitalize">{environment.name}</span>
-          {environment.previewLifecycle && (
-            <span className="text-xs text-muted-foreground">
-              {environment.previewLifecycle.stateLabel}
-            </span>
-          )}
+    <div className="console-panel overflow-hidden">
+      <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className={cn(
+                'h-2 w-2 rounded-full',
+                environment.isPreview
+                  ? 'bg-info'
+                  : environment.namespace
+                    ? 'bg-success'
+                    : 'bg-warning'
+              )}
+            />
+            <span className="text-sm font-semibold capitalize">{environment.name}</span>
+            {statusBadges.map((label) => (
+              <Badge key={label} variant="outline">
+                {label}
+              </Badge>
+            ))}
+          </div>
+
+          {meta ? <div className="text-[11px] text-muted-foreground">{meta}</div> : null}
+
+          <div className="text-sm text-foreground">{buildEnvironmentListSummary(environment)}</div>
+
+          {environment.primaryDomainUrl ? (
+            <a
+              href={environment.primaryDomainUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex max-w-full items-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <span className="truncate">
+                {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
+              </span>
+            </a>
+          ) : null}
         </div>
-        <div className="truncate text-[11px] text-muted-foreground">
-          {buildEnvironmentHeaderMeta(environment)}
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/projects/${projectId}/environments/${environment.id}`}>
+              进入环境
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+          {deleteAction}
         </div>
       </div>
-      {expanded ? (
-        <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-      ) : (
-        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-      )}
-    </button>
+    </div>
   );
 }
 
@@ -1186,14 +1217,7 @@ export function EnvironmentsPageClient({
   initialCreateOpen = false,
   initialData,
 }: EnvironmentsPageClientProps) {
-  const defaultExpandedEnvId =
-    initialData.environments.find((environment) => environment.id === initialEnvId)?.id ??
-    initialData.environments[0]?.id ??
-    null;
   const [environments, setEnvironments] = useState(initialData.environments);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(
-    defaultExpandedEnvId ? { [defaultExpandedEnvId]: true } : {}
-  );
   const [governance, setGovernance] = useState(initialData.governance);
   const [deliveryControl, setDeliveryControl] = useState(initialData.deliveryControl);
   const [routingRules, setRoutingRules] = useState<DeliveryRoutingRuleInput[]>(
@@ -1228,13 +1252,6 @@ export function EnvironmentsPageClient({
       setRoutingRules(data.deliveryControl.routingRules.map(toEditableRoutingRule));
       setPromotionFlows(data.deliveryControl.promotionFlows.map(toEditablePromotionFlow));
       setEditingDeliveryControl(false);
-      setExpanded((prev) => {
-        if (Object.keys(prev).length > 0) {
-          return prev;
-        }
-
-        return data.environments[0] ? { [data.environments[0].id]: true } : {};
-      });
     } catch (error) {
       const message = error instanceof Error ? error.message : '加载环境失败';
       setFeedback(message);
@@ -1268,10 +1285,6 @@ export function EnvironmentsPageClient({
   const focusedEnvironment =
     (initialEnvId ? environments.find((environment) => environment.id === initialEnvId) : null) ??
     null;
-
-  const toggleExpanded = (envId: string) => {
-    setExpanded((prev) => ({ ...prev, [envId]: !prev[envId] }));
-  };
 
   const resetDeliveryControlEditor = useCallback(() => {
     setRoutingRules(deliveryControl.routingRules.map(toEditableRoutingRule));
@@ -1338,7 +1351,6 @@ export function EnvironmentsPageClient({
           ? `已启动 ${data.name} · ${data.sourceCommitSha?.slice(0, 7) ?? 'latest'} 正在构建，完成后会自动部署`
           : `已启动 ${data.name} · ${data.sourceCommitSha?.slice(0, 7) ?? 'latest'} 正在部署`
       );
-      setExpanded((prev) => ({ ...prev, [data.id]: true }));
       await fetchEnvironments();
       setTimeout(() => setFeedback(null), 4000);
     } catch (error) {
@@ -1422,7 +1434,7 @@ export function EnvironmentsPageClient({
           <div className="flex flex-wrap items-center gap-2">
             {focusMode && focusedEnvironment ? (
               <Button asChild variant="outline">
-                <Link href={`/projects/${projectId}`}>项目</Link>
+                <Link href={`/projects/${projectId}/environments`}>环境列表</Link>
               </Button>
             ) : null}
             {!focusMode ? (
@@ -1503,30 +1515,13 @@ export function EnvironmentsPageClient({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {standardEnvironments.map((environment) => {
-                      const isExpanded = !!expanded[environment.id];
-                      return (
-                        <div key={environment.id} className="console-panel overflow-hidden">
-                          <EnvironmentCardHeader
-                            environment={environment}
-                            expanded={isExpanded}
-                            onToggle={() => toggleExpanded(environment.id)}
-                          />
-
-                          {isExpanded && (
-                            <div className="px-5 py-4">
-                              <EnvironmentExpandedContent
-                                environment={environment}
-                                savingStrategy={savingStrategyId === environment.id}
-                                onStrategyChange={(value) =>
-                                  handleStrategyChange(environment.id, value)
-                                }
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {standardEnvironments.map((environment) => (
+                      <EnvironmentListCard
+                        key={environment.id}
+                        projectId={projectId}
+                        environment={environment}
+                      />
+                    ))}
                   </div>
                 )}
               </section>
@@ -1543,85 +1538,62 @@ export function EnvironmentsPageClient({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {previewEnvironments.map((environment) => {
-                      const isExpanded = !!expanded[environment.id];
-
-                      return (
-                        <div key={environment.id} className="console-panel overflow-hidden">
-                          <div className="flex items-start justify-between gap-3 px-5 py-4">
-                            <div className="min-w-0 flex-1">
-                              <EnvironmentCardHeader
-                                environment={environment}
-                                expanded={isExpanded}
-                                onToggle={() => toggleExpanded(environment.id)}
-                              />
-                            </div>
-
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-9 shrink-0"
+                    {previewEnvironments.map((environment) => (
+                      <EnvironmentListCard
+                        key={environment.id}
+                        projectId={projectId}
+                        environment={environment}
+                        deleteAction={
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={
+                                  deletingId === environment.id || !environment.actions?.canDelete
+                                }
+                                title={environment.actions?.deleteSummary}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                {environment.cleanupState?.state === 'expired_ready'
+                                  ? '立即回收'
+                                  : '结束环境'}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>结束预览环境？</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  <span className="font-medium text-foreground">
+                                    {environment.name}
+                                  </span>{' '}
+                                  及关联资源会一起删除。
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                                {environment.cleanupState?.state === 'expired_ready'
+                                  ? '已过期，可直接回收。'
+                                  : '会回收域名、变量、数据库和运行资源。'}
+                              </div>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel className="w-full sm:w-auto">
+                                  取消
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeletePreview(environment.id)}
+                                  className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                                   disabled={
                                     deletingId === environment.id || !environment.actions?.canDelete
                                   }
-                                  title={environment.actions?.deleteSummary}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  {environment.cleanupState?.state === 'expired_ready'
-                                    ? '立即回收'
-                                    : '结束环境'}
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>结束预览环境？</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    <span className="font-medium text-foreground">
-                                      {environment.name}
-                                    </span>{' '}
-                                    及关联资源会一起删除。
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
-                                  {environment.cleanupState?.state === 'expired_ready'
-                                    ? '已过期，可直接回收。'
-                                    : '会回收域名、变量、数据库和运行资源。'}
-                                </div>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel className="w-full sm:w-auto">
-                                    取消
-                                  </AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeletePreview(environment.id)}
-                                    className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
-                                    disabled={
-                                      deletingId === environment.id ||
-                                      !environment.actions?.canDelete
-                                    }
-                                  >
-                                    {deletingId === environment.id ? '处理中...' : '确认结束'}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-
-                          {isExpanded && (
-                            <div className="px-5 py-4">
-                              <EnvironmentExpandedContent
-                                environment={environment}
-                                savingStrategy={savingStrategyId === environment.id}
-                                onStrategyChange={(value) =>
-                                  handleStrategyChange(environment.id, value)
-                                }
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                                  {deletingId === environment.id ? '处理中...' : '确认结束'}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        }
+                      />
+                    ))}
                   </div>
                 )}
               </section>

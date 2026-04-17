@@ -30,5 +30,7 @@ export default async function ProjectEnvironmentsPage({
     return <EnvironmentsPageClient projectId={id} initialData={initialData} initialCreateOpen />;
   }
 
-  redirect(`/projects/${id}`);
+  const initialData = await getProjectEnvironmentListData(id, access.member.role);
+
+  return <EnvironmentsPageClient projectId={id} initialData={initialData} />;
 }
