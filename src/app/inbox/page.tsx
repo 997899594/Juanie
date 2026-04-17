@@ -166,7 +166,7 @@ export default async function InboxPage({
                           className="justify-between rounded-xl"
                         >
                           <Link href={`/projects/${run.projectId}/delivery/${run.releaseId}`}>
-                            交付
+                            发布
                             <ArrowRight className="h-3.5 w-3.5" />
                           </Link>
                         </Button>

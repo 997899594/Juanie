@@ -49,22 +49,11 @@ function getEnvironmentSecondaryLine(
   environment: ProjectOverviewPageData['environmentCards'][number]
 ): string | null {
   return (
-    getEnvironmentGitSummary(environment) ?? environment.platformSignals.nextActionLabel ?? null
+    getEnvironmentGitSummary(environment) ??
+    environment.previewLifecycle?.summary ??
+    environment.platformSignals.nextActionLabel ??
+    null
   );
-}
-
-function getRenderedSecondaryLine(
-  environment: ProjectOverviewPageData['environmentCards'][number]
-): string | null {
-  const secondaryLine = getEnvironmentSecondaryLine(environment);
-
-  if (!secondaryLine) {
-    return null;
-  }
-
-  return secondaryLine === environment.platformSignals.nextActionLabel
-    ? `下一步：${secondaryLine}`
-    : secondaryLine;
 }
 
 export function ProjectEnvironmentIndex({
@@ -116,9 +105,9 @@ export function ProjectEnvironmentIndex({
                   <div className="truncate text-sm text-foreground">
                     {getEnvironmentSummary(environment)}
                   </div>
-                  {getRenderedSecondaryLine(environment) ? (
+                  {getEnvironmentSecondaryLine(environment) ? (
                     <div className="truncate text-xs text-muted-foreground">
-                      {getRenderedSecondaryLine(environment)}
+                      {getEnvironmentSecondaryLine(environment)}
                     </div>
                   ) : null}
                 </div>

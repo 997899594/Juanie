@@ -25,7 +25,7 @@ interface ProjectOverviewDashboardProps {
 }
 
 export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOverviewDashboardProps) {
-  const { project, environmentCards, overview, stats, collaboration } = pageData;
+  const { project, environmentCards, overview, collaboration } = pageData;
   const productionEnvironment = environmentCards.find((environment) => environment.isProduction);
   const productionHost =
     productionEnvironment?.primaryDomainUrl?.replace(/^https?:\/\//, '') ?? null;
@@ -36,17 +36,22 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
         title={project.name}
         description={overview.description ?? overview.headerDescription}
         actions={
-          <Button asChild>
-            <Link href={`/projects/${projectId}/environments?new=preview`}>
-              <Plus className="h-4 w-4" />
-              启动预览环境
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="ghost">
+              <Link href={`/projects/${projectId}/delivery`}>发布总览</Link>
+            </Button>
+            <Button asChild>
+              <Link href={`/projects/${projectId}/environments?new=preview`}>
+                <Plus className="h-4 w-4" />
+                启动预览环境
+              </Link>
+            </Button>
+          </>
         }
       />
 
       <section className="ui-floating overflow-hidden">
-        <div className="grid gap-0 md:grid-cols-[1.2fr_0.8fr_1fr]">
+        <div className="grid gap-0 md:grid-cols-[1.25fr_0.75fr_1fr]">
           <div className="console-divider-bottom px-5 py-4 md:console-divider-bottom-0 md:console-divider-right">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               项目
@@ -96,11 +101,6 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
                   {collaboration.memberCount} 人
                 </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {collaboration.members
-                    .map((member) => member.user.name ?? member.user.email)
-                    .join(' · ')}
-                </div>
               </div>
             </div>
           </div>
@@ -122,17 +122,6 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
               ) : null}
             </div>
           </div>
-        </div>
-
-        <div className="console-divider-top grid gap-2 p-2 md:grid-cols-4">
-          {stats.map((item) => (
-            <div key={item.label} className="console-surface rounded-[18px] px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                {item.label}
-              </div>
-              <div className="mt-2 text-lg font-semibold text-foreground">{item.value}</div>
-            </div>
-          ))}
         </div>
       </section>
 

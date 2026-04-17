@@ -12,13 +12,13 @@ export function Sidebar() {
   const pathname = usePathname();
   const [projectName, setProjectName] = useState('');
   const [environmentName, setEnvironmentName] = useState('');
+  const queryEnvironmentId =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('env') : null;
 
   const projectIdMatch = pathname.match(/\/projects\/([^/]+)/);
   const projectId = projectIdMatch?.[1];
   const environmentIdMatch = pathname.match(/\/projects\/[^/]+\/environments\/([^/]+)/);
-  const schemaEnvironmentId =
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('env') : null;
-  const environmentId = environmentIdMatch?.[1] ?? schemaEnvironmentId;
+  const environmentId = environmentIdMatch?.[1] ?? queryEnvironmentId;
   const isInEnvironment = !!projectId && !!environmentId;
 
   useEffect(() => {
@@ -89,12 +89,15 @@ export function Sidebar() {
                 {environmentNav.map((item) => {
                   const href = buildEnvironmentNavHref(projectId, environmentId, item.href);
                   const isActive =
-                    item.href === '/schema'
-                      ? pathname === `/projects/${projectId}/schema` &&
-                        schemaEnvironmentId === environmentId
-                      : item.href === ''
-                        ? pathname === `/projects/${projectId}/environments/${environmentId}`
-                        : pathname === href || pathname.startsWith(`${href}/`);
+                    item.href === '/delivery'
+                      ? pathname === `/projects/${projectId}/delivery` &&
+                        queryEnvironmentId === environmentId
+                      : item.href === '/schema'
+                        ? pathname === `/projects/${projectId}/schema` &&
+                          queryEnvironmentId === environmentId
+                        : item.href === ''
+                          ? pathname === `/projects/${projectId}/environments/${environmentId}`
+                          : pathname === href || pathname.startsWith(`${href}/`);
                   const Icon = item.icon;
 
                   return (

@@ -27,8 +27,8 @@ export default async function LoginPage() {
             <div className="ui-control-muted p-4">
               <div className="grid gap-2">
                 <div className="ui-control px-3 py-3 text-sm">项目</div>
-                <div className="ui-control px-3 py-3 text-sm">交付</div>
                 <div className="ui-control px-3 py-3 text-sm">环境</div>
+                <div className="ui-control px-3 py-3 text-sm">发布</div>
               </div>
             </div>
 
@@ -79,7 +79,7 @@ export default async function LoginPage() {
               nameClassName="text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
             />
             <div className="mt-4 max-w-xl text-5xl font-semibold leading-tight tracking-tight">
-              清晰的交付主链
+              项目进入环境，环境进入发布
             </div>
           </div>
 

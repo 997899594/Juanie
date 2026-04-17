@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { redirectLegacyRuntimeRoute } from '../legacy-runtime-redirect';
 
 export default async function RuntimeVariablesPage({
   params,
@@ -15,9 +16,10 @@ export default async function RuntimeVariablesPage({
   if (!session?.user?.id) {
     redirect('/login');
   }
-  redirect(
-    resolvedSearchParams?.env
-      ? `/projects/${id}/environments/${resolvedSearchParams.env}/variables`
-      : `/projects/${id}/environments`
-  );
+
+  redirectLegacyRuntimeRoute({
+    projectId: id,
+    environmentId: resolvedSearchParams?.env ?? null,
+    section: 'variables',
+  });
 }

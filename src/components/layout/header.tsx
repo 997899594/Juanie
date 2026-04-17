@@ -20,12 +20,14 @@ interface BreadcrumbItem {
 export function Header() {
   const pathname = usePathname();
   const project = useProjectContext();
-  const breadcrumbs = generateBreadcrumbs(pathname, project ?? undefined);
+  const queryEnvironmentId =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('env') : null;
+  const breadcrumbs = generateBreadcrumbs(pathname, project ?? undefined, queryEnvironmentId);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const currentTitle = breadcrumbs[breadcrumbs.length - 1]?.title ?? '首页';
   const projectId = project?.projectId ?? null;
   const environmentIdMatch = pathname.match(/\/projects\/[^/]+\/environments\/([^/]+)/);
-  const environmentId = environmentIdMatch?.[1] ?? null;
+  const environmentId = environmentIdMatch?.[1] ?? queryEnvironmentId;
   const mobileEnvironmentTabs = useMemo(() => {
     if (!projectId || !environmentId) {
       return [];
@@ -39,8 +41,11 @@ export function Header() {
     if (!projectId || !environmentId) {
       return false;
     }
+    if (href.includes('/delivery?env=')) {
+      return pathname === `/projects/${projectId}/delivery` && queryEnvironmentId === environmentId;
+    }
     if (href.includes('/schema?env=')) {
-      return pathname === `/projects/${projectId}/schema`;
+      return pathname === `/projects/${projectId}/schema` && queryEnvironmentId === environmentId;
     }
 
     const baseHref = `/projects/${projectId}/environments/${environmentId}`;
@@ -220,7 +225,8 @@ export function Header() {
 
 function generateBreadcrumbs(
   pathname: string,
-  project?: { projectId: string; projectName: string }
+  project?: { projectId: string; projectName: string },
+  queryEnvironmentId?: string | null
 ): BreadcrumbItem[] {
   const segments = pathname.split('/').filter(Boolean);
 
@@ -234,7 +240,7 @@ function generateBreadcrumbs(
     approvals: '审批',
     teams: '团队',
     settings: '设置',
-    delivery: '交付',
+    delivery: queryEnvironmentId ? '发布' : '发布总览',
     deployments: '部署执行',
     releases: '发布',
     environments: '环境',
@@ -254,7 +260,7 @@ function generateBreadcrumbs(
     // Replace project UUID with the actual project name
     const isProjectId = project && segment === project.projectId;
     const isReleaseId =
-      segments[index - 1] === 'releases' &&
+      (segments[index - 1] === 'releases' || segments[index - 1] === 'delivery') &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment);
     const title = isProjectId
       ? project.projectName

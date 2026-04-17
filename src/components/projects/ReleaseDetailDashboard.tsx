@@ -38,7 +38,7 @@ export function ReleaseDetailDashboard({
   const { release, previousReleaseLink, sourceReleaseLink } = pageData;
   const environmentId = release.environment?.id ?? release.environmentId;
   const environmentLogsHref = `/projects/${projectId}/environments/${environmentId}/logs`;
-  const releasesHref = `/projects/${projectId}/delivery`;
+  const releasesHref = `/projects/${projectId}/delivery?env=${environmentId}`;
   const releaseStateKey = buildReleaseEventStateKey(release);
 
   return (
@@ -65,7 +65,7 @@ export function ReleaseDetailDashboard({
             <Button asChild variant="outline" size="sm" className="h-9 px-4">
               <Link href={releasesHref}>
                 <ArrowLeft className="h-3.5 w-3.5" />
-                返回
+                返回发布
               </Link>
             </Button>
           </div>

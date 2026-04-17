@@ -157,7 +157,7 @@ function filterLightweightReleaseItems(
   const riskFilter = filters.risk ?? 'attention';
 
   return releases.filter((release) => {
-    if (envFilter !== 'all' && (release.environment.name ?? '环境') !== envFilter) {
+    if (envFilter !== 'all' && release.environment.id !== envFilter) {
       return false;
     }
 
@@ -447,8 +447,11 @@ export function buildProjectReleasesPageData(input: {
     environments: input.environments,
     governance,
     environmentOptions: [
-      'all',
-      ...new Set(input.releaseItems.map((release) => release.environment.name ?? '环境')),
+      { value: 'all', label: '全部环境' },
+      ...input.environments.map((environment) => ({
+        value: environment.id,
+        label: environment.name ?? '环境',
+      })),
     ],
     selectedEnv,
     selectedRisk,

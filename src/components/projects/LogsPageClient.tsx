@@ -173,7 +173,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader title="环境日志" />
+      <PageHeader title="日志" description={selectedEnvironment?.name} />
       <EnvironmentSectionNav projectId={projectId} environmentId={envId || null} />
 
       <div className="ui-control-muted px-4 py-3">
@@ -194,7 +194,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
       <div className="ui-floating px-4 py-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <ScrollText className="h-4 w-4" />
-          诊断选择
+          日志范围
         </div>
         <div className="flex flex-wrap items-center gap-3 overflow-x-auto pb-1">
           <Select value={envId} onValueChange={setEnvId}>

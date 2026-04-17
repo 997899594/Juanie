@@ -55,6 +55,11 @@ export const environmentNav: NavItem[] = [
     icon: Home,
   },
   {
+    title: '发布',
+    href: '/delivery',
+    icon: Rocket,
+  },
+  {
     title: '数据',
     href: '/schema',
     icon: Database,
@@ -89,6 +94,10 @@ export function buildEnvironmentNavHref(
   environmentId: string,
   href: string
 ): string {
+  if (href === '/delivery') {
+    return `/projects/${projectId}/delivery?env=${environmentId}`;
+  }
+
   if (href === '/schema') {
     return `/projects/${projectId}/schema?env=${environmentId}`;
   }

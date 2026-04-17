@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { redirectLegacyRuntimeRoute } from '../legacy-runtime-redirect';
 
 export default async function RuntimeLogsPage({
   params,
@@ -15,5 +16,10 @@ export default async function RuntimeLogsPage({
   if (!session?.user?.id) {
     redirect('/login');
   }
-  redirect(env ? `/projects/${id}/environments/${env}/logs` : `/projects/${id}/environments`);
+
+  redirectLegacyRuntimeRoute({
+    projectId: id,
+    environmentId: env ?? null,
+    section: 'logs',
+  });
 }

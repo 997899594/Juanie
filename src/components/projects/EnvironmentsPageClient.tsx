@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, GitBranch, Globe, Plus, Rocket, Trash2 } from 'lucide-react';
+import { ArrowRight, GitBranch, Globe, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
@@ -36,16 +36,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import {
-  cleanupPreviewEnvironments,
   createPreviewEnvironment,
   type DatabaseSchemaRepairPlan,
   type DeliveryRoutingRuleInput,
   deletePreviewEnvironment,
   fetchProjectEnvironments,
   type PromotionFlowInput,
-  updateDeliveryControl,
   updateEnvironmentStrategy,
 } from '@/lib/environments/client-actions';
 import { cn } from '@/lib/utils';
@@ -254,18 +251,6 @@ const deploymentStrategyOptions = [
   { value: 'blue_green', label: '蓝绿切换' },
 ] as const;
 
-const deliveryRuleKindOptions = [
-  { value: 'branch', label: '分支' },
-  { value: 'tag', label: '标签' },
-  { value: 'pull_request', label: 'PR' },
-  { value: 'manual', label: '手动' },
-] as const;
-
-const promotionStrategyOptions = [
-  { value: 'reuse_release_artifacts', label: '复用已验证产物' },
-  { value: 'rebuild_from_ref', label: '从源码重新构建' },
-] as const;
-
 interface PreviewDialogProps {
   open: boolean;
   loading: boolean;
@@ -309,46 +294,44 @@ function PreviewEnvironmentDialog({
       <DialogContent className="flex max-h-[calc(100vh-2rem)] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>新建预览环境</DialogTitle>
-          <DialogDescription>
-            直接基于远端分支或 PR 的最新提交启动预览环境，不需要额外再提交一次代码。
-          </DialogDescription>
+          <DialogDescription>基于分支或 PR 直接启动。</DialogDescription>
         </DialogHeader>
 
         <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-              <div className="space-y-4">
-                {disabledSummary && (
-                  <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
-                    {disabledSummary}
-                  </div>
-                )}
+            <div className="space-y-4">
+              {disabledSummary && (
+                <div className="console-card rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                  {disabledSummary}
+                </div>
+              )}
 
-                <div className="console-surface p-4 sm:p-5">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="preview-branch">分支</Label>
-                      <Input
-                        id="preview-branch"
-                        placeholder="feature/release-intel"
-                        value={branch}
-                        onChange={(event) => setBranch(event.target.value)}
-                        disabled={loading || disabled}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="preview-pr">PR 号</Label>
-                      <Input
-                        id="preview-pr"
-                        inputMode="numeric"
-                        placeholder="42"
-                        value={prNumber}
-                        onChange={(event) => setPrNumber(event.target.value)}
-                        disabled={loading || disabled}
-                      />
-                    </div>
+              <div className="console-surface p-4 sm:p-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="preview-branch">分支</Label>
+                    <Input
+                      id="preview-branch"
+                      placeholder="feature/release-intel"
+                      value={branch}
+                      onChange={(event) => setBranch(event.target.value)}
+                      disabled={loading || disabled}
+                    />
                   </div>
-                  <div className="mt-4 space-y-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="preview-pr">PR 号</Label>
+                    <Input
+                      id="preview-pr"
+                      inputMode="numeric"
+                      placeholder="42"
+                      value={prNumber}
+                      onChange={(event) => setPrNumber(event.target.value)}
+                      disabled={loading || disabled}
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
                     <Label htmlFor="preview-ttl">保留时长（小时）</Label>
                     <Input
                       id="preview-ttl"
@@ -360,7 +343,7 @@ function PreviewEnvironmentDialog({
                     />
                   </div>
 
-                  <div className="mt-4 space-y-2">
+                  <div className="space-y-2">
                     <Label>数据库策略</Label>
                     <Select
                       value={databaseStrategy}
@@ -379,52 +362,18 @@ function PreviewEnvironmentDialog({
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    {databaseStrategy === 'isolated_clone' && isolatedCloneSummary && (
-                      <div className="text-xs text-muted-foreground">{isolatedCloneSummary}</div>
-                    )}
                   </div>
                 </div>
-
-                {error && (
-                  <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
-                    {error}
-                  </div>
-                )}
+                {databaseStrategy === 'isolated_clone' && isolatedCloneSummary ? (
+                  <div className="mt-3 text-xs text-muted-foreground">{isolatedCloneSummary}</div>
+                ) : null}
               </div>
 
-              <div className="space-y-4">
-                <div className="ui-control-muted p-4 sm:p-5">
-                  <div className="mb-4 text-sm font-semibold text-foreground">启动概览</div>
-                  <div className="mt-4 space-y-3 text-sm">
-                    <div className="rounded-2xl bg-background/85 px-4 py-3">
-                      <div className="text-xs text-muted-foreground">标识来源</div>
-                      <div className="mt-1 text-foreground">
-                        {branch ? `分支 ${branch}` : prNumber ? `PR #${prNumber}` : '等待输入'}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-background/85 px-4 py-3">
-                      <div className="text-xs text-muted-foreground">启动方式</div>
-                      <div className="mt-1 text-foreground">按远端最新提交直接发布</div>
-                    </div>
-                    <div className="rounded-2xl bg-background/85 px-4 py-3">
-                      <div className="text-xs text-muted-foreground">保留时长</div>
-                      <div className="mt-1 text-foreground">
-                        {ttlHours ? `${ttlHours} 小时` : '默认 72 小时'}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-background/85 px-4 py-3">
-                      <div className="text-xs text-muted-foreground">数据库方案</div>
-                      <div className="mt-1 text-foreground">
-                        {databaseStrategy === 'isolated_clone' ? '独立预览库' : '继承基础数据库'}
-                      </div>
-                    </div>
-                    <div className="rounded-2xl bg-background/85 px-4 py-3 text-xs leading-6 text-muted-foreground">
-                      创建后会先解析远端最新提交；如果同一提交已有可复用产物，会直接部署；否则进入构建中状态并等待
-                      CI 完成。
-                    </div>
-                  </div>
+              {error && (
+                <div className="rounded-2xl bg-destructive/[0.06] px-4 py-3 text-sm text-destructive shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+                  {error}
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -462,464 +411,6 @@ function getEnvironmentPriority(environment: EnvironmentRecord): number {
 
       return environment.isPreview ? 2 : 1;
   }
-}
-
-function toEditableRoutingRule(rule: DeliveryControlRuleRecord): DeliveryRoutingRuleInput {
-  return {
-    environmentId: rule.environmentId ?? '',
-    kind: rule.kind,
-    pattern: rule.pattern,
-    priority: rule.priority,
-    isActive: rule.isActive,
-    autoCreateEnvironment: rule.autoCreateEnvironment,
-  };
-}
-
-function toEditablePromotionFlow(flow: DeliveryControlFlowRecord): PromotionFlowInput {
-  return {
-    sourceEnvironmentId: flow.sourceEnvironmentId ?? '',
-    targetEnvironmentId: flow.targetEnvironmentId ?? '',
-    requiresApproval: flow.requiresApproval,
-    strategy: flow.strategy,
-    isActive: flow.isActive,
-  };
-}
-
-function createRuleDraft(
-  environments: DeliveryControlEnvironmentOption[]
-): DeliveryRoutingRuleInput {
-  return {
-    environmentId: environments[0]?.id ?? '',
-    kind: 'branch',
-    pattern: '',
-    priority: 100,
-    isActive: true,
-    autoCreateEnvironment: false,
-  };
-}
-
-function createFlowDraft(environments: DeliveryControlEnvironmentOption[]): PromotionFlowInput {
-  const sourceEnvironmentId = environments[0]?.id ?? '';
-  const targetEnvironmentId = environments[1]?.id ?? environments[0]?.id ?? '';
-
-  return {
-    sourceEnvironmentId,
-    targetEnvironmentId,
-    requiresApproval: true,
-    strategy: 'reuse_release_artifacts',
-    isActive: true,
-  };
-}
-
-function DeliveryControlPanel({
-  deliveryControl,
-  routingRules,
-  promotionFlows,
-  editing,
-  saving,
-  onToggleEditing,
-  onReset,
-  onSave,
-  onAddRule,
-  onUpdateRule,
-  onRemoveRule,
-  onAddFlow,
-  onUpdateFlow,
-  onRemoveFlow,
-}: {
-  deliveryControl: DeliveryControlState;
-  routingRules: DeliveryRoutingRuleInput[];
-  promotionFlows: PromotionFlowInput[];
-  editing: boolean;
-  saving: boolean;
-  onToggleEditing: () => void;
-  onReset: () => void;
-  onSave: () => Promise<void>;
-  onAddRule: () => void;
-  onUpdateRule: (index: number, rule: DeliveryRoutingRuleInput) => void;
-  onRemoveRule: (index: number) => void;
-  onAddFlow: () => void;
-  onUpdateFlow: (index: number, flow: PromotionFlowInput) => void;
-  onRemoveFlow: (index: number) => void;
-}) {
-  const persistentEnvironments = deliveryControl.environments.filter(
-    (environment) => environment.kind !== 'preview'
-  );
-  const routingTargetEnvironments = persistentEnvironments.filter(
-    (environment) => environment.deliveryMode !== 'promote_only'
-  );
-  const displayedRoutingRules = editing ? routingRules : deliveryControl.routingRules;
-  const displayedPromotionFlows = editing ? promotionFlows : deliveryControl.promotionFlows;
-
-  return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Rocket className="h-4 w-4" />
-          交付控制面
-        </div>
-        <div className="flex items-center gap-2">
-          {editing && (
-            <Button variant="outline" size="sm" onClick={onReset}>
-              丢弃
-            </Button>
-          )}
-          {deliveryControl.editable ? (
-            editing ? (
-              <Button size="sm" disabled={saving} onClick={() => void onSave()}>
-                {saving ? '保存中...' : '保存链路'}
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" onClick={onToggleEditing}>
-                编辑链路
-              </Button>
-            )
-          ) : null}
-        </div>
-      </div>
-
-      <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
-        {deliveryControl.editSummary}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="console-panel overflow-hidden">
-          <div className="console-divider-bottom px-4 py-3">
-            <div className="text-sm font-medium">Git 路由规则</div>
-          </div>
-          <div className="space-y-3 px-4 py-4">
-            {displayedRoutingRules.length === 0 ? (
-              <div className="ui-control-muted px-4 py-4 text-sm text-muted-foreground">
-                还没有路由规则
-              </div>
-            ) : (
-              displayedRoutingRules.map((rule, index) => (
-                <div key={rule.id ?? `${rule.kind}-${index}`} className="console-surface px-4 py-4">
-                  {editing ? (
-                    <div className="space-y-3">
-                      {(() => {
-                        const editableRule = rule as DeliveryRoutingRuleInput;
-
-                        return (
-                          <>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <div className="space-y-2">
-                                <Label>目标环境</Label>
-                                <Select
-                                  value={editableRule.environmentId}
-                                  onValueChange={(value) =>
-                                    onUpdateRule(index, { ...editableRule, environmentId: value })
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="选择环境" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {routingTargetEnvironments.map((environment) => (
-                                      <SelectItem key={environment.id} value={environment.id}>
-                                        {environment.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>来源类型</Label>
-                                <Select
-                                  value={editableRule.kind}
-                                  onValueChange={(value: DeliveryRoutingRuleInput['kind']) =>
-                                    onUpdateRule(index, {
-                                      ...editableRule,
-                                      kind: value,
-                                      autoCreateEnvironment:
-                                        value === 'pull_request'
-                                          ? true
-                                          : editableRule.autoCreateEnvironment,
-                                      pattern: value === 'manual' ? null : editableRule.pattern,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="选择规则类型" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {deliveryRuleKindOptions.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        {option.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-
-                            {editableRule.kind !== 'manual' && (
-                              <div className="grid gap-3 md:grid-cols-[1fr_120px]">
-                                <div className="space-y-2">
-                                  <Label>Pattern</Label>
-                                  <Input
-                                    value={editableRule.pattern ?? ''}
-                                    onChange={(event) =>
-                                      onUpdateRule(index, {
-                                        ...editableRule,
-                                        pattern: event.target.value,
-                                      })
-                                    }
-                                    placeholder={
-                                      editableRule.kind === 'pull_request' ? '*' : 'main'
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>优先级</Label>
-                                  <Input
-                                    inputMode="numeric"
-                                    value={String(editableRule.priority)}
-                                    onChange={(event) =>
-                                      onUpdateRule(index, {
-                                        ...editableRule,
-                                        priority: Number.parseInt(event.target.value || '100', 10),
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="flex flex-wrap items-center gap-4">
-                              <div className="flex items-center gap-2 text-sm">
-                                <Switch
-                                  checked={editableRule.isActive}
-                                  onCheckedChange={(checked) =>
-                                    onUpdateRule(index, { ...editableRule, isActive: checked })
-                                  }
-                                />
-                                <span>启用</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm">
-                                <Switch
-                                  checked={editableRule.autoCreateEnvironment}
-                                  disabled={editableRule.kind !== 'pull_request'}
-                                  onCheckedChange={(checked) =>
-                                    onUpdateRule(index, {
-                                      ...editableRule,
-                                      autoCreateEnvironment: checked,
-                                    })
-                                  }
-                                />
-                                <span>自动创建预览</span>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="ml-auto rounded-xl text-destructive"
-                                onClick={() => onRemoveRule(index)}
-                              >
-                                删除
-                              </Button>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary">
-                          {deliveryRuleKindOptions.find((option) => option.value === rule.kind)
-                            ?.label ?? rule.kind}
-                        </Badge>
-                        <div className="text-sm font-medium text-foreground">
-                          {'environmentName' in rule
-                            ? (rule.environmentName ?? '未绑定环境')
-                            : '未绑定环境'}
-                        </div>
-                        <Badge variant="outline">{rule.isActive ? '已启用' : '已停用'}</Badge>
-                        {rule.autoCreateEnvironment ? (
-                          <Badge variant="outline">自动创建预览</Badge>
-                        ) : null}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {[rule.pattern ? `匹配 ${rule.pattern}` : null, `优先级 ${rule.priority}`]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-
-            {editing && (
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={onAddRule}>
-                <Plus className="h-4 w-4" />
-                添加路由
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <div className="console-panel overflow-hidden">
-          <div className="console-divider-bottom px-4 py-3">
-            <div className="text-sm font-medium">环境推广链路</div>
-          </div>
-          <div className="space-y-3 px-4 py-4">
-            {displayedPromotionFlows.length === 0 ? (
-              <div className="ui-control-muted px-4 py-4 text-sm text-muted-foreground">
-                还没有推广链路
-              </div>
-            ) : (
-              displayedPromotionFlows.map((flow, index) => (
-                <div
-                  key={
-                    flow.id ?? `${flow.sourceEnvironmentId}-${flow.targetEnvironmentId}-${index}`
-                  }
-                  className="console-surface px-4 py-4"
-                >
-                  {editing ? (
-                    <div className="space-y-3">
-                      {(() => {
-                        const editableFlow = flow as PromotionFlowInput;
-
-                        return (
-                          <>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <div className="space-y-2">
-                                <Label>源环境</Label>
-                                <Select
-                                  value={editableFlow.sourceEnvironmentId}
-                                  onValueChange={(value) =>
-                                    onUpdateFlow(index, {
-                                      ...editableFlow,
-                                      sourceEnvironmentId: value,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="选择源环境" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {persistentEnvironments.map((environment) => (
-                                      <SelectItem key={environment.id} value={environment.id}>
-                                        {environment.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-2">
-                                <Label>目标环境</Label>
-                                <Select
-                                  value={editableFlow.targetEnvironmentId}
-                                  onValueChange={(value) =>
-                                    onUpdateFlow(index, {
-                                      ...editableFlow,
-                                      targetEnvironmentId: value,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="选择目标环境" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {persistentEnvironments.map((environment) => (
-                                      <SelectItem key={environment.id} value={environment.id}>
-                                        {environment.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Label>策略</Label>
-                              <Select
-                                value={editableFlow.strategy}
-                                onValueChange={(value: PromotionFlowInput['strategy']) =>
-                                  onUpdateFlow(index, { ...editableFlow, strategy: value })
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="选择策略" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {promotionStrategyOptions.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-4">
-                              <div className="flex items-center gap-2 text-sm">
-                                <Switch
-                                  checked={editableFlow.requiresApproval}
-                                  onCheckedChange={(checked) =>
-                                    onUpdateFlow(index, {
-                                      ...editableFlow,
-                                      requiresApproval: checked,
-                                    })
-                                  }
-                                />
-                                <span>需要审批</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm">
-                                <Switch
-                                  checked={editableFlow.isActive}
-                                  onCheckedChange={(checked) =>
-                                    onUpdateFlow(index, { ...editableFlow, isActive: checked })
-                                  }
-                                />
-                                <span>启用</span>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="ml-auto rounded-xl text-destructive"
-                                onClick={() => onRemoveFlow(index)}
-                              >
-                                删除
-                              </Button>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary">
-                          {'sourceEnvironmentName' in flow && 'targetEnvironmentName' in flow
-                            ? `${flow.sourceEnvironmentName ?? flow.sourceEnvironmentId ?? '未绑定'} → ${
-                                flow.targetEnvironmentName ?? flow.targetEnvironmentId ?? '未绑定'
-                              }`
-                            : `${flow.sourceEnvironmentId} → ${flow.targetEnvironmentId}`}
-                        </Badge>
-                        <Badge variant="outline">{flow.isActive ? '已启用' : '已停用'}</Badge>
-                        {flow.requiresApproval ? <Badge variant="outline">需要审批</Badge> : null}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {promotionStrategyOptions.find((option) => option.value === flow.strategy)
-                          ?.label ?? flow.strategy}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-
-            {editing && (
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={onAddFlow}>
-                <Plus className="h-4 w-4" />
-                添加链路
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
 }
 
 function buildEnvironmentHeaderMeta(environment: EnvironmentRecord): string {
@@ -1004,19 +495,6 @@ function EnvironmentListCard({
           {meta ? <div className="text-[11px] text-muted-foreground">{meta}</div> : null}
 
           <div className="text-sm text-foreground">{buildEnvironmentListSummary(environment)}</div>
-
-          {environment.primaryDomainUrl ? (
-            <a
-              href={environment.primaryDomainUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex max-w-full items-center text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <span className="truncate">
-                {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
-              </span>
-            </a>
-          ) : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
@@ -1108,10 +586,19 @@ function EnvironmentDetailsPanel({
       <div className="space-y-3">
         {hasStrategyControl || strategyHelper ? (
           <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">发布方式</div>
             <div className="console-card px-4 py-3 text-sm text-foreground">
               <div className="space-y-3">
-                <div>{environment.strategyLabel ?? '未设置发布策略'}</div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      发布策略
+                    </div>
+                    <div className="mt-1">{environment.strategyLabel ?? '未设置'}</div>
+                  </div>
+                  {savingStrategy ? (
+                    <div className="text-xs text-muted-foreground">保存中...</div>
+                  ) : null}
+                </div>
                 {hasStrategyControl ? (
                   <Select
                     value={environment.deploymentStrategy ?? 'rolling'}
@@ -1219,21 +706,11 @@ export function EnvironmentsPageClient({
 }: EnvironmentsPageClientProps) {
   const [environments, setEnvironments] = useState(initialData.environments);
   const [governance, setGovernance] = useState(initialData.governance);
-  const [deliveryControl, setDeliveryControl] = useState(initialData.deliveryControl);
-  const [routingRules, setRoutingRules] = useState<DeliveryRoutingRuleInput[]>(
-    initialData.deliveryControl.routingRules.map(toEditableRoutingRule)
-  );
-  const [promotionFlows, setPromotionFlows] = useState<PromotionFlowInput[]>(
-    initialData.deliveryControl.promotionFlows.map(toEditablePromotionFlow)
-  );
   const [dialogOpen, setDialogOpen] = useState(initialCreateOpen);
   const [dialogLoading, setDialogLoading] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [cleaningExpired, setCleaningExpired] = useState(false);
   const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
-  const [editingDeliveryControl, setEditingDeliveryControl] = useState(false);
-  const [savingDeliveryControl, setSavingDeliveryControl] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1248,10 +725,6 @@ export function EnvironmentsPageClient({
         await fetchProjectEnvironments<EnvironmentsPageClientProps['initialData']>(projectId);
       setEnvironments(data.environments);
       setGovernance(data.governance);
-      setDeliveryControl(data.deliveryControl);
-      setRoutingRules(data.deliveryControl.routingRules.map(toEditableRoutingRule));
-      setPromotionFlows(data.deliveryControl.promotionFlows.map(toEditablePromotionFlow));
-      setEditingDeliveryControl(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : '加载环境失败';
       setFeedback(message);
@@ -1285,32 +758,6 @@ export function EnvironmentsPageClient({
   const focusedEnvironment =
     (initialEnvId ? environments.find((environment) => environment.id === initialEnvId) : null) ??
     null;
-
-  const resetDeliveryControlEditor = useCallback(() => {
-    setRoutingRules(deliveryControl.routingRules.map(toEditableRoutingRule));
-    setPromotionFlows(deliveryControl.promotionFlows.map(toEditablePromotionFlow));
-    setEditingDeliveryControl(false);
-  }, [deliveryControl]);
-
-  const handleSaveDeliveryControl = useCallback(async () => {
-    setSavingDeliveryControl(true);
-
-    try {
-      await updateDeliveryControl({
-        projectId,
-        routingRules,
-        promotionFlows,
-      });
-      await fetchEnvironments();
-      setFeedback('交付链路已更新');
-      setTimeout(() => setFeedback(null), 4000);
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '更新交付链路失败');
-      setTimeout(() => setFeedback(null), 5000);
-    } finally {
-      setSavingDeliveryControl(false);
-    }
-  }, [fetchEnvironments, projectId, promotionFlows, routingRules]);
 
   const handleCreatePreview = async (input: {
     branch: string;
@@ -1399,33 +846,6 @@ export function EnvironmentsPageClient({
     }
   };
 
-  const handleCleanupExpiredPreviews = async () => {
-    if (cleaningExpired) return;
-    setCleaningExpired(true);
-
-    try {
-      const result = await cleanupPreviewEnvironments(projectId);
-      const parts = [];
-
-      if (result.deletedIds.length > 0) {
-        parts.push(`已回收 ${result.deletedIds.length} 个过期预览环境`);
-      }
-
-      if (result.skipped.length > 0) {
-        parts.push(`${result.skipped.length} 个仍被活跃发布阻塞`);
-      }
-
-      setFeedback(parts.join(' · ') || '没有可回收项');
-      await fetchEnvironments();
-      setTimeout(() => setFeedback(null), 5000);
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '执行预览环境治理失败');
-      setTimeout(() => setFeedback(null), 5000);
-    } finally {
-      setCleaningExpired(false);
-    }
-  };
-
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
@@ -1434,7 +854,7 @@ export function EnvironmentsPageClient({
           <div className="flex flex-wrap items-center gap-2">
             {focusMode && focusedEnvironment ? (
               <Button asChild variant="outline">
-                <Link href={`/projects/${projectId}/environments`}>环境列表</Link>
+                <Link href={`/projects/${projectId}/environments`}>返回环境列表</Link>
               </Button>
             ) : null}
             {!focusMode ? (
@@ -1450,10 +870,9 @@ export function EnvironmentsPageClient({
         }
       />
 
-      <EnvironmentSectionNav
-        projectId={projectId}
-        environmentId={focusMode ? focusedEnvironment?.id : null}
-      />
+      {focusMode ? (
+        <EnvironmentSectionNav projectId={projectId} environmentId={focusedEnvironment?.id} />
+      ) : null}
 
       <PreviewEnvironmentDialog
         open={dialogOpen}
@@ -1598,107 +1017,6 @@ export function EnvironmentsPageClient({
                 )}
               </section>
             </>
-          )}
-
-          {(deliveryControl.routingRules.length > 0 ||
-            deliveryControl.promotionFlows.length > 0 ||
-            governance.cleanupPreviews.expiredCount > 0 ||
-            deliveryControl.editable) && (
-            <details className="ui-floating overflow-hidden">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
-                <div className="space-y-1">
-                  <div className="text-sm font-semibold">路由与治理</div>
-                  <div className="text-xs text-muted-foreground">
-                    {[
-                      governance.cleanupPreviews.expiredCount > 0
-                        ? `过期预览 ${governance.cleanupPreviews.expiredCount}`
-                        : null,
-                      deliveryControl.routingRules.length > 0
-                        ? `路由 ${deliveryControl.routingRules.length}`
-                        : null,
-                      deliveryControl.promotionFlows.length > 0
-                        ? `推广 ${deliveryControl.promotionFlows.length}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || '高级操作'}
-                  </div>
-                </div>
-              </summary>
-
-              <div className="console-divider-top space-y-6 px-4 py-4">
-                {(governance.cleanupPreviews.expiredCount > 0 ||
-                  !governance.manageEnvVars.allowed) && (
-                  <div className="ui-control-muted rounded-[20px] px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                      <span>
-                        {governance.cleanupPreviews.expiredCount > 0
-                          ? governance.cleanupPreviews.summary
-                          : governance.manageEnvVars.summary}
-                      </span>
-                      {governance.cleanupPreviews.expiredCount > 0 ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="ml-auto"
-                          onClick={handleCleanupExpiredPreviews}
-                          disabled={!governance.cleanupPreviews.allowed || cleaningExpired}
-                        >
-                          {cleaningExpired ? '治理中...' : '治理预览'}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-
-                <DeliveryControlPanel
-                  deliveryControl={deliveryControl}
-                  routingRules={routingRules}
-                  promotionFlows={promotionFlows}
-                  editing={editingDeliveryControl}
-                  saving={savingDeliveryControl}
-                  onToggleEditing={() => setEditingDeliveryControl(true)}
-                  onReset={resetDeliveryControlEditor}
-                  onSave={handleSaveDeliveryControl}
-                  onAddRule={() =>
-                    setRoutingRules((current) => [
-                      ...current,
-                      createRuleDraft(
-                        deliveryControl.environments.filter(
-                          (environment) => environment.deliveryMode !== 'promote_only'
-                        )
-                      ),
-                    ])
-                  }
-                  onUpdateRule={(index, rule) =>
-                    setRoutingRules((current) =>
-                      current.map((item, itemIndex) => (itemIndex === index ? rule : item))
-                    )
-                  }
-                  onRemoveRule={(index) =>
-                    setRoutingRules((current) =>
-                      current.filter((_, itemIndex) => itemIndex !== index)
-                    )
-                  }
-                  onAddFlow={() =>
-                    setPromotionFlows((current) => [
-                      ...current,
-                      createFlowDraft(deliveryControl.environments),
-                    ])
-                  }
-                  onUpdateFlow={(index, flow) =>
-                    setPromotionFlows((current) =>
-                      current.map((item, itemIndex) => (itemIndex === index ? flow : item))
-                    )
-                  }
-                  onRemoveFlow={(index) =>
-                    setPromotionFlows((current) =>
-                      current.filter((_, itemIndex) => itemIndex !== index)
-                    )
-                  }
-                />
-              </div>
-            </details>
           )}
         </div>
       )}

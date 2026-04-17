@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const environmentNav = [
@@ -21,6 +21,8 @@ export function EnvironmentSectionNav({
   environmentId?: string | null;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const queryEnvironmentId = searchParams.get('env');
 
   return (
     <div className="ui-control-muted rounded-[24px] px-3 py-3 lg:hidden">
@@ -43,9 +45,11 @@ export function EnvironmentSectionNav({
                   ? `/projects/${projectId}/environments/${environmentId}`
                   : `/projects/${projectId}/environments`)
               : item.href === '/delivery'
-                ? pathname === `/projects/${projectId}/delivery`
+                ? pathname === `/projects/${projectId}/delivery` &&
+                  queryEnvironmentId === environmentId
                 : item.href === '/schema'
-                  ? pathname === `/projects/${projectId}/schema`
+                  ? pathname === `/projects/${projectId}/schema` &&
+                    queryEnvironmentId === environmentId
                   : pathname === href || pathname.startsWith(`${href}/`);
 
           return (

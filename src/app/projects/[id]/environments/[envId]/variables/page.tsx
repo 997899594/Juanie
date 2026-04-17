@@ -29,10 +29,7 @@ export default async function ProjectEnvironmentVariablesPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="变量"
-        description={`${environment.name} 的直接配置、实际生效变量与服务级覆盖`}
-      />
+      <PageHeader title="变量" description={environment.name} />
       <EnvironmentSectionNav projectId={id} environmentId={envId} />
       <EnvVarManager
         projectId={id}

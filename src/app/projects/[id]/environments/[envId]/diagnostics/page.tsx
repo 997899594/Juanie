@@ -29,7 +29,7 @@ export default async function ProjectEnvironmentDiagnosticsPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="诊断" description={`${environment.name} 的资源与诊断视图`} />
+      <PageHeader title="诊断" description={environment.name} />
       <EnvironmentSectionNav projectId={id} environmentId={envId} />
       <EnvironmentResourcePanel
         projectId={id}

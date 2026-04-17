@@ -749,11 +749,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   <div className="mt-1 text-sm text-muted-foreground">
                     {selectedTeam?.importSummary ?? '连接现有 Git 仓库'}
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline">保留现有代码</Badge>
-                    <Badge variant="outline">自动识别服务</Badge>
-                    <Badge variant="outline">接入发布链路</Badge>
-                  </div>
                 </button>
 
                 <button
@@ -764,11 +759,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   <div className="font-medium">新建仓库</div>
                   <div className="mt-1 text-sm text-muted-foreground">
                     {selectedTeam?.createSummary ?? '从平台模板直接创建一个新仓库'}
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <Badge variant="outline">仓库自动创建</Badge>
-                    <Badge variant="outline">默认交付链路</Badge>
-                    <Badge variant="outline">资源档位预置</Badge>
                   </div>
                 </button>
               </div>
@@ -957,7 +947,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             ) : null}
 
             <div>
-              <h2 className="mb-1 text-lg font-semibold">把交付参数一次配齐</h2>
+              <h2 className="mb-1 text-lg font-semibold">把发布参数一次配齐</h2>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -1023,7 +1013,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </div>
 
               <div className="space-y-2">
-                <Label>交付节奏</Label>
+                <Label>发布节奏</Label>
                 <div className="ui-control flex items-center justify-between gap-3 px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -1246,7 +1236,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
               <div className="ui-floating px-4 py-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                  交付策略
+                  发布策略
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Badge variant={formData.autoDeploy ? 'default' : 'secondary'}>
@@ -1273,16 +1263,8 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               </div>
             </div>
 
-            {selectedTeam && (
-              <div className="px-1 text-sm text-muted-foreground">
-                {formData.mode === 'import'
-                  ? selectedTeam.importSummary
-                  : selectedTeam.createSummary}
-              </div>
-            )}
-
             <div className="ui-control p-4">
-              <div className="text-sm font-medium">最终会创建这些能力</div>
+              <div className="text-sm font-medium">最终创建</div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <div className="ui-control-muted px-4 py-3">
                   <div className="text-xs text-muted-foreground">启用服务</div>
@@ -1293,7 +1275,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   <div className="mt-1 text-sm font-medium">{formData.databases.length} 个</div>
                 </div>
                 <div className="ui-control-muted px-4 py-3">
-                  <div className="text-xs text-muted-foreground">默认链路</div>
+                  <div className="text-xs text-muted-foreground">环境链路</div>
                   <div className="mt-1 text-sm font-medium">{environmentTemplateLabel}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {deploymentStrategyLabel} · {previewDatabaseStrategyLabel}
@@ -1308,11 +1290,11 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 onClick={() => setReviewServicesOpen((current) => !current)}
                 className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
               >
-                <div>
-                  <h3 className="text-sm font-medium">高级调整 · 服务与资源</h3>
-                </div>
+                <div className="text-sm font-medium">服务设置</div>
                 <div className="flex items-center gap-3">
-                  <Badge variant="outline">{activeServices.length} 个启用中</Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {activeServices.length} 个启用
+                  </span>
                   {reviewServicesOpen ? (
                     <ChevronUp className="h-4 w-4 text-muted-foreground" />
                   ) : (
@@ -1361,7 +1343,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                                   <div>
                                     <div className="text-sm font-medium">公网入口</div>
                                     <div className="mt-1 text-xs text-muted-foreground">
-                                      关闭后服务仍会部署，但不会作为公开入口暴露。
+                                      决定是否对外暴露。
                                     </div>
                                   </div>
                                   <Switch
@@ -1530,14 +1512,11 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 onClick={() => setReviewDatabasesOpen((current) => !current)}
                 className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
               >
-                <div>
-                  <h3 className="text-sm font-medium">高级调整 · 数据库</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    需要托管数据库或外部连接时再展开。
-                  </p>
-                </div>
+                <div className="text-sm font-medium">数据库设置</div>
                 <div className="flex items-center gap-3">
-                  <Badge variant="outline">{formData.databases.length} 个</Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {formData.databases.length} 个
+                  </span>
                   {reviewDatabasesOpen ? (
                     <ChevronUp className="h-4 w-4 text-muted-foreground" />
                   ) : (

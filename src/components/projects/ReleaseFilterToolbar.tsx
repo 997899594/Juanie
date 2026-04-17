@@ -4,7 +4,10 @@ import { AlertTriangle, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ReleaseFilterToolbarProps {
-  environmentOptions: string[];
+  environmentOptions: Array<{
+    value: string;
+    label: string;
+  }>;
   filter: string;
   riskFilter: 'all' | 'attention' | 'approval' | 'failed';
   onChange: (next: { env?: string; risk?: 'all' | 'attention' | 'approval' | 'failed' }) => void;
@@ -23,13 +26,13 @@ export function ReleaseFilterToolbar({
           <Filter className="h-4 w-4 text-muted-foreground" />
           {environmentOptions.map((environment) => (
             <Button
-              key={environment}
-              variant={filter === environment ? 'default' : 'outline'}
+              key={environment.value}
+              variant={filter === environment.value ? 'default' : 'outline'}
               size="sm"
-              onClick={() => onChange({ env: environment })}
+              onClick={() => onChange({ env: environment.value })}
               className="capitalize"
             >
-              {environment}
+              {environment.label}
             </Button>
           ))}
         </div>
