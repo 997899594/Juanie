@@ -1,12 +1,29 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
 import { db } from '@/lib/db';
-import { deploymentLogs, deployments } from '@/lib/db/schema';
+import { deployments } from '@/lib/db/schema';
+import {
+  createDeploymentLogRealtimeSubscriber,
+  loadDeploymentRealtimeSummary,
+  loadScopedDeploymentRealtimeLogs,
+} from '@/lib/realtime/deployments';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+function isTerminalDeploymentStatus(status: string | null | undefined): boolean {
+  return (
+    status === 'running' ||
+    status === 'awaiting_rollout' ||
+    status === 'verification_failed' ||
+    status === 'failed' ||
+    status === 'migration_failed' ||
+    status === 'rolled_back' ||
+    status === 'canceled'
+  );
+}
 
 export async function GET(
   request: NextRequest,
@@ -29,6 +46,11 @@ export async function GET(
       async start(controller) {
         const encoder = new TextEncoder();
         let closed = false;
+        let unsubscribe: (() => Promise<void>) | null = null;
+        let pollingTimer: ReturnType<typeof setInterval> | null = null;
+        let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+        let emitLock = Promise.resolve();
+        let sentCount = 0;
 
         const sendEvent = (data: object) => {
           if (closed) return;
@@ -38,63 +60,129 @@ export async function GET(
         const close = () => {
           if (closed) return;
           closed = true;
+          if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
+          }
+          if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+          }
           controller.close();
         };
 
-        let sentCount = 0;
-        let done = false;
-        const onAbort = () => {
-          done = true;
+        const runSerialized = (task: () => Promise<void>) => {
+          emitLock = emitLock.then(task).catch((error) => {
+            console.error('Deployment log stream task failed:', error);
+          });
+        };
+
+        const cleanup = async () => {
+          request.signal.removeEventListener('abort', onAbort);
+          if (unsubscribe) {
+            await unsubscribe();
+            unsubscribe = null;
+          }
           close();
+        };
+
+        const onAbort = () => {
+          void cleanup();
         };
         request.signal.addEventListener('abort', onAbort);
 
-        const poll = async () => {
-          try {
-            while (!done) {
-              try {
-                const allLogs = await db.query.deploymentLogs.findMany({
-                  where: eq(deploymentLogs.deploymentId, depId),
-                  orderBy: [asc(deploymentLogs.createdAt)],
-                });
+        const emitSnapshot = async () => {
+          const logs = await loadScopedDeploymentRealtimeLogs({
+            projectId: id,
+            deploymentId: depId,
+          });
+          sentCount = logs.length;
+          sendEvent({ type: 'logs', mode: 'replace', logs });
 
-                if (allLogs.length > sentCount) {
-                  const newLogs = allLogs.slice(sentCount);
-                  sentCount = allLogs.length;
-                  sendEvent({ type: 'logs', logs: newLogs });
-                }
+          const summary = await loadDeploymentRealtimeSummary(depId);
+          if (isTerminalDeploymentStatus(summary?.status)) {
+            sendEvent({ type: 'complete', status: summary?.status });
+            return false;
+          }
 
-                const current = await db.query.deployments.findFirst({
-                  where: eq(deployments.id, depId),
-                });
+          return true;
+        };
 
-                if (
-                  current?.status === 'running' ||
-                  current?.status === 'awaiting_rollout' ||
-                  current?.status === 'verification_failed' ||
-                  current?.status === 'failed' ||
-                  current?.status === 'migration_failed' ||
-                  current?.status === 'rolled_back'
-                ) {
-                  sendEvent({ type: 'complete', status: current.status });
-                  done = true;
-                  return;
-                }
+        const startPollingFallback = () => {
+          pollingTimer = setInterval(() => {
+            runSerialized(async () => {
+              const logs = await loadScopedDeploymentRealtimeLogs({
+                projectId: id,
+                deploymentId: depId,
+              });
 
-                await new Promise((r) => setTimeout(r, 1000));
-              } catch (err) {
-                console.error('Log stream poll error:', err);
-                sendEvent({ type: 'error', message: 'Failed to fetch logs' });
-                done = true;
+              if (logs.length > sentCount) {
+                const nextLogs = logs.slice(sentCount);
+                sentCount = logs.length;
+                sendEvent({ type: 'logs', mode: 'append', logs: nextLogs });
               }
+
+              const summary = await loadDeploymentRealtimeSummary(depId);
+              if (isTerminalDeploymentStatus(summary?.status)) {
+                sendEvent({ type: 'complete', status: summary?.status });
+                await cleanup();
+              }
+            });
+          }, 1000);
+        };
+
+        const start = async () => {
+          try {
+            sendEvent({ type: 'connected', timestamp: Date.now() });
+
+            const keepOpen = await emitSnapshot();
+            if (!keepOpen) {
+              await cleanup();
+              return;
             }
-          } finally {
-            request.signal.removeEventListener('abort', onAbort);
-            close();
+
+            heartbeatTimer = setInterval(() => {
+              sendEvent({ type: 'ping', timestamp: Date.now() });
+            }, 15000);
+
+            try {
+              unsubscribe = await createDeploymentLogRealtimeSubscriber({
+                deploymentId: depId,
+                onEvent: async (event) => {
+                  runSerialized(async () => {
+                    if (event.kind === 'deployment_log_appended') {
+                      sentCount += 1;
+                      sendEvent({
+                        type: 'logs',
+                        mode: 'append',
+                        logs: [event.log],
+                      });
+                      return;
+                    }
+
+                    if (isTerminalDeploymentStatus(event.status)) {
+                      sendEvent({ type: 'complete', status: event.status });
+                      await cleanup();
+                    }
+                  });
+                },
+              });
+
+              if (!unsubscribe) {
+                startPollingFallback();
+              }
+            } catch (error) {
+              console.error('Failed to subscribe to deployment log realtime events:', error);
+              startPollingFallback();
+            }
+          } catch (err) {
+            console.error('Log stream failed:', err);
+            sendEvent({ type: 'error', message: 'Failed to fetch logs' });
+            await cleanup();
           }
         };
 
-        void poll();
+        void start();
       },
     });
 

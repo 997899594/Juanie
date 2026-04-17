@@ -9,6 +9,11 @@ import {
 } from '@/lib/db/schema';
 import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
 import { addDeploymentJob, addMigrationJob } from '@/lib/queue';
+import { publishDeploymentRealtimeSnapshot } from '@/lib/realtime/deployments';
+import {
+  publishReleaseRealtimeSnapshot,
+  publishReleaseRealtimeSnapshots,
+} from '@/lib/realtime/releases';
 import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
 import { syncReleaseGitTrackingSafely } from '@/lib/releases/environment-tracking';
 import { persistReleaseRecapById } from '@/lib/releases/recap-service';
@@ -84,6 +89,8 @@ export async function updateReleaseStatus(
       updatedAt: new Date(),
     })
     .where(eq(releases.id, releaseId));
+
+  await publishReleaseRealtimeSnapshot(releaseId);
 }
 
 export async function persistReleaseRecapSafely(releaseId: string) {
@@ -138,6 +145,8 @@ async function cancelSupersededPendingReleases(target: OrchestratedRelease) {
     .where(
       and(inArray(releases.id, candidateIds), inArray(releases.status, supersedableReleaseStatuses))
     );
+
+  await publishReleaseRealtimeSnapshots(candidateIds);
 
   for (const candidateId of candidateIds) {
     await persistReleaseRecapSafely(candidateId);
@@ -294,6 +303,10 @@ export async function continueReleaseFromDeploymentStage(
       )[0];
 
     await cancelSupersededDeployments(deployment);
+
+    if (!existingDeployment) {
+      await publishDeploymentRealtimeSnapshot(deployment.id);
+    }
 
     if (deployment.status === 'queued') {
       await addDeploymentJob(deployment.id, release.projectId, release.environmentId);

@@ -1,6 +1,11 @@
 import { and, eq, gt, inArray, isNull, lt, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { type DeploymentStatus, deploymentLogs, deployments } from '@/lib/db/schema';
+import { type DeploymentStatus, deployments } from '@/lib/db/schema';
+import {
+  appendDeploymentRealtimeLogs,
+  publishDeploymentRealtimeSnapshot,
+  publishDeploymentsRealtimeSnapshots,
+} from '@/lib/realtime/deployments';
 
 type DeploymentScope = Pick<
   typeof deployments.$inferSelect,
@@ -30,12 +35,11 @@ async function writeCancellationLogs(deploymentIds: string[], message: string): 
     return;
   }
 
-  await db
-    .insert(deploymentLogs)
-    .values(deploymentIds.map((deploymentId) => ({ deploymentId, level: 'warn', message })))
-    .catch(() => {
-      // Ignore log write failures so cancellation is never blocked by diagnostics.
-    });
+  await appendDeploymentRealtimeLogs(
+    deploymentIds.map((deploymentId) => ({ deploymentId, level: 'warn' as const, message }))
+  ).catch(() => {
+    // Ignore log write failures so cancellation is never blocked by diagnostics.
+  });
 }
 
 async function markDeploymentCanceled(
@@ -56,6 +60,7 @@ async function markDeploymentCanceled(
       )
     );
 
+  await publishDeploymentRealtimeSnapshot(deploymentId);
   await writeCancellationLogs([deploymentId], logMessage);
 }
 
@@ -103,6 +108,7 @@ export async function cancelSupersededDeployments(target: DeploymentScope): Prom
       )
     );
 
+  await publishDeploymentsRealtimeSnapshots(candidateIds);
   await writeCancellationLogs(candidateIds, logMessage);
 
   return candidateIds;

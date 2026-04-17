@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
 import { getIsConnected } from '@/lib/k8s';
+import { updateDeploymentRealtimeState } from '@/lib/realtime/deployments';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { SupersededDeploymentError } from '@/lib/releases/deployment-coordination';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
@@ -71,25 +72,19 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
 
     if (error instanceof SupersededDeploymentError) {
       await logDeployment(deployment.id, message, 'warn');
-      await db
-        .update(deployments)
-        .set({
-          status: 'canceled',
-          errorMessage: message,
-        })
-        .where(eq(deployments.id, deployment.id));
+      await updateDeploymentRealtimeState(deployment.id, {
+        status: 'canceled',
+        errorMessage: message,
+      });
       return { success: false, terminal: true, canceled: true };
     }
 
     const status = classifyDeploymentFailureStatus(message);
     await logDeployment(deployment.id, `Deployment failed: ${message}`, 'error');
-    await db
-      .update(deployments)
-      .set({
-        status,
-        errorMessage: message,
-      })
-      .where(eq(deployments.id, deployment.id));
+    await updateDeploymentRealtimeState(deployment.id, {
+      status,
+      errorMessage: message,
+    });
 
     await cleanupFailedCandidateResources(deployment.id).catch(async (cleanupError) => {
       const cleanupMessage =

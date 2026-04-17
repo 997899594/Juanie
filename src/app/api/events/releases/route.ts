@@ -1,10 +1,18 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { NextRequest } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
-import { db } from '@/lib/db';
-import { releases } from '@/lib/db/schema';
+import {
+  createReleaseRealtimeSubscriber,
+  loadLatestProjectReleaseRealtimeRecord,
+  loadReleaseRealtimeRecord,
+  type ReleaseRealtimeRecord,
+} from '@/lib/realtime/releases';
+import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 
-export async function GET(request: Request) {
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
   try {
     const session = await requireSession();
     const url = new URL(request.url);
@@ -20,76 +28,146 @@ export async function GET(request: Request) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        let closed = false;
+        let unsubscribe: (() => Promise<void>) | null = null;
+        let pollingTimer: ReturnType<typeof setInterval> | null = null;
+        let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+        let emitLock = Promise.resolve();
+        let lastStateKey: string | null = null;
+
         const sendEvent = (data: object) => {
+          if (closed) {
+            return;
+          }
+
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
         sendEvent({ type: 'connected', timestamp: Date.now() });
 
-        let lastReleaseState: string | null = null;
-        let isActive = true;
-
-        const checkReleases = async () => {
-          if (!isActive) return;
-
-          const latestRelease = releaseId
-            ? await db.query.releases.findFirst({
-                where: and(eq(releases.projectId, projectId), eq(releases.id, releaseId)),
-                with: {
-                  environment: true,
-                  artifacts: {
-                    with: {
-                      service: true,
-                    },
-                  },
-                },
-              })
-            : await db.query.releases.findFirst({
-                where: eq(releases.projectId, projectId),
-                orderBy: [desc(releases.createdAt)],
-                with: {
-                  environment: true,
-                  artifacts: {
-                    with: {
-                      service: true,
-                    },
-                  },
-                },
-              });
-
-          if (!latestRelease) {
+        const close = () => {
+          if (closed) {
             return;
           }
 
-          const nextState = [
-            latestRelease.id,
-            latestRelease.status,
-            latestRelease.sourceCommitSha ?? '',
-            latestRelease.updatedAt.toISOString(),
-            latestRelease.recap && typeof latestRelease.recap === 'object'
-              ? String((latestRelease.recap as { generatedAt?: string }).generatedAt ?? '')
-              : '',
-          ].join(':');
+          closed = true;
 
-          if (lastReleaseState === nextState) {
-            return;
+          if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
           }
 
-          lastReleaseState = nextState;
-          sendEvent({
-            type: 'release',
-            data: latestRelease,
+          if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+          }
+
+          controller.close();
+        };
+
+        const runSerialized = (task: () => Promise<void>) => {
+          emitLock = emitLock.then(task).catch((error) => {
+            console.error('Release stream task failed:', error);
           });
         };
 
-        await checkReleases();
-        const interval = setInterval(checkReleases, 3000);
+        const emitRelease = async (release: ReleaseRealtimeRecord | null) => {
+          if (!release) {
+            return;
+          }
 
-        request.signal.addEventListener('abort', () => {
-          isActive = false;
-          clearInterval(interval);
-          controller.close();
-        });
+          if (releaseId && release.id !== releaseId) {
+            return;
+          }
+
+          const nextStateKey = buildReleaseEventStateKey(release);
+          if (!nextStateKey || nextStateKey === lastStateKey) {
+            return;
+          }
+
+          lastStateKey = nextStateKey;
+          sendEvent({
+            type: 'release',
+            data: release,
+          });
+        };
+
+        const loadCurrentRelease = async () => {
+          if (releaseId) {
+            const payload = await loadReleaseRealtimeRecord(releaseId);
+            if (!payload || payload.projectId !== projectId) {
+              return null;
+            }
+
+            return payload.release;
+          }
+
+          const payload = await loadLatestProjectReleaseRealtimeRecord(projectId);
+          return payload?.release ?? null;
+        };
+
+        const emitCurrentRelease = async () => {
+          await emitRelease(await loadCurrentRelease());
+        };
+
+        const cleanup = async () => {
+          request.signal.removeEventListener('abort', onAbort);
+          if (unsubscribe) {
+            await unsubscribe();
+            unsubscribe = null;
+          }
+          close();
+        };
+
+        const onAbort = () => {
+          void cleanup();
+        };
+        request.signal.addEventListener('abort', onAbort);
+
+        const startPollingFallback = () => {
+          pollingTimer = setInterval(() => {
+            runSerialized(async () => {
+              await emitCurrentRelease();
+            });
+          }, 3000);
+        };
+
+        const start = async () => {
+          try {
+            await emitCurrentRelease();
+
+            heartbeatTimer = setInterval(() => {
+              sendEvent({ type: 'ping', timestamp: Date.now() });
+            }, 15000);
+
+            try {
+              unsubscribe = await createReleaseRealtimeSubscriber({
+                projectId,
+                onEvent: async (event) => {
+                  runSerialized(async () => {
+                    await emitRelease(event.release);
+                  });
+                },
+              });
+
+              if (!unsubscribe) {
+                startPollingFallback();
+              }
+            } catch (error) {
+              console.error('Failed to subscribe to release realtime events:', error);
+              startPollingFallback();
+            }
+          } catch (error) {
+            console.error('Release stream failed:', error);
+            sendEvent({
+              type: 'error',
+              message: '读取发布进度失败',
+            });
+            await cleanup();
+          }
+        };
+
+        void start();
       },
     });
 

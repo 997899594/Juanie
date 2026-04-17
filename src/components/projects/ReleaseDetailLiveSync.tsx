@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
 
@@ -19,7 +19,9 @@ export function ReleaseDetailLiveSync({
   initialStateKey,
 }: ReleaseDetailLiveSyncProps) {
   const router = useRouter();
+  const [streamToken, setStreamToken] = useState(0);
   const lastStateRef = useRef<string | null>(initialStateKey);
+  const reconnectTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     lastStateRef.current = initialStateKey;
@@ -30,9 +32,28 @@ export function ReleaseDetailLiveSync({
       return;
     }
 
+    let closed = false;
     const eventSource = new EventSource(
-      `/api/events/releases?projectId=${projectId}&releaseId=${releaseId}`
+      `/api/events/releases?projectId=${projectId}&releaseId=${releaseId}&token=${streamToken}`
     );
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      clearReconnectTimer();
+      reconnectTimerRef.current = window.setTimeout(() => {
+        setStreamToken((value) => value + 1);
+      }, 1500);
+    };
+
+    eventSource.onopen = () => {
+      clearReconnectTimer();
+    };
 
     eventSource.onmessage = (event) => {
       try {
@@ -62,6 +83,7 @@ export function ReleaseDetailLiveSync({
         router.refresh();
 
         if (!isActiveReleaseStatus(data.data.status)) {
+          clearReconnectTimer();
           eventSource.close();
         }
       } catch (error) {
@@ -69,10 +91,21 @@ export function ReleaseDetailLiveSync({
       }
     };
 
+    eventSource.onerror = () => {
+      eventSource.close();
+      if (closed) {
+        return;
+      }
+
+      scheduleReconnect();
+    };
+
     return () => {
+      closed = true;
+      clearReconnectTimer();
       eventSource.close();
     };
-  }, [initialStatus, projectId, releaseId, router]);
+  }, [initialStatus, projectId, releaseId, router, streamToken]);
 
   return null;
 }

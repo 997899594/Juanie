@@ -86,11 +86,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           return shouldKeepProjectInitStreamOpen(overview);
         };
 
-        const onAbort = () => {
-          close();
-        };
-        request.signal.addEventListener('abort', onAbort);
-
         const cleanup = async () => {
           request.signal.removeEventListener('abort', onAbort);
           if (unsubscribe) {
@@ -99,6 +94,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           }
           close();
         };
+
+        const onAbort = () => {
+          void cleanup();
+        };
+        request.signal.addEventListener('abort', onAbort);
 
         const startPollingFallback = () => {
           pollingTimer = setInterval(() => {

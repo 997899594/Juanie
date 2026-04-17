@@ -16,6 +16,7 @@ import {
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
+import { publishReleaseRealtimeSnapshot } from '@/lib/realtime/releases';
 import { assertReleaseEntryPointAllowed, type ReleaseEntryPoint } from '@/lib/releases/admission';
 import { prewarmReleaseMigrationPreviewCache } from '@/lib/releases/migration-preview-prewarm';
 import { buildDefaultReleaseSummary } from '@/lib/releases/presentation';
@@ -206,6 +207,7 @@ async function persistRelease(
   }
 
   await addReleaseJob(release.id);
+  await publishReleaseRealtimeSnapshot(release.id);
 
   void (async () => {
     try {

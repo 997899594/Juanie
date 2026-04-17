@@ -1,7 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { deploymentLogs, deployments, environments, projects, services } from '@/lib/db/schema';
+import { deployments, environments, projects, services } from '@/lib/db/schema';
 import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
+import {
+  appendDeploymentRealtimeLogs,
+  updateDeploymentRealtimeState,
+} from '@/lib/realtime/deployments';
 import {
   completeReleaseAfterRolloutIfReady,
   persistReleaseRecapSafely,
@@ -27,11 +31,13 @@ function getStrategyLabel(strategy: ProgressiveDeploymentStrategy): string {
 }
 
 async function appendDeploymentLog(deploymentId: string, message: string) {
-  await db.insert(deploymentLogs).values({
-    deploymentId,
-    message,
-    level: 'info',
-  });
+  await appendDeploymentRealtimeLogs([
+    {
+      deploymentId,
+      message,
+      level: 'info',
+    },
+  ]);
 }
 
 async function markDeploymentRolloutFailed(
@@ -39,19 +45,18 @@ async function markDeploymentRolloutFailed(
   message: string,
   status: 'verification_failed' | 'failed' = 'verification_failed'
 ) {
-  await db
-    .update(deployments)
-    .set({
-      status,
-      errorMessage: message,
-    })
-    .where(eq(deployments.id, deploymentId));
-
-  await db.insert(deploymentLogs).values({
-    deploymentId,
-    message: `Rollout failed: ${message}`,
-    level: 'error',
+  await updateDeploymentRealtimeState(deploymentId, {
+    status,
+    errorMessage: message,
   });
+
+  await appendDeploymentRealtimeLogs([
+    {
+      deploymentId,
+      message: `Rollout failed: ${message}`,
+      level: 'error',
+    },
+  ]);
 }
 
 export async function buildDeploymentRolloutPlan(input: {
@@ -284,14 +289,11 @@ export async function finalizeDeploymentRollout(input: {
       onLog: (message) => appendDeploymentLog(deployment.id, message),
     });
 
-    await db
-      .update(deployments)
-      .set({
-        status: 'running',
-        errorMessage: null,
-        deployedAt: new Date(),
-      })
-      .where(eq(deployments.id, deployment.id));
+    await updateDeploymentRealtimeState(deployment.id, {
+      status: 'running',
+      errorMessage: null,
+      deployedAt: new Date(),
+    });
 
     if (deployment.releaseId) {
       await completeReleaseAfterRolloutIfReady(deployment.releaseId);

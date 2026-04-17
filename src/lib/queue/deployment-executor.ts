@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { deploymentLogs, deployments, environments, projects, releases } from '@/lib/db/schema';
+import { deployments, environments, projects, releases } from '@/lib/db/schema';
 import { buildDeployImageReference } from '@/lib/deploy-images';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
 import {
@@ -14,6 +14,10 @@ import {
 import { getEnvironmentKind } from '@/lib/environments/model';
 import { ensureEnvironmentScaffold } from '@/lib/environments/service';
 import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
+import {
+  appendDeploymentRealtimeLogs,
+  updateDeploymentRealtimeState,
+} from '@/lib/realtime/deployments';
 import { assertDeploymentIsCurrent } from '@/lib/releases/deployment-coordination';
 import {
   buildCandidateDeploymentName,
@@ -38,12 +42,9 @@ export async function logDeployment(
   level: 'info' | 'warn' | 'error' = 'info'
 ) {
   console.log(`[${level.toUpperCase()}] ${message}`);
-  await db
-    .insert(deploymentLogs)
-    .values({ deploymentId, message, level })
-    .catch(() => {
-      // Swallow DB errors so log failures never break the deployment.
-    });
+  await appendDeploymentRealtimeLogs([{ deploymentId, message, level }]).catch(() => {
+    // Swallow DB errors so log failures never break the deployment.
+  });
 }
 
 export async function executeDeploymentWorkload(
@@ -102,15 +103,17 @@ export async function executeDeploymentWorkload(
   });
 
   await logDeployment(deploymentId, 'Starting deployment process');
-  await db
-    .update(deployments)
-    .set({ status: 'building', errorMessage: null })
-    .where(eq(deployments.id, deploymentId));
+  await updateDeploymentRealtimeState(deploymentId, {
+    status: 'building',
+    errorMessage: null,
+  });
 
   await logDeployment(deploymentId, 'Build phase started — resolving image');
   await progress?.(20);
 
-  await db.update(deployments).set({ status: 'deploying' }).where(eq(deployments.id, deploymentId));
+  await updateDeploymentRealtimeState(deploymentId, {
+    status: 'deploying',
+  });
 
   await logDeployment(deploymentId, 'Deploying to Kubernetes');
   await progress?.(50);
@@ -298,14 +301,11 @@ export async function executeDeploymentWorkload(
 
   await assertDeploymentIsCurrent(deploymentId);
 
-  await db
-    .update(deployments)
-    .set({
-      status: awaitingRollout ? 'awaiting_rollout' : 'running',
-      errorMessage: null,
-      deployedAt: new Date(),
-    })
-    .where(eq(deployments.id, deploymentId));
+  await updateDeploymentRealtimeState(deploymentId, {
+    status: awaitingRollout ? 'awaiting_rollout' : 'running',
+    errorMessage: null,
+    deployedAt: new Date(),
+  });
 
   await logDeployment(
     deploymentId,

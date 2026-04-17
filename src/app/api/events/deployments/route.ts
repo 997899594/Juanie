@@ -1,10 +1,30 @@
-import { desc, eq } from 'drizzle-orm';
+import { NextRequest } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
-import { db } from '@/lib/db';
-import { deployments, environments, services } from '@/lib/db/schema';
+import {
+  createDeploymentRealtimeSubscriber,
+  type DeploymentRealtimeSummary,
+  loadLatestProjectDeploymentRealtimeSummary,
+} from '@/lib/realtime/deployments';
 
-export async function GET(request: Request) {
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+function buildDeploymentStateKey(deployment: DeploymentRealtimeSummary | null): string | null {
+  if (!deployment) {
+    return null;
+  }
+
+  return [
+    deployment.id,
+    deployment.status,
+    deployment.commitSha ?? '',
+    deployment.deployedAt ?? '',
+    deployment.createdAt,
+  ].join(':');
+}
+
+export async function GET(request: NextRequest) {
   try {
     const session = await requireSession();
     const url = new URL(request.url);
@@ -19,74 +39,124 @@ export async function GET(request: Request) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
+        let closed = false;
+        let unsubscribe: (() => Promise<void>) | null = null;
+        let pollingTimer: ReturnType<typeof setInterval> | null = null;
+        let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+        let emitLock = Promise.resolve();
+        let lastStateKey: string | null = null;
+
         const sendEvent = (data: object) => {
+          if (closed) {
+            return;
+          }
+
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
         };
 
         sendEvent({ type: 'connected', timestamp: Date.now() });
 
-        let lastDeploymentState: string | null = null;
-        let isActive = true;
+        const close = () => {
+          if (closed) {
+            return;
+          }
 
-        const checkDeployments = async () => {
-          if (!isActive) return;
+          closed = true;
 
-          const recentDeployments = await db
-            .select({
-              id: deployments.id,
-              status: deployments.status,
-              version: deployments.version,
-              commitSha: deployments.commitSha,
-              environmentId: deployments.environmentId,
-              serviceId: deployments.serviceId,
-              createdAt: deployments.createdAt,
-              deployedAt: deployments.deployedAt,
-            })
-            .from(deployments)
-            .where(eq(deployments.projectId, projectId))
-            .orderBy(desc(deployments.createdAt))
-            .limit(1);
+          if (pollingTimer) {
+            clearInterval(pollingTimer);
+            pollingTimer = null;
+          }
 
-          if (recentDeployments.length > 0) {
-            const latest = recentDeployments[0];
-            const nextState = [
-              latest.id,
-              latest.status,
-              latest.commitSha,
-              latest.deployedAt?.toISOString() ?? '',
-            ].join(':');
+          if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+          }
 
-            if (lastDeploymentState !== nextState) {
-              lastDeploymentState = nextState;
+          controller.close();
+        };
 
-              const env = await db.query.environments.findFirst({
-                where: eq(environments.id, latest.environmentId),
-              });
-              const service = latest.serviceId
-                ? await db.query.services.findFirst({
-                    where: eq(services.id, latest.serviceId),
-                  })
-                : null;
+        const runSerialized = (task: () => Promise<void>) => {
+          emitLock = emitLock.then(task).catch((error) => {
+            console.error('Deployment stream task failed:', error);
+          });
+        };
 
-              sendEvent({
-                type: 'deployment',
-                data: {
-                  ...latest,
-                  environmentName: env?.name,
-                  serviceName: service?.name ?? null,
+        const emitDeployment = async (deployment: DeploymentRealtimeSummary | null) => {
+          const nextStateKey = buildDeploymentStateKey(deployment);
+          if (!nextStateKey || nextStateKey === lastStateKey) {
+            return;
+          }
+
+          lastStateKey = nextStateKey;
+          sendEvent({
+            type: 'deployment',
+            data: deployment,
+          });
+        };
+
+        const emitCurrentDeployment = async () => {
+          await emitDeployment(await loadLatestProjectDeploymentRealtimeSummary(projectId));
+        };
+
+        const cleanup = async () => {
+          request.signal.removeEventListener('abort', onAbort);
+          if (unsubscribe) {
+            await unsubscribe();
+            unsubscribe = null;
+          }
+          close();
+        };
+
+        const onAbort = () => {
+          void cleanup();
+        };
+        request.signal.addEventListener('abort', onAbort);
+
+        const startPollingFallback = () => {
+          pollingTimer = setInterval(() => {
+            runSerialized(async () => {
+              await emitCurrentDeployment();
+            });
+          }, 3000);
+        };
+
+        const start = async () => {
+          try {
+            await emitCurrentDeployment();
+
+            heartbeatTimer = setInterval(() => {
+              sendEvent({ type: 'ping', timestamp: Date.now() });
+            }, 15000);
+
+            try {
+              unsubscribe = await createDeploymentRealtimeSubscriber({
+                projectId,
+                onEvent: async (event) => {
+                  runSerialized(async () => {
+                    await emitDeployment(event.deployment);
+                  });
                 },
               });
+
+              if (!unsubscribe) {
+                startPollingFallback();
+              }
+            } catch (error) {
+              console.error('Failed to subscribe to deployment realtime events:', error);
+              startPollingFallback();
             }
+          } catch (error) {
+            console.error('Deployment stream failed:', error);
+            sendEvent({
+              type: 'error',
+              message: '读取部署进度失败',
+            });
+            await cleanup();
           }
         };
 
-        const interval = setInterval(checkDeployments, 3000);
-
-        request.signal.addEventListener('abort', () => {
-          isActive = false;
-          clearInterval(interval);
-          controller.close();
-        });
+        void start();
       },
     });
 

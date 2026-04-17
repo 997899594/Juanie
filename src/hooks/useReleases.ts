@@ -39,8 +39,10 @@ interface UseReleasesOptions {
 export function useReleases({ projectId, onRelease, initialStateKey }: UseReleasesOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [streamToken, setStreamToken] = useState(0);
   const onReleaseRef = useRef(onRelease);
   const lastStateRef = useRef<string | null>(initialStateKey ?? null);
+  const reconnectTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     onReleaseRef.current = onRelease;
@@ -53,9 +55,27 @@ export function useReleases({ projectId, onRelease, initialStateKey }: UseReleas
   useEffect(() => {
     if (!projectId) return;
 
-    const eventSource = new EventSource(`/api/events/releases?projectId=${projectId}`);
+    let closed = false;
+    const eventSource = new EventSource(
+      `/api/events/releases?projectId=${projectId}&token=${streamToken}`
+    );
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      clearReconnectTimer();
+      reconnectTimerRef.current = window.setTimeout(() => {
+        setStreamToken((value) => value + 1);
+      }, 1500);
+    };
 
     eventSource.onopen = () => {
+      clearReconnectTimer();
       setIsConnected(true);
       setError(null);
     };
@@ -78,15 +98,23 @@ export function useReleases({ projectId, onRelease, initialStateKey }: UseReleas
     };
 
     eventSource.onerror = () => {
+      eventSource.close();
+      if (closed) {
+        return;
+      }
+
       setIsConnected(false);
       setError('Connection lost. Reconnecting...');
+      scheduleReconnect();
     };
 
     return () => {
+      closed = true;
+      clearReconnectTimer();
       eventSource.close();
       setIsConnected(false);
     };
-  }, [projectId]);
+  }, [projectId, streamToken]);
 
   return {
     isConnected,

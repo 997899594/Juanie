@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
+import { publishReleaseRealtimeSnapshot } from '@/lib/realtime/releases';
 import { getReleaseById } from '@/lib/releases';
 import { buildReleaseRecap, type ReleaseRecapRecord } from '@/lib/releases/recap';
 import { getReleaseOperationalContext } from '@/lib/releases/runtime-context';
@@ -35,6 +36,8 @@ export async function persistReleaseRecapById(
       recap,
     })
     .where(eq(releases.id, release.id));
+
+  await publishReleaseRealtimeSnapshot(release.id);
 
   return recap;
 }
