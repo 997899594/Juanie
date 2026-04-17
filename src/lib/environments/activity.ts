@@ -1,3 +1,4 @@
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { ReleaseStatusDecoration } from '@/lib/releases/status-presentation';
 import {
   getDeploymentStatusDecoration,
@@ -92,7 +93,7 @@ export function buildEnvironmentRecentActivity(input: {
         .filter(Boolean)
         .join(' · '),
       createdAtLabel: formatPlatformTimeContext(input.latestRelease.createdAt),
-      href: `/projects/${input.projectId}/delivery/${input.latestRelease.id}`,
+      href: buildReleaseDetailPath(input.projectId, input.environmentId, input.latestRelease.id),
       actionLabel: '查看交付',
       statusDecoration,
       timestamp: toTimestamp(input.latestRelease.createdAt),
@@ -111,7 +112,11 @@ export function buildEnvironmentRecentActivity(input: {
         .join(' · '),
       createdAtLabel: formatPlatformTimeContext(input.latestDeployment.createdAt),
       href: input.latestDeployment.releaseId
-        ? `/projects/${input.projectId}/delivery/${input.latestDeployment.releaseId}`
+        ? buildReleaseDetailPath(
+            input.projectId,
+            input.environmentId,
+            input.latestDeployment.releaseId
+          )
         : `/projects/${input.projectId}/environments/${input.environmentId}/logs`,
       actionLabel: input.latestDeployment.releaseId ? '查看交付' : '查看日志',
       statusDecoration,
@@ -159,7 +164,11 @@ export function buildEnvironmentRecentActivity(input: {
         .join(' · '),
       createdAtLabel: formatPlatformTimeContext(input.latestMigration.createdAt),
       href: input.latestMigration.releaseId
-        ? `/projects/${input.projectId}/delivery/${input.latestMigration.releaseId}`
+        ? buildReleaseDetailPath(
+            input.projectId,
+            input.environmentId,
+            input.latestMigration.releaseId
+          )
         : `/projects/${input.projectId}/environments/${input.environmentId}/logs`,
       actionLabel: input.latestMigration.releaseId ? '查看交付' : '查看日志',
       statusDecoration,

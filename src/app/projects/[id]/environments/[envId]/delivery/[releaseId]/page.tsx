@@ -9,12 +9,12 @@ import { db } from '@/lib/db';
 import { projects, teamMembers } from '@/lib/db/schema';
 import { getReleaseDetailPageData } from '@/lib/releases/service';
 
-export default async function DeliveryDetailPage({
+export default async function EnvironmentDeliveryDetailPage({
   params,
 }: {
-  params: Promise<{ id: string; releaseId: string }>;
+  params: Promise<{ id: string; envId: string; releaseId: string }>;
 }) {
-  const { id, releaseId } = await params;
+  const { id, envId, releaseId } = await params;
   const session = await auth();
   if (!session?.user?.id) {
     redirect('/login');
@@ -38,13 +38,19 @@ export default async function DeliveryDetailPage({
   if (!pageData) {
     notFound();
   }
+
+  const releaseEnvironmentId = pageData.release.environment?.id ?? pageData.release.environmentId;
+  if (releaseEnvironmentId !== envId) {
+    notFound();
+  }
+
   const [releasePlanSnapshot, incidentSnapshot] = await Promise.all([
     resolveAIPluginSnapshot<ReleasePlan>({
       pluginId: 'release-intelligence',
       context: {
         teamId: project.teamId,
         projectId: id,
-        environmentId: pageData.release.environment?.id ?? pageData.release.environmentId,
+        environmentId: releaseEnvironmentId,
         releaseId,
         actorUserId: session.user.id,
       },
@@ -54,7 +60,7 @@ export default async function DeliveryDetailPage({
       context: {
         teamId: project.teamId,
         projectId: id,
-        environmentId: pageData.release.environment?.id ?? pageData.release.environmentId,
+        environmentId: releaseEnvironmentId,
         releaseId,
         actorUserId: session.user.id,
       },

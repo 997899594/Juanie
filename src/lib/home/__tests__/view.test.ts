@@ -43,12 +43,13 @@ describe('home view', () => {
         createdAt: '2026-03-26T00:00:00.000Z',
         database: { name: 'postgres' },
         project: { name: 'demo' },
+        environment: { id: 'env-1' },
       },
     ]);
 
     expect(result[0]?.issueLabel).toBe('审批阻塞');
     expect(result[0]?.actionLabel).toBe('处理迁移审批');
-    expect(result[0]?.href).toBe('/projects/proj-1/delivery/rel-1');
+    expect(result[0]?.href).toBe('/projects/proj-1/environments/env-1/delivery/rel-1');
     expect(result[0]?.databaseName).toBe('postgres');
     expect(result[0]?.projectName).toBe('demo');
   });

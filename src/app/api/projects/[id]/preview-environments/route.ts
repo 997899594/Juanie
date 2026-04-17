@@ -13,6 +13,7 @@ import {
   buildPreviewLaunchRef,
   launchPreviewEnvironmentFromRef,
 } from '@/lib/environments/preview-launch';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -104,7 +105,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         launchState: result.launchState,
         releaseId: result.release?.id ?? null,
         releaseStatus: result.release?.status ?? null,
-        releasePath: result.release ? `/projects/${id}/delivery/${result.release.id}` : null,
+        releasePath: result.release
+          ? buildReleaseDetailPath(id, result.environment.id, result.release.id)
+          : null,
         sourceCommitSha: result.sourceCommitSha,
       },
       { status: 202 }

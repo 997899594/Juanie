@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createRepositoryRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { PreviewDatabaseGuardBlockedError } from '@/lib/releases/preview-database-guard';
 import { ReleaseSchemaGateBlockedError } from '@/lib/releases/schema-gate';
 
@@ -39,7 +40,9 @@ export async function POST(request: Request) {
         success: true,
         release: {
           ...release,
-          releasePath: release ? `/projects/${release.projectId}/delivery/${release.id}` : null,
+          releasePath: release
+            ? buildReleaseDetailPath(release.projectId, release.environmentId, release.id)
+            : null,
         },
       },
       { status: 202 }

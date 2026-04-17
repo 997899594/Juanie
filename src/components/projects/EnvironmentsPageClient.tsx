@@ -104,6 +104,11 @@ interface DeliveryControlState {
   promotionFlows: DeliveryControlFlowRecord[];
 }
 
+interface EnvironmentVariableOverview {
+  direct: Array<{ id: string }>;
+  effective: Array<{ id: string; inherited: boolean }>;
+}
+
 interface EnvironmentRecord {
   id: string;
   name: string;
@@ -457,6 +462,79 @@ function buildEnvironmentListSummary(environment: EnvironmentRecord): string {
   return buildEnvironmentStatusSummary(environment);
 }
 
+function buildEnvironmentSourceSummary(environment: EnvironmentRecord): {
+  label: string;
+  summary: string;
+} {
+  if (environment.gitTracking) {
+    return {
+      label: environment.sourceLabel ?? '当前来源',
+      summary: environment.gitTracking.summary,
+    };
+  }
+
+  if (environment.sourceLabel) {
+    return {
+      label: environment.sourceLabel,
+      summary:
+        environment.branch && !environment.sourceLabel.includes(environment.branch)
+          ? `跟随 ${environment.branch}`
+          : '当前环境按该来源持续更新',
+    };
+  }
+
+  return {
+    label: '手动环境',
+    summary: '当前环境没有自动来源路由，需要手动发布或提升',
+  };
+}
+
+function buildEnvironmentVersionSummary(environment: EnvironmentRecord): {
+  label: string;
+  summary: string;
+} {
+  if (!environment.latestReleaseCard) {
+    return {
+      label: '暂无版本',
+      summary: '当前环境还没有可展示的版本记录',
+    };
+  }
+
+  return {
+    label: environment.latestReleaseCard.title,
+    summary: [
+      environment.latestReleaseCard.shortCommitSha
+        ? `commit ${environment.latestReleaseCard.shortCommitSha}`
+        : null,
+      environment.latestReleaseCard.createdAtLabel,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  };
+}
+
+function buildEnvironmentDatabaseSummary(environment: EnvironmentRecord): string {
+  const totalCount = environment.databases.length;
+  if (totalCount === 0) {
+    return '没有数据库';
+  }
+
+  const issueCount = environment.databases.filter((database) => {
+    const status = database.schemaState?.status;
+    return status === 'drifted' || status === 'blocked' || status === 'pending_migrations';
+  }).length;
+
+  const inheritedCount = environment.databaseBindingSummary.inheritedCount;
+
+  return [
+    `${totalCount} 个数据库`,
+    issueCount > 0 ? `${issueCount} 个待处理` : null,
+    inheritedCount > 0 ? `${inheritedCount} 个继承` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function EnvironmentListCard({
   projectId,
   environment,
@@ -529,26 +607,69 @@ function EnvironmentListCard({
 }
 
 function EnvironmentOverviewPanel({
+  projectId,
   environment,
   savingStrategy,
   onStrategyChange,
 }: {
+  projectId: string;
   environment: EnvironmentRecord;
   savingStrategy: boolean;
   onStrategyChange: (
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
 }) {
+  const [variableSummary, setVariableSummary] = useState('变量状态加载中');
   const statusBadges = [
     environment.policy.primarySignal?.label ?? null,
     environment.previewLifecycle?.stateLabel ?? null,
   ].filter(Boolean);
   const hasStrategyControl = environment.actions.canConfigureStrategy;
+  const sourceSummary = buildEnvironmentSourceSummary(environment);
+  const versionSummary = buildEnvironmentVersionSummary(environment);
   const strategyHelper = hasStrategyControl
     ? environment.actions.configureStrategySummary
     : environment.actions.configureStrategySummary !== environment.strategyLabel
       ? environment.actions.configureStrategySummary
       : null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch(`/api/projects/${projectId}/env-vars/overview?environmentId=${environment.id}`)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('加载变量状态失败');
+        }
+
+        return (await response.json()) as EnvironmentVariableOverview;
+      })
+      .then((overview) => {
+        if (cancelled) {
+          return;
+        }
+
+        const effectiveCount = overview.effective.length;
+        const inheritedCount = overview.effective.filter((item) => item.inherited).length;
+        setVariableSummary(
+          [
+            effectiveCount === 0 ? '没有变量' : `${effectiveCount} 个生效变量`,
+            inheritedCount > 0 ? `${inheritedCount} 个继承` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setVariableSummary('变量状态暂不可用');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [environment.id, projectId]);
 
   return (
     <div className="console-surface rounded-[28px] p-4 sm:p-5">
@@ -578,12 +699,31 @@ function EnvironmentOverviewPanel({
           </div>
         ) : null}
 
-        <div
-          className={cn(
-            'grid gap-4',
-            hasStrategyControl || strategyHelper ? 'lg:grid-cols-[1.15fr_0.85fr]' : undefined
-          )}
-        >
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="console-card rounded-[24px] px-5 py-4">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              当前来源
+            </div>
+            <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+              {sourceSummary.label}
+            </div>
+            <div className="mt-2 text-sm leading-6 text-muted-foreground">
+              {sourceSummary.summary}
+            </div>
+          </div>
+
+          <div className="console-card rounded-[24px] px-5 py-4">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              当前版本
+            </div>
+            <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
+              {versionSummary.label}
+            </div>
+            <div className="mt-2 text-sm leading-6 text-muted-foreground">
+              {versionSummary.summary}
+            </div>
+          </div>
+
           <div className="console-card rounded-[24px] px-5 py-4">
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -600,53 +740,68 @@ function EnvironmentOverviewPanel({
                 environment.previewLifecycle?.stateLabel ??
                 '运行中'}
             </div>
-            <div className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            <div className="mt-2 text-sm leading-6 text-muted-foreground">
               {buildEnvironmentStatusSummary(environment)}
             </div>
           </div>
+        </div>
 
-          {hasStrategyControl || strategyHelper ? (
-            <div className="console-card rounded-[24px] px-5 py-4 text-sm text-foreground">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    发布策略
-                  </div>
-                  <div className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                    {environment.strategyLabel ?? '未设置'}
-                  </div>
-                </div>
-                {savingStrategy ? (
-                  <div className="text-xs text-muted-foreground">保存中...</div>
-                ) : null}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="console-card rounded-[24px] px-5 py-4 text-sm text-foreground">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                发布方式
               </div>
-              {hasStrategyControl ? (
-                <div className="mt-4">
-                  <Select
-                    value={environment.deploymentStrategy ?? 'rolling'}
-                    onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
-                      onStrategyChange(value)
-                    }
-                    disabled={savingStrategy}
-                  >
-                    <SelectTrigger className="h-11 max-w-sm rounded-2xl">
-                      <SelectValue placeholder="选择发布策略" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {deploymentStrategyOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : null}
-              {strategyHelper ? (
-                <div className="mt-3 text-xs leading-5 text-muted-foreground">{strategyHelper}</div>
+              {savingStrategy ? (
+                <div className="text-xs text-muted-foreground">保存中...</div>
               ) : null}
             </div>
-          ) : null}
+            {hasStrategyControl ? (
+              <div className="mt-3">
+                <Select
+                  value={environment.deploymentStrategy ?? 'rolling'}
+                  onValueChange={(value: 'rolling' | 'controlled' | 'canary' | 'blue_green') =>
+                    onStrategyChange(value)
+                  }
+                  disabled={savingStrategy}
+                >
+                  <SelectTrigger className="h-11 rounded-2xl">
+                    <SelectValue placeholder="选择发布策略" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {deploymentStrategyOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="mt-3 text-lg font-semibold text-foreground">
+                {environment.strategyLabel ?? '未设置'}
+              </div>
+            )}
+            <div className="mt-2 text-sm leading-6 text-muted-foreground">
+              {strategyHelper ?? environment.strategyLabel ?? '当前环境未配置发布策略'}
+            </div>
+          </div>
+
+          <div className="console-card rounded-[24px] px-5 py-4">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              数据库状态
+            </div>
+            <div className="mt-3 text-lg font-semibold text-foreground">
+              {buildEnvironmentDatabaseSummary(environment)}
+            </div>
+          </div>
+
+          <div className="console-card rounded-[24px] px-5 py-4">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              变量状态
+            </div>
+            <div className="mt-3 text-lg font-semibold text-foreground">{variableSummary}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -654,10 +809,12 @@ function EnvironmentOverviewPanel({
 }
 
 function EnvironmentExpandedContent({
+  projectId,
   environment,
   savingStrategy,
   onStrategyChange,
 }: {
+  projectId: string;
   environment: EnvironmentRecord;
   savingStrategy: boolean;
   onStrategyChange: (
@@ -666,6 +823,7 @@ function EnvironmentExpandedContent({
 }) {
   return (
     <EnvironmentOverviewPanel
+      projectId={projectId}
       environment={environment}
       savingStrategy={savingStrategy}
       onStrategyChange={onStrategyChange}
@@ -934,6 +1092,7 @@ export function EnvironmentsPageClient({
         <div className="space-y-6">
           {focusMode && focusedEnvironment ? (
             <EnvironmentExpandedContent
+              projectId={projectId}
               environment={focusedEnvironment}
               savingStrategy={savingStrategyId === focusedEnvironment.id}
               onStrategyChange={(value) => handleStrategyChange(focusedEnvironment.id, value)}

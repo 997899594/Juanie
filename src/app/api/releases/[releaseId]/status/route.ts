@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getReleaseById } from '@/lib/releases';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
 import { getReleaseStatusLabel } from '@/lib/releases/status-presentation';
 
@@ -145,7 +146,7 @@ export async function GET(
         sourceCommitSha: release.sourceCommitSha,
         createdAt: release.createdAt,
         updatedAt: release.updatedAt,
-        releasePath: `/projects/${release.projectId}/delivery/${release.id}`,
+        releasePath: buildReleaseDetailPath(release.projectId, release.environmentId, release.id),
       },
     });
   } catch (error) {

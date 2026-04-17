@@ -12,6 +12,7 @@ import { StatusIndicator } from '@/components/ui/status-indicator';
 import type { TeamRole } from '@/lib/db/schema';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getReleaseDetailPageData } from '@/lib/releases/service';
 import { formatPlatformDateTime } from '@/lib/time/format';
 
@@ -218,7 +219,13 @@ export function ReleaseDiffSection({
         <div className="text-sm font-semibold">变更</div>
         {previousReleaseLink ? (
           <Button asChild variant="outline" size="sm" className="h-8 px-3">
-            <Link href={`/projects/${projectId}/delivery/${previousReleaseLink.id}`}>
+            <Link
+              href={buildReleaseDetailPath(
+                projectId,
+                previousReleaseLink.environmentId,
+                previousReleaseLink.id
+              )}
+            >
               对比上一版：{previousReleaseLink.title}
             </Link>
           </Button>
@@ -239,7 +246,13 @@ export function ReleaseDiffSection({
                 {sourceReleaseLink.environmentName}
               </div>
               <Button asChild variant="ghost" size="sm" className="-ml-2 mt-2 h-8 px-2">
-                <Link href={`/projects/${projectId}/delivery/${sourceReleaseLink.id}`}>
+                <Link
+                  href={buildReleaseDetailPath(
+                    projectId,
+                    sourceReleaseLink.environmentId,
+                    sourceReleaseLink.id
+                  )}
+                >
                   {sourceReleaseLink.title}
                 </Link>
               </Button>
@@ -252,7 +265,13 @@ export function ReleaseDiffSection({
                 上一版
               </div>
               <Button asChild variant="ghost" size="sm" className="-ml-2 h-8 px-2">
-                <Link href={`/projects/${projectId}/delivery/${previousReleaseLink.id}`}>
+                <Link
+                  href={buildReleaseDetailPath(
+                    projectId,
+                    previousReleaseLink.environmentId,
+                    previousReleaseLink.id
+                  )}
+                >
                   {previousReleaseLink.title}
                 </Link>
               </Button>
@@ -494,6 +513,7 @@ export function ReleaseExecutionSections({
                     </div>
                     <DeploymentRollbackAction
                       projectId={projectId}
+                      environmentId={release.environment.id}
                       deploymentId={deployment.id}
                       disabled={!releaseActions.canManage}
                       disabledSummary={releaseActions.summary}

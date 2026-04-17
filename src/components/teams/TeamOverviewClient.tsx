@@ -1,9 +1,9 @@
 'use client';
 
-import { FolderKanban, Plus, Users } from 'lucide-react';
+import { FolderKanban, Plus } from 'lucide-react';
 import Link from 'next/link';
-import { TeamGovernancePanel } from '@/components/teams/TeamGovernancePanel';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import type { getTeamOverviewPageData } from '@/lib/teams/service';
 
 interface TeamOverviewClientProps {
@@ -16,7 +16,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
         {overview.stats.map((stat) => (
           <div key={stat.label} className="ui-control px-5 py-4">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -25,33 +25,37 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
             <div className="mt-3 text-3xl font-semibold tracking-tight">{stat.value}</div>
           </div>
         ))}
+        <div className="flex items-stretch gap-2 md:justify-end">
+          <Link href={`/teams/${teamId}/members`} className="flex-1 md:flex-none">
+            <Button variant="outline" className="h-full min-h-16 w-full rounded-[20px] px-5">
+              成员
+            </Button>
+          </Link>
+          <Link href="/projects/new" className="flex-1 md:flex-none">
+            <Button className="h-full min-h-16 w-full rounded-[20px] px-5">
+              <Plus className="h-4 w-4" />
+              新建项目
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="ui-control px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm font-medium">项目</div>
-          <Link href="/projects/new">
-            <Button className="h-9 rounded-xl px-4">
-              <Plus className="h-4 w-4" />
-              新建项目
-            </Button>
-          </Link>
+          <div>
+            <div className="text-sm font-medium">项目</div>
+            <div className="mt-1 text-sm text-muted-foreground">团队内所有项目都从这里进入。</div>
+          </div>
         </div>
       </div>
 
       {overview.projects.length === 0 ? (
-        <div className="ui-floating flex min-h-80 flex-col items-center justify-center text-center">
-          <div className="mb-4 rounded-2xl bg-secondary/80 p-4">
-            <FolderKanban className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h2 className="text-lg font-medium">没有项目</h2>
-          <Link href="/projects/new" className="mt-5">
-            <Button className="rounded-xl">
-              <Plus className="h-4 w-4" />
-              新建项目
-            </Button>
-          </Link>
-        </div>
+        <EmptyState
+          icon={<FolderKanban className="h-8 w-8 text-muted-foreground" />}
+          title="没有项目"
+          action={{ label: '新建项目', href: '/projects/new' }}
+          className="min-h-80"
+        />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2">
           {overview.projects.map((project) => (
@@ -73,29 +77,6 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
           ))}
         </div>
       )}
-
-      <div className="ui-control px-5 py-4">
-        <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-secondary/80 p-3">
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold">团队成员</div>
-          </div>
-          <Link href={`/teams/${teamId}/members`} className="ml-auto">
-            <Button variant="outline" className="h-9 rounded-xl px-4">
-              成员
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      <div className="ui-floating px-5 py-4">
-        <div className="text-sm font-semibold">治理</div>
-        <div className="mt-3">
-          <TeamGovernancePanel governance={overview.governance} />
-        </div>
-      </div>
     </div>
   );
 }

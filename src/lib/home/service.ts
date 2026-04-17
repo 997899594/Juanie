@@ -46,6 +46,7 @@ export function buildHomePageData<
     database?: { name?: string | null } | null;
     project?: { name?: string | null } | null;
     environment?: {
+      id: string;
       name?: string | null;
       isPreview?: boolean | null;
       previewPrNumber?: number | null;

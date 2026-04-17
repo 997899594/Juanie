@@ -59,7 +59,7 @@ describe('release service', () => {
         id: 'rel-1',
         sourceRef: 'refs/heads/main',
         sourceCommitSha: '1234567890abcdef',
-        environment: { isPreview: false },
+        environment: { id: 'env-0', isPreview: false },
         artifacts: [
           {
             service: { id: 'svc-1', name: 'web' },
@@ -75,10 +75,12 @@ describe('release service', () => {
     expect(result?.release.diff.changedArtifacts.length).toBe(1);
     expect(result?.previousReleaseLink).toEqual({
       id: 'rel-1',
+      environmentId: 'env-0',
       title: 'main 发布 · 1234567',
     });
     expect(result?.sourceReleaseLink).toEqual({
       id: 'rel-source',
+      environmentId: 'env-staging',
       title: 'Promote staging · abcdef1',
       environmentName: 'staging',
     });

@@ -298,9 +298,6 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                         <div className="text-sm text-muted-foreground">
                           {environment.actions.configureStrategySummary}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          数据库策略：{databaseStrategyLabels[environment.databaseStrategy]}
-                        </div>
                       </div>
 
                       <div className="w-full md:w-56">
@@ -329,6 +326,9 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                             ))}
                           </SelectContent>
                         </Select>
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          {databaseStrategyLabels[environment.databaseStrategy]}
+                        </div>
                       </div>
                     </div>
                   </div>

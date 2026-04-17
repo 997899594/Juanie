@@ -20,10 +20,12 @@ import {
   fetchRollbackPlan,
   type RollbackPlanResponse,
 } from '@/lib/releases/client-actions';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 
 interface DeploymentRollbackActionProps {
   projectId: string;
+  environmentId: string;
   deploymentId: string;
   disabled?: boolean;
   disabledSummary?: string | null;
@@ -31,6 +33,7 @@ interface DeploymentRollbackActionProps {
 
 export function DeploymentRollbackAction({
   projectId,
+  environmentId,
   deploymentId,
   disabled = false,
   disabledSummary,
@@ -87,7 +90,7 @@ export function DeploymentRollbackAction({
 
       setOpen(false);
       if (data?.releaseId) {
-        router.push(`/projects/${projectId}/delivery/${data.releaseId}`);
+        router.push(buildReleaseDetailPath(projectId, environmentId, data.releaseId));
         router.refresh();
       }
     } catch (submitError) {

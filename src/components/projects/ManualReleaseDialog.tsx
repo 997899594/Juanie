@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { createManualRelease, fetchManualReleasePlan } from '@/lib/releases/client-actions';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { buildReleasePlanningPanel } from '@/lib/releases/planning-view';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 
@@ -259,7 +260,7 @@ export function ManualReleaseDialog({
       setOpen(false);
       await onCreated?.();
       if (data?.id) {
-        router.push(`/projects/${projectId}/delivery/${data.id}`);
+        router.push(buildReleaseDetailPath(projectId, environmentId, data.id));
         router.refresh();
       }
     } catch (submitError) {

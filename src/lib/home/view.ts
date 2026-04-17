@@ -23,6 +23,7 @@ import {
   type ReleaseIssueCode,
   type ReleaseIssueSnapshot,
 } from '@/lib/releases/intelligence';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
@@ -88,6 +89,7 @@ export interface HomeAttentionRunLike {
   } | null;
   environment?:
     | (EnvironmentKindLike & {
+        id: string;
         name?: string | null;
         previewPrNumber?: number | null;
         branch?: string | null;
@@ -238,9 +240,10 @@ export function decorateHomeAttentionRuns<TRun extends HomeAttentionRunLike>(
       issueCode,
       issueLabel: issue?.label ?? getIssueLabel(issueCode),
       actionLabel: issue?.nextActionLabel ?? getReleaseActionLabel(issueCode),
-      href: run.releaseId
-        ? `/projects/${run.projectId}/delivery/${run.releaseId}`
-        : `/projects/${run.projectId}`,
+      href:
+        run.releaseId && run.environment?.id
+          ? buildReleaseDetailPath(run.projectId, run.environment.id, run.releaseId)
+          : `/projects/${run.projectId}`,
       databaseName: run.database?.name ?? '数据库',
       projectName: run.project?.name ?? '项目',
       createdAtLabel: run.createdAt ? formatRelativeTime(run.createdAt) : '—',

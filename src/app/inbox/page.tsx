@@ -14,6 +14,7 @@ import {
 } from '@/lib/approvals/view';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { getMigrationStatusDecoration } from '@/lib/releases/status-presentation';
 
 export default async function InboxPage({
@@ -165,7 +166,13 @@ export default async function InboxPage({
                           size="sm"
                           className="justify-between rounded-xl"
                         >
-                          <Link href={`/projects/${run.projectId}/delivery/${run.releaseId}`}>
+                          <Link
+                            href={buildReleaseDetailPath(
+                              run.projectId,
+                              run.environment.id,
+                              run.releaseId
+                            )}
+                          >
                             发布
                             <ArrowRight className="h-3.5 w-3.5" />
                           </Link>

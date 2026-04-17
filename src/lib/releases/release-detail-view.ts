@@ -1,6 +1,7 @@
 import { isPreviewEnvironment } from '@/lib/environments/model';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { buildReleaseDiff } from '@/lib/releases/diff';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { buildReleaseRecap } from '@/lib/releases/recap';
 import type {
@@ -89,9 +90,11 @@ function buildReleaseTimeline(input: {
   environmentStrategy: string | null;
 }) {
   const { release } = input;
-  const releaseHref = release.projectId
-    ? `/projects/${release.projectId}/delivery/${release.id}`
-    : null;
+  const releaseEnvironmentId = release.environment?.id ?? null;
+  const releaseHref =
+    release.projectId && releaseEnvironmentId
+      ? buildReleaseDetailPath(release.projectId, releaseEnvironmentId, release.id)
+      : null;
   const items: Array<ReleaseTimelineItem & { sortValue: number }> = [
     ...buildMigrationRetryTimelineItems(release, releaseHref),
   ];
@@ -118,9 +121,14 @@ function buildReleaseTimeline(input: {
         .filter(Boolean)
         .join(' · '),
       tone: 'info',
-      href: release.projectId
-        ? `/projects/${release.projectId}/delivery/${release.sourceRelease.id}`
-        : null,
+      href:
+        release.projectId && release.sourceRelease.environment?.id
+          ? buildReleaseDetailPath(
+              release.projectId,
+              release.sourceRelease.environment.id,
+              release.sourceRelease.id
+            )
+          : null,
       sortValue: release.createdAt ? new Date(release.createdAt).getTime() : 0,
     });
   }

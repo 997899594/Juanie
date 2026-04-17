@@ -46,6 +46,7 @@ export interface ApprovalRunLike {
     type: string;
   };
   environment: EnvironmentKindLike & {
+    id: string;
     name: string;
     branch?: string | null;
     previewPrNumber?: number | null;

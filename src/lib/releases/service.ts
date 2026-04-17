@@ -555,6 +555,7 @@ export function buildReleaseDetailPageData<
         sourceRef?: string | null;
         sourceCommitSha?: string | null;
         environment?: {
+          id: string;
           isPreview?: boolean | null;
         } | null;
       })
@@ -569,6 +570,7 @@ export function buildReleaseDetailPageData<
     sourceReleaseLink: input.release.sourceRelease
       ? {
           id: input.release.sourceRelease.id,
+          environmentId: input.release.sourceRelease.environment?.id ?? '',
           title: getReleaseDisplayTitle(input.release.sourceRelease),
           environmentName: input.release.sourceRelease.environment?.name ?? '来源环境',
         }
@@ -576,6 +578,7 @@ export function buildReleaseDetailPageData<
     previousReleaseLink: input.previousRelease
       ? {
           id: input.previousRelease.id,
+          environmentId: input.previousRelease.environment?.id ?? '',
           title: getReleaseDisplayTitle(input.previousRelease),
         }
       : null,

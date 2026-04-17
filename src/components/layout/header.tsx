@@ -259,14 +259,19 @@ function generateBreadcrumbs(
     currentPath += `/${segment}`;
     // Replace project UUID with the actual project name
     const isProjectId = project && segment === project.projectId;
+    const isEnvironmentId =
+      segments[index - 1] === 'environments' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment);
     const isReleaseId =
       (segments[index - 1] === 'releases' || segments[index - 1] === 'delivery') &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segment);
     const title = isProjectId
       ? project.projectName
-      : isReleaseId
-        ? '详情'
-        : (pathMap[segment] ?? segment);
+      : isEnvironmentId
+        ? '当前环境'
+        : isReleaseId
+          ? '详情'
+          : (pathMap[segment] ?? segment);
 
     if (index === segments.length - 1) {
       breadcrumbs.push({ title });

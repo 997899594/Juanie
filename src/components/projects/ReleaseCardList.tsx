@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PreviewSourceSummary } from '@/components/ui/preview-source-summary';
 import { StatusIndicator } from '@/components/ui/status-indicator';
+import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import type { getProjectReleasesPageData } from '@/lib/releases/service';
 import { formatPlatformTimeContext } from '@/lib/time/format';
 import { cn } from '@/lib/utils';
@@ -161,7 +162,13 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         size="sm"
                         className="min-w-0 flex-1 sm:flex-none"
                       >
-                        <Link href={`/projects/${projectId}/delivery/${release.id}`}>
+                        <Link
+                          href={buildReleaseDetailPath(
+                            projectId,
+                            release.environment.id,
+                            release.id
+                          )}
+                        >
                           发布
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
