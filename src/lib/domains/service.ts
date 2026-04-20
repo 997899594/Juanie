@@ -9,6 +9,7 @@ import {
   initK8sClient,
   reconcileCiliumHTTPRoutesForHostname,
 } from '@/lib/k8s';
+import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import {
   buildDomainRouteName,
   buildPreviewEnvironmentHostname,
@@ -48,7 +49,7 @@ function isConflictError(error: unknown): boolean {
 }
 
 function buildServiceResourceName(projectSlug: string, serviceName: string): string {
-  return `${projectSlug}-${serviceName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+  return buildProjectScopedK8sName(projectSlug, serviceName);
 }
 
 export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsInput) {

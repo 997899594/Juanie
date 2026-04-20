@@ -5,6 +5,7 @@ import { projects } from '@/lib/db/schema';
 import { getK8sClient } from '@/lib/k8s';
 import { AppBuilder } from '@/lib/k8s/app-builder';
 import { AppDeployer } from '@/lib/k8s/app-deployer';
+import { buildProjectNamespaceBase, buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import type { AppSpec } from '@/lib/k8s/types';
 
 let driftDetectorRunning = false;
@@ -57,7 +58,7 @@ async function detectAndHeal(): Promise<void> {
 }
 
 async function checkProjectDrift(project: any): Promise<void> {
-  const namespace = `juanie-${project.slug}`;
+  const namespace = buildProjectNamespaceBase(project.slug);
 
   for (const service of project.services || []) {
     const spec = await buildAppSpec(project, service);
@@ -116,7 +117,7 @@ async function getActualResources(namespace: string, appName: string): Promise<a
 }
 
 async function buildAppSpec(project: any, service: any): Promise<AppSpec | null> {
-  const namespace = `juanie-${project.slug}`;
+  const namespace = buildProjectNamespaceBase(project.slug);
 
   // 跳过没有镜像的服务
   if (!service.imageRepository) {
@@ -125,7 +126,7 @@ async function buildAppSpec(project: any, service: any): Promise<AppSpec | null>
 
   return {
     projectId: project.id,
-    name: `${project.slug}-${(service.slug || service.name).toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
+    name: buildProjectScopedK8sName(project.slug, service.slug || service.name),
     namespace,
     image: {
       repository: service.imageRepository,

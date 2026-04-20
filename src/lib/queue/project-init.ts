@@ -46,7 +46,6 @@ import { buildDeployImageRepository } from '@/lib/deploy-images';
 import { buildDomainRouteName, pickDefaultPublicService } from '@/lib/domains/defaults';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { buildEnvironmentNamespace } from '@/lib/environments/model';
-import { buildPreviewNamespace } from '@/lib/environments/preview';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
   gateway,
@@ -65,6 +64,7 @@ import {
   reconcileCiliumHTTPRoutesForHostname,
   upsertService,
 } from '@/lib/k8s';
+import { buildProjectNamespaceBase, buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
@@ -1401,7 +1401,7 @@ async function renderEnvTemplate(
     where: eq(databases.projectId, project.id),
   });
 
-  const ns = `juanie-${project.slug}`;
+  const ns = buildProjectNamespaceBase(project.slug);
   const lines: string[] = [
     `# ===========================================`,
     `# Juanie 环境变量模板`,
@@ -1416,7 +1416,7 @@ async function renderEnvTemplate(
   for (const db_ of dbList) {
     const host =
       db_.provisionType === 'standalone'
-        ? `${project.slug}-${db_.name}.${ns}.svc.cluster.local`
+        ? `${buildProjectScopedK8sName(project.slug, db_.name)}.${ns}.svc.cluster.local`
         : `<host>`;
 
     switch (db_.type) {
@@ -1599,7 +1599,7 @@ async function deployServices(
     const target = targets[i];
     const namespace =
       target.environment.namespace || buildEnvironmentNamespace(project.slug, target.environment);
-    const resourceName = `${project.slug}-${target.service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+    const resourceName = buildProjectScopedK8sName(project.slug, target.service.name);
     const port = target.service.port || 3000;
 
     console.log(
@@ -1736,23 +1736,15 @@ export async function provisionDatabase(
     : null;
   const namespace =
     environment?.namespace ??
-    (environment?.isPreview
-      ? buildPreviewNamespace(project.slug, environment.name)
-      : environment?.isProduction
-        ? `juanie-${project.slug}-prod`
-        : `juanie-${project.slug}`);
+    (environment
+      ? buildEnvironmentNamespace(project.slug, environment)
+      : buildProjectNamespaceBase(project.slug));
   const dbPassword = nanoid(32);
-  const resourceName = [
+  const resourceName = buildProjectScopedK8sName(
     project.slug,
     environment?.isPreview ? environment.name : environment?.isProduction ? 'prod' : null,
-    database.name,
-  ]
-    .filter(Boolean)
-    .join('-')
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, 63);
+    database.name
+  );
   const secretName = `${resourceName}-creds`;
 
   console.log(`Provisioning standalone database ${database.name} for project ${project.name}`);
@@ -2210,15 +2202,15 @@ async function configureDns(
       domain.environment?.namespace ||
       (domain.environment
         ? buildEnvironmentNamespace(project.slug, domain.environment)
-        : `juanie-${project.slug}`);
+        : buildProjectNamespaceBase(project.slug));
     if (hasK8s) {
       console.log(`Configuring DNS for ${domain.hostname}`);
 
       // Determine the service name to point to
       const targetService = domain.service ?? defaultPublicService;
       const serviceName = targetService
-        ? `${project.slug}-${targetService.name}`
-        : `${project.slug}-web`;
+        ? buildProjectScopedK8sName(project.slug, targetService.name)
+        : buildProjectScopedK8sName(project.slug, 'web');
 
       const servicePort = targetService?.port || 3000;
       const routeName = buildDomainRouteName(domain.hostname);

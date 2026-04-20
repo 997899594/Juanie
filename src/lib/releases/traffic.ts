@@ -7,6 +7,7 @@ import {
   deleteCiliumHTTPRoute,
   reconcileCiliumHTTPRoutesForHostname,
 } from '@/lib/k8s';
+import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
 
 export interface TrafficBackendRef {
   serviceName: string;
@@ -23,7 +24,7 @@ export interface RolloutServiceLike {
 }
 
 export function buildStableDeploymentName(projectSlug: string, serviceName: string): string {
-  return `${projectSlug}-${serviceName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+  return buildProjectScopedK8sName(projectSlug, serviceName);
 }
 
 export function buildCandidateDeploymentName(baseName: string): string {

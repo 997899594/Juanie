@@ -1,5 +1,6 @@
 import type { EnvironmentDeliveryMode, EnvironmentKind } from '@/lib/db/schema';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
+import { buildK8sName, buildProjectNamespaceBase } from '@/lib/k8s/naming';
 
 export interface EnvironmentKindLike {
   kind?: EnvironmentKind | null;
@@ -133,9 +134,13 @@ export function buildEnvironmentNamespace(
   }
 
   if (kind === 'production') {
-    return `juanie-${projectSlug}-prod`;
+    return buildK8sName([buildProjectNamespaceBase(projectSlug), 'prod'], {
+      fallback: 'juanie-prod',
+    });
   }
 
   const environmentSlug = truncateSegment(slugifySegment(environment.name) || 'env', 40);
-  return truncateSegment(`juanie-${projectSlug}-${environmentSlug}`, 63);
+  return buildK8sName([buildProjectNamespaceBase(projectSlug), environmentSlug], {
+    fallback: 'juanie-env',
+  });
 }

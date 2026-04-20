@@ -16,6 +16,7 @@ import {
   isProductionEnvironment,
 } from '@/lib/environments/model';
 import { createNamespace, getIsConnected, upsertService } from '@/lib/k8s';
+import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import {
   buildPreviewEnvironmentName,
   calculatePreviewExpiry,
@@ -247,7 +248,7 @@ export async function ensureEnvironmentScaffold(input: {
   });
 
   for (const service of serviceList) {
-    const serviceName = `${input.project.slug}-${service.name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+    const serviceName = buildProjectScopedK8sName(input.project.slug, service.name);
 
     await upsertService(namespace, serviceName, {
       port: service.port || 3000,

@@ -1,4 +1,5 @@
 import { isPreviewEnvironment } from '@/lib/environments/model';
+import { buildK8sName, slugifyK8sNameSegment } from '@/lib/k8s/naming';
 
 interface PreviewEnvironmentLike {
   id: string;
@@ -19,16 +20,6 @@ export interface PreviewEnvironmentInput {
 const DEFAULT_PREVIEW_TTL_HOURS = 72;
 const MAX_ENV_NAME_LENGTH = 48;
 const MAX_NAMESPACE_LENGTH = 63;
-
-function slugifySegment(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/^refs\/heads\//, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
-}
 
 function truncateSegment(value: string, maxLength: number): string {
   return value.length <= maxLength ? value : value.slice(0, maxLength).replace(/-+$/g, '');
@@ -57,17 +48,17 @@ export function buildPreviewEnvironmentName(input: PreviewEnvironmentInput): str
   }
 
   const branchSlug = truncateSegment(
-    slugifySegment(input.branch) || 'branch',
+    slugifyK8sNameSegment(input.branch, 'branch'),
     MAX_ENV_NAME_LENGTH - 'preview-'.length
   );
   return `preview-${branchSlug}`;
 }
 
 export function buildPreviewNamespace(projectSlug: string, environmentName: string): string {
-  return truncateSegment(
-    slugifySegment(`${projectSlug}-${environmentName}`) || 'preview',
-    MAX_NAMESPACE_LENGTH
-  );
+  return buildK8sName([projectSlug, environmentName], {
+    fallback: 'preview',
+    maxLength: MAX_NAMESPACE_LENGTH,
+  });
 }
 
 export function calculatePreviewExpiry(
