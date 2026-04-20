@@ -116,7 +116,7 @@ export async function addProjectDeleteJob(projectId: string) {
         type: 'exponential',
         delay: 15000,
       },
-      jobId: `project-delete:${projectId}`,
+      jobId: `project-delete-${projectId}`,
       removeOnComplete: true,
       removeOnFail: true,
     }
