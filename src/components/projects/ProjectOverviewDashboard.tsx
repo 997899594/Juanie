@@ -1,4 +1,4 @@
-import { ExternalLink, GitBranch, Plus, Users } from 'lucide-react';
+import { ExternalLink, GitBranch, Plus, Settings2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { ProjectEnvironmentIndex } from '@/components/projects/ProjectOverviewSections';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -40,6 +40,12 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
             <Button asChild variant="ghost">
               <Link href={`/projects/${projectId}/delivery`}>发布总览</Link>
             </Button>
+            <Button asChild variant="ghost">
+              <Link href={`/projects/${projectId}/settings`}>
+                <Settings2 className="h-4 w-4" />
+                项目设置
+              </Link>
+            </Button>
             <Button asChild>
               <Link href={`/projects/${projectId}/environments?new=preview`}>
                 <Plus className="h-4 w-4" />
@@ -77,6 +83,14 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
                   </span>
                 ) : null}
                 <span>创建于 {overview.createdDateLabel}</span>
+              </div>
+              <div className="pt-1">
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/projects/${projectId}/settings`}>
+                    <Settings2 className="h-3.5 w-3.5" />
+                    打开项目设置
+                  </Link>
+                </Button>
               </div>
             </div>
           </div>
