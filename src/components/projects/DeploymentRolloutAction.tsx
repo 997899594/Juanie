@@ -123,9 +123,7 @@ export function DeploymentRolloutAction({
       >
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>{actionLabel}</DialogTitle>
-          <DialogDescription>
-            确认候选版本满足检查条件后，再继续完成放量或蓝绿切换。
-          </DialogDescription>
+          <DialogDescription>确认后继续。</DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -140,7 +138,7 @@ export function DeploymentRolloutAction({
               <div className={dialogPanelClassName}>
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">候选切换上下文</div>
-                  <div className="text-sm text-muted-foreground">确认当前待切换版本是否正确。</div>
+                  <div className="text-sm text-muted-foreground">确认候选版本。</div>
                 </div>
 
                 {plan?.deployment?.candidateImage ? (
@@ -166,7 +164,7 @@ export function DeploymentRolloutAction({
               <div className={dialogPanelClassName}>
                 <div className="mb-3 space-y-1">
                   <div className="text-sm font-semibold text-foreground">放量检查</div>
-                  <div className="text-sm text-muted-foreground">只在检查通过后继续推进。</div>
+                  <div className="text-sm text-muted-foreground">通过后继续。</div>
                 </div>
 
                 {loadingPlan ? (

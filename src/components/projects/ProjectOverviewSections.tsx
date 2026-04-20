@@ -11,7 +11,7 @@ function getEnvironmentSummary(
       ? environment.primaryDomainUrl.replace(/^https?:\/\//, '')
       : null) ??
     environment.platformSignals.primarySummary ??
-    (environment.latestReleaseCard ? `当前版本 ${environment.latestReleaseCard.title}` : null) ??
+    (environment.latestReleaseCard ? `版本 ${environment.latestReleaseCard.title}` : null) ??
     environment.previewLifecycle?.stateLabel ??
     environment.scopeLabel ??
     '进入环境'
@@ -32,7 +32,7 @@ function getEnvironmentGitSummary(
   if (environment.gitTracking.expectsPromotionTag) {
     return [
       environment.gitTracking.shortCommitSha
-        ? `当前追踪 ${environment.gitTracking.shortCommitSha}`
+        ? `追踪 ${environment.gitTracking.shortCommitSha}`
         : null,
       environment.gitTracking.releaseTagName ? '已生成提升标签' : '等待提升标签',
     ]
@@ -41,7 +41,7 @@ function getEnvironmentGitSummary(
   }
 
   return environment.gitTracking.shortCommitSha
-    ? `当前追踪 ${environment.gitTracking.shortCommitSha}`
+    ? `追踪 ${environment.gitTracking.shortCommitSha}`
     : `Git ${environment.gitTracking.trackingBranchName}`;
 }
 

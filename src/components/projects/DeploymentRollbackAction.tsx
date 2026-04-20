@@ -126,9 +126,7 @@ export function DeploymentRollbackAction({
       >
         <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
           <DialogTitle>回滚检查</DialogTitle>
-          <DialogDescription>
-            回到上一个稳定版本前，先确认当前候选镜像和阻断条件。
-          </DialogDescription>
+          <DialogDescription>确认后回滚。</DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
@@ -143,7 +141,7 @@ export function DeploymentRollbackAction({
               <div className={dialogPanelClassName}>
                 <div className="space-y-1">
                   <div className="text-sm font-semibold text-foreground">回滚来源</div>
-                  <div className="text-sm text-muted-foreground">确认要回到的稳定版本来源。</div>
+                  <div className="text-sm text-muted-foreground">确认回滚版本。</div>
                 </div>
 
                 {planningPanel?.sourceImageUrl ? (
@@ -169,9 +167,7 @@ export function DeploymentRollbackAction({
               <div className={dialogPanelClassName}>
                 <div className="mb-3 space-y-1">
                   <div className="text-sm font-semibold text-foreground">回滚检查</div>
-                  <div className="text-sm text-muted-foreground">
-                    有阻断时不允许直接创建回滚发布。
-                  </div>
+                  <div className="text-sm text-muted-foreground">有阻断则不可回滚。</div>
                 </div>
 
                 {loadingPlan ? (

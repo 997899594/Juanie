@@ -194,9 +194,7 @@ export function ProjectInitializingClient({
           </div>
         </div>
         <div className="ui-control px-5 py-4">
-          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            后续动作
-          </div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">动作</div>
           <div className="mt-3 text-sm font-semibold">{effectiveNextAction}</div>
         </div>
       </div>

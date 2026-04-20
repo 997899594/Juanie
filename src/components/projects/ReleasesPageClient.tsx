@@ -200,11 +200,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title={selectedEnvironment ? `${selectedEnvironment.name} 发布` : '发布总览'}
-        description={
-          selectedEnvironment
-            ? '只看当前环境的发布、进入方式和后续提升。'
-            : '只保留发布链路本身，不重复环境里的其它信息。'
-        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusIndicator
@@ -283,7 +278,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             />
             <span>{governance.roleLabel}</span>
             {selectedEnvironment ? <span>{selectedEnvironment.name}</span> : null}
-            {!selectedEnvironment ? <span>跨环境发布记录</span> : <span>当前环境发布视图</span>}
+            {!selectedEnvironment ? <span>跨环境</span> : <span>单环境</span>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!selectedEnvironment && hasPromotionTarget ? (
@@ -331,14 +326,10 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               {selectedEnvironment?.name}
             </div>
             <div className="mt-2 text-sm text-muted-foreground">
-              {selectedEnvironment?.scopeLabel ??
-                selectedEnvironment?.sourceLabel ??
-                '当前发布环境'}
+              {selectedEnvironment?.scopeLabel ?? selectedEnvironment?.sourceLabel ?? '环境'}
             </div>
             {selectedEnvironment?.deliveryMode === 'promote_only' ? (
-              <div className="mt-3 text-xs text-muted-foreground">
-                当前环境只接受提升，不直接发布。
-              </div>
+              <div className="mt-3 text-xs text-muted-foreground">仅接受提升</div>
             ) : null}
             {(selectedEnvironment?.deliveryRules?.length ?? 0) > 0 ? (
               <div className="mt-3 text-xs text-muted-foreground">
@@ -371,11 +362,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               </div>
             ) : (
               <div className="mt-3 text-lg font-semibold tracking-tight text-foreground">
-                直接在当前环境发布
+                直接发布
               </div>
             )}
             {incomingPromotionPlans.some((plan) => plan.requiresApproval) ? (
-              <div className="mt-3 text-xs text-muted-foreground">部分进入链路需要审批。</div>
+              <div className="mt-3 text-xs text-muted-foreground">含审批</div>
             ) : null}
           </div>
 
@@ -398,13 +389,11 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               </div>
             ) : (
               <div className="mt-3 text-lg font-semibold tracking-tight text-foreground">
-                当前环境没有后续提升链路
+                无后续链路
               </div>
             )}
             {outgoingPromotionPlans.some((plan) => plan.requiresApproval) ? (
-              <div className="mt-3 text-xs text-muted-foreground">
-                提升到后续环境时可能需要审批。
-              </div>
+              <div className="mt-3 text-xs text-muted-foreground">含审批</div>
             ) : null}
           </div>
         </section>

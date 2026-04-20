@@ -448,10 +448,10 @@ function buildEnvironmentStatusSummary(environment: EnvironmentRecord): string {
   }
 
   if (environment.namespace) {
-    return '运行正常，可以继续发布、查看数据或排查日志。';
+    return '运行正常';
   }
 
-  return '环境已创建，相关状态会在这里持续更新。';
+  return '状态更新中';
 }
 
 function buildEnvironmentListSummary(environment: EnvironmentRecord): string {
@@ -468,7 +468,7 @@ function buildEnvironmentSourceSummary(environment: EnvironmentRecord): {
 } {
   if (environment.gitTracking) {
     return {
-      label: environment.sourceLabel ?? '当前来源',
+      label: environment.sourceLabel ?? '来源',
       summary: environment.gitTracking.summary,
     };
   }
@@ -479,13 +479,13 @@ function buildEnvironmentSourceSummary(environment: EnvironmentRecord): {
       summary:
         environment.branch && !environment.sourceLabel.includes(environment.branch)
           ? `跟随 ${environment.branch}`
-          : '当前环境按该来源持续更新',
+          : '持续更新',
     };
   }
 
   return {
     label: '手动环境',
-    summary: '当前环境没有自动来源路由，需要手动发布或提升',
+    summary: '手动发布或提升',
   };
 }
 
@@ -496,7 +496,7 @@ function buildEnvironmentVersionSummary(environment: EnvironmentRecord): {
   if (!environment.latestReleaseCard) {
     return {
       label: '暂无版本',
-      summary: '当前环境还没有可展示的版本记录',
+      summary: '还没有版本',
     };
   }
 
@@ -705,19 +705,19 @@ function EnvironmentOverviewPanel({
 
       <section className="grid gap-3 xl:grid-cols-[1.1fr_1fr_1fr]">
         <div className={shellClassName}>
-          <div className={titleClassName}>当前来源</div>
+          <div className={titleClassName}>来源</div>
           <div className={valueClassName}>{sourceSummary.label}</div>
           <div className={summaryClassName}>{sourceSummary.summary}</div>
         </div>
 
         <div className={shellClassName}>
-          <div className={titleClassName}>当前版本</div>
+          <div className={titleClassName}>版本</div>
           <div className={valueClassName}>{versionSummary.label}</div>
           <div className={summaryClassName}>{versionSummary.summary}</div>
         </div>
 
         <div className={shellClassName}>
-          <div className={titleClassName}>当前状态</div>
+          <div className={titleClassName}>状态</div>
           <div className={valueClassName}>
             {environment.policy.primarySignal?.label ??
               environment.previewLifecycle?.stateLabel ??
