@@ -27,10 +27,10 @@ describe('approvals view', () => {
         canceled: 1,
       })
     ).toEqual([
-      { label: '待处理', value: 3 },
+      { label: '全部事项', value: 3 },
       { label: '待审批', value: 1 },
       { label: '待外部完成', value: 1 },
-      { label: '失败', value: 1 },
+      { label: '失败待修复', value: 1 },
       { label: '已取消', value: 1 },
     ]);
   });
