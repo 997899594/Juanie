@@ -7,6 +7,14 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { databaseCapabilities, normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import {
+  getDatabaseSelectionValidationIssues,
+  getDefaultDatabaseProvisionType,
+  isPlatformDatabaseProvisionType,
+  isPlatformDatabaseType,
+  platformDatabaseProvisionTypes,
+  platformDatabaseTypes,
+} from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { databases, environments, services } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
@@ -72,7 +80,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const {
       name,
       type,
-      provisionType = 'shared',
+      provisionType,
       externalUrl,
       plan = 'starter',
       environmentId,
@@ -86,20 +94,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'name and type are required' }, { status: 400 });
     }
 
-    const validTypes = ['postgresql', 'mysql', 'redis', 'mongodb'];
-    const validProvisionTypes = ['shared', 'standalone', 'external'];
     const validScopes = ['project', 'service'];
     const validRoles = ['primary', 'readonly', 'cache', 'queue', 'analytics'];
     const normalizedCapabilities = normalizeDatabaseCapabilities(capabilities);
-    if (!validTypes.includes(type)) {
+    if (!isPlatformDatabaseType(type)) {
       return NextResponse.json(
-        { error: `Invalid type. Must be one of: ${validTypes.join(', ')}` },
+        { error: `Invalid type. Must be one of: ${platformDatabaseTypes.join(', ')}` },
         { status: 400 }
       );
     }
-    if (!validProvisionTypes.includes(provisionType)) {
+    if (
+      provisionType !== undefined &&
+      provisionType !== null &&
+      !isPlatformDatabaseProvisionType(provisionType)
+    ) {
       return NextResponse.json(
-        { error: `Invalid provisionType. Must be one of: ${validProvisionTypes.join(', ')}` },
+        {
+          error: `Invalid provisionType. Must be one of: ${platformDatabaseProvisionTypes.join(', ')}`,
+        },
         { status: 400 }
       );
     }
@@ -126,17 +138,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         { status: 400 }
       );
     }
-    if (normalizedCapabilities.length > 0 && type !== 'postgresql') {
-      return NextResponse.json(
-        { error: 'database capabilities 目前只支持 postgresql' },
-        { status: 400 }
-      );
-    }
-    if (provisionType === 'external' && !externalUrl) {
-      return NextResponse.json(
-        { error: 'externalUrl is required for external provision type' },
-        { status: 400 }
-      );
+    const resolvedProvisionType = provisionType ?? getDefaultDatabaseProvisionType(type);
+    const selectionIssues = getDatabaseSelectionValidationIssues({
+      type,
+      provisionType: resolvedProvisionType,
+      externalUrl,
+      capabilities: normalizedCapabilities,
+    });
+
+    if (selectionIssues.length > 0) {
+      return NextResponse.json({ error: selectionIssues[0]?.message }, { status: 400 });
     }
 
     // Validate environmentId belongs to this project (if provided)
@@ -178,11 +189,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           name,
           type,
           plan,
-          provisionType,
+          provisionType: resolvedProvisionType,
           scope,
           role,
           capabilities: normalizedCapabilities,
-          connectionString: provisionType === 'external' ? externalUrl : null,
+          connectionString: resolvedProvisionType === 'external' ? externalUrl : null,
           status: 'pending',
         })
         .returning();

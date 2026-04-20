@@ -1,8 +1,14 @@
 import { and, eq } from 'drizzle-orm';
+import {
+  assertDatabasePreviewCloneSupport,
+  toPlatformDatabaseProvisionType,
+} from '@/lib/databases/platform-support';
 import { syncPreviewEnvironmentDatabases } from '@/lib/databases/preview';
 import { db } from '@/lib/db';
 import { environments, services } from '@/lib/db/schema';
 import { ensureEnvironmentDomains } from '@/lib/domains/service';
+import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/database-strategy';
+import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import {
   buildEnvironmentNamespace,
   isPersistentEnvironment,
@@ -53,6 +59,27 @@ function resolveEnvironmentKindForScaffold(input: {
   return 'persistent';
 }
 
+async function assertPreviewCloneSupportForBaseEnvironment(input: {
+  projectId: string;
+  baseEnvironmentId: string | null;
+}): Promise<void> {
+  if (!input.baseEnvironmentId) {
+    return;
+  }
+
+  const sourceDatabases = await getDatabasesForEnvironment({
+    projectId: input.projectId,
+    environmentId: input.baseEnvironmentId,
+  });
+
+  assertDatabasePreviewCloneSupport(
+    sourceDatabases.map((database) => ({
+      ...database,
+      provisionType: toPlatformDatabaseProvisionType(database.provisionType),
+    }))
+  );
+}
+
 export async function ensurePreviewEnvironmentForRef(input: {
   projectId: string;
   projectSlug: string;
@@ -81,6 +108,17 @@ export async function ensurePreviewEnvironmentForRef(input: {
     input.baseEnvironmentId === undefined
       ? await resolvePreviewBaseEnvironmentId(input.projectId)
       : input.baseEnvironmentId;
+  const databaseStrategy = resolveProjectPreviewDatabaseStrategy(
+    input.projectConfigJson,
+    input.databaseStrategy
+  );
+
+  if (databaseStrategy === 'isolated_clone') {
+    await assertPreviewCloneSupportForBaseEnvironment({
+      projectId: input.projectId,
+      baseEnvironmentId,
+    });
+  }
 
   const values = {
     projectId: input.projectId,
@@ -92,7 +130,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
     previewPrNumber: prNumber,
     expiresAt: calculatePreviewExpiry(input.ttlHours),
     baseEnvironmentId,
-    databaseStrategy: input.databaseStrategy ?? 'inherit',
+    databaseStrategy,
     autoDeploy: true,
     isProduction: false,
     deploymentStrategy: 'rolling' as const,

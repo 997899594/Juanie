@@ -3,6 +3,10 @@ import {
   formatDatabaseCapabilityIssues,
   verifyDeclaredDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
+import {
+  formatDatabaseRuntimeAccessIssues,
+  verifyDeclaredDatabaseRuntimeAccess,
+} from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { type MigrationRunStatus, migrationRuns } from '@/lib/db/schema';
 import {
@@ -234,12 +238,21 @@ export async function buildMigrationExecutionPlan(
   let filePreviewError: string | null = null;
   let sqlFiles: Array<{ name: string }> = [];
   const commandSafety = assessMigrationCommandSafety(spec.specification);
-  const capabilityCheck = await verifyDeclaredDatabaseCapabilities(spec.database);
+  const runtimeAccessCheck = await verifyDeclaredDatabaseRuntimeAccess(spec.database);
 
-  if (!capabilityCheck.satisfied) {
+  if (!runtimeAccessCheck.satisfied) {
     canRun = false;
-    blockingReason = formatDatabaseCapabilityIssues(spec.database, capabilityCheck.issues);
-    warnings.push(...capabilityCheck.issues.map((issue) => issue.message));
+    blockingReason ??= formatDatabaseRuntimeAccessIssues(spec.database, runtimeAccessCheck.issues);
+    warnings.push(...runtimeAccessCheck.issues.map((issue) => issue.message));
+  }
+
+  if (runtimeAccessCheck.satisfied) {
+    const capabilityCheck = await verifyDeclaredDatabaseCapabilities(spec.database);
+    if (!capabilityCheck.satisfied) {
+      canRun = false;
+      blockingReason ??= formatDatabaseCapabilityIssues(spec.database, capabilityCheck.issues);
+      warnings.push(...capabilityCheck.issues.map((issue) => issue.message));
+    }
   }
 
   if (spec.specification.tool === 'sql') {
@@ -256,16 +269,16 @@ export async function buildMigrationExecutionPlan(
     } catch (error) {
       canRun = false;
       filePreviewError = error instanceof Error ? error.message : String(error);
-      blockingReason = `无法从 ${migrationPath} 读取迁移文件：${filePreviewError}`;
+      blockingReason ??= `无法从 ${migrationPath} 读取迁移文件：${filePreviewError}`;
     }
   } else if (requiresImage && !imageUrl) {
     canRun = false;
-    blockingReason = '命令式迁移需要最近一次可用的部署镜像。';
+    blockingReason ??= '命令式迁移需要最近一次可用的部署镜像。';
   }
 
   if (commandSafety.blocksExecution && spec.specification.executionMode !== 'external') {
     canRun = false;
-    blockingReason = commandSafety.summary;
+    blockingReason ??= commandSafety.summary;
   }
 
   return {

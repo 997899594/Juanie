@@ -2,6 +2,13 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { DatabaseConfig, ParsedConfig } from '@/lib/config/parser';
 import { parseJuanieConfig } from '@/lib/config/parser';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import {
+  getDatabaseProvisionTypeLabel,
+  getDatabaseTypeLabel,
+  resolveDatabaseProvisionType,
+  supportsDatabaseProvisionType,
+  toPlatformDatabaseProvisionType,
+} from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { databases, projects, repositories, services } from '@/lib/db/schema';
 import {
@@ -14,6 +21,68 @@ interface RuntimeContractSyncInput {
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
   strict?: boolean;
+}
+
+interface RuntimeDatabaseInfrastructureSnapshot {
+  name: string;
+  type: typeof databases.$inferSelect.type;
+  provisionType: ReturnType<typeof resolveDatabaseProvisionType>;
+  provisionTypeWasSupported: boolean;
+}
+
+interface RuntimeDatabaseInfrastructureChange {
+  databaseName: string;
+  message: string;
+}
+
+export class RuntimeDatabaseContractSyncBlockedError extends Error {
+  constructor(readonly changes: RuntimeDatabaseInfrastructureChange[]) {
+    super(changes.map((change) => change.message).join('；'));
+    this.name = 'RuntimeDatabaseContractSyncBlockedError';
+  }
+}
+
+function getRuntimeDatabaseInfrastructureSnapshot(
+  databaseRecord: typeof databases.$inferSelect
+): RuntimeDatabaseInfrastructureSnapshot {
+  const storedProvisionType = toPlatformDatabaseProvisionType(databaseRecord.provisionType);
+  const provisionType = resolveDatabaseProvisionType(databaseRecord.type, storedProvisionType);
+  const provisionTypeWasSupported =
+    storedProvisionType !== null &&
+    supportsDatabaseProvisionType(databaseRecord.type, storedProvisionType);
+
+  return {
+    name: databaseRecord.name,
+    type: databaseRecord.type,
+    provisionType,
+    provisionTypeWasSupported,
+  };
+}
+
+export function getUnsafeRuntimeDatabaseInfrastructureChange(
+  databaseRecord: Pick<typeof databases.$inferSelect, 'name' | 'type' | 'provisionType'>,
+  config: Pick<DatabaseConfig, 'name' | 'type' | 'provisionType'>
+): RuntimeDatabaseInfrastructureChange | null {
+  const current = getRuntimeDatabaseInfrastructureSnapshot(
+    databaseRecord as typeof databases.$inferSelect
+  );
+  const nextProvisionType = resolveDatabaseProvisionType(config.type, config.provisionType);
+
+  if (config.type !== current.type) {
+    return {
+      databaseName: config.name,
+      message: `数据库 "${config.name}" 的基础设施类型不能通过 juanie.yaml 直接从 ${getDatabaseTypeLabel(current.type)} 改成 ${getDatabaseTypeLabel(config.type)}，请走显式迁移流程`,
+    };
+  }
+
+  if (current.provisionTypeWasSupported && nextProvisionType !== current.provisionType) {
+    return {
+      databaseName: config.name,
+      message: `数据库 "${config.name}" 的供应方式不能通过 juanie.yaml 直接从 ${getDatabaseProvisionTypeLabel(current.provisionType)} 改成 ${getDatabaseProvisionTypeLabel(nextProvisionType)}，请走显式迁移流程`,
+    };
+  }
+
+  return null;
 }
 
 async function loadProjectConfigFromRepo(input: RuntimeContractSyncInput): Promise<{
@@ -237,21 +306,41 @@ export async function syncProjectDatabaseRuntimeContractsFromRepo(input: Runtime
       continue;
     }
 
+    const unsafeInfrastructureChange = getUnsafeRuntimeDatabaseInfrastructureChange(
+      databaseRecord,
+      config
+    );
+    if (unsafeInfrastructureChange) {
+      if (input.strict) {
+        throw new RuntimeDatabaseContractSyncBlockedError([unsafeInfrastructureChange]);
+      }
+
+      console.warn(
+        `[Runtime Contract] Skipping unsafe database infrastructure change for ${databaseRecord.name}: ${unsafeInfrastructureChange.message}`
+      );
+      continue;
+    }
+
     const nextScope = config.scope ?? (config.service ? 'service' : 'project');
     const nextServiceId =
       nextScope === 'service' && config.service
         ? (serviceByName.get(config.service)?.id ?? databaseRecord.serviceId)
         : null;
+    const nextProvisionType = resolveDatabaseProvisionType(config.type, config.provisionType);
 
     const [updated] = await db
       .update(databases)
       .set({
         type: config.type,
         plan: config.plan ?? databaseRecord.plan,
-        provisionType: config.provisionType ?? databaseRecord.provisionType,
+        provisionType: nextProvisionType,
         scope: nextScope,
         role: config.role ?? databaseRecord.role,
         serviceId: nextServiceId,
+        connectionString:
+          nextProvisionType === 'external'
+            ? (config.externalUrl?.trim() ?? databaseRecord.connectionString)
+            : databaseRecord.connectionString,
         capabilities: normalizeDatabaseCapabilities(config.capabilities),
         updatedAt: new Date(),
       })

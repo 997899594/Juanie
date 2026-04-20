@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { parseJuanieConfig } from '@/lib/config/parser';
+import { supportsDatabaseAutomatedMigrations } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import {
   databases,
@@ -34,19 +35,32 @@ interface ServiceDatabaseBindingConfig {
 }
 
 function getImplicitDatabaseTypesForMigrationTool(
-  tool: ServiceDatabaseBindingConfig['migrate']['tool']
+  binding: ServiceDatabaseBindingConfig
 ): Array<ServiceDatabaseBindingConfig['type']> | null {
-  switch (tool) {
+  let candidates: Array<ServiceDatabaseBindingConfig['type']> | null;
+
+  switch (binding.migrate.tool) {
     case 'drizzle':
     case 'prisma':
     case 'knex':
     case 'sql':
-      return ['postgresql', 'mysql'];
+      candidates = ['postgresql', 'mysql'];
+      break;
     case 'typeorm':
-      return ['postgresql', 'mysql', 'mongodb'];
+      candidates = ['postgresql', 'mysql', 'mongodb'];
+      break;
     default:
       return null;
   }
+
+  if (binding.migrate.executionMode !== 'automatic') {
+    return candidates;
+  }
+
+  return candidates.filter(
+    (candidate): candidate is NonNullable<typeof candidate> =>
+      candidate !== undefined && supportsDatabaseAutomatedMigrations(candidate)
+  );
 }
 
 export function getServiceBindingConfigs(serviceConfig?: {
@@ -124,7 +138,7 @@ export function resolveDatabaseForBinding(
   let filtered = baseCandidates;
 
   if (!binding.binding && !binding.role && !binding.type) {
-    const implicitDatabaseTypes = getImplicitDatabaseTypesForMigrationTool(binding.migrate.tool);
+    const implicitDatabaseTypes = getImplicitDatabaseTypesForMigrationTool(binding);
     if (implicitDatabaseTypes) {
       const implicitlyTypedCandidates = filtered.filter((candidate) =>
         implicitDatabaseTypes.includes(candidate.type as ServiceDatabaseBindingConfig['type'])

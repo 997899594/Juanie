@@ -25,7 +25,10 @@ import {
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
 import { getReleaseRunningStatusForMigrationPhase } from '@/lib/releases/state-machine';
-import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
+import {
+  RuntimeDatabaseContractSyncBlockedError,
+  syncProjectDatabaseRuntimeContractsFromRepo,
+} from '@/lib/services/runtime-contract';
 
 function getExpectedConfirmationValue(databaseName: string, environmentName: string): string {
   return `${databaseName}/${environmentName}`;
@@ -477,6 +480,13 @@ export async function POST(
       { status: 202 }
     );
   } catch (err: any) {
+    if (err instanceof RuntimeDatabaseContractSyncBlockedError) {
+      return NextResponse.json(
+        { error: err.message || '数据库运行时合同同步被阻止' },
+        { status: 409 }
+      );
+    }
+
     return NextResponse.json({ error: err.message || '迁移执行失败' }, { status: 500 });
   }
 }

@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { databaseCapabilities } from '@/lib/databases/capabilities';
+import {
+  getDatabaseSelectionValidationIssues,
+  getDefaultDatabaseProvisionType,
+  platformDatabaseProvisionTypes,
+  supportsDatabaseAutomatedMigrations,
+} from '@/lib/databases/platform-support';
 
 const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
 
@@ -98,17 +104,28 @@ export const databaseSchema = z
       .optional()
       .default('primary'),
     plan: z.enum(['starter', 'standard', 'premium']).optional(),
-    provisionType: z.enum(['shared', 'standalone', 'external']).optional().default('standalone'),
+    provisionType: z.enum(platformDatabaseProvisionTypes).optional(),
     externalUrl: z.string().optional(),
     capabilities: z.array(z.enum(databaseCapabilities)).max(20).optional().default([]),
     environments: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   })
+  .transform((database) => ({
+    ...database,
+    provisionType: database.provisionType ?? getDefaultDatabaseProvisionType(database.type),
+  }))
   .superRefine((database, ctx) => {
-    if (database.capabilities.length > 0 && database.type !== 'postgresql') {
+    const issues = getDatabaseSelectionValidationIssues(database);
+
+    for (const issue of issues) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'database capabilities 目前只支持 postgresql',
-        path: ['capabilities'],
+        message: issue.message,
+        path:
+          issue.code === 'unsupported_capabilities'
+            ? ['capabilities']
+            : issue.code === 'external_url_required' || issue.code === 'invalid_external_url'
+              ? ['externalUrl']
+              : ['provisionType'],
       });
     }
   });
@@ -197,6 +214,16 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
     }
 
     for (const binding of service.databases ?? []) {
+      if (
+        binding.migrate.executionMode === 'automatic' &&
+        binding.type &&
+        !supportsDatabaseAutomatedMigrations(binding.type)
+      ) {
+        errors.push(
+          `Service "${service.name}" 的数据库迁移绑定声明了 ${binding.type} automatic 自动迁移，但当前只有 PostgreSQL 支持`
+        );
+      }
+
       if (!binding.binding) {
         continue;
       }
@@ -206,13 +233,35 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
         warnings.push(
           `Service "${service.name}" references unknown database binding "${binding.binding}"`
         );
+        continue;
+      }
+
+      if (
+        binding.migrate.executionMode === 'automatic' &&
+        !supportsDatabaseAutomatedMigrations(database.type)
+      ) {
+        errors.push(
+          `Service "${service.name}" 绑定的数据库 "${database.name}" (${database.type}) 暂不支持 automatic 自动迁移`
+        );
+      }
+    }
+
+    if (service.migrate?.executionMode === 'automatic') {
+      const hasPostgresDatabase = (config.databases ?? []).some((database) =>
+        supportsDatabaseAutomatedMigrations(database.type)
+      );
+
+      if (!hasPostgresDatabase) {
+        warnings.push(
+          `Service "${service.name}" 配置了 automatic 自动迁移，但项目中没有可由平台自动处理的 PostgreSQL 数据库`
+        );
       }
     }
   }
 
   return {
     ...config,
-    isValid: true,
+    isValid: errors.length === 0,
     errors,
     warnings,
   };
@@ -243,7 +292,7 @@ export function generateDefaultConfig(
     `      path: /api/health`,
   ];
 
-  if (options?.database === 'postgresql' || options?.database === 'mysql') {
+  if (options?.database === 'postgresql') {
     lines.push(
       `    # Juanie could not infer a migration command for this service.`,
       `    # Add a migrate block manually before enabling managed migrations.`

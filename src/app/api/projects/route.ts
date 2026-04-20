@@ -4,6 +4,12 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import type { DatabaseConfig, ServiceConfig } from '@/lib/config/parser';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import {
+  formatUnsupportedPreviewCloneDatabasesMessage,
+  getDatabaseSelectionValidationIssues,
+  getUnsupportedPreviewCloneDatabases,
+  resolveDatabaseProvisionType,
+} from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import type { InitStepStatus } from '@/lib/db/schema';
 import {
@@ -113,6 +119,39 @@ export async function POST(request: Request) {
         { error: '团队、名称和标识不能为空', code: 'project_create_failed' },
         { status: 400 }
       );
+    }
+
+    for (const databaseConfig of databaseConfigs ?? []) {
+      const issues = getDatabaseSelectionValidationIssues({
+        ...databaseConfig,
+        provisionType: resolveDatabaseProvisionType(
+          databaseConfig.type,
+          databaseConfig.provisionType
+        ),
+      });
+
+      if (issues.length > 0) {
+        return NextResponse.json(
+          {
+            error: `数据库 "${databaseConfig.name}" 配置无效：${issues[0]?.message ?? '未知错误'}`,
+            code: 'project_create_failed',
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (previewDatabaseStrategy === 'isolated_clone') {
+      const unsupportedDatabases = getUnsupportedPreviewCloneDatabases(databaseConfigs ?? []);
+      if (unsupportedDatabases.length > 0) {
+        return NextResponse.json(
+          {
+            error: formatUnsupportedPreviewCloneDatabasesMessage(unsupportedDatabases),
+            code: 'project_create_failed',
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const teamMember = await db.query.teamMembers.findFirst({
@@ -355,7 +394,7 @@ export async function POST(request: Request) {
       }
 
       for (const dbConfig of databaseConfigs) {
-        const provisionType = dbConfig.provisionType || 'standalone';
+        const provisionType = resolveDatabaseProvisionType(dbConfig.type, dbConfig.provisionType);
         await tx.insert(databases).values({
           projectId: createdProject.id,
           environmentId: primaryEnvironment.id,

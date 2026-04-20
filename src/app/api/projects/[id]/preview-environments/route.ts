@@ -7,8 +7,10 @@ import {
   requireSession,
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
+import { PreviewCloneUnsupportedError } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { environments } from '@/lib/db/schema';
+import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/database-strategy';
 import {
   buildPreviewLaunchRef,
   launchPreviewEnvironmentFromRef,
@@ -52,22 +54,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         : null;
     const ttlHours =
       typeof body.ttlHours === 'number' && Number.isFinite(body.ttlHours) ? body.ttlHours : 72;
-    const configJson =
-      project.configJson && typeof project.configJson === 'object'
-        ? (project.configJson as Record<string, unknown>)
-        : null;
-    const creationDefaults =
-      configJson?.creationDefaults && typeof configJson.creationDefaults === 'object'
-        ? (configJson.creationDefaults as Record<string, unknown>)
-        : null;
-    const defaultPreviewDatabaseStrategy =
-      creationDefaults?.previewDatabaseStrategy === 'isolated_clone' ? 'isolated_clone' : 'inherit';
-    const databaseStrategy =
+    const requestedDatabaseStrategy =
       body.databaseStrategy === 'isolated_clone'
         ? 'isolated_clone'
         : body.databaseStrategy === 'inherit'
           ? 'inherit'
-          : defaultPreviewDatabaseStrategy;
+          : null;
+    const databaseStrategy = resolveProjectPreviewDatabaseStrategy(
+      project.configJson,
+      requestedDatabaseStrategy
+    );
 
     if (!branch && !prNumber) {
       return NextResponse.json({ error: '预览环境需要分支或 PR 号' }, { status: 400 });
@@ -118,6 +114,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     if (error instanceof PreviewDatabaseGuardBlockedError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+
+    if (error instanceof PreviewCloneUnsupportedError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
 

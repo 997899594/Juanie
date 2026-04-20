@@ -35,6 +35,16 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import type { ServiceConfig } from '@/lib/config/parser';
+import type {
+  PlatformDatabaseProvisionType,
+  PlatformDatabaseType,
+} from '@/lib/databases/platform-support';
+import {
+  formatUnsupportedPreviewCloneDatabasesMessage,
+  getDefaultDatabaseProvisionType,
+  getUnsupportedPreviewCloneDatabases,
+  supportsDatabaseProvisionType,
+} from '@/lib/databases/platform-support';
 import {
   getEnvironmentDatabaseStrategyLabel,
   getEnvironmentDeploymentStrategyLabel,
@@ -128,9 +138,9 @@ interface ServiceWithId {
 interface DatabaseWithId {
   _id: string;
   name: string;
-  type: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
+  type: PlatformDatabaseType;
   plan: 'starter' | 'standard' | 'premium';
-  provisionType: 'shared' | 'standalone' | 'external';
+  provisionType: PlatformDatabaseProvisionType;
   externalUrl?: string;
 }
 
@@ -276,7 +286,7 @@ function createDatabaseDraft(type: DatabaseWithId['type']): DatabaseWithId {
     name: type === 'postgresql' ? 'primary' : type,
     type,
     plan: 'starter',
-    provisionType: type === 'mysql' || type === 'mongodb' ? 'standalone' : 'shared',
+    provisionType: getDefaultDatabaseProvisionType(type),
   };
 }
 
@@ -495,6 +505,11 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
     getEnvironmentDatabaseStrategyLabel(formData.previewDatabaseStrategy) ??
     formData.previewDatabaseStrategy;
   const environmentTemplateLabel = getCreateEnvironmentTemplateLabel(formData.environmentTemplate);
+  const previewCloneUnsupportedDatabases = getUnsupportedPreviewCloneDatabases(formData.databases);
+  const isolatedCloneBlockedMessage =
+    previewCloneUnsupportedDatabases.length > 0
+      ? formatUnsupportedPreviewCloneDatabasesMessage(previewCloneUnsupportedDatabases)
+      : null;
 
   const fetchRepositories = useCallback(
     async (search?: string) => {
@@ -583,6 +598,21 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
       fetchRepositories(searchQuery);
     }
   }, [currentStep, fetchRepositories, formData.mode, searchQuery]);
+
+  useEffect(() => {
+    if (formData.previewDatabaseStrategy !== 'isolated_clone' || !isolatedCloneBlockedMessage) {
+      return;
+    }
+
+    setFormData((prev) =>
+      prev.previewDatabaseStrategy === 'isolated_clone'
+        ? {
+            ...prev,
+            previewDatabaseStrategy: 'inherit',
+          }
+        : prev
+    );
+  }, [formData.previewDatabaseStrategy, isolatedCloneBlockedMessage]);
 
   const updateTeamId = (teamId: string) => {
     setSubmitSnapshot(null);
@@ -767,7 +797,11 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         const externalDatabasesValid = formData.databases
           .filter((database) => database.provisionType === 'external')
           .every((database) => Boolean(database.externalUrl?.trim()));
-        return activeServices.length > 0 && externalDatabasesValid;
+        return (
+          activeServices.length > 0 &&
+          externalDatabasesValid &&
+          (formData.previewDatabaseStrategy !== 'isolated_clone' || !isolatedCloneBlockedMessage)
+        );
       }
       default:
         return false;
@@ -1178,9 +1212,15 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                     title={strategy.label}
                     description={strategy.description}
                     selected={formData.previewDatabaseStrategy === strategy.value}
+                    disabled={
+                      strategy.value === 'isolated_clone' && Boolean(isolatedCloneBlockedMessage)
+                    }
                   />
                 ))}
               </div>
+              {isolatedCloneBlockedMessage ? (
+                <p className="text-sm text-muted-foreground">{isolatedCloneBlockedMessage}</p>
+              ) : null}
             </div>
 
             <DisclosurePanel
@@ -1551,8 +1591,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   />
                 ) : (
                   formData.databases.map((database) => {
-                    const sharedDisabled = database.type === 'mysql' || database.type === 'mongodb';
-
                     const updateDatabase = (updates: Partial<DatabaseWithId>) => {
                       setFormData((prev) => ({
                         ...prev,
@@ -1631,22 +1669,29 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                                   { value: 'standalone', label: '独立资源' },
                                   { value: 'external', label: '外部实例' },
                                 ] as const
-                              ).map((option) => (
-                                <Button
-                                  key={option.value}
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={option.value === 'shared' && sharedDisabled}
-                                  onClick={() => updateDatabase({ provisionType: option.value })}
-                                  className={getPillChoiceClass(
-                                    database.provisionType === option.value,
-                                    option.value === 'shared' && sharedDisabled
-                                  )}
-                                >
-                                  {option.label}
-                                </Button>
-                              ))}
+                              ).map((option) => {
+                                const disabled = !supportsDatabaseProvisionType(
+                                  database.type,
+                                  option.value
+                                );
+
+                                return (
+                                  <Button
+                                    key={option.value}
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={disabled}
+                                    onClick={() => updateDatabase({ provisionType: option.value })}
+                                    className={getPillChoiceClass(
+                                      database.provisionType === option.value,
+                                      disabled
+                                    )}
+                                  >
+                                    {option.label}
+                                  </Button>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
@@ -1662,9 +1707,11 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                               placeholder={
                                 database.type === 'redis'
                                   ? 'redis://:password@host:6379'
-                                  : database.type === 'mongodb'
-                                    ? 'mongodb://user:pass@host:27017/db'
-                                    : 'postgresql://user:pass@host:5432/db'
+                                  : database.type === 'mysql'
+                                    ? 'mysql://user:pass@host:3306/db'
+                                    : database.type === 'mongodb'
+                                      ? 'mongodb://user:pass@host:27017/db'
+                                      : 'postgresql://user:pass@host:5432/db'
                               }
                             />
                           </div>

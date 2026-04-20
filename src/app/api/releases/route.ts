@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { PreviewCloneUnsupportedError } from '@/lib/databases/platform-support';
 import { createRepositoryRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
 import { verifyRepositoryAccess } from '@/lib/releases/api-access';
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
     const status =
       error instanceof ReleaseSchemaGateBlockedError ||
       error instanceof PreviewDatabaseGuardBlockedError ||
+      error instanceof PreviewCloneUnsupportedError ||
       error instanceof ReleaseAdmissionError
         ? 409
         : message.includes('Token does not have access') || message.includes('Missing bearer token')

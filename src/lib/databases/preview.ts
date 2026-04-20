@@ -1,6 +1,10 @@
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { clonePostgreSQLDatabase } from '@/lib/databases/clone';
+import {
+  assertDatabasePreviewCloneSupport,
+  toPlatformDatabaseProvisionType,
+} from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
 import { databases, environments, projects } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
@@ -67,9 +71,12 @@ export async function syncPreviewEnvironmentDatabases(input: {
     return;
   }
 
-  if (sourceDatabases.some((database) => database.provisionType === 'external')) {
-    throw new Error('外部数据库暂不支持独立预览库，请改用继承基础数据库');
-  }
+  assertDatabasePreviewCloneSupport(
+    sourceDatabases.map((database) => ({
+      ...database,
+      provisionType: toPlatformDatabaseProvisionType(database.provisionType),
+    }))
+  );
 
   const existingClones = await db.query.databases.findMany({
     where: and(eq(databases.environmentId, environment.id), isNotNull(databases.sourceDatabaseId)),

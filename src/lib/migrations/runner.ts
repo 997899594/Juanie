@@ -5,7 +5,11 @@ import {
   formatDatabaseCapabilityIssues,
   verifyDeclaredDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
-import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
+import { assertManagedPostgresRuntimeAccess } from '@/lib/databases/postgres-ownership';
+import {
+  formatDatabaseRuntimeAccessIssues,
+  verifyDeclaredDatabaseRuntimeAccess,
+} from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import { migrationRunItems, migrationRuns } from '@/lib/db/schema';
 import {
@@ -957,6 +961,15 @@ export async function executeMigrationRun(
     await appendRunLog(runId, '检测到迁移任务已在运行，恢复监控现有执行。');
   }
 
+  const runtimeAccessCheck = await verifyDeclaredDatabaseRuntimeAccess(spec.database);
+  if (!runtimeAccessCheck.satisfied) {
+    await markRunFailed(
+      runId,
+      'MIGRATION_DATABASE_RUNTIME_ACCESS_FAILED',
+      formatDatabaseRuntimeAccessIssues(spec.database, runtimeAccessCheck.issues)
+    );
+  }
+
   const capabilityCheck = await verifyDeclaredDatabaseCapabilities(spec.database);
   if (!capabilityCheck.satisfied) {
     await markRunFailed(
@@ -967,7 +980,7 @@ export async function executeMigrationRun(
   }
 
   if (spec.specification.tool === 'sql') {
-    await ensureManagedPostgresOwnership(spec.database);
+    await assertManagedPostgresRuntimeAccess(spec.database);
     await runSqlMigration(runId, spec, options);
     return;
   }
@@ -989,6 +1002,6 @@ export async function executeMigrationRun(
     );
   }
 
-  await ensureManagedPostgresOwnership(spec.database);
+  await assertManagedPostgresRuntimeAccess(spec.database);
   await runCommandMigration(runId, spec, options.imageUrl!);
 }

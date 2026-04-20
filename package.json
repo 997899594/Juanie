@@ -54,6 +54,8 @@
     "drizzle-orm": "^0.38.3",
     "ioredis": "^5.9.3",
     "lucide-react": "^0.469.0",
+    "mongodb": "^7.1.1",
+    "mysql2": "^3.22.1",
     "nanoid": "^5.0.9",
     "next": "16.1.6",
     "next-auth": "beta",

@@ -9,6 +9,7 @@ import {
   repositories,
   services,
 } from '@/lib/db/schema';
+import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/database-strategy';
 import {
   clearPreviewEnvironmentBuildState,
   setPreviewEnvironmentBuildState,
@@ -279,6 +280,7 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
             projectSlug: project.slug,
             projectConfigJson: project.configJson,
             ref: input.ref,
+            databaseStrategy: resolveProjectPreviewDatabaseStrategy(project.configJson),
             baseEnvironmentId: route.rule.environmentId ?? null,
           })
         : null;

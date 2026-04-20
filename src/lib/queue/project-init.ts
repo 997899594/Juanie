@@ -11,7 +11,21 @@ import {
   resolveManagedPostgresImage,
   verifyDeclaredDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
-import { ensureManagedPostgresOwnership } from '@/lib/databases/postgres-ownership';
+import {
+  formatUnsupportedDatabaseProvisionTypeMessage,
+  resolveDatabaseProvisionType,
+  supportsDatabaseAutomatedMigrations,
+  supportsDatabaseProvisionType,
+  toPlatformDatabaseProvisionType,
+} from '@/lib/databases/platform-support';
+import {
+  assertManagedPostgresRuntimeAccess,
+  buildManagedPostgresProvisionStatements,
+} from '@/lib/databases/postgres-ownership';
+import {
+  formatDatabaseRuntimeAccessIssues,
+  verifyDeclaredDatabaseRuntimeAccess,
+} from '@/lib/databases/runtime-access';
 import { db } from '@/lib/db';
 import {
   buildNormalizedPostgresUrl,
@@ -564,7 +578,7 @@ interface RepoAutomationContext {
 }
 
 function supportsGeneratedMigration(dbType: typeof databases.$inferSelect.type): boolean {
-  return dbType === 'postgresql' || dbType === 'mysql';
+  return supportsDatabaseAutomatedMigrations(dbType);
 }
 
 function parseDockerBakeTargets(content: string): string[] {
@@ -1661,10 +1675,23 @@ export async function provisionDatabase(
   project: typeof projects.$inferSelect,
   hasK8s: boolean
 ): Promise<void> {
-  const provisionType = database.provisionType || 'standalone';
+  const provisionType = resolveDatabaseProvisionType(
+    database.type,
+    toPlatformDatabaseProvisionType(database.provisionType)
+  );
+
+  if (!supportsDatabaseProvisionType(database.type, provisionType)) {
+    await db.update(databases).set({ status: 'failed' }).where(eq(databases.id, database.id));
+    throw new Error(formatUnsupportedDatabaseProvisionTypeMessage(database.type, provisionType));
+  }
 
   if (provisionType === 'external') {
-    // connectionString was set at insert time; just mark running
+    const runtimeAccessCheck = await verifyDeclaredDatabaseRuntimeAccess(database);
+    if (!runtimeAccessCheck.satisfied) {
+      await db.update(databases).set({ status: 'failed' }).where(eq(databases.id, database.id));
+      throw new Error(formatDatabaseRuntimeAccessIssues(database, runtimeAccessCheck.issues));
+    }
+
     const capabilityCheck = await verifyDeclaredDatabaseCapabilities(database);
     await db
       .update(databases)
@@ -1686,11 +1713,9 @@ export async function provisionDatabase(
       await provisionSharedRedis(database);
       return;
     }
-    // MySQL / MongoDB: shared not supported — fall through to standalone
-    console.log(`[shared] ${database.type} not supported as shared, falling through to standalone`);
   }
 
-  // standalone (or shared fallback for unsupported types)
+  // standalone
   if (!hasK8s) {
     console.log(`[Mock] Would provision database: ${database.name}`);
     await db.update(databases).set({ status: 'running' }).where(eq(databases.id, database.id));
@@ -1733,7 +1758,11 @@ export async function provisionDatabase(
   console.log(`Provisioning standalone database ${database.name} for project ${project.name}`);
 
   await createNamespace(namespace);
-  await createSecret(namespace, secretName, { password: dbPassword });
+  await createSecret(
+    namespace,
+    secretName,
+    buildManagedDatabaseSecretData(database.type, dbPassword)
+  );
 
   if (database.type === 'postgresql') {
     await createPostgreSQLStatefulSet(
@@ -1750,6 +1779,9 @@ export async function provisionDatabase(
   } else if (database.type === 'mysql') {
     await createMySQLStatefulSet(namespace, resourceName, database.name, secretName);
     await createService(namespace, resourceName, { port: 3306, targetPort: 3306 });
+  } else {
+    await db.update(databases).set({ status: 'failed' }).where(eq(databases.id, database.id));
+    throw new Error(`当前不支持以 ${provisionType} 方式供应 ${database.type} 数据库`);
   }
 
   const connectionString = getConnectionString(
@@ -1765,6 +1797,10 @@ export async function provisionDatabase(
     .set({
       connectionString,
       host: `${resourceName}.${namespace}.svc.cluster.local`,
+      port: getManagedDatabasePort(database.type),
+      databaseName: database.type === 'redis' ? null : database.name,
+      username: getManagedDatabaseUsername(database.type),
+      password: dbPassword,
       serviceName: resourceName,
       namespace,
     })
@@ -1789,6 +1825,46 @@ export async function provisionDatabase(
   }
 
   console.log(`✅ Provisioned standalone database ${database.name}`);
+}
+
+function buildManagedDatabaseSecretData(
+  type: typeof databases.$inferSelect.type,
+  password: string
+): Record<string, string> {
+  switch (type) {
+    case 'postgresql':
+      return { POSTGRES_PASSWORD: password };
+    case 'mysql':
+      return { MYSQL_ROOT_PASSWORD: password };
+    case 'redis':
+      return { password };
+    default:
+      return { password };
+  }
+}
+
+function getManagedDatabaseUsername(type: typeof databases.$inferSelect.type): string | null {
+  switch (type) {
+    case 'postgresql':
+      return 'postgres';
+    case 'mysql':
+      return 'root';
+    default:
+      return null;
+  }
+}
+
+function getManagedDatabasePort(type: typeof databases.$inferSelect.type): number | null {
+  switch (type) {
+    case 'postgresql':
+      return 5432;
+    case 'mysql':
+      return 3306;
+    case 'redis':
+      return 6379;
+    default:
+      return null;
+  }
 }
 
 /** Sanitize a string to a valid PostgreSQL identifier segment (a-z0-9_ only, max 30 chars). */
@@ -1851,28 +1927,28 @@ async function provisionSharedPostgreSQL(
     .join('_')
     .slice(0, 63);
   const dbPassword = nanoid(32); // URL-safe chars: A-Za-z0-9_- — safe in SQL string literals
+  const provisionStatements = buildManagedPostgresProvisionStatements({
+    databaseName: dbIdentifier,
+    owner: dbIdentifier,
+    password: dbPassword,
+  });
 
   const adminConn = postgres(adminUrl, { max: 1 });
   try {
-    // Create database (idempotent)
-    await adminConn
-      .unsafe(`CREATE DATABASE "${dbIdentifier}" ENCODING 'UTF8'`)
-      .catch((e: Error) => {
-        if (!e.message?.includes('already exists')) throw e;
-      });
+    await adminConn.unsafe(provisionStatements.roleCreateOrUpdate);
 
-    // Create user with password (idempotent)
-    await adminConn
-      .unsafe(`CREATE USER "${dbIdentifier}" WITH PASSWORD '${dbPassword}'`)
-      .catch((e: Error) => {
-        if (!e.message?.includes('already exists')) throw e;
-      });
+    const [databaseExists] = await adminConn<{ exists: boolean }[]>`
+      SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = ${dbIdentifier}) AS exists
+    `;
 
-    // Grant all privileges
-    await adminConn.unsafe(
-      `GRANT ALL PRIVILEGES ON DATABASE "${dbIdentifier}" TO "${dbIdentifier}"`
-    );
-    await adminConn.unsafe(`ALTER DATABASE "${dbIdentifier}" OWNER TO "${dbIdentifier}"`);
+    if (!databaseExists?.exists) {
+      await adminConn.unsafe(provisionStatements.databaseCreate);
+    }
+
+    await adminConn.unsafe(provisionStatements.databaseOwnerStatement);
+    for (const statement of provisionStatements.databaseGrants) {
+      await adminConn.unsafe(statement);
+    }
 
     const parsedUrl = new URL(adminUrl);
     const host = toFqdn(parsedUrl.hostname);
@@ -1884,6 +1960,17 @@ async function provisionSharedPostgreSQL(
       port,
       databaseName: dbIdentifier,
     });
+
+    const bootstrapUrl = new URL(adminUrl);
+    bootstrapUrl.pathname = `/${dbIdentifier}`;
+    const bootstrapConn = postgres(bootstrapUrl.toString(), { max: 1 });
+    try {
+      for (const statement of provisionStatements.schemaBootstrapStatements) {
+        await bootstrapConn.unsafe(statement);
+      }
+    } finally {
+      await bootstrapConn.end().catch(() => undefined);
+    }
 
     await db
       .update(databases)
@@ -1897,7 +1984,7 @@ async function provisionSharedPostgreSQL(
       })
       .where(eq(databases.id, database.id));
 
-    await ensureManagedPostgresOwnership({
+    await assertManagedPostgresRuntimeAccess({
       type: 'postgresql',
       provisionType: 'shared',
       host,
