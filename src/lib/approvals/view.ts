@@ -123,10 +123,10 @@ export function buildApprovalStats(input: {
   canceled: number;
 }): ApprovalStat[] {
   return [
-    { label: '待处理', value: input.total },
+    { label: '全部事项', value: input.total },
     { label: '待审批', value: input.approval },
     { label: '待外部完成', value: input.external },
-    { label: '失败', value: input.failed },
+    { label: '失败待修复', value: input.failed },
     { label: '已取消', value: input.canceled },
   ];
 }

@@ -67,7 +67,7 @@ export default async function InboxPage({
             筛选
           </div>
           <Button asChild variant={filterState === 'all' ? 'default' : 'outline'} size="sm">
-            <Link href={buildApprovalsFilterHref('all')}>待处理</Link>
+            <Link href={buildApprovalsFilterHref('all')}>全部事项</Link>
           </Button>
           <Button asChild variant={filterState === 'approval' ? 'default' : 'outline'} size="sm">
             <Link href={buildApprovalsFilterHref('approval')}>待审批</Link>
@@ -76,7 +76,7 @@ export default async function InboxPage({
             <Link href={buildApprovalsFilterHref('external')}>待外部完成</Link>
           </Button>
           <Button asChild variant={filterState === 'failed' ? 'default' : 'outline'} size="sm">
-            <Link href={buildApprovalsFilterHref('failed')}>失败</Link>
+            <Link href={buildApprovalsFilterHref('failed')}>失败待修复</Link>
           </Button>
           <Button asChild variant={filterState === 'canceled' ? 'default' : 'outline'} size="sm">
             <Link href={buildApprovalsFilterHref('canceled')}>已取消</Link>
