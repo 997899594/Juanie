@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { projects, teamMembers, teams } from '@/lib/db/schema';
+import { requestProjectDeletion } from '@/lib/projects/delete-service';
 
 export async function createTeam(formData: FormData) {
   const session = await auth();
@@ -104,8 +105,7 @@ export async function deleteProject(projectId: string) {
     return { error: 'Only owner can delete project' };
   }
 
-  await db.delete(projects).where(eq(projects.id, projectId));
-
+  const result = await requestProjectDeletion(projectId);
   revalidatePath('/projects');
-  return { success: true };
+  return { success: true, ...result };
 }

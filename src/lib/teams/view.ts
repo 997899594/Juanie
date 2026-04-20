@@ -1,5 +1,6 @@
 import type { IntegrationAuthMode, TeamRole } from '@/lib/db/schema';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
+import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import {
   buildTeamGovernanceSnapshot,
   buildTeamMemberActionSnapshot,
@@ -72,6 +73,7 @@ export interface TeamOverviewStat {
 export interface TeamOverviewProjectCard {
   id: string;
   name: string;
+  status: string | null;
   statusLabel: string;
   governance: ReturnType<typeof buildProjectGovernanceSnapshot>;
 }
@@ -283,7 +285,8 @@ export function buildTeamOverviewView(input: {
     projects: input.projects.map((project) => ({
       id: project.id,
       name: project.name,
-      statusLabel: project.status ?? 'active',
+      status: project.status ?? null,
+      statusLabel: formatRuntimeStatusLabel(project.status),
       governance: buildProjectGovernanceSnapshot({
         role: input.role,
         environments: project.environments,

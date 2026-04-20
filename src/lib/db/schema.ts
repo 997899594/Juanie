@@ -38,7 +38,13 @@ export type DatabaseScope = (typeof databaseScopes)[number];
 export const databaseRoles = ['primary', 'readonly', 'cache', 'queue', 'analytics'] as const;
 export type DatabaseRole = (typeof databaseRoles)[number];
 
-export const projectStatuses = ['initializing', 'active', 'failed', 'archived'] as const;
+export const projectStatuses = [
+  'initializing',
+  'active',
+  'failed',
+  'deleting',
+  'archived',
+] as const;
 export type ProjectStatus = (typeof projectStatuses)[number];
 
 export const releaseStatuses = [

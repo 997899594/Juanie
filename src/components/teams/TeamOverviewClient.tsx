@@ -2,8 +2,11 @@
 
 import { FolderKanban, Plus } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
+import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import type { getTeamOverviewPageData } from '@/lib/teams/service';
 
 interface TeamOverviewClientProps {
@@ -12,9 +15,43 @@ interface TeamOverviewClientProps {
 }
 
 export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientProps) {
-  const overview = initialData.overview;
+  const [overview, setOverview] = useState(initialData.overview);
   const shellClassName =
     'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
+
+  useProjectsRealtime({
+    projectIds: overview.projects.map((project) => project.id),
+    onEvent: (event) => {
+      if (event.kind === 'project_deleted') {
+        setOverview((current) => {
+          const exists = current.projects.some((project) => project.id === event.projectId);
+          return {
+            ...current,
+            stats: current.stats.map((stat) =>
+              stat.label === '项目' && exists
+                ? { ...stat, value: String(Math.max(0, Number(stat.value) - 1)) }
+                : stat
+            ),
+            projects: current.projects.filter((project) => project.id !== event.projectId),
+          };
+        });
+        return;
+      }
+
+      setOverview((current) => ({
+        ...current,
+        projects: current.projects.map((project) =>
+          project.id === event.projectId
+            ? {
+                ...project,
+                status: event.project.status,
+                statusLabel: formatRuntimeStatusLabel(event.project.status),
+              }
+            : project
+        ),
+      }));
+    },
+  });
 
   return (
     <div className="space-y-6">

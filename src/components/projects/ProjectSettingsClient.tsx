@@ -27,8 +27,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
 import { updateEnvironmentStrategy } from '@/lib/environments/client-actions';
 import type { ProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
+import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { cn } from '@/lib/utils';
 
 interface ProjectSettingsClientProps {
@@ -94,18 +96,46 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [savingEnvironmentId, setSavingEnvironmentId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: initialData.project.name || '',
     description: initialData.project.description || '',
     productionBranch: initialData.project.productionBranch || 'main',
   });
+  const isDeleting = project.status === 'deleting';
+  const overviewStats = [
+    { label: '团队', value: project.teamName },
+    { label: '角色', value: project.governance.roleLabel },
+    { label: '状态', value: formatRuntimeStatusLabel(project.status) },
+  ];
 
-  const canEdit = ['owner', 'admin'].includes(project.yourRole);
+  const canEdit = ['owner', 'admin'].includes(project.yourRole) && !isDeleting;
+
+  useProjectsRealtime({
+    projectIds: [projectId],
+    onEvent: (event) => {
+      if (event.kind === 'project_deleted') {
+        router.replace('/projects');
+        router.refresh();
+        return;
+      }
+
+      setProject((current) => ({
+        ...current,
+        status: event.project.status ?? current.status,
+      }));
+    },
+  });
 
   const handleEnvironmentStrategyChange = async (
     environmentId: string,
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => {
+    if (isDeleting) {
+      return;
+    }
+
     setSavingEnvironmentId(environmentId);
 
     try {
@@ -128,6 +158,10 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDeleting) {
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -152,21 +186,40 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
   };
 
   const handleDelete = async () => {
-    const res = await fetch(`/api/projects/${projectId}/settings`, {
-      method: 'DELETE',
-    });
+    setDeleteError(null);
+    setDeleting(true);
 
-    if (res.ok) {
-      router.push('/projects');
+    try {
+      const res = await fetch(`/api/projects/${projectId}/settings`, {
+        method: 'DELETE',
+      });
+      const payload = await res.json().catch(() => null);
+
+      if (res.ok) {
+        setProject((current) => ({
+          ...current,
+          status: payload?.status ?? 'deleting',
+        }));
+        return;
+      }
+
+      setDeleteError(payload?.error ?? '删除项目失败，请稍后再试');
+    } finally {
+      setDeleting(false);
     }
   };
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader title="设置" />
+      <PageHeader
+        title="设置"
+        description={
+          isDeleting ? '项目正在删除中，环境资源清理完成后会自动从列表移除。' : undefined
+        }
+      />
 
       <div className="grid gap-2 md:grid-cols-3">
-        {initialData.overview.stats.map((stat) => (
+        {overviewStats.map((stat) => (
           <div key={stat.label} className={settingsSubtleClassName}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
@@ -222,13 +275,15 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     状态
                   </div>
-                  <div className="mt-2 text-sm font-medium capitalize">{project.status}</div>
+                  <div className="mt-2 text-sm font-medium">
+                    {formatRuntimeStatusLabel(project.status)}
+                  </div>
                 </div>
               </div>
 
               {canEdit && (
                 <div className="flex items-center gap-3 pt-2">
-                  <Button type="submit" disabled={saving}>
+                  <Button type="submit" disabled={saving || isDeleting}>
                     {saving ? '保存中...' : '保存'}
                   </Button>
                   {saved && <span className="text-xs text-success">已保存</span>}
@@ -265,7 +320,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
               {canEdit && (
                 <div className="flex items-center gap-3 pt-2">
-                  <Button type="submit" disabled={saving}>
+                  <Button type="submit" disabled={saving || isDeleting}>
                     {saving ? '保存中...' : '保存修改'}
                   </Button>
                   {saved && <span className="text-xs text-success">已保存</span>}
@@ -320,6 +375,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                           }
                           disabled={
                             savingEnvironmentId === environment.id ||
+                            isDeleting ||
                             !environment.actions.canConfigureStrategy
                           }
                         >
@@ -364,41 +420,55 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             </div>
             <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
-                <div className="rounded-[22px] bg-[linear-gradient(180deg,rgba(196,85,77,0.08),rgba(255,255,255,0.92))] p-4 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(196,85,77,0.08)] sm:p-5 md:flex md:items-center md:justify-between">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-foreground">删除项目</div>
-                    <div className="text-sm text-muted-foreground">该操作无法撤销。</div>
-                  </div>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" className="w-full md:w-auto">
-                        <Trash2 className="h-4 w-4" />
-                        删除
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>删除项目</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          确认删除{' '}
-                          <span className="font-medium text-foreground">{project.name}</span>？
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
-                        项目、环境和发布记录会一起删除。
+                <>
+                  <div className="rounded-[22px] bg-[linear-gradient(180deg,rgba(196,85,77,0.08),rgba(255,255,255,0.92))] p-4 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(196,85,77,0.08)] sm:p-5 md:flex md:items-center md:justify-between">
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-foreground">删除项目</div>
+                      <div className="text-sm text-muted-foreground">
+                        {isDeleting ? '正在清理项目资源，请稍候。' : '该操作无法撤销。'}
                       </div>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={handleDelete}
-                          className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          className="w-full md:w-auto"
+                          disabled={isDeleting || deleting}
                         >
-                          删除
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
+                          <Trash2 className="h-4 w-4" />
+                          {isDeleting ? '删除中' : deleting ? '提交中...' : '删除'}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>删除项目</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            确认删除{' '}
+                            <span className="font-medium text-foreground">{project.name}</span>？
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+                          {isDeleting
+                            ? '删除任务已经提交，项目、环境和发布记录会在清理完成后一起移除。'
+                            : '项目、环境和发布记录会一起删除。'}
+                        </div>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={handleDelete}
+                            disabled={isDeleting || deleting}
+                            className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                          >
+                            {isDeleting ? '删除中' : deleting ? '提交中...' : '删除'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  {deleteError ? (
+                    <p className="mt-3 text-sm text-destructive">{deleteError}</p>
+                  ) : null}
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground">仅 owner 可删除。</p>
               )}

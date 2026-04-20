@@ -8,6 +8,7 @@ function getConnection(): ConnectionOptions {
 }
 
 let _projectInitQueue: Queue | null = null;
+let _projectDeleteQueue: Queue | null = null;
 let _releaseQueue: Queue | null = null;
 let _deploymentQueue: Queue | null = null;
 let _migrationQueue: Queue | null = null;
@@ -18,6 +19,13 @@ export function getProjectInitQueue(): Queue {
     _projectInitQueue = new Queue('project-init', { connection: getConnection() });
   }
   return _projectInitQueue;
+}
+
+export function getProjectDeleteQueue(): Queue {
+  if (!_projectDeleteQueue) {
+    _projectDeleteQueue = new Queue('project-delete', { connection: getConnection() });
+  }
+  return _projectDeleteQueue;
 }
 
 export function getDeploymentQueue(): Queue {
@@ -52,6 +60,10 @@ export type ProjectInitJobData = {
   projectId: string;
   mode: 'import' | 'create';
   template?: string;
+};
+
+export type ProjectDeleteJobData = {
+  projectId: string;
 };
 
 export type DeploymentJobData = {
@@ -90,6 +102,23 @@ export async function addProjectInitJob(
         type: 'exponential',
         delay: 5000,
       },
+    }
+  );
+}
+
+export async function addProjectDeleteJob(projectId: string) {
+  return getProjectDeleteQueue().add(
+    'delete',
+    { projectId },
+    {
+      attempts: 5,
+      backoff: {
+        type: 'exponential',
+        delay: 15000,
+      },
+      jobId: `project-delete:${projectId}`,
+      removeOnComplete: true,
+      removeOnFail: true,
     }
   );
 }
@@ -157,6 +186,7 @@ export async function addSchemaRepairAtlasJob(
 export async function closeQueues() {
   const promises: Promise<void>[] = [];
   if (_projectInitQueue) promises.push(_projectInitQueue.close());
+  if (_projectDeleteQueue) promises.push(_projectDeleteQueue.close());
   if (_releaseQueue) promises.push(_releaseQueue.close());
   if (_deploymentQueue) promises.push(_deploymentQueue.close());
   if (_migrationQueue) promises.push(_migrationQueue.close());

@@ -1,6 +1,7 @@
 import { initK8sClient } from '@/lib/k8s';
 import { createDeploymentWorker } from './deployment';
 import { createMigrationWorker } from './migration';
+import { createProjectDeleteWorker } from './project-delete';
 import { createProjectInitWorker } from './project-init';
 import { createReleaseWorker } from './release';
 import { createSchemaRepairAtlasWorker } from './schema-repair-atlas';
@@ -11,6 +12,7 @@ initK8sClient();
 console.log('Starting Juanie workers...');
 
 const projectInitWorker = createProjectInitWorker();
+const projectDeleteWorker = createProjectDeleteWorker();
 const releaseWorker = createReleaseWorker();
 const deploymentWorker = createDeploymentWorker();
 const migrationWorker = createMigrationWorker();
@@ -22,6 +24,14 @@ projectInitWorker.on('completed', (job) => {
 
 projectInitWorker.on('failed', (job, err) => {
   console.error(`Project init job ${job?.id} failed:`, err.message);
+});
+
+projectDeleteWorker.on('completed', (job) => {
+  console.log(`Project delete job ${job.id} completed`);
+});
+
+projectDeleteWorker.on('failed', (job, err) => {
+  console.error(`Project delete job ${job?.id} failed:`, err.message);
 });
 
 releaseWorker.on('completed', (job) => {
@@ -60,6 +70,7 @@ process.on('SIGTERM', async () => {
   console.log('Shutting down workers...');
   await Promise.all([
     projectInitWorker.close(),
+    projectDeleteWorker.close(),
     releaseWorker.close(),
     deploymentWorker.close(),
     migrationWorker.close(),
@@ -72,6 +83,7 @@ process.on('SIGINT', async () => {
   console.log('Shutting down workers...');
   await Promise.all([
     projectInitWorker.close(),
+    projectDeleteWorker.close(),
     releaseWorker.close(),
     deploymentWorker.close(),
     migrationWorker.close(),
@@ -82,6 +94,7 @@ process.on('SIGINT', async () => {
 
 console.log('Workers started successfully');
 console.log('  - Project init worker: listening to "project-init" queue');
+console.log('  - Project delete worker: listening to "project-delete" queue');
 console.log('  - Release worker: listening to "release" queue');
 console.log('  - Deployment worker: listening to "deployment" queue');
 console.log('  - Migration worker: listening to "migration" queue');

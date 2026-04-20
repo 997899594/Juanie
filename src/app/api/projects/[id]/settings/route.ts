@@ -8,7 +8,7 @@ import {
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments, projects, teams } from '@/lib/db/schema';
-import { deleteNamespace, getIsConnected, initK8sClient, waitForNamespaceDeleted } from '@/lib/k8s';
+import { requestProjectDeletion } from '@/lib/projects/delete-service';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -70,6 +70,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       'Forbidden'
     );
 
+    const projectRecord = await db.query.projects.findFirst({
+      where: eq(projects.id, id),
+      columns: {
+        status: true,
+      },
+    });
+
+    if (projectRecord?.status === 'deleting') {
+      return NextResponse.json({ error: '项目正在删除中，暂时不能修改设置' }, { status: 409 });
+    }
+
     const updates = await request.json();
     const allowedFields = ['name', 'description', 'productionBranch'];
     const filteredUpdates: Record<string, unknown> = {};
@@ -111,38 +122,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Only owner can delete project' }, { status: 403 });
     }
 
-    const envList = await db.query.environments.findMany({
-      where: eq(environments.projectId, id),
-    });
-
-    initK8sClient();
-    if (getIsConnected()) {
-      const namespaces = [...new Set(envList.map((e) => e.namespace).filter(Boolean) as string[])];
-      await Promise.all(namespaces.map((ns) => deleteNamespace(ns)));
-
-      const cleanupResults = await Promise.all(
-        namespaces.map(async (namespace) => ({
-          namespace,
-          deleted: await waitForNamespaceDeleted({ name: namespace }),
-        }))
-      );
-      const pendingNamespaces = cleanupResults
-        .filter((result) => !result.deleted)
-        .map((result) => result.namespace);
-
-      if (pendingNamespaces.length > 0) {
-        return NextResponse.json(
-          {
-            error: `项目资源仍在清理中，请稍后重试删除：${pendingNamespaces.join(', ')}`,
-          },
-          { status: 409 }
-        );
-      }
-    }
-
-    await db.delete(projects).where(eq(projects.id, id));
-
-    return NextResponse.json({ success: true });
+    const result = await requestProjectDeletion(id);
+    return NextResponse.json({ success: true, ...result }, { status: 202 });
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

@@ -7,6 +7,7 @@ const runtimeStatusDecorations: Record<string, RuntimeStatusDecoration> = {
   active: { color: 'success', label: '运行中' },
   running: { color: 'success', label: '运行中' },
   initializing: { color: 'warning', label: '初始化中' },
+  deleting: { color: 'warning', label: '删除中' },
   pending: { color: 'warning', label: '待处理' },
   failed: { color: 'error', label: '失败' },
   archived: { color: 'neutral', label: '已归档' },
