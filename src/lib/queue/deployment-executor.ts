@@ -11,13 +11,21 @@ import {
   syncEnvVarsToK8s,
   syncServiceEnvVarsToK8s,
 } from '@/lib/env-sync';
-import { getEnvironmentKind } from '@/lib/environments/model';
+import {
+  getEnvironmentDeploymentRuntime,
+  getEnvironmentKind,
+  usesArgoRolloutsRuntime,
+} from '@/lib/environments/model';
 import { ensureEnvironmentScaffold } from '@/lib/environments/service';
 import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
 import {
   appendDeploymentRealtimeLogs,
   updateDeploymentRealtimeState,
 } from '@/lib/realtime/deployments';
+import {
+  deployArgoRolloutWorkload,
+  supportsArgoRolloutsDeploymentStrategy,
+} from '@/lib/releases/argo-rollouts';
 import { assertDeploymentIsCurrent } from '@/lib/releases/deployment-coordination';
 import {
   buildCandidateDeploymentName,
@@ -137,6 +145,7 @@ export async function executeDeploymentWorkload(
   });
   const targetEnvironment = freshEnvironment ?? environment;
   const deploymentStrategy = targetEnvironment.deploymentStrategy ?? 'rolling';
+  const deploymentRuntime = getEnvironmentDeploymentRuntime(targetEnvironment);
 
   await ensureEnvironmentDomains({
     project: {
@@ -204,6 +213,44 @@ export async function executeDeploymentWorkload(
     const stableExists = await deploymentExists(targetEnvironment.namespace, stableName);
     const canShiftTraffic = service.type === 'web' && service.isPublic !== false;
     const shouldVerifyCandidateFirst = verificationPlan.blockingPaths.length > 0;
+    const shouldUseArgoRollouts =
+      usesArgoRolloutsRuntime({
+        deploymentRuntime,
+      }) &&
+      supportsArgoRolloutsDeploymentStrategy(deploymentStrategy) &&
+      canShiftTraffic &&
+      shouldVerifyCandidateFirst;
+
+    if (shouldUseArgoRollouts) {
+      const rollout = await deployArgoRolloutWorkload({
+        namespace: targetEnvironment.namespace,
+        rolloutName: stableName,
+        stableServiceName: stableName,
+        previewServiceName: candidateName,
+        imageName,
+        strategy: deploymentStrategy,
+        service,
+        envFrom,
+        verificationPlan,
+        onLog: (message) => logDeployment(deploymentId, message),
+        onWarn: (message) => logDeployment(deploymentId, message, 'warn'),
+      });
+
+      if (rollout.awaitingRollout) {
+        await logDeployment(
+          deploymentId,
+          `Argo Rollout candidate for ${service.name} is verified and awaiting promotion`
+        );
+      } else {
+        await logDeployment(
+          deploymentId,
+          `Argo Rollout for ${service.name} completed initial activation without manual promotion`
+        );
+      }
+
+      awaitingRollout = awaitingRollout || rollout.awaitingRollout;
+      continue;
+    }
 
     if (!shouldVerifyCandidateFirst) {
       await promoteCandidateSnapshotToStable({

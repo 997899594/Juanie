@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import type { DatabaseConfig, ServiceConfig } from '@/lib/config/parser';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
   formatUnsupportedPreviewCloneDatabasesMessage,
   getDatabaseSelectionValidationIssues,
@@ -290,6 +291,7 @@ export async function POST(request: Request) {
             isProduction: environment.isProduction,
             databaseStrategy: environment.databaseStrategy,
             deploymentStrategy: environment.deploymentStrategy,
+            deploymentRuntime: environment.deploymentRuntime,
           }))
         )
         .returning();
@@ -403,6 +405,7 @@ export async function POST(request: Request) {
           type: dbConfig.type,
           plan: dbConfig.plan || 'starter',
           provisionType,
+          runtime: inferDatabaseRuntime(dbConfig.type, provisionType),
           scope: dbConfig.scope || (dbConfig.service ? 'service' : 'project'),
           role: dbConfig.role || 'primary',
           capabilities: normalizeDatabaseCapabilities(dbConfig.capabilities),

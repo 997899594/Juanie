@@ -1,11 +1,17 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
+import { getEnvironmentDeploymentRuntime, usesArgoRolloutsRuntime } from '@/lib/environments/model';
 import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
 import {
   appendDeploymentRealtimeLogs,
   updateDeploymentRealtimeState,
 } from '@/lib/realtime/deployments';
+import {
+  finalizeArgoRollout,
+  getArgoRolloutSnapshot,
+  supportsArgoRolloutsDeploymentStrategy,
+} from '@/lib/releases/argo-rollouts';
 import {
   completeReleaseAfterRolloutIfReady,
   persistReleaseRecapSafely,
@@ -13,6 +19,7 @@ import {
 } from '@/lib/releases/orchestration';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
 import {
+  buildServiceVerificationPlan,
   isProgressiveStrategy,
   type ProgressiveDeploymentStrategy,
   promoteCandidateSnapshotToStable,
@@ -163,22 +170,35 @@ export async function buildDeploymentRolloutPlan(input: {
 
   const stableName = buildStableDeploymentName(project.slug, service.name);
   const candidateName = buildCandidateDeploymentName(stableName);
-  const [stableExists, candidateSnapshot] = await Promise.all([
+  const deploymentRuntime = getEnvironmentDeploymentRuntime(environment);
+  const argoRuntimeEnabled =
+    usesArgoRolloutsRuntime({ deploymentRuntime }) &&
+    supportsArgoRolloutsDeploymentStrategy(environment.deploymentStrategy);
+
+  const [legacyStableDeploymentExists, candidateSnapshot, argoSnapshot] = await Promise.all([
     deploymentExists(environment.namespace, stableName),
     getDeploymentSnapshot(environment.namespace, candidateName),
+    argoRuntimeEnabled ? getArgoRolloutSnapshot(environment.namespace, stableName) : null,
   ]);
 
-  const canFinalize = !!candidateSnapshot?.image;
+  const stableExists = argoRuntimeEnabled
+    ? Boolean(argoSnapshot?.image) || legacyStableDeploymentExists
+    : legacyStableDeploymentExists;
+  const canFinalize = argoRuntimeEnabled ? !!argoSnapshot?.image : !!candidateSnapshot?.image;
   const strategyLabel = getStrategyLabel(environment.deploymentStrategy);
+  const candidateImage = argoRuntimeEnabled
+    ? (argoSnapshot?.image ?? null)
+    : (candidateSnapshot?.image ?? null);
 
   return {
     deployment: {
       id: deployment.id,
       serviceId: service.id,
       serviceName: service.name,
+      runtime: deploymentRuntime,
       stableName,
       candidateName,
-      candidateImage: candidateSnapshot?.image ?? null,
+      candidateImage,
       stableExists,
     },
     plan: {
@@ -201,7 +221,7 @@ export async function buildDeploymentRolloutPlan(input: {
                   tone: 'neutral' as const,
                 },
               ]),
-          ...(candidateSnapshot?.image
+          ...(candidateImage
             ? [
                 {
                   key: 'rollout:candidate-ready',
@@ -216,11 +236,20 @@ export async function buildDeploymentRolloutPlan(input: {
                   tone: 'danger' as const,
                 },
               ]),
+          ...(argoRuntimeEnabled
+            ? [
+                {
+                  key: 'rollout:argo-rollouts',
+                  label: 'Argo Rollouts',
+                  tone: 'neutral' as const,
+                },
+              ]
+            : []),
         ],
-        customSummary: candidateSnapshot?.image
+        customSummary: candidateImage
           ? `当前可以完成 ${strategyLabel}，把候选版本切为正式版本`
           : '当前还没有可切换的候选版本',
-        customNextActionLabel: candidateSnapshot?.image ? '确认推进放量' : '等待候选版本部署完成',
+        customNextActionLabel: candidateImage ? '确认推进放量' : '等待候选版本部署完成',
       }),
     },
   };
@@ -261,11 +290,7 @@ export async function finalizeDeploymentRollout(input: {
       : null,
   ]);
 
-  const candidateSnapshot = environment?.namespace
-    ? await getDeploymentSnapshot(environment.namespace, candidateName)
-    : null;
-
-  if (!deployment || !project || !environment || !service || !candidateSnapshot?.image) {
+  if (!deployment || !project || !environment || !service) {
     throw new Error('无法解析放量上下文');
   }
 
@@ -275,19 +300,50 @@ export async function finalizeDeploymentRollout(input: {
     throw new Error('当前环境缺少命名空间，无法推进放量');
   }
 
+  const deploymentRuntime = getEnvironmentDeploymentRuntime(environment);
+  const argoRuntimeEnabled =
+    usesArgoRolloutsRuntime({ deploymentRuntime }) &&
+    supportsArgoRolloutsDeploymentStrategy(environment.deploymentStrategy);
+
+  const candidateSnapshot = !argoRuntimeEnabled
+    ? await getDeploymentSnapshot(namespace, candidateName)
+    : null;
+  const argoSnapshot = argoRuntimeEnabled
+    ? await getArgoRolloutSnapshot(namespace, stableName)
+    : null;
+
+  if (
+    (!argoRuntimeEnabled && !candidateSnapshot?.image) ||
+    (argoRuntimeEnabled && !argoSnapshot?.image)
+  ) {
+    throw new Error('无法解析放量上下文');
+  }
+
   try {
-    await promoteCandidateSnapshotToStable({
-      namespace,
-      projectSlug: project.slug,
-      environmentId: environment.id,
-      service,
-      stableName,
-      candidateName,
-      snapshot: candidateSnapshot,
-      stableExists: rollout.deployment.stableExists,
-      candidateVerified: true,
-      onLog: (message) => appendDeploymentLog(deployment.id, message),
-    });
+    if (argoRuntimeEnabled) {
+      await finalizeArgoRollout({
+        namespace,
+        rolloutName: stableName,
+        stableServiceName: stableName,
+        previewServiceName: candidateName,
+        service,
+        verificationPlan: buildServiceVerificationPlan(service),
+        onLog: (message) => appendDeploymentLog(deployment.id, message),
+      });
+    } else {
+      await promoteCandidateSnapshotToStable({
+        namespace,
+        projectSlug: project.slug,
+        environmentId: environment.id,
+        service,
+        stableName,
+        candidateName,
+        snapshot: candidateSnapshot!,
+        stableExists: rollout.deployment.stableExists,
+        candidateVerified: true,
+        onLog: (message) => appendDeploymentLog(deployment.id, message),
+      });
+    }
 
     await updateDeploymentRealtimeState(deployment.id, {
       status: 'running',
@@ -301,13 +357,13 @@ export async function finalizeDeploymentRollout(input: {
 
     await appendDeploymentLog(
       deployment.id,
-      `Completed ${rollout.plan.strategyLabel ?? '渐进式发布'}: switched ${service.name} to stable ${candidateSnapshot.image}`
+      `Completed ${rollout.plan.strategyLabel ?? '渐进式发布'}: switched ${service.name} to stable ${argoSnapshot?.image ?? candidateSnapshot?.image}`
     );
 
     return {
       success: true,
       deploymentId: deployment.id,
-      imageUrl: candidateSnapshot.image,
+      imageUrl: argoSnapshot?.image ?? candidateSnapshot?.image ?? null,
       strategyLabel: rollout.plan.strategyLabel,
     };
   } catch (error) {

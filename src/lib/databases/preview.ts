@@ -1,11 +1,12 @@
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { clonePostgreSQLDatabase } from '@/lib/databases/clone';
+import { getDatabaseRuntime } from '@/lib/databases/model';
 import {
   assertDatabasePreviewCloneSupport,
   toPlatformDatabaseProvisionType,
 } from '@/lib/databases/platform-support';
-import { deprovisionManagedPostgresDatabase } from '@/lib/databases/postgres-ownership';
+import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
 import { databases, environments, projects } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
@@ -57,15 +58,20 @@ export async function syncPreviewEnvironmentDatabases(input: {
         name: true,
         type: true,
         provisionType: true,
+        runtime: true,
         host: true,
+        port: true,
         databaseName: true,
         username: true,
+        connectionString: true,
+        namespace: true,
+        serviceName: true,
       },
     });
 
     for (const clone of removableClones) {
       try {
-        await deprovisionManagedPostgresDatabase(clone);
+        await deprovisionManagedDatabase(clone);
       } catch (error) {
         throw new Error(
           `Failed to deprovision preview clone database ${clone.databaseName ?? clone.name}`,
@@ -151,6 +157,7 @@ export async function syncPreviewEnvironmentDatabases(input: {
         type: source.type,
         plan: source.plan,
         provisionType: source.provisionType,
+        runtime: getDatabaseRuntime(source),
         scope: source.scope,
         role: source.role,
         capabilities: source.capabilities,

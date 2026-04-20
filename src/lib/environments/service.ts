@@ -11,6 +11,7 @@ import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/databa
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import {
   buildEnvironmentNamespace,
+  inferEnvironmentDeploymentRuntime,
   isPersistentEnvironment,
   isPreviewEnvironment,
   isProductionEnvironment,
@@ -135,6 +136,7 @@ export async function ensurePreviewEnvironmentForRef(input: {
     autoDeploy: true,
     isProduction: false,
     deploymentStrategy: 'rolling' as const,
+    deploymentRuntime: inferEnvironmentDeploymentRuntime('rolling'),
     namespace: buildEnvironmentNamespace(input.projectSlug, {
       name: environmentName,
       kind: 'preview',

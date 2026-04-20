@@ -1,6 +1,6 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
-import { deprovisionManagedPostgresDatabase } from '@/lib/databases/postgres-ownership';
+import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
 import { databases, environments, projects, repositories } from '@/lib/db/schema';
 import {
@@ -133,15 +133,20 @@ async function cleanupManagedDatabasesForProject(projectId: string): Promise<voi
       name: true,
       type: true,
       provisionType: true,
+      runtime: true,
       host: true,
+      port: true,
       databaseName: true,
       username: true,
+      connectionString: true,
+      namespace: true,
+      serviceName: true,
     },
   });
 
   for (const database of databaseList) {
     try {
-      await deprovisionManagedPostgresDatabase(database);
+      await deprovisionManagedDatabase(database);
     } catch (error) {
       throw new Error(
         `Failed to deprovision managed database ${database.databaseName ?? database.name}`,

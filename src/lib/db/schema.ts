@@ -37,6 +37,14 @@ export type DatabaseScope = (typeof databaseScopes)[number];
 
 export const databaseRoles = ['primary', 'readonly', 'cache', 'queue', 'analytics'] as const;
 export type DatabaseRole = (typeof databaseRoles)[number];
+export const databaseRuntimes = [
+  'external',
+  'shared_postgres',
+  'shared_redis',
+  'cloudnativepg',
+  'native_k8s',
+] as const;
+export type DatabaseRuntime = (typeof databaseRuntimes)[number];
 
 export const projectStatuses = [
   'initializing',
@@ -126,6 +134,8 @@ export const environmentDeploymentStrategies = [
   'blue_green',
 ] as const;
 export type EnvironmentDeploymentStrategy = (typeof environmentDeploymentStrategies)[number];
+export const environmentDeploymentRuntimes = ['native_k8s', 'argo_rollouts'] as const;
+export type EnvironmentDeploymentRuntime = (typeof environmentDeploymentRuntimes)[number];
 export const environmentKinds = ['production', 'persistent', 'preview'] as const;
 export type EnvironmentKind = (typeof environmentKinds)[number];
 export const environmentDeliveryModes = ['direct', 'promote_only'] as const;
@@ -187,6 +197,7 @@ export const databaseTypeEnum = pgEnum('databaseType', databaseTypes);
 export const databasePlanEnum = pgEnum('databasePlan', databasePlans);
 export const databaseScopeEnum = pgEnum('databaseScope', databaseScopes);
 export const databaseRoleEnum = pgEnum('databaseRole', databaseRoles);
+export const databaseRuntimeEnum = pgEnum('databaseRuntime', databaseRuntimes);
 export const projectStatusEnum = pgEnum('projectStatus', projectStatuses);
 export const releaseStatusEnum = pgEnum('releaseStatus', releaseStatuses);
 export const deploymentStatusEnum = pgEnum('deploymentStatus', deploymentStatuses);
@@ -212,6 +223,10 @@ export const migrationApprovalPolicyEnum = pgEnum(
 export const environmentDeploymentStrategyEnum = pgEnum(
   'environmentDeploymentStrategy',
   environmentDeploymentStrategies
+);
+export const environmentDeploymentRuntimeEnum = pgEnum(
+  'environmentDeploymentRuntime',
+  environmentDeploymentRuntimes
 );
 export const environmentKindEnum = pgEnum('environmentKind', environmentKinds);
 export const environmentDeliveryModeEnum = pgEnum(
@@ -631,6 +646,9 @@ export const environments = pgTable(
     deploymentStrategy: environmentDeploymentStrategyEnum('deploymentStrategy')
       .default('rolling')
       .notNull(),
+    deploymentRuntime: environmentDeploymentRuntimeEnum('deploymentRuntime')
+      .default('native_k8s')
+      .notNull(),
 
     namespace: varchar('namespace', { length: 100 }),
 
@@ -732,6 +750,7 @@ export const databases = pgTable(
     type: databaseTypeEnum('type').notNull(),
     plan: databasePlanEnum('plan').notNull().default('starter'),
     provisionType: varchar('provisionType', { length: 20 }).notNull().default('shared'),
+    runtime: databaseRuntimeEnum('runtime'),
     scope: databaseScopeEnum('scope').notNull().default('project'),
     role: databaseRoleEnum('role').notNull().default('primary'),
     capabilities: jsonb('capabilities')

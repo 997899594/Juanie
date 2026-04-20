@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { DatabaseConfig, ParsedConfig } from '@/lib/config/parser';
 import { parseJuanieConfig } from '@/lib/config/parser';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
   getDatabaseProvisionTypeLabel,
   getDatabaseTypeLabel,
@@ -334,6 +335,7 @@ export async function syncProjectDatabaseRuntimeContractsFromRepo(input: Runtime
         type: config.type,
         plan: config.plan ?? databaseRecord.plan,
         provisionType: nextProvisionType,
+        runtime: inferDatabaseRuntime(config.type, nextProvisionType),
         scope: nextScope,
         role: config.role ?? databaseRecord.role,
         serviceId: nextServiceId,

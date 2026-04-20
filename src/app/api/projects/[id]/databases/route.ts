@@ -7,6 +7,7 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { databaseCapabilities, normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
   getDatabaseSelectionValidationIssues,
   getDefaultDatabaseProvisionType,
@@ -190,6 +191,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           type,
           plan,
           provisionType: resolvedProvisionType,
+          runtime: inferDatabaseRuntime(type, resolvedProvisionType),
           scope,
           role,
           capabilities: normalizedCapabilities,

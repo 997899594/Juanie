@@ -853,6 +853,7 @@ export async function createService(
     port: number;
     targetPort: number;
     type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
+    selector?: Record<string, string>;
   }
 ): Promise<void> {
   const { core } = getK8sClient();
@@ -865,7 +866,7 @@ export async function createService(
       metadata: { name },
       spec: {
         type: spec.type || 'ClusterIP',
-        selector: { app: name },
+        selector: spec.selector || { app: name },
         ports: [
           {
             port: spec.port,
@@ -926,6 +927,7 @@ export async function upsertService(
         port: spec.port,
         targetPort: typeof spec.targetPort === 'number' ? spec.targetPort : spec.port,
         type: spec.type,
+        selector: spec.selector,
       });
       return;
     }
@@ -939,6 +941,288 @@ export async function deleteService(namespace: string, name: string): Promise<vo
 
   try {
     await core.deleteNamespacedService({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
+      throw e;
+    }
+  }
+}
+
+export interface ArgoRolloutSpec {
+  name: string;
+  namespace: string;
+  image: string;
+  port: number;
+  replicas: number;
+  stableServiceName: string;
+  previewServiceName: string;
+  strategy: 'controlled' | 'blue_green';
+  envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
+  imagePullSecrets?: string[];
+  healthcheckPath?: string;
+  cpuRequest?: string;
+  cpuLimit?: string;
+  memoryRequest?: string;
+  memoryLimit?: string;
+}
+
+interface ArgoRolloutResourceLike {
+  metadata?: {
+    name?: string;
+    namespace?: string;
+  };
+  spec?: {
+    paused?: boolean;
+    replicas?: number;
+    strategy?: {
+      blueGreen?: {
+        activeService?: string;
+        previewService?: string;
+        autoPromotionEnabled?: boolean;
+        scaleDownDelaySeconds?: number;
+        previewReplicaCount?: number;
+      };
+    };
+    template?: {
+      spec?: {
+        containers?: Array<{
+          image?: string;
+        }>;
+      };
+    };
+  };
+  status?: {
+    phase?: string;
+    pauseConditions?: Array<{
+      reason?: string;
+    }>;
+  };
+}
+
+function buildArgoRolloutBody(spec: ArgoRolloutSpec): Record<string, unknown> {
+  return {
+    apiVersion: 'argoproj.io/v1alpha1',
+    kind: 'Rollout',
+    metadata: {
+      name: spec.name,
+      namespace: spec.namespace,
+    },
+    spec: {
+      replicas: spec.replicas,
+      revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
+      selector: {
+        matchLabels: {
+          app: spec.name,
+        },
+      },
+      template: {
+        metadata: {
+          labels: {
+            app: spec.name,
+          },
+        },
+        spec: {
+          imagePullSecrets: spec.imagePullSecrets?.map((secretName) => ({ name: secretName })),
+          containers: [
+            {
+              name: 'app',
+              image: spec.image,
+              ports: [{ name: 'http', containerPort: spec.port, protocol: 'TCP' }],
+              envFrom: spec.envFrom,
+              readinessProbe: {
+                httpGet: { path: spec.healthcheckPath || '/api/health/ready', port: spec.port },
+                initialDelaySeconds: 15,
+                periodSeconds: 10,
+                failureThreshold: 6,
+              },
+              livenessProbe: {
+                httpGet: { path: spec.healthcheckPath || '/api/health/live', port: spec.port },
+                initialDelaySeconds: 30,
+                periodSeconds: 20,
+                failureThreshold: 3,
+              },
+              resources: {
+                requests: {
+                  cpu: spec.cpuRequest || '100m',
+                  memory: spec.memoryRequest || '256Mi',
+                },
+                limits: {
+                  cpu: spec.cpuLimit || '500m',
+                  memory: spec.memoryLimit || '512Mi',
+                },
+              },
+            },
+          ],
+        },
+      },
+      strategy: {
+        blueGreen: {
+          activeService: spec.stableServiceName,
+          previewService: spec.previewServiceName,
+          autoPromotionEnabled: false,
+          scaleDownDelaySeconds: spec.strategy === 'blue_green' ? 30 : 120,
+          previewReplicaCount: spec.replicas,
+        },
+      },
+    },
+  };
+}
+
+export async function getArgoRollout(
+  namespace: string,
+  name: string
+): Promise<ArgoRolloutResourceLike | null> {
+  const { custom } = getK8sClient();
+
+  try {
+    return (await custom.getNamespacedCustomObject({
+      group: 'argoproj.io',
+      version: 'v1alpha1',
+      namespace,
+      plural: 'rollouts',
+      name,
+    })) as ArgoRolloutResourceLike;
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      return null;
+    }
+
+    throw e;
+  }
+}
+
+export async function upsertArgoRollout(spec: ArgoRolloutSpec): Promise<void> {
+  const { custom } = getK8sClient();
+  const body = buildArgoRolloutBody(spec);
+
+  try {
+    await custom.getNamespacedCustomObject({
+      group: 'argoproj.io',
+      version: 'v1alpha1',
+      namespace: spec.namespace,
+      plural: 'rollouts',
+      name: spec.name,
+    });
+    await custom.replaceNamespacedCustomObject({
+      group: 'argoproj.io',
+      version: 'v1alpha1',
+      namespace: spec.namespace,
+      plural: 'rollouts',
+      name: spec.name,
+      body,
+    });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      await custom.createNamespacedCustomObject({
+        group: 'argoproj.io',
+        version: 'v1alpha1',
+        namespace: spec.namespace,
+        plural: 'rollouts',
+        body,
+      });
+      return;
+    }
+
+    throw e;
+  }
+}
+
+export async function resumeArgoRollout(namespace: string, name: string): Promise<void> {
+  const { custom } = getK8sClient();
+  const current = await getArgoRollout(namespace, name);
+
+  if (!current) {
+    throw new Error(`Argo Rollout ${namespace}/${name} not found`);
+  }
+
+  const body = {
+    ...current,
+    spec: {
+      ...current.spec,
+      paused: false,
+      strategy: {
+        ...current.spec?.strategy,
+        blueGreen: {
+          ...current.spec?.strategy?.blueGreen,
+          autoPromotionEnabled: true,
+        },
+      },
+    },
+  };
+
+  await custom.replaceNamespacedCustomObject({
+    group: 'argoproj.io',
+    version: 'v1alpha1',
+    namespace,
+    plural: 'rollouts',
+    name,
+    body,
+  });
+}
+
+export interface CloudNativePgClusterManifest {
+  apiVersion: 'postgresql.cnpg.io/v1';
+  kind: 'Cluster';
+  metadata: {
+    name: string;
+    namespace: string;
+    labels?: Record<string, string>;
+  };
+  spec: Record<string, unknown>;
+}
+
+export async function upsertCloudNativePgCluster(
+  manifest: CloudNativePgClusterManifest
+): Promise<void> {
+  const { custom } = getK8sClient();
+
+  try {
+    await custom.getNamespacedCustomObject({
+      group: 'postgresql.cnpg.io',
+      version: 'v1',
+      namespace: manifest.metadata.namespace,
+      plural: 'clusters',
+      name: manifest.metadata.name,
+    });
+    await custom.replaceNamespacedCustomObject({
+      group: 'postgresql.cnpg.io',
+      version: 'v1',
+      namespace: manifest.metadata.namespace,
+      plural: 'clusters',
+      name: manifest.metadata.name,
+      body: manifest,
+    });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      await custom.createNamespacedCustomObject({
+        group: 'postgresql.cnpg.io',
+        version: 'v1',
+        namespace: manifest.metadata.namespace,
+        plural: 'clusters',
+        body: manifest,
+      });
+      return;
+    }
+
+    throw e;
+  }
+}
+
+export async function deleteCloudNativePgCluster(namespace: string, name: string): Promise<void> {
+  const { custom } = getK8sClient();
+
+  try {
+    await custom.deleteNamespacedCustomObject({
+      group: 'postgresql.cnpg.io',
+      version: 'v1',
+      namespace,
+      plural: 'clusters',
+      name,
+    });
   } catch (e: unknown) {
     const error = e as { code?: number; statusCode?: number };
     if ((error.code ?? error.statusCode) !== 404) {
