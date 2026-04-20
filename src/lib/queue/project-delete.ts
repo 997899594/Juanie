@@ -1,7 +1,8 @@
 import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
+import { deprovisionManagedPostgresDatabase } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
-import { environments, projects, repositories } from '@/lib/db/schema';
+import { databases, environments, projects, repositories } from '@/lib/db/schema';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -124,6 +125,32 @@ async function cleanupOrphanRepositoryRecord(repositoryId: string): Promise<void
   }
 }
 
+async function cleanupManagedDatabasesForProject(projectId: string): Promise<void> {
+  const databaseList = await db.query.databases.findMany({
+    where: eq(databases.projectId, projectId),
+    columns: {
+      id: true,
+      name: true,
+      type: true,
+      provisionType: true,
+      host: true,
+      databaseName: true,
+      username: true,
+    },
+  });
+
+  for (const database of databaseList) {
+    try {
+      await deprovisionManagedPostgresDatabase(database);
+    } catch (error) {
+      throw new Error(
+        `Failed to deprovision managed database ${database.databaseName ?? database.name}`,
+        { cause: error }
+      );
+    }
+  }
+}
+
 export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, job.data.projectId),
@@ -193,6 +220,7 @@ export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
     }
   }
 
+  await cleanupManagedDatabasesForProject(project.id);
   await cleanupRepositoryArtifacts(project);
 
   const repositoryId = project.repositoryId;

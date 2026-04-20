@@ -16,12 +16,27 @@ type ManagedPostgresOwnershipStatements = {
   databaseStatements: string[];
 };
 
+type ManagedPostgresDeprovisionStatements = {
+  databaseDropStatements: string[];
+  roleDropStatements: string[];
+};
+
 type ManagedPostgresProvisionStatements = {
   roleCreateOrUpdate: string;
   databaseCreate: string;
   databaseOwnerStatement: string;
   databaseGrants: string[];
   schemaBootstrapStatements: string[];
+};
+
+type ManagedPostgresAdminConnection = {
+  unsafe: (query: string) => Promise<unknown>;
+  end: () => Promise<unknown>;
+};
+
+type ManagedPostgresDeprovisionOptions = {
+  resolveAdminUrl?: () => string;
+  connect?: (connectionString: string) => ManagedPostgresAdminConnection;
 };
 
 function quoteIdentifier(value: string): string {
@@ -178,11 +193,14 @@ export function buildManagedPostgresProvisionStatements({
   return {
     roleCreateOrUpdate: `
       DO $$
+      DECLARE
+        target_role text := ${ownerLiteral};
+        target_password text := ${passwordLiteral};
       BEGIN
-        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${ownerLiteral}) THEN
-          EXECUTE 'ALTER ROLE ${quotedOwner} LOGIN PASSWORD ${passwordLiteral}';
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = target_role) THEN
+          EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', target_role, target_password);
         ELSE
-          EXECUTE 'CREATE ROLE ${quotedOwner} LOGIN PASSWORD ${passwordLiteral}';
+          EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', target_role, target_password);
         END IF;
       END $$;
     `,
@@ -194,6 +212,75 @@ export function buildManagedPostgresProvisionStatements({
       `GRANT ALL PRIVILEGES ON SCHEMA public TO ${quotedOwner}`,
     ],
   };
+}
+
+export function buildManagedPostgresDeprovisionStatements({
+  databaseName,
+  ownerRoleName,
+  adminDatabaseName,
+  adminRoleName,
+}: {
+  databaseName: string;
+  ownerRoleName?: string | null;
+  adminDatabaseName: string;
+  adminRoleName: string;
+}): ManagedPostgresDeprovisionStatements {
+  const normalizedDatabaseName = databaseName.trim().toLowerCase();
+  const protectedDatabaseNames = new Set([
+    'postgres',
+    'template0',
+    'template1',
+    adminDatabaseName.trim().toLowerCase(),
+  ]);
+  const databaseDropStatements = protectedDatabaseNames.has(normalizedDatabaseName)
+    ? []
+    : [`DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)} WITH (FORCE)`];
+
+  const normalizedOwnerRoleName = ownerRoleName?.trim().toLowerCase() || null;
+  const protectedRoleNames = new Set(['postgres', adminRoleName.trim().toLowerCase()]);
+  const roleDropStatements =
+    normalizedOwnerRoleName && !protectedRoleNames.has(normalizedOwnerRoleName)
+      ? [`DROP ROLE IF EXISTS ${quoteIdentifier(ownerRoleName!.trim())}`]
+      : [];
+
+  return {
+    databaseDropStatements,
+    roleDropStatements,
+  };
+}
+
+function buildManagedPostgresRoleCleanupStatements({
+  ownerRoleName,
+  adminRoleName,
+}: {
+  ownerRoleName?: string | null;
+  adminRoleName: string;
+}): string[] {
+  const normalizedOwnerRoleName = ownerRoleName?.trim().toLowerCase() || null;
+  const protectedRoleNames = new Set(['postgres', adminRoleName.trim().toLowerCase()]);
+  if (!normalizedOwnerRoleName || protectedRoleNames.has(normalizedOwnerRoleName)) {
+    return [];
+  }
+
+  const ownerLiteral = quoteLiteral(ownerRoleName!.trim());
+  const quotedAdminRole = quoteIdentifier(adminRoleName.trim());
+
+  return [
+    `
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM pg_namespace
+          WHERE nspname = 'public'
+            AND pg_get_userbyid(nspowner) = ${ownerLiteral}
+        ) THEN
+          EXECUTE 'ALTER SCHEMA public OWNER TO ${quotedAdminRole}';
+        END IF;
+      END $$;
+    `,
+    `DROP OWNED BY ${quoteIdentifier(ownerRoleName!.trim())}`,
+  ];
 }
 
 function isManagedSharedPostgres(
@@ -219,6 +306,33 @@ function isManagedSharedPostgres(
   const adminHost = toClusterFqdn(new URL(adminUrl).hostname);
   const targetHost = toClusterFqdn(database.host);
   return adminHost === targetHost;
+}
+
+function looksLikeManagedSharedPostgres(
+  database: ManagedPostgresDatabase
+): database is ManagedPostgresDatabase & {
+  host: string;
+  databaseName: string;
+  username: string;
+} {
+  if (database.type !== 'postgresql') {
+    return false;
+  }
+
+  if (database.provisionType && database.provisionType !== 'shared') {
+    return false;
+  }
+
+  return Boolean(database.host && database.databaseName && database.username);
+}
+
+function getAdminDatabaseName(adminUrl: string): string {
+  const pathname = new URL(adminUrl).pathname.replace(/^\/+/, '');
+  return decodeURIComponent(pathname || 'postgres');
+}
+
+function getAdminRoleName(adminUrl: string): string {
+  return decodeURIComponent(new URL(adminUrl).username || 'postgres');
 }
 
 export async function ensureManagedPostgresOwnership(
@@ -259,6 +373,83 @@ export async function ensureManagedPostgresOwnership(
     return true;
   } finally {
     await Promise.allSettled([databaseConnection.end(), adminConnection.end()]);
+  }
+}
+
+export async function deprovisionManagedPostgresDatabase(
+  database: ManagedPostgresDatabase,
+  options: ManagedPostgresDeprovisionOptions = {}
+): Promise<boolean> {
+  const shouldManage = looksLikeManagedSharedPostgres(database);
+  let adminUrl: string;
+  try {
+    adminUrl = (options.resolveAdminUrl ?? getNormalizedDatabaseUrlFromEnv)();
+  } catch (error) {
+    if (shouldManage) {
+      throw new Error(
+        'Control-plane database config is incomplete; cannot deprovision shared PostgreSQL',
+        { cause: error }
+      );
+    }
+
+    return false;
+  }
+
+  if (!isManagedSharedPostgres(database, adminUrl)) {
+    return false;
+  }
+
+  const statements = buildManagedPostgresDeprovisionStatements({
+    databaseName: database.databaseName,
+    ownerRoleName: database.username,
+    adminDatabaseName: getAdminDatabaseName(adminUrl),
+    adminRoleName: getAdminRoleName(adminUrl),
+  });
+  const roleCleanupStatements = buildManagedPostgresRoleCleanupStatements({
+    ownerRoleName: database.username,
+    adminRoleName: getAdminRoleName(adminUrl),
+  });
+
+  if (
+    statements.databaseDropStatements.length === 0 &&
+    statements.roleDropStatements.length === 0 &&
+    roleCleanupStatements.length === 0
+  ) {
+    return false;
+  }
+
+  const connect =
+    options.connect ?? ((connectionString: string) => postgres(connectionString, { max: 1 }));
+  const adminConnection = connect(adminUrl);
+  const maintenanceUrls = new Set([adminUrl]);
+  const postgresUrl = new URL(adminUrl);
+  postgresUrl.pathname = '/postgres';
+  maintenanceUrls.add(postgresUrl.toString());
+  const maintenanceConnections = Array.from(maintenanceUrls, (connectionString) => ({
+    connectionString,
+    connection: connectionString === adminUrl ? adminConnection : connect(connectionString),
+  }));
+
+  try {
+    for (const { connection } of maintenanceConnections) {
+      for (const statement of roleCleanupStatements) {
+        await connection.unsafe(statement);
+      }
+    }
+
+    for (const statement of statements.databaseDropStatements) {
+      await adminConnection.unsafe(statement);
+    }
+
+    for (const statement of statements.roleDropStatements) {
+      await adminConnection.unsafe(statement);
+    }
+
+    return true;
+  } finally {
+    await Promise.allSettled(
+      maintenanceConnections.map(({ connection }) => connection.end().catch(() => undefined))
+    );
   }
 }
 

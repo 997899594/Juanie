@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import {
+  buildManagedPostgresDeprovisionStatements,
   buildManagedPostgresOwnershipStatements,
   buildManagedPostgresProvisionStatements,
+  deprovisionManagedPostgresDatabase,
 } from '@/lib/databases/postgres-ownership';
 
 describe('managed postgres ownership repair', () => {
@@ -38,13 +40,152 @@ describe('managed postgres ownership repair', () => {
       password: 'secret_pw',
     });
 
-    expect(statements.roleCreateOrUpdate).toContain('CREATE ROLE "juanie_demo" LOGIN PASSWORD');
-    expect(statements.roleCreateOrUpdate).toContain('ALTER ROLE "juanie_demo" LOGIN PASSWORD');
+    expect(statements.roleCreateOrUpdate).toContain("target_role text := 'juanie_demo'");
+    expect(statements.roleCreateOrUpdate).toContain("target_password text := 'secret_pw'");
+    expect(statements.roleCreateOrUpdate).toContain(
+      "format('CREATE ROLE %I LOGIN PASSWORD %L', target_role, target_password)"
+    );
+    expect(statements.roleCreateOrUpdate).toContain(
+      "format('ALTER ROLE %I LOGIN PASSWORD %L', target_role, target_password)"
+    );
     expect(statements.databaseCreate).toBe(
       'CREATE DATABASE "juanie_demo" OWNER "juanie_demo" ENCODING \'UTF8\' TEMPLATE template0'
     );
     expect(statements.databaseGrants).toEqual([
       'GRANT ALL PRIVILEGES ON DATABASE "juanie_demo" TO "juanie_demo"',
     ]);
+  });
+
+  it('escapes password literals correctly inside dynamic role SQL', () => {
+    const statements = buildManagedPostgresProvisionStatements({
+      databaseName: 'juanie_demo',
+      owner: 'juanie_demo',
+      password: "secret-pw'quoted",
+    });
+
+    expect(statements.roleCreateOrUpdate).toContain("target_password text := 'secret-pw''quoted'");
+    expect(statements.roleCreateOrUpdate).toContain(
+      "format('ALTER ROLE %I LOGIN PASSWORD %L', target_role, target_password)"
+    );
+    expect(statements.roleCreateOrUpdate).toContain(
+      "format('CREATE ROLE %I LOGIN PASSWORD %L', target_role, target_password)"
+    );
+  });
+
+  it('builds force-drop statements for managed shared postgres databases', () => {
+    const statements = buildManagedPostgresDeprovisionStatements({
+      databaseName: 'juanie_demo',
+      ownerRoleName: 'juanie_demo',
+      adminDatabaseName: 'juanie',
+      adminRoleName: 'postgres',
+    });
+
+    expect(statements.databaseDropStatements).toEqual([
+      'DROP DATABASE IF EXISTS "juanie_demo" WITH (FORCE)',
+    ]);
+    expect(statements.roleDropStatements).toEqual(['DROP ROLE IF EXISTS "juanie_demo"']);
+  });
+
+  it('does not target the control-plane database or admin role for deletion', () => {
+    const statements = buildManagedPostgresDeprovisionStatements({
+      databaseName: 'juanie',
+      ownerRoleName: 'postgres',
+      adminDatabaseName: 'juanie',
+      adminRoleName: 'postgres',
+    });
+
+    expect(statements.databaseDropStatements).toEqual([]);
+    expect(statements.roleDropStatements).toEqual([]);
+  });
+
+  it('drops managed shared postgres databases through the admin connection', async () => {
+    const adminUnsafe = mock(async () => undefined);
+    const adminEnd = mock(async () => undefined);
+    const postgresUnsafe = mock(async () => undefined);
+    const postgresEnd = mock(async () => undefined);
+    const connect = mock((connectionString: string) => {
+      if (connectionString.endsWith('/postgres')) {
+        return { unsafe: postgresUnsafe, end: postgresEnd };
+      }
+
+      return { unsafe: adminUnsafe, end: adminEnd };
+    });
+
+    const result = await deprovisionManagedPostgresDatabase(
+      {
+        type: 'postgresql',
+        provisionType: 'shared',
+        host: 'postgres',
+        databaseName: 'juanie_demo',
+        username: 'juanie_demo',
+      },
+      {
+        resolveAdminUrl: () => 'postgresql://postgres:secret@postgres:5432/juanie',
+        connect,
+      }
+    );
+
+    expect(result).toBe(true);
+    expect((connect.mock?.calls ?? []).length).toBe(2);
+    expect((adminUnsafe.mock?.calls ?? []).slice(-2).map(([statement]) => statement)).toEqual([
+      'DROP DATABASE IF EXISTS "juanie_demo" WITH (FORCE)',
+      'DROP ROLE IF EXISTS "juanie_demo"',
+    ]);
+    expect(
+      (postgresUnsafe.mock?.calls ?? []).some(([statement]) =>
+        String(statement).includes('DROP OWNED BY "juanie_demo"')
+      )
+    ).toBe(true);
+    expect((adminEnd.mock?.calls ?? []).length).toBe(1);
+    expect((postgresEnd.mock?.calls ?? []).length).toBe(1);
+  });
+
+  it('skips databases that are not hosted on the managed shared postgres instance', async () => {
+    const connect = mock(() => {
+      throw new Error('should not connect');
+    });
+
+    const result = await deprovisionManagedPostgresDatabase(
+      {
+        type: 'postgresql',
+        provisionType: 'shared',
+        host: 'external-postgres.example.com',
+        databaseName: 'juanie_demo',
+        username: 'juanie_demo',
+      },
+      {
+        resolveAdminUrl: () => 'postgresql://postgres:secret@postgres:5432/juanie',
+        connect,
+      }
+    );
+
+    expect(result).toBe(false);
+    expect((connect.mock?.calls ?? []).length).toBe(0);
+  });
+
+  it('fails loudly when shared postgres cleanup is required but admin config is unavailable', async () => {
+    let thrown: unknown = null;
+
+    try {
+      await deprovisionManagedPostgresDatabase(
+        {
+          type: 'postgresql',
+          provisionType: 'shared',
+          host: 'postgres',
+          databaseName: 'juanie_demo',
+          username: 'juanie_demo',
+        },
+        {
+          resolveAdminUrl: () => {
+            throw new Error('missing env');
+          },
+        }
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown instanceof Error).toBe(true);
+    expect((thrown as Error).message).toContain('cannot deprovision shared PostgreSQL');
   });
 });

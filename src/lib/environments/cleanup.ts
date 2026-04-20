@@ -1,4 +1,5 @@
 import { and, eq, isNotNull, lt } from 'drizzle-orm';
+import { deprovisionManagedPostgresDatabase } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
 import { databases, domains, environments, environmentVariables } from '@/lib/db/schema';
 import { isPreviewEnvironment } from '@/lib/environments/model';
@@ -56,6 +57,17 @@ export async function deletePreviewEnvironmentById(environmentId: string): Promi
     .where(eq(environmentVariables.environmentId, environment.id));
 
   if (environment.databases.length > 0) {
+    for (const database of environment.databases) {
+      try {
+        await deprovisionManagedPostgresDatabase(database);
+      } catch (error) {
+        throw new Error(
+          `Failed to deprovision preview database ${database.databaseName ?? database.name}`,
+          { cause: error }
+        );
+      }
+    }
+
     await db.delete(databases).where(eq(databases.environmentId, environment.id));
   }
 

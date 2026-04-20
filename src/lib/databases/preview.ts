@@ -5,6 +5,7 @@ import {
   assertDatabasePreviewCloneSupport,
   toPlatformDatabaseProvisionType,
 } from '@/lib/databases/platform-support';
+import { deprovisionManagedPostgresDatabase } from '@/lib/databases/postgres-ownership';
 import { db } from '@/lib/db';
 import { databases, environments, projects } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
@@ -46,6 +47,33 @@ export async function syncPreviewEnvironmentDatabases(input: {
   const hasK8s = getHasK8s();
 
   if (environment.databaseStrategy !== 'isolated_clone') {
+    const removableClones = await db.query.databases.findMany({
+      where: and(
+        eq(databases.environmentId, environment.id),
+        isNotNull(databases.sourceDatabaseId)
+      ),
+      columns: {
+        id: true,
+        name: true,
+        type: true,
+        provisionType: true,
+        host: true,
+        databaseName: true,
+        username: true,
+      },
+    });
+
+    for (const clone of removableClones) {
+      try {
+        await deprovisionManagedPostgresDatabase(clone);
+      } catch (error) {
+        throw new Error(
+          `Failed to deprovision preview clone database ${clone.databaseName ?? clone.name}`,
+          { cause: error }
+        );
+      }
+    }
+
     await db
       .delete(databases)
       .where(
