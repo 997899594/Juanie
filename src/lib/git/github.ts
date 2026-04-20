@@ -3,6 +3,7 @@ import type {
   CreateRepoOptions,
   CreateReviewRequestOptions,
   CreateTagOptions,
+  DeleteFilesOptions,
   GitProvider,
   GitProviderConfig,
   GitRepository,
@@ -544,6 +545,50 @@ export class GitHubProvider implements GitProvider {
         console.error(`[GitHub pushFiles] Status: ${res.status}`);
         console.error(`[GitHub pushFiles] Error:`, JSON.stringify(error, null, 2));
         throw new Error(error.message || `Failed to push file: ${path}`);
+      }
+    }
+  }
+
+  async deleteFiles(accessToken: string, options: DeleteFilesOptions): Promise<void> {
+    const [owner, repo] = options.repoFullName.split('/');
+
+    for (const path of options.paths) {
+      const existingRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${options.branch}`,
+        { headers: this.getHeaders(accessToken) }
+      );
+
+      if (existingRes.status === 404) {
+        continue;
+      }
+
+      if (!existingRes.ok) {
+        const error = await existingRes.json().catch(() => null);
+        throw new Error(
+          (error as { message?: string } | null)?.message ?? `Failed to inspect file: ${path}`
+        );
+      }
+
+      const existingData = (await existingRes.json()) as { sha?: string };
+      if (!existingData.sha) {
+        throw new Error(`Failed to resolve file sha for deletion: ${path}`);
+      }
+
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(accessToken),
+        body: JSON.stringify({
+          message: options.message,
+          sha: existingData.sha,
+          branch: options.branch,
+        }),
+      });
+
+      if (!res.ok && res.status !== 404) {
+        const error = await res.json().catch(() => null);
+        throw new Error(
+          (error as { message?: string } | null)?.message ?? `Failed to delete file: ${path}`
+        );
       }
     }
   }

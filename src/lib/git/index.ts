@@ -72,6 +72,13 @@ export interface PushOptions {
   message: string;
 }
 
+export interface DeleteFilesOptions {
+  repoFullName: string;
+  branch: string;
+  paths: string[];
+  message: string;
+}
+
 export interface TriggerReleaseBuildOptions {
   repoFullName: string;
   ref: string;
@@ -136,6 +143,7 @@ export interface GitProvider {
   createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository>;
 
   pushFiles(accessToken: string, options: PushOptions): Promise<void>;
+  deleteFiles(accessToken: string, options: DeleteFilesOptions): Promise<void>;
 
   /**
    * List files in the root directory of a repository.

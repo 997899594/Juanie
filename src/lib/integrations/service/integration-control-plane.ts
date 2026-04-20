@@ -6,6 +6,7 @@ import type {
   CreateRepoOptions,
   CreateReviewRequestOptions,
   CreateTagOptions,
+  DeleteFilesOptions,
   GitProvider,
   GitRepository,
   GitReviewRequest,
@@ -295,5 +296,10 @@ export const gateway = {
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {
     const provider = resolveProvider(session);
     return provider.pushFiles(session.accessToken, options);
+  },
+
+  async deleteFiles(session: IntegrationSession, options: DeleteFilesOptions): Promise<void> {
+    const provider = resolveProvider(session);
+    return provider.deleteFiles(session.accessToken, options);
   },
 };

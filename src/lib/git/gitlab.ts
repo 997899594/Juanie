@@ -3,6 +3,7 @@ import type {
   CreateRepoOptions,
   CreateReviewRequestOptions,
   CreateTagOptions,
+  DeleteFilesOptions,
   GitProvider,
   GitProviderConfig,
   GitRepository,
@@ -470,11 +471,64 @@ export class GitLabProvider implements GitProvider {
     }
   }
 
+  async deleteFiles(accessToken: string, options: DeleteFilesOptions): Promise<void> {
+    const encodedPath = encodeURIComponent(options.repoFullName);
+
+    for (const path of options.paths) {
+      const res = await fetch(
+        `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/files/${encodeURIComponent(path)}`,
+        {
+          method: 'DELETE',
+          headers: this.getHeaders(accessToken),
+          body: JSON.stringify({
+            branch: options.branch,
+            commit_message: options.message,
+          }),
+        }
+      );
+
+      if (res.ok || res.status === 404) {
+        continue;
+      }
+
+      const error = (await res.json().catch(() => null)) as {
+        message?: string | string[] | Record<string, string[]>;
+      } | null;
+      const errorMessage = this.getErrorMessage(error);
+
+      if (res.status === 400 && errorMessage && /doesn['’]t exist|not exist/i.test(errorMessage)) {
+        continue;
+      }
+
+      throw new Error(errorMessage || `Failed to delete file: ${path}`);
+    }
+  }
+
   private getHeaders(accessToken: string): HeadersInit {
     return {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     };
+  }
+
+  private getErrorMessage(
+    error: { message?: string | string[] | Record<string, string[]> } | null
+  ): string | null {
+    if (!error?.message) {
+      return null;
+    }
+
+    if (typeof error.message === 'string') {
+      return error.message;
+    }
+
+    if (Array.isArray(error.message)) {
+      return error.message.join(', ');
+    }
+
+    return Object.entries(error.message)
+      .flatMap(([key, value]) => value.map((entry) => `${key}: ${entry}`))
+      .join(', ');
   }
 
   private async fetchMergeRequest(
