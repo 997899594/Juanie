@@ -17,7 +17,7 @@ export interface AtlasMigrationFile {
   content: string;
 }
 
-interface AtlasDatabaseTarget {
+export interface AtlasDatabaseTarget {
   type: 'postgresql' | 'mysql';
   connectionString: string | null;
   host: string | null;
@@ -25,6 +25,10 @@ interface AtlasDatabaseTarget {
   databaseName: string | null;
   username: string | null;
   password: string | null;
+}
+
+export function isAtlasDatabaseTarget(database: { type: string }): database is AtlasDatabaseTarget {
+  return database.type === 'postgresql' || database.type === 'mysql';
 }
 
 export interface PreparedAtlasMigrationWorkspace {
@@ -171,7 +175,7 @@ async function getAppliedAtlasVersionsMySql(connectionString: string): Promise<s
   });
 
   try {
-    const [tables] = await connection.query<Array<{ count: number }>>(
+    const [tables] = await connection.query(
       `SELECT COUNT(*) AS count
        FROM information_schema.tables
        WHERE table_schema = DATABASE()
@@ -179,11 +183,11 @@ async function getAppliedAtlasVersionsMySql(connectionString: string): Promise<s
       [ATLAS_REVISIONS_TABLE]
     );
 
-    if (Number(tables[0]?.count ?? 0) === 0) {
+    if (Number((tables as Array<{ count: number }>)[0]?.count ?? 0) === 0) {
       return [];
     }
 
-    const [rows] = await connection.query<Array<{ version: string }>>(
+    const [rows] = await connection.query(
       `SELECT version
        FROM atlas_schema_revisions
        WHERE (applied IS NULL OR total IS NULL OR applied = total)
@@ -191,7 +195,7 @@ async function getAppliedAtlasVersionsMySql(connectionString: string): Promise<s
        ORDER BY version ASC`
     );
 
-    return rows.map((row) => row.version).filter(Boolean);
+    return (rows as Array<{ version: string }>).map((row) => row.version).filter(Boolean);
   } finally {
     await connection.end().catch(() => undefined);
   }
@@ -238,7 +242,7 @@ async function hasUserTablesMySql(connectionString: string): Promise<boolean> {
   });
 
   try {
-    const [rows] = await connection.query<Array<{ count: number }>>(
+    const [rows] = await connection.query(
       `SELECT COUNT(*) AS count
        FROM information_schema.tables
        WHERE table_schema = DATABASE()
@@ -247,7 +251,7 @@ async function hasUserTablesMySql(connectionString: string): Promise<boolean> {
       [ATLAS_REVISIONS_TABLE]
     );
 
-    return Number(rows[0]?.count ?? 0) > 0;
+    return Number((rows as Array<{ count: number }>)[0]?.count ?? 0) > 0;
   } finally {
     await connection.end().catch(() => undefined);
   }

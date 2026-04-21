@@ -15,6 +15,7 @@ import {
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
   hasAtlasUserTables,
+  isAtlasDatabaseTarget,
 } from '@/lib/migrations/atlas';
 import {
   fetchMigrationFilesFromRepoPath,
@@ -404,6 +405,17 @@ async function inspectAtlasLedger(spec: ResolvedMigrationSpec): Promise<{
   hasUserTables: boolean;
 }> {
   if (spec.database.type !== 'postgresql' && spec.database.type !== 'mysql') {
+    return {
+      status: 'blocked',
+      summary: `暂不支持在 ${spec.database.type} 上检查 Atlas 账本`,
+      expectedEntries: [],
+      actualEntries: [],
+      hasLedger: false,
+      hasUserTables: false,
+    };
+  }
+
+  if (!isAtlasDatabaseTarget(spec.database)) {
     return {
       status: 'blocked',
       summary: `暂不支持在 ${spec.database.type} 上检查 Atlas 账本`,

@@ -78,7 +78,6 @@ export type ReleaseJobData = {
 
 export type MigrationJobData = {
   runId: string;
-  imageUrl?: string | null;
   allowApprovalBypass?: boolean;
 };
 
@@ -147,15 +146,11 @@ export async function addReleaseJob(releaseId: string) {
   );
 }
 
-export async function addMigrationJob(
-  runId: string,
-  options?: { imageUrl?: string | null; allowApprovalBypass?: boolean }
-) {
+export async function addMigrationJob(runId: string, options?: { allowApprovalBypass?: boolean }) {
   return getMigrationQueue().add(
     'migrate',
     {
       runId,
-      imageUrl: options?.imageUrl ?? null,
       allowApprovalBypass: options?.allowApprovalBypass ?? false,
     },
     {

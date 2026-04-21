@@ -53,7 +53,6 @@ export async function processMigration(job: Job<MigrationJobData>) {
 
   try {
     await executeMigrationRun(run.id, spec, {
-      imageUrl: job.data.imageUrl,
       allowApprovalBypass: job.data.allowApprovalBypass,
       sourceRef: run.release?.sourceRef ?? null,
       sourceCommitSha:

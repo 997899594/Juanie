@@ -15,6 +15,7 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import { isPlatformManagedMigrationTool } from './platform-managed';
 import {
   buildPlatformInternalCommand,
   getDefaultSchemaConfigPath,
@@ -303,6 +304,14 @@ export async function syncMigrationSpecificationsFromRepo(
         binding.schema.source,
         databaseRecord.type
       );
+      if (
+        binding.schema.executionMode !== 'external' &&
+        !isPlatformManagedMigrationTool(executionTool, databaseRecord.type)
+      ) {
+        throw new Error(
+          `Service "${serviceRecord.name}" 绑定数据库 "${databaseRecord.name}" (${databaseRecord.type}) 的 schema.source=${binding.schema.source} 当前无法由平台直接执行，请改为 external 或切换到 Atlas / SQL / 受支持的 Drizzle 方案`
+        );
+      }
       const sourceConfigPath =
         binding.schema.config ?? getDefaultSchemaConfigPath(binding.schema.source);
       const migrationPath =
@@ -319,7 +328,6 @@ export async function syncMigrationSpecificationsFromRepo(
           phase: binding.schema.phase ?? 'preDeploy',
           executionMode: binding.schema.executionMode,
           sourceConfigPath,
-          workingDirectory: '.',
           migrationPath: migrationPath ?? null,
           command: buildPlatformInternalCommand(binding.schema.source, executionTool),
           lockStrategy: binding.schema.lockStrategy ?? 'platform',
@@ -338,7 +346,6 @@ export async function syncMigrationSpecificationsFromRepo(
             phase: binding.schema.phase ?? 'preDeploy',
             executionMode: binding.schema.executionMode,
             sourceConfigPath,
-            workingDirectory: '.',
             migrationPath: migrationPath ?? null,
             command: buildPlatformInternalCommand(binding.schema.source, executionTool),
             lockStrategy: binding.schema.lockStrategy ?? 'platform',

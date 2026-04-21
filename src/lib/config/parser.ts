@@ -6,6 +6,11 @@ import {
   platformDatabaseProvisionTypes,
   supportsDatabaseAutomatedMigrations,
 } from '@/lib/databases/platform-support';
+import { isPlatformManagedMigrationTool } from '@/lib/migrations/platform-managed';
+import {
+  resolveExecutionToolForSchemaSource,
+  type SchemaSource,
+} from '@/lib/migrations/schema-source';
 
 const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
 const schemaSources = ['atlas', 'drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom'] as const;
@@ -25,72 +30,76 @@ const schemaConfigSchema = z
   })
   .strict();
 
-const serviceDatabaseBindingSchema = z.object({
-  binding: z.string().min(1).max(100).optional(),
-  role: z.enum(['primary', 'readonly', 'cache', 'queue', 'analytics']).optional(),
-  type: z.enum(['postgresql', 'mysql', 'redis', 'mongodb']).optional(),
-  schema: schemaConfigSchema,
-});
+const serviceDatabaseBindingSchema = z
+  .object({
+    binding: z.string().min(1).max(100).optional(),
+    role: z.enum(['primary', 'readonly', 'cache', 'queue', 'analytics']).optional(),
+    type: z.enum(['postgresql', 'mysql', 'redis', 'mongodb']).optional(),
+    schema: schemaConfigSchema,
+  })
+  .strict();
 
-export const serviceSchema = z.object({
-  name: z.string().min(1).max(100),
-  type: z.enum(['web', 'worker', 'cron']),
+export const serviceSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    type: z.enum(['web', 'worker', 'cron']),
 
-  monorepo: z
-    .object({
-      appDir: z.string().min(1).optional(),
-    })
-    .optional(),
+    monorepo: z
+      .object({
+        appDir: z.string().min(1).optional(),
+      })
+      .optional(),
 
-  build: z
-    .object({
-      strategy: z.enum(['auto', 'dockerfile', 'bake', 'buildpacks']).optional(),
-      command: z.string().optional(),
-      dockerfile: z.string().optional(),
-      context: z.string().optional(),
-      target: z.string().optional(),
-      definition: z.string().optional(),
-    })
-    .optional(),
+    build: z
+      .object({
+        strategy: z.enum(['auto', 'dockerfile', 'bake', 'buildpacks']).optional(),
+        command: z.string().optional(),
+        dockerfile: z.string().optional(),
+        context: z.string().optional(),
+        target: z.string().optional(),
+        definition: z.string().optional(),
+      })
+      .optional(),
 
-  run: z.object({
-    command: z.string(),
-    port: z.number().int().min(1).max(65535).optional(),
-  }),
+    run: z.object({
+      command: z.string(),
+      port: z.number().int().min(1).max(65535).optional(),
+    }),
 
-  healthcheck: z
-    .object({
-      path: z.string().optional(),
-      interval: z.number().int().min(5).max(300).optional(),
-    })
-    .optional(),
+    healthcheck: z
+      .object({
+        path: z.string().optional(),
+        interval: z.number().int().min(5).max(300).optional(),
+      })
+      .optional(),
 
-  env: z.record(z.string(), z.string()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
 
-  scaling: z
-    .object({
-      min: z.number().int().min(0).max(100).optional(),
-      max: z.number().int().min(1).max(1000).optional(),
-      cpu: z.number().int().min(1).max(100).optional(),
-    })
-    .optional(),
+    scaling: z
+      .object({
+        min: z.number().int().min(0).max(100).optional(),
+        max: z.number().int().min(1).max(1000).optional(),
+        cpu: z.number().int().min(1).max(100).optional(),
+      })
+      .optional(),
 
-  schedule: z.string().optional(),
+    schedule: z.string().optional(),
 
-  domain: z.string().optional(),
-  isPublic: z.boolean().optional(),
-  schema: schemaConfigSchema.optional(),
-  databases: z.array(serviceDatabaseBindingSchema).max(10).optional(),
+    domain: z.string().optional(),
+    isPublic: z.boolean().optional(),
+    schema: schemaConfigSchema.optional(),
+    databases: z.array(serviceDatabaseBindingSchema).max(10).optional(),
 
-  resources: z
-    .object({
-      cpuRequest: z.string().optional(),
-      cpuLimit: z.string().optional(),
-      memoryRequest: z.string().optional(),
-      memoryLimit: z.string().optional(),
-    })
-    .optional(),
-});
+    resources: z
+      .object({
+        cpuRequest: z.string().optional(),
+        cpuLimit: z.string().optional(),
+        memoryRequest: z.string().optional(),
+        memoryLimit: z.string().optional(),
+      })
+      .optional(),
+  })
+  .strict();
 
 export const databaseSchema = z
   .object({
@@ -157,6 +166,14 @@ export interface ParsedConfig extends JuanieConfig {
   warnings: string[];
 }
 
+function canPlatformExecuteSchemaSource(
+  source: SchemaSource,
+  databaseType: DatabaseConfig['type']
+): boolean {
+  const executionTool = resolveExecutionToolForSchemaSource(source, databaseType);
+  return isPlatformManagedMigrationTool(executionTool, databaseType);
+}
+
 export function parseJuanieConfig(yamlContent: string): ParsedConfig {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -214,6 +231,16 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
 
     for (const binding of service.databases ?? []) {
       if (
+        binding.schema.executionMode !== 'external' &&
+        binding.type &&
+        !canPlatformExecuteSchemaSource(binding.schema.source, binding.type)
+      ) {
+        errors.push(
+          `Service "${service.name}" 的 schema.source=${binding.schema.source} 目前无法由平台直接执行 ${binding.type} 迁移，请改为 external 或切换到平台支持的 schema source`
+        );
+      }
+
+      if (
         binding.schema.executionMode === 'automatic' &&
         binding.type &&
         !supportsDatabaseAutomatedMigrations(binding.type)
@@ -233,6 +260,15 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
           `Service "${service.name}" references unknown database binding "${binding.binding}"`
         );
         continue;
+      }
+
+      if (
+        binding.schema.executionMode !== 'external' &&
+        !canPlatformExecuteSchemaSource(binding.schema.source, database.type)
+      ) {
+        errors.push(
+          `Service "${service.name}" 绑定的数据库 "${database.name}" (${database.type}) 当前不支持以 schema.source=${binding.schema.source} 由平台直接执行迁移`
+        );
       }
 
       if (
@@ -293,8 +329,8 @@ export function generateDefaultConfig(
 
   if (options?.database === 'postgresql') {
     lines.push(
-      `    # Juanie could not infer a migration command for this service.`,
-      `    # Add a migrate block manually before enabling managed migrations.`
+      `    # Juanie could not infer a schema source for this service.`,
+      `    # Add a schema block manually before enabling managed migrations.`
     );
   }
 

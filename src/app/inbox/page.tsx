@@ -142,7 +142,6 @@ export default async function InboxPage({
                       projectId={run.projectId}
                       runId={run.id}
                       status={run.status}
-                      imageUrl={run.imageUrl}
                     />
                     {run.releaseId ? (
                       <>

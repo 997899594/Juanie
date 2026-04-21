@@ -15,16 +15,10 @@ import {
   evaluateReleasePolicy,
 } from '@/lib/policies/delivery';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
-import { assessMigrationCommandSafety } from './command-safety';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
 import { resolveMigrationPath } from './path';
-import { isPlatformManagedMigrationSpec } from './platform-managed';
 import { resolveMigrationSpecifications } from './resolver';
-import type {
-  ExecuteMigrationRunOptions,
-  MigrationExecutionPlan,
-  ResolvedMigrationSpec,
-} from './types';
+import type { MigrationExecutionPlan, ResolvedMigrationSpec } from './types';
 
 export { resolveMigrationSpecifications } from './resolver';
 
@@ -50,7 +44,6 @@ export async function createMigrationRun(
     triggeredByUserId?: string | null;
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
-    runnerType?: 'k8s_job' | 'ci_job' | 'worker';
     initialStatus?: MigrationRunStatus;
   }
 ) {
@@ -71,7 +64,7 @@ export async function createMigrationRun(
       sourceCommitSha: input.sourceCommitSha ?? null,
       sourceCommitMessage: input.sourceCommitMessage ?? null,
       status: input.initialStatus ?? 'queued',
-      runnerType: input.runnerType ?? 'worker',
+      runnerType: 'worker',
       lockKey,
     })
     .returning();
@@ -92,7 +85,6 @@ export async function resolveAndRunMigrations(
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     serviceIds?: string[];
-    options?: ExecuteMigrationRunOptions;
   }
 ) {
   const runs = await resolveAndCreateMigrationRuns(projectId, environmentId, phase, input);
@@ -112,7 +104,6 @@ export async function resolveAndCreateMigrationRuns(
     sourceCommitSha?: string | null;
     sourceCommitMessage?: string | null;
     serviceIds?: string[];
-    options?: ExecuteMigrationRunOptions;
   }
 ) {
   const specs = await resolveMigrationSpecifications(projectId, environmentId, phase, {
@@ -140,12 +131,6 @@ export async function resolveAndCreateMigrationRuns(
       triggeredByUserId: input.triggeredByUserId,
       sourceCommitSha: input.sourceCommitSha,
       sourceCommitMessage: input.sourceCommitMessage,
-      runnerType:
-        initialStatus === 'queued' &&
-        !isPlatformManagedMigrationSpec(spec) &&
-        input.options?.imageUrl
-          ? 'k8s_job'
-          : 'worker',
       initialStatus,
     });
     runs.push(run);
@@ -208,8 +193,7 @@ export async function findActiveMigrationRun(input: {
 }
 
 export async function buildMigrationExecutionPlan(
-  spec: ResolvedMigrationSpec,
-  options: ExecuteMigrationRunOptions = {}
+  spec: ResolvedMigrationSpec
 ): Promise<MigrationExecutionPlan> {
   const confirmationValue = `${spec.database.name}/${spec.environment.name}`;
   const migrationPolicy = evaluateMigrationPolicy({
@@ -227,15 +211,8 @@ export async function buildMigrationExecutionPlan(
   });
   const warnings: string[] = [...migrationPolicy.warnings];
   const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
-  const imageUrl = options.imageUrl ?? null;
-  const runnerType: 'k8s_job' | 'worker' | 'external' =
-    spec.specification.executionMode === 'external'
-      ? 'external'
-      : isPlatformManagedMigrationSpec(spec)
-        ? 'worker'
-        : 'k8s_job';
-  const requiresImage =
-    spec.specification.executionMode !== 'external' && !isPlatformManagedMigrationSpec(spec);
+  const runnerType: 'worker' | 'external' =
+    spec.specification.executionMode === 'external' ? 'external' : 'worker';
   let canRun = spec.database.status === 'running';
   let blockingReason: string | null =
     spec.database.status === 'running'
@@ -243,7 +220,6 @@ export async function buildMigrationExecutionPlan(
       : `数据库状态为 ${spec.database.status ?? '未知'}，只有 running 状态才能执行迁移`;
   let filePreviewError: string | null = null;
   let sqlFiles: Array<{ name: string }> = [];
-  const commandSafety = assessMigrationCommandSafety(spec.specification);
   const runtimeAccessCheck = await verifyDeclaredDatabaseRuntimeAccess(spec.database);
 
   if (!runtimeAccessCheck.satisfied) {
@@ -277,14 +253,6 @@ export async function buildMigrationExecutionPlan(
       filePreviewError = error instanceof Error ? error.message : String(error);
       blockingReason ??= `无法从 ${migrationPath} 读取迁移文件：${filePreviewError}`;
     }
-  } else if (requiresImage && !imageUrl) {
-    canRun = false;
-    blockingReason ??= '命令式迁移需要最近一次可用的部署镜像。';
-  }
-
-  if (commandSafety.blocksExecution && spec.specification.executionMode !== 'external') {
-    canRun = false;
-    blockingReason ??= commandSafety.summary;
   }
 
   return {
@@ -293,7 +261,6 @@ export async function buildMigrationExecutionPlan(
     blockingReason,
     filePreviewError,
     warnings,
-    commandSafety,
     platformSignals: buildPlatformSignalSnapshot({
       environmentPolicySignals: environmentPolicy.signals,
       environmentPolicySignal: environmentPolicy.primarySignal,
@@ -306,7 +273,6 @@ export async function buildMigrationExecutionPlan(
     migrationPolicy,
     releasePolicy,
     runnerType,
-    imageUrl,
     database: {
       id: spec.database.id,
       name: spec.database.name,
@@ -330,7 +296,6 @@ export async function buildMigrationExecutionPlan(
       phase: spec.specification.phase,
       executionMode: spec.specification.executionMode,
       sourceConfigPath: spec.specification.sourceConfigPath ?? null,
-      workingDirectory: spec.specification.workingDirectory,
       migrationPath,
       command: spec.specification.command,
       compatibility: spec.specification.compatibility,

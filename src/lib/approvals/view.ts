@@ -63,11 +63,12 @@ export interface ApprovalRunLike {
     name?: string | null;
   } | null;
   specification: {
+    source?: string | null;
     tool: string;
     phase: string;
     command: string;
     executionMode?: string | null;
-    workingDirectory?: string | null;
+    sourceConfigPath?: string | null;
     migrationPath?: string | null;
     lockStrategy?: string | null;
     compatibility?: string | null;

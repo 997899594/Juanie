@@ -9,6 +9,7 @@ import { databaseMigrations } from '@/lib/db/schema';
 import {
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
+  isAtlasDatabaseTarget,
   prepareAtlasMigrationWorkspace,
   resolveAtlasDatabaseUrl,
 } from '@/lib/migrations/atlas';
@@ -574,6 +575,10 @@ export async function executeAtlasMigrationsForSpec(
   const log = onLog || (async () => {});
 
   if (spec.database.type !== 'postgresql' && spec.database.type !== 'mysql') {
+    throw new Error(`Atlas 平台迁移暂不支持 ${spec.database.type}`);
+  }
+
+  if (!isAtlasDatabaseTarget(spec.database)) {
     throw new Error(`Atlas 平台迁移暂不支持 ${spec.database.type}`);
   }
 

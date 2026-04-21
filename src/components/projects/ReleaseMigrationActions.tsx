@@ -10,7 +10,6 @@ interface ReleaseMigrationActionsProps {
   projectId: string;
   runId: string;
   status: string;
-  imageUrl?: string | null;
   disabled?: boolean;
   disabledSummary?: string | null;
 }
@@ -19,7 +18,6 @@ export function ReleaseMigrationActions({
   projectId,
   runId,
   status,
-  imageUrl,
   disabled = false,
   disabledSummary,
 }: ReleaseMigrationActionsProps) {
@@ -43,7 +41,6 @@ export function ReleaseMigrationActions({
         projectId,
         runId,
         action,
-        imageUrl,
       });
       router.refresh();
     } catch (actionError) {

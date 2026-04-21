@@ -40,7 +40,6 @@ export interface ResolvedMigrationSpec {
 }
 
 export interface ExecuteMigrationRunOptions {
-  imageUrl?: string | null;
   allowApprovalBypass?: boolean;
   sourceRef?: string | null;
   sourceCommitSha?: string | null;
@@ -52,16 +51,11 @@ export interface MigrationExecutionPlan {
   blockingReason: string | null;
   filePreviewError: string | null;
   warnings: string[];
-  commandSafety: {
-    blocksExecution: boolean;
-    summary: string | null;
-  };
   platformSignals: PlatformSignalSnapshot;
   environmentPolicy: EnvironmentPolicySnapshot;
   migrationPolicy: MigrationPolicyDecision;
   releasePolicy: ReleasePolicySnapshot;
-  runnerType: 'k8s_job' | 'worker' | 'external';
-  imageUrl: string | null;
+  runnerType: 'worker' | 'external';
   database: {
     id: string;
     name: string;
@@ -85,7 +79,6 @@ export interface MigrationExecutionPlan {
     phase: MigrationSpecificationRecord['phase'];
     executionMode: MigrationSpecificationRecord['executionMode'];
     sourceConfigPath: string | null;
-    workingDirectory: string;
     migrationPath: string | null;
     command: string;
     compatibility: MigrationSpecificationRecord['compatibility'];

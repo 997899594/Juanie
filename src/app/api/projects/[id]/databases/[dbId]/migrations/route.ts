@@ -213,7 +213,6 @@ export async function POST(
     const {
       action = 'run',
       runId,
-      imageUrl,
       confirmationText,
       errorMessage,
     } = await request.json().catch(() => ({}));
@@ -223,9 +222,7 @@ export async function POST(
     );
 
     if (action === 'plan') {
-      const plan = await buildMigrationExecutionPlan(resolvedSpec, {
-        imageUrl: imageUrl ?? null,
-      });
+      const plan = await buildMigrationExecutionPlan(resolvedSpec);
 
       return NextResponse.json(plan);
     }
@@ -266,7 +263,6 @@ export async function POST(
       }
 
       await addMigrationJob(run.id, {
-        imageUrl: imageUrl ?? null,
         allowApprovalBypass: true,
       });
 
@@ -404,7 +400,6 @@ export async function POST(
         deploymentId: previousRun.deploymentId,
         sourceCommitSha: previousRun.sourceCommitSha,
         sourceCommitMessage: previousRun.sourceCommitMessage,
-        runnerType: initialStatus === 'queued' && imageUrl ? 'k8s_job' : 'worker',
         initialStatus,
       });
 
@@ -420,7 +415,6 @@ export async function POST(
 
       if (initialStatus === 'queued') {
         await addMigrationJob(retryRun.id, {
-          imageUrl: imageUrl ?? null,
           allowApprovalBypass: false,
         });
       }
@@ -464,12 +458,11 @@ export async function POST(
     const run = await createMigrationRun(resolvedSpec, {
       triggeredBy: 'manual',
       triggeredByUserId: session.user.id,
-      runnerType: initialStatus === 'queued' && imageUrl ? 'k8s_job' : 'worker',
       initialStatus,
     });
 
     if (initialStatus === 'queued') {
-      await addMigrationJob(run.id, { imageUrl, allowApprovalBypass: false });
+      await addMigrationJob(run.id, { allowApprovalBypass: false });
     }
 
     return NextResponse.json(

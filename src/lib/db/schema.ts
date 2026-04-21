@@ -120,7 +120,7 @@ export const migrationRunStatuses = [
 ] as const;
 export type MigrationRunStatus = (typeof migrationRunStatuses)[number];
 
-export const migrationRunnerTypes = ['k8s_job', 'ci_job', 'worker'] as const;
+export const migrationRunnerTypes = ['worker'] as const;
 export type MigrationRunnerType = (typeof migrationRunnerTypes)[number];
 
 export const migrationLockStrategies = ['platform', 'db_advisory'] as const;
@@ -815,7 +815,6 @@ export const migrationSpecifications = pgTable(
     executionMode: migrationExecutionModeEnum('executionMode').notNull(),
 
     sourceConfigPath: varchar('sourceConfigPath', { length: 500 }),
-    workingDirectory: varchar('workingDirectory', { length: 500 }).notNull(),
     migrationPath: varchar('migrationPath', { length: 500 }),
     command: text('command').notNull(),
     lockStrategy: migrationLockStrategyEnum('lockStrategy').notNull().default('platform'),

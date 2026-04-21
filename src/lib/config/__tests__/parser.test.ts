@@ -34,7 +34,9 @@ services:
 `);
 
     expect(parsed.isValid).toBe(false);
-    expect(parsed.errors).toContain('services.0: Unrecognized key: "migrate"');
+    expect(
+      parsed.errors.some((error) => error.includes('services.0') && error.includes('migrate'))
+    ).toBe(true);
   });
 
   it('rejects unsupported database provision combinations', () => {

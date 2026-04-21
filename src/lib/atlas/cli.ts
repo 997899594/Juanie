@@ -58,7 +58,7 @@ interface AtlasCommandOptions {
   network?: string;
 }
 
-function buildDockerEnvArgs(env: NodeJS.ProcessEnv): string[] {
+function buildDockerEnvArgs(env: Record<string, string | undefined>): string[] {
   const args: string[] = [];
 
   for (const [key, value] of Object.entries(env)) {
@@ -105,7 +105,7 @@ function getAtlasCommand(
     dockerArgs.push('--network', options.network);
   }
 
-  dockerArgs.push(...buildDockerEnvArgs(options.env ?? {}));
+  dockerArgs.push(...buildDockerEnvArgs(options.env ?? process.env));
 
   return {
     command: 'docker',

@@ -114,7 +114,7 @@ export async function POST(
     );
   }
 
-  const { action, imageUrl, errorMessage } = await request.json().catch(() => ({}));
+  const { action, errorMessage } = await request.json().catch(() => ({}));
 
   if (action === 'approve') {
     if (run.status !== 'awaiting_approval') {
@@ -140,7 +140,6 @@ export async function POST(
     }
 
     await addMigrationJob(run.id, {
-      imageUrl: imageUrl ?? null,
       allowApprovalBypass: true,
     });
 
@@ -252,7 +251,6 @@ export async function POST(
       triggeredByUserId: session.user.id,
       sourceCommitSha: run.sourceCommitSha,
       sourceCommitMessage: run.sourceCommitMessage,
-      runnerType: initialStatus === 'queued' && imageUrl ? 'k8s_job' : 'worker',
       initialStatus,
     });
 
@@ -268,7 +266,6 @@ export async function POST(
 
     if (initialStatus === 'queued') {
       await addMigrationJob(retryRun.id, {
-        imageUrl: imageUrl ?? null,
         allowApprovalBypass: false,
       });
     }

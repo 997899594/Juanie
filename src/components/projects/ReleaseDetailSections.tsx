@@ -562,7 +562,6 @@ export function ReleaseExecutionSections({
                       projectId={projectId}
                       runId={run.id}
                       status={run.status}
-                      imageUrl={run.imageUrl}
                       disabled={!releaseActions.canManage}
                       disabledSummary={releaseActions.summary}
                     />

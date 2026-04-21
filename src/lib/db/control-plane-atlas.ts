@@ -21,6 +21,19 @@ const LEGACY_MIGRATIONS_TABLE = '_migrations';
 
 type AtlasCommand = 'generate' | 'hash' | 'validate' | 'status' | 'apply';
 
+async function runProcess(command: string, args: string[]): Promise<void> {
+  const result = spawnSync(command, args, {
+    cwd: process.cwd(),
+    stdio: 'ignore',
+    env: process.env,
+    encoding: 'utf8',
+  });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.stdout || `${command} ${args.join(' ')} failed`);
+  }
+}
+
 function resolveAtlasProcessEnv(): NodeJS.ProcessEnv {
   try {
     return {

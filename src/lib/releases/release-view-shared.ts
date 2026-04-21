@@ -118,11 +118,12 @@ export interface ReleaseViewLike {
     } | null;
     databaseId?: string;
     specification?: {
+      source?: string | null;
       tool?: string;
       phase?: string;
       command?: string;
       executionMode?: string | null;
-      workingDirectory?: string | null;
+      sourceConfigPath?: string | null;
       migrationPath?: string | null;
       lockStrategy?: string | null;
       compatibility?: string | null;
@@ -225,11 +226,12 @@ export interface ReleaseDetailDecorations {
       type?: string | null;
     };
     specification: {
+      source: string;
       tool: string;
       phase: string;
       command: string;
       executionMode: string;
-      workingDirectory: string;
+      sourceConfigPath: string | null;
       migrationPath: string | null;
       lockStrategy: string;
       compatibility: string;
@@ -445,11 +447,12 @@ export function buildMigrationItems(
       type: null,
     },
     specification: {
+      source: run.specification?.source ?? run.specification?.tool ?? 'custom',
       tool: run.specification?.tool ?? 'custom',
       phase: run.specification?.phase ?? 'manual',
       command: run.specification?.command ?? '未提供命令',
       executionMode: run.specification?.executionMode ?? 'automatic',
-      workingDirectory: run.specification?.workingDirectory ?? '.',
+      sourceConfigPath: run.specification?.sourceConfigPath ?? null,
       migrationPath: run.specification?.migrationPath ?? null,
       lockStrategy: run.specification?.lockStrategy ?? 'platform',
       compatibility: run.specification?.compatibility ?? 'backward_compatible',

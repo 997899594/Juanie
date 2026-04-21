@@ -209,9 +209,6 @@ export async function runReleaseMigrationPhase(
   release: OrchestratedRelease,
   phase: 'preDeploy' | 'postDeploy'
 ) {
-  const imageByServiceId = new Map(
-    release.artifacts.map((artifact) => [artifact.serviceId, artifact.imageUrl])
-  );
   const createdRuns = await resolveAndCreateMigrationRuns(
     release.projectId,
     release.environmentId,
@@ -224,18 +221,12 @@ export async function runReleaseMigrationPhase(
       sourceCommitSha: release.configCommitSha ?? release.sourceCommitSha,
       sourceCommitMessage: release.summary,
       serviceIds: release.artifacts.map((artifact) => artifact.serviceId),
-      options: {
-        allowApprovalBypass: false,
-      },
     }
   );
 
   for (const run of createdRuns) {
     if (run.status === 'queued') {
-      await addMigrationJob(run.id, {
-        imageUrl: imageByServiceId.get(run.serviceId) ?? null,
-        allowApprovalBypass: false,
-      });
+      await addMigrationJob(run.id, { allowApprovalBypass: false });
     }
 
     const result = await waitForMigrationRun(run.id);

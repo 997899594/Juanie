@@ -3,6 +3,10 @@ import { join } from 'node:path';
 import { Job, Worker } from 'bullmq';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { encrypt } from '@/lib/crypto';
+import {
+  type DatabaseCapability,
+  normalizeDatabaseCapabilities,
+} from '@/lib/databases/capabilities';
 import { supportsDatabaseAutomatedMigrations } from '@/lib/databases/platform-support';
 import { provisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
@@ -28,7 +32,11 @@ import { insertRepositoryRecord } from '@/lib/integrations/service/repository-se
 import { isK8sAvailable } from '@/lib/k8s';
 import { buildProjectNamespaceBase, buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import { logger } from '@/lib/logger';
-import { getDefaultSchemaConfigPath } from '@/lib/migrations/schema-source';
+import { isPlatformManagedMigrationTool } from '@/lib/migrations/platform-managed';
+import {
+  getDefaultSchemaConfigPath,
+  resolveExecutionToolForSchemaSource,
+} from '@/lib/migrations/schema-source';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
@@ -507,6 +515,7 @@ interface RepoAutomationContext {
   bakeTargets: string[];
   atlasConfigPath: string | null;
   atlasConfigContent: string | null;
+  atlasSchemaContents: Record<string, string>;
   migrationScriptContents: Record<string, string>;
   packageJson: {
     packageManager?: string;
@@ -515,6 +524,17 @@ interface RepoAutomationContext {
     devDependencies?: Record<string, string>;
   } | null;
 }
+
+type RepoAutomationContextLike = Pick<
+  RepoAutomationContext,
+  'monorepoType' | 'rootFiles' | 'packageManager' | 'bakeDefinition' | 'bakeTargets' | 'packageJson'
+> &
+  Partial<
+    Pick<
+      RepoAutomationContext,
+      'atlasConfigPath' | 'atlasConfigContent' | 'atlasSchemaContents' | 'migrationScriptContents'
+    >
+  >;
 
 function supportsGeneratedMigration(dbType: typeof databases.$inferSelect.type): boolean {
   return supportsDatabaseAutomatedMigrations(dbType);
@@ -647,10 +667,8 @@ function resolveManagedMigrationScriptPaths(
 }
 
 export function detectMigrationTool(
-  automation: Pick<
-    RepoAutomationContext,
-    'packageJson' | 'rootFiles' | 'atlasConfigContent' | 'migrationScriptContents'
-  >
+  automation: Pick<RepoAutomationContextLike, 'packageJson' | 'rootFiles'> &
+    Partial<Pick<RepoAutomationContextLike, 'atlasConfigContent' | 'migrationScriptContents'>>
 ) {
   const scripts = automation.packageJson?.scripts ?? {};
 
@@ -682,7 +700,7 @@ export function detectMigrationTool(
 }
 
 function inferSchemaConfigPath(
-  automation: RepoAutomationContext,
+  automation: RepoAutomationContextLike,
   source: ReturnType<typeof detectMigrationTool>
 ): string | null {
   if (source === 'atlas') {
@@ -702,14 +720,89 @@ function inferSchemaConfigPath(
   return getDefaultSchemaConfigPath(source);
 }
 
+function extractAtlasSchemaSourcePaths(content: string): string[] {
+  const paths = new Set<string>();
+  const regex = /src\s*=\s*["']file:\/\/([^"']+)["']/g;
+  let match: RegExpExecArray | null = regex.exec(content);
+
+  while (match !== null) {
+    const rawPath = match[1]?.trim();
+    if (rawPath) {
+      paths.add(rawPath.replace(/^\.\//u, ''));
+    }
+    match = regex.exec(content);
+  }
+
+  return [...paths];
+}
+
+function inferDatabaseCapabilities(
+  automation: RepoAutomationContextLike,
+  database: Pick<typeof databases.$inferSelect, 'type' | 'capabilities'>
+): DatabaseCapability[] {
+  const declared = normalizeDatabaseCapabilities(database.capabilities ?? []);
+
+  if (database.type !== 'postgresql') {
+    return declared;
+  }
+
+  const inspectionText = [
+    automation.atlasConfigContent ?? '',
+    ...Object.values(automation.atlasSchemaContents ?? {}),
+    ...Object.values(automation.migrationScriptContents ?? {}),
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  if (!inspectionText.trim()) {
+    return declared;
+  }
+
+  const inferred: DatabaseCapability[] = [...declared];
+  const detectors: Array<{
+    capability: DatabaseCapability;
+    patterns: RegExp[];
+  }> = [
+    {
+      capability: 'vector',
+      patterns: [
+        /\bensurePgvector\b/i,
+        /\bpgvector\b/i,
+        /create\s+extension\s+if\s+not\s+exists\s+["']?vector["']?/i,
+        /\bvector\s*\(/i,
+        /::vector\b/i,
+      ],
+    },
+    {
+      capability: 'pg_trgm',
+      patterns: [
+        /create\s+extension\s+if\s+not\s+exists\s+["']?pg_trgm["']?/i,
+        /\bgin_trgm_ops\b/i,
+        /\bsimilarity\s*\(/i,
+      ],
+    },
+  ];
+
+  for (const detector of detectors) {
+    if (
+      !inferred.includes(detector.capability) &&
+      detector.patterns.some((pattern) => pattern.test(inspectionText))
+    ) {
+      inferred.push(detector.capability);
+    }
+  }
+
+  return normalizeDatabaseCapabilities(inferred);
+}
+
 export function inferSchemaConfig(
-  automation: RepoAutomationContext,
+  automation: RepoAutomationContextLike,
   databaseType: typeof databases.$inferSelect.type
 ): {
   comment: string;
   source: 'atlas' | 'drizzle' | 'prisma' | 'knex' | 'typeorm' | 'custom';
   config?: string;
-  executionMode: 'automatic' | 'manual_platform';
+  executionMode: 'automatic' | 'external';
   approvalPolicy?: 'manual_in_production';
 } | null {
   if (!supportsGeneratedMigration(databaseType) || automation.monorepoType !== 'none') {
@@ -719,24 +812,44 @@ export function inferSchemaConfig(
   const scripts = automation.packageJson?.scripts ?? {};
   const source = detectMigrationTool(automation);
   const configPath = inferSchemaConfigPath(automation, source);
+  const executionTool = resolveExecutionToolForSchemaSource(source, databaseType);
+  const canPlatformManage = isPlatformManagedMigrationTool(executionTool, databaseType);
+  const hasAtlasConfig =
+    source === 'atlas' && Boolean(automation.atlasConfigPath || automation.atlasConfigContent);
+
+  if (hasAtlasConfig) {
+    return {
+      comment: canPlatformManage
+        ? 'Auto-detected from atlas.hcl'
+        : 'Auto-detected from atlas.hcl; platform keeps this schema source in external mode',
+      source,
+      ...(configPath ? { config: configPath } : {}),
+      executionMode: canPlatformManage ? 'automatic' : 'external',
+      ...(canPlatformManage ? { approvalPolicy: 'manual_in_production' as const } : {}),
+    };
+  }
 
   if (scripts['db:migrate']) {
     return {
-      comment: 'Auto-generated from package.json script db:migrate',
+      comment: canPlatformManage
+        ? 'Auto-generated from package.json script db:migrate'
+        : 'Auto-detected from package.json script db:migrate; platform keeps this schema source in external mode',
       source,
       ...(configPath ? { config: configPath } : {}),
-      executionMode: 'automatic',
-      approvalPolicy: 'manual_in_production',
+      executionMode: canPlatformManage ? 'automatic' : 'external',
+      ...(canPlatformManage ? { approvalPolicy: 'manual_in_production' as const } : {}),
     };
   }
 
   if (scripts['db:deploy']) {
     return {
-      comment: 'Auto-generated from package.json script db:deploy',
+      comment: canPlatformManage
+        ? 'Auto-generated from package.json script db:deploy'
+        : 'Auto-detected from package.json script db:deploy; platform keeps this schema source in external mode',
       source,
       ...(configPath ? { config: configPath } : {}),
-      executionMode: 'automatic',
-      approvalPolicy: 'manual_in_production',
+      executionMode: canPlatformManage ? 'automatic' : 'external',
+      ...(canPlatformManage ? { approvalPolicy: 'manual_in_production' as const } : {}),
     };
   }
 
@@ -745,7 +858,7 @@ export function inferSchemaConfig(
 
 function resolveBakeTarget(
   service: typeof services.$inferSelect,
-  automation: RepoAutomationContext
+  automation: RepoAutomationContextLike
 ): string | null {
   const bakeTargets = automation.bakeTargets ?? [];
 
@@ -767,7 +880,7 @@ function resolveBakeTarget(
 
 function buildServiceBuildLines(
   service: typeof services.$inferSelect,
-  automation: RepoAutomationContext
+  automation: RepoAutomationContextLike
 ): string[] {
   const lines = ['    build:'];
   const buildCommand = service.buildCommand ?? 'npm run build';
@@ -841,7 +954,7 @@ export function buildServiceMigrationLines(
   service: typeof services.$inferSelect,
   serviceList: Array<typeof services.$inferSelect>,
   databaseList: Array<typeof databases.$inferSelect>,
-  automation: RepoAutomationContext
+  automation: RepoAutomationContextLike
 ): string[] {
   const serviceScopedRelationalDbs = databaseList.filter(
     (database) => database.serviceId === service.id && supportsGeneratedMigration(database.type)
@@ -892,7 +1005,7 @@ export function renderJuanieConfig(
     repository: typeof repositories.$inferSelect | null;
   },
   context: ProjectInitRenderContext,
-  automation: RepoAutomationContext
+  automation: RepoAutomationContextLike
 ): string {
   const lines: string[] = ['# juanie.yaml', `name: ${project.slug}`, '', 'services:'];
 
@@ -958,6 +1071,7 @@ export function renderJuanieConfig(
     lines.push('', 'databases:');
 
     for (const database of context.databases) {
+      const capabilities = inferDatabaseCapabilities(automation, database);
       lines.push(
         `  - name: ${database.name}`,
         `    type: ${database.type}`,
@@ -965,6 +1079,13 @@ export function renderJuanieConfig(
         `    scope: ${database.scope ?? (database.serviceId ? 'service' : 'project')}`,
         `    role: ${database.role ?? 'primary'}`
       );
+
+      if (capabilities.length > 0) {
+        lines.push(
+          '    capabilities:',
+          ...capabilities.map((capability) => `      - ${capability}`)
+        );
+      }
     }
   }
 
@@ -1016,6 +1137,7 @@ async function pushCicdConfig(
   let bakeTargets: string[] = [];
   let atlasConfigPath: string | null = null;
   let atlasConfigContent: string | null = null;
+  const atlasSchemaContents: Record<string, string> = {};
   const migrationScriptContents: Record<string, string> = {};
   let packageJson: RepoAutomationContext['packageJson'] = null;
 
@@ -1060,6 +1182,32 @@ async function pushCicdConfig(
           atlasConfigPath,
           project.productionBranch || 'main'
         );
+
+        if (atlasConfigContent) {
+          for (const sourcePath of extractAtlasSchemaSourcePaths(atlasConfigContent)) {
+            try {
+              const content = await gateway.getFileContent(
+                session,
+                project.repository.fullName,
+                sourcePath,
+                project.productionBranch || 'main'
+              );
+
+              if (content) {
+                atlasSchemaContents[sourcePath] = content;
+              }
+            } catch (error) {
+              scopedLogger.warn(
+                'Failed to inspect Atlas schema source while inferring capabilities',
+                {
+                  repositoryFullName: project.repository.fullName,
+                  sourcePath,
+                  errorMessage: error instanceof Error ? error.message : String(error),
+                }
+              );
+            }
+          }
+        }
       } catch (error) {
         scopedLogger.warn('Failed to read atlas.hcl while inferring migrations', {
           repositoryFullName: project.repository.fullName,
@@ -1147,6 +1295,7 @@ async function pushCicdConfig(
     bakeTargets,
     atlasConfigPath,
     atlasConfigContent,
+    atlasSchemaContents,
     migrationScriptContents,
     packageJson,
   };

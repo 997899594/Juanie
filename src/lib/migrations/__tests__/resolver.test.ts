@@ -31,10 +31,8 @@ describe('migration resolver binding selection', () => {
     const resolved = resolveDatabaseForBinding(
       {
         binding: 'primary',
-        migrate: {
-          tool: 'drizzle',
-          workingDirectory: '.',
-          command: 'bun run db:migrate',
+        schema: {
+          source: 'drizzle',
           executionMode: 'automatic',
         },
       },
@@ -51,10 +49,8 @@ describe('migration resolver binding selection', () => {
       {
         role: 'readonly',
         type: 'postgresql',
-        migrate: {
-          tool: 'drizzle',
-          workingDirectory: '.',
-          command: 'bun run db:migrate',
+        schema: {
+          source: 'drizzle',
           executionMode: 'automatic',
         },
       },
@@ -69,10 +65,8 @@ describe('migration resolver binding selection', () => {
   it('falls back to service primary when no explicit selector is given', () => {
     const resolved = resolveDatabaseForBinding(
       {
-        migrate: {
-          tool: 'drizzle',
-          workingDirectory: '.',
-          command: 'bun run db:migrate',
+        schema: {
+          source: 'drizzle',
           executionMode: 'automatic',
         },
       },
@@ -87,10 +81,8 @@ describe('migration resolver binding selection', () => {
   it('falls back to the project primary when the service has no direct database', () => {
     const resolved = resolveDatabaseForBinding(
       {
-        migrate: {
-          tool: 'drizzle',
-          workingDirectory: '.',
-          command: 'bun run db:migrate',
+        schema: {
+          source: 'drizzle',
           executionMode: 'automatic',
         },
       },
@@ -102,21 +94,17 @@ describe('migration resolver binding selection', () => {
     expect(resolved?.resolution.strategy).toBe('implicit_primary');
   });
 
-  it('prefers database-level bindings over service-level migrate shorthand', () => {
+  it('prefers database-level bindings over service-level schema shorthand', () => {
     const configs = getServiceBindingConfigs({
-      migrate: {
-        tool: 'drizzle',
-        workingDirectory: '.',
-        command: 'bun run db:migrate',
+      schema: {
+        source: 'drizzle',
         executionMode: 'automatic',
       },
       databases: [
         {
           role: 'primary',
-          migrate: {
-            tool: 'drizzle',
-            workingDirectory: '.',
-            command: 'bun run db:migrate',
+          schema: {
+            source: 'drizzle',
             executionMode: 'automatic',
           },
         },

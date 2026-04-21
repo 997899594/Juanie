@@ -1,4 +1,5 @@
-import type { DatabaseType, MigrationSpecificationRecord, MigrationTool } from '@/lib/db/schema';
+import type { DatabaseType, MigrationTool } from '@/lib/db/schema';
+import type { MigrationSpecificationRecord } from './types';
 
 export const schemaSources = [
   'atlas',
@@ -29,11 +30,11 @@ export function resolveExecutionToolForSchemaSource(
   }
 
   if (source === 'sql') {
-    return 'atlas';
+    return 'sql';
   }
 
   if (source === 'drizzle') {
-    return databaseType === 'postgresql' ? 'drizzle' : 'custom';
+    return databaseType === 'postgresql' ? 'drizzle' : databaseType === 'mysql' ? 'sql' : 'custom';
   }
 
   if (source === 'prisma') {

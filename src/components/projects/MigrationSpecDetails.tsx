@@ -17,7 +17,6 @@ export interface MigrationSpecDetailsValue {
   command: string;
   sourceConfigPath?: string | null;
   executionMode?: string | null;
-  workingDirectory?: string | null;
   migrationPath?: string | null;
   compatibility?: string | null;
   approvalPolicy?: string | null;
