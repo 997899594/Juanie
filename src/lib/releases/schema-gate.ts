@@ -15,6 +15,8 @@ export interface ReleaseSchemaGateState {
     | 'blocked';
   statusLabel: string;
   summary: string | null;
+  hasLedger?: boolean;
+  hasUserTables?: boolean;
 }
 
 export interface ReleaseSchemaGateSnapshot {
@@ -75,12 +77,22 @@ function getSchemaStatusChip(status: ReleaseSchemaGateState['status']): Platform
   }
 }
 
+export function isReleaseSchemaStateBlocking(state: ReleaseSchemaGateState): boolean {
+  if (state.status === 'aligned' || state.status === 'pending_migrations') {
+    return false;
+  }
+
+  if (state.status !== 'unmanaged') {
+    return true;
+  }
+
+  return state.hasLedger === true || state.hasUserTables === true;
+}
+
 function buildReleaseSchemaGateSnapshot(
   states: ReleaseSchemaGateState[]
 ): ReleaseSchemaGateSnapshot {
-  const blockingStates = states.filter(
-    (state) => !['aligned', 'pending_migrations'].includes(state.status)
-  );
+  const blockingStates = states.filter(isReleaseSchemaStateBlocking);
   const customSignals: PlatformSignalChip[] = [];
 
   if (blockingStates.length > 0) {
@@ -169,6 +181,8 @@ export async function inspectReleaseSchemaGate(input: {
         status: state.status,
         statusLabel: getEnvironmentSchemaStateLabel(state.status),
         summary: state.summary,
+        hasLedger: state.hasLedger,
+        hasUserTables: state.hasUserTables,
       } satisfies ReleaseSchemaGateState;
     })
   );

@@ -347,6 +347,7 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
     }
   }
 
+  await triggerInitialAutoDeployBuilds(project);
   await db.update(projects).set({ status: 'active' }).where(eq(projects.id, projectId));
 }
 
@@ -569,6 +570,19 @@ export function buildRunScriptCommand(packageManager: PackageManager, script: st
   return `${packageManager} run ${script}`;
 }
 
+export function resolvePackageScriptCommand(
+  packageJson: RepoAutomationContext['packageJson'],
+  packageManager: PackageManager,
+  script: string
+): string {
+  const declared = packageJson?.scripts?.[script]?.trim();
+  if (declared) {
+    return declared;
+  }
+
+  return buildRunScriptCommand(packageManager, script);
+}
+
 export function detectMigrationTool(packageJson: RepoAutomationContext['packageJson']) {
   const dependencies = {
     ...(packageJson?.dependencies ?? {}),
@@ -603,7 +617,11 @@ export function inferMigrationCommand(
     return {
       comment: 'Auto-generated from package.json script db:migrate',
       tool,
-      command: buildRunScriptCommand(automation.packageManager, 'db:migrate'),
+      command: resolvePackageScriptCommand(
+        automation.packageJson,
+        automation.packageManager,
+        'db:migrate'
+      ),
       executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     };
@@ -613,7 +631,11 @@ export function inferMigrationCommand(
     return {
       comment: 'Auto-generated from package.json script db:deploy',
       tool,
-      command: buildRunScriptCommand(automation.packageManager, 'db:deploy'),
+      command: resolvePackageScriptCommand(
+        automation.packageJson,
+        automation.packageManager,
+        'db:deploy'
+      ),
       executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     };
@@ -1484,6 +1506,72 @@ async function configureReleaseTrigger(
     repositoryFullName: project.repository.fullName,
     imageName,
   });
+}
+
+async function triggerInitialAutoDeployBuilds(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+): Promise<void> {
+  if (!project.repository?.fullName || !project.repository.providerId) {
+    return;
+  }
+
+  const environmentList = await db.query.environments.findMany({
+    where: eq(environments.projectId, project.id),
+    orderBy: (environment, { asc }) => [asc(environment.createdAt)],
+  });
+
+  const refs = Array.from(
+    new Set(
+      environmentList
+        .filter((environment) => environment.autoDeploy && !environment.isPreview)
+        .map((environment) => environment.branch?.trim())
+        .filter((branch): branch is string => Boolean(branch))
+        .map((branch) => (branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`))
+    )
+  );
+
+  if (refs.length === 0) {
+    return;
+  }
+
+  const scopedLogger = projectInitLogger.child({
+    projectId: project.id,
+    step: 'trigger_initial_auto_deploy_builds',
+    repositoryFullName: project.repository.fullName,
+  });
+
+  const session = await getTeamIntegrationSession({
+    integrationId: project.repository.providerId,
+    teamId: project.teamId,
+    requiredCapabilities: ['read_repo', 'write_workflow'],
+  });
+
+  for (const ref of refs) {
+    const sourceCommitSha = await gateway.resolveRefToCommitSha(
+      session,
+      project.repository.fullName,
+      ref
+    );
+
+    if (!sourceCommitSha) {
+      throw new Error(`无法解析初始化首发分支 ${ref} 的最新提交`);
+    }
+
+    await gateway.triggerReleaseBuild(session, {
+      repoFullName: project.repository.fullName,
+      ref,
+      releaseRef: ref,
+      sourceCommitSha,
+      forceFullBuild: true,
+    });
+
+    scopedLogger.info('Triggered initial auto-deploy build', {
+      ref,
+      sourceCommitSha,
+    });
+  }
 }
 
 async function setupNamespace(

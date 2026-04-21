@@ -7,14 +7,17 @@ COPY . /app
 # ============================================
 # Stage 2: Dependencies
 # ============================================
-FROM oven/bun:1 AS deps
+FROM oven/bun:1.3.9 AS deps
 WORKDIR /app
 ENV CI=true
 ENV LEFTHOOK=0
+ENV BUN_INSTALL_CACHE_DIR=/tmp/.bun-install-cache
 
 COPY package.json bun.lock ./
 COPY scripts/prepare.ts ./scripts/prepare.ts
-RUN bun install --frozen-lockfile
+RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
+  && mkdir -p "${BUN_INSTALL_CACHE_DIR}" \
+  && bun install --frozen-lockfile --no-cache --backend=copyfile --network-concurrency=8
 
 # ============================================
 # Stage 3: Builder (Next.js)
@@ -45,8 +48,9 @@ RUN bun build ./src/lib/schema-management/schema-runner.ts --compile --outfile=s
 # ============================================
 # Stage 5: Migration Builder
 # ============================================
-FROM oven/bun:1 AS migrate-deps
+FROM oven/bun:1.3.9 AS migrate-deps
 WORKDIR /migrate
+ENV BUN_INSTALL_CACHE_DIR=/tmp/.bun-install-cache
 
 RUN cat <<'EOF' > package.json
 {
@@ -59,7 +63,9 @@ RUN cat <<'EOF' > package.json
 }
 EOF
 
-RUN bun install --production
+RUN rm -rf "${BUN_INSTALL_CACHE_DIR}" \
+  && mkdir -p "${BUN_INSTALL_CACHE_DIR}" \
+  && bun install --production --no-cache --backend=copyfile --network-concurrency=8
 
 # ============================================
 # Stage 6: Web Runner
@@ -89,7 +95,7 @@ CMD ["node", "server.js"]
 # ============================================
 # Stage 7: Worker Runner
 # ============================================
-FROM oven/bun:1 AS worker
+FROM oven/bun:1.3.9 AS worker
 WORKDIR /app
 
 ENV NODE_ENV=production

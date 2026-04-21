@@ -18,6 +18,7 @@ import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 import { assessMigrationCommandSafety } from './command-safety';
 import { fetchMigrationFilesFromRepoPath } from './fetch';
 import { resolveMigrationPath } from './path';
+import { isPlatformManagedMigrationSpec } from './platform-managed';
 import { resolveMigrationSpecifications } from './resolver';
 import type {
   ExecuteMigrationRunOptions,
@@ -139,7 +140,12 @@ export async function resolveAndCreateMigrationRuns(
       triggeredByUserId: input.triggeredByUserId,
       sourceCommitSha: input.sourceCommitSha,
       sourceCommitMessage: input.sourceCommitMessage,
-      runnerType: initialStatus === 'queued' && input.options?.imageUrl ? 'k8s_job' : 'worker',
+      runnerType:
+        initialStatus === 'queued' &&
+        !isPlatformManagedMigrationSpec(spec) &&
+        input.options?.imageUrl
+          ? 'k8s_job'
+          : 'worker',
       initialStatus,
     });
     runs.push(run);
@@ -225,11 +231,11 @@ export async function buildMigrationExecutionPlan(
   const runnerType: 'k8s_job' | 'worker' | 'external' =
     spec.specification.executionMode === 'external'
       ? 'external'
-      : spec.specification.tool === 'sql'
+      : isPlatformManagedMigrationSpec(spec)
         ? 'worker'
         : 'k8s_job';
   const requiresImage =
-    spec.specification.executionMode !== 'external' && spec.specification.tool !== 'sql';
+    spec.specification.executionMode !== 'external' && !isPlatformManagedMigrationSpec(spec);
   let canRun = spec.database.status === 'running';
   let blockingReason: string | null =
     spec.database.status === 'running'
