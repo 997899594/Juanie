@@ -424,6 +424,7 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
     }
   }
 
+  await triggerInitialAutoDeployBuilds(project);
   await db.update(projects).set({ status: 'active' }).where(eq(projects.id, projectId));
 }
 
@@ -1510,6 +1511,65 @@ async function configureReleaseTrigger(
   await onProgress?.(100, '发布触发配置完成');
   console.log(`✅ Configured release trigger for ${project.repository.fullName}`);
   console.log(`   Juanie CI will call /api/releases after image push`);
+}
+
+async function triggerInitialAutoDeployBuilds(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  }
+): Promise<void> {
+  if (!project.repository?.fullName || !project.repository.providerId) {
+    return;
+  }
+
+  const environmentList = await db.query.environments.findMany({
+    where: eq(environments.projectId, project.id),
+    orderBy: (environment, { asc }) => [asc(environment.createdAt)],
+  });
+
+  const refs = Array.from(
+    new Set(
+      environmentList
+        .filter((environment) => environment.autoDeploy && !environment.isPreview)
+        .map((environment) => environment.branch?.trim())
+        .filter((branch): branch is string => Boolean(branch))
+        .map((branch) => (branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`))
+    )
+  );
+
+  if (refs.length === 0) {
+    return;
+  }
+
+  const session = await getTeamIntegrationSession({
+    integrationId: project.repository.providerId,
+    teamId: project.teamId,
+    requiredCapabilities: ['read_repo', 'write_workflow'],
+  });
+
+  for (const ref of refs) {
+    const sourceCommitSha = await gateway.resolveRefToCommitSha(
+      session,
+      project.repository.fullName,
+      ref
+    );
+
+    if (!sourceCommitSha) {
+      throw new Error(`无法解析初始化首发分支 ${ref} 的最新提交`);
+    }
+
+    await gateway.triggerReleaseBuild(session, {
+      repoFullName: project.repository.fullName,
+      ref,
+      releaseRef: ref,
+      sourceCommitSha,
+      forceFullBuild: true,
+    });
+
+    console.log(
+      `✅ Triggered initial auto-deploy build for ${project.repository.fullName} (${ref})`
+    );
+  }
 }
 
 /**
