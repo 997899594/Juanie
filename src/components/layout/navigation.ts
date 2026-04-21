@@ -94,13 +94,5 @@ export function buildEnvironmentNavHref(
   environmentId: string,
   href: string
 ): string {
-  if (href === '/delivery') {
-    return `/projects/${projectId}/delivery?env=${environmentId}`;
-  }
-
-  if (href === '/schema') {
-    return `/projects/${projectId}/schema?env=${environmentId}`;
-  }
-
   return `/projects/${projectId}/environments/${environmentId}${href}`;
 }

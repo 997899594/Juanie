@@ -30,7 +30,7 @@ function getSourceLabel(source: ResolvedAIPluginSnapshot['source'], stale: boole
 
 function getRiskBadgeVariant(
   level: 'low' | 'medium' | 'high'
-): 'outline' | 'warning' | 'destructive' {
+): 'secondary' | 'warning' | 'destructive' {
   if (level === 'high') {
     return 'destructive';
   }
@@ -39,7 +39,7 @@ function getRiskBadgeVariant(
     return 'warning';
   }
 
-  return 'outline';
+  return 'secondary';
 }
 
 function getCheckBadgeVariant(
@@ -58,7 +58,7 @@ function getCheckBadgeVariant(
 
 function renderUnavailableState(panel: ResolvedAIPluginSnapshot, emptyLabel: string) {
   return (
-    <div className="ui-control-muted px-4 py-5">
+    <div className="rounded-[20px] bg-[rgba(243,240,233,0.7)] px-4 py-5 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset]">
       <div className="text-sm font-medium text-foreground">{emptyLabel}</div>
       <div className="mt-2 text-sm text-muted-foreground">
         {panel.errorMessage ?? panel.availability.blockedReason ?? '无结果'}
@@ -80,27 +80,27 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ReleaseAIRefreshActions projectId={props.projectId} releaseId={props.releaseId} />
-            <Badge variant="outline">
+            <Badge variant="secondary">
               {getSourceLabel(props.releasePlan.source, props.releasePlan.stale)}
             </Badge>
-            <Badge variant="outline">{props.releasePlan.availability.plan}</Badge>
+            <Badge variant="secondary">{props.releasePlan.availability.plan}</Badge>
           </div>
         </div>
 
         {releasePlanSnapshot ? (
           <div className="space-y-4">
             {props.releasePlan.errorMessage && (
-              <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
+              <div className="rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-3 text-sm text-muted-foreground">
                 {props.releasePlan.errorMessage}
               </div>
             )}
             <div className="ui-control px-4 py-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{releasePlanSnapshot.recommendation.strategy}</Badge>
+                <Badge variant="secondary">{releasePlanSnapshot.recommendation.strategy}</Badge>
                 <Badge variant={getRiskBadgeVariant(releasePlanSnapshot.risk.level)}>
                   {releasePlanSnapshot.risk.level}
                 </Badge>
-                <Badge variant="outline">{releasePlanSnapshot.recommendation.confidence}</Badge>
+                <Badge variant="secondary">{releasePlanSnapshot.recommendation.confidence}</Badge>
               </div>
               <div className="mt-3 text-sm font-medium text-foreground">
                 {releasePlanSnapshot.recommendation.summary}
@@ -118,7 +118,10 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                 检查
               </div>
               {releasePlanSnapshot.checks.slice(0, 4).map((check) => (
-                <div key={check.key} className="ui-control-muted px-4 py-3">
+                <div
+                  key={check.key}
+                  className="rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-sm font-medium">{check.label}</div>
                     <Badge variant={getCheckBadgeVariant(check.status)}>{check.status}</Badge>
@@ -129,7 +132,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="ui-control-muted px-4 py-4">
+              <div className="rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   步骤
                 </div>
@@ -145,7 +148,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                   ))}
                 </div>
               </div>
-              <div className="ui-control-muted px-4 py-4">
+              <div className="rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   回滚
                 </div>
@@ -160,7 +163,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                 {releasePlanSnapshot.rollbackPlan.triggerSignals.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {releasePlanSnapshot.rollbackPlan.triggerSignals.slice(0, 4).map((signal) => (
-                      <Badge key={signal} variant="outline">
+                      <Badge key={signal} variant="secondary">
                         {signal}
                       </Badge>
                     ))}
@@ -180,17 +183,17 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             <div className="text-sm font-semibold">故障归因</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">
+            <Badge variant="secondary">
               {getSourceLabel(props.incidentAnalysis.source, props.incidentAnalysis.stale)}
             </Badge>
-            <Badge variant="outline">{props.incidentAnalysis.availability.plan}</Badge>
+            <Badge variant="secondary">{props.incidentAnalysis.availability.plan}</Badge>
           </div>
         </div>
 
         {incidentSnapshot ? (
           <div className="space-y-4">
             {props.incidentAnalysis.errorMessage && (
-              <div className="ui-control-muted px-4 py-3 text-sm text-muted-foreground">
+              <div className="rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-3 text-sm text-muted-foreground">
                 {props.incidentAnalysis.errorMessage}
               </div>
             )}
@@ -207,7 +210,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                 >
                   {incidentSnapshot.diagnosis.confidence}
                 </Badge>
-                <Badge variant="outline">{incidentSnapshot.diagnosis.category}</Badge>
+                <Badge variant="secondary">{incidentSnapshot.diagnosis.category}</Badge>
               </div>
               <div className="mt-3 text-sm font-medium text-foreground">
                 {incidentSnapshot.diagnosis.summary}
@@ -221,7 +224,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="ui-control-muted px-4 py-4">
+              <div className="rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   过程
                 </div>
@@ -237,7 +240,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                   ))}
                 </div>
               </div>
-              <div className="ui-control-muted px-4 py-4">
+              <div className="rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   证据
                 </div>
@@ -253,7 +256,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               </div>
             </div>
 
-            <div className="ui-control-muted px-4 py-4">
+            <div className="rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 动作
               </div>
@@ -263,7 +266,7 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                     <div className="text-sm font-medium text-foreground">可直接执行</div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {incidentSnapshot.actions.safe.map((action) => (
-                        <Badge key={action.key} variant="outline">
+                        <Badge key={action.key} variant="secondary">
                           {action.label}
                         </Badge>
                       ))}

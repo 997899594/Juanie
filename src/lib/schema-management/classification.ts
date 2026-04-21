@@ -1,7 +1,7 @@
 import type { EnvironmentSchemaStateStatus } from '@/lib/db/schema';
 
 export interface SchemaLedgerClassificationInput {
-  kind: 'drizzle' | 'sql';
+  kind: 'atlas' | 'drizzle' | 'sql';
   expectedEntries: string[];
   actualEntries: string[];
   hasUserTables: boolean;
@@ -23,6 +23,10 @@ function isPrefix(prefix: string[], values: string[]): boolean {
 }
 
 function describeKind(kind: SchemaLedgerClassificationInput['kind']): string {
+  if (kind === 'atlas') {
+    return 'Atlas';
+  }
+
   return kind === 'drizzle' ? 'Drizzle' : 'SQL';
 }
 

@@ -12,6 +12,11 @@ import {
   projects,
 } from '@/lib/db/schema';
 import {
+  getAppliedAtlasVersions,
+  getAtlasDeclaredVersions,
+  hasAtlasUserTables,
+} from '@/lib/migrations/atlas';
+import {
   fetchMigrationFilesFromRepoPath,
   readRepositoryFileFromRepoPath,
 } from '@/lib/migrations/fetch';
@@ -390,6 +395,76 @@ async function inspectSqlLedger(spec: ResolvedMigrationSpec): Promise<{
   };
 }
 
+async function inspectAtlasLedger(spec: ResolvedMigrationSpec): Promise<{
+  status: EnvironmentSchemaStateStatus;
+  summary: string;
+  expectedEntries: string[];
+  actualEntries: string[];
+  hasLedger: boolean;
+  hasUserTables: boolean;
+}> {
+  if (spec.database.type !== 'postgresql' && spec.database.type !== 'mysql') {
+    return {
+      status: 'blocked',
+      summary: `暂不支持在 ${spec.database.type} 上检查 Atlas 账本`,
+      expectedEntries: [],
+      actualEntries: [],
+      hasLedger: false,
+      hasUserTables: false,
+    };
+  }
+
+  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
+  if (!migrationPath) {
+    return {
+      status: 'blocked',
+      summary: '无法解析 Atlas migration 路径',
+      expectedEntries: [],
+      actualEntries: [],
+      hasLedger: false,
+      hasUserTables: false,
+    };
+  }
+
+  const ref = await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch);
+  const migrationFiles = (
+    await fetchMigrationFilesFromRepoPath(spec.specification.projectId, migrationPath, ref)
+  ).filter((file) => file.name.endsWith('.sql'));
+  const expectedEntries = getAtlasDeclaredVersions(migrationFiles);
+
+  try {
+    const [actualEntries, hasUserTables] = await Promise.all([
+      getAppliedAtlasVersions(spec.database),
+      hasAtlasUserTables(spec.database),
+    ]);
+
+    const classified = classifySchemaLedgerState({
+      kind: 'atlas',
+      expectedEntries,
+      actualEntries,
+      hasUserTables,
+    });
+
+    return {
+      status: classified.status,
+      summary: classified.summary,
+      expectedEntries,
+      actualEntries,
+      hasLedger: classified.hasLedger,
+      hasUserTables: classified.hasUserTables,
+    };
+  } catch (error) {
+    return {
+      status: 'blocked',
+      summary: error instanceof Error ? error.message : String(error),
+      expectedEntries,
+      actualEntries: [],
+      hasLedger: false,
+      hasUserTables: false,
+    };
+  }
+}
+
 async function upsertEnvironmentSchemaState(input: {
   projectId: string;
   environmentId: string;
@@ -503,18 +578,20 @@ export async function inspectEnvironmentSchemaState(input: {
 
   try {
     const inspected =
-      resolvedSpec.specification.tool === 'drizzle'
-        ? await inspectDrizzleLedger(resolvedSpec)
-        : resolvedSpec.specification.tool === 'sql'
-          ? await inspectSqlLedger(resolvedSpec)
-          : {
-              status: 'blocked' as const,
-              summary: `暂不支持检查 ${resolvedSpec.specification.tool} 迁移账本`,
-              expectedEntries: [],
-              actualEntries: [],
-              hasLedger: false,
-              hasUserTables: false,
-            };
+      resolvedSpec.specification.tool === 'atlas'
+        ? await inspectAtlasLedger(resolvedSpec)
+        : resolvedSpec.specification.tool === 'drizzle'
+          ? await inspectDrizzleLedger(resolvedSpec)
+          : resolvedSpec.specification.tool === 'sql'
+            ? await inspectSqlLedger(resolvedSpec)
+            : {
+                status: 'blocked' as const,
+                summary: `暂不支持检查 ${resolvedSpec.specification.tool} 迁移账本`,
+                expectedEntries: [],
+                actualEntries: [],
+                hasLedger: false,
+                hasUserTables: false,
+              };
 
     return upsertEnvironmentSchemaState({
       projectId: input.projectId,

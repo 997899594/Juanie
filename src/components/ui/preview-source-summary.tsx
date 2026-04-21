@@ -44,7 +44,7 @@ export function PreviewSourceSummary({
         ))}
       {meta.authorName && <span>{meta.authorName}</span>}
       {meta.stateLabel && (
-        <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[11px]">
+        <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
           {meta.stateLabel}
         </Badge>
       )}

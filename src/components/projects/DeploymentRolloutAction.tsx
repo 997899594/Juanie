@@ -107,9 +107,9 @@ export function DeploymentRolloutAction({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="h-8 rounded-xl px-3"
+          className="h-8 rounded-full px-3"
           disabled={disabled}
           title={disabled ? (disabledSummary ?? undefined) : undefined}
         >
@@ -119,18 +119,18 @@ export function DeploymentRolloutAction({
       </DialogTrigger>
       <DialogContent
         size="workspace"
-        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[95vh]"
       >
-        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
           <DialogTitle>{actionLabel}</DialogTitle>
           <DialogDescription>确认后继续。</DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.12fr)_minmax(380px,0.88fr)]">
             <div className="space-y-4">
               {disabledSummary && (
-                <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+                <div className="rounded-[20px] bg-[rgba(243,240,233,0.66)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
                   {disabledSummary}
                 </div>
               )}
@@ -153,11 +153,9 @@ export function DeploymentRolloutAction({
                 )}
               </div>
 
-              {error && (
-                <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
+              {error ? (
+                <div className={cn(dialogSubtleClassName, 'text-sm text-destructive')}>{error}</div>
+              ) : null}
             </div>
 
             <div className="space-y-4">
@@ -178,11 +176,11 @@ export function DeploymentRolloutAction({
                       summaryClassName="rounded-[20px]"
                     />
 
-                    {plan.plan.blockingReason && (
-                      <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
+                    {plan.plan.blockingReason ? (
+                      <div className={cn(dialogSubtleClassName, 'text-sm text-destructive')}>
                         {plan.plan.blockingReason}
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 ) : (
                   <EmptyState title="暂无结果" className="min-h-40 rounded-[20px]" />
@@ -192,12 +190,16 @@ export function DeploymentRolloutAction({
           </div>
         </div>
 
-        <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
-          <Button variant="outline" className="w-full sm:w-auto" onClick={() => setOpen(false)}>
+        <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
+          <Button
+            variant="ghost"
+            className="w-full rounded-full sm:w-auto"
+            onClick={() => setOpen(false)}
+          >
             关闭
           </Button>
           <Button
-            className="w-full sm:w-auto"
+            className="w-full rounded-full sm:w-auto"
             onClick={handleFinalize}
             disabled={submitting || loadingPlan || !plan?.plan.canFinalize}
           >

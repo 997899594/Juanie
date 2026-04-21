@@ -12,7 +12,7 @@ export interface SchemaRepairRuntimeArtifacts {
 
 interface SchemaRepairArtifactInput {
   provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
-  tool: 'drizzle' | 'sql' | 'prisma' | 'knex' | 'typeorm' | 'custom';
+  tool: 'atlas' | 'drizzle' | 'sql' | 'prisma' | 'knex' | 'typeorm' | 'custom';
   databaseType: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
   migrationPath: string | null;
   existingMigrationNames: string[];

@@ -52,7 +52,7 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
       <PageHeader
         title="项目"
         actions={
-          <Button asChild className="h-9 rounded-xl px-4">
+          <Button asChild className="h-9 rounded-full px-4">
             <Link href="/projects/new">
               <Plus className="h-4 w-4" />
               新建项目
@@ -80,7 +80,7 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
             <FolderKanban className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">没有项目</h2>
-          <Button asChild variant="outline" className="mt-5 rounded-full">
+          <Button asChild variant="ghost" className="mt-5 rounded-full px-4">
             <Link href="/projects/new">
               <Plus className="h-4 w-4" />
               新建项目
@@ -116,7 +116,7 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
                   </div>
                 </div>
               </div>
-              <div className="rounded-full bg-white/82 px-3 py-1.5 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(17,17,17,0.04)]">
+              <div className="rounded-full bg-secondary/76 px-3 py-1.5">
                 <div className="flex items-center gap-2">
                   <div
                     className={`h-2 w-2 rounded-full ${getRuntimeStatusDotClass(project.status)}`}

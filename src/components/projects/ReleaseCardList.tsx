@@ -131,7 +131,7 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                         </Badge>
                       ))}
                       {release.artifacts.length > 3 ? (
-                        <Badge variant="outline" className="rounded-full px-2 py-0.5 font-normal">
+                        <Badge variant="secondary" className="rounded-full px-2 py-0.5 font-normal">
                           +{release.artifacts.length - 3}
                         </Badge>
                       ) : null}
@@ -146,9 +146,9 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                     <div className="flex w-full items-center gap-2 sm:w-auto">
                       <Button
                         asChild
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="min-w-0 flex-1 sm:flex-none"
+                        className="min-w-0 flex-1 rounded-full sm:flex-none"
                       >
                         <Link
                           href={`/projects/${projectId}/environments/${release.environment.id}/logs`}
@@ -158,9 +158,9 @@ export function ReleaseCardList({ projectId, releases }: ReleaseCardListProps) {
                       </Button>
                       <Button
                         asChild
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="min-w-0 flex-1 sm:flex-none"
+                        className="min-w-0 flex-1 rounded-full sm:flex-none"
                       >
                         <Link
                           href={buildReleaseDetailPath(

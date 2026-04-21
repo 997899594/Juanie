@@ -66,7 +66,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
         ))}
         <div className="flex items-stretch gap-2 md:justify-end">
           <Link href={`/teams/${teamId}/members`} className="flex-1 md:flex-none">
-            <Button variant="outline" className="h-full min-h-16 w-full rounded-[20px] px-5">
+            <Button variant="ghost" className="h-full min-h-16 w-full rounded-[20px] px-5">
               成员
             </Button>
           </Link>

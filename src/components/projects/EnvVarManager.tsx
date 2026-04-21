@@ -1,7 +1,9 @@
 'use client';
 
+import { useForm } from '@tanstack/react-form';
 import { Eye, EyeOff, KeyRound, Loader2, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,8 +26,14 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import {
+  FormDescription,
+  FormField,
+  FormLabel,
+  FormMessage,
+  FormSection,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
@@ -95,6 +103,29 @@ interface EnvVarDialogProps {
   trigger: React.ReactNode;
 }
 
+function normalizeEnvVarKey(value: string): string {
+  return value.toUpperCase().replace(/\s/g, '_');
+}
+
+function getErrorMessage(errors: unknown[]): string | null {
+  const firstError = errors[0];
+
+  if (typeof firstError === 'string') {
+    return firstError;
+  }
+
+  if (
+    typeof firstError === 'object' &&
+    firstError !== null &&
+    'message' in firstError &&
+    typeof firstError.message === 'string'
+  ) {
+    return firstError.message;
+  }
+
+  return null;
+}
+
 function EnvVarDialog({
   projectId,
   environmentId,
@@ -106,59 +137,26 @@ function EnvVarDialog({
 }: EnvVarDialogProps) {
   const isEdit = !!editTarget;
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showValue, setShowValue] = useState(false);
 
-  const [form, setForm] = useState<EnvVarFormData>({
-    key: editTarget?.key ?? '',
-    value: '',
-    isSecret: editTarget?.isSecret ?? false,
-  });
-
-  // 打开时重置表单
-  useEffect(() => {
-    if (open) {
-      setForm({
-        key: editTarget?.key ?? '',
-        value: '',
-        isSecret: editTarget?.isSecret ?? false,
-      });
-      setError(null);
-      setShowValue(false);
-    }
-  }, [open, editTarget]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.key.trim()) {
-      setError('变量名不能为空');
-      return;
-    }
-    if (!form.value.trim() && !isEdit) {
-      setError('变量值不能为空');
-      return;
-    }
-    // 编辑模式下，value 为空时跳过值更新（只改 key 或 isSecret）
-    if (isEdit && !form.value.trim()) {
-      setError('请输入新的变量值后再更新，密文变量无法回显');
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
+  const form = useForm({
+    defaultValues: {
+      key: editTarget?.key ?? '',
+      value: '',
+      isSecret: editTarget?.isSecret ?? false,
+    } satisfies EnvVarFormData,
+    onSubmit: async ({ value }) => {
       const url = isEdit
         ? `/api/projects/${projectId}/env-vars/${editTarget.id}`
         : `/api/projects/${projectId}/env-vars`;
       const method = isEdit ? 'PUT' : 'POST';
 
       const body: Record<string, unknown> = {
-        key: form.key.trim(),
-        value: form.value,
-        isSecret: form.isSecret,
+        key: value.key.trim(),
+        value: value.value,
+        isSecret: value.isSecret,
       };
+
       if (!isEdit) {
         body.environmentId = environmentId;
       }
@@ -170,129 +168,200 @@ function EnvVarDialog({
       });
 
       if (!res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? '保存变量失败');
       }
 
+      toast.success(isEdit ? '变量已更新' : '变量已添加');
       setOpen(false);
       onSuccess();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
+      form.reset();
+    },
+  });
+
+  // 打开时重置表单
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        key: editTarget?.key ?? '',
+        value: '',
+        isSecret: editTarget?.isSecret ?? false,
+      });
+      setShowValue(false);
     }
-  };
+  }, [open, editTarget, form]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         size="form"
-        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[94vh]"
       >
-        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
           <DialogTitle>{isEdit ? '编辑变量' : '添加变量'}</DialogTitle>
           <DialogDescription>
             变量只作用于当前环境，密文值不会回显，更新时需要重新输入。
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-            <div className="space-y-4">
-              <div className="ui-control-muted p-4 sm:p-5">
-                <div className="space-y-1.5">
-                  <Label htmlFor="env-key">变量名</Label>
-                  <Input
-                    id="env-key"
-                    placeholder="DATABASE_URL"
-                    value={form.key}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        key: e.target.value.toUpperCase().replace(/\s/g, '_'),
-                      }))
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            void form.handleSubmit().catch((error: unknown) => {
+              toast.error(error instanceof Error ? error.message : '保存变量失败');
+            });
+          }}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+            <FormSection className="space-y-4 px-0 py-0 shadow-none">
+              <form.Field
+                name="key"
+                validators={{
+                  onChange: ({ value }) => {
+                    if (!value.trim()) {
+                      return '变量名不能为空';
                     }
-                    className="font-mono"
-                    autoComplete="off"
-                    autoFocus
-                    disabled={disabled}
-                  />
-                </div>
-
-                <div className="mt-4 space-y-1.5">
-                  <Label htmlFor="env-value">
-                    {isEdit ? '新变量值' : '变量值'}
-                    {isEdit && (
-                      <span className="ml-1.5 text-xs text-muted-foreground">(更新时必填)</span>
-                    )}
-                  </Label>
-                  <div className="relative">
+                    return undefined;
+                  },
+                }}
+              >
+                {(field) => (
+                  <FormField>
+                    <FormLabel htmlFor={field.name}>变量名</FormLabel>
                     <Input
-                      id="env-value"
-                      type={form.isSecret && !showValue ? 'password' : 'text'}
-                      placeholder={isEdit ? '输入新值' : '输入值'}
-                      value={form.value}
-                      onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-                      className="pr-9 font-mono"
+                      id={field.name}
+                      placeholder="DATABASE_URL"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(normalizeEnvVarKey(e.target.value))}
+                      className="font-mono"
                       autoComplete="off"
+                      autoFocus
+                      disabled={disabled}
+                      aria-invalid={field.state.meta.errors.length > 0}
+                    />
+                    <FormMessage>
+                      {field.state.meta.isTouched ? getErrorMessage(field.state.meta.errors) : null}
+                    </FormMessage>
+                  </FormField>
+                )}
+              </form.Field>
+
+              <form.Field
+                name="value"
+                validators={{
+                  onChange: ({ value }) => {
+                    if (!value.trim()) {
+                      return isEdit ? '请输入新的变量值后再更新' : '变量值不能为空';
+                    }
+                    return undefined;
+                  },
+                }}
+              >
+                {(field) => (
+                  <form.Field name="isSecret">
+                    {(secretField) => (
+                      <FormField>
+                        <FormLabel htmlFor={field.name}>
+                          {isEdit ? '新变量值' : '变量值'}
+                          {isEdit ? (
+                            <span className="ml-1.5 text-xs text-muted-foreground">
+                              (更新时必填)
+                            </span>
+                          ) : null}
+                        </FormLabel>
+                        <div className="relative">
+                          <Input
+                            id={field.name}
+                            type={secretField.state.value && !showValue ? 'password' : 'text'}
+                            placeholder={isEdit ? '输入新值' : '输入值'}
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            className="pr-9 font-mono"
+                            autoComplete="off"
+                            disabled={disabled}
+                            aria-invalid={field.state.meta.errors.length > 0}
+                          />
+                          {secretField.state.value ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setShowValue((v) => !v)}
+                              className="absolute right-1.5 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full text-muted-foreground"
+                              tabIndex={-1}
+                            >
+                              {showValue ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          ) : null}
+                        </div>
+                        <FormMessage>
+                          {field.state.meta.isTouched
+                            ? getErrorMessage(field.state.meta.errors)
+                            : null}
+                        </FormMessage>
+                      </FormField>
+                    )}
+                  </form.Field>
+                )}
+              </form.Field>
+
+              <form.Field name="isSecret">
+                {(field) => (
+                  <div className="flex items-center gap-3 rounded-[18px] bg-[rgba(255,255,255,0.88)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.025)]">
+                    <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">密文变量</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        开启后只写不读，详情页不会回显真实值。
+                      </p>
+                    </div>
+                    <Switch
+                      checked={field.state.value}
+                      onCheckedChange={field.handleChange}
                       disabled={disabled}
                     />
-                    {form.isSecret && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setShowValue((v) => !v)}
-                        className="absolute right-1.5 top-1/2 h-8 w-8 -translate-y-1/2 rounded-xl text-muted-foreground"
-                        tabIndex={-1}
-                      >
-                        {showValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    )}
                   </div>
-                </div>
-              </div>
+                )}
+              </form.Field>
 
-              <div className="ui-control flex items-center gap-3 px-4 py-4">
-                <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground">密文变量</p>
-                </div>
-                <Switch
-                  checked={form.isSecret}
-                  onCheckedChange={(checked) => setForm((f) => ({ ...f, isSecret: checked }))}
-                  disabled={disabled}
-                />
-              </div>
-
-              {disabledSummary && (
-                <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
-                  {disabledSummary}
-                </div>
-              )}
-
-              {error && (
-                <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-            </div>
+              {disabledSummary ? <FormDescription>{disabledSummary}</FormDescription> : null}
+            </FormSection>
           </div>
 
-          <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
+          <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
             <Button
               type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
+              variant="ghost"
+              className="w-full rounded-full sm:w-auto"
               onClick={() => setOpen(false)}
-              disabled={saving}
             >
               取消
             </Button>
-            <Button type="submit" className="w-full sm:w-auto" disabled={saving || disabled}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isEdit ? '更新变量' : '添加变量'}
-            </Button>
+            <form.Subscribe
+              selector={(state) => ({
+                canSubmit: state.canSubmit,
+                isSubmitting: state.isSubmitting,
+              })}
+            >
+              {({ canSubmit, isSubmitting }) => (
+                <Button
+                  type="submit"
+                  className="w-full rounded-full sm:w-auto"
+                  disabled={!canSubmit || disabled}
+                >
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {isEdit ? '更新变量' : '添加变量'}
+                </Button>
+              )}
+            </form.Subscribe>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -331,9 +400,14 @@ function EnvVarRow({
       const res = await fetch(`/api/projects/${projectId}/env-vars/${envVar.id}`, {
         method: 'DELETE',
       });
-      if (res.ok) {
-        onDeleted();
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? '删除变量失败');
       }
+      toast.success('变量已删除');
+      onDeleted();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '删除变量失败');
     } finally {
       setDeleting(false);
     }
@@ -346,7 +420,7 @@ function EnvVarRow({
           {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <code className="truncate text-sm font-mono">{envVar.key}</code>
           {envVar.isSecret && (
-            <span className="ui-control-muted inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[rgba(243,240,233,0.7)] px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.62)_inset]">
               <KeyRound className="h-3 w-3" />
               密文
             </span>
@@ -402,7 +476,7 @@ function EnvVarRow({
                 )}
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent>
+            <AlertDialogContent size="form">
               <AlertDialogHeader>
                 <AlertDialogTitle>删除变量？</AlertDialogTitle>
                 <AlertDialogDescription>
@@ -411,10 +485,12 @@ function EnvVarRow({
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
+                <AlertDialogCancel className="w-full rounded-full sm:w-auto">
+                  取消
+                </AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
-                  className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                  className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                 >
                   删除
                 </AlertDialogAction>
@@ -435,7 +511,7 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
           {envVar.isSecret && <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <code className="truncate text-sm font-mono">{envVar.key}</code>
           {envVar.isSecret && (
-            <span className="ui-control-muted inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[rgba(243,240,233,0.7)] px-2.5 py-1 text-[11px] font-semibold text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.62)_inset]">
               <KeyRound className="h-3 w-3" />
               密文
             </span>
@@ -458,7 +534,7 @@ function ReadonlyEnvVarRow({ envVar, badges }: { envVar: EnvVar; badges?: string
           {(badges ?? []).map((badge) => (
             <span
               key={`${envVar.id}-${badge}`}
-              className="ui-control-muted inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+              className="inline-flex items-center rounded-full bg-[rgba(243,240,233,0.7)] px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.62)_inset]"
             >
               {badge}
             </span>
@@ -638,8 +714,8 @@ export function EnvVarManager({
                   trigger={
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="mt-1"
+                      variant="ghost"
+                      className="mt-1 rounded-full px-4"
                       disabled={!canManage}
                       title={!canManage ? (disabledSummary ?? undefined) : undefined}
                     >

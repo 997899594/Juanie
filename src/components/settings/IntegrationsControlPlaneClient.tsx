@@ -55,7 +55,9 @@ export function IntegrationsControlPlaneClient({
                       {integration.accountLabel}
                     </div>
                   </div>
-                  <Badge variant={integration.statusTone === 'danger' ? 'destructive' : 'outline'}>
+                  <Badge
+                    variant={integration.statusTone === 'danger' ? 'destructive' : 'secondary'}
+                  >
                     {integration.statusLabel}
                   </Badge>
                 </div>
@@ -104,7 +106,7 @@ export function IntegrationsControlPlaneClient({
                       </div>
                     </div>
                     {repository.webUrl ? (
-                      <Button asChild variant="outline" className="h-8 px-3">
+                      <Button asChild variant="ghost" className="h-8 rounded-full px-3">
                         <a href={repository.webUrl} target="_blank" rel="noreferrer">
                           <ExternalLink className="h-3.5 w-3.5" />
                           链接

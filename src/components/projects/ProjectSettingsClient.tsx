@@ -439,7 +439,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                           {isDeleting ? '删除中' : deleting ? '提交中...' : '删除'}
                         </Button>
                       </AlertDialogTrigger>
-                      <AlertDialogContent>
+                      <AlertDialogContent size="form">
                         <AlertDialogHeader>
                           <AlertDialogTitle>删除项目</AlertDialogTitle>
                           <AlertDialogDescription>
@@ -447,17 +447,19 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                             <span className="font-medium text-foreground">{project.name}</span>？
                           </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+                        <div className="rounded-[20px] bg-[rgba(196,85,77,0.06)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
                           {isDeleting
                             ? '删除任务已经提交，项目、环境和发布记录会在清理完成后一起移除。'
                             : '项目、环境和发布记录会一起删除。'}
                         </div>
                         <AlertDialogFooter>
-                          <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
+                          <AlertDialogCancel className="w-full rounded-full sm:w-auto">
+                            取消
+                          </AlertDialogCancel>
                           <AlertDialogAction
                             onClick={handleDelete}
                             disabled={isDeleting || deleting}
-                            className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                            className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                           >
                             {isDeleting ? '删除中' : deleting ? '提交中...' : '删除'}
                           </AlertDialogAction>

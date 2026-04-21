@@ -5,6 +5,17 @@ export function getMigrationPhaseLabel(value?: string | null): string {
   return value ?? '未设置';
 }
 
+export function getSchemaSourceLabel(value?: string | null): string {
+  if (value === 'atlas') return 'Atlas';
+  if (value === 'drizzle') return 'Drizzle';
+  if (value === 'prisma') return 'Prisma';
+  if (value === 'knex') return 'Knex';
+  if (value === 'typeorm') return 'TypeORM';
+  if (value === 'sql') return 'SQL';
+  if (value === 'custom') return 'Custom';
+  return value ?? '未设置';
+}
+
 export function getMigrationExecutionModeLabel(value?: string | null): string {
   if (value === 'manual_platform') return '平台审批';
   if (value === 'external') return '外部执行';

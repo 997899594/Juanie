@@ -34,7 +34,7 @@ export function EmptyState({ icon, title, description, action, className }: Empt
         <Button
           onClick={action.onClick}
           asChild={!!action.href}
-          variant="outline"
+          variant="secondary"
           className="rounded-full px-4"
         >
           {action.href ? <a href={action.href}>{action.label}</a> : action.label}

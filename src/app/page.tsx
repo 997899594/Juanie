@@ -66,13 +66,13 @@ export default async function HomePage() {
         title="指挥台"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+            <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
               <Link href="/projects">项目</Link>
             </Button>
-            <Button asChild variant="outline" size="sm" className="h-9 rounded-xl px-4">
+            <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
               <Link href="/inbox">待办</Link>
             </Button>
-            <Button asChild size="sm" className="h-9 rounded-xl px-4">
+            <Button asChild size="sm" className="h-9 rounded-full px-4">
               <Link href="/projects/new">
                 <Plus className="h-3.5 w-3.5" />
                 新建项目
@@ -102,7 +102,7 @@ export default async function HomePage() {
                   <FolderKanban className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="text-sm font-medium">没有项目</div>
-                <Button asChild variant="outline" className="mt-5 rounded-full">
+                <Button asChild variant="secondary" className="mt-5 rounded-full">
                   <Link href="/projects/new">
                     <Plus className="h-3.5 w-3.5" />
                     新建项目

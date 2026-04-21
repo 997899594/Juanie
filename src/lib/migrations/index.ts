@@ -261,7 +261,7 @@ export async function buildMigrationExecutionPlan(
     }
   }
 
-  if (spec.specification.tool === 'sql') {
+  if (spec.specification.tool === 'sql' || spec.specification.tool === 'atlas') {
     try {
       const files = await fetchMigrationFilesFromRepoPath(
         spec.specification.projectId,
@@ -325,9 +325,11 @@ export async function buildMigrationExecutionPlan(
     },
     specification: {
       id: spec.specification.id,
+      source: spec.specification.source,
       tool: spec.specification.tool,
       phase: spec.specification.phase,
       executionMode: spec.specification.executionMode,
+      sourceConfigPath: spec.specification.sourceConfigPath ?? null,
       workingDirectory: spec.specification.workingDirectory,
       migrationPath,
       command: spec.specification.command,

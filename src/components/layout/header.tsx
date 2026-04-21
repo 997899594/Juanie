@@ -22,7 +22,7 @@ export function Header() {
   const project = useProjectContext();
   const queryEnvironmentId =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('env') : null;
-  const breadcrumbs = generateBreadcrumbs(pathname, project ?? undefined, queryEnvironmentId);
+  const breadcrumbs = generateBreadcrumbs(pathname, project ?? undefined);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const currentTitle = breadcrumbs[breadcrumbs.length - 1]?.title ?? '首页';
   const projectId = project?.projectId ?? null;
@@ -41,13 +41,6 @@ export function Header() {
     if (!projectId || !environmentId) {
       return false;
     }
-    if (href.includes('/delivery?env=')) {
-      return pathname === `/projects/${projectId}/delivery` && queryEnvironmentId === environmentId;
-    }
-    if (href.includes('/schema?env=')) {
-      return pathname === `/projects/${projectId}/schema` && queryEnvironmentId === environmentId;
-    }
-
     const baseHref = `/projects/${projectId}/environments/${environmentId}`;
     if (href === baseHref) {
       return pathname === baseHref;
@@ -84,7 +77,7 @@ export function Header() {
         <div className="glass flex items-center justify-between gap-3 rounded-[20px] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_10px_30px_rgba(55,53,47,0.035)]">
           <div className="flex min-w-0 items-center gap-3">
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
               className="h-10 w-10 rounded-2xl bg-card/80"
               onClick={() => setMobileMenuOpen(true)}
@@ -225,8 +218,7 @@ export function Header() {
 
 function generateBreadcrumbs(
   pathname: string,
-  project?: { projectId: string; projectName: string },
-  queryEnvironmentId?: string | null
+  project?: { projectId: string; projectName: string }
 ): BreadcrumbItem[] {
   const segments = pathname.split('/').filter(Boolean);
 
@@ -240,7 +232,7 @@ function generateBreadcrumbs(
     approvals: '审批',
     teams: '团队',
     settings: '设置',
-    delivery: queryEnvironmentId ? '发布' : '发布总览',
+    delivery: '发布',
     deployments: '部署执行',
     releases: '发布',
     environments: '环境',

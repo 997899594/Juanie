@@ -15,17 +15,21 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import {
+  buildPlatformInternalCommand,
+  getDefaultSchemaConfigPath,
+  resolveExecutionToolForSchemaSource,
+  type SchemaSource,
+} from './schema-source';
 import type { ResolvedMigrationSpec } from './types';
 
 interface ServiceDatabaseBindingConfig {
   binding?: string;
   role?: 'primary' | 'readonly' | 'cache' | 'queue' | 'analytics';
   type?: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
-  migrate: {
-    tool: 'drizzle' | 'prisma' | 'knex' | 'typeorm' | 'sql' | 'custom';
-    workingDirectory: string;
-    path?: string;
-    command: string;
+  schema: {
+    source: SchemaSource;
+    config?: string;
     phase?: 'preDeploy' | 'postDeploy' | 'manual';
     executionMode: 'automatic' | 'manual_platform' | 'external';
     lockStrategy?: 'platform' | 'db_advisory';
@@ -39,7 +43,8 @@ function getImplicitDatabaseTypesForMigrationTool(
 ): Array<ServiceDatabaseBindingConfig['type']> | null {
   let candidates: Array<ServiceDatabaseBindingConfig['type']> | null;
 
-  switch (binding.migrate.tool) {
+  switch (binding.schema.source) {
+    case 'atlas':
     case 'drizzle':
     case 'prisma':
     case 'knex':
@@ -53,7 +58,7 @@ function getImplicitDatabaseTypesForMigrationTool(
       return null;
   }
 
-  if (binding.migrate.executionMode !== 'automatic') {
+  if (binding.schema.executionMode !== 'automatic') {
     return candidates;
   }
 
@@ -64,7 +69,7 @@ function getImplicitDatabaseTypesForMigrationTool(
 }
 
 export function getServiceBindingConfigs(serviceConfig?: {
-  migrate?: ServiceDatabaseBindingConfig['migrate'];
+  schema?: ServiceDatabaseBindingConfig['schema'];
   databases?: ServiceDatabaseBindingConfig[];
 }): ServiceDatabaseBindingConfig[] {
   if (!serviceConfig) {
@@ -75,8 +80,8 @@ export function getServiceBindingConfigs(serviceConfig?: {
     return serviceConfig.databases ?? [];
   }
 
-  if (serviceConfig.migrate) {
-    return [{ migrate: serviceConfig.migrate }];
+  if (serviceConfig.schema) {
+    return [{ schema: serviceConfig.schema }];
   }
 
   return [];
@@ -281,7 +286,7 @@ export async function syncMigrationSpecificationsFromRepo(
     const bindings = getServiceBindingConfigs(
       serviceConfig as
         | {
-            migrate?: ServiceDatabaseBindingConfig['migrate'];
+            schema?: ServiceDatabaseBindingConfig['schema'];
             databases?: ServiceDatabaseBindingConfig[];
           }
         | undefined
@@ -294,6 +299,14 @@ export async function syncMigrationSpecificationsFromRepo(
       }
 
       const databaseRecord = resolved.database;
+      const executionTool = resolveExecutionToolForSchemaSource(
+        binding.schema.source,
+        databaseRecord.type
+      );
+      const sourceConfigPath =
+        binding.schema.config ?? getDefaultSchemaConfigPath(binding.schema.source);
+      const migrationPath =
+        executionTool === 'atlas' && binding.schema.source === 'atlas' ? null : undefined;
       const [specification] = await db
         .insert(migrationSpecifications)
         .values({
@@ -301,15 +314,17 @@ export async function syncMigrationSpecificationsFromRepo(
           serviceId: serviceRecord.id,
           environmentId,
           databaseId: databaseRecord.id,
-          tool: binding.migrate.tool,
-          phase: binding.migrate.phase ?? 'preDeploy',
-          executionMode: binding.migrate.executionMode,
-          workingDirectory: binding.migrate.workingDirectory,
-          migrationPath: binding.migrate.path,
-          command: binding.migrate.command,
-          lockStrategy: binding.migrate.lockStrategy ?? 'platform',
-          compatibility: binding.migrate.compatibility ?? 'backward_compatible',
-          approvalPolicy: binding.migrate.approvalPolicy ?? 'auto',
+          source: binding.schema.source,
+          tool: executionTool,
+          phase: binding.schema.phase ?? 'preDeploy',
+          executionMode: binding.schema.executionMode,
+          sourceConfigPath,
+          workingDirectory: '.',
+          migrationPath: migrationPath ?? null,
+          command: buildPlatformInternalCommand(binding.schema.source, executionTool),
+          lockStrategy: binding.schema.lockStrategy ?? 'platform',
+          compatibility: binding.schema.compatibility ?? 'backward_compatible',
+          approvalPolicy: binding.schema.approvalPolicy ?? 'auto',
         })
         .onConflictDoUpdate({
           target: [
@@ -318,15 +333,17 @@ export async function syncMigrationSpecificationsFromRepo(
             migrationSpecifications.databaseId,
           ],
           set: {
-            tool: binding.migrate.tool,
-            phase: binding.migrate.phase ?? 'preDeploy',
-            executionMode: binding.migrate.executionMode,
-            workingDirectory: binding.migrate.workingDirectory,
-            migrationPath: binding.migrate.path ?? null,
-            command: binding.migrate.command,
-            lockStrategy: binding.migrate.lockStrategy ?? 'platform',
-            compatibility: binding.migrate.compatibility ?? 'backward_compatible',
-            approvalPolicy: binding.migrate.approvalPolicy ?? 'auto',
+            source: binding.schema.source,
+            tool: executionTool,
+            phase: binding.schema.phase ?? 'preDeploy',
+            executionMode: binding.schema.executionMode,
+            sourceConfigPath,
+            workingDirectory: '.',
+            migrationPath: migrationPath ?? null,
+            command: buildPlatformInternalCommand(binding.schema.source, executionTool),
+            lockStrategy: binding.schema.lockStrategy ?? 'platform',
+            compatibility: binding.schema.compatibility ?? 'backward_compatible',
+            approvalPolicy: binding.schema.approvalPolicy ?? 'auto',
             updatedAt: new Date(),
           },
         })

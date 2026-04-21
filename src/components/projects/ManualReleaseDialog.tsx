@@ -3,6 +3,7 @@
 import { Rocket } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -164,7 +165,6 @@ export function ManualReleaseDialog({
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [plan, setPlan] = useState<ManualReleasePlan | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!environmentId && defaultEnvironmentId) {
@@ -193,7 +193,6 @@ export function ManualReleaseDialog({
 
     let cancelled = false;
     setLoadingPlan(true);
-    setError(null);
 
     fetchManualReleasePlan({
       projectId,
@@ -215,7 +214,7 @@ export function ManualReleaseDialog({
       })
       .catch((requestError) => {
         if (!cancelled) {
-          setError(requestError instanceof Error ? requestError.message : '加载发布检查失败');
+          toast.error(requestError instanceof Error ? requestError.message : '加载发布检查失败');
           setPlan(null);
         }
       })
@@ -245,7 +244,6 @@ export function ManualReleaseDialog({
     if (!sourceRelease) return;
 
     setSubmitting(true);
-    setError(null);
 
     try {
       const data = await createManualRelease({
@@ -264,13 +262,14 @@ export function ManualReleaseDialog({
       });
 
       setOpen(false);
+      toast.success('手动发布已创建');
       await onCreated?.();
       if (data?.id) {
         router.push(buildReleaseDetailPath(projectId, environmentId, data.id));
         router.refresh();
       }
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : '创建手动发布失败');
+      toast.error(submitError instanceof Error ? submitError.message : '创建手动发布失败');
     } finally {
       setSubmitting(false);
     }
@@ -280,8 +279,9 @@ export function ManualReleaseDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className="rounded-full px-4"
           disabled={Boolean(unavailableReason)}
           title={unavailableReason ?? undefined}
         >
@@ -291,20 +291,20 @@ export function ManualReleaseDialog({
       </DialogTrigger>
       <DialogContent
         size="workspace"
-        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[92vh]"
+        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[95vh]"
       >
-        <DialogHeader className="shrink-0 px-5 py-6 sm:px-7">
+        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
           <DialogTitle>手动发布</DialogTitle>
           <DialogDescription>
             复用已经构建成功的产物，直接发到目标环境，不改动源码分支。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7 sm:py-6">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.92fr)]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.16fr)_minmax(420px,0.84fr)]">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
-                <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
+                <div className="rounded-[20px] bg-[rgba(243,240,233,0.66)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
                   {disabledSummary}
                 </div>
               )}
@@ -355,12 +355,6 @@ export function ManualReleaseDialog({
                   />
                 </div>
               </div>
-
-              {error && (
-                <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
             </div>
 
             <div className="space-y-4">
@@ -430,12 +424,6 @@ export function ManualReleaseDialog({
                       summaryClassName="rounded-[20px]"
                     />
 
-                    {planningPanel.blockingReason && (
-                      <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
-                        {planningPanel.blockingReason}
-                      </div>
-                    )}
-
                     {!planningPanel.blockingReason && planningPanel.warningChips.length > 0 && (
                       <PlatformSignalChipList chips={planningPanel.warningChips} />
                     )}
@@ -448,9 +436,9 @@ export function ManualReleaseDialog({
           </div>
         </div>
 
-        <DialogFooter className="console-divider-top shrink-0 bg-background px-5 py-4 sm:px-7">
+        <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
           <Button
-            variant="outline"
+            variant="ghost"
             className="w-full rounded-full sm:w-auto"
             onClick={() => setOpen(false)}
           >

@@ -59,12 +59,12 @@ export function ReleaseMigrationActions({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {canApprove && (
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 rounded-xl px-3 text-xs"
+            className="h-8 rounded-full px-3 text-xs"
             onClick={() => handleAction('approve')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
@@ -77,9 +77,9 @@ export function ReleaseMigrationActions({
         )}
         {canMarkExternal && (
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 rounded-xl px-3 text-xs"
+            className="h-8 rounded-full px-3 text-xs"
             onClick={() => handleAction('mark_external_complete')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
@@ -92,9 +92,9 @@ export function ReleaseMigrationActions({
         )}
         {canMarkExternal && (
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 rounded-xl px-3 text-xs"
+            className="h-8 rounded-full px-3 text-xs"
             onClick={() => handleAction('mark_external_failed')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
@@ -107,9 +107,9 @@ export function ReleaseMigrationActions({
         )}
         {canRetry && (
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 rounded-xl px-3 text-xs"
+            className="h-8 rounded-full px-3 text-xs"
             onClick={() => handleAction('retry')}
             disabled={pendingAction !== null || disabled}
             title={disabled ? (disabledSummary ?? undefined) : undefined}
@@ -121,10 +121,10 @@ export function ReleaseMigrationActions({
           </Button>
         )}
       </div>
-      {disabled && disabledSummary && (
+      {disabled && disabledSummary ? (
         <div className="text-xs text-muted-foreground">{disabledSummary}</div>
-      )}
-      {error && <div className="text-xs text-destructive">{error}</div>}
+      ) : null}
+      {error ? <div className="text-xs text-destructive">{error}</div> : null}
     </div>
   );
 }

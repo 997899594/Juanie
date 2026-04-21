@@ -3,6 +3,7 @@
 import { Database, ExternalLink, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
@@ -199,7 +200,6 @@ export function SchemaCenterClient({
     databaseId: string;
     action: SchemaCenterActionKey;
   } | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const next = await fetchProjectSchemaCenter<SchemaCenterData>(
@@ -222,11 +222,9 @@ export function SchemaCenterClient({
     try {
       await task();
       await refresh();
-      setFeedback(successMessage);
-      setTimeout(() => setFeedback(null), 3000);
+      toast.success(successMessage);
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '执行失败');
-      setTimeout(() => setFeedback(null), 5000);
+      toast.error(error instanceof Error ? error.message : '执行失败');
     } finally {
       setPendingAction(null);
     }
@@ -249,29 +247,21 @@ export function SchemaCenterClient({
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title={focusedEnvironment ? `${focusedEnvironment.name} · 数据` : '数据'}
+        title={`${focusedEnvironment?.name ?? '环境'} · 数据`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {focusedEnvironment ? (
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="ghost" size="sm" className="rounded-full px-4">
                 <Link href={`/projects/${projectId}/environments/${focusedEnvironment.id}`}>
                   环境
                 </Link>
               </Button>
-            ) : (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/projects/${projectId}`}>项目</Link>
-              </Button>
-            )}
+            ) : null}
           </div>
         }
       />
 
-      {feedback ? (
-        <div className="ui-control-muted px-4 py-3 text-sm text-foreground">{feedback}</div>
-      ) : null}
-
-      <div className="ui-control-muted px-4 py-3">
+      <div className="rounded-[18px] bg-[rgba(243,240,233,0.72)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
           <span>{data.summary.databaseCount} 个数据库</span>
           <span>{data.summary.blockingCount} 个门禁阻塞</span>
@@ -283,14 +273,14 @@ export function SchemaCenterClient({
       <div className="space-y-4">
         {data.environments.map((environment) => (
           <section key={environment.id} className="ui-floating px-4 py-4">
-            {!focusedEnvironment && (
+            {!focusedEnvironment ? (
               <div className="mb-4 flex items-center gap-2">
                 <Database className="h-4 w-4" />
                 <div className="text-sm font-semibold">{environment.name}</div>
-                {environment.isProduction ? <Badge variant="outline">生产</Badge> : null}
-                {environment.isPreview ? <Badge variant="outline">预览</Badge> : null}
+                {environment.isProduction ? <Badge variant="secondary">生产</Badge> : null}
+                {environment.isPreview ? <Badge variant="secondary">预览</Badge> : null}
               </div>
-            )}
+            ) : null}
 
             <div className="space-y-3">
               {environment.databases.map((database) => {
@@ -327,23 +317,25 @@ export function SchemaCenterClient({
                     repairPlan.atlasExecutionStatus === 'failed');
 
                 return (
-                  <div key={database.id} className="ui-control-muted rounded-2xl px-4 py-4">
+                  <div
+                    key={database.id}
+                    className="rounded-2xl bg-[linear-gradient(180deg,rgba(243,240,233,0.72),rgba(255,255,255,0.88))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset,0_0_0_1px_rgba(17,17,17,0.028)]"
+                  >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-medium text-foreground">{database.name}</div>
                           <Badge variant="secondary">{database.type}</Badge>
                           <Badge
-                            variant="outline"
+                            variant="secondary"
                             className={getSchemaStateBadgeClass(state?.status)}
                           >
                             {state?.statusLabel ?? '未纳管'}
                           </Badge>
                           {repairPlan ? (
-                            <Badge variant="outline">{getSuggestionStatusLabel(repairPlan)}</Badge>
-                          ) : null}
-                          {repairPlan?.reviewUrl ? (
-                            <Badge variant="outline">已创建 PR</Badge>
+                            <Badge variant="secondary">
+                              {getSuggestionStatusLabel(repairPlan)}
+                            </Badge>
                           ) : null}
                         </div>
                         <div className="text-sm text-muted-foreground">
@@ -365,7 +357,7 @@ export function SchemaCenterClient({
 
                       <div className="flex flex-wrap gap-2">
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
                           disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                           onClick={() =>
@@ -385,7 +377,7 @@ export function SchemaCenterClient({
 
                         {state?.status === 'aligned_untracked' ? (
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                             onClick={() =>
@@ -452,7 +444,7 @@ export function SchemaCenterClient({
 
                         {canDiscardSuggestion ? (
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
                             disabled={hasPendingAction || !environment.actions.canConfigureStrategy}
                             onClick={() =>
@@ -472,7 +464,7 @@ export function SchemaCenterClient({
                         ) : null}
 
                         {repairPlan?.reviewUrl ? (
-                          <Button asChild variant="outline" size="sm">
+                          <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
                             <a href={repairPlan.reviewUrl} target="_blank" rel="noreferrer">
                               打开修复 PR
                               <ExternalLink className="ml-1 h-3.5 w-3.5" />
@@ -488,7 +480,7 @@ export function SchemaCenterClient({
                         <div className="mt-1 text-sm text-muted-foreground">
                           {repairPlan.summary}
                         </div>
-                        <div className="ui-control-muted mt-2 px-3 py-2 text-sm text-foreground">
+                        <div className="mt-2 rounded-[16px] bg-[rgba(243,240,233,0.64)] px-3 py-2 text-sm text-foreground">
                           {suggestionSummary}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -505,10 +497,10 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.diffSummary ? (
-                      <div className="ui-control-muted mt-4 px-4 py-3">
+                      <div className="mt-4 rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">迁移详情</Badge>
-                          <Badge variant="outline">
+                          <Badge variant="secondary">
                             {latestAtlasRun.diffSummary.changedFiles.length} 个文件
                           </Badge>
                         </div>
@@ -541,7 +533,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.log ? (
-                      <details className="ui-control-muted mt-4 px-4 py-3">
+                      <details className="mt-4 rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
                         <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
                           执行日志
                         </summary>

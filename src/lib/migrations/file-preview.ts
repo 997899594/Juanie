@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Client as PgClient } from 'pg';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
+import { extractAtlasMigrationVersion, getAppliedAtlasVersions } from '@/lib/migrations/atlas';
 import {
   fetchMigrationFilesFromRepoPath,
   listRepositoryDirectoryFromRepoPath,
@@ -25,6 +26,7 @@ const PREVIEW_CACHE_MAX_ENTRIES = Math.max(
   50
 );
 const SUPPORTED_MIGRATION_TOOLS = [
+  'atlas',
   'drizzle',
   'prisma',
   'knex',
@@ -84,9 +86,10 @@ interface CachedPreviewEntry {
 }
 
 interface ExecutionStateSnapshot {
-  mode: 'names' | 'ordered_count' | 'unknown';
+  mode: 'names' | 'ordered_count' | 'versions' | 'unknown';
   executedNames?: Set<string>;
   executedCount?: number;
+  executedVersions?: Set<string>;
   warning?: string | null;
 }
 
@@ -459,6 +462,22 @@ async function resolveGenericDeclaredPreview(
   return buildDeclaredPreview('迁移目录', files);
 }
 
+async function resolveAtlasDeclaredPreview(
+  projectId: string,
+  migrationPath: string,
+  revision: string
+): Promise<DeclaredMigrationPreview> {
+  const files = await withTimeout(
+    fetchMigrationFilesFromRepoPath(projectId, migrationPath, revision),
+    '读取 Atlas 迁移目录'
+  );
+
+  return buildDeclaredPreview(
+    'Atlas 目录',
+    files.filter((file) => file.name.endsWith('.sql')).map((file) => file.name)
+  );
+}
+
 async function resolveDeclaredPreviewForRun(
   run: MigrationFilePreviewRunLike
 ): Promise<DeclaredMigrationPreview | null> {
@@ -471,6 +490,9 @@ async function resolveDeclaredPreviewForRun(
   const revision = resolveRevision(run);
   if (tool === 'sql') {
     return resolveSqlDeclaredPreview(run.projectId, migrationPath, revision);
+  }
+  if (tool === 'atlas') {
+    return resolveAtlasDeclaredPreview(run.projectId, migrationPath, revision);
   }
   if (tool === 'drizzle') {
     return resolveDrizzleDeclaredPreview(run.projectId, migrationPath, revision);
@@ -668,6 +690,45 @@ async function resolveRuntimeExecutionState(
   run: MigrationFilePreviewRunLike,
   tool: SupportedMigrationTool
 ): Promise<ExecutionStateSnapshot> {
+  if (tool === 'atlas') {
+    if (run.database?.type !== 'postgresql' && run.database?.type !== 'mysql') {
+      return {
+        mode: 'unknown',
+        warning: '当前仅支持 PostgreSQL / MySQL 的 Atlas 执行状态读取。',
+      };
+    }
+
+    const connectionString = normalizeRefValue(run.database.connectionString);
+    if (!connectionString) {
+      return {
+        mode: 'unknown',
+        warning: '数据库连接串缺失，无法读取 Atlas 执行状态。',
+      };
+    }
+
+    try {
+      const versions = await getAppliedAtlasVersions({
+        type: run.database.type,
+        connectionString,
+        host: null,
+        port: null,
+        databaseName: null,
+        username: null,
+        password: null,
+      });
+
+      return {
+        mode: 'versions',
+        executedVersions: new Set(versions),
+      };
+    } catch (error) {
+      return {
+        mode: 'unknown',
+        warning: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   if (run.database?.type !== 'postgresql') {
     return {
       mode: 'unknown',
@@ -725,6 +786,22 @@ function applyExecutionState(input: {
       declaredFiles.length
     );
     const pending = declaredFiles.slice(executedTotal);
+
+    return buildPendingSnapshot({
+      declaredPreview: input.declaredPreview,
+      pendingFiles: pending,
+      executedTotal,
+      warning: input.executionState.warning,
+    });
+  }
+
+  if (input.executionState.mode === 'versions') {
+    const executedVersions = input.executionState.executedVersions ?? new Set<string>();
+    const pending = declaredFiles.filter((file) => {
+      const version = extractAtlasMigrationVersion(file);
+      return !version || !executedVersions.has(version);
+    });
+    const executedTotal = declaredFiles.length - pending.length;
 
     return buildPendingSnapshot({
       declaredPreview: input.declaredPreview,

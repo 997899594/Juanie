@@ -1,4 +1,13 @@
 import type {
+  BranchSchema,
+  ExpandedMergeRequestSchema,
+  ExpandedUserSchema,
+  ProjectSchema,
+  RepositoryFileExpandedSchema,
+  RepositoryTreeSchema,
+} from '@gitbeaker/rest';
+import { Gitlab } from '@gitbeaker/rest';
+import type {
   CreateBranchOptions,
   CreateRepoOptions,
   CreateReviewRequestOptions,
@@ -14,6 +23,35 @@ import type {
   TriggerReleaseBuildOptions,
 } from './index';
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = error.message;
+
+    if (typeof message === 'string' && message.trim().length > 0) {
+      return message;
+    }
+
+    if (Array.isArray(message)) {
+      return message.join(', ');
+    }
+
+    if (message && typeof message === 'object') {
+      return Object.entries(message as Record<string, string[]>)
+        .flatMap(([key, value]) => value.map((entry) => `${key}: ${entry}`))
+        .join(', ');
+    }
+  }
+
+  return fallback;
+}
+
+function isStatusError(error: unknown, status: number): boolean {
+  return typeof error === 'object' && error !== null && 'cause' in error
+    ? ((error.cause as { response?: { status?: number } } | undefined)?.response?.status ??
+        null) === status
+    : false;
+}
+
 export class GitLabProvider implements GitProvider {
   type = 'gitlab' as const;
   private serverUrl: string;
@@ -26,6 +64,13 @@ export class GitLabProvider implements GitProvider {
     this.clientId = config.clientId;
     this.clientSecret = config.clientSecret;
     this.redirectUri = config.redirectUri;
+  }
+
+  private getClient(accessToken: string): InstanceType<typeof Gitlab> {
+    return new Gitlab({
+      host: this.serverUrl,
+      token: accessToken,
+    });
   }
 
   getAuthUrl(state: string): string {
@@ -70,22 +115,15 @@ export class GitLabProvider implements GitProvider {
   }
 
   async getUser(accessToken: string): Promise<GitUser> {
-    const res = await fetch(`${this.serverUrl}/api/v4/user`, {
-      headers: this.getHeaders(accessToken),
-    });
-
-    if (!res.ok) {
-      throw new Error('Failed to get user');
-    }
-
-    const data = await res.json();
+    const client = this.getClient(accessToken);
+    const data = (await client.Users.showCurrentUser()) as ExpandedUserSchema;
 
     return {
       id: String(data.id),
       username: data.username,
       name: data.name,
       email: data.email || `${data.username}@${new URL(this.serverUrl).hostname}`,
-      avatarUrl: data.avatar_url,
+      avatarUrl: data.avatar_url ?? null,
     };
   }
 
@@ -93,36 +131,33 @@ export class GitLabProvider implements GitProvider {
     accessToken: string,
     options?: { page?: number; perPage?: number; search?: string }
   ): Promise<GitRepository[]> {
+    const client = this.getClient(accessToken);
     const page = options?.page || 1;
     const perPage = options?.perPage || 100;
+    const data = (await client.Projects.all({
+      orderBy: 'updated_at',
+      owned: true,
+      search: options?.search,
+      ...(options?.page ? ({ page } as Record<string, number>) : {}),
+      ...(options?.perPage ? ({ perPage } as Record<string, number>) : {}),
+    } as Record<string, unknown>)) as ProjectSchema[];
 
-    let url = `${this.serverUrl}/api/v4/projects?page=${page}&per_page=${perPage}&order_by=updated_at&owned=true`;
-
-    if (options?.search) {
-      url += `&search=${encodeURIComponent(options.search)}`;
-    }
-
-    const res = await fetch(url, { headers: this.getHeaders(accessToken) });
-
-    if (!res.ok) {
-      return [];
-    }
-
-    const data = await res.json();
-    return data.map(this.mapRepository);
+    return data.map((item) => this.mapRepository(item));
   }
 
   async getRepository(accessToken: string, fullName: string): Promise<GitRepository | null> {
-    const encodedPath = encodeURIComponent(fullName);
-    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}`, {
-      headers: this.getHeaders(accessToken),
-    });
+    const client = this.getClient(accessToken);
 
-    if (!res.ok) {
-      return null;
+    try {
+      const data = (await client.Projects.show(fullName)) as ProjectSchema;
+      return this.mapRepository(data);
+    } catch (error) {
+      if (isStatusError(error, 404)) {
+        return null;
+      }
+
+      throw error;
     }
-
-    return this.mapRepository(await res.json());
   }
 
   async getReviewRequest(
@@ -130,29 +165,35 @@ export class GitLabProvider implements GitProvider {
     repoFullName: string,
     number: number
   ): Promise<GitReviewRequest | null> {
-    const data = await this.fetchMergeRequest(accessToken, repoFullName, number);
+    const client = this.getClient(accessToken);
 
-    if (!data) {
-      return null;
+    try {
+      const data = (await client.MergeRequests.show(
+        repoFullName,
+        number
+      )) as ExpandedMergeRequestSchema;
+      const state = this.mapReviewState({
+        draft: Boolean(data.draft),
+        state: typeof data.state === 'string' ? data.state : null,
+      });
+
+      return {
+        number,
+        kind: 'merge_request',
+        label: `MR !${number}`,
+        title: data.title,
+        state,
+        stateLabel: this.getReviewStateLabel(state),
+        authorName: data.author?.name ?? data.author?.username ?? null,
+        webUrl: data.web_url ?? null,
+      };
+    } catch (error) {
+      if (isStatusError(error, 404)) {
+        return null;
+      }
+
+      throw error;
     }
-    const state = this.mapReviewState({
-      draft: Boolean(data.draft),
-      state: typeof data.state === 'string' ? data.state : null,
-    });
-
-    return {
-      number,
-      kind: 'merge_request',
-      label: `MR !${number}`,
-      title: data.title as string,
-      state,
-      stateLabel: this.getReviewStateLabel(state),
-      authorName: ((data.author as { name?: string | null; username?: string | null } | undefined)
-        ?.name ??
-        (data.author as { username?: string | null } | undefined)?.username ??
-        null) as string | null,
-      webUrl: (data.web_url as string | null) ?? null,
-    };
   }
 
   async resolveRefToCommitSha(
@@ -160,53 +201,45 @@ export class GitLabProvider implements GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<string | null> {
-    const encodedPath = encodeURIComponent(repoFullName);
+    const client = this.getClient(accessToken);
 
     if (ref.startsWith('refs/heads/')) {
       const branch = ref.slice('refs/heads/'.length);
-      const res = await fetch(
-        `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/branches/${encodeURIComponent(branch)}`,
-        {
-          headers: this.getHeaders(accessToken),
+
+      try {
+        const data = (await client.Branches.show(repoFullName, branch)) as BranchSchema;
+        return data.commit?.id ?? null;
+      } catch (error) {
+        if (isStatusError(error, 404)) {
+          return null;
         }
-      );
 
-      if (!res.ok) {
-        return null;
+        throw error;
       }
-
-      const data = await res.json();
-      const sha = (data.commit as { id?: string } | undefined)?.id;
-      return typeof sha === 'string' ? sha : null;
     }
 
     const prMatch = ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
-    if (prMatch) {
-      const [, mergeRequestNumber] = prMatch;
-      const data = await this.fetchMergeRequest(
-        accessToken,
-        repoFullName,
-        Number(mergeRequestNumber)
-      );
-
-      if (!data) {
-        return null;
-      }
-      if (typeof data.sha === 'string') {
-        return data.sha;
-      }
-
-      const headSha = (data.diff_refs as { head_sha?: string } | undefined)?.head_sha;
-      return typeof headSha === 'string' ? headSha : null;
+    if (!prMatch) {
+      return null;
     }
 
-    return null;
+    const data = (await client.MergeRequests.show(
+      repoFullName,
+      Number(prMatch[1])
+    )) as ExpandedMergeRequestSchema;
+
+    if (typeof data.sha === 'string') {
+      return data.sha;
+    }
+
+    return data.diff_refs?.head_sha ?? null;
   }
 
   async triggerReleaseBuild(
     accessToken: string,
     options: TriggerReleaseBuildOptions
   ): Promise<void> {
+    const client = this.getClient(accessToken);
     let pipelineRef: string | null = null;
 
     if (options.ref.startsWith('refs/heads/')) {
@@ -214,17 +247,14 @@ export class GitLabProvider implements GitProvider {
     } else {
       const prMatch = options.ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
       if (prMatch) {
-        const [, mergeRequestNumber] = prMatch;
-        const data = await this.fetchMergeRequest(
-          accessToken,
+        const data = (await client.MergeRequests.show(
           options.repoFullName,
-          Number(mergeRequestNumber)
-        );
-        const sourceBranch =
-          typeof data?.source_branch === 'string' && data.source_branch.trim().length > 0
+          Number(prMatch[1])
+        )) as ExpandedMergeRequestSchema;
+        pipelineRef =
+          typeof data.source_branch === 'string' && data.source_branch.trim().length > 0
             ? data.source_branch
             : null;
-        pipelineRef = sourceBranch;
       }
     }
 
@@ -232,12 +262,8 @@ export class GitLabProvider implements GitProvider {
       throw new Error('当前 GitLab 来源无法触发预览构建，请检查 MR 或改用分支启动');
     }
 
-    const encodedPath = encodeURIComponent(options.repoFullName);
-    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/pipeline`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        ref: pipelineRef,
+    try {
+      await client.Pipelines.create(options.repoFullName, pipelineRef, {
         variables: [
           {
             key: 'JUANIE_SOURCE_SHA',
@@ -252,62 +278,38 @@ export class GitLabProvider implements GitProvider {
             value: options.forceFullBuild ? '1' : '0',
           },
         ],
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json().catch(() => null);
-      throw new Error(
-        error && typeof error.message === 'string'
-          ? error.message
-          : 'Failed to trigger GitLab preview build pipeline'
-      );
+      });
+    } catch (error) {
+      throw new Error(getErrorMessage(error, 'Failed to trigger GitLab preview build pipeline'));
     }
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {
-    const res = await fetch(`${this.serverUrl}/api/v4/projects`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        name: options.name,
-        description: options.description,
-        visibility: options.isPrivate ? 'private' : 'public',
-        initialize_with_readme: options.autoInit ?? true,
-      }),
-    });
+    const client = this.getClient(accessToken);
+    const data = (await client.Projects.create({
+      name: options.name,
+      description: options.description,
+      visibility: options.isPrivate ? 'private' : 'public',
+      initializeWithReadme: options.autoInit ?? true,
+    })) as ProjectSchema;
 
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create repository');
-    }
-
-    return this.mapRepository(await res.json());
+    return this.mapRepository(data);
   }
 
   async createBranch(accessToken: string, options: CreateBranchOptions): Promise<void> {
-    const encodedPath = encodeURIComponent(options.repoFullName);
-    const res = await fetch(
-      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/branches`,
-      {
-        method: 'POST',
-        headers: this.getHeaders(accessToken),
-        body: JSON.stringify({
-          branch: options.branch,
-          ref: options.fromBranch,
-        }),
-      }
-    );
+    const client = this.getClient(accessToken);
 
-    if (!res.ok && res.status !== 400) {
-      const error = await res.json();
-      throw new Error(error.message || `Failed to create branch ${options.branch}`);
+    try {
+      await client.Branches.create(options.repoFullName, options.branch, options.fromBranch);
+    } catch (error) {
+      if (!isStatusError(error, 400)) {
+        throw new Error(getErrorMessage(error, `Failed to create branch ${options.branch}`));
+      }
     }
   }
 
   async syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void> {
-    const encodedPath = encodeURIComponent(options.repoFullName);
-    const encodedBranch = encodeURIComponent(options.branch);
+    const client = this.getClient(accessToken);
     const currentSha = await this.resolveRefToCommitSha(
       accessToken,
       options.repoFullName,
@@ -319,66 +321,28 @@ export class GitLabProvider implements GitProvider {
     }
 
     if (currentSha) {
-      const deleteRes = await fetch(
-        `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/branches/${encodedBranch}`,
-        {
-          method: 'DELETE',
-          headers: this.getHeaders(accessToken),
+      try {
+        await client.Branches.remove(options.repoFullName, options.branch);
+      } catch (error) {
+        if (!isStatusError(error, 404)) {
+          throw new Error(getErrorMessage(error, `Failed to reset branch ${options.branch}`));
         }
-      );
-
-      if (!deleteRes.ok && deleteRes.status !== 404) {
-        const error = await deleteRes.json().catch(() => null);
-        throw new Error(
-          (error as { message?: string } | null)?.message ??
-            `Failed to reset branch ${options.branch}`
-        );
       }
     }
 
-    const createRes = await fetch(
-      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/branches`,
-      {
-        method: 'POST',
-        headers: this.getHeaders(accessToken),
-        body: JSON.stringify({
-          branch: options.branch,
-          ref: options.commitSha,
-        }),
-      }
-    );
-
-    if (!createRes.ok) {
-      const error = await createRes.json().catch(() => null);
-      throw new Error(
-        (error as { message?: string } | null)?.message ?? `Failed to sync branch ${options.branch}`
-      );
-    }
+    await client.Branches.create(options.repoFullName, options.branch, options.commitSha);
   }
 
   async createTag(accessToken: string, options: CreateTagOptions): Promise<void> {
-    const encodedPath = encodeURIComponent(options.repoFullName);
-    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/repository/tags`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        tag_name: options.tag,
-        ref: options.commitSha,
-      }),
-    });
+    const client = this.getClient(accessToken);
 
-    if (!res.ok) {
-      const error = await res.json().catch(() => null);
-      const message =
-        typeof error === 'object' && error !== null && 'message' in error
-          ? String((error as { message?: string }).message)
-          : null;
-
-      if (res.status === 400 && message?.includes('already exists')) {
-        return;
+    try {
+      await client.Tags.create(options.repoFullName, options.tag, options.commitSha);
+    } catch (error) {
+      const message = getErrorMessage(error, '');
+      if (!message.includes('already exists')) {
+        throw new Error(message || `Failed to create tag ${options.tag}`);
       }
-
-      throw new Error(message ?? `Failed to create tag ${options.tag}`);
     }
   }
 
@@ -386,169 +350,86 @@ export class GitLabProvider implements GitProvider {
     accessToken: string,
     options: CreateReviewRequestOptions
   ): Promise<GitReviewRequest> {
-    const encodedPath = encodeURIComponent(options.repoFullName);
-    const res = await fetch(`${this.serverUrl}/api/v4/projects/${encodedPath}/merge_requests`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        title: options.title,
+    const client = this.getClient(accessToken);
+    const reviewRequestTitle = (options.draft ?? true) ? `Draft: ${options.title}` : options.title;
+    const data = (await client.MergeRequests.create(
+      options.repoFullName,
+      options.headBranch,
+      options.baseBranch,
+      reviewRequestTitle,
+      {
         description: options.body ?? '',
-        source_branch: options.headBranch,
-        target_branch: options.baseBranch,
-        draft: options.draft ?? true,
-      }),
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create merge request');
-    }
-
-    const data = await res.json();
+      }
+    )) as ExpandedMergeRequestSchema;
     const state = this.mapReviewState({
       draft: Boolean(data.draft),
       state: typeof data.state === 'string' ? data.state : null,
     });
 
     return {
-      number: data.iid as number,
+      number: data.iid,
       kind: 'merge_request',
-      label: `MR !${data.iid as number}`,
-      title: data.title as string,
+      label: `MR !${data.iid}`,
+      title: data.title,
       state,
       stateLabel: this.getReviewStateLabel(state),
-      authorName: ((
-        data.author as
-          | {
-              name?: string | null;
-              username?: string | null;
-            }
-          | undefined
-      )?.name ??
-        (data.author as { username?: string | null } | undefined)?.username ??
-        null) as string | null,
-      webUrl: (data.web_url as string | null) ?? null,
+      authorName: data.author?.name ?? data.author?.username ?? null,
+      webUrl: data.web_url ?? null,
     };
   }
 
   async pushFiles(accessToken: string, options: PushOptions): Promise<void> {
-    const encodedPath = encodeURIComponent(options.repoFullName);
-    const branch = options.branch;
+    const client = this.getClient(accessToken);
 
     for (const [path, content] of Object.entries(options.files)) {
-      const res = await fetch(
-        `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/files/${encodeURIComponent(path)}`,
-        {
-          method: 'POST',
-          headers: this.getHeaders(accessToken),
-          body: JSON.stringify({
-            branch,
-            commit_message: options.message,
-            content,
-          }),
+      try {
+        await client.RepositoryFiles.create(
+          options.repoFullName,
+          path,
+          options.branch,
+          content,
+          options.message
+        );
+      } catch (error) {
+        if (!isStatusError(error, 400)) {
+          throw new Error(getErrorMessage(error, `Failed to push file: ${path}`));
         }
-      );
 
-      if (!res.ok && res.status !== 400) {
-        const error = await res.json();
-        throw new Error(error.message || `Failed to push file: ${path}`);
-      }
-
-      if (res.status === 400) {
-        await fetch(
-          `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/files/${encodeURIComponent(path)}`,
-          {
-            method: 'PUT',
-            headers: this.getHeaders(accessToken),
-            body: JSON.stringify({
-              branch,
-              commit_message: options.message,
-              content,
-            }),
-          }
+        await client.RepositoryFiles.edit(
+          options.repoFullName,
+          path,
+          options.branch,
+          content,
+          options.message
         );
       }
     }
   }
 
   async deleteFiles(accessToken: string, options: DeleteFilesOptions): Promise<void> {
-    const encodedPath = encodeURIComponent(options.repoFullName);
+    const client = this.getClient(accessToken);
 
     for (const path of options.paths) {
-      const res = await fetch(
-        `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/files/${encodeURIComponent(path)}`,
-        {
-          method: 'DELETE',
-          headers: this.getHeaders(accessToken),
-          body: JSON.stringify({
-            branch: options.branch,
-            commit_message: options.message,
-          }),
+      try {
+        await client.RepositoryFiles.remove(
+          options.repoFullName,
+          path,
+          options.branch,
+          options.message
+        );
+      } catch (error) {
+        const message = getErrorMessage(error, '');
+
+        if (
+          isStatusError(error, 404) ||
+          (isStatusError(error, 400) && /doesn['’]t exist|not exist/i.test(message))
+        ) {
+          continue;
         }
-      );
 
-      if (res.ok || res.status === 404) {
-        continue;
+        throw new Error(message || `Failed to delete file: ${path}`);
       }
-
-      const error = (await res.json().catch(() => null)) as {
-        message?: string | string[] | Record<string, string[]>;
-      } | null;
-      const errorMessage = this.getErrorMessage(error);
-
-      if (res.status === 400 && errorMessage && /doesn['’]t exist|not exist/i.test(errorMessage)) {
-        continue;
-      }
-
-      throw new Error(errorMessage || `Failed to delete file: ${path}`);
     }
-  }
-
-  private getHeaders(accessToken: string): HeadersInit {
-    return {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    };
-  }
-
-  private getErrorMessage(
-    error: { message?: string | string[] | Record<string, string[]> } | null
-  ): string | null {
-    if (!error?.message) {
-      return null;
-    }
-
-    if (typeof error.message === 'string') {
-      return error.message;
-    }
-
-    if (Array.isArray(error.message)) {
-      return error.message.join(', ');
-    }
-
-    return Object.entries(error.message)
-      .flatMap(([key, value]) => value.map((entry) => `${key}: ${entry}`))
-      .join(', ');
-  }
-
-  private async fetchMergeRequest(
-    accessToken: string,
-    repoFullName: string,
-    mergeRequestNumber: number
-  ): Promise<Record<string, unknown> | null> {
-    const encodedPath = encodeURIComponent(repoFullName);
-    const res = await fetch(
-      `${this.serverUrl}/api/v4/projects/${encodedPath}/merge_requests/${mergeRequestNumber}`,
-      {
-        headers: this.getHeaders(accessToken),
-      }
-    );
-
-    if (!res.ok) {
-      return null;
-    }
-
-    return (await res.json()) as Record<string, unknown>;
   }
 
   async listRootFiles(
@@ -556,29 +437,13 @@ export class GitLabProvider implements GitProvider {
     repoFullName: string,
     branch?: string
   ): Promise<string[]> {
-    const encodedPath = encodeURIComponent(repoFullName);
-    const ref = branch ? `&ref=${branch}` : '';
+    const client = this.getClient(accessToken);
+    const data = (await client.Repositories.allRepositoryTrees(repoFullName, {
+      ref: branch,
+      perPage: 100,
+    })) as RepositoryTreeSchema[];
 
-    // Get root directory tree (path=empty means root, per_page=100 to get more files)
-    const res = await fetch(
-      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/tree?per_page=100${ref}`,
-      { headers: this.getHeaders(accessToken) }
-    );
-
-    if (!res.ok) {
-      return [];
-    }
-
-    const data = await res.json();
-
-    if (!Array.isArray(data)) {
-      return [];
-    }
-
-    // Get file names from root level only (type === 'blob')
-    return data
-      .filter((item: { type: string }) => item.type === 'blob')
-      .map((item: { name: string; path: string }) => item.path);
+    return data.filter((item) => item.type === 'blob').map((item) => item.path);
   }
 
   async fileExists(
@@ -587,15 +452,18 @@ export class GitLabProvider implements GitProvider {
     path: string,
     branch?: string
   ): Promise<boolean> {
-    const encodedPath = encodeURIComponent(repoFullName);
-    const ref = branch ? `?ref=${branch}` : '';
+    const client = this.getClient(accessToken);
 
-    const res = await fetch(
-      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/files/${encodeURIComponent(path)}${ref}`,
-      { headers: this.getHeaders(accessToken) }
-    );
+    try {
+      await client.RepositoryFiles.show(repoFullName, path, branch ?? 'HEAD');
+      return true;
+    } catch (error) {
+      if (isStatusError(error, 404)) {
+        return false;
+      }
 
-    return res.ok;
+      throw error;
+    }
   }
 
   async getFileContent(
@@ -604,25 +472,27 @@ export class GitLabProvider implements GitProvider {
     path: string,
     branch?: string
   ): Promise<string | null> {
-    const encodedPath = encodeURIComponent(repoFullName);
-    const ref = branch ? `?ref=${branch}` : '';
+    const client = this.getClient(accessToken);
 
-    const res = await fetch(
-      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/files/${encodeURIComponent(path)}${ref}`,
-      { headers: this.getHeaders(accessToken) }
-    );
+    try {
+      const data = (await client.RepositoryFiles.show(
+        repoFullName,
+        path,
+        branch ?? 'HEAD'
+      )) as RepositoryFileExpandedSchema;
 
-    if (!res.ok) {
-      return null;
+      if (!data.content) {
+        return null;
+      }
+
+      return Buffer.from(data.content, 'base64').toString('utf-8');
+    } catch (error) {
+      if (isStatusError(error, 404)) {
+        return null;
+      }
+
+      throw error;
     }
-
-    const data = await res.json();
-    if (!data.content) {
-      return null;
-    }
-
-    // GitLab returns base64 encoded content
-    return Buffer.from(data.content, 'base64').toString('utf-8');
   }
 
   async listDirectory(
@@ -631,44 +501,30 @@ export class GitLabProvider implements GitProvider {
     path: string,
     branch?: string
   ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
-    const encodedPath = encodeURIComponent(repoFullName);
-    const ref = branch ? `&ref=${branch}` : '';
+    const client = this.getClient(accessToken);
+    const data = (await client.Repositories.allRepositoryTrees(repoFullName, {
+      path,
+      ref: branch,
+      perPage: 100,
+    })) as RepositoryTreeSchema[];
 
-    const res = await fetch(
-      `${this.serverUrl}/api/v4/projects/${encodedPath}/repository/tree?path=${encodeURIComponent(path)}&per_page=100${ref}`,
-      { headers: this.getHeaders(accessToken) }
-    );
-
-    if (!res.ok) {
-      return [];
-    }
-
-    const data = await res.json();
-
-    if (!Array.isArray(data)) {
-      return [];
-    }
-
-    return data.map((item: { name: string; path: string; type: string }) => ({
+    return data.map((item) => ({
       name: item.name,
       path: item.path,
       type: item.type === 'tree' ? 'dir' : 'file',
     }));
   }
 
-  private mapRepository(data: Record<string, unknown>): GitRepository {
-    const httpUrl = data.http_url_to_repo as string;
-    const sshUrl = data.ssh_url_to_repo as string;
-
+  private mapRepository(data: ProjectSchema): GitRepository {
     return {
       id: String(data.id),
-      name: data.name as string,
-      fullName: data.path_with_namespace as string,
-      owner: (data.namespace as { path: string })?.path || '',
-      cloneUrl: httpUrl,
-      sshUrl: sshUrl,
-      webUrl: data.web_url as string,
-      defaultBranch: (data.default_branch as string) || 'main',
+      name: data.name,
+      fullName: data.path_with_namespace,
+      owner: data.namespace?.path || '',
+      cloneUrl: data.http_url_to_repo,
+      sshUrl: data.ssh_url_to_repo,
+      webUrl: data.web_url,
+      defaultBranch: data.default_branch || 'main',
       isPrivate: data.visibility === 'private' || data.visibility === 'internal',
     };
   }

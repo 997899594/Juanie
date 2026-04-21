@@ -38,7 +38,9 @@ import {
   buildEnvironmentTopologyBlueprint,
   type CreateEnvironmentTemplate,
 } from '@/lib/projects/environment-topology';
+import { deleteCreatedProject, markProjectInitDispatchFailed } from '@/lib/projects/init-dispatch';
 import { addProjectInitJob } from '@/lib/queue';
+import { getRequiredCapabilitiesForProjectBootstrap } from '@/lib/queue/project-init-capabilities';
 import { buildProjectInitStepSeeds } from '@/lib/queue/project-init-steps';
 
 const routeLogger = logger.child({ route: 'api/projects' });
@@ -63,6 +65,35 @@ interface CreateProjectRequest {
   previewDatabaseStrategy?: 'inherit' | 'isolated_clone';
   runtimeProfile?: CreateRuntimeProfile;
   environmentTemplate?: CreateEnvironmentTemplate;
+}
+
+function getCapabilityLabel(capability: string): string {
+  switch (capability) {
+    case 'read_repo':
+      return '读取仓库';
+    case 'write_repo':
+      return '写入仓库';
+    case 'write_workflow':
+      return '触发或管理工作流';
+    default:
+      return capability;
+  }
+}
+
+function buildBootstrapAccessErrorMessage(mode: 'import' | 'create', error: unknown): string {
+  const actionLabel = mode === 'create' ? '创建项目' : '导入项目';
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: string }).code === 'MISSING_CAPABILITY' &&
+    'capability' in error &&
+    typeof (error as { capability?: string }).capability === 'string'
+  ) {
+    return `当前团队缺少 ${getCapabilityLabel((error as { capability: string }).capability)} 授权，无法完成${actionLabel}链路`;
+  }
+
+  return `当前团队没有可用的仓库集成授权，无法完成${actionLabel}链路`;
 }
 
 export async function GET() {
@@ -173,34 +204,20 @@ export async function POST(request: Request) {
 
     let integrationSession: Awaited<ReturnType<typeof getTeamIntegrationSession>> | null = null;
 
-    if (mode === 'import') {
-      try {
-        integrationSession = await getTeamIntegrationSession({
-          teamId,
-          actingUserId: session.user.id,
-          requiredCapabilities: ['read_repo'],
-        });
-      } catch {
-        return NextResponse.json(
-          { error: '当前团队没有可用的仓库读取授权', code: 'repo_read_missing' },
-          { status: 403 }
-        );
-      }
-    }
-
-    if (mode === 'create') {
-      try {
-        await getTeamIntegrationSession({
-          teamId,
-          actingUserId: session.user.id,
-          requiredCapabilities: ['write_repo'],
-        });
-      } catch {
-        return NextResponse.json(
-          { error: '当前团队没有可用的仓库创建授权', code: 'repo_write_missing' },
-          { status: 403 }
-        );
-      }
+    try {
+      integrationSession = await getTeamIntegrationSession({
+        teamId,
+        actingUserId: session.user.id,
+        requiredCapabilities: getRequiredCapabilitiesForProjectBootstrap(mode),
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: buildBootstrapAccessErrorMessage(mode, error),
+          code: 'repo_bootstrap_capability_missing',
+        },
+        { status: 403 }
+      );
     }
 
     // For import mode, ensure repository record exists
@@ -442,6 +459,39 @@ export async function POST(request: Request) {
         projectId: project.id,
         mode,
       });
+
+      const queueErrorMessage =
+        error instanceof Error ? error.message : '初始化任务创建失败，请稍后重试';
+
+      try {
+        await deleteCreatedProject(project.id);
+      } catch (rollbackError) {
+        routeLogger.error('Failed to rollback project after queueing error', rollbackError, {
+          projectId: project.id,
+        });
+        await markProjectInitDispatchFailed({
+          projectId: project.id,
+          errorMessage: queueErrorMessage,
+        });
+
+        return NextResponse.json(
+          {
+            error: '初始化任务创建失败，项目已保留为失败状态，可稍后重试',
+            code: 'project_init_queue_failed',
+            details: queueErrorMessage,
+          },
+          { status: 503 }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: '初始化任务创建失败，请稍后重试',
+          code: 'project_init_queue_failed',
+          details: queueErrorMessage,
+        },
+        { status: 503 }
+      );
     }
 
     return NextResponse.json({ project }, { status: 201 });

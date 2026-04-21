@@ -1,3 +1,5 @@
+import pino from 'pino';
+
 export type LoggerLevel = 'debug' | 'info' | 'warn' | 'error';
 
 type LogContext = Record<string, unknown>;
@@ -35,10 +37,6 @@ function resolveLogLevel(): LoggerLevel {
   return process.env.NODE_ENV === 'development' ? 'debug' : 'info';
 }
 
-function shouldLog(level: LoggerLevel): boolean {
-  return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[resolveLogLevel()];
-}
-
 function serializeError(error: unknown): SerializedError {
   if (error instanceof Error) {
     return {
@@ -58,62 +56,33 @@ function isPlainContext(value: unknown): value is LogContext {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function writeLog(level: LoggerLevel, message: string, context: LogContext): void {
-  if (!shouldLog(level)) {
-    return;
-  }
+const baseLogger = pino({
+  base: undefined,
+  level: resolveLogLevel(),
+  messageKey: 'message',
+  formatters: {
+    bindings: () => ({}),
+    level: (label) => ({ level: label }),
+  },
+  timestamp: () => `,"timestamp":"${new Date().toISOString()}"`,
+});
 
-  const payload = {
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    ...context,
-  };
-
-  const line = JSON.stringify(payload);
-  switch (level) {
-    case 'debug':
-    case 'info':
-      console.log(line);
-      break;
-    case 'warn':
-      console.warn(line);
-      break;
-    case 'error':
-      console.error(line);
-      break;
-  }
-}
-
-function createLogger(context: LogContext = {}): Logger {
+function createLogger(instance: pino.Logger): Logger {
   return {
     child(childContext: LogContext): Logger {
-      return createLogger({
-        ...context,
-        ...childContext,
-      });
+      return createLogger(instance.child(childContext));
     },
     debug(message: string, messageContext: LogContext = {}): void {
-      writeLog('debug', message, {
-        ...context,
-        ...messageContext,
-      });
+      instance.debug(messageContext, message);
     },
     info(message: string, messageContext: LogContext = {}): void {
-      writeLog('info', message, {
-        ...context,
-        ...messageContext,
-      });
+      instance.info(messageContext, message);
     },
     warn(message: string, messageContext: LogContext = {}): void {
-      writeLog('warn', message, {
-        ...context,
-        ...messageContext,
-      });
+      instance.warn(messageContext, message);
     },
     error(message: string, errorOrContext?: unknown, messageContext: LogContext = {}): void {
       const mergedContext: LogContext = {
-        ...context,
         ...messageContext,
       };
 
@@ -125,9 +94,9 @@ function createLogger(context: LogContext = {}): Logger {
         mergedContext.error = serializeError(errorOrContext);
       }
 
-      writeLog('error', message, mergedContext);
+      instance.error(mergedContext, message);
     },
   };
 }
 
-export const logger: Logger = createLogger();
+export const logger: Logger = createLogger(baseLogger);

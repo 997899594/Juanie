@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const environmentNav = [
@@ -21,36 +21,19 @@ export function EnvironmentSectionNav({
   environmentId?: string | null;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const queryEnvironmentId = searchParams.get('env');
 
   return (
-    <div className="ui-control-muted rounded-[24px] px-3 py-3 lg:hidden">
+    <div className="rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(246,244,239,0.9))] px-3 py-3 shadow-[0_1px_0_rgba(255,255,255,0.84)_inset,0_10px_26px_rgba(55,53,47,0.05)] lg:hidden">
       <div className="flex flex-wrap gap-2">
         {environmentNav.map((item) => {
-          const href =
-            item.href === '/delivery'
-              ? environmentId
-                ? `/projects/${projectId}/delivery?env=${environmentId}`
-                : `/projects/${projectId}/delivery`
-              : item.href === '/schema'
-                ? environmentId
-                  ? `/projects/${projectId}/schema?env=${environmentId}`
-                  : `/projects/${projectId}/schema`
-                : `${environmentId ? `/projects/${projectId}/environments/${environmentId}` : `/projects/${projectId}/environments`}${item.href}`;
+          const href = `${environmentId ? `/projects/${projectId}/environments/${environmentId}` : `/projects/${projectId}/environments`}${item.href}`;
           const isActive =
             item.href === ''
               ? pathname ===
                 (environmentId
                   ? `/projects/${projectId}/environments/${environmentId}`
                   : `/projects/${projectId}/environments`)
-              : item.href === '/delivery'
-                ? pathname === `/projects/${projectId}/delivery` &&
-                  queryEnvironmentId === environmentId
-                : item.href === '/schema'
-                  ? pathname === `/projects/${projectId}/schema` &&
-                    queryEnvironmentId === environmentId
-                  : pathname === href || pathname.startsWith(`${href}/`);
+              : pathname === href || pathname.startsWith(`${href}/`);
 
           return (
             <Link
@@ -60,7 +43,7 @@ export function EnvironmentSectionNav({
                 'inline-flex items-center rounded-full px-3 py-2 text-xs font-medium transition-colors',
                 isActive
                   ? 'bg-foreground text-background shadow-[0_8px_20px_rgba(55,53,47,0.14)]'
-                  : 'ui-control text-muted-foreground hover:bg-secondary/80 hover:text-foreground'
+                  : 'bg-transparent text-muted-foreground hover:bg-white/85 hover:text-foreground'
               )}
             >
               {item.label}

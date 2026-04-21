@@ -1,9 +1,11 @@
 'use client';
 
+import { useForm } from '@tanstack/react-form';
 import { ArrowRight, GitBranch, Globe, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
+import { toast } from 'sonner';
+import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,8 +28,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import {
+  FormDescription,
+  FormField,
+  FormLabel,
+  FormMessage,
+  FormSection,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/ui/page-header';
 import {
   Select,
@@ -259,7 +267,6 @@ const deploymentStrategyOptions = [
 interface PreviewDialogProps {
   open: boolean;
   loading: boolean;
-  error: string | null;
   disabled?: boolean;
   disabledSummary?: string | null;
   allowIsolatedClone: boolean;
@@ -276,7 +283,6 @@ interface PreviewDialogProps {
 function PreviewEnvironmentDialog({
   open,
   loading,
-  error,
   disabled = false,
   disabledSummary,
   allowIsolatedClone,
@@ -284,119 +290,179 @@ function PreviewEnvironmentDialog({
   onOpenChange,
   onSubmit,
 }: PreviewDialogProps) {
-  const [branch, setBranch] = useState('');
-  const [prNumber, setPrNumber] = useState('');
-  const [ttlHours, setTtlHours] = useState('72');
-  const [databaseStrategy, setDatabaseStrategy] = useState<'inherit' | 'isolated_clone'>('inherit');
+  const form = useForm({
+    defaultValues: {
+      branch: '',
+      prNumber: '',
+      ttlHours: '72',
+      databaseStrategy: 'inherit' as 'inherit' | 'isolated_clone',
+    },
+    onSubmit: async ({ value }) => {
+      await onSubmit(value);
+      form.reset();
+    },
+  });
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    await onSubmit({ branch, prNumber, ttlHours, databaseStrategy });
+  const getErrorMessage = (errors: unknown[]): string | null => {
+    const firstError = errors[0];
+
+    if (typeof firstError === 'string') {
+      return firstError;
+    }
+
+    if (
+      typeof firstError === 'object' &&
+      firstError !== null &&
+      'message' in firstError &&
+      typeof firstError.message === 'string'
+    ) {
+      return firstError.message;
+    }
+
+    return null;
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         size="workspace"
-        className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh]"
+        className="flex max-h-[calc(100vh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[95vh]"
       >
-        <DialogHeader className="shrink-0 px-4 py-5 sm:px-6">
+        <DialogHeader className="shrink-0 px-5 py-6 sm:px-8 sm:py-7">
           <DialogTitle>新建预览环境</DialogTitle>
           <DialogDescription>基于分支或 PR 直接启动。</DialogDescription>
         </DialogHeader>
 
-        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
-            <div className="space-y-4">
-              {disabledSummary && (
-                <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-muted-foreground">
-                  {disabledSummary}
-                </div>
-              )}
+        <form
+          className="flex min-h-0 flex-1 flex-col"
+          onSubmit={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void form.handleSubmit().catch((error: unknown) => {
+              toast.error(error instanceof Error ? error.message : '创建预览环境失败');
+            });
+          }}
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+            <FormSection className="space-y-4 px-0 py-0 shadow-none">
+              {disabledSummary ? <FormDescription>{disabledSummary}</FormDescription> : null}
 
-              <div className="ui-control-muted rounded-[24px] p-4 sm:p-5">
+              <div className="rounded-[24px] bg-[linear-gradient(180deg,rgba(243,240,233,0.72),rgba(255,255,255,0.88))] p-4 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset,0_0_0_1px_rgba(17,17,17,0.028)] sm:p-5">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="preview-branch">分支</Label>
-                    <Input
-                      id="preview-branch"
-                      placeholder="feature/release-intel"
-                      value={branch}
-                      onChange={(event) => setBranch(event.target.value)}
-                      disabled={loading || disabled}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="preview-pr">PR 号</Label>
-                    <Input
-                      id="preview-pr"
-                      inputMode="numeric"
-                      placeholder="42"
-                      value={prNumber}
-                      onChange={(event) => setPrNumber(event.target.value)}
-                      disabled={loading || disabled}
-                    />
-                  </div>
+                  <form.Field name="branch">
+                    {(field) => (
+                      <FormField>
+                        <FormLabel htmlFor={field.name}>分支</FormLabel>
+                        <Input
+                          id={field.name}
+                          placeholder="feature/release-intel"
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          disabled={loading || disabled}
+                        />
+                        <FormMessage>
+                          {field.state.meta.isTouched
+                            ? getErrorMessage(field.state.meta.errors)
+                            : null}
+                        </FormMessage>
+                      </FormField>
+                    )}
+                  </form.Field>
+                  <form.Field name="prNumber">
+                    {(field) => (
+                      <FormField>
+                        <FormLabel htmlFor={field.name}>PR 号</FormLabel>
+                        <Input
+                          id={field.name}
+                          inputMode="numeric"
+                          placeholder="42"
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          disabled={loading || disabled}
+                        />
+                        <FormMessage>
+                          {field.state.meta.isTouched
+                            ? getErrorMessage(field.state.meta.errors)
+                            : null}
+                        </FormMessage>
+                      </FormField>
+                    )}
+                  </form.Field>
                 </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="preview-ttl">保留时长（小时）</Label>
-                    <Input
-                      id="preview-ttl"
-                      inputMode="numeric"
-                      placeholder="72"
-                      value={ttlHours}
-                      onChange={(event) => setTtlHours(event.target.value)}
-                      disabled={loading || disabled}
-                    />
-                  </div>
+                  <form.Field name="ttlHours">
+                    {(field) => (
+                      <FormField>
+                        <FormLabel htmlFor={field.name}>保留时长（小时）</FormLabel>
+                        <Input
+                          id={field.name}
+                          inputMode="numeric"
+                          placeholder="72"
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(event) => field.handleChange(event.target.value)}
+                          disabled={loading || disabled}
+                        />
+                        <FormMessage />
+                      </FormField>
+                    )}
+                  </form.Field>
 
-                  <div className="space-y-2">
-                    <Label>数据库策略</Label>
-                    <Select
-                      value={databaseStrategy}
-                      onValueChange={(value: 'inherit' | 'isolated_clone') =>
-                        setDatabaseStrategy(value)
-                      }
-                      disabled={loading || disabled}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="选择数据库策略" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="inherit">继承基础数据库</SelectItem>
-                        <SelectItem value="isolated_clone" disabled={!allowIsolatedClone}>
-                          独立预览库
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <form.Field name="databaseStrategy">
+                    {(field) => (
+                      <FormField>
+                        <FormLabel htmlFor="preview-database-strategy">数据库策略</FormLabel>
+                        <Select
+                          value={field.state.value}
+                          onValueChange={(value: 'inherit' | 'isolated_clone') =>
+                            field.handleChange(value)
+                          }
+                          disabled={loading || disabled}
+                        >
+                          <SelectTrigger id="preview-database-strategy">
+                            <SelectValue placeholder="选择数据库策略" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="inherit">继承基础数据库</SelectItem>
+                            <SelectItem value="isolated_clone" disabled={!allowIsolatedClone}>
+                              独立预览库
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {field.state.value === 'isolated_clone' && isolatedCloneSummary ? (
+                          <FormDescription>{isolatedCloneSummary}</FormDescription>
+                        ) : null}
+                        <FormMessage />
+                      </FormField>
+                    )}
+                  </form.Field>
                 </div>
-                {databaseStrategy === 'isolated_clone' && isolatedCloneSummary ? (
-                  <div className="mt-3 text-xs text-muted-foreground">{isolatedCloneSummary}</div>
-                ) : null}
               </div>
-
-              {error && (
-                <div className="ui-control rounded-[20px] bg-destructive/[0.06] px-4 py-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
-            </div>
+            </FormSection>
           </div>
 
-          <DialogFooter className="console-divider-top shrink-0 bg-background px-4 py-4 sm:px-6">
+          <DialogFooter className="console-divider-top shrink-0 bg-background/88 px-5 py-4 backdrop-blur sm:px-8">
             <Button
               type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
+              variant="ghost"
+              className="w-full rounded-full sm:w-auto"
               onClick={() => onOpenChange(false)}
             >
               取消
             </Button>
-            <Button type="submit" className="w-full sm:w-auto" disabled={loading || disabled}>
-              {loading ? '启动中...' : '启动预览环境'}
-            </Button>
+            <form.Subscribe selector={(state) => ({ isSubmitting: state.isSubmitting })}>
+              {({ isSubmitting }) => (
+                <Button
+                  type="submit"
+                  className="w-full rounded-full sm:w-auto"
+                  disabled={loading || disabled || isSubmitting}
+                >
+                  {loading || isSubmitting ? '启动中...' : '启动预览环境'}
+                </Button>
+              )}
+            </form.Subscribe>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -568,7 +634,7 @@ function EnvironmentListCard({
             />
             <span className="text-sm font-semibold capitalize">{environment.name}</span>
             {statusBadges.map((label) => (
-              <Badge key={label} variant="outline" className="rounded-full px-2.5 py-0.5">
+              <Badge key={label} variant="secondary" className="rounded-full px-2.5 py-0.5">
                 {label}
               </Badge>
             ))}
@@ -593,7 +659,7 @@ function EnvironmentListCard({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-          <Button asChild variant="outline" size="sm" className="h-9 rounded-full px-4">
+          <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
             <Link href={`/projects/${projectId}/environments/${environment.id}`}>
               进入环境
               <ArrowRight className="h-3.5 w-3.5" />
@@ -694,7 +760,7 @@ function EnvironmentOverviewPanel({
                 {environment.primaryDomainUrl.replace(/^https?:\/\//, '')}
               </a>
             </div>
-            <Button asChild variant="outline" className="h-11 shrink-0 rounded-full px-5 text-sm">
+            <Button asChild variant="ghost" className="h-11 shrink-0 rounded-full px-5 text-sm">
               <a href={environment.primaryDomainUrl} target="_blank" rel="noreferrer">
                 打开地址
               </a>
@@ -877,10 +943,8 @@ export function EnvironmentsPageClient({
   const [governance, setGovernance] = useState(initialData.governance);
   const [dialogOpen, setDialogOpen] = useState(initialCreateOpen);
   const [dialogLoading, setDialogLoading] = useState(false);
-  const [dialogError, setDialogError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingStrategyId, setSavingStrategyId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialCreateOpen) {
@@ -895,9 +959,7 @@ export function EnvironmentsPageClient({
       setEnvironments(data.environments);
       setGovernance(data.governance);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '加载环境失败';
-      setFeedback(message);
-      setTimeout(() => setFeedback(null), 5000);
+      toast.error(error instanceof Error ? error.message : '加载环境失败');
     }
   }, [projectId]);
 
@@ -938,21 +1000,18 @@ export function EnvironmentsPageClient({
     databaseStrategy: 'inherit' | 'isolated_clone';
   }) => {
     setDialogLoading(true);
-    setDialogError(null);
 
     const branch = input.branch.trim();
     const prNumber = input.prNumber.trim();
     const ttlHours = input.ttlHours.trim();
 
     if (!branch && !prNumber) {
-      setDialogError('至少填写分支或 PR 号。');
       setDialogLoading(false);
-      return;
+      throw new Error('至少填写分支或 PR 号。');
     }
     if (branch && prNumber) {
-      setDialogError('分支和 PR 号一次只能填写一个。');
       setDialogLoading(false);
-      return;
+      throw new Error('分支和 PR 号一次只能填写一个。');
     }
 
     try {
@@ -965,15 +1024,14 @@ export function EnvironmentsPageClient({
       });
 
       setDialogOpen(false);
-      setFeedback(
+      toast.success(
         data.launchState === 'building'
           ? `已启动 ${data.name} · ${data.sourceCommitSha?.slice(0, 7) ?? 'latest'} 正在构建，完成后会自动部署`
           : `已启动 ${data.name} · ${data.sourceCommitSha?.slice(0, 7) ?? 'latest'} 正在部署`
       );
       await fetchEnvironments();
-      setTimeout(() => setFeedback(null), 4000);
     } catch (error) {
-      setDialogError(error instanceof Error ? error.message : '创建预览环境失败');
+      throw error instanceof Error ? error : new Error('创建预览环境失败');
     } finally {
       setDialogLoading(false);
     }
@@ -984,12 +1042,10 @@ export function EnvironmentsPageClient({
 
     try {
       await deletePreviewEnvironment(projectId, environmentId);
-      setFeedback('预览环境已删除');
+      toast.success('预览环境已删除');
       await fetchEnvironments();
-      setTimeout(() => setFeedback(null), 4000);
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '删除预览环境失败');
-      setTimeout(() => setFeedback(null), 5000);
+      toast.error(error instanceof Error ? error.message : '删除预览环境失败');
     } finally {
       setDeletingId(null);
     }
@@ -1008,11 +1064,9 @@ export function EnvironmentsPageClient({
         deploymentStrategy,
       });
       await fetchEnvironments();
-      setFeedback('发布策略已更新');
-      setTimeout(() => setFeedback(null), 3000);
+      toast.success('发布策略已更新');
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : '更新发布策略失败');
-      setTimeout(() => setFeedback(null), 5000);
+      toast.error(error instanceof Error ? error.message : '更新发布策略失败');
     } finally {
       setSavingStrategyId(null);
     }
@@ -1026,7 +1080,7 @@ export function EnvironmentsPageClient({
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {focusMode && focusedEnvironment ? (
-              <Button asChild variant="outline" className="h-10 rounded-full px-5">
+              <Button asChild variant="ghost" className="h-10 rounded-full px-5">
                 <Link href={`/projects/${projectId}/environments`}>返回环境列表</Link>
               </Button>
             ) : null}
@@ -1051,25 +1105,15 @@ export function EnvironmentsPageClient({
       <PreviewEnvironmentDialog
         open={dialogOpen}
         loading={dialogLoading}
-        error={dialogError}
         disabled={!governance.createPreview.allowed}
         disabledSummary={governance.createPreview.summary}
         allowIsolatedClone={governance.createIsolatedPreview.allowed}
         isolatedCloneSummary={governance.createIsolatedPreview.summary}
         onOpenChange={(open) => {
           setDialogOpen(open);
-          if (!open) {
-            setDialogError(null);
-          }
         }}
         onSubmit={handleCreatePreview}
       />
-
-      {feedback && (
-        <div className="ui-control-muted rounded-[20px] px-4 py-3 text-sm text-foreground">
-          {feedback}
-        </div>
-      )}
 
       {environments.length === 0 ? (
         <EmptyState
@@ -1104,7 +1148,7 @@ export function EnvironmentsPageClient({
                   ) : null}
                 </div>
                 {standardEnvironments.length === 0 ? (
-                  <div className="ui-control-muted rounded-[20px] px-5 py-8 text-sm text-muted-foreground">
+                  <div className="rounded-[20px] bg-[rgba(243,240,233,0.68)] px-5 py-8 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
                     暂无环境
                   </div>
                 ) : (
@@ -1146,7 +1190,7 @@ export function EnvironmentsPageClient({
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 className="h-9 rounded-full px-4"
                                 disabled={
@@ -1160,7 +1204,7 @@ export function EnvironmentsPageClient({
                                   : '结束环境'}
                               </Button>
                             </AlertDialogTrigger>
-                            <AlertDialogContent>
+                            <AlertDialogContent size="form">
                               <AlertDialogHeader>
                                 <AlertDialogTitle>结束预览环境？</AlertDialogTitle>
                                 <AlertDialogDescription>
@@ -1170,18 +1214,18 @@ export function EnvironmentsPageClient({
                                   及关联资源会一起删除。
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
-                              <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                              <div className="rounded-2xl bg-[rgba(243,240,233,0.66)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
                                 {environment.cleanupState?.state === 'expired_ready'
                                   ? '已过期，可直接回收。'
                                   : '会回收域名、变量、数据库和运行资源。'}
                               </div>
                               <AlertDialogFooter>
-                                <AlertDialogCancel className="w-full sm:w-auto">
+                                <AlertDialogCancel className="w-full rounded-full sm:w-auto">
                                   取消
                                 </AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={() => handleDeletePreview(environment.id)}
-                                  className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                                  className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                                   disabled={
                                     deletingId === environment.id || !environment.actions?.canDelete
                                   }

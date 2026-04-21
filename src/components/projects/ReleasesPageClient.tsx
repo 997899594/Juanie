@@ -4,6 +4,7 @@ import { ArrowUpCircle, Database, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { ManualReleaseDialog } from '@/components/projects/ManualReleaseDialog';
 import { ReleaseCardList } from '@/components/projects/ReleaseCardList';
 import { ReleaseFilterToolbar } from '@/components/projects/ReleaseFilterToolbar';
@@ -27,7 +28,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const router = useRouter();
   const searchParams = useSearchParams();
   const [promoting, setPromoting] = useState(false);
-  const [promoteResult, setPromoteResult] = useState<string | null>(null);
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
   const [selectedPromotionFlowId, setSelectedPromotionFlowId] = useState<string | null>(
     initialData.promotionPlans.find((plan) =>
@@ -88,7 +88,6 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   const handlePromote = async () => {
     if (promoting) return;
     setPromoting(true);
-    setPromoteResult(null);
 
     try {
       const data = await createPromotionRelease({
@@ -96,7 +95,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         flowId: selectedPromotionFlowId,
       });
 
-      setPromoteResult(
+      toast.success(
         data.tagName
           ? `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'} · 成功后写入 ${data.tagName}`
           : `已创建提升发布 · ${data.targetEnvironmentName ?? '目标环境'}`
@@ -104,12 +103,9 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       setPromoteDialogOpen(false);
       router.refresh();
     } catch (promoteError) {
-      setPromoteResult(
-        `错误：${promoteError instanceof Error ? promoteError.message : '创建提升发布失败'}`
-      );
+      toast.error(promoteError instanceof Error ? promoteError.message : '创建提升发布失败');
     } finally {
       setPromoting(false);
-      setTimeout(() => setPromoteResult(null), 5000);
     }
   };
 
@@ -199,7 +195,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
-        title={selectedEnvironment ? `${selectedEnvironment.name} 发布` : '发布总览'}
+        title={`${selectedEnvironment?.name ?? '环境'} · 发布`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusIndicator
@@ -229,7 +225,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
               </Button>
             )}
             {selectedEnvironment ? (
-              <Button asChild variant="outline" size="sm" className="h-9 px-4">
+              <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
                 <Link href={`/projects/${projectId}/environments/${selectedEnvironment.id}`}>
                   返回环境
                 </Link>
@@ -240,21 +236,8 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       />
 
       {error && (
-        <div className="ui-control-muted rounded-2xl px-4 py-3 text-sm text-foreground">
+        <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-4 py-3 text-sm text-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
           {error}
-        </div>
-      )}
-
-      {promoteResult && (
-        <div
-          className={cn(
-            'rounded-2xl px-4 py-3 text-sm',
-            promoteResult.startsWith('错误')
-              ? 'bg-destructive/[0.08] text-destructive'
-              : 'ui-control-muted text-foreground'
-          )}
-        >
-          {promoteResult}
         </div>
       )}
 
@@ -281,18 +264,12 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
             {!selectedEnvironment ? <span>跨环境</span> : <span>单环境</span>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {!selectedEnvironment && hasPromotionTarget ? (
-              <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-                <Link href={`/projects/${projectId}`}>
-                  <ScrollText className="h-3.5 w-3.5" />
-                  项目
-                </Link>
-              </Button>
-            ) : null}
             {selectedEnvironment ? (
               <>
                 <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-                  <Link href={`/projects/${projectId}/schema?env=${selectedEnvironment.id}`}>
+                  <Link
+                    href={`/projects/${projectId}/environments/${selectedEnvironment.id}/schema`}
+                  >
                     <Database className="h-3.5 w-3.5" />
                     数据
                   </Link>
@@ -304,14 +281,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
                   </Link>
                 </Button>
               </>
-            ) : (
-              <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
-                <Link href={`/projects/${projectId}/schema`}>
-                  <Database className="h-3.5 w-3.5" />
-                  数据
-                </Link>
-              </Button>
-            )}
+            ) : null}
           </div>
         </div>
       </section>
@@ -399,20 +369,18 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
         </section>
       ) : null}
 
-      {!selectedEnvironment ? (
-        <ReleaseFilterToolbar
-          environmentOptions={initialData.environmentOptions}
-          filter={filter}
-          riskFilter={riskFilter}
-          onChange={updateFilters}
-        />
-      ) : null}
+      <ReleaseFilterToolbar
+        environmentOptions={initialData.environmentOptions}
+        filter={filter}
+        riskFilter={riskFilter}
+        onChange={updateFilters}
+      />
 
       <ReleaseCardList projectId={projectId} releases={filtered} />
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
         <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
-          <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
+          <Button asChild variant="ghost" size="sm" className="min-w-0 flex-1 rounded-full">
             <Link
               href={
                 selectedEnvironment

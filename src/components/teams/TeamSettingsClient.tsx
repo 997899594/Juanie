@@ -231,7 +231,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                       ? 'success'
                       : aiControlPlane.provider.configured
                         ? 'warning'
-                        : 'outline'
+                        : 'secondary'
                   }
                 >
                   {aiControlPlane.provider.enabled
@@ -257,8 +257,8 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-semibold">{plugin.name}</div>
-                      <Badge variant="outline">{plugin.tierLabel}</Badge>
-                      <Badge variant="outline">{plugin.surfaceLabel}</Badge>
+                      <Badge variant="secondary">{plugin.tierLabel}</Badge>
+                      <Badge variant="secondary">{plugin.surfaceLabel}</Badge>
                     </div>
                     <div className="text-xs text-muted-foreground">
                       schema：{plugin.snapshotSchema} · 缓存{' '}
@@ -354,7 +354,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                   删除团队
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent size="form">
                 <AlertDialogHeader>
                   <AlertDialogTitle>删除 &ldquo;{team.name}&rdquo;？</AlertDialogTitle>
                   <AlertDialogDescription>关联项目会一起删除。</AlertDialogDescription>
@@ -363,11 +363,13 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                   团队和关联项目会一起删除。
                 </div>
                 <AlertDialogFooter>
-                  <AlertDialogCancel className="w-full sm:w-auto">取消</AlertDialogCancel>
+                  <AlertDialogCancel className="w-full rounded-full sm:w-auto">
+                    取消
+                  </AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
+                    className="w-full rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:w-auto"
                   >
                     {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : '删除团队'}
                   </AlertDialogAction>

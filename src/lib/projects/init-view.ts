@@ -70,6 +70,7 @@ export const PROJECT_INIT_STEP_LABELS: Record<string, string> = {
   deploy_services: '部署服务',
   provision_databases: '创建数据库',
   configure_dns: '配置域名',
+  trigger_initial_builds: '触发首发构建',
 };
 
 export const PROJECT_INIT_STEP_WEIGHTS: Record<string, number> = {
@@ -82,6 +83,7 @@ export const PROJECT_INIT_STEP_WEIGHTS: Record<string, number> = {
   deploy_services: 30,
   provision_databases: 20,
   configure_dns: 10,
+  trigger_initial_builds: 10,
 };
 
 function buildStepSummary(step: ProjectInitStepLike): string {
@@ -194,6 +196,20 @@ function buildProjectInitIssue(
         summary: error || '平台无法完成域名配置',
         nextActionLabel: '检查域名和网关配置',
       };
+    case 'init_enqueue_failed':
+      return {
+        code: 'init_failed',
+        label: '初始化调度失败',
+        summary: error || '平台未能成功创建初始化任务',
+        nextActionLabel: '稍后重试初始化',
+      };
+    case 'initial_build_trigger_failed':
+      return {
+        code: 'init_failed',
+        label: '首发构建触发失败',
+        summary: error || '平台无法触发初始化首发构建',
+        nextActionLabel: '检查远端分支、CI workflow 与触发权限',
+      };
   }
 
   switch (step.step) {
@@ -259,6 +275,13 @@ function buildProjectInitIssue(
         label: '域名配置失败',
         summary: error || '平台无法完成域名配置',
         nextActionLabel: '检查域名和网关配置',
+      };
+    case 'trigger_initial_builds':
+      return {
+        code: 'init_failed',
+        label: '首发构建触发失败',
+        summary: error || '平台无法触发初始化首发构建',
+        nextActionLabel: '检查远端分支、CI workflow 与触发权限',
       };
     default:
       return {

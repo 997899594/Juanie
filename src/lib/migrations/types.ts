@@ -80,9 +80,11 @@ export interface MigrationExecutionPlan {
   };
   specification: {
     id: string;
+    source: MigrationSpecificationRecord['source'];
     tool: MigrationSpecificationRecord['tool'];
     phase: MigrationSpecificationRecord['phase'];
     executionMode: MigrationSpecificationRecord['executionMode'];
+    sourceConfigPath: string | null;
     workingDirectory: string;
     migrationPath: string | null;
     command: string;

@@ -23,7 +23,7 @@ export default async function TeamsPage() {
       <PageHeader
         title="团队"
         actions={
-          <Button asChild className="h-9 rounded-xl px-4">
+          <Button asChild className="h-9 rounded-full px-4">
             <Link href="/teams/new">
               <Plus className="h-4 w-4" />
               新建团队
@@ -40,7 +40,7 @@ export default async function TeamsPage() {
             <Users className="h-8 w-8 text-muted-foreground" />
           </div>
           <h2 className="text-lg font-medium">还没有团队</h2>
-          <Button asChild variant="outline" className="mt-5 rounded-full">
+          <Button asChild variant="ghost" className="mt-5 rounded-full px-4">
             <Link href="/teams/new">
               <Plus className="h-4 w-4" />
               新建团队

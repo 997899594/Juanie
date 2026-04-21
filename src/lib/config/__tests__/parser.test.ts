@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { parseJuanieConfig } from '@/lib/config/parser';
 
 describe('juanie config parser', () => {
-  it('requires explicit migration executionMode', () => {
+  it('defaults schema executionMode to automatic when omitted', () => {
     const parsed = parseJuanieConfig(`
 services:
   - name: web
@@ -10,21 +10,17 @@ services:
     run:
       command: npm start
       port: 3000
-    migrate:
-      tool: drizzle
-      workingDirectory: .
-      command: npm run db:push
+    schema:
+      source: drizzle
       phase: preDeploy
       approvalPolicy: manual_in_production
 `);
 
-    expect(parsed.isValid).toBe(false);
-    expect(parsed.errors).toContain(
-      'services.0.migrate.executionMode: Invalid option: expected one of "automatic"|"manual_platform"|"external"'
-    );
+    expect(parsed.isValid).toBe(true);
+    expect(parsed.services[0]?.schema?.executionMode).toBe('automatic');
   });
 
-  it('rejects legacy autoRun migration config', () => {
+  it('rejects legacy migrate config blocks', () => {
     const parsed = parseJuanieConfig(`
 services:
   - name: web
@@ -34,15 +30,11 @@ services:
       port: 3000
     migrate:
       tool: drizzle
-      workingDirectory: .
       command: npm run db:push
-      phase: preDeploy
-      executionMode: manual_platform
-      autoRun: false
 `);
 
     expect(parsed.isValid).toBe(false);
-    expect(parsed.errors).toContain('services.0.migrate: Unrecognized key: "autoRun"');
+    expect(parsed.errors).toContain('services.0: Unrecognized key: "migrate"');
   });
 
   it('rejects unsupported database provision combinations', () => {
@@ -75,10 +67,8 @@ services:
       port: 3000
     databases:
       - binding: mysql
-        migrate:
-          tool: drizzle
-          workingDirectory: .
-          command: npm run db:migrate
+        schema:
+          source: drizzle
           executionMode: automatic
 databases:
   - name: mysql
@@ -99,10 +89,8 @@ services:
       port: 3000
     databases:
       - binding: analytics
-        migrate:
-          tool: typeorm
-          workingDirectory: .
-          command: npm run typeorm migration:run
+        schema:
+          source: typeorm
           executionMode: automatic
 databases:
   - name: analytics

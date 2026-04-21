@@ -4,6 +4,7 @@ import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { projectInitSteps, projects } from '@/lib/db/schema';
+import { markProjectInitDispatchFailed } from '@/lib/projects/init-dispatch';
 import { getProjectInitPageData, getProjectInitRetryContext } from '@/lib/projects/init-service';
 import { addProjectInitJob } from '@/lib/queue';
 
@@ -62,7 +63,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         .where(eq(projects.id, id)),
     ]);
 
-    await addProjectInitJob(id, retryContext.mode, retryContext.template);
+    try {
+      await addProjectInitJob(id, retryContext.mode, retryContext.template);
+    } catch (error) {
+      const queueErrorMessage =
+        error instanceof Error ? error.message : '初始化任务创建失败，请稍后重试';
+
+      await markProjectInitDispatchFailed({
+        projectId: id,
+        errorMessage: queueErrorMessage,
+      });
+
+      return NextResponse.json(
+        {
+          error: '重新执行初始化失败，初始化任务未成功写入队列',
+          code: 'project_init_queue_failed',
+          details: queueErrorMessage,
+        },
+        { status: 503 }
+      );
+    }
 
     const pageData = await getProjectInitPageData(id, session.user.id);
     if (!pageData) {

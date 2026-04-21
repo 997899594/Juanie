@@ -89,14 +89,12 @@ export function ReleaseAIRefreshActions(input: {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button
-        variant="outline"
+        variant="ghost"
         size={input.compact ? 'icon' : 'sm'}
         className={cn(
-          input.compact ? 'h-9 w-9 rounded-xl' : 'rounded-xl',
-          status === 'success' &&
-            'border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/5 hover:text-emerald-700',
-          status === 'error' &&
-            'border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive'
+          input.compact ? 'h-9 w-9 rounded-full' : 'rounded-full px-3',
+          status === 'success' && 'text-emerald-600 hover:bg-emerald-500/8 hover:text-emerald-700',
+          status === 'error' && 'text-destructive hover:bg-destructive/8 hover:text-destructive'
         )}
         onClick={handleRefresh}
         title={buttonTitle}
@@ -106,7 +104,14 @@ export function ReleaseAIRefreshActions(input: {
         {!input.compact && (refreshing ? '刷新中...' : '刷新 AI')}
       </Button>
       {(input.showMessage ?? true) && message && (
-        <div className="text-xs text-muted-foreground">{message}</div>
+        <div
+          className={cn(
+            'text-xs',
+            status === 'error' ? 'text-destructive' : 'text-muted-foreground'
+          )}
+        >
+          {message}
+        </div>
       )}
     </div>
   );

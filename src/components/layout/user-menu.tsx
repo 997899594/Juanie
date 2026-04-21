@@ -35,12 +35,12 @@ export function UserMenu({ variant = 'compact' }: { variant?: 'compact' | 'sideb
         {variant === 'sidebar' ? (
           <Button
             variant="ghost"
-            className="h-auto w-full justify-between rounded-[20px] px-3 py-3 hover:bg-secondary/70"
+            className="h-auto w-full justify-between rounded-[20px] bg-transparent px-3 py-3 shadow-none hover:bg-white/75"
           >
             <span className="flex min-w-0 items-center gap-3 text-left">
-              <Avatar className="h-9 w-9">
+              <Avatar className="h-9 w-9 shadow-[0_8px_18px_rgba(55,53,47,0.08)]">
                 <AvatarImage src={session.user.image ?? undefined} alt={session.user.name ?? ''} />
-                <AvatarFallback className="bg-muted text-[10px]">{initials}</AvatarFallback>
+                <AvatarFallback className="bg-secondary text-[10px]">{initials}</AvatarFallback>
               </Avatar>
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{session.user.name}</span>
@@ -62,7 +62,7 @@ export function UserMenu({ variant = 'compact' }: { variant?: 'compact' | 'sideb
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align={variant === 'sidebar' ? 'start' : 'end'}
-        className={cn('w-48', variant === 'sidebar' && 'w-56')}
+        className={cn('w-48', variant === 'sidebar' && 'w-56 rounded-[22px] p-2.5')}
       >
         <div className="flex items-center gap-2 p-2">
           <div className="flex flex-col space-y-0.5">

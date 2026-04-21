@@ -199,19 +199,6 @@ export function ProjectInitializingClient({
         </div>
       </div>
 
-      <div className="ui-floating px-5 py-5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="text-sm font-semibold">进度</div>
-          <div className="text-xs text-muted-foreground">{overview.overallProgress}%</div>
-        </div>
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-foreground transition-all duration-500"
-            style={{ width: `${overview.overallProgress}%` }}
-          />
-        </div>
-      </div>
-
       <div className="ui-floating console-list overflow-hidden px-0 py-0">
         {overview.steps.map((step) => (
           <div key={step.id} className="flex gap-4 px-5 py-4">
@@ -271,7 +258,7 @@ export function ProjectInitializingClient({
               </Button>
             ) : null}
             <Link href="/projects/new">
-              <Button variant="outline" className="px-4">
+              <Button variant="ghost" className="rounded-full px-4">
                 返回创建页
               </Button>
             </Link>

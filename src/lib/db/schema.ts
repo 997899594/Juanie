@@ -90,7 +90,15 @@ export const deploymentStatuses = [
 ] as const;
 export type DeploymentStatus = (typeof deploymentStatuses)[number];
 
-export const migrationTools = ['drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom'] as const;
+export const migrationTools = [
+  'atlas',
+  'drizzle',
+  'prisma',
+  'knex',
+  'typeorm',
+  'sql',
+  'custom',
+] as const;
 export type MigrationTool = (typeof migrationTools)[number];
 
 export const migrationPhases = ['preDeploy', 'postDeploy', 'manual'] as const;
@@ -801,10 +809,12 @@ export const migrationSpecifications = pgTable(
       .notNull()
       .references(() => databases.id, { onDelete: 'cascade' }),
 
+    source: migrationToolEnum('source').notNull().default('custom'),
     tool: migrationToolEnum('tool').notNull(),
     phase: migrationPhaseEnum('phase').notNull().default('preDeploy'),
     executionMode: migrationExecutionModeEnum('executionMode').notNull(),
 
+    sourceConfigPath: varchar('sourceConfigPath', { length: 500 }),
     workingDirectory: varchar('workingDirectory', { length: 500 }).notNull(),
     migrationPath: varchar('migrationPath', { length: 500 }),
     command: text('command').notNull(),

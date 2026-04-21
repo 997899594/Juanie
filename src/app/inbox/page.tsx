@@ -149,9 +149,9 @@ export default async function InboxPage({
                         {run.primaryDomainUrl && (
                           <Button
                             asChild
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
-                            className="justify-between rounded-xl"
+                            className="justify-between rounded-full px-4"
                           >
                             <a href={run.primaryDomainUrl} target="_blank" rel="noreferrer">
                               环境
@@ -161,9 +161,9 @@ export default async function InboxPage({
                         )}
                         <Button
                           asChild
-                          variant="outline"
+                          variant="secondary"
                           size="sm"
-                          className="justify-between rounded-xl"
+                          className="justify-between rounded-full px-4"
                         >
                           <Link
                             href={buildReleaseDetailPath(
@@ -182,7 +182,7 @@ export default async function InboxPage({
                         asChild
                         variant="ghost"
                         size="sm"
-                        className="justify-between rounded-xl"
+                        className="justify-between rounded-full px-4"
                       >
                         <Link href={`/projects/${run.projectId}`}>
                           项目

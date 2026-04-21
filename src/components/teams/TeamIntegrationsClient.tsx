@@ -26,7 +26,7 @@ function toBadgeVariant(tone: 'success' | 'warning' | 'danger' | 'neutral') {
     case 'danger':
       return 'destructive' as const;
     default:
-      return 'outline' as const;
+      return 'secondary' as const;
   }
 }
 
@@ -82,8 +82,8 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
         title="集成"
         actions={
           <Button
-            variant="outline"
-            className="h-9 rounded-xl px-4"
+            variant="ghost"
+            className="h-9 rounded-full px-4"
             onClick={refreshData}
             disabled={refreshing}
           >
@@ -123,10 +123,10 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-semibold">{binding.label}</div>
-                      <Badge variant="outline">{binding.provider}</Badge>
-                      <Badge variant="outline">{binding.authModeLabel}</Badge>
+                      <Badge variant="secondary">{binding.provider}</Badge>
+                      <Badge variant="secondary">{binding.authModeLabel}</Badge>
                       {binding.isDefault ? <Badge variant="success">默认</Badge> : null}
-                      {binding.isRevoked ? <Badge variant="outline">已撤销</Badge> : null}
+                      {binding.isRevoked ? <Badge variant="secondary">已撤销</Badge> : null}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       执行身份：{binding.identityOwner}
@@ -138,8 +138,8 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
                     <div className="flex flex-wrap gap-2">
                       {!binding.isDefault ? (
                         <Button
-                          variant="outline"
-                          className="h-8 rounded-xl px-3"
+                          variant="ghost"
+                          className="h-8 rounded-full px-3"
                           onClick={() => handleSetDefault(binding.id)}
                           disabled={isPending}
                         >
@@ -152,8 +152,8 @@ export function TeamIntegrationsClient({ teamId, initialData }: TeamIntegrations
                         </Button>
                       ) : null}
                       <Button
-                        variant="outline"
-                        className="h-8 rounded-xl px-3 text-destructive hover:text-destructive"
+                        variant="ghost"
+                        className="h-8 rounded-full px-3 text-destructive hover:text-destructive"
                         onClick={() => handleRevoke(binding.id)}
                         disabled={isPending}
                       >

@@ -5,6 +5,8 @@ export function getDefaultMigrationPath(
   databaseType: DatabaseRecord['type']
 ): string | null {
   switch (tool) {
+    case 'atlas':
+      return 'migrations';
     case 'drizzle':
       return 'drizzle';
     case 'prisma':
@@ -20,8 +22,28 @@ export function getDefaultMigrationPath(
 }
 
 export function resolveMigrationPath(
-  specification: Pick<MigrationSpecificationRecord, 'tool' | 'migrationPath'>,
+  specification: Pick<MigrationSpecificationRecord, 'tool' | 'migrationPath'> & {
+    source?: MigrationSpecificationRecord['source'] | null;
+  },
   databaseType: DatabaseRecord['type']
 ): string | null {
-  return specification.migrationPath ?? getDefaultMigrationPath(specification.tool, databaseType);
+  if (specification.migrationPath) {
+    return specification.migrationPath;
+  }
+
+  switch (specification.source) {
+    case 'sql':
+      return `migrations/${databaseType}`;
+    case 'atlas':
+      return 'migrations';
+    case 'drizzle':
+      return 'drizzle';
+    case 'prisma':
+      return 'prisma/migrations';
+    case 'knex':
+    case 'typeorm':
+      return 'migrations';
+    default:
+      return getDefaultMigrationPath(specification.tool, databaseType);
+  }
 }

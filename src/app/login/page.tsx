@@ -53,7 +53,7 @@ export default async function LoginPage() {
                       await signIn('github', { redirectTo: '/' });
                     }}
                   >
-                    <Button type="submit" variant="outline" className="h-11 w-full rounded-xl">
+                    <Button type="submit" variant="secondary" className="h-11 w-full rounded-xl">
                       <Github className="h-4 w-4" />
                       使用 GitHub 登录
                     </Button>
@@ -65,7 +65,7 @@ export default async function LoginPage() {
                       await signIn('gitlab', { redirectTo: '/' });
                     }}
                   >
-                    <Button type="submit" variant="outline" className="h-11 w-full rounded-xl">
+                    <Button type="submit" variant="secondary" className="h-11 w-full rounded-xl">
                       使用 GitLab 登录
                     </Button>
                   </form>

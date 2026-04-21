@@ -3,8 +3,15 @@ import { and, eq } from 'drizzle-orm';
 import { BSON, MongoClient, ObjectId } from 'mongodb';
 import mysql from 'mysql2/promise';
 import { Client as PgClient } from 'pg';
+import { AtlasCommandError, runAtlasCommand } from '@/lib/atlas/cli';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
+import {
+  getAppliedAtlasVersions,
+  getAtlasDeclaredVersions,
+  prepareAtlasMigrationWorkspace,
+  resolveAtlasDatabaseUrl,
+} from '@/lib/migrations/atlas';
 import { drizzleTagToFilename, parseDrizzleJournalEntries } from '@/lib/migrations/drizzle';
 import {
   fetchMigrationFilesFromRepoPath,
@@ -512,4 +519,132 @@ export async function executeDrizzleMigrationsForSpec(
   }
 
   return pending.length;
+}
+
+async function markAtlasMigrationsApplied(input: {
+  databaseId: string;
+  files: MigrationFile[];
+  appliedVersions: string[];
+}): Promise<void> {
+  const fileByVersion = new Map(
+    input.files
+      .map((file) => {
+        const [version] = file.name.split('_');
+        return version ? [version, file] : null;
+      })
+      .filter((entry): entry is [string, MigrationFile] => entry !== null)
+  );
+
+  for (const version of input.appliedVersions) {
+    const file = fileByVersion.get(version);
+    if (!file) {
+      continue;
+    }
+
+    const checksum = crypto.createHash('sha256').update(file.content).digest('hex');
+
+    await db
+      .insert(databaseMigrations)
+      .values({
+        databaseId: input.databaseId,
+        filename: file.name,
+        checksum,
+        status: 'success',
+        output: `Applied Atlas migration ${version}`,
+        executedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [databaseMigrations.databaseId, databaseMigrations.filename],
+        set: {
+          checksum,
+          status: 'success',
+          output: `Applied Atlas migration ${version}`,
+          executedAt: new Date(),
+          error: null,
+        },
+      });
+  }
+}
+
+export async function executeAtlasMigrationsForSpec(
+  spec: ResolvedMigrationSpec,
+  revision: string,
+  onLog?: (message: string, level: 'info' | 'warn' | 'error') => Promise<void>
+): Promise<number> {
+  const log = onLog || (async () => {});
+
+  if (spec.database.type !== 'postgresql' && spec.database.type !== 'mysql') {
+    throw new Error(`Atlas 平台迁移暂不支持 ${spec.database.type}`);
+  }
+
+  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
+  if (!migrationPath) {
+    throw new Error('无法解析 Atlas migration 路径');
+  }
+
+  const databaseUrl = resolveAtlasDatabaseUrl(spec.database);
+  if (!databaseUrl) {
+    throw new Error('数据库缺少可用的连接信息，无法执行 Atlas 迁移');
+  }
+
+  const workspace = await prepareAtlasMigrationWorkspace({
+    projectId: spec.specification.projectId,
+    migrationPath,
+    revision,
+  });
+
+  try {
+    const declaredVersions = getAtlasDeclaredVersions(workspace.files);
+    if (declaredVersions.length === 0) {
+      await log(`✅ ${spec.database.name}: 无可执行的 Atlas 迁移文件`, 'info');
+      return 0;
+    }
+
+    const beforeVersions = await getAppliedAtlasVersions(spec.database);
+    await log(
+      `🔄 ${spec.database.name}: 准备执行 Atlas 迁移 (${declaredVersions.length} 个声明版本)`,
+      'info'
+    );
+
+    try {
+      await runAtlasCommand(
+        ['migrate', 'apply', '--dir', 'file://migrations', '--url', databaseUrl],
+        {
+          cwd: workspace.dir,
+          onOutputLine: (line, stream) => {
+            void log(line, stream === 'stderr' ? 'warn' : 'info');
+          },
+        }
+      );
+    } catch (error) {
+      if (error instanceof AtlasCommandError) {
+        const details = [error.stdout.trim(), error.stderr.trim()].filter(Boolean).join('\n');
+        if (details) {
+          await log(details, 'error');
+        }
+      }
+
+      throw error;
+    }
+
+    const afterVersions = await getAppliedAtlasVersions(spec.database);
+    const beforeSet = new Set(beforeVersions);
+    const appliedVersions = afterVersions.filter((version) => !beforeSet.has(version));
+
+    await markAtlasMigrationsApplied({
+      databaseId: spec.database.id,
+      files: workspace.files,
+      appliedVersions,
+    });
+
+    if (appliedVersions.length === 0) {
+      await log(`✅ ${spec.database.name}: Atlas 没有待执行迁移`, 'info');
+      return 0;
+    }
+
+    await log(`✅ ${spec.database.name}: 已执行 ${appliedVersions.length} 个 Atlas 迁移`, 'info');
+    return appliedVersions.length;
+  } finally {
+    await workspace.cleanup();
+  }
 }

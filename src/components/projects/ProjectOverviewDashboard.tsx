@@ -37,9 +37,15 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
         description={overview.description ?? overview.headerDescription}
         actions={
           <>
-            <Button asChild variant="ghost">
-              <Link href={`/projects/${projectId}/delivery`}>发布总览</Link>
-            </Button>
+            {productionEnvironment ? (
+              <Button asChild variant="ghost">
+                <Link
+                  href={`/projects/${projectId}/environments/${productionEnvironment.id}/delivery`}
+                >
+                  正式环境
+                </Link>
+              </Button>
+            ) : null}
             <Button asChild variant="ghost">
               <Link href={`/projects/${projectId}/settings`}>
                 <Settings2 className="h-4 w-4" />
@@ -84,14 +90,6 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
                 ) : null}
                 <span>创建于 {overview.createdDateLabel}</span>
               </div>
-              <div className="pt-1">
-                <Button asChild variant="outline" size="sm">
-                  <Link href={`/projects/${projectId}/settings`}>
-                    <Settings2 className="h-3.5 w-3.5" />
-                    打开项目设置
-                  </Link>
-                </Button>
-              </div>
             </div>
           </div>
 
@@ -102,7 +100,10 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
             <div className="mt-3 flex items-center gap-3">
               <div className="flex -space-x-2">
                 {collaboration.members.map((member) => (
-                  <Avatar key={member.id} className="h-9 w-9 rounded-xl border border-background">
+                  <Avatar
+                    key={member.id}
+                    className="h-9 w-9 rounded-xl shadow-[0_10px_22px_rgba(55,53,47,0.08)]"
+                  >
                     <AvatarImage src={member.user.image ?? undefined} />
                     <AvatarFallback className="rounded-xl bg-secondary text-[10px] font-semibold">
                       {getInitials(member.user.name, member.user.email)}
@@ -128,7 +129,7 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
                 {productionHost ?? '生产环境还没有访问地址'}
               </div>
               {productionEnvironment?.primaryDomainUrl ? (
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="ghost" size="sm" className="h-8 rounded-full px-3">
                   <a href={productionEnvironment.primaryDomainUrl} target="_blank" rel="noreferrer">
                     打开正式环境
                   </a>

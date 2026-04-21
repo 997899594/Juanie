@@ -8,6 +8,7 @@ export const projectInitImportSteps = [
   'provision_databases',
   'deploy_services',
   'configure_dns',
+  'trigger_initial_builds',
 ] as const;
 
 export const projectInitCreateSteps = [
@@ -19,6 +20,7 @@ export const projectInitCreateSteps = [
   'provision_databases',
   'deploy_services',
   'configure_dns',
+  'trigger_initial_builds',
 ] as const;
 
 export const projectInitStepsByMode = {
@@ -43,6 +45,7 @@ export type ProjectInitErrorCode =
   | 'database_provision_failed'
   | 'service_deploy_failed'
   | 'dns_config_failed'
+  | 'initial_build_trigger_failed'
   | 'init_step_failed';
 
 export const projectInitK8sExecutionSteps = [
@@ -61,6 +64,7 @@ export const projectInitDefaultErrorCodes = {
   provision_databases: 'database_provision_failed',
   deploy_services: 'service_deploy_failed',
   configure_dns: 'dns_config_failed',
+  trigger_initial_builds: 'initial_build_trigger_failed',
 } as const satisfies Record<ProjectInitStepName, ProjectInitErrorCode>;
 
 const autoRetryableProjectInitErrorCodes = [

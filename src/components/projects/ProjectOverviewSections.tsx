@@ -48,12 +48,17 @@ function getEnvironmentGitSummary(
 function getEnvironmentSecondaryLine(
   environment: ProjectOverviewPageData['environmentCards'][number]
 ): string | null {
-  return (
+  const secondary =
     getEnvironmentGitSummary(environment) ??
     environment.previewLifecycle?.summary ??
     environment.platformSignals.nextActionLabel ??
-    null
-  );
+    null;
+
+  if (!secondary || secondary === getEnvironmentSummary(environment)) {
+    return null;
+  }
+
+  return secondary;
 }
 
 export function ProjectEnvironmentIndex({
@@ -95,7 +100,7 @@ export function ProjectEnvironmentIndex({
                     />
                     <div className="text-sm font-semibold">{environment.name}</div>
                     {environment.latestReleaseCard ? (
-                      <Badge variant="outline">
+                      <Badge variant="secondary">
                         {environment.latestReleaseCard.statusDecoration.label}
                       </Badge>
                     ) : environment.previewLifecycle ? (
@@ -114,7 +119,7 @@ export function ProjectEnvironmentIndex({
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2 text-xs font-medium text-muted-foreground xl:justify-end">
-                  <span>进入环境</span>
+                  <span>查看</span>
                   <ArrowRight className="h-3.5 w-3.5" />
                 </div>
               </div>

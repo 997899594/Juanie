@@ -1,3 +1,4 @@
+import { Octokit } from 'octokit';
 import { logger } from '@/lib/logger';
 import type {
   CreateBranchOptions,
@@ -16,6 +17,58 @@ import type {
 } from './index';
 
 const gitHubProviderLogger = logger.child({ component: 'git-provider-github' });
+
+interface GitHubRepositoryPayload {
+  id: number | string;
+  name: string;
+  full_name: string;
+  owner?: {
+    login?: string | null;
+  } | null;
+  clone_url: string;
+  ssh_url: string | null;
+  html_url: string;
+  default_branch?: string | null;
+  private: boolean;
+}
+
+interface GitHubPullRequestPayload {
+  number: number;
+  title: string;
+  state?: string | null;
+  draft?: boolean;
+  merged_at?: string | null;
+  merge_commit_sha?: string | null;
+  html_url?: string | null;
+  user?: {
+    login?: string | null;
+    name?: string | null;
+  } | null;
+  head?: {
+    ref?: string | null;
+    sha?: string | null;
+  } | null;
+}
+
+interface GitHubContentFilePayload {
+  type: 'file';
+  name: string;
+  path: string;
+  sha: string;
+  content?: string;
+  encoding?: string;
+}
+
+interface GitHubContentDirectoryPayload {
+  type: 'dir';
+  name: string;
+  path: string;
+}
+
+type GitHubContentPayload =
+  | GitHubContentFilePayload
+  | GitHubContentDirectoryPayload
+  | Array<GitHubContentFilePayload | GitHubContentDirectoryPayload>;
 
 function mapGitHubWorkflowDispatchError(message?: string | null): string {
   const normalizedMessage = message?.trim();
@@ -37,6 +90,21 @@ function mapGitHubWorkflowDispatchError(message?: string | null): string {
   return normalizedMessage || 'Failed to trigger GitHub preview build workflow';
 }
 
+function isNotFoundError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'status' in error && error.status === 404;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = error.message;
+    if (typeof message === 'string' && message.trim().length > 0) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 export class GitHubProvider implements GitProvider {
   type = 'github' as const;
   private clientId: string;
@@ -47,6 +115,22 @@ export class GitHubProvider implements GitProvider {
     this.clientId = config.clientId;
     this.clientSecret = config.clientSecret;
     this.redirectUri = config.redirectUri;
+  }
+
+  private getClient(accessToken: string): Octokit {
+    return new Octokit({
+      auth: accessToken,
+    });
+  }
+
+  private parseRepoFullName(repoFullName: string): { owner: string; repo: string } {
+    const [owner, repo] = repoFullName.split('/');
+
+    if (!owner || !repo) {
+      throw new Error(`Invalid GitHub repository name: ${repoFullName}`);
+    }
+
+    return { owner, repo };
   }
 
   getAuthUrl(state: string): string {
@@ -93,33 +177,27 @@ export class GitHubProvider implements GitProvider {
   }
 
   async getUser(accessToken: string): Promise<GitUser> {
-    const res = await fetch('https://api.github.com/user', {
-      headers: this.getHeaders(accessToken),
-    });
+    const client = this.getClient(accessToken);
+    const userResponse = await client.rest.users.getAuthenticated();
 
-    if (!res.ok) {
-      throw new Error('Failed to get user');
-    }
+    let email = userResponse.data.email ?? null;
 
-    const data = await res.json();
-
-    const emailsRes = await fetch('https://api.github.com/user/emails', {
-      headers: this.getHeaders(accessToken),
-    });
-
-    let email = data.email;
-    if (!email && emailsRes.ok) {
-      const emails = await emailsRes.json();
-      const primaryEmail = emails.find((e: { primary: boolean; email: string }) => e.primary);
-      email = primaryEmail?.email || emails[0]?.email;
+    if (!email) {
+      try {
+        const emailsResponse = await client.rest.users.listEmailsForAuthenticatedUser();
+        const primaryEmail = emailsResponse.data.find((item) => item.primary);
+        email = primaryEmail?.email ?? emailsResponse.data[0]?.email ?? null;
+      } catch {
+        email = null;
+      }
     }
 
     return {
-      id: String(data.id),
-      username: data.login,
-      name: data.name,
-      email: email || `${data.login}@users.noreply.github.com`,
-      avatarUrl: data.avatar_url,
+      id: String(userResponse.data.id),
+      username: userResponse.data.login,
+      name: userResponse.data.name,
+      email: email || `${userResponse.data.login}@users.noreply.github.com`,
+      avatarUrl: userResponse.data.avatar_url,
     };
   }
 
@@ -127,41 +205,48 @@ export class GitHubProvider implements GitProvider {
     accessToken: string,
     options?: { page?: number; perPage?: number; search?: string }
   ): Promise<GitRepository[]> {
+    const client = this.getClient(accessToken);
     const page = options?.page || 1;
     const perPage = options?.perPage || 100;
 
-    const url = `https://api.github.com/user/repos?page=${page}&per_page=${perPage}&sort=updated`;
-
     if (options?.search) {
-      const searchRes = await fetch(
-        `https://api.github.com/search/repositories?q=${encodeURIComponent(options.search)}+user:@me&per_page=${perPage}`,
-        { headers: this.getHeaders(accessToken) }
+      const currentUser = await client.rest.users.getAuthenticated();
+      const searchResponse = await client.rest.search.repos({
+        q: `${options.search} user:${currentUser.data.login}`,
+        per_page: perPage,
+        page,
+      });
+
+      return searchResponse.data.items.map((item) =>
+        this.mapRepository(item as unknown as GitHubRepositoryPayload)
       );
-      if (!searchRes.ok) return [];
-      const searchData = await searchRes.json();
-      return searchData.items.map(this.mapRepository);
     }
 
-    const res = await fetch(url, { headers: this.getHeaders(accessToken) });
+    const response = await client.rest.repos.listForAuthenticatedUser({
+      page,
+      per_page: perPage,
+      sort: 'updated',
+    });
 
-    if (!res.ok) {
-      return [];
-    }
-
-    const data = await res.json();
-    return data.map(this.mapRepository);
+    return response.data.map((item) =>
+      this.mapRepository(item as unknown as GitHubRepositoryPayload)
+    );
   }
 
   async getRepository(accessToken: string, fullName: string): Promise<GitRepository | null> {
-    const res = await fetch(`https://api.github.com/repos/${fullName}`, {
-      headers: this.getHeaders(accessToken),
-    });
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(fullName);
 
-    if (!res.ok) {
-      return null;
+    try {
+      const response = await client.rest.repos.get({ owner, repo });
+      return this.mapRepository(response.data as unknown as GitHubRepositoryPayload);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+
+      throw error;
     }
-
-    return this.mapRepository(await res.json());
   }
 
   async getReviewRequest(
@@ -169,35 +254,35 @@ export class GitHubProvider implements GitProvider {
     repoFullName: string,
     number: number
   ): Promise<GitReviewRequest | null> {
-    const [owner, repo] = repoFullName.split('/');
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${number}`, {
-      headers: this.getHeaders(accessToken),
-    });
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(repoFullName);
 
-    if (!res.ok) {
-      return null;
+    try {
+      const response = await client.rest.pulls.get({ owner, repo, pull_number: number });
+      const data = response.data as unknown as GitHubPullRequestPayload;
+      const state = this.mapReviewState({
+        draft: Boolean(data.draft),
+        state: typeof data.state === 'string' ? data.state : null,
+        mergedAt: typeof data.merged_at === 'string' ? data.merged_at : null,
+      });
+
+      return {
+        number,
+        kind: 'pull_request',
+        label: `PR #${number}`,
+        title: data.title,
+        state,
+        stateLabel: this.getReviewStateLabel(state),
+        authorName: data.user?.name ?? data.user?.login ?? null,
+        webUrl: data.html_url ?? null,
+      };
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+
+      throw error;
     }
-
-    const data = await res.json();
-    const state = this.mapReviewState({
-      draft: Boolean(data.draft),
-      state: typeof data.state === 'string' ? data.state : null,
-      mergedAt: typeof data.merged_at === 'string' ? data.merged_at : null,
-    });
-
-    return {
-      number,
-      kind: 'pull_request',
-      label: `PR #${number}`,
-      title: data.title as string,
-      state,
-      stateLabel: this.getReviewStateLabel(state),
-      authorName: ((data.user as { name?: string | null; login?: string | null } | undefined)
-        ?.name ??
-        (data.user as { login?: string | null } | undefined)?.login ??
-        null) as string | null,
-      webUrl: (data.html_url as string | null) ?? null,
-    };
   }
 
   async resolveRefToCommitSha(
@@ -205,54 +290,50 @@ export class GitHubProvider implements GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<string | null> {
-    const [owner, repo] = repoFullName.split('/');
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(repoFullName);
 
     if (ref.startsWith('refs/heads/')) {
       const branch = ref.slice('refs/heads/'.length);
-      const res = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`,
-        {
-          headers: this.getHeaders(accessToken),
+
+      try {
+        const response = await client.rest.repos.getBranch({ owner, repo, branch });
+        return response.data.commit.sha;
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          return null;
         }
-      );
 
-      if (!res.ok) {
-        return null;
+        throw error;
       }
-
-      const data = await res.json();
-      const sha = (data.commit as { sha?: string } | undefined)?.sha;
-      return typeof sha === 'string' ? sha : null;
     }
 
     const prMatch = ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
-    if (prMatch) {
-      const [, prNumber, target] = prMatch;
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, {
-        headers: this.getHeaders(accessToken),
-      });
-
-      if (!res.ok) {
-        return null;
-      }
-
-      const data = await res.json();
-      if (target === 'merge' && typeof data.merge_commit_sha === 'string') {
-        return data.merge_commit_sha;
-      }
-
-      const headSha = (data.head as { sha?: string } | undefined)?.sha;
-      return typeof headSha === 'string' ? headSha : null;
+    if (!prMatch) {
+      return null;
     }
 
-    return null;
+    const [, prNumber, target] = prMatch;
+    const response = await client.rest.pulls.get({
+      owner,
+      repo,
+      pull_number: Number(prNumber),
+    });
+    const data = response.data as unknown as GitHubPullRequestPayload;
+
+    if (target === 'merge' && typeof data.merge_commit_sha === 'string') {
+      return data.merge_commit_sha;
+    }
+
+    return data.head?.sha ?? null;
   }
 
   async triggerReleaseBuild(
     accessToken: string,
     options: TriggerReleaseBuildOptions
   ): Promise<void> {
-    const [owner, repo] = options.repoFullName.split('/');
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
     let dispatchRef: string | null = null;
 
     if (options.ref.startsWith('refs/heads/')) {
@@ -260,23 +341,13 @@ export class GitHubProvider implements GitProvider {
     } else {
       const prMatch = options.ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
       if (prMatch) {
-        const [, prNumber] = prMatch;
-        const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, {
-          headers: this.getHeaders(accessToken),
+        const response = await client.rest.pulls.get({
+          owner,
+          repo,
+          pull_number: Number(prMatch[1]),
         });
-
-        if (!res.ok) {
-          const error = await res.json().catch(() => null);
-          throw new Error(
-            error && typeof error.message === 'string'
-              ? error.message
-              : `Failed to resolve pull request #${prNumber} for preview build`
-          );
-        }
-
-        const data = await res.json();
-        const headRef = (data.head as { ref?: string } | undefined)?.ref;
-        dispatchRef = typeof headRef === 'string' && headRef.trim().length > 0 ? headRef : null;
+        const data = response.data as unknown as GitHubPullRequestPayload;
+        dispatchRef = data.head?.ref ?? null;
       }
     }
 
@@ -284,91 +355,67 @@ export class GitHubProvider implements GitProvider {
       throw new Error('当前来源无法触发 GitHub 预览构建，请改用分支启动');
     }
 
-    const res = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/juanie-ci.yml/dispatches`,
-      {
-        method: 'POST',
-        headers: this.getHeaders(accessToken),
-        body: JSON.stringify({
-          ref: dispatchRef,
-          inputs: {
-            juanie_source_sha: options.sourceCommitSha,
-            juanie_release_ref: options.releaseRef ?? options.ref,
-            juanie_force_full_build: options.forceFullBuild ? 'true' : 'false',
-          },
-        }),
-      }
-    );
-
-    if (!res.ok) {
-      const error = await res.json().catch(() => null);
-      throw new Error(
-        mapGitHubWorkflowDispatchError(
-          error && typeof error.message === 'string' ? error.message : null
-        )
-      );
+    try {
+      await client.rest.actions.createWorkflowDispatch({
+        owner,
+        repo,
+        workflow_id: 'juanie-ci.yml',
+        ref: dispatchRef,
+        inputs: {
+          juanie_source_sha: options.sourceCommitSha,
+          juanie_release_ref: options.releaseRef ?? options.ref,
+          juanie_force_full_build: options.forceFullBuild ? 'true' : 'false',
+        },
+      });
+    } catch (error) {
+      throw new Error(mapGitHubWorkflowDispatchError(getErrorMessage(error, '')));
     }
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {
-    const res = await fetch('https://api.github.com/user/repos', {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        name: options.name,
-        description: options.description,
-        private: options.isPrivate,
-        auto_init: options.autoInit ?? true,
-      }),
+    const client = this.getClient(accessToken);
+    const response = await client.rest.repos.createForAuthenticatedUser({
+      name: options.name,
+      description: options.description,
+      private: options.isPrivate,
+      auto_init: options.autoInit ?? true,
     });
 
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create repository');
-    }
-
-    return this.mapRepository(await res.json());
+    return this.mapRepository(response.data as unknown as GitHubRepositoryPayload);
   }
 
   async createBranch(accessToken: string, options: CreateBranchOptions): Promise<void> {
-    const [owner, repo] = options.repoFullName.split('/');
-    const sourceRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${options.fromBranch}`,
-      {
-        headers: this.getHeaders(accessToken),
-      }
-    );
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
+    const sourceRef = await client.rest.git.getRef({
+      owner,
+      repo,
+      ref: `heads/${options.fromBranch}`,
+    });
 
-    if (!sourceRes.ok) {
-      const error = await sourceRes.json();
-      throw new Error(error.message || `Failed to load source branch ${options.fromBranch}`);
-    }
-
-    const sourceData = await sourceRes.json();
-    const sha = sourceData.object?.sha;
-
-    if (!sha || typeof sha !== 'string') {
+    const sha = sourceRef.data.object.sha;
+    if (!sha) {
       throw new Error(`Source branch ${options.fromBranch} has no resolvable commit SHA`);
     }
 
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
+    try {
+      await client.rest.git.createRef({
+        owner,
+        repo,
         ref: `refs/heads/${options.branch}`,
         sha,
-      }),
-    });
-
-    if (!res.ok && res.status !== 422) {
-      const error = await res.json();
-      throw new Error(error.message || `Failed to create branch ${options.branch}`);
+      });
+    } catch (error) {
+      if (!('status' in Object(error ?? {}) && (error as { status?: number }).status === 422)) {
+        throw new Error(getErrorMessage(error, `Failed to create branch ${options.branch}`));
+      }
     }
   }
 
   async syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void> {
-    const [owner, repo] = options.repoFullName.split('/');
-    const branchPath = `heads/${options.branch}`;
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
+    const branchRef = `heads/${options.branch}`;
     const currentSha = await this.resolveRefToCommitSha(
       accessToken,
       options.repoFullName,
@@ -380,85 +427,53 @@ export class GitHubProvider implements GitProvider {
     }
 
     if (currentSha) {
-      const updateRes = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/git/refs/${branchPath}`,
-        {
-          method: 'PATCH',
-          headers: this.getHeaders(accessToken),
-          body: JSON.stringify({
-            sha: options.commitSha,
-            force: true,
-          }),
-        }
-      );
-
-      if (!updateRes.ok) {
-        const error = await updateRes.json().catch(() => null);
-        throw new Error(
-          (error as { message?: string } | null)?.message ??
-            `Failed to sync branch ${options.branch}`
-        );
-      }
-
+      await client.rest.git.updateRef({
+        owner,
+        repo,
+        ref: branchRef,
+        sha: options.commitSha,
+        force: true,
+      });
       return;
     }
 
-    const createRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
+    try {
+      await client.rest.git.createRef({
+        owner,
+        repo,
         ref: `refs/heads/${options.branch}`,
         sha: options.commitSha,
-      }),
-    });
-
-    if (!createRes.ok && createRes.status !== 422) {
-      const error = await createRes.json().catch(() => null);
-      throw new Error(
-        (error as { message?: string } | null)?.message ??
-          `Failed to create branch ${options.branch}`
-      );
-    }
-
-    if (createRes.status === 422) {
-      const retryRes = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/git/refs/${branchPath}`,
-        {
-          method: 'PATCH',
-          headers: this.getHeaders(accessToken),
-          body: JSON.stringify({
-            sha: options.commitSha,
-            force: true,
-          }),
-        }
-      );
-
-      if (!retryRes.ok) {
-        const error = await retryRes.json().catch(() => null);
-        throw new Error(
-          (error as { message?: string } | null)?.message ??
-            `Failed to sync branch ${options.branch}`
-        );
+      });
+    } catch (error) {
+      if (!('status' in Object(error ?? {}) && (error as { status?: number }).status === 422)) {
+        throw new Error(getErrorMessage(error, `Failed to create branch ${options.branch}`));
       }
+
+      await client.rest.git.updateRef({
+        owner,
+        repo,
+        ref: branchRef,
+        sha: options.commitSha,
+        force: true,
+      });
     }
   }
 
   async createTag(accessToken: string, options: CreateTagOptions): Promise<void> {
-    const [owner, repo] = options.repoFullName.split('/');
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
+
+    try {
+      await client.rest.git.createRef({
+        owner,
+        repo,
         ref: `refs/tags/${options.tag}`,
         sha: options.commitSha,
-      }),
-    });
-
-    if (!res.ok && res.status !== 422) {
-      const error = await res.json().catch(() => null);
-      throw new Error(
-        (error as { message?: string } | null)?.message ?? `Failed to create tag ${options.tag}`
-      );
+      });
+    } catch (error) {
+      if (!('status' in Object(error ?? {}) && (error as { status?: number }).status === 422)) {
+        throw new Error(getErrorMessage(error, `Failed to create tag ${options.tag}`));
+      }
     }
   }
 
@@ -466,25 +481,19 @@ export class GitHubProvider implements GitProvider {
     accessToken: string,
     options: CreateReviewRequestOptions
   ): Promise<GitReviewRequest> {
-    const [owner, repo] = options.repoFullName.split('/');
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
-      method: 'POST',
-      headers: this.getHeaders(accessToken),
-      body: JSON.stringify({
-        title: options.title,
-        body: options.body ?? '',
-        head: options.headBranch,
-        base: options.baseBranch,
-        draft: options.draft ?? true,
-      }),
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
+    const response = await client.rest.pulls.create({
+      owner,
+      repo,
+      title: options.title,
+      body: options.body ?? '',
+      head: options.headBranch,
+      base: options.baseBranch,
+      draft: options.draft ?? true,
     });
 
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.message || 'Failed to create pull request');
-    }
-
-    const data = await res.json();
+    const data = response.data as unknown as GitHubPullRequestPayload;
     const state = this.mapReviewState({
       draft: Boolean(data.draft),
       state: typeof data.state === 'string' ? data.state : null,
@@ -492,117 +501,107 @@ export class GitHubProvider implements GitProvider {
     });
 
     return {
-      number: data.number as number,
+      number: data.number,
       kind: 'pull_request',
-      label: `PR #${data.number as number}`,
-      title: data.title as string,
+      label: `PR #${data.number}`,
+      title: data.title,
       state,
       stateLabel: this.getReviewStateLabel(state),
-      authorName: ((data.user as { name?: string | null; login?: string | null } | undefined)
-        ?.name ??
-        (data.user as { login?: string | null } | undefined)?.login ??
-        null) as string | null,
-      webUrl: (data.html_url as string | null) ?? null,
+      authorName: data.user?.name ?? data.user?.login ?? null,
+      webUrl: data.html_url ?? null,
     };
   }
 
   async pushFiles(accessToken: string, options: PushOptions): Promise<void> {
-    const [owner, repo] = options.repoFullName.split('/');
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
 
     for (const [path, content] of Object.entries(options.files)) {
       let existingFileSha: string | undefined;
 
-      const existingRes = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${options.branch}`,
-        { headers: this.getHeaders(accessToken) }
-      );
-
-      if (existingRes.ok) {
-        const existingData = await existingRes.json();
-        existingFileSha = existingData.sha;
+      try {
+        const existing = await client.rest.repos.getContent({
+          owner,
+          repo,
+          path,
+          ref: options.branch,
+        });
+        const data = existing.data as unknown as GitHubContentFilePayload;
+        existingFileSha = Array.isArray(existing.data) ? undefined : data.sha;
+      } catch (error) {
+        if (!isNotFoundError(error)) {
+          throw error;
+        }
       }
 
-      const body: Record<string, unknown> = {
-        message: options.message,
-        content: Buffer.from(content).toString('base64'),
-        branch: options.branch,
-      };
-
-      if (existingFileSha) {
-        body.sha = existingFileSha;
-      }
-
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
-        method: 'PUT',
-        headers: this.getHeaders(accessToken),
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
+      try {
+        await client.rest.repos.createOrUpdateFileContents({
+          owner,
+          repo,
+          path,
+          message: options.message,
+          content: Buffer.from(content).toString('base64'),
+          branch: options.branch,
+          sha: existingFileSha,
+        });
+      } catch (error) {
         gitHubProviderLogger.error('Failed to push file to GitHub repository', {
           path,
           repoFullName: options.repoFullName,
           branch: options.branch,
-          status: res.status,
-          url: `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
-          response: error,
+          response: getErrorMessage(error, 'Unknown GitHub error'),
         });
-        throw new Error(error.message || `Failed to push file: ${path}`);
+        throw new Error(getErrorMessage(error, `Failed to push file: ${path}`));
       }
     }
   }
 
   async deleteFiles(accessToken: string, options: DeleteFilesOptions): Promise<void> {
-    const [owner, repo] = options.repoFullName.split('/');
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
 
     for (const path of options.paths) {
-      const existingRes = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${options.branch}`,
-        { headers: this.getHeaders(accessToken) }
-      );
+      let existingFileSha: string | null = null;
 
-      if (existingRes.status === 404) {
-        continue;
+      try {
+        const existing = await client.rest.repos.getContent({
+          owner,
+          repo,
+          path,
+          ref: options.branch,
+        });
+        if (!Array.isArray(existing.data)) {
+          existingFileSha = (existing.data as unknown as GitHubContentFilePayload).sha;
+        }
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          continue;
+        }
+
+        throw new Error(getErrorMessage(error, `Failed to inspect file: ${path}`));
       }
 
-      if (!existingRes.ok) {
-        const error = await existingRes.json().catch(() => null);
-        throw new Error(
-          (error as { message?: string } | null)?.message ?? `Failed to inspect file: ${path}`
-        );
-      }
-
-      const existingData = (await existingRes.json()) as { sha?: string };
-      if (!existingData.sha) {
+      if (!existingFileSha) {
         throw new Error(`Failed to resolve file sha for deletion: ${path}`);
       }
 
-      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
-        method: 'DELETE',
-        headers: this.getHeaders(accessToken),
-        body: JSON.stringify({
+      try {
+        await client.rest.repos.deleteFile({
+          owner,
+          repo,
+          path,
           message: options.message,
-          sha: existingData.sha,
+          sha: existingFileSha,
           branch: options.branch,
-        }),
-      });
+        });
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          continue;
+        }
 
-      if (!res.ok && res.status !== 404) {
-        const error = await res.json().catch(() => null);
-        throw new Error(
-          (error as { message?: string } | null)?.message ?? `Failed to delete file: ${path}`
-        );
+        throw new Error(getErrorMessage(error, `Failed to delete file: ${path}`));
       }
     }
-  }
-
-  private getHeaders(accessToken: string): HeadersInit {
-    return {
-      Authorization: `token ${accessToken}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-    };
   }
 
   async listRootFiles(
@@ -610,26 +609,9 @@ export class GitHubProvider implements GitProvider {
     repoFullName: string,
     branch?: string
   ): Promise<string[]> {
-    const [owner, repo] = repoFullName.split('/');
-    const ref = branch ? `&ref=${branch}` : '';
+    const items = await this.getDirectoryContents(accessToken, repoFullName, '', branch);
 
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/?${ref}`, {
-      headers: this.getHeaders(accessToken),
-    });
-
-    if (!res.ok) {
-      return [];
-    }
-
-    const data = await res.json();
-
-    if (!Array.isArray(data)) {
-      return [];
-    }
-
-    return data
-      .filter((item: { type: string }) => item.type === 'file')
-      .map((item: { name: string; path: string }) => item.path);
+    return items.filter((item) => item.type === 'file').map((item) => item.path);
   }
 
   async fileExists(
@@ -638,15 +620,24 @@ export class GitHubProvider implements GitProvider {
     path: string,
     branch?: string
   ): Promise<boolean> {
-    const [owner, repo] = repoFullName.split('/');
-    const ref = branch ? `?ref=${branch}` : '';
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(repoFullName);
 
-    const res = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${path}${ref}`,
-      { headers: this.getHeaders(accessToken) }
-    );
+    try {
+      await client.rest.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref: branch,
+      });
+      return true;
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return false;
+      }
 
-    return res.ok;
+      throw error;
+    }
   }
 
   async getFileContent(
@@ -655,25 +646,34 @@ export class GitHubProvider implements GitProvider {
     path: string,
     branch?: string
   ): Promise<string | null> {
-    const [owner, repo] = repoFullName.split('/');
-    const ref = branch ? `?ref=${branch}` : '';
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(repoFullName);
 
-    const res = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${path}${ref}`,
-      { headers: this.getHeaders(accessToken) }
-    );
+    try {
+      const response = await client.rest.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref: branch,
+      });
 
-    if (!res.ok) {
-      return null;
+      if (Array.isArray(response.data)) {
+        return null;
+      }
+
+      const data = response.data as unknown as GitHubContentFilePayload;
+      if (data.type !== 'file' || !data.content) {
+        return null;
+      }
+
+      return Buffer.from(data.content, 'base64').toString('utf-8');
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+
+      throw error;
     }
-
-    const data = await res.json();
-    if (data.type !== 'file' || !data.content) {
-      return null;
-    }
-
-    // GitHub returns base64 encoded content
-    return Buffer.from(data.content, 'base64').toString('utf-8');
   }
 
   async listDirectory(
@@ -682,42 +682,56 @@ export class GitHubProvider implements GitProvider {
     path: string,
     branch?: string
   ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
-    const [owner, repo] = repoFullName.split('/');
-    const ref = branch ? `&ref=${branch}` : '';
-
-    const res = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/contents/${path}?${ref}`,
-      { headers: this.getHeaders(accessToken) }
-    );
-
-    if (!res.ok) {
-      return [];
-    }
-
-    const data = await res.json();
-
-    if (!Array.isArray(data)) {
-      return [];
-    }
-
-    return data.map((item: { name: string; path: string; type: string }) => ({
-      name: item.name,
-      path: item.path,
-      type: item.type === 'dir' ? 'dir' : 'file',
-    }));
+    return this.getDirectoryContents(accessToken, repoFullName, path, branch);
   }
 
-  private mapRepository(data: Record<string, unknown>): GitRepository {
+  private async getDirectoryContents(
+    accessToken: string,
+    repoFullName: string,
+    path: string,
+    branch?: string
+  ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
+    const client = this.getClient(accessToken);
+    const { owner, repo } = this.parseRepoFullName(repoFullName);
+
+    try {
+      const response = await client.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path,
+        ref: branch,
+      });
+      const data = response.data as GitHubContentPayload;
+
+      if (!Array.isArray(data)) {
+        return [];
+      }
+
+      return data.map((item) => ({
+        name: item.name,
+        path: item.path,
+        type: item.type === 'dir' ? 'dir' : 'file',
+      }));
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return [];
+      }
+
+      throw error;
+    }
+  }
+
+  private mapRepository(data: GitHubRepositoryPayload): GitRepository {
     return {
       id: String(data.id),
-      name: data.name as string,
-      fullName: data.full_name as string,
-      owner: (data.owner as { login: string }).login,
-      cloneUrl: data.clone_url as string,
-      sshUrl: data.ssh_url as string,
-      webUrl: data.html_url as string,
-      defaultBranch: (data.default_branch as string) || 'main',
-      isPrivate: data.private as boolean,
+      name: data.name,
+      fullName: data.full_name,
+      owner: data.owner?.login ?? '',
+      cloneUrl: data.clone_url,
+      sshUrl: data.ssh_url,
+      webUrl: data.html_url,
+      defaultBranch: data.default_branch || 'main',
+      isPrivate: data.private,
     };
   }
 

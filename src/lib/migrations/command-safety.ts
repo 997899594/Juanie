@@ -57,6 +57,17 @@ export function assessMigrationCommandSafety(
     };
   }
 
+  if (
+    specification.tool === 'atlas' &&
+    includesPattern(command, [/\batlas\s+schema\s+apply\b/i, /\batlas\s+migrate\s+diff\b/i])
+  ) {
+    return {
+      blocksExecution: true,
+      summary:
+        'Atlas schema apply / migrate diff 不是发布期迁移执行命令，平台要求改成 atlas migrate apply 或等价封装。',
+    };
+  }
+
   return {
     blocksExecution: false,
     summary: null,

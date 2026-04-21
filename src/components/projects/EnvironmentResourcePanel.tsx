@@ -428,7 +428,7 @@ export function EnvironmentResourcePanel({
           <div className={resourceEyebrowClassName}>环境资源</div>
           <div className="mt-2 text-sm font-medium">容量与异常</div>
         </div>
-        <Button asChild variant="outline" size="sm">
+        <Button asChild variant="ghost" size="sm" className="rounded-full px-4">
           <Link href={`/projects/${projectId}/environments/${environmentId}/logs`}>
             查看环境日志
           </Link>
@@ -456,9 +456,9 @@ export function EnvironmentResourcePanel({
       {resourceType === 'diagnostics' && (
         <div className="mb-4 flex flex-wrap gap-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className=""
+            className="rounded-full px-4"
             disabled={
               !canManage ||
               remediationAction !== null ||
@@ -470,9 +470,9 @@ export function EnvironmentResourcePanel({
             {remediationAction === 'cleanup_terminating_pods' ? '清理中...' : '清理残留 Pod'}
           </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className=""
+            className="rounded-full px-4"
             disabled={!canManage || remediationAction !== null}
             title={canManage ? undefined : (manageSummary ?? undefined)}
             onClick={() => runRemediation('restart_deployments')}
@@ -489,7 +489,7 @@ export function EnvironmentResourcePanel({
       )}
 
       {resourceError ? (
-        <div className="rounded-2xl bg-destructive/[0.08] px-4 py-3 text-sm text-destructive">
+        <div className={cn(resourceSubtleClassName, 'text-sm text-destructive')}>
           {resourceError}
         </div>
       ) : loading ? (
@@ -528,9 +528,9 @@ export function EnvironmentResourcePanel({
                   )}
                 </div>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className=""
+                  className="rounded-full px-3"
                   onClick={() => setSelectedPod(pod.metadata.name)}
                 >
                   Pod 日志
@@ -609,7 +609,7 @@ export function EnvironmentResourcePanel({
               <div className="text-sm font-medium">Pod 原始日志 · {selectedPod}</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button asChild variant="outline" size="sm">
+              <Button asChild variant="ghost" size="sm" className="rounded-full px-3">
                 <Link href={`/projects/${projectId}/environments/${environmentId}/logs`}>
                   环境日志
                 </Link>

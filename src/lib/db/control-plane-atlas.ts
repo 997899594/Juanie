@@ -1,12 +1,16 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import postgres from 'postgres';
+import {
+  canUseDockerAtlas,
+  hasExecutable,
+  hasLocalAtlas,
+  normalizeAtlasDatabaseUrl,
+  runAtlasCommand,
+} from '@/lib/atlas/cli';
 import { getNormalizedDatabaseUrlFromEnv } from './connection-url';
 
-const ATLAS_VERSION = process.env.ATLAS_VERSION ?? '1.1.0';
-const ATLAS_DOCKER_IMAGE =
-  process.env.ATLAS_DOCKER_IMAGE ?? `arigaio/atlas:${ATLAS_VERSION}-community`;
 const MIGRATIONS_DIR_URL = 'file://migrations';
 const REVISIONS_SCHEMA = 'public';
 const DEFAULT_DEV_URL = 'docker://postgres/16/dev?search_path=public';
@@ -16,66 +20,6 @@ const ATLAS_REVISIONS_TABLE = 'atlas_schema_revisions';
 const LEGACY_MIGRATIONS_TABLE = '_migrations';
 
 type AtlasCommand = 'generate' | 'hash' | 'validate' | 'status' | 'apply';
-
-function hasExecutable(command: string): boolean {
-  return spawnSync(command, ['--help'], { stdio: 'ignore' }).status === 0;
-}
-
-function hasLocalAtlas(): boolean {
-  return hasExecutable('atlas');
-}
-
-function getCommand(
-  args: string[],
-  options?: {
-    network?: string;
-  }
-): { command: string; args: string[] } {
-  if (hasLocalAtlas()) {
-    return {
-      command: 'atlas',
-      args,
-    };
-  }
-
-  if (!hasExecutable('docker')) {
-    throw new Error('Atlas CLI 未安装，且当前环境没有可用的 Docker，无法执行数据库迁移');
-  }
-
-  const dockerArgs = ['run', '--rm', '-v', `${process.cwd()}:/workspace`, '-w', '/workspace'];
-
-  if (process.platform === 'linux') {
-    dockerArgs.push('--add-host', 'host.docker.internal:host-gateway');
-  }
-
-  if (options?.network) {
-    dockerArgs.push('--network', options.network);
-  }
-
-  return {
-    command: 'docker',
-    args: [...dockerArgs, ATLAS_DOCKER_IMAGE, ...args],
-  };
-}
-
-function runProcess(command: string, args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: 'inherit',
-      env: resolveAtlasProcessEnv(),
-    });
-
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(`${command} ${args.join(' ')} exited with code ${code ?? 'unknown'}`));
-    });
-  });
-}
 
 function resolveAtlasProcessEnv(): NodeJS.ProcessEnv {
   try {
@@ -94,25 +38,16 @@ async function runAtlas(
     network?: string;
   }
 ): Promise<void> {
-  const command = getCommand(args, options);
-  await runProcess(command.command, command.args);
-}
-
-function normalizeUrlForDocker(rawUrl: string): string {
-  const parsed = new URL(rawUrl);
-  if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
-    parsed.hostname = 'host.docker.internal';
-  }
-  return parsed.toString();
-}
-
-function shouldRewriteDatabaseUrl(): boolean {
-  return !hasLocalAtlas() && hasExecutable('docker');
+  await runAtlasCommand(args, {
+    cwd: process.cwd(),
+    env: resolveAtlasProcessEnv(),
+    network: options?.network,
+  });
 }
 
 function getDatabaseUrl(): string {
   const databaseUrl = getNormalizedDatabaseUrlFromEnv();
-  return shouldRewriteDatabaseUrl() ? normalizeUrlForDocker(databaseUrl) : databaseUrl;
+  return canUseDockerAtlas() ? normalizeAtlasDatabaseUrl(databaseUrl) : databaseUrl;
 }
 
 async function getMigrationFiles(): Promise<string[]> {

@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { EnvironmentResourcePanel } from '@/components/projects/EnvironmentResourcePanel';
-import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
+import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
 import { getProjectEnvironmentOrNull, getProjectMemberRole } from '@/lib/environments/page-context';

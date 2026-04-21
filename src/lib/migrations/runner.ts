@@ -22,6 +22,7 @@ import {
   isK8sAvailable,
 } from '@/lib/k8s';
 import {
+  executeAtlasMigrationsForSpec,
   executeDrizzleMigrationsForSpec,
   executeMigrationsForDatabase,
 } from '@/lib/migrations/executor';
@@ -724,6 +725,71 @@ async function runDrizzleMigration(
   }
 }
 
+async function runAtlasMigration(
+  runId: string,
+  spec: ResolvedMigrationSpec,
+  options: ExecuteMigrationRunOptions
+): Promise<void> {
+  const path = resolveMigrationPath(spec.specification, spec.database.type) ?? 'migrations';
+  const revision =
+    options.sourceCommitSha || options.sourceRef || spec.environment.branch || 'main';
+
+  const [item] = await db
+    .insert(migrationRunItems)
+    .values({
+      migrationRunId: runId,
+      name: path,
+      status: 'running',
+    })
+    .returning();
+
+  const logs: string[] = [];
+
+  try {
+    const appliedCount = await executeAtlasMigrationsForSpec(spec, revision, async (message) => {
+      logs.push(message);
+      await appendRunLog(runId, message);
+    });
+
+    const finishedAt = new Date();
+    const startedAt = await getRunStartedAt(runId);
+    await db
+      .update(migrationRunItems)
+      .set({
+        status: 'success',
+        output: logs.join('\n'),
+        finishedAt,
+      })
+      .where(eq(migrationRunItems.id, item.id));
+
+    await db
+      .update(migrationRuns)
+      .set({
+        status: 'success',
+        appliedCount,
+        finishedAt,
+        durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
+        updatedAt: finishedAt,
+      })
+      .where(eq(migrationRuns.id, runId));
+  } catch (error) {
+    const finishedAt = new Date();
+    const message = error instanceof Error ? error.message : String(error);
+
+    await db
+      .update(migrationRunItems)
+      .set({
+        status: 'failed',
+        error: message,
+        output: logs.join('\n'),
+        finishedAt,
+      })
+      .where(eq(migrationRunItems.id, item.id));
+
+    await markRunFailed(runId, 'MIGRATION_COMMAND_FAILED', message);
+  }
+}
+
 async function runCommandMigration(
   runId: string,
   spec: ResolvedMigrationSpec,
@@ -1057,6 +1123,11 @@ export async function executeMigrationRun(
 
     if (spec.specification.tool === 'drizzle') {
       await runDrizzleMigration(runId, spec, options);
+      return;
+    }
+
+    if (spec.specification.tool === 'atlas') {
+      await runAtlasMigration(runId, spec, options);
       return;
     }
 

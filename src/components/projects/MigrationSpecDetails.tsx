@@ -6,12 +6,16 @@ import {
   getMigrationExecutionModeLabel,
   getMigrationLockStrategyLabel,
   getMigrationPhaseLabel,
+  getSchemaSourceLabel,
 } from '@/lib/migrations/presentation';
+import { usesPlatformInternalCommand } from '@/lib/migrations/schema-source';
 
 export interface MigrationSpecDetailsValue {
+  source?: string | null;
   tool: string;
   phase: string;
   command: string;
+  sourceConfigPath?: string | null;
   executionMode?: string | null;
   workingDirectory?: string | null;
   migrationPath?: string | null;
@@ -44,11 +48,13 @@ export function MigrationSpecDetails({
   databaseType,
   compact = false,
 }: MigrationSpecDetailsProps) {
+  const isInternalCommand = usesPlatformInternalCommand(specification.command);
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="text-sm font-medium">{specification.tool}</div>
-        <Badge variant="outline">{getMigrationPhaseLabel(specification.phase)}</Badge>
+        <div className="text-sm font-medium">{getSchemaSourceLabel(specification.source)}</div>
+        <Badge variant="secondary">{getMigrationPhaseLabel(specification.phase)}</Badge>
         <Badge variant="secondary">
           {getMigrationExecutionModeLabel(specification.executionMode)}
         </Badge>
@@ -59,34 +65,30 @@ export function MigrationSpecDetails({
         ) : null}
       </div>
 
-      <div className="ui-control-muted rounded-2xl px-3 py-2">
-        <code className="break-all text-xs">{specification.command}</code>
-      </div>
-
       <div
         className={
           compact ? 'grid gap-2 text-xs sm:grid-cols-2' : 'grid gap-2 text-xs md:grid-cols-2'
         }
       >
-        <div className="ui-control rounded-xl px-2.5 py-2">
-          <div className="text-muted-foreground">工作目录</div>
+        <div className="rounded-[16px] bg-[rgba(255,255,255,0.88)] px-2.5 py-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.025)]">
+          <div className="text-muted-foreground">执行引擎</div>
           <code className="mt-1 block break-all text-foreground">
-            {specification.workingDirectory ?? '.'}
+            {getSchemaSourceLabel(specification.tool)}
           </code>
         </div>
-        <div className="ui-control rounded-xl px-2.5 py-2">
-          <div className="text-muted-foreground">迁移路径</div>
+        <div className="rounded-[16px] bg-[rgba(255,255,255,0.88)] px-2.5 py-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.025)]">
+          <div className="text-muted-foreground">Schema 配置</div>
           <code className="mt-1 block break-all text-foreground">
-            {resolveMigrationPath(specification.migrationPath, databaseType)}
+            {specification.sourceConfigPath ?? '平台自动推断'}
           </code>
         </div>
-        <div className="ui-control rounded-xl px-2.5 py-2">
+        <div className="rounded-[16px] bg-[rgba(255,255,255,0.88)] px-2.5 py-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.025)]">
           <div className="text-muted-foreground">审批策略</div>
           <div className="mt-1 text-foreground">
             {getMigrationApprovalPolicyLabel(specification.approvalPolicy)}
           </div>
         </div>
-        <div className="ui-control rounded-xl px-2.5 py-2">
+        <div className="rounded-[16px] bg-[rgba(255,255,255,0.88)] px-2.5 py-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_6px_16px_rgba(55,53,47,0.025)]">
           <div className="text-muted-foreground">锁策略</div>
           <div className="mt-1 text-foreground">
             {getMigrationLockStrategyLabel(specification.lockStrategy)}
@@ -94,10 +96,30 @@ export function MigrationSpecDetails({
         </div>
       </div>
 
+      {(specification.migrationPath || !isInternalCommand) && (
+        <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-3 py-2 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {specification.migrationPath ? <span>派生迁移目录</span> : null}
+            {!isInternalCommand ? <span>执行命令</span> : null}
+          </div>
+          {specification.migrationPath ? (
+            <code className="mt-1 block break-all text-xs text-foreground">
+              {resolveMigrationPath(specification.migrationPath, databaseType)}
+            </code>
+          ) : null}
+          {!isInternalCommand ? (
+            <code className="mt-2 block break-all text-xs text-foreground">
+              {specification.command}
+            </code>
+          ) : null}
+        </div>
+      )}
+
       {specification.filePreview && (
-        <div className="ui-control-muted rounded-2xl px-3 py-2">
-          <div className="text-xs text-muted-foreground">
-            迁移文件预览 · {specification.filePreview.sourceLabel}
+        <div className="rounded-2xl bg-[rgba(243,240,233,0.68)] px-3 py-2 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>迁移文件预览</span>
+            <span>{specification.filePreview.sourceLabel}</span>
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             待执行 {specification.filePreview.total} · 已执行{' '}

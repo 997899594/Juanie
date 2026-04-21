@@ -2,7 +2,7 @@
 
 import { RefreshCw, ScrollText, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EnvironmentSectionNav } from '@/components/projects/RuntimeSectionNav';
+import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import {
@@ -176,21 +176,6 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
       <PageHeader title="日志" description={selectedEnvironment?.name} />
       <EnvironmentSectionNav projectId={projectId} environmentId={envId || null} />
 
-      <div className="ui-control-muted px-4 py-3">
-        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-          <span>{selectedEnvironment?.name ?? '未选环境'}</span>
-          <span>{selectedPod?.metadata.name ?? '未选 Pod'}</span>
-          <StatusIndicator
-            status={statusColor[status]}
-            pulse={status === 'streaming'}
-            label={statusLabel[status]}
-          />
-          <span>
-            {pods.length > 0 ? `${runningPodCount} 运行中 / ${readyPodCount} 就绪` : '等待识别'}
-          </span>
-        </div>
-      </div>
-
       <div className="ui-floating px-4 py-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <ScrollText className="h-4 w-4" />
@@ -239,16 +224,16 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             <Button
               variant="ghost"
               size="sm"
-              className={cn(follow && 'text-foreground')}
+              className={cn('rounded-full', follow && 'text-foreground')}
               onClick={() => setFollow((f) => !f)}
             >
               {follow ? '自动跟随中' : '开启跟随'}
             </Button>
-            <Button variant="outline" size="sm" onClick={startStream}>
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={startStream}>
               <RefreshCw className="h-3.5 w-3.5" />
               重连
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setLines([])}>
+            <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setLines([])}>
               <X className="h-3.5 w-3.5" />
               清空
             </Button>
@@ -268,6 +253,10 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
               </div>
               <div className="mt-1 text-[11px] text-zinc-500">
                 {[
+                  selectedEnvironment?.name ?? null,
+                  pods.length > 0
+                    ? `${runningPodCount} 运行中 / ${readyPodCount} 就绪`
+                    : '等待识别',
                   sessionStartedLabel ? `会话开始 ${sessionStartedLabel}` : null,
                   lastLineLabel ? `最后更新 ${lastLineLabel}` : null,
                   lines.length > 0 ? `${lines.length} 行` : null,
@@ -293,7 +282,9 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
               {lines.map((line) => (
                 <LogEntry key={line.id} text={line.text} />
               ))}
-              <div className="mt-1 text-red-400">[错误] {errorMsg}</div>
+              <div className="mt-2 rounded-[18px] bg-red-500/10 px-3 py-2 text-red-300 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset]">
+                {errorMsg}
+              </div>
             </>
           ) : lines.length === 0 ? (
             <span className="text-zinc-500">
@@ -311,16 +302,26 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
           <Button
             variant="ghost"
             size="sm"
-            className={cn('min-w-0 flex-1', follow && 'text-foreground')}
+            className={cn('min-w-0 flex-1 rounded-full', follow && 'text-foreground')}
             onClick={() => setFollow((f) => !f)}
           >
             {follow ? '跟随中' : '跟随'}
           </Button>
-          <Button variant="outline" size="sm" className="min-w-0 flex-1" onClick={startStream}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-w-0 flex-1 rounded-full"
+            onClick={startStream}
+          >
             <RefreshCw className="h-3.5 w-3.5" />
             重连
           </Button>
-          <Button variant="ghost" size="sm" className="min-w-0 flex-1" onClick={() => setLines([])}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-w-0 flex-1 rounded-full"
+            onClick={() => setLines([])}
+          >
             <X className="h-3.5 w-3.5" />
             清空
           </Button>

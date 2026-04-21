@@ -89,15 +89,9 @@ export function Sidebar() {
                 {environmentNav.map((item) => {
                   const href = buildEnvironmentNavHref(projectId, environmentId, item.href);
                   const isActive =
-                    item.href === '/delivery'
-                      ? pathname === `/projects/${projectId}/delivery` &&
-                        queryEnvironmentId === environmentId
-                      : item.href === '/schema'
-                        ? pathname === `/projects/${projectId}/schema` &&
-                          queryEnvironmentId === environmentId
-                        : item.href === ''
-                          ? pathname === `/projects/${projectId}/environments/${environmentId}`
-                          : pathname === href || pathname.startsWith(`${href}/`);
+                    item.href === ''
+                      ? pathname === `/projects/${projectId}/environments/${environmentId}`
+                      : pathname === href || pathname.startsWith(`${href}/`);
                   const Icon = item.icon;
 
                   return (

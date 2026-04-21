@@ -8,15 +8,14 @@ import {
 } from '@/lib/databases/platform-support';
 
 const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
+const schemaSources = ['atlas', 'drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom'] as const;
 
-const migrationConfigSchema = z
+const schemaConfigSchema = z
   .object({
-    tool: z.enum(['drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom']),
-    workingDirectory: z.string().min(1),
-    path: z.string().min(1).optional(),
-    command: z.string().min(1),
+    source: z.enum(schemaSources),
+    config: z.string().min(1).optional(),
     phase: z.enum(['preDeploy', 'postDeploy', 'manual']).optional().default('preDeploy'),
-    executionMode: z.enum(migrationExecutionModes),
+    executionMode: z.enum(migrationExecutionModes).optional().default('automatic'),
     lockStrategy: z.enum(['platform', 'db_advisory']).optional().default('platform'),
     compatibility: z
       .enum(['backward_compatible', 'breaking'])
@@ -30,7 +29,7 @@ const serviceDatabaseBindingSchema = z.object({
   binding: z.string().min(1).max(100).optional(),
   role: z.enum(['primary', 'readonly', 'cache', 'queue', 'analytics']).optional(),
   type: z.enum(['postgresql', 'mysql', 'redis', 'mongodb']).optional(),
-  migrate: migrationConfigSchema,
+  schema: schemaConfigSchema,
 });
 
 export const serviceSchema = z.object({
@@ -80,7 +79,7 @@ export const serviceSchema = z.object({
 
   domain: z.string().optional(),
   isPublic: z.boolean().optional(),
-  migrate: migrationConfigSchema.optional(),
+  schema: schemaConfigSchema.optional(),
   databases: z.array(serviceDatabaseBindingSchema).max(10).optional(),
 
   resources: z
@@ -207,15 +206,15 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
   }
 
   for (const service of config.services) {
-    if (service.migrate && (service.databases?.length ?? 0) > 0) {
+    if (service.schema && (service.databases?.length ?? 0) > 0) {
       warnings.push(
-        `Service "${service.name}" defines both service-level migrate and databases[].migrate; service-level migrate will only be used when no database bindings are defined`
+        `Service "${service.name}" defines both service-level schema and databases[].schema; service-level schema will only be used when no database bindings are defined`
       );
     }
 
     for (const binding of service.databases ?? []) {
       if (
-        binding.migrate.executionMode === 'automatic' &&
+        binding.schema.executionMode === 'automatic' &&
         binding.type &&
         !supportsDatabaseAutomatedMigrations(binding.type)
       ) {
@@ -237,7 +236,7 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
       }
 
       if (
-        binding.migrate.executionMode === 'automatic' &&
+        binding.schema.executionMode === 'automatic' &&
         !supportsDatabaseAutomatedMigrations(database.type)
       ) {
         errors.push(
@@ -246,7 +245,7 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
       }
     }
 
-    if (service.migrate?.executionMode === 'automatic') {
+    if (service.schema?.executionMode === 'automatic') {
       const hasPlatformManagedMigrationDatabase = (config.databases ?? []).some((database) =>
         supportsDatabaseAutomatedMigrations(database.type)
       );

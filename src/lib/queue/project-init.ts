@@ -20,7 +20,6 @@ import {
 import { resolveDeployImageRepository } from '@/lib/deploy-images';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { ensureEnvironmentNamespace, reconcileEnvironmentState } from '@/lib/environments/service';
-import type { Capability } from '@/lib/integrations/domain/models';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -29,12 +28,14 @@ import { insertRepositoryRecord } from '@/lib/integrations/service/repository-se
 import { isK8sAvailable } from '@/lib/k8s';
 import { buildProjectNamespaceBase, buildProjectScopedK8sName } from '@/lib/k8s/naming';
 import { logger } from '@/lib/logger';
+import { getDefaultSchemaConfigPath } from '@/lib/migrations/schema-source';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
+import { requiredCapabilitiesForStep } from './project-init-capabilities';
 import {
   getProjectInitSteps,
   isAutoRetryableProjectInitError,
@@ -47,21 +48,7 @@ import {
 const isDev = process.env.NODE_ENV === 'development';
 const projectInitLogger = logger.child({ component: 'project-init' });
 
-export const requiredCapabilitiesForStep = (step: ProjectInitStepName): Capability[] => {
-  switch (step) {
-    case 'validate_repository':
-      return ['read_repo'];
-    case 'push_cicd_config':
-    case 'push_template':
-      return ['write_repo', 'write_workflow'];
-    case 'configure_release_trigger':
-      return ['read_repo'];
-    case 'create_repository':
-      return ['write_repo'];
-    default:
-      return [];
-  }
-};
+export { requiredCapabilitiesForStep } from './project-init-capabilities';
 
 // ============================================
 // Helper Functions
@@ -264,6 +251,10 @@ const projectInitStepRunners: Record<ProjectInitStepName, ProjectInitStepRunner>
     await configureDns(project, hasK8s, reportStepProgress);
     return undefined;
   },
+  trigger_initial_builds: async ({ project, reportStepProgress }) => {
+    await triggerInitialAutoDeployBuilds(project, reportStepProgress);
+    return undefined;
+  },
 };
 
 export async function processProjectInit(job: Job<ProjectInitJobData>) {
@@ -347,7 +338,6 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
     }
   }
 
-  await triggerInitialAutoDeployBuilds(project);
   await db.update(projects).set({ status: 'active' }).where(eq(projects.id, projectId));
 }
 
@@ -515,6 +505,9 @@ interface RepoAutomationContext {
   packageManager: PackageManager;
   bakeDefinition: string | null;
   bakeTargets: string[];
+  atlasConfigPath: string | null;
+  atlasConfigContent: string | null;
+  migrationScriptContents: Record<string, string>;
   packageJson: {
     packageManager?: string;
     scripts?: Record<string, string>;
@@ -583,26 +576,139 @@ export function resolvePackageScriptCommand(
   return buildRunScriptCommand(packageManager, script);
 }
 
-export function detectMigrationTool(packageJson: RepoAutomationContext['packageJson']) {
+const managedMigrationScriptNames = ['db:migrate', 'db:deploy'] as const;
+
+function detectMigrationToolFromText(
+  text: string
+): 'atlas' | 'drizzle' | 'prisma' | 'knex' | 'typeorm' | null {
+  const normalized = text.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (/\batlas\b/i.test(normalized)) return 'atlas';
+  if (/\bprisma\b/i.test(normalized)) return 'prisma';
+  if (/\bdrizzle-kit\b|\bdrizzle-orm\b/i.test(normalized)) return 'drizzle';
+  if (/\bknex\b/i.test(normalized)) return 'knex';
+  if (/\btypeorm\b/i.test(normalized)) return 'typeorm';
+  return null;
+}
+
+function resolveMigrationScriptFilePaths(command: string): string[] {
+  const args = _parseCommandString(command);
+  const paths = new Set<string>();
+
+  for (let index = 0; index < args.length; index += 1) {
+    const value = args[index]?.trim();
+    if (!value || value.startsWith('-')) {
+      continue;
+    }
+
+    const next = args[index + 1]?.trim();
+    if (
+      ['node', 'bun', 'tsx', 'ts-node', 'bash', 'sh'].includes(value) &&
+      next &&
+      !next.startsWith('-')
+    ) {
+      paths.add(next.replace(/^\.\//u, ''));
+      continue;
+    }
+
+    if (
+      value.startsWith('./scripts/') ||
+      value.startsWith('scripts/') ||
+      /\.(?:mjs|cjs|js|ts|tsx|sh)$/u.test(value)
+    ) {
+      paths.add(value.replace(/^\.\//u, ''));
+    }
+  }
+
+  return [...paths];
+}
+
+function resolveManagedMigrationScriptPaths(
+  packageJson: RepoAutomationContext['packageJson']
+): string[] {
+  const scripts = packageJson?.scripts ?? {};
+  const paths = new Set<string>();
+
+  for (const scriptName of managedMigrationScriptNames) {
+    const command = scripts[scriptName]?.trim();
+    if (!command) {
+      continue;
+    }
+
+    for (const scriptPath of resolveMigrationScriptFilePaths(command)) {
+      paths.add(scriptPath);
+    }
+  }
+
+  return [...paths];
+}
+
+export function detectMigrationTool(
+  automation: Pick<
+    RepoAutomationContext,
+    'packageJson' | 'rootFiles' | 'atlasConfigContent' | 'migrationScriptContents'
+  >
+) {
+  const scripts = automation.packageJson?.scripts ?? {};
+
+  for (const scriptName of managedMigrationScriptNames) {
+    const detected = detectMigrationToolFromText(scripts[scriptName]?.trim() ?? '');
+    if (detected) {
+      return detected;
+    }
+  }
+
+  for (const content of Object.values(automation.migrationScriptContents ?? {})) {
+    const detected = detectMigrationToolFromText(content);
+    if (detected) {
+      return detected;
+    }
+  }
+
   const dependencies = {
-    ...(packageJson?.dependencies ?? {}),
-    ...(packageJson?.devDependencies ?? {}),
+    ...(automation.packageJson?.dependencies ?? {}),
+    ...(automation.packageJson?.devDependencies ?? {}),
   };
 
   if (dependencies.prisma || dependencies['@prisma/client']) return 'prisma';
   if (dependencies['drizzle-kit'] || dependencies['drizzle-orm']) return 'drizzle';
   if (dependencies.knex) return 'knex';
   if (dependencies.typeorm) return 'typeorm';
+  if (automation.atlasConfigContent || automation.rootFiles.includes('atlas.hcl')) return 'atlas';
   return 'custom';
 }
 
-export function inferMigrationCommand(
+function inferSchemaConfigPath(
+  automation: RepoAutomationContext,
+  source: ReturnType<typeof detectMigrationTool>
+): string | null {
+  if (source === 'atlas') {
+    return automation.atlasConfigPath ?? 'atlas.hcl';
+  }
+
+  if (source === 'drizzle') {
+    const candidates = [
+      'drizzle.config.ts',
+      'drizzle.config.mjs',
+      'drizzle.config.js',
+      'drizzle.config.cjs',
+    ];
+    return candidates.find((candidate) => automation.rootFiles.includes(candidate)) ?? null;
+  }
+
+  return getDefaultSchemaConfigPath(source);
+}
+
+export function inferSchemaConfig(
   automation: RepoAutomationContext,
   databaseType: typeof databases.$inferSelect.type
 ): {
   comment: string;
-  tool: 'drizzle' | 'prisma' | 'knex' | 'typeorm' | 'custom';
-  command: string;
+  source: 'atlas' | 'drizzle' | 'prisma' | 'knex' | 'typeorm' | 'custom';
+  config?: string;
   executionMode: 'automatic' | 'manual_platform';
   approvalPolicy?: 'manual_in_production';
 } | null {
@@ -611,17 +717,14 @@ export function inferMigrationCommand(
   }
 
   const scripts = automation.packageJson?.scripts ?? {};
-  const tool = detectMigrationTool(automation.packageJson);
+  const source = detectMigrationTool(automation);
+  const configPath = inferSchemaConfigPath(automation, source);
 
   if (scripts['db:migrate']) {
     return {
       comment: 'Auto-generated from package.json script db:migrate',
-      tool,
-      command: resolvePackageScriptCommand(
-        automation.packageJson,
-        automation.packageManager,
-        'db:migrate'
-      ),
+      source,
+      ...(configPath ? { config: configPath } : {}),
       executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     };
@@ -630,12 +733,8 @@ export function inferMigrationCommand(
   if (scripts['db:deploy']) {
     return {
       comment: 'Auto-generated from package.json script db:deploy',
-      tool,
-      command: resolvePackageScriptCommand(
-        automation.packageJson,
-        automation.packageManager,
-        'db:deploy'
-      ),
+      source,
+      ...(configPath ? { config: configPath } : {}),
       executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     };
@@ -711,23 +810,22 @@ function buildServiceBuildLines(
   return lines;
 }
 
-export function buildMigrationConfigLines(
+export function buildSchemaConfigLines(
   indent: string,
-  inferred: ReturnType<typeof inferMigrationCommand>
+  inferred: ReturnType<typeof inferSchemaConfig>
 ): string[] {
   if (!inferred) {
     return [
-      `${indent}# Juanie could not infer a migration command for this service.`,
-      `${indent}# Add a migrate block manually before enabling managed migrations.`,
+      `${indent}# Juanie could not infer a schema source for this service.`,
+      `${indent}# Add a schema block manually before enabling managed migrations.`,
     ];
   }
 
   const lines = [
     `${indent}# ${inferred.comment}`,
-    `${indent}migrate:`,
-    `${indent}  tool: ${inferred.tool}`,
-    `${indent}  workingDirectory: .`,
-    `${indent}  command: ${inferred.command}`,
+    `${indent}schema:`,
+    `${indent}  source: ${inferred.source}`,
+    ...(inferred.config ? [`${indent}  config: ${inferred.config}`] : []),
     `${indent}  phase: preDeploy`,
     `${indent}  executionMode: ${inferred.executionMode}`,
   ];
@@ -750,9 +848,9 @@ export function buildServiceMigrationLines(
   );
 
   if (serviceScopedRelationalDbs.length === 1 && serviceScopedRelationalDbs[0].role === 'primary') {
-    return buildMigrationConfigLines(
+    return buildSchemaConfigLines(
       '    ',
-      inferMigrationCommand(automation, serviceScopedRelationalDbs[0].type)
+      inferSchemaConfig(automation, serviceScopedRelationalDbs[0].type)
     );
   }
 
@@ -760,11 +858,11 @@ export function buildServiceMigrationLines(
     const lines = ['    databases:'];
 
     for (const database of serviceScopedRelationalDbs) {
-      const inferred = inferMigrationCommand(automation, database.type);
+      const inferred = inferSchemaConfig(automation, database.type);
       lines.push(
         `      - role: ${database.role ?? 'primary'}`,
         `        type: ${database.type}`,
-        ...buildMigrationConfigLines('        ', inferred)
+        ...buildSchemaConfigLines('        ', inferred)
       );
     }
 
@@ -779,9 +877,9 @@ export function buildServiceMigrationLines(
     );
 
     if (accessibleRelationalDbs.length === 1 && accessibleRelationalDbs[0].role === 'primary') {
-      return buildMigrationConfigLines(
+      return buildSchemaConfigLines(
         '    ',
-        inferMigrationCommand(automation, accessibleRelationalDbs[0].type)
+        inferSchemaConfig(automation, accessibleRelationalDbs[0].type)
       );
     }
   }
@@ -916,6 +1014,9 @@ async function pushCicdConfig(
   let rootFiles: string[] = [];
   let bakeDefinition: string | null = null;
   let bakeTargets: string[] = [];
+  let atlasConfigPath: string | null = null;
+  let atlasConfigContent: string | null = null;
+  const migrationScriptContents: Record<string, string> = {};
   let packageJson: RepoAutomationContext['packageJson'] = null;
 
   try {
@@ -944,6 +1045,45 @@ async function pushCicdConfig(
       } catch (error) {
         scopedLogger.warn('Failed to parse package.json, falling back to migration skeleton', {
           repositoryFullName: project.repository.fullName,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (rootFiles.includes('atlas.hcl')) {
+      atlasConfigPath = 'atlas.hcl';
+
+      try {
+        atlasConfigContent = await gateway.getFileContent(
+          session,
+          project.repository.fullName,
+          atlasConfigPath,
+          project.productionBranch || 'main'
+        );
+      } catch (error) {
+        scopedLogger.warn('Failed to read atlas.hcl while inferring migrations', {
+          repositoryFullName: project.repository.fullName,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    for (const scriptPath of resolveManagedMigrationScriptPaths(packageJson)) {
+      try {
+        const content = await gateway.getFileContent(
+          session,
+          project.repository.fullName,
+          scriptPath,
+          project.productionBranch || 'main'
+        );
+
+        if (content) {
+          migrationScriptContents[scriptPath] = content;
+        }
+      } catch (error) {
+        scopedLogger.warn('Failed to inspect migration script while inferring tool', {
+          repositoryFullName: project.repository.fullName,
+          scriptPath,
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }
@@ -1005,6 +1145,9 @@ async function pushCicdConfig(
     packageManager: detectPackageManager(rootFiles, packageJson),
     bakeDefinition,
     bakeTargets,
+    atlasConfigPath,
+    atlasConfigContent,
+    migrationScriptContents,
     packageJson,
   };
   const files: Record<string, string> = {};
@@ -1508,21 +1651,14 @@ async function configureReleaseTrigger(
   });
 }
 
-async function triggerInitialAutoDeployBuilds(
-  project: typeof projects.$inferSelect & {
-    repository: typeof repositories.$inferSelect | null;
-  }
-): Promise<void> {
-  if (!project.repository?.fullName || !project.repository.providerId) {
-    return;
-  }
-
-  const environmentList = await db.query.environments.findMany({
-    where: eq(environments.projectId, project.id),
-    orderBy: (environment, { asc }) => [asc(environment.createdAt)],
-  });
-
-  const refs = Array.from(
+export function resolveInitialAutoDeployRefs(
+  environmentList: Array<{
+    branch?: string | null;
+    autoDeploy?: boolean | null;
+    isPreview?: boolean | null;
+  }>
+): string[] {
+  return Array.from(
     new Set(
       environmentList
         .filter((environment) => environment.autoDeploy && !environment.isPreview)
@@ -1531,8 +1667,53 @@ async function triggerInitialAutoDeployBuilds(
         .map((branch) => (branch.startsWith('refs/heads/') ? branch : `refs/heads/${branch}`))
     )
   );
+}
+
+function formatInitialAutoDeployRefs(refs: string[]): string {
+  return refs.map((ref) => ref.replace(/^refs\/heads\//, '')).join('、');
+}
+
+export function buildInitialAutoDeploySummary(input: {
+  refs: string[];
+  triggeredRefs: string[];
+  missingRefs: string[];
+}): string {
+  if (input.refs.length === 0) {
+    return '没有需要触发的首发构建';
+  }
+
+  const segments: string[] = [];
+
+  if (input.triggeredRefs.length > 0) {
+    segments.push(`已触发 ${input.triggeredRefs.length} 个首发构建`);
+  }
+
+  if (input.missingRefs.length > 0) {
+    segments.push(`跳过不存在的分支：${formatInitialAutoDeployRefs(input.missingRefs)}`);
+  }
+
+  return segments.join('，') || '没有可触发的首发构建';
+}
+
+async function triggerInitialAutoDeployBuilds(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  },
+  onProgress?: StepProgressReporter
+): Promise<void> {
+  if (!project.repository?.fullName || !project.repository.providerId) {
+    await onProgress?.(100, '项目还没有仓库，跳过首发构建触发');
+    return;
+  }
+
+  const environmentList = await db.query.environments.findMany({
+    where: eq(environments.projectId, project.id),
+    orderBy: (environment, { asc }) => [asc(environment.createdAt)],
+  });
+  const refs = resolveInitialAutoDeployRefs(environmentList);
 
   if (refs.length === 0) {
+    await onProgress?.(100, '没有需要触发的首发构建');
     return;
   }
 
@@ -1545,10 +1726,19 @@ async function triggerInitialAutoDeployBuilds(
   const session = await getTeamIntegrationSession({
     integrationId: project.repository.providerId,
     teamId: project.teamId,
-    requiredCapabilities: ['read_repo', 'write_workflow'],
+    requiredCapabilities: requiredCapabilitiesForStep('trigger_initial_builds'),
   });
 
-  for (const ref of refs) {
+  const triggeredRefs: string[] = [];
+  const missingRefs: string[] = [];
+
+  for (let index = 0; index < refs.length; index += 1) {
+    const ref = refs[index];
+    await onProgress?.(
+      Math.round((index / refs.length) * 90),
+      `检查 ${ref.replace(/^refs\/heads\//, '')} 最新提交`
+    );
+
     const sourceCommitSha = await gateway.resolveRefToCommitSha(
       session,
       project.repository.fullName,
@@ -1556,7 +1746,11 @@ async function triggerInitialAutoDeployBuilds(
     );
 
     if (!sourceCommitSha) {
-      throw new Error(`无法解析初始化首发分支 ${ref} 的最新提交`);
+      missingRefs.push(ref);
+      scopedLogger.warn('Skipping missing initial auto-deploy branch', {
+        ref,
+      });
+      continue;
     }
 
     await gateway.triggerReleaseBuild(session, {
@@ -1566,12 +1760,22 @@ async function triggerInitialAutoDeployBuilds(
       sourceCommitSha,
       forceFullBuild: true,
     });
+    triggeredRefs.push(ref);
 
     scopedLogger.info('Triggered initial auto-deploy build', {
       ref,
       sourceCommitSha,
     });
   }
+
+  await onProgress?.(
+    100,
+    buildInitialAutoDeploySummary({
+      refs,
+      triggeredRefs,
+      missingRefs,
+    })
+  );
 }
 
 async function setupNamespace(

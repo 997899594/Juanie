@@ -4,7 +4,11 @@ export function isPlatformManagedMigrationTool(
   tool: MigrationSpecificationRecord['tool'],
   databaseType: DatabaseRecord['type']
 ): boolean {
-  return tool === 'sql' || (tool === 'drizzle' && databaseType === 'postgresql');
+  return (
+    tool === 'sql' ||
+    (tool === 'drizzle' && databaseType === 'postgresql') ||
+    (tool === 'atlas' && ['postgresql', 'mysql'].includes(databaseType))
+  );
 }
 
 export function isPlatformManagedMigrationSpec(

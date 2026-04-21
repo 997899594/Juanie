@@ -1,13 +1,21 @@
 'use client';
 
+import { useForm } from '@tanstack/react-form';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  FormDescription,
+  FormField,
+  FormLabel,
+  FormMessage,
+  FormSection,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/ui/page-header';
 
 interface UserSettingsClientProps {
@@ -41,33 +49,29 @@ interface UserSettingsClientProps {
 
 export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
   const [user, setUser] = useState(initialData.user);
-  const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    name: initialData.user.name ?? '',
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
-    try {
+  const form = useForm({
+    defaultValues: {
+      name: initialData.user.name ?? '',
+    },
+    onSubmit: async ({ value }) => {
       const res = await fetch('/api/user', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(value),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setUser((prev) => ({
-          ...prev,
-          ...data,
-        }));
+      if (!res.ok) {
+        throw new Error('保存失败');
       }
-    } finally {
-      setSaving(false);
-    }
-  };
+
+      const data = await res.json();
+      setUser((prev) => ({
+        ...prev,
+        ...data,
+      }));
+      toast.success('设置已保存');
+    },
+  });
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: '/login' });
@@ -88,7 +92,7 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
   const shellClassName =
     'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
   const subtleClassName =
-    'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
+    'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.78),rgba(255,255,255,0.88))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.03)]';
 
   return (
     <div className="space-y-6">
@@ -96,10 +100,10 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         title="设置"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" className="h-9 px-4">
+            <Button asChild variant="ghost" className="h-9 rounded-full px-4">
               <Link href="/settings/integrations">集成</Link>
             </Button>
-            <Button variant="outline" className="h-9 px-4" onClick={handleSignOut}>
+            <Button variant="ghost" className="h-9 rounded-full px-4" onClick={handleSignOut}>
               退出登录
             </Button>
           </div>
@@ -108,11 +112,11 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         {initialData.overview.stats.map((stat) => (
-          <div key={stat.label} className={`${subtleClassName} rounded-[20px]`}>
+          <div key={stat.label} className={`${subtleClassName} rounded-[20px] px-4 py-3`}>
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>
-            <div className="mt-2 truncate text-sm font-semibold">{stat.value}</div>
+            <div className="mt-1.5 truncate text-sm font-semibold">{stat.value}</div>
           </div>
         ))}
       </div>
@@ -132,29 +136,60 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="grid flex-1 gap-4 md:max-w-xl">
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm">
-                显示名称
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ name: e.target.value })}
-                placeholder="输入你的名称"
-              />
-            </div>
+          <form
+            className="flex-1 md:max-w-xl"
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void form.handleSubmit().catch((error: unknown) => {
+                toast.error(error instanceof Error ? error.message : '保存失败');
+              });
+            }}
+          >
+            <FormSection className="space-y-5 px-0 py-0 shadow-none">
+              <form.Field name="name">
+                {(field) => (
+                  <FormField>
+                    <FormLabel htmlFor={field.name}>显示名称</FormLabel>
+                    <Input
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      placeholder="输入你的名称"
+                    />
+                    <FormDescription>显示在头像和成员列表。</FormDescription>
+                    <FormMessage />
+                  </FormField>
+                )}
+              </form.Field>
 
-            <div className="space-y-2">
-              <Label className="text-sm">邮箱地址</Label>
-              <div className={`${subtleClassName} text-sm text-muted-foreground`}>{user.email}</div>
-            </div>
+              <FormField>
+                <FormLabel htmlFor="user-email">邮箱地址</FormLabel>
+                <div
+                  id="user-email"
+                  className="rounded-[18px] bg-[rgba(243,240,233,0.72)] px-4 py-3 text-sm text-muted-foreground"
+                >
+                  {user.email}
+                </div>
+              </FormField>
 
-            <div className="flex justify-end">
-              <Button type="submit" className="h-9 px-4" disabled={saving}>
-                {saving ? '保存中...' : '保存'}
-              </Button>
-            </div>
+              <div className="flex justify-end">
+                <form.Subscribe
+                  selector={(state) => ({
+                    canSubmit: state.canSubmit,
+                    isSubmitting: state.isSubmitting,
+                  })}
+                >
+                  {({ canSubmit, isSubmitting }) => (
+                    <Button type="submit" className="h-9 px-4" disabled={!canSubmit}>
+                      {isSubmitting ? '保存中...' : '保存'}
+                    </Button>
+                  )}
+                </form.Subscribe>
+              </div>
+            </FormSection>
           </form>
         </div>
       </div>
@@ -165,14 +200,15 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
         </div>
         <div className="space-y-2 p-3">
           {initialData.overview.integrations.length === 0 ? (
-            <div
-              className={`${subtleClassName} flex min-h-40 items-center justify-center text-sm text-muted-foreground`}
-            >
+            <div className="flex min-h-40 items-center justify-center rounded-[18px] bg-[rgba(243,240,233,0.66)] text-sm text-muted-foreground">
               暂无代码托管连接
             </div>
           ) : (
             initialData.overview.integrations.map((integration) => (
-              <div key={integration.id} className={`${subtleClassName} px-4 py-4`}>
+              <div
+                key={integration.id}
+                className="rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.72),rgba(255,255,255,0.88))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset,0_0_0_1px_rgba(17,17,17,0.028)]"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold">{integration.provider}</div>
@@ -180,7 +216,9 @@ export function UserSettingsClient({ initialData }: UserSettingsClientProps) {
                       {integration.accountLabel}
                     </div>
                   </div>
-                  <Badge variant={integration.statusTone === 'danger' ? 'destructive' : 'outline'}>
+                  <Badge
+                    variant={integration.statusTone === 'danger' ? 'destructive' : 'secondary'}
+                  >
                     {integration.statusLabel}
                   </Badge>
                 </div>

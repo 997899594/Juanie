@@ -19,12 +19,12 @@ import { nanoid } from 'nanoid';
 import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlatformSignalBlock } from '@/components/ui/platform-signals';
 import {
   Select,
   SelectContent,
@@ -294,8 +294,8 @@ function getChoiceCardClass(selected: boolean): string {
   return cn(
     'relative cursor-pointer rounded-[20px] px-4 py-4 text-left transition-all duration-150',
     selected
-      ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,246,242,0.94))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(55,53,47,0.07),0_18px_40px_rgba(55,53,47,0.08)]'
-      : 'bg-[rgba(255,255,255,0.78)] shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_8px_24px_rgba(55,53,47,0.03)] hover:-translate-y-px hover:bg-[rgba(255,255,255,0.9)] hover:shadow-[0_1px_0_rgba(255,255,255,0.82)_inset,0_14px_28px_rgba(55,53,47,0.055)]'
+      ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,246,242,0.94))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(55,53,47,0.055),0_12px_28px_rgba(55,53,47,0.055)]'
+      : 'bg-[rgba(255,255,255,0.76)] shadow-[0_1px_0_rgba(255,255,255,0.74)_inset,0_0_0_1px_rgba(55,53,47,0.028),0_6px_18px_rgba(55,53,47,0.024)] hover:bg-[rgba(255,255,255,0.88)] hover:shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_0_0_1px_rgba(55,53,47,0.035),0_10px_22px_rgba(55,53,47,0.036)]'
   );
 }
 
@@ -303,8 +303,8 @@ function getCompactChoiceCardClass(selected: boolean): string {
   return cn(
     'rounded-[18px] px-4 py-4 text-left transition-all duration-150',
     selected
-      ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,246,242,0.94))] shadow-[0_1px_0_rgba(255,255,255,0.88)_inset,0_0_0_1px_rgba(55,53,47,0.06),0_14px_30px_rgba(55,53,47,0.07)]'
-      : 'bg-[rgba(255,255,255,0.74)] shadow-[0_1px_0_rgba(255,255,255,0.74)_inset,0_8px_22px_rgba(55,53,47,0.028)] hover:-translate-y-px hover:bg-[rgba(255,255,255,0.88)] hover:shadow-[0_1px_0_rgba(255,255,255,0.82)_inset,0_12px_26px_rgba(55,53,47,0.05)]'
+      ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,246,242,0.94))] shadow-[0_1px_0_rgba(255,255,255,0.88)_inset,0_0_0_1px_rgba(55,53,47,0.05),0_10px_24px_rgba(55,53,47,0.048)]'
+      : 'bg-[rgba(255,255,255,0.74)] shadow-[0_1px_0_rgba(255,255,255,0.74)_inset,0_0_0_1px_rgba(55,53,47,0.025),0_6px_16px_rgba(55,53,47,0.022)] hover:bg-[rgba(255,255,255,0.86)] hover:shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_0_0_1px_rgba(55,53,47,0.032),0_8px_18px_rgba(55,53,47,0.03)]'
   );
 }
 
@@ -375,7 +375,7 @@ function ChoiceCardButton({
             <span className="min-w-0 break-words">{title}</span>
           </div>
           {selected ? (
-            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[rgba(55,53,47,0.92)] text-background shadow-[0_6px_16px_rgba(55,53,47,0.12)]">
               <Check className="h-3.5 w-3.5" />
             </span>
           ) : null}
@@ -444,14 +444,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   const [currentStep, setCurrentStep] = useState<Step>('mode');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingAnalyze, setIsLoadingAnalyze] = useState(false);
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-  const [submitSnapshot, setSubmitSnapshot] = useState<{
-    platformSignals: {
-      chips: Array<{ key: string; label: string; tone: 'danger' | 'neutral' }>;
-      primarySummary: string | null;
-      nextActionLabel: string | null;
-    };
-  } | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     mode: 'import',
@@ -540,7 +532,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   const analyzeRepository = useCallback(
     async (repositoryFullName: string, branch: string) => {
       setIsLoadingAnalyze(true);
-      setAnalyzeError(null);
 
       try {
         const url = new URL('/api/git/repositories/analyze', window.location.origin);
@@ -551,7 +542,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         const response = await fetch(url);
         if (!response.ok) {
           const error = await response.json();
-          setAnalyzeError(error.error || '识别仓库失败');
+          toast.error(error.error || '识别仓库失败');
           setFormData((prev) => ({
             ...prev,
             services: buildImportFallbackServices(prev.runtimeProfile),
@@ -578,7 +569,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         }));
       } catch (error) {
         console.error('Failed to analyze repository:', error);
-        setAnalyzeError('识别仓库失败');
+        toast.error('识别仓库失败');
         setFormData((prev) => ({
           ...prev,
           services: buildImportFallbackServices(prev.runtimeProfile),
@@ -615,8 +606,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   }, [formData.previewDatabaseStrategy, isolatedCloneBlockedMessage]);
 
   const updateTeamId = (teamId: string) => {
-    setSubmitSnapshot(null);
-    setAnalyzeError(null);
     setRepositories([]);
     setSearchQuery('');
     setFormData((prev) => ({
@@ -629,8 +618,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   };
 
   const switchMode = (mode: CreateMode) => {
-    setSubmitSnapshot(null);
-    setAnalyzeError(null);
     setCurrentStep('mode');
     setSearchQuery('');
     setRepositories([]);
@@ -720,7 +707,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    setSubmitSnapshot(null);
 
     try {
       const result = await submitCreateProject({
@@ -756,15 +742,13 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         return;
       }
 
-      setSubmitSnapshot(result.snapshot);
+      toast.error(result.snapshot.platformSignals.primarySummary ?? '创建项目失败，请稍后重试', {
+        description: result.snapshot.platformSignals.nextActionLabel ?? undefined,
+      });
     } catch (error) {
       console.error('Failed to create project:', error);
-      setSubmitSnapshot({
-        platformSignals: {
-          chips: [{ key: 'create:request-failed', label: '创建项目失败', tone: 'danger' }],
-          primarySummary: '创建请求失败，请稍后重试',
-          nextActionLabel: '检查网络后重试',
-        },
+      toast.error('创建请求失败，请稍后重试', {
+        description: '检查网络后重试',
       });
     } finally {
       setIsSubmitting(false);
@@ -810,16 +794,29 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-8 overflow-x-auto pb-1">
-        <div className="flex min-w-max items-center justify-between">
+      <div className="mb-8 rounded-[24px] bg-[rgba(251,250,248,0.72)] px-2 py-2">
+        <div className="mb-3 flex items-center justify-between gap-3 px-2">
+          <div>
+            <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+              创建项目
+            </div>
+            <div className="mt-1 text-sm font-medium text-foreground">
+              {STEPS[currentStepIndex]?.title}
+            </div>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {currentStepIndex + 1} / {STEPS.length}
+          </div>
+        </div>
+        <div className="flex min-w-max items-center justify-between gap-2 overflow-x-auto pb-1">
           {STEPS.map((step, index) => (
             <div key={step.id} className="flex items-center">
               <div
                 className={cn(
-                  'flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium',
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-medium shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]',
                   index <= currentStepIndex
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-muted-foreground'
+                    : 'bg-white/75 text-muted-foreground'
                 )}
               >
                 {index < currentStepIndex ? <Check className="h-4 w-4" /> : index + 1}
@@ -835,8 +832,8 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               {index < STEPS.length - 1 && (
                 <div
                   className={cn(
-                    'mx-2 h-0.5 w-12 sm:w-20',
-                    index < currentStepIndex ? 'bg-primary' : 'bg-border'
+                    'mx-2 h-px w-10 shrink-0 sm:w-16',
+                    index < currentStepIndex ? 'bg-primary/55' : 'bg-border/60'
                   )}
                 />
               )}
@@ -846,14 +843,6 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
       </div>
 
       <div className="space-y-6">
-        {submitSnapshot && (
-          <PlatformSignalBlock
-            chips={submitSnapshot.platformSignals.chips}
-            summary={submitSnapshot.platformSignals.primarySummary}
-            nextActionLabel={submitSnapshot.platformSignals.nextActionLabel}
-          />
-        )}
-
         {currentStep === 'mode' && (
           <div className="space-y-6">
             <div className="space-y-4">
@@ -1047,20 +1036,13 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         {currentStep === 'config' && (
           <div className="space-y-6">
             {isLoadingAnalyze ? (
-              <div className="flex flex-col items-center justify-center py-12">
+              <div className="ui-floating flex flex-col items-center justify-center py-12">
                 <Loader2 className="mb-4 h-8 w-8 animate-spin text-foreground" />
                 <p className="text-sm text-muted-foreground">正在识别仓库结构...</p>
               </div>
             ) : null}
 
-            {analyzeError ? (
-              <div className="ui-floating p-4">
-                <p className="text-sm text-foreground">{analyzeError}</p>
-                <p className="mt-1 text-xs text-muted-foreground">已回退到平台默认服务配置</p>
-              </div>
-            ) : null}
-
-            <SectionHeading title="把发布参数一次配齐" />
+            <SectionHeading title="项目配置" />
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -1256,79 +1238,43 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
           <div className="space-y-6">
             <SectionHeading title="最后确认" />
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="ui-floating px-4 py-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                  项目
-                </div>
-                <div className="mt-3 space-y-3 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">名称</span>
-                    <span className="min-w-0 max-w-[60%] break-words text-right font-medium">
-                      {formData.name || '-'}
-                    </span>
+            <div className="ui-floating px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0 space-y-2">
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    项目摘要
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">仓库</span>
-                    <span className="min-w-0 max-w-[60%] break-all text-right font-medium">
-                      {formData.mode === 'import'
-                        ? formData.repositoryFullName
-                        : `${formData.repositoryName}（${formData.isPrivate ? '私有' : '公开'}）`}
-                    </span>
+                  <div className="text-lg font-semibold text-foreground">
+                    {formData.name || '-'}
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">生产分支</span>
-                    <span className="min-w-0 max-w-[60%] break-all text-right font-medium">
-                      {formData.productionBranch}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">环境拓扑</span>
-                    <span className="min-w-0 max-w-[60%] break-words text-right font-medium">
-                      {environmentTemplateLabel}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">主域名</span>
-                    <span className="min-w-0 max-w-[60%] break-all text-right font-medium">
-                      {formData.useCustomDomain ? formData.domain : '平台默认域名'}
-                    </span>
+                  <div className="text-sm text-muted-foreground">
+                    {formData.mode === 'import'
+                      ? formData.repositoryFullName
+                      : `${formData.repositoryName} · ${formData.isPrivate ? '私有仓库' : '公开仓库'}`}
                   </div>
                 </div>
-              </div>
-
-              <div className="ui-floating px-4 py-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                  发布策略
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Badge variant={formData.autoDeploy ? 'default' : 'secondary'}>
-                    基础环境自动部署：{formData.autoDeploy ? '开启' : '关闭'}
+                    {formData.autoDeploy ? '自动部署' : '手动部署'}
                   </Badge>
+                  <Badge variant="secondary">{deploymentStrategyLabel}</Badge>
+                  <Badge variant="secondary">{previewDatabaseStrategyLabel}</Badge>
                   <Badge variant="secondary">
-                    生产发布：
-                    {getEnvironmentDeploymentStrategyLabel(formData.productionDeploymentStrategy) ??
-                      formData.productionDeploymentStrategy}
-                  </Badge>
-                  <Badge variant="secondary">
-                    预览库：
-                    {getEnvironmentDatabaseStrategyLabel(formData.previewDatabaseStrategy) ??
-                      formData.previewDatabaseStrategy}
-                  </Badge>
-                  <Badge variant="secondary">环境拓扑：{environmentTemplateLabel}</Badge>
-                  <Badge variant="outline">
-                    资源档位：
                     {createRuntimeProfiles.find(
                       (profile) => profile.value === formData.runtimeProfile
                     )?.label ?? formData.runtimeProfile}
                   </Badge>
                 </div>
               </div>
-            </div>
-
-            <div className="ui-control p-4">
-              <div className="text-sm font-medium">最终创建</div>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <div className="ui-control-muted px-4 py-3">
+                  <div className="text-xs text-muted-foreground">环境链路</div>
+                  <div className="mt-1 text-sm font-medium">{environmentTemplateLabel}</div>
+                </div>
+                <div className="ui-control-muted px-4 py-3">
+                  <div className="text-xs text-muted-foreground">生产分支</div>
+                  <div className="mt-1 text-sm font-medium">{formData.productionBranch}</div>
+                </div>
                 <div className="ui-control-muted px-4 py-3">
                   <div className="text-xs text-muted-foreground">启用服务</div>
                   <div className="mt-1 text-sm font-medium">{activeServices.length} 个</div>
@@ -1337,13 +1283,9 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   <div className="text-xs text-muted-foreground">数据库</div>
                   <div className="mt-1 text-sm font-medium">{formData.databases.length} 个</div>
                 </div>
-                <div className="ui-control-muted px-4 py-3">
-                  <div className="text-xs text-muted-foreground">环境链路</div>
-                  <div className="mt-1 text-sm font-medium">{environmentTemplateLabel}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {deploymentStrategyLabel} · {previewDatabaseStrategyLabel}
-                  </div>
-                </div>
+              </div>
+              <div className="mt-3 text-sm text-muted-foreground">
+                访问域名：{formData.useCustomDomain ? formData.domain : '平台默认域名'}
               </div>
             </div>
 
@@ -1372,7 +1314,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                               }
                             />
                             <div className="min-w-0 break-words font-medium">{service.name}</div>
-                            <Badge variant="outline">{service.type}</Badge>
+                            <Badge variant="secondary">{service.type}</Badge>
                           </div>
                           <div className="min-w-0 break-all pl-11 text-xs text-muted-foreground">
                             {service.appDir} · 启动命令 {service.run.command}
@@ -1566,8 +1508,9 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                     <Button
                       key={databaseType.value}
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
+                      className="rounded-full px-3"
                       onClick={() =>
                         setFormData((prev) => ({
                           ...prev,
@@ -1613,7 +1556,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                               onChange={(event) => updateDatabase({ name: event.target.value })}
                               className="h-9 w-44 min-w-0"
                             />
-                            <Badge variant="outline">
+                            <Badge variant="secondary">
                               {
                                 DATABASE_TYPE_OPTIONS.find(
                                   (option) => option.value === database.type
@@ -1729,8 +1672,8 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
       <div className="pointer-events-none sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-20 mt-6 -mx-4 px-4 py-3 md:static md:mx-0 md:px-0 md:py-0">
         <div className="pointer-events-auto ui-floating flex items-center justify-between gap-3 p-3 md:bg-transparent md:p-0 md:shadow-none">
           <Button
-            variant="outline"
-            className="px-4"
+            variant="ghost"
+            className="rounded-full px-4"
             onClick={handleBack}
             disabled={isFirstStep || isSubmitting}
           >
