@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
+import { BSON, MongoClient, ObjectId } from 'mongodb';
+import mysql from 'mysql2/promise';
 import { Client as PgClient } from 'pg';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
@@ -11,7 +13,11 @@ import {
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
 
-interface MigrationFile {
+const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
+  ...args: string[]
+) => (...args: unknown[]) => Promise<unknown>;
+
+export interface MigrationFile {
   name: string;
   content: string;
 }
@@ -23,11 +29,16 @@ interface Database {
   name: string;
 }
 
+export interface MigrationExecutionSummary {
+  appliedCount: number;
+  skippedCount: number;
+}
+
 export async function executeMigrationsForDatabase(
   database: Database,
   migrationFiles: MigrationFile[],
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => Promise<void>
-): Promise<number> {
+): Promise<MigrationExecutionSummary> {
   const log = onLog || (async () => {});
 
   // 1. 获取已执行的迁移
@@ -47,24 +58,38 @@ export async function executeMigrationsForDatabase(
 
   if (pending.length === 0) {
     await log(`✅ ${database.name}: 无待执行迁移`, 'info');
-    return 0;
+    return {
+      appliedCount: 0,
+      skippedCount: migrationFiles.length,
+    };
   }
 
   await log(`🔄 ${database.name}: 发现 ${pending.length} 个待执行迁移`, 'info');
 
   // 3. 按顺序执行
+  let appliedCount = 0;
+  let skippedCount = migrationFiles.length - pending.length;
+
   for (const file of pending) {
-    await executeSingleMigration(database, file, log);
+    const result = await executeSingleMigration(database, file, log);
+    if (result === 'applied') {
+      appliedCount += 1;
+    } else {
+      skippedCount += 1;
+    }
   }
 
-  return pending.length;
+  return {
+    appliedCount,
+    skippedCount,
+  };
 }
 
 async function executeSingleMigration(
   database: Database,
   file: MigrationFile,
   log: (message: string, level: 'info' | 'warn' | 'error') => Promise<void>
-): Promise<void> {
+): Promise<'applied' | 'skipped'> {
   const checksum = crypto.createHash('sha256').update(file.content).digest('hex');
 
   // 检查是否已存在（防止并发）
@@ -78,7 +103,7 @@ async function executeSingleMigration(
   if (existing) {
     if (existing.status === 'success') {
       await log(`⏭️  ${file.name} 已执行，跳过`, 'info');
-      return;
+      return 'skipped';
     }
     if (existing.checksum !== checksum) {
       throw new Error(`迁移文件 ${file.name} 内容已变更，禁止执行`);
@@ -122,6 +147,7 @@ async function executeSingleMigration(
       .where(eq(databaseMigrations.id, migration.id));
 
     await log(`✅ ${file.name} 执行成功`, 'info');
+    return 'applied';
   } catch (err: any) {
     // 标记失败
     await db
@@ -150,14 +176,136 @@ async function executePostgreSQLMigration(database: Database, sql: string): Prom
   }
 }
 
-async function executeMySQLMigration(_database: Database, _sql: string): Promise<string> {
-  // TODO: 实现 MySQL 支持
-  throw new Error('MySQL 迁移暂未实现');
+function summarizeMySQLRowsAffected(result: unknown): number | null {
+  if (!result) {
+    return null;
+  }
+
+  if (Array.isArray(result)) {
+    const total = result.reduce((sum, item) => sum + (summarizeMySQLRowsAffected(item) ?? 0), 0);
+    return total > 0 ? total : null;
+  }
+
+  if (typeof result === 'object' && 'affectedRows' in result) {
+    const affectedRows = result.affectedRows;
+    return typeof affectedRows === 'number' ? affectedRows : null;
+  }
+
+  return null;
 }
 
-async function executeMongoDBMigration(_database: Database, _script: string): Promise<string> {
-  // TODO: 实现 MongoDB 支持
-  throw new Error('MongoDB 迁移暂未实现');
+export async function executeMySQLMigration(database: Database, sql: string): Promise<string> {
+  if (!database.connectionString) {
+    throw new Error('MySQL connectionString 为空');
+  }
+
+  const connection = await mysql.createConnection({
+    uri: database.connectionString,
+    multipleStatements: true,
+  });
+
+  try {
+    const [rows] = await connection.query(sql);
+    const affectedRows = summarizeMySQLRowsAffected(rows);
+    return affectedRows === null
+      ? 'MySQL migration executed successfully'
+      : `Rows affected: ${affectedRows}`;
+  } finally {
+    await connection.end().catch(() => undefined);
+  }
+}
+
+function normalizeMongoMigrationScript(script: string): string {
+  return script
+    .replace(/^\s*export\s+default\s+/gm, 'module.exports = ')
+    .replace(/^\s*export\s+async\s+function\s+up\s*\(/gm, 'async function up(')
+    .replace(/^\s*export\s+function\s+up\s*\(/gm, 'function up(')
+    .replace(/^\s*export\s+const\s+up\s*=/gm, 'const up =')
+    .replace(/^\s*export\s+\{\s*up(?:\s+as\s+default)?\s*\}\s*;?\s*$/gm, '');
+}
+
+function formatMongoMigrationResult(result: unknown): string {
+  if (result === undefined) {
+    return 'MongoDB migration executed successfully';
+  }
+
+  if (typeof result === 'string') {
+    return result;
+  }
+
+  if (
+    typeof result === 'number' ||
+    typeof result === 'boolean' ||
+    typeof result === 'bigint' ||
+    result === null
+  ) {
+    return `MongoDB migration result: ${String(result)}`;
+  }
+
+  try {
+    return `MongoDB migration result: ${JSON.stringify(result)}`;
+  } catch {
+    return 'MongoDB migration executed successfully';
+  }
+}
+
+export async function executeMongoDBMigration(database: Database, script: string): Promise<string> {
+  if (!database.connectionString) {
+    throw new Error('MongoDB connectionString 为空');
+  }
+
+  const client = new MongoClient(database.connectionString, {
+    maxPoolSize: 1,
+  });
+  await client.connect();
+
+  try {
+    const dbHandle = client.db();
+    const moduleRef: { exports: unknown } = { exports: {} };
+    const exportsRef = moduleRef.exports as Record<string, unknown>;
+    const runner = new AsyncFunction(
+      'client',
+      'db',
+      'ObjectId',
+      'BSON',
+      'module',
+      'exports',
+      `
+${normalizeMongoMigrationScript(script)}
+
+if (typeof module.exports === 'function') {
+  return await module.exports({ client, db, ObjectId, BSON });
+}
+
+if (module.exports && typeof module.exports === 'object' && typeof module.exports.up === 'function') {
+  return await module.exports.up({ client, db, ObjectId, BSON });
+}
+
+if (typeof exports.default === 'function') {
+  return await exports.default({ client, db, ObjectId, BSON });
+}
+
+if (typeof exports.up === 'function') {
+  return await exports.up({ client, db, ObjectId, BSON });
+}
+
+if (typeof up === 'function') {
+  return await up({ client, db, ObjectId, BSON });
+}
+
+return undefined;
+`
+    );
+
+    const result = await runner(client, dbHandle, ObjectId, BSON, moduleRef, exportsRef);
+    return formatMongoMigrationResult(result);
+  } catch (error) {
+    throw new Error(
+      `MongoDB migration execution failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+  } finally {
+    await client.close().catch(() => undefined);
+  }
 }
 
 async function ensureDrizzleLedger(client: PgClient): Promise<void> {
@@ -308,11 +456,9 @@ export async function executeDrizzleMigrationsForSpec(
     revision
   );
   const journalEntries = parseDrizzleJournalEntries(journalContent);
-  const files = (await fetchMigrationFilesFromRepoPath(
-    spec.specification.projectId,
-    migrationPath,
-    revision
-  )).filter((file) => file.name.endsWith('.sql'));
+  const files = (
+    await fetchMigrationFilesFromRepoPath(spec.specification.projectId, migrationPath, revision)
+  ).filter((file) => file.name.endsWith('.sql'));
 
   const fileByName = new Map(files.map((file) => [file.name, file]));
   const declaredFiles =

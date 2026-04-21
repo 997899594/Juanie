@@ -7,6 +7,7 @@ import {
   type ReleaseStatus,
   releases,
 } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import { resolveAndCreateMigrationRuns } from '@/lib/migrations';
 import { addDeploymentJob, addMigrationJob } from '@/lib/queue';
 import { publishDeploymentRealtimeSnapshot } from '@/lib/realtime/deployments';
@@ -40,6 +41,7 @@ const supersedableRunStatuses: MigrationRunStatus[] = [
   'awaiting_approval',
   'awaiting_external_completion',
 ];
+const releaseOrchestrationLogger = logger.child({ component: 'release-orchestration' });
 
 export class ReleaseApprovalRequiredError extends Error {
   constructor(
@@ -95,7 +97,9 @@ export async function updateReleaseStatus(
 
 export async function persistReleaseRecapSafely(releaseId: string) {
   await persistReleaseRecapById(releaseId).catch((recapError) => {
-    console.error(`[Release] Failed to persist recap for ${releaseId}:`, recapError);
+    releaseOrchestrationLogger.error('Failed to persist release recap', recapError, {
+      releaseId,
+    });
   });
 }
 

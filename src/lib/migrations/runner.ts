@@ -16,10 +16,10 @@ import {
   createJob,
   deleteJob,
   getEvents,
-  getIsConnected,
   getJob,
   getPodLogs,
   getPods,
+  isK8sAvailable,
 } from '@/lib/k8s';
 import {
   executeDrizzleMigrationsForSpec,
@@ -613,7 +613,7 @@ async function runSqlMigration(
   const logs: string[] = [];
 
   try {
-    const appliedCount = await executeMigrationsForDatabase(spec.database, files, async (message) => {
+    const summary = await executeMigrationsForDatabase(spec.database, files, async (message) => {
       logs.push(message);
       await appendRunLog(runId, message);
     });
@@ -633,7 +633,7 @@ async function runSqlMigration(
       .update(migrationRuns)
       .set({
         status: 'success',
-        appliedCount,
+        appliedCount: summary.appliedCount,
         finishedAt,
         durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
         updatedAt: finishedAt,
@@ -665,7 +665,8 @@ async function runDrizzleMigration(
   options: ExecuteMigrationRunOptions
 ): Promise<void> {
   const path = resolveMigrationPath(spec.specification, spec.database.type) ?? 'drizzle';
-  const revision = options.sourceCommitSha || options.sourceRef || spec.environment.branch || 'main';
+  const revision =
+    options.sourceCommitSha || options.sourceRef || spec.environment.branch || 'main';
 
   const [item] = await db
     .insert(migrationRunItems)
@@ -729,7 +730,7 @@ async function runCommandMigration(
   imageUrl: string
 ): Promise<void> {
   const namespace = spec.environment.namespace;
-  if (!getIsConnected() || !namespace) {
+  if (!isK8sAvailable() || !namespace) {
     await markRunFailed(
       runId,
       'MIGRATION_JOB_CREATE_FAILED',

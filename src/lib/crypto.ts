@@ -6,11 +6,13 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { logger } from '@/lib/logger';
 
 const ALGORITHM = 'aes-256-gcm';
 const K8S_SECRET_NAMESPACE = 'juanie';
 const K8S_SECRET_NAME = 'juanie-master-key';
 const K8S_SECRET_KEY = 'masterKey';
+const cryptoLogger = logger.child({ component: 'crypto' });
 
 // 缓存已加载的 master key（进程内单例）
 let cachedMasterKey: Buffer | null = null;
@@ -33,8 +35,8 @@ export async function getMasterKey(): Promise<Buffer> {
 
   // 1. 尝试从 K8s Secret 读取
   try {
-    const { getK8sClient, getIsConnected } = await import('@/lib/k8s');
-    if (getIsConnected()) {
+    const { getK8sClient, isK8sAvailable } = await import('@/lib/k8s');
+    if (isK8sAvailable()) {
       const { core } = getK8sClient();
 
       try {
@@ -49,7 +51,10 @@ export async function getMasterKey(): Promise<Buffer> {
           if (cachedMasterKey.length !== 32) {
             throw new Error(`Master key must be 32 bytes, got ${cachedMasterKey.length}`);
           }
-          console.log('[crypto] Master key loaded from K8s Secret');
+          cryptoLogger.info('Master key loaded from Kubernetes secret', {
+            namespace: K8S_SECRET_NAMESPACE,
+            secretName: K8S_SECRET_NAME,
+          });
           return cachedMasterKey;
         }
       } catch (readErr: unknown) {
@@ -73,13 +78,16 @@ export async function getMasterKey(): Promise<Buffer> {
         },
       });
       cachedMasterKey = Buffer.from(newKeyHex, 'hex');
-      console.log(
-        '[crypto] Master key auto-generated and saved to K8s Secret juanie/juanie-master-key'
-      );
+      cryptoLogger.info('Master key auto-generated and stored in Kubernetes', {
+        namespace: K8S_SECRET_NAMESPACE,
+        secretName: K8S_SECRET_NAME,
+      });
       return cachedMasterKey;
     }
   } catch (e) {
-    console.warn('[crypto] K8s unavailable, falling back to env var:', (e as Error).message);
+    cryptoLogger.warn('Kubernetes secret unavailable, falling back to environment variable', {
+      reason: e instanceof Error ? e.message : String(e),
+    });
   }
 
   // 2. Fallback：从环境变量读取（本地开发）

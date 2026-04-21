@@ -4,6 +4,7 @@ import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { deployments } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import {
   createDeploymentLogRealtimeSubscriber,
   loadDeploymentRealtimeSummary,
@@ -12,6 +13,7 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const routeLogger = logger.child({ route: 'api/projects/deployment-log-stream' });
 
 function isTerminalDeploymentStatus(status: string | null | undefined): boolean {
   return (
@@ -73,7 +75,10 @@ export async function GET(
 
         const runSerialized = (task: () => Promise<void>) => {
           emitLock = emitLock.then(task).catch((error) => {
-            console.error('Deployment log stream task failed:', error);
+            routeLogger.error('Deployment log stream task failed', error, {
+              projectId: id,
+              deploymentId: depId,
+            });
           });
         };
 
@@ -172,11 +177,17 @@ export async function GET(
                 startPollingFallback();
               }
             } catch (error) {
-              console.error('Failed to subscribe to deployment log realtime events:', error);
+              routeLogger.error('Failed to subscribe to deployment log realtime events', error, {
+                projectId: id,
+                deploymentId: depId,
+              });
               startPollingFallback();
             }
           } catch (err) {
-            console.error('Log stream failed:', err);
+            routeLogger.error('Deployment log stream failed', err, {
+              projectId: id,
+              deploymentId: depId,
+            });
             sendEvent({ type: 'error', message: 'Failed to fetch logs' });
             await cleanup();
           }

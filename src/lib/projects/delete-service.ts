@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import { addProjectDeleteJob } from '@/lib/queue';
 import { publishProjectRealtimeSnapshot } from '@/lib/realtime/projects';
 
@@ -8,6 +9,8 @@ export interface ProjectDeletionRequestResult {
   status: 'deleting';
   alreadyDeleting: boolean;
 }
+
+const projectDeleteServiceLogger = logger.child({ component: 'project-delete-service' });
 
 export async function requestProjectDeletion(
   projectId: string
@@ -27,7 +30,10 @@ export async function requestProjectDeletion(
   if (project.status === 'deleting') {
     await addProjectDeleteJob(projectId);
     await publishProjectRealtimeSnapshot(projectId).catch((error) => {
-      console.warn(`Failed to publish deleting project snapshot for ${projectId}:`, error);
+      projectDeleteServiceLogger.warn('Failed to publish deleting project snapshot', {
+        projectId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     });
     return {
       status: 'deleting',
@@ -58,7 +64,10 @@ export async function requestProjectDeletion(
   }
 
   await publishProjectRealtimeSnapshot(projectId).catch((error) => {
-    console.warn(`Failed to publish deleting project snapshot for ${projectId}:`, error);
+    projectDeleteServiceLogger.warn('Failed to publish deleting project snapshot', {
+      projectId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
   });
 
   return {

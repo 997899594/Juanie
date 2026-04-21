@@ -4,7 +4,9 @@ export interface DrizzleJournalEntry {
   when: number;
 }
 
-export function parseDrizzleJournalEntries(content: string | null | undefined): DrizzleJournalEntry[] {
+export function parseDrizzleJournalEntries(
+  content: string | null | undefined
+): DrizzleJournalEntry[] {
   if (!content) {
     return [];
   }
@@ -27,8 +29,7 @@ export function parseDrizzleJournalEntries(content: string | null | undefined): 
 
   return entries
     .map((entry, index) => ({
-      idx:
-        typeof entry?.idx === 'number' && Number.isFinite(entry.idx) ? entry.idx : index,
+      idx: typeof entry?.idx === 'number' && Number.isFinite(entry.idx) ? entry.idx : index,
       tag: typeof entry?.tag === 'string' ? entry.tag.trim() : '',
       when:
         typeof entry?.when === 'number' && Number.isFinite(entry.when) ? entry.when : Date.now(),

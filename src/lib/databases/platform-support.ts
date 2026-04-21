@@ -51,7 +51,7 @@ const databasePlatformSupport: Record<PlatformDatabaseType, DatabasePlatformSupp
     provisionTypes: ['standalone', 'external'],
     defaultProvisionType: 'standalone',
     supportsCapabilities: false,
-    supportsAutomatedMigrations: false,
+    supportsAutomatedMigrations: true,
     previewCloneProvisionTypes: [],
   },
   redis: {

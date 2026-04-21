@@ -7,6 +7,7 @@ import {
 } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { databaseCapabilities, normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
   getDatabaseSelectionValidationIssues,
   getDefaultDatabaseProvisionType,
@@ -19,17 +20,11 @@ import { db } from '@/lib/db';
 import { databases, environments, services } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { pickProductionEnvironment } from '@/lib/environments/model';
-import { getIsConnected, initK8sClient } from '@/lib/k8s';
+import { isK8sAvailable } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 import { injectDatabaseEnvVars, provisionDatabase } from '@/lib/queue/project-init';
 
-function getHasK8s(): boolean {
-  try {
-    initK8sClient();
-    return getIsConnected();
-  } catch {
-    return false;
-  }
-}
+const routeLogger = logger.child({ route: 'api/projects/databases' });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -190,6 +185,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           type,
           plan,
           provisionType: resolvedProvisionType,
+          runtime: inferDatabaseRuntime(type, resolvedProvisionType),
           scope,
           role,
           capabilities: normalizedCapabilities,
@@ -198,7 +194,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         })
         .returning();
 
-      const hasK8s = getHasK8s();
+      const hasK8s = isK8sAvailable();
       await provisionDatabase(dbRecord, project, hasK8s);
 
       const updated = await db.query.databases.findFirst({
@@ -209,15 +205,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         await injectDatabaseEnvVars(updated, project, updated.environmentId ?? null);
         // Immediately sync to K8s so the env var is available without waiting for next deploy
         if (updated.environmentId) {
-          await syncEnvVarsToK8s(id, updated.environmentId).catch((e) =>
-            console.warn('[databases POST] syncEnvVarsToK8s failed:', e)
-          );
+          await syncEnvVarsToK8s(id, updated.environmentId).catch((e) => {
+            routeLogger.warn('Database env vars sync to Kubernetes failed after provisioning', {
+              projectId: id,
+              databaseId: updated.id,
+              environmentId: updated.environmentId,
+              reason: e instanceof Error ? e.message : String(e),
+            });
+          });
         }
       }
 
       return NextResponse.json(updated, { status: 201 });
     } catch (error) {
-      console.error('Failed to provision database:', error);
+      routeLogger.error('Failed to provision database', error, {
+        projectId: id,
+        databaseName: name,
+        databaseType: type,
+      });
       return NextResponse.json(
         {
           error: 'Failed to provision database',

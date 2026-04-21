@@ -6,12 +6,17 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import { logger } from '@/lib/logger';
 import {
   buildEnvironmentTrackingBranchName,
   buildReleaseEnvironmentTagName,
 } from '@/lib/releases/environment-tracking-names';
 
 export { buildEnvironmentTrackingBranchName, buildReleaseEnvironmentTagName };
+
+const releaseEnvironmentTrackingLogger = logger.child({
+  component: 'release-environment-tracking',
+});
 
 export async function syncReleaseGitTracking(releaseId: string): Promise<{
   branchSynced: boolean;
@@ -89,6 +94,9 @@ export async function syncReleaseGitTracking(releaseId: string): Promise<{
 
 export async function syncReleaseGitTrackingSafely(releaseId: string): Promise<void> {
   await syncReleaseGitTracking(releaseId).catch((error) => {
-    console.warn(`[Release] Failed to sync release git tracking for ${releaseId}:`, error);
+    releaseEnvironmentTrackingLogger.warn('Failed to sync release git tracking', {
+      releaseId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
   });
 }

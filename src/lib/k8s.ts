@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { Writable } from 'node:stream';
 import * as k8s from '@kubernetes/client-node';
+import { logger } from '@/lib/logger';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
 let k8sAppsApi: k8s.AppsV1Api | null = null;
@@ -9,6 +10,7 @@ let k8sNetworkingApi: k8s.NetworkingV1Api | null = null;
 let k8sBatchApi: k8s.BatchV1Api | null = null;
 let kubeConfig: k8s.KubeConfig | null = null;
 let initAttempted = false;
+const k8sLogger = logger.child({ component: 'k8s' });
 
 export function initK8sClient(): void {
   if (initAttempted) return;
@@ -22,27 +24,27 @@ export function initK8sClient(): void {
     if (process.env.KUBERNETES_SERVICE_HOST) {
       // Running in K8s cluster, use in-cluster config (ServiceAccount)
       kc.loadFromCluster();
-      console.log('Using in-cluster Kubernetes configuration');
+      k8sLogger.info('Using in-cluster Kubernetes configuration');
     } else if (process.env.KUBECONFIG_CONTENT) {
       // External kubeconfig provided as string
       kc.loadFromString(process.env.KUBECONFIG_CONTENT);
-      console.log('Using KUBECONFIG_CONTENT');
+      k8sLogger.info('Using KUBECONFIG_CONTENT');
     } else {
       // Try to load from file or default
       const kubeconfigPath = process.env.KUBECONFIG || `${process.env.HOME}/.kube/config`;
       if (existsSync(kubeconfigPath)) {
         kc.loadFromFile(kubeconfigPath);
-        console.log(`Using kubeconfig from ${kubeconfigPath}`);
+        k8sLogger.info('Using kubeconfig from file', { kubeconfigPath });
       } else {
         kc.loadFromDefault();
-        console.log('Using default kubeconfig');
+        k8sLogger.info('Using default kubeconfig');
       }
     }
 
     // Check if we have a valid cluster config
     const currentCluster = kc.getCurrentCluster();
     if (!currentCluster) {
-      console.log('⚠️  No Kubernetes cluster configured');
+      k8sLogger.warn('No Kubernetes cluster configured');
       return;
     }
 
@@ -52,12 +54,11 @@ export function initK8sClient(): void {
     k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
     k8sNetworkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
     k8sBatchApi = kc.makeApiClient(k8s.BatchV1Api);
-    console.log('✅ Kubernetes client initialized');
+    k8sLogger.info('Kubernetes client initialized');
   } catch (error) {
-    console.log(
-      '⚠️  Failed to initialize Kubernetes client:',
-      error instanceof Error ? error.message : 'Unknown error'
-    );
+    k8sLogger.warn('Failed to initialize Kubernetes client', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }
 
@@ -148,6 +149,26 @@ async function doesNamespaceExist(name: string): Promise<boolean> {
 
     throw e;
   }
+}
+
+export async function waitForNamespaceCreated(input: {
+  name: string;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}): Promise<boolean> {
+  const timeoutMs = input.timeoutMs ?? 45_000;
+  const pollIntervalMs = input.pollIntervalMs ?? 2_000;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (await doesNamespaceExist(input.name)) {
+      return true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return doesNamespaceExist(input.name);
 }
 
 export async function waitForNamespaceDeleted(input: {
@@ -573,6 +594,11 @@ export function getIsConnected(): boolean {
   );
 }
 
+export function isK8sAvailable(): boolean {
+  initK8sClient();
+  return getIsConnected();
+}
+
 const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
 const LEGACY_DEPLOYMENT_ANNOTATIONS_TO_CLEAR = [
   'juanie.dev/last-applied-configuration',
@@ -785,7 +811,10 @@ export async function rolloutRestartDeployments(namespace: string): Promise<void
       .map((d) => d.metadata?.name)
       .filter((n): n is string => Boolean(n));
   } catch (e) {
-    console.warn(`[rolloutRestart] could not list deployments in ${namespace}:`, e);
+    k8sLogger.warn('Could not list deployments for rollout restart', {
+      namespace,
+      errorMessage: e instanceof Error ? e.message : String(e),
+    });
     return;
   }
 
@@ -819,14 +848,20 @@ export async function rolloutRestartDeployments(namespace: string): Promise<void
         };
         await apps.replaceNamespacedDeployment({ namespace, name: deploymentName, body: updated });
       } catch (e) {
-        console.warn(`[rolloutRestart] failed for ${namespace}/${deploymentName}:`, e);
+        k8sLogger.warn('Failed to restart deployment', {
+          namespace,
+          deploymentName,
+          errorMessage: e instanceof Error ? e.message : String(e),
+        });
       }
     })
   );
 
-  console.log(
-    `✅ Rolling restart triggered for ${deploymentNames.length} deployment(s) in ${namespace}: ${deploymentNames.join(', ')}`
-  );
+  k8sLogger.info('Rolling restart triggered for deployments', {
+    namespace,
+    deploymentCount: deploymentNames.length,
+    deploymentNames,
+  });
 }
 
 export async function deleteDeployment(namespace: string, name: string): Promise<void> {
@@ -853,6 +888,7 @@ export async function createService(
     port: number;
     targetPort: number;
     type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
+    selector?: Record<string, string>;
   }
 ): Promise<void> {
   const { core } = getK8sClient();
@@ -865,7 +901,7 @@ export async function createService(
       metadata: { name },
       spec: {
         type: spec.type || 'ClusterIP',
-        selector: { app: name },
+        selector: spec.selector || { app: name },
         ports: [
           {
             port: spec.port,
@@ -926,6 +962,7 @@ export async function upsertService(
         port: spec.port,
         targetPort: typeof spec.targetPort === 'number' ? spec.targetPort : spec.port,
         type: spec.type,
+        selector: spec.selector,
       });
       return;
     }
@@ -939,6 +976,74 @@ export async function deleteService(namespace: string, name: string): Promise<vo
 
   try {
     await core.deleteNamespacedService({ namespace, name });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) !== 404) {
+      throw e;
+    }
+  }
+}
+
+export interface CloudNativePgClusterManifest {
+  apiVersion: 'postgresql.cnpg.io/v1';
+  kind: 'Cluster';
+  metadata: {
+    name: string;
+    namespace: string;
+    labels?: Record<string, string>;
+  };
+  spec: Record<string, unknown>;
+}
+
+export async function upsertCloudNativePgCluster(
+  manifest: CloudNativePgClusterManifest
+): Promise<void> {
+  const { custom } = getK8sClient();
+
+  try {
+    await custom.getNamespacedCustomObject({
+      group: 'postgresql.cnpg.io',
+      version: 'v1',
+      namespace: manifest.metadata.namespace,
+      plural: 'clusters',
+      name: manifest.metadata.name,
+    });
+    await custom.replaceNamespacedCustomObject({
+      group: 'postgresql.cnpg.io',
+      version: 'v1',
+      namespace: manifest.metadata.namespace,
+      plural: 'clusters',
+      name: manifest.metadata.name,
+      body: manifest,
+    });
+  } catch (e: unknown) {
+    const error = e as { code?: number; statusCode?: number };
+    if ((error.code ?? error.statusCode) === 404) {
+      await custom.createNamespacedCustomObject({
+        group: 'postgresql.cnpg.io',
+        version: 'v1',
+        namespace: manifest.metadata.namespace,
+        plural: 'clusters',
+        body: manifest,
+      });
+      return;
+    }
+
+    throw e;
+  }
+}
+
+export async function deleteCloudNativePgCluster(namespace: string, name: string): Promise<void> {
+  const { custom } = getK8sClient();
+
+  try {
+    await custom.deleteNamespacedCustomObject({
+      group: 'postgresql.cnpg.io',
+      version: 'v1',
+      namespace,
+      plural: 'clusters',
+      name,
+    });
   } catch (e: unknown) {
     const error = e as { code?: number; statusCode?: number };
     if ((error.code ?? error.statusCode) !== 404) {

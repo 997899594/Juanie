@@ -141,7 +141,9 @@ export async function resolveAndCreateMigrationRuns(
       sourceCommitSha: input.sourceCommitSha,
       sourceCommitMessage: input.sourceCommitMessage,
       runnerType:
-        initialStatus === 'queued' && !isPlatformManagedMigrationSpec(spec) && input.options?.imageUrl
+        initialStatus === 'queued' &&
+        !isPlatformManagedMigrationSpec(spec) &&
+        input.options?.imageUrl
           ? 'k8s_job'
           : 'worker',
       initialStatus,

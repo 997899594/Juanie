@@ -1,11 +1,13 @@
 import { NextRequest } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
 import { getProjectInitOverviewSnapshot } from '@/lib/projects/init-service';
 import { createProjectInitRealtimeSubscriber } from '@/lib/realtime/project-init';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const routeLogger = logger.child({ route: 'api/projects/init-stream' });
 
 function shouldKeepProjectInitStreamOpen(
   overview: Awaited<ReturnType<typeof getProjectInitOverviewSnapshot>>
@@ -53,7 +55,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         const runSerialized = (task: () => Promise<void>) => {
           emitLock = emitLock.then(task).catch((error) => {
-            console.error('Project init stream task failed:', error);
+            routeLogger.error('Project init stream task failed', error, {
+              projectId: id,
+            });
           });
         };
 
@@ -140,11 +144,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 startPollingFallback();
               }
             } catch (error) {
-              console.error('Failed to subscribe to project init realtime events:', error);
+              routeLogger.error('Failed to subscribe to project init realtime events', error, {
+                projectId: id,
+              });
               startPollingFallback();
             }
           } catch (error) {
-            console.error('Project init stream failed:', error);
+            routeLogger.error('Project init realtime stream failed', error, {
+              projectId: id,
+            });
             sendEvent({
               type: 'error',
               message: '读取初始化进度失败',

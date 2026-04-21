@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import type { DatabaseConfig, ServiceConfig } from '@/lib/config/parser';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
   formatUnsupportedPreviewCloneDatabasesMessage,
   getDatabaseSelectionValidationIssues,
@@ -11,7 +12,6 @@ import {
   resolveDatabaseProvisionType,
 } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
-import type { InitStepStatus } from '@/lib/db/schema';
 import {
   databases,
   deliveryRules,
@@ -32,12 +32,16 @@ import {
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { ensureRepository } from '@/lib/integrations/service/repository-service';
+import { logger } from '@/lib/logger';
 import type { CreateRuntimeProfile } from '@/lib/projects/create-defaults';
 import {
   buildEnvironmentTopologyBlueprint,
   type CreateEnvironmentTemplate,
 } from '@/lib/projects/environment-topology';
 import { addProjectInitJob } from '@/lib/queue';
+import { buildProjectInitStepSeeds } from '@/lib/queue/project-init-steps';
+
+const routeLogger = logger.child({ route: 'api/projects' });
 
 interface CreateProjectRequest {
   mode: 'import' | 'create';
@@ -213,28 +217,7 @@ export async function POST(request: Request) {
       previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
     });
 
-    const importSteps: { step: string; status: InitStepStatus; progress: number }[] = [
-      { step: 'validate_repository', status: 'pending', progress: 0 },
-      { step: 'push_cicd_config', status: 'pending', progress: 0 },
-      { step: 'configure_release_trigger', status: 'pending', progress: 0 },
-      { step: 'setup_namespace', status: 'pending', progress: 0 },
-      { step: 'provision_databases', status: 'pending', progress: 0 },
-      { step: 'deploy_services', status: 'pending', progress: 0 },
-      { step: 'configure_dns', status: 'pending', progress: 0 },
-    ];
-
-    const createSteps: { step: string; status: InitStepStatus; progress: number }[] = [
-      { step: 'create_repository', status: 'pending', progress: 0 },
-      { step: 'push_template', status: 'pending', progress: 0 },
-      { step: 'push_cicd_config', status: 'pending', progress: 0 },
-      { step: 'configure_release_trigger', status: 'pending', progress: 0 },
-      { step: 'setup_namespace', status: 'pending', progress: 0 },
-      { step: 'provision_databases', status: 'pending', progress: 0 },
-      { step: 'deploy_services', status: 'pending', progress: 0 },
-      { step: 'configure_dns', status: 'pending', progress: 0 },
-    ];
-
-    const initStepsData = mode === 'import' ? importSteps : createSteps;
+    const initStepsData = buildProjectInitStepSeeds(mode);
 
     const project = await db.transaction(async (tx) => {
       const managedHostnameBase = await allocateManagedHostnameBaseWithDb({
@@ -290,6 +273,7 @@ export async function POST(request: Request) {
             isProduction: environment.isProduction,
             databaseStrategy: environment.databaseStrategy,
             deploymentStrategy: environment.deploymentStrategy,
+            deploymentRuntime: environment.deploymentRuntime,
           }))
         )
         .returning();
@@ -403,6 +387,7 @@ export async function POST(request: Request) {
           type: dbConfig.type,
           plan: dbConfig.plan || 'starter',
           provisionType,
+          runtime: inferDatabaseRuntime(dbConfig.type, provisionType),
           scope: dbConfig.scope || (dbConfig.service ? 'service' : 'project'),
           role: dbConfig.role || 'primary',
           capabilities: normalizeDatabaseCapabilities(dbConfig.capabilities),
@@ -453,12 +438,15 @@ export async function POST(request: Request) {
     try {
       await addProjectInitJob(project.id, mode, template);
     } catch (error) {
-      console.error('Failed to queue project initialization:', error);
+      routeLogger.error('Failed to queue project initialization', error, {
+        projectId: project.id,
+        mode,
+      });
     }
 
     return NextResponse.json({ project }, { status: 201 });
   } catch (error) {
-    console.error('Failed to create project:', error);
+    routeLogger.error('Failed to create project', error);
     return NextResponse.json(
       {
         error: '创建项目失败',

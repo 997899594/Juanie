@@ -1,13 +1,15 @@
 import { Cron } from 'croner';
 import { cleanupRetainedHistory, getHistoryRetentionPolicy } from '@/lib/history/retention';
+import { logger } from '@/lib/logger';
 
 let historyRetentionRunning = false;
 
 const DEFAULT_HISTORY_RETENTION_SCHEDULE = process.env.HISTORY_RETENTION_SCHEDULE || '17 */6 * * *';
+const historyRetentionLogger = logger.child({ component: 'history-retention' });
 
 export function startHistoryRetention(): void {
   if (historyRetentionRunning) {
-    console.log('[HistoryRetention] Already running');
+    historyRetentionLogger.info('History retention already running');
     return;
   }
 
@@ -17,15 +19,28 @@ export function startHistoryRetention(): void {
     try {
       const policy = getHistoryRetentionPolicy();
       const result = await cleanupRetainedHistory(policy);
-      console.log(
-        `[HistoryRetention] cleaned deploymentLogs=${result.deletedDeploymentLogs}, auditLogs=${result.deletedAuditLogs}, aiPluginRuns=${result.deletedAIPluginRuns}, aiPluginSnapshots=${result.deletedAIPluginSnapshots}, migrationRuns=${result.deletedMigrationRuns}, schemaRepairAtlasRuns=${result.deletedSchemaRepairAtlasRuns}`
-      );
+      historyRetentionLogger.info('History retention cleanup completed', {
+        deletedDeploymentLogs: result.deletedDeploymentLogs,
+        deletedAuditLogs: result.deletedAuditLogs,
+        deletedAIPluginRuns: result.deletedAIPluginRuns,
+        deletedAIPluginSnapshots: result.deletedAIPluginSnapshots,
+        deletedMigrationRuns: result.deletedMigrationRuns,
+        deletedSchemaRepairAtlasRuns: result.deletedSchemaRepairAtlasRuns,
+        policy,
+      });
     } catch (error) {
-      console.error('[HistoryRetention] Error:', error);
+      historyRetentionLogger.error('History retention cleanup failed', error);
     }
   });
 
-  console.log(
-    `[HistoryRetention] Started (schedule: ${DEFAULT_HISTORY_RETENTION_SCHEDULE}, deploymentLogs=${getHistoryRetentionPolicy().deploymentLogDays}d, auditLogs=${getHistoryRetentionPolicy().auditLogDays}d, aiRuns=${getHistoryRetentionPolicy().aiPluginRunDays}d, aiSnapshots=${getHistoryRetentionPolicy().aiPluginSnapshotDays}d, migrationRuns=${getHistoryRetentionPolicy().migrationRunDays}d, schemaRepairAtlasRuns=${getHistoryRetentionPolicy().schemaRepairAtlasRunDays}d)`
-  );
+  const policy = getHistoryRetentionPolicy();
+  historyRetentionLogger.info('History retention started', {
+    schedule: DEFAULT_HISTORY_RETENTION_SCHEDULE,
+    deploymentLogDays: policy.deploymentLogDays,
+    auditLogDays: policy.auditLogDays,
+    aiPluginRunDays: policy.aiPluginRunDays,
+    aiPluginSnapshotDays: policy.aiPluginSnapshotDays,
+    migrationRunDays: policy.migrationRunDays,
+    schemaRepairAtlasRunDays: policy.schemaRepairAtlasRunDays,
+  });
 }

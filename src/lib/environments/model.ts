@@ -1,4 +1,9 @@
-import type { EnvironmentDeliveryMode, EnvironmentKind } from '@/lib/db/schema';
+import type {
+  EnvironmentDeliveryMode,
+  EnvironmentDeploymentRuntime,
+  EnvironmentDeploymentStrategy,
+  EnvironmentKind,
+} from '@/lib/db/schema';
 import { buildPreviewNamespace } from '@/lib/environments/preview';
 import { buildK8sName, buildProjectNamespaceBase } from '@/lib/k8s/naming';
 
@@ -10,6 +15,11 @@ export interface EnvironmentKindLike {
 
 export interface EnvironmentDeliveryModeLike extends EnvironmentKindLike {
   deliveryMode?: EnvironmentDeliveryMode | null;
+}
+
+export interface EnvironmentDeploymentRuntimeLike {
+  deploymentRuntime?: EnvironmentDeploymentRuntime | null;
+  deploymentStrategy?: EnvironmentDeploymentStrategy | null;
 }
 
 export interface EnvironmentNamespaceLike extends EnvironmentKindLike {
@@ -73,6 +83,30 @@ export function getEnvironmentDeliveryMode(
 
 export function isPromoteOnlyEnvironment(environment: EnvironmentDeliveryModeLike): boolean {
   return getEnvironmentDeliveryMode(environment) === 'promote_only';
+}
+
+export function inferEnvironmentDeploymentRuntime(
+  strategy?: EnvironmentDeploymentStrategy | null
+): EnvironmentDeploymentRuntime {
+  if (strategy === 'controlled' || strategy === 'blue_green') {
+    return 'argo_rollouts';
+  }
+
+  return 'native_k8s';
+}
+
+export function getEnvironmentDeploymentRuntime(
+  environment: EnvironmentDeploymentRuntimeLike
+): EnvironmentDeploymentRuntime {
+  if (environment.deploymentRuntime) {
+    return environment.deploymentRuntime;
+  }
+
+  return inferEnvironmentDeploymentRuntime(environment.deploymentStrategy);
+}
+
+export function usesArgoRolloutsRuntime(environment: EnvironmentDeploymentRuntimeLike): boolean {
+  return getEnvironmentDeploymentRuntime(environment) === 'argo_rollouts';
 }
 
 export function allowsGitRouting(environment: EnvironmentDeliveryModeLike): boolean {

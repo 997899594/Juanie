@@ -4,31 +4,37 @@ import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { cleanupStuckTerminatingPods } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 import { persistLatestEnvironmentReleaseRecap } from '@/lib/releases/recap-service';
 import { cleanupRedundantCandidateResources } from '@/lib/releases/workloads';
 
 let infrastructureRemediationRunning = false;
 
 const DEFAULT_PLATFORM_NAMESPACE = process.env.PLATFORM_NAMESPACE?.trim() || 'juanie';
+const infrastructureRemediationLogger = logger.child({
+  component: 'infrastructure-remediation',
+});
 
 export function startInfrastructureRemediation(): void {
   if (infrastructureRemediationRunning) {
-    console.log('[InfraRemediation] Already running');
+    infrastructureRemediationLogger.info('Infrastructure remediation already running');
     return;
   }
 
   infrastructureRemediationRunning = true;
 
   new Cron('*/10 * * * *', async () => {
-    console.log('[InfraRemediation] Checking for stuck terminating pods...');
+    infrastructureRemediationLogger.info('Checking infrastructure remediation targets');
     try {
       await remediateInfrastructure();
     } catch (error) {
-      console.error('[InfraRemediation] Error:', error);
+      infrastructureRemediationLogger.error('Infrastructure remediation failed', error);
     }
   });
 
-  console.log('[InfraRemediation] Started (runs every 10 minutes)');
+  infrastructureRemediationLogger.info('Infrastructure remediation started', {
+    schedule: '*/10 * * * *',
+  });
 }
 
 async function remediateInfrastructure(): Promise<void> {
@@ -104,17 +110,29 @@ async function remediateInfrastructure(): Promise<void> {
         }
 
         if (podNames.length > 0) {
-          console.log(
-            `[InfraRemediation] auto-cleaned ${podNames.length} terminating pod(s) in ${environment.namespace}`
-          );
+          infrastructureRemediationLogger.info('Auto-cleaned terminating pods', {
+            namespace: environment.namespace,
+            podCount: podNames.length,
+            podNames,
+            projectId: project.id,
+            environmentId: environment.id,
+          });
         }
         if (candidateNames.length > 0) {
-          console.log(
-            `[InfraRemediation] auto-cleaned ${candidateNames.length} redundant candidate workload(s) in ${environment.namespace}`
-          );
+          infrastructureRemediationLogger.info('Auto-cleaned redundant candidate workloads', {
+            namespace: environment.namespace,
+            candidateCount: candidateNames.length,
+            candidateNames,
+            projectId: project.id,
+            environmentId: environment.id,
+          });
         }
       } catch (error) {
-        console.error(`[InfraRemediation] Failed to remediate ${environment.namespace}:`, error);
+        infrastructureRemediationLogger.error('Failed to remediate environment namespace', error, {
+          namespace: environment.namespace,
+          projectId: project.id,
+          environmentId: environment.id,
+        });
       }
     }
   }
@@ -122,14 +140,15 @@ async function remediateInfrastructure(): Promise<void> {
   try {
     const platformPods = await cleanupStuckTerminatingPods(DEFAULT_PLATFORM_NAMESPACE);
     if (platformPods.length > 0) {
-      console.log(
-        `[InfraRemediation] auto-cleaned ${platformPods.length} terminating pod(s) in platform namespace ${DEFAULT_PLATFORM_NAMESPACE}`
-      );
+      infrastructureRemediationLogger.info('Auto-cleaned terminating pods in platform namespace', {
+        namespace: DEFAULT_PLATFORM_NAMESPACE,
+        podCount: platformPods.length,
+        podNames: platformPods,
+      });
     }
   } catch (error) {
-    console.error(
-      `[InfraRemediation] Failed to remediate platform namespace ${DEFAULT_PLATFORM_NAMESPACE}:`,
-      error
-    );
+    infrastructureRemediationLogger.error('Failed to remediate platform namespace', error, {
+      namespace: DEFAULT_PLATFORM_NAMESPACE,
+    });
   }
 }

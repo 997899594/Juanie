@@ -15,6 +15,7 @@ import {
   setPreviewEnvironmentBuildState,
 } from '@/lib/environments/preview-build-state';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
+import { logger } from '@/lib/logger';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
 import { publishReleaseRealtimeSnapshot } from '@/lib/realtime/releases';
@@ -33,6 +34,7 @@ import {
 
 type EnvironmentRecord = typeof environments.$inferSelect;
 type DeliveryRuleRecord = typeof deliveryRules.$inferSelect;
+const releaseServiceLogger = logger.child({ component: 'release-service' });
 
 export interface ReleaseServiceInput {
   id?: string;
@@ -221,7 +223,12 @@ async function persistRelease(
         serviceIds: artifacts.map((artifact) => artifact.service.id),
       });
     } catch (error) {
-      console.warn(`[Release] Failed to prewarm migration preview cache for ${release.id}:`, error);
+      releaseServiceLogger.warn('Failed to prewarm migration preview cache', {
+        releaseId: release.id,
+        projectId: project.id,
+        environmentId: environment.id,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     }
   })();
 

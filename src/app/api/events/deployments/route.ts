@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
 import {
   createDeploymentRealtimeSubscriber,
   type DeploymentRealtimeSummary,
@@ -9,6 +10,7 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const routeLogger = logger.child({ route: 'api/events/deployments' });
 
 function buildDeploymentStateKey(deployment: DeploymentRealtimeSummary | null): string | null {
   if (!deployment) {
@@ -78,7 +80,9 @@ export async function GET(request: NextRequest) {
 
         const runSerialized = (task: () => Promise<void>) => {
           emitLock = emitLock.then(task).catch((error) => {
-            console.error('Deployment stream task failed:', error);
+            routeLogger.error('Deployment stream task failed', error, {
+              projectId,
+            });
           });
         };
 
@@ -143,11 +147,15 @@ export async function GET(request: NextRequest) {
                 startPollingFallback();
               }
             } catch (error) {
-              console.error('Failed to subscribe to deployment realtime events:', error);
+              routeLogger.error('Failed to subscribe to deployment realtime events', error, {
+                projectId,
+              });
               startPollingFallback();
             }
           } catch (error) {
-            console.error('Deployment stream failed:', error);
+            routeLogger.error('Deployment realtime stream failed', error, {
+              projectId,
+            });
             sendEvent({
               type: 'error',
               message: '读取部署进度失败',

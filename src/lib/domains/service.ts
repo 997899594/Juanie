@@ -1,12 +1,16 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import type { EnvironmentDeploymentStrategy } from '@/lib/db/schema';
 import { domains } from '@/lib/db/schema';
+import {
+  syncProjectPreviewApplicationSet,
+  usesPreviewApplicationSetStableRoutes,
+} from '@/lib/environments/application-set';
 import { isPreviewEnvironment } from '@/lib/environments/model';
 import {
   createCiliumHTTPRoute,
   deleteCiliumHTTPRoute,
-  getIsConnected,
-  initK8sClient,
+  isK8sAvailable,
   reconcileCiliumHTTPRoutesForHostname,
 } from '@/lib/k8s';
 import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
@@ -29,6 +33,7 @@ interface EnsureEnvironmentDomainsInput {
     namespace: string | null;
     kind?: 'production' | 'persistent' | 'preview' | null;
     isPreview?: boolean | null;
+    deploymentStrategy?: EnvironmentDeploymentStrategy | null;
   };
   services: Array<{
     id: string;
@@ -38,6 +43,8 @@ interface EnsureEnvironmentDomainsInput {
     port?: number | null;
   }>;
 }
+
+const DEFAULT_ROUTE_SERVICE_PORT = 3000;
 
 function isConflictError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
@@ -84,11 +91,38 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
     }
   }
 
-  if (!getIsConnected() || !input.environment.namespace || domainList.length === 0) {
-    return domainList;
+  const hasK8s = isK8sAvailable();
+
+  if (
+    usesPreviewApplicationSetStableRoutes(input.environment) &&
+    hasK8s &&
+    input.environment.namespace
+  ) {
+    await syncProjectPreviewApplicationSet({
+      projectId: input.project.id,
+    });
+
+    const pendingVerificationIds = domainList
+      .filter((domain) => !domain.isVerified)
+      .map((domain) => domain.id);
+
+    if (pendingVerificationIds.length > 0) {
+      for (const domainId of pendingVerificationIds) {
+        await db.update(domains).set({ isVerified: true }).where(eq(domains.id, domainId));
+      }
+    }
+
+    return db.query.domains.findMany({
+      where: and(
+        eq(domains.projectId, input.project.id),
+        eq(domains.environmentId, input.environment.id)
+      ),
+    });
   }
 
-  initK8sClient();
+  if (!hasK8s || !input.environment.namespace || domainList.length === 0) {
+    return domainList;
+  }
 
   for (const domain of domainList) {
     const service =
@@ -109,7 +143,7 @@ export async function ensureEnvironmentDomains(input: EnsureEnvironmentDomainsIn
       sectionName: 'https-wildcard',
       hostnames: [domain.hostname],
       serviceName: buildServiceResourceName(input.project.slug, service.name),
-      servicePort: service.port || 80,
+      servicePort: service.port || DEFAULT_ROUTE_SERVICE_PORT,
       path: '/',
     };
 

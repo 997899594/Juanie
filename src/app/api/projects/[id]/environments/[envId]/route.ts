@@ -5,6 +5,7 @@ import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments } from '@/lib/db/schema';
+import { inferEnvironmentDeploymentRuntime } from '@/lib/environments/model';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 
 const updateEnvironmentSchema = z.object({
@@ -43,6 +44,7 @@ export async function PATCH(
       .update(environments)
       .set({
         deploymentStrategy: parsed.data.deploymentStrategy,
+        deploymentRuntime: inferEnvironmentDeploymentRuntime(parsed.data.deploymentStrategy),
         updatedAt: new Date(),
       })
       .where(eq(environments.id, envId))
@@ -53,6 +55,7 @@ export async function PATCH(
       environment: {
         id: updated.id,
         deploymentStrategy: updated.deploymentStrategy,
+        deploymentRuntime: updated.deploymentRuntime,
       },
     });
   } catch (error) {

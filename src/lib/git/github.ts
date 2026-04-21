@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import type {
   CreateBranchOptions,
   CreateRepoOptions,
@@ -13,6 +14,8 @@ import type {
   SyncBranchRefOptions,
   TriggerReleaseBuildOptions,
 } from './index';
+
+const gitHubProviderLogger = logger.child({ component: 'git-provider-github' });
 
 function mapGitHubWorkflowDispatchError(message?: string | null): string {
   const normalizedMessage = message?.trim();
@@ -537,13 +540,14 @@ export class GitHubProvider implements GitProvider {
 
       if (!res.ok) {
         const error = await res.json();
-        console.error(`[GitHub pushFiles] Failed to push ${path}`);
-        console.error(
-          `[GitHub pushFiles] URL: https://api.github.com/repos/${owner}/${repo}/contents/${path}`
-        );
-        console.error(`[GitHub pushFiles] Branch: ${options.branch}`);
-        console.error(`[GitHub pushFiles] Status: ${res.status}`);
-        console.error(`[GitHub pushFiles] Error:`, JSON.stringify(error, null, 2));
+        gitHubProviderLogger.error('Failed to push file to GitHub repository', {
+          path,
+          repoFullName: options.repoFullName,
+          branch: options.branch,
+          status: res.status,
+          url: `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+          response: error,
+        });
         throw new Error(error.message || `Failed to push file: ${path}`);
       }
     }

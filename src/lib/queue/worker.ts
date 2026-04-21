@@ -1,4 +1,5 @@
 import { initK8sClient } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 import { createDeploymentWorker } from './deployment';
 import { createMigrationWorker } from './migration';
 import { createProjectDeleteWorker } from './project-delete';
@@ -8,8 +9,9 @@ import { createSchemaRepairAtlasWorker } from './schema-repair-atlas';
 
 // 启动时初始化 K8s 客户端（in-cluster ServiceAccount 或 KUBECONFIG）
 initK8sClient();
+const workerLogger = logger.child({ component: 'queue-worker' });
 
-console.log('Starting Juanie workers...');
+workerLogger.info('Starting Juanie workers');
 
 const projectInitWorker = createProjectInitWorker();
 const projectDeleteWorker = createProjectDeleteWorker();
@@ -19,55 +21,64 @@ const migrationWorker = createMigrationWorker();
 const schemaRepairAtlasWorker = createSchemaRepairAtlasWorker();
 
 projectInitWorker.on('completed', (job) => {
-  console.log(`Project init job ${job.id} completed`);
+  workerLogger.info('Project init job completed', { jobId: job.id, queue: 'project-init' });
 });
 
 projectInitWorker.on('failed', (job, err) => {
-  console.error(`Project init job ${job?.id} failed:`, err.message);
+  workerLogger.error('Project init job failed', err, { jobId: job?.id, queue: 'project-init' });
 });
 
 projectDeleteWorker.on('completed', (job) => {
-  console.log(`Project delete job ${job.id} completed`);
+  workerLogger.info('Project delete job completed', { jobId: job.id, queue: 'project-delete' });
 });
 
 projectDeleteWorker.on('failed', (job, err) => {
-  console.error(`Project delete job ${job?.id} failed:`, err.message);
+  workerLogger.error('Project delete job failed', err, {
+    jobId: job?.id,
+    queue: 'project-delete',
+  });
 });
 
 releaseWorker.on('completed', (job) => {
-  console.log(`Release job ${job.id} completed`);
+  workerLogger.info('Release job completed', { jobId: job.id, queue: 'release' });
 });
 
 releaseWorker.on('failed', (job, err) => {
-  console.error(`Release job ${job?.id} failed:`, err.message);
+  workerLogger.error('Release job failed', err, { jobId: job?.id, queue: 'release' });
 });
 
 deploymentWorker.on('completed', (job) => {
-  console.log(`Deployment job ${job.id} completed`);
+  workerLogger.info('Deployment job completed', { jobId: job.id, queue: 'deployment' });
 });
 
 deploymentWorker.on('failed', (job, err) => {
-  console.error(`Deployment job ${job?.id} failed:`, err.message);
+  workerLogger.error('Deployment job failed', err, { jobId: job?.id, queue: 'deployment' });
 });
 
 migrationWorker.on('completed', (job) => {
-  console.log(`Migration job ${job.id} completed`);
+  workerLogger.info('Migration job completed', { jobId: job.id, queue: 'migration' });
 });
 
 migrationWorker.on('failed', (job, err) => {
-  console.error(`Migration job ${job?.id} failed:`, err.message);
+  workerLogger.error('Migration job failed', err, { jobId: job?.id, queue: 'migration' });
 });
 
 schemaRepairAtlasWorker.on('completed', (job) => {
-  console.log(`Schema repair Atlas job ${job.id} completed`);
+  workerLogger.info('Schema repair Atlas job completed', {
+    jobId: job.id,
+    queue: 'schema-repair-atlas',
+  });
 });
 
 schemaRepairAtlasWorker.on('failed', (job, err) => {
-  console.error(`Schema repair Atlas job ${job?.id} failed:`, err.message);
+  workerLogger.error('Schema repair Atlas job failed', err, {
+    jobId: job?.id,
+    queue: 'schema-repair-atlas',
+  });
 });
 
 process.on('SIGTERM', async () => {
-  console.log('Shutting down workers...');
+  workerLogger.info('Shutting down workers', { signal: 'SIGTERM' });
   await Promise.all([
     projectInitWorker.close(),
     projectDeleteWorker.close(),
@@ -80,7 +91,7 @@ process.on('SIGTERM', async () => {
 });
 
 process.on('SIGINT', async () => {
-  console.log('Shutting down workers...');
+  workerLogger.info('Shutting down workers', { signal: 'SIGINT' });
   await Promise.all([
     projectInitWorker.close(),
     projectDeleteWorker.close(),
@@ -92,10 +103,13 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-console.log('Workers started successfully');
-console.log('  - Project init worker: listening to "project-init" queue');
-console.log('  - Project delete worker: listening to "project-delete" queue');
-console.log('  - Release worker: listening to "release" queue');
-console.log('  - Deployment worker: listening to "deployment" queue');
-console.log('  - Migration worker: listening to "migration" queue');
-console.log('  - Schema repair Atlas worker: listening to "schema-repair-atlas" queue');
+workerLogger.info('Workers started successfully', {
+  queues: [
+    'project-init',
+    'project-delete',
+    'release',
+    'deployment',
+    'migration',
+    'schema-repair-atlas',
+  ],
+});

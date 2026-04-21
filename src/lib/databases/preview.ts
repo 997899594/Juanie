@@ -1,31 +1,23 @@
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { clonePostgreSQLDatabase } from '@/lib/databases/clone';
+import { getDatabaseRuntime } from '@/lib/databases/model';
 import {
   assertDatabasePreviewCloneSupport,
   toPlatformDatabaseProvisionType,
 } from '@/lib/databases/platform-support';
-import { deprovisionManagedPostgresDatabase } from '@/lib/databases/postgres-ownership';
+import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
 import { databases, environments, projects } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { isPreviewEnvironment } from '@/lib/environments/model';
-import { getIsConnected, initK8sClient } from '@/lib/k8s';
+import { isK8sAvailable } from '@/lib/k8s';
 import {
   injectDatabaseEnvVars,
   provisionDatabase,
   removeInjectedDatabaseEnvVars,
 } from '@/lib/queue/project-init';
-
-function getHasK8s(): boolean {
-  try {
-    initK8sClient();
-    return getIsConnected();
-  } catch {
-    return false;
-  }
-}
 
 export async function syncPreviewEnvironmentDatabases(input: {
   projectId: string;
@@ -44,7 +36,7 @@ export async function syncPreviewEnvironmentDatabases(input: {
     return;
   }
 
-  const hasK8s = getHasK8s();
+  const hasK8s = isK8sAvailable();
 
   if (environment.databaseStrategy !== 'isolated_clone') {
     const removableClones = await db.query.databases.findMany({
@@ -57,15 +49,20 @@ export async function syncPreviewEnvironmentDatabases(input: {
         name: true,
         type: true,
         provisionType: true,
+        runtime: true,
         host: true,
+        port: true,
         databaseName: true,
         username: true,
+        connectionString: true,
+        namespace: true,
+        serviceName: true,
       },
     });
 
     for (const clone of removableClones) {
       try {
-        await deprovisionManagedPostgresDatabase(clone);
+        await deprovisionManagedDatabase(clone);
       } catch (error) {
         throw new Error(
           `Failed to deprovision preview clone database ${clone.databaseName ?? clone.name}`,
@@ -151,6 +148,7 @@ export async function syncPreviewEnvironmentDatabases(input: {
         type: source.type,
         plan: source.plan,
         provisionType: source.provisionType,
+        runtime: getDatabaseRuntime(source),
         scope: source.scope,
         role: source.role,
         capabilities: source.capabilities,

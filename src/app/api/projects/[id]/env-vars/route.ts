@@ -21,9 +21,11 @@ import { db } from '@/lib/db';
 import { environmentVariables } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { resolveEnvironmentVariableScope } from '@/lib/env-vars/scope';
-import { getIsConnected, rolloutRestartDeployments } from '@/lib/k8s';
+import { isK8sAvailable, rolloutRestartDeployments } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 
 type RouteParams = { params: Promise<{ id: string }> };
+const routeLogger = logger.child({ route: 'api/projects/env-vars' });
 
 // ============================================
 // GET - 列出环境变量
@@ -193,7 +195,12 @@ export async function POST(request: Request, { params }: RouteParams) {
       try {
         ({ encryptedValue, iv, authTag } = await encrypt(value));
       } catch (e) {
-        console.error('Failed to encrypt secret value:', e);
+        routeLogger.error('Failed to encrypt secret value during variable creation', e, {
+          projectId,
+          environmentId,
+          serviceId,
+          key,
+        });
         return NextResponse.json(
           {
             error: 'Encryption unavailable',
@@ -241,12 +248,23 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     if (environmentId) {
       await syncEnvVarsToK8s(projectId, environmentId).catch((e) => {
-        console.error('Failed to sync env vars to K8s after create', e);
+        routeLogger.warn('Failed to sync env vars to Kubernetes after creation', {
+          projectId,
+          environmentId,
+          key,
+          reason: e instanceof Error ? e.message : String(e),
+        });
       });
 
-      if (getIsConnected() && scopedEnvironment?.namespace) {
+      if (isK8sAvailable() && scopedEnvironment?.namespace) {
         await rolloutRestartDeployments(scopedEnvironment.namespace).catch((e) => {
-          console.warn('Failed to trigger rolling restart after env var create', e);
+          routeLogger.warn('Failed to trigger rollout restart after env var creation', {
+            projectId,
+            environmentId,
+            namespace: scopedEnvironment.namespace,
+            key,
+            reason: e instanceof Error ? e.message : String(e),
+          });
         });
       }
     }

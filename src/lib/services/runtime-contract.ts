@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { DatabaseConfig, ParsedConfig } from '@/lib/config/parser';
 import { parseJuanieConfig } from '@/lib/config/parser';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
+import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
   getDatabaseProvisionTypeLabel,
   getDatabaseTypeLabel,
@@ -15,6 +16,7 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import { logger } from '@/lib/logger';
 
 interface RuntimeContractSyncInput {
   projectId: string;
@@ -34,6 +36,8 @@ interface RuntimeDatabaseInfrastructureChange {
   databaseName: string;
   message: string;
 }
+
+const runtimeContractLogger = logger.child({ component: 'runtime-contract' });
 
 export class RuntimeDatabaseContractSyncBlockedError extends Error {
   constructor(readonly changes: RuntimeDatabaseInfrastructureChange[]) {
@@ -131,10 +135,10 @@ async function loadProjectConfigFromRepo(input: RuntimeContractSyncInput): Promi
       requiredCapabilities: ['read_repo'],
     });
   } catch (error) {
-    console.warn(
-      `[Deployment] Could not load integration session for project ${input.projectId}:`,
-      error
-    );
+    runtimeContractLogger.warn('Could not load integration session for runtime contract sync', {
+      projectId: input.projectId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 
@@ -315,9 +319,11 @@ export async function syncProjectDatabaseRuntimeContractsFromRepo(input: Runtime
         throw new RuntimeDatabaseContractSyncBlockedError([unsafeInfrastructureChange]);
       }
 
-      console.warn(
-        `[Runtime Contract] Skipping unsafe database infrastructure change for ${databaseRecord.name}: ${unsafeInfrastructureChange.message}`
-      );
+      runtimeContractLogger.warn('Skipping unsafe database infrastructure change', {
+        projectId: input.projectId,
+        databaseName: databaseRecord.name,
+        reason: unsafeInfrastructureChange.message,
+      });
       continue;
     }
 
@@ -334,6 +340,7 @@ export async function syncProjectDatabaseRuntimeContractsFromRepo(input: Runtime
         type: config.type,
         plan: config.plan ?? databaseRecord.plan,
         provisionType: nextProvisionType,
+        runtime: inferDatabaseRuntime(config.type, nextProvisionType),
         scope: nextScope,
         role: config.role ?? databaseRecord.role,
         serviceId: nextServiceId,

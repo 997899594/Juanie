@@ -1,36 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Job, Worker } from 'bullmq';
-import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
-import postgres from 'postgres';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { encrypt } from '@/lib/crypto';
-import {
-  formatDatabaseCapabilityIssues,
-  reconcileDeclaredDatabaseCapabilities,
-  resolveManagedPostgresImage,
-  verifyDeclaredDatabaseCapabilities,
-} from '@/lib/databases/capabilities';
-import {
-  formatUnsupportedDatabaseProvisionTypeMessage,
-  resolveDatabaseProvisionType,
-  supportsDatabaseAutomatedMigrations,
-  supportsDatabaseProvisionType,
-  toPlatformDatabaseProvisionType,
-} from '@/lib/databases/platform-support';
-import {
-  assertManagedPostgresRuntimeAccess,
-  buildManagedPostgresProvisionStatements,
-} from '@/lib/databases/postgres-ownership';
-import {
-  formatDatabaseRuntimeAccessIssues,
-  verifyDeclaredDatabaseRuntimeAccess,
-} from '@/lib/databases/runtime-access';
+import { supportsDatabaseAutomatedMigrations } from '@/lib/databases/platform-support';
+import { provisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
-import {
-  buildNormalizedPostgresUrl,
-  getNormalizedDatabaseUrlFromEnv,
-} from '@/lib/db/connection-url';
 import {
   databases,
   domains,
@@ -42,39 +17,37 @@ import {
   services,
   teams,
 } from '@/lib/db/schema';
-import { buildDeployImageRepository } from '@/lib/deploy-images';
-import { buildDomainRouteName, pickDefaultPublicService } from '@/lib/domains/defaults';
+import { resolveDeployImageRepository } from '@/lib/deploy-images';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
-import { buildEnvironmentNamespace } from '@/lib/environments/model';
+import { ensureEnvironmentNamespace, reconcileEnvironmentState } from '@/lib/environments/service';
 import type { Capability } from '@/lib/integrations/domain/models';
 import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 import { insertRepositoryRecord } from '@/lib/integrations/service/repository-service';
-import {
-  createCiliumHTTPRoute,
-  createNamespace,
-  createSecret,
-  createService,
-  createStatefulSet,
-  getIsConnected,
-  getK8sClient,
-  initK8sClient,
-  reconcileCiliumHTTPRoutesForHostname,
-  upsertService,
-} from '@/lib/k8s';
+import { isK8sAvailable } from '@/lib/k8s';
 import { buildProjectNamespaceBase, buildProjectScopedK8sName } from '@/lib/k8s/naming';
+import { logger } from '@/lib/logger';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { TemplateService } from '@/lib/templates';
 import type { ProjectInitJobData } from './index';
+import {
+  getProjectInitSteps,
+  isAutoRetryableProjectInitError,
+  isK8sBackedProjectInitStep,
+  type ProjectInitErrorCode,
+  type ProjectInitStepName,
+  projectInitDefaultErrorCodes,
+} from './project-init-steps';
 
 const isDev = process.env.NODE_ENV === 'development';
+const projectInitLogger = logger.child({ component: 'project-init' });
 
-export const requiredCapabilitiesForStep = (step: StepName): Capability[] => {
+export const requiredCapabilitiesForStep = (step: ProjectInitStepName): Capability[] => {
   switch (step) {
     case 'validate_repository':
       return ['read_repo'];
@@ -149,70 +122,7 @@ function _parseCommandString(commandStr: string): string[] {
   return args;
 }
 
-// Check if K8s is available
-let k8sAvailable: boolean | null = null;
-
-function isK8sAvailable(): boolean {
-  if (k8sAvailable !== null) return k8sAvailable;
-
-  try {
-    initK8sClient();
-    k8sAvailable = getIsConnected();
-    return k8sAvailable;
-  } catch {
-    k8sAvailable = false;
-    console.log('⚠️  Kubernetes not available, running in mock mode');
-    return false;
-  }
-}
-
-const IMPORT_STEPS = [
-  'validate_repository',
-  'push_cicd_config',
-  'configure_release_trigger',
-  'setup_namespace',
-  'provision_databases',
-  'deploy_services',
-  'configure_dns',
-] as const;
-
-const CREATE_STEPS = [
-  'create_repository',
-  'push_template',
-  'push_cicd_config',
-  'configure_release_trigger',
-  'setup_namespace',
-  'provision_databases',
-  'deploy_services',
-  'configure_dns',
-] as const;
-
-type StepName = (typeof IMPORT_STEPS)[number] | (typeof CREATE_STEPS)[number];
-type ProjectInitErrorCode =
-  | 'repository_missing'
-  | 'repository_access_denied'
-  | 'repository_create_denied'
-  | 'repository_create_failed'
-  | 'template_push_failed'
-  | 'cicd_config_push_failed'
-  | 'release_trigger_failed'
-  | 'k8s_namespace_failed'
-  | 'database_provision_failed'
-  | 'service_deploy_failed'
-  | 'dns_config_failed'
-  | 'init_step_failed';
-
 type StepProgressReporter = (progress: number, message?: string) => Promise<void>;
-
-function isAutoRetryableProjectInitError(code: ProjectInitErrorCode): boolean {
-  return (
-    code === 'k8s_namespace_failed' ||
-    code === 'database_provision_failed' ||
-    code === 'service_deploy_failed' ||
-    code === 'dns_config_failed' ||
-    code === 'init_step_failed'
-  );
-}
 
 // ============================================
 // Helper Functions
@@ -220,7 +130,7 @@ function isAutoRetryableProjectInitError(code: ProjectInitErrorCode): boolean {
 
 async function updateStepStatus(
   projectId: string,
-  step: StepName,
+  step: ProjectInitStepName,
   status: 'running' | 'completed' | 'failed' | 'skipped',
   data?: { message?: string; progress?: number; error?: string; errorCode?: ProjectInitErrorCode }
 ) {
@@ -269,11 +179,15 @@ async function updateStepStatus(
     progress: hasField('progress') ? (data?.progress ?? null) : null,
     timestamp: Date.now(),
   }).catch((error) => {
-    console.warn(`Failed to publish project init realtime event for ${projectId}/${step}:`, error);
+    projectInitLogger.warn('Failed to publish project init realtime event', {
+      projectId,
+      step,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
   });
 }
 
-function classifyProjectInitError(step: StepName, error: unknown): ProjectInitErrorCode {
+function classifyProjectInitError(step: ProjectInitStepName, error: unknown): ProjectInitErrorCode {
   const message =
     error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 
@@ -286,29 +200,76 @@ function classifyProjectInitError(step: StepName, error: unknown): ProjectInitEr
     if (message.includes('write_repo') || message.includes('permission')) {
       return 'repository_create_denied';
     }
-    return 'repository_create_failed';
   }
 
-  if (step === 'push_template') return 'template_push_failed';
-  if (step === 'push_cicd_config') return 'cicd_config_push_failed';
-  if (step === 'configure_release_trigger') return 'release_trigger_failed';
-  if (step === 'setup_namespace') return 'k8s_namespace_failed';
-  if (step === 'provision_databases') return 'database_provision_failed';
-  if (step === 'deploy_services') return 'service_deploy_failed';
-  if (step === 'configure_dns') return 'dns_config_failed';
-
-  return 'init_step_failed';
+  return projectInitDefaultErrorCodes[step] ?? 'init_step_failed';
 }
 
-export async function processProjectInit(job: Job<ProjectInitJobData>) {
-  const { projectId, mode, template } = job.data;
-
-  const project = await db.query.projects.findFirst({
+async function loadProjectInitProject(projectId: string) {
+  return db.query.projects.findFirst({
     where: eq(projects.id, projectId),
     with: {
       repository: true,
     },
   });
+}
+
+type ProjectInitProjectRecord = NonNullable<Awaited<ReturnType<typeof loadProjectInitProject>>>;
+
+interface ProjectInitExecutionContext {
+  hasK8s: boolean;
+  project: ProjectInitProjectRecord;
+  reportStepProgress: StepProgressReporter;
+  template?: string;
+}
+
+type ProjectInitStepRunner = (
+  context: ProjectInitExecutionContext
+) => Promise<ProjectInitProjectRecord | undefined>;
+
+const projectInitStepRunners: Record<ProjectInitStepName, ProjectInitStepRunner> = {
+  validate_repository: async ({ project, reportStepProgress }) => {
+    await validateRepository(project, reportStepProgress);
+    return undefined;
+  },
+  create_repository: async ({ project, reportStepProgress }) => {
+    await createRepository(project, reportStepProgress);
+    return (await loadProjectInitProject(project.id)) ?? project;
+  },
+  push_template: async ({ project, reportStepProgress, template }) => {
+    await pushTemplate(project, template, reportStepProgress);
+    return undefined;
+  },
+  push_cicd_config: async ({ project, reportStepProgress }) => {
+    await pushCicdConfig(project, reportStepProgress);
+    return undefined;
+  },
+  configure_release_trigger: async ({ project, reportStepProgress }) => {
+    await configureReleaseTrigger(project, reportStepProgress);
+    return undefined;
+  },
+  setup_namespace: async ({ project, reportStepProgress }) => {
+    await setupNamespace(project, reportStepProgress);
+    return undefined;
+  },
+  provision_databases: async ({ project, hasK8s, reportStepProgress }) => {
+    await provisionDatabases(project, hasK8s, reportStepProgress);
+    return undefined;
+  },
+  deploy_services: async ({ project, hasK8s, reportStepProgress }) => {
+    await deployServices(project, hasK8s, reportStepProgress);
+    return undefined;
+  },
+  configure_dns: async ({ project, hasK8s, reportStepProgress }) => {
+    await configureDns(project, hasK8s, reportStepProgress);
+    return undefined;
+  },
+};
+
+export async function processProjectInit(job: Job<ProjectInitJobData>) {
+  const { projectId, mode, template } = job.data;
+
+  const project = await loadProjectInitProject(projectId);
 
   if (!project) {
     throw new Error(`Project ${projectId} not found`);
@@ -320,7 +281,7 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
     .where(eq(projects.id, projectId));
 
   const hasK8s = isK8sAvailable();
-  const steps = mode === 'import' ? IMPORT_STEPS : CREATE_STEPS;
+  const steps = getProjectInitSteps(mode);
   const currentAttempt = job.attemptsMade + 1;
   const totalAttempts =
     typeof job.opts.attempts === 'number' && job.opts.attempts > 0 ? job.opts.attempts : 1;
@@ -340,62 +301,24 @@ export async function processProjectInit(job: Job<ProjectInitJobData>) {
           : {}),
       });
 
-      switch (step) {
-        case 'validate_repository':
-          await validateRepository(project, reportStepProgress);
-          break;
-        case 'create_repository': {
-          await createRepository(project, reportStepProgress);
-          // Refetch project to get updated repository relation
-          const updatedProject = await db.query.projects.findFirst({
-            where: eq(projects.id, projectId),
-            with: { repository: true },
-          });
-          if (updatedProject) {
-            Object.assign(project, updatedProject);
-          }
-          break;
-        }
-        case 'push_cicd_config':
-          await pushCicdConfig(project, reportStepProgress);
-          break;
-        case 'push_template':
-          await pushTemplate(project, template, reportStepProgress);
-          break;
-        case 'configure_release_trigger':
-          await configureReleaseTrigger(project, reportStepProgress);
-          break;
-        case 'setup_namespace':
-          await setupNamespace(project, hasK8s, reportStepProgress);
-          break;
-        case 'deploy_services':
-          await deployServices(project, hasK8s, reportStepProgress);
-          break;
-        case 'provision_databases':
-          await provisionDatabases(project, hasK8s, reportStepProgress);
-          break;
-        case 'configure_dns':
-          await configureDns(project, hasK8s, reportStepProgress);
-          break;
+      const maybeUpdatedProject = await projectInitStepRunners[step]({
+        project,
+        template,
+        hasK8s,
+        reportStepProgress,
+      });
+
+      if (maybeUpdatedProject) {
+        Object.assign(project, maybeUpdatedProject);
       }
 
       const message =
-        !hasK8s &&
-        ['setup_namespace', 'deploy_services', 'provision_databases', 'configure_dns'].includes(
-          step
-        )
-          ? 'Skipped (no K8s cluster)'
-          : undefined;
+        !hasK8s && isK8sBackedProjectInitStep(step) ? 'Skipped (no K8s cluster)' : undefined;
 
       await updateStepStatus(
         projectId,
         step,
-        hasK8s ||
-          !['setup_namespace', 'deploy_services', 'provision_databases', 'configure_dns'].includes(
-            step
-          )
-          ? 'completed'
-          : 'skipped',
+        hasK8s || !isK8sBackedProjectInitStep(step) ? 'completed' : 'skipped',
         { progress: 100, message }
       );
     } catch (error) {
@@ -432,20 +355,26 @@ async function validateRepository(
   project: typeof projects.$inferSelect & { repository: typeof repositories.$inferSelect | null },
   onProgress?: StepProgressReporter
 ) {
-  console.log(`[validateRepository] Starting for project ${project.name}`);
+  const scopedLogger = projectInitLogger.child({
+    projectId: project.id,
+    step: 'validate_repository',
+  });
+  scopedLogger.info('Starting repository validation', { projectName: project.name });
   await onProgress?.(10, '检查仓库绑定');
 
   if (!project.repository) {
-    console.log('[validateRepository] No repository linked');
+    scopedLogger.warn('No repository linked');
     if (isDev) {
-      console.log('⚠️  Skipping repository validation (dev mode)');
+      scopedLogger.info('Skipping repository validation in development mode');
       await onProgress?.(100, '开发模式下跳过仓库校验');
       return;
     }
     throw new Error('No repository linked to project');
   }
 
-  console.log(`[validateRepository] Repository: ${project.repository.fullName}`);
+  scopedLogger.info('Validating repository access', {
+    repositoryFullName: project.repository.fullName,
+  });
   await onProgress?.(45, '验证团队仓库授权');
 
   // Obtain integration session with required capability
@@ -456,21 +385,28 @@ async function validateRepository(
 
   await onProgress?.(80, '读取仓库元数据');
   const repo = await gateway.getRepository(session, project.repository.fullName);
-  console.log(`[validateRepository] Repository access ${repo ? 'granted' : 'denied'}`);
+  scopedLogger.info('Resolved repository access', {
+    repositoryFullName: project.repository.fullName,
+    accessGranted: Boolean(repo),
+  });
 
   if (!repo) {
     throw new Error('No access to repository');
   }
 
   await onProgress?.(100, '仓库访问已确认');
-  console.log('[validateRepository] Validation passed');
+  scopedLogger.info('Repository validation passed');
 }
 
 async function createRepository(
   project: typeof projects.$inferSelect,
   onProgress?: StepProgressReporter
 ) {
-  console.log(`Creating repository for project ${project.name}`);
+  const scopedLogger = projectInitLogger.child({
+    projectId: project.id,
+    step: 'create_repository',
+  });
+  scopedLogger.info('Creating repository for project', { projectName: project.name });
   await onProgress?.(10, '准备创建仓库');
 
   // Obtain integration session with required capability
@@ -506,7 +442,9 @@ async function createRepository(
   await db.update(projects).set({ repositoryId: dbRepoId }).where(eq(projects.id, project.id));
 
   await onProgress?.(100, '仓库创建完成');
-  console.log(`✅ Created repository: ${repo.fullName}`);
+  scopedLogger.info('Created repository for project', {
+    repositoryFullName: repo.fullName,
+  });
 }
 
 async function pushTemplate(
@@ -516,7 +454,11 @@ async function pushTemplate(
   template?: string,
   onProgress?: StepProgressReporter
 ) {
-  console.log(`Pushing template to project ${project.name}`);
+  const scopedLogger = projectInitLogger.child({
+    projectId: project.id,
+    step: 'push_template',
+  });
+  scopedLogger.info('Pushing template to project repository', { projectName: project.name });
   await onProgress?.(10, '准备模板内容');
 
   if (!project.repository) {
@@ -548,7 +490,10 @@ async function pushTemplate(
   });
 
   await onProgress?.(100, '模板已推送');
-  console.log(`✅ Pushed ${files.size} files to repository`);
+  scopedLogger.info('Pushed template files to repository', {
+    fileCount: files.size,
+    repositoryFullName: project.repository.fullName,
+  });
 }
 
 // ============================================
@@ -947,11 +892,15 @@ async function pushCicdConfig(
   },
   onProgress?: StepProgressReporter
 ) {
-  console.log(`Pushing CI/CD config for project ${project.name}`);
+  const scopedLogger = projectInitLogger.child({
+    projectId: project.id,
+    step: 'push_cicd_config',
+  });
+  scopedLogger.info('Pushing Juanie CI/CD config', { projectName: project.name });
   await onProgress?.(5, '准备注入 Juanie CI/CD 配置');
 
   if (!project.repository) {
-    console.log('No repository linked, skipping CI/CD config');
+    scopedLogger.warn('No repository linked, skipping CI/CD config');
     await onProgress?.(100, '项目还没有仓库，跳过 CI/CD 注入');
     return;
   }
@@ -977,7 +926,10 @@ async function pushCicdConfig(
       project.productionBranch || 'main'
     );
     monorepoType = detectMonorepoType(rootFiles);
-    console.log(`Detected monorepo type: ${monorepoType}`);
+    scopedLogger.info('Detected repository topology for CI/CD config', {
+      monorepoType,
+      repositoryFullName: project.repository.fullName,
+    });
 
     if (rootFiles.includes('package.json')) {
       try {
@@ -990,7 +942,10 @@ async function pushCicdConfig(
         );
         packageJson = packageJsonContent ? JSON.parse(packageJsonContent) : null;
       } catch (error) {
-        console.warn('Failed to parse package.json, falling back to migration skeleton:', error);
+        scopedLogger.warn('Failed to parse package.json, falling back to migration skeleton', {
+          repositoryFullName: project.repository.fullName,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
@@ -1015,14 +970,17 @@ async function pushCicdConfig(
           bakeTargets = parseDockerBakeTargets(bakeContent);
         }
       } catch (error) {
-        console.warn(
-          'Failed to inspect docker-bake definition, continuing without targets:',
-          error
-        );
+        scopedLogger.warn('Failed to inspect docker-bake definition, continuing without targets', {
+          repositoryFullName: project.repository.fullName,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   } catch (error) {
-    console.warn('Failed to inspect repository root, falling back to generated skeleton:', error);
+    scopedLogger.warn('Failed to inspect repository root, falling back to generated skeleton', {
+      repositoryFullName: project.repository.fullName,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
   }
 
   await onProgress?.(65, '生成 Juanie 配置文件');
@@ -1094,7 +1052,10 @@ async function pushCicdConfig(
     .where(eq(projects.id, project.id));
 
   await onProgress?.(100, 'Juanie CI/CD 配置已注入');
-  console.log(`✅ Pushed CI/CD config (monorepo: ${isMonorepo ? monorepoType : 'none'})`);
+  scopedLogger.info('Pushed Juanie CI/CD config', {
+    monorepoType: isMonorepo ? monorepoType : 'none',
+    repositoryFullName: project.repository.fullName,
+  });
 }
 
 function renderGitHubCI(
@@ -1504,11 +1465,15 @@ async function configureReleaseTrigger(
   },
   onProgress?: StepProgressReporter
 ) {
-  console.log(`Configuring release trigger for project ${project.name}`);
+  const scopedLogger = projectInitLogger.child({
+    projectId: project.id,
+    step: 'configure_release_trigger',
+  });
+  scopedLogger.info('Configuring release trigger for project', { projectName: project.name });
   await onProgress?.(20, '准备发布触发配置');
 
   if (!project.repository) {
-    console.log('No repository linked, skipping release trigger configuration');
+    scopedLogger.warn('No repository linked, skipping release trigger configuration');
     await onProgress?.(100, '项目还没有仓库，跳过发布触发配置');
     return;
   }
@@ -1516,7 +1481,14 @@ async function configureReleaseTrigger(
   // Update project config with image name
   const config = (project.configJson as Record<string, unknown>) || {};
   await onProgress?.(60, '计算镜像仓库地址');
-  const imageName = buildImageName(project.repository);
+  const imageName = resolveDeployImageRepository({
+    configJson: project.configJson,
+    repositoryFullName: project.repository.fullName,
+  });
+
+  if (!imageName) {
+    throw new Error(`Cannot resolve deploy image repository for ${project.repository.fullName}`);
+  }
 
   await db
     .update(projects)
@@ -1530,8 +1502,10 @@ async function configureReleaseTrigger(
     .where(eq(projects.id, project.id));
 
   await onProgress?.(100, '发布触发配置完成');
-  console.log(`✅ Configured release trigger for ${project.repository.fullName}`);
-  console.log(`   Juanie CI will call /api/releases after image push`);
+  scopedLogger.info('Configured release trigger for repository', {
+    repositoryFullName: project.repository.fullName,
+    imageName,
+  });
 }
 
 async function triggerInitialAutoDeployBuilds(
@@ -1562,6 +1536,12 @@ async function triggerInitialAutoDeployBuilds(
     return;
   }
 
+  const scopedLogger = projectInitLogger.child({
+    projectId: project.id,
+    step: 'trigger_initial_auto_deploy_builds',
+    repositoryFullName: project.repository.fullName,
+  });
+
   const session = await getTeamIntegrationSession({
     integrationId: project.repository.providerId,
     teamId: project.teamId,
@@ -1587,61 +1567,44 @@ async function triggerInitialAutoDeployBuilds(
       forceFullBuild: true,
     });
 
-    console.log(
-      `✅ Triggered initial auto-deploy build for ${project.repository.fullName} (${ref})`
-    );
+    scopedLogger.info('Triggered initial auto-deploy build', {
+      ref,
+      sourceCommitSha,
+    });
   }
-}
-
-/**
- * Build the container image name based on git provider type.
- */
-function buildImageName(repo: typeof repositories.$inferSelect): string {
-  return buildDeployImageRepository(repo.fullName);
 }
 
 async function setupNamespace(
   project: typeof projects.$inferSelect,
-  hasK8s: boolean,
   onProgress?: StepProgressReporter
 ) {
   const envList = await db.query.environments.findMany({
     where: eq(environments.projectId, project.id),
   });
 
-  const namespacesToCreate = new Set<string>();
-
-  for (const env of envList) {
-    const ns = buildEnvironmentNamespace(project.slug, env);
-    await db.update(environments).set({ namespace: ns }).where(eq(environments.id, env.id));
-    namespacesToCreate.add(ns);
-  }
-
-  if (namespacesToCreate.size === 0) {
+  if (envList.length === 0) {
     await onProgress?.(100, '没有需要创建的命名空间');
     return;
   }
 
-  if (hasK8s) {
-    const namespaceList = [...namespacesToCreate];
-    for (let index = 0; index < namespaceList.length; index += 1) {
-      const ns = namespaceList[index];
-      try {
-        await createNamespace(ns);
-        await onProgress?.(
-          Math.round(((index + 1) / namespaceList.length) * 100),
-          `已确保命名空间 ${ns}`
-        );
-      } catch (error) {
-        console.error(`Failed to create namespace ${ns}:`, error);
-        throw error;
-      }
-    }
-  } else {
-    for (const ns of namespacesToCreate) {
-      console.log(`[Mock] Would create namespace: ${ns}`);
-    }
-    await onProgress?.(100, '当前没有可用 Kubernetes，已跳过命名空间创建');
+  for (let index = 0; index < envList.length; index += 1) {
+    const environment = envList[index];
+    const namespace = await ensureEnvironmentNamespace({
+      projectSlug: project.slug,
+      environment: {
+        id: environment.id,
+        name: environment.name,
+        namespace: environment.namespace,
+        kind: environment.kind,
+        isProduction: environment.isProduction,
+        isPreview: environment.isPreview,
+      },
+    });
+
+    await onProgress?.(
+      Math.round(((index + 1) / envList.length) * 100),
+      `已登记 ${environment.name} 环境命名空间 ${namespace}`
+    );
   }
 }
 
@@ -1658,44 +1621,51 @@ async function deployServices(
   });
 
   if (!hasK8s) {
-    console.log('⚠️  Skipping service deployment (no K8s cluster)');
+    projectInitLogger.warn('Skipping service deployment because Kubernetes is unavailable', {
+      projectId: project.id,
+      step: 'deploy_services',
+    });
     await onProgress?.(100, '当前没有可用 Kubernetes，已跳过服务初始化');
     return;
   }
 
-  // Only create K8s Services (ClusterIP) for internal networking.
-  // The Deployment (Pod) is intentionally NOT created here — it will be created
-  // by the deployment worker on the first CI/CD push with the correct image,
-  // envFrom (ConfigMap/Secret refs), and imagePullSecrets.
-  const targets = environmentList.flatMap((environment) =>
-    serviceList.map((service) => ({ environment, service }))
-  );
-
-  if (targets.length === 0) {
+  if (serviceList.length === 0 || environmentList.length === 0) {
     await onProgress?.(100, '没有需要初始化的服务');
     return;
   }
 
-  for (let i = 0; i < targets.length; i++) {
-    const target = targets[i];
-    const namespace =
-      target.environment.namespace || buildEnvironmentNamespace(project.slug, target.environment);
-    const resourceName = buildProjectScopedK8sName(project.slug, target.service.name);
-    const port = target.service.port || 3000;
+  for (let i = 0; i < environmentList.length; i++) {
+    const environment = environmentList[i];
 
-    console.log(
-      `[deployServices] Ensuring K8s Service ${resourceName} in ${target.environment.name}...`
-    );
-    await upsertService(namespace, resourceName, { port, targetPort: port });
-    console.log(`✅ Ensured K8s Service ${resourceName} in ${namespace}`);
+    await reconcileEnvironmentState({
+      project: {
+        id: project.id,
+        slug: project.slug,
+        configJson: project.configJson,
+      },
+      environment: {
+        id: environment.id,
+        name: environment.name,
+        namespace: environment.namespace,
+        kind: environment.kind,
+        isProduction: environment.isProduction,
+        isPreview: environment.isPreview,
+        deploymentStrategy: environment.deploymentStrategy,
+      },
+      services: serviceList,
+      scope: 'runtime',
+    });
 
-    // Mark as pending — the Deployment (and pod) will be created by the first CI/CD deploy
-    await db.update(services).set({ status: 'pending' }).where(eq(services.id, target.service.id));
     await onProgress?.(
-      Math.round(((i + 1) / targets.length) * 100),
-      `已确保 ${target.environment.name} 环境中的 ${target.service.name} Service`
+      Math.round(((i + 1) / environmentList.length) * 100),
+      `已确保 ${environment.name} 环境基础服务`
     );
   }
+
+  await db
+    .update(services)
+    .set({ status: 'pending', updatedAt: new Date() })
+    .where(eq(services.projectId, project.id));
 }
 
 async function provisionDatabases(
@@ -1737,7 +1707,12 @@ async function provisionDatabases(
     ];
     for (const envId of affectedEnvIds) {
       await syncEnvVarsToK8s(project.id, envId).catch((e) =>
-        console.warn(`[provisionDatabases] syncEnvVarsToK8s failed for env ${envId}:`, e)
+        projectInitLogger.warn('Failed to sync environment variables to Kubernetes', {
+          projectId: project.id,
+          step: 'provision_databases',
+          environmentId: envId,
+          errorMessage: e instanceof Error ? e.message : String(e),
+        })
       );
     }
   }
@@ -1756,503 +1731,11 @@ export async function provisionDatabase(
   project: typeof projects.$inferSelect,
   hasK8s: boolean
 ): Promise<void> {
-  const provisionType = resolveDatabaseProvisionType(
-    database.type,
-    toPlatformDatabaseProvisionType(database.provisionType)
-  );
-
-  if (!supportsDatabaseProvisionType(database.type, provisionType)) {
-    await db.update(databases).set({ status: 'failed' }).where(eq(databases.id, database.id));
-    throw new Error(formatUnsupportedDatabaseProvisionTypeMessage(database.type, provisionType));
-  }
-
-  if (provisionType === 'external') {
-    const runtimeAccessCheck = await verifyDeclaredDatabaseRuntimeAccess(database);
-    if (!runtimeAccessCheck.satisfied) {
-      await db.update(databases).set({ status: 'failed' }).where(eq(databases.id, database.id));
-      throw new Error(formatDatabaseRuntimeAccessIssues(database, runtimeAccessCheck.issues));
-    }
-
-    const capabilityCheck = await verifyDeclaredDatabaseCapabilities(database);
-    await db
-      .update(databases)
-      .set({ status: capabilityCheck.satisfied ? 'running' : 'failed' })
-      .where(eq(databases.id, database.id));
-    if (!capabilityCheck.satisfied) {
-      throw new Error(formatDatabaseCapabilityIssues(database, capabilityCheck.issues));
-    }
-    console.log(`✅ Database ${database.name} marked running (external)`);
-    return;
-  }
-
-  if (provisionType === 'shared') {
-    if (database.type === 'postgresql') {
-      await provisionSharedPostgreSQL(database, project);
-      return;
-    }
-    if (database.type === 'redis') {
-      await provisionSharedRedis(database);
-      return;
-    }
-  }
-
-  // standalone
-  if (!hasK8s) {
-    console.log(`[Mock] Would provision database: ${database.name}`);
-    await db.update(databases).set({ status: 'running' }).where(eq(databases.id, database.id));
-    return;
-  }
-
-  const environment = database.environmentId
-    ? await db.query.environments.findFirst({
-        where: eq(environments.id, database.environmentId),
-        columns: {
-          id: true,
-          name: true,
-          namespace: true,
-          isPreview: true,
-          isProduction: true,
-        },
-      })
-    : null;
-  const namespace =
-    environment?.namespace ??
-    (environment
-      ? buildEnvironmentNamespace(project.slug, environment)
-      : buildProjectNamespaceBase(project.slug));
-  const dbPassword = nanoid(32);
-  const resourceName = buildProjectScopedK8sName(
-    project.slug,
-    environment?.isPreview ? environment.name : environment?.isProduction ? 'prod' : null,
-    database.name
-  );
-  const secretName = `${resourceName}-creds`;
-
-  console.log(`Provisioning standalone database ${database.name} for project ${project.name}`);
-
-  await createNamespace(namespace);
-  await createSecret(
-    namespace,
-    secretName,
-    buildManagedDatabaseSecretData(database.type, dbPassword)
-  );
-
-  if (database.type === 'postgresql') {
-    await createPostgreSQLStatefulSet(
-      namespace,
-      resourceName,
-      database.name,
-      secretName,
-      database.capabilities
-    );
-    await createService(namespace, resourceName, { port: 5432, targetPort: 5432 });
-  } else if (database.type === 'redis') {
-    await createRedisDeployment(namespace, resourceName, secretName);
-    await createService(namespace, resourceName, { port: 6379, targetPort: 6379 });
-  } else if (database.type === 'mysql') {
-    await createMySQLStatefulSet(namespace, resourceName, database.name, secretName);
-    await createService(namespace, resourceName, { port: 3306, targetPort: 3306 });
-  } else {
-    await db.update(databases).set({ status: 'failed' }).where(eq(databases.id, database.id));
-    throw new Error(`当前不支持以 ${provisionType} 方式供应 ${database.type} 数据库`);
-  }
-
-  const connectionString = getConnectionString(
-    database.type,
-    resourceName,
-    namespace,
-    dbPassword,
-    database.name
-  );
-
-  await db
-    .update(databases)
-    .set({
-      connectionString,
-      host: `${resourceName}.${namespace}.svc.cluster.local`,
-      port: getManagedDatabasePort(database.type),
-      databaseName: database.type === 'redis' ? null : database.name,
-      username: getManagedDatabaseUsername(database.type),
-      password: dbPassword,
-      serviceName: resourceName,
-      namespace,
-    })
-    .where(eq(databases.id, database.id));
-
-  const latestDatabase = await db.query.databases.findFirst({
-    where: eq(databases.id, database.id),
+  await provisionManagedDatabase({
+    database,
+    project,
+    hasK8s,
   });
-  if (!latestDatabase) {
-    throw new Error(`数据库 ${database.name} 在供应完成后丢失，无法兑现能力`);
-  }
-
-  const capabilityCheck = await reconcileDeclaredDatabaseCapabilities(latestDatabase);
-
-  await db
-    .update(databases)
-    .set({ status: capabilityCheck.satisfied ? 'running' : 'failed' })
-    .where(eq(databases.id, database.id));
-
-  if (!capabilityCheck.satisfied) {
-    throw new Error(formatDatabaseCapabilityIssues(database, capabilityCheck.issues));
-  }
-
-  console.log(`✅ Provisioned standalone database ${database.name}`);
-}
-
-function buildManagedDatabaseSecretData(
-  type: typeof databases.$inferSelect.type,
-  password: string
-): Record<string, string> {
-  switch (type) {
-    case 'postgresql':
-      return { POSTGRES_PASSWORD: password };
-    case 'mysql':
-      return { MYSQL_ROOT_PASSWORD: password };
-    case 'redis':
-      return { password };
-    default:
-      return { password };
-  }
-}
-
-function getManagedDatabaseUsername(type: typeof databases.$inferSelect.type): string | null {
-  switch (type) {
-    case 'postgresql':
-      return 'postgres';
-    case 'mysql':
-      return 'root';
-    default:
-      return null;
-  }
-}
-
-function getManagedDatabasePort(type: typeof databases.$inferSelect.type): number | null {
-  switch (type) {
-    case 'postgresql':
-      return 5432;
-    case 'mysql':
-      return 3306;
-    case 'redis':
-      return 6379;
-    default:
-      return null;
-  }
-}
-
-/** Sanitize a string to a valid PostgreSQL identifier segment (a-z0-9_ only, max 30 chars). */
-function sanitizePgName(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '_')
-    .slice(0, 30);
-}
-
-/**
- * Qualify a bare K8s service name with the Juanie namespace FQDN so it can be
- * resolved from pods running in other namespaces.
- * localhost / IP addresses / already-qualified names are returned as-is.
- */
-function toFqdn(host: string): string {
-  const juanieNamespace = process.env.JUANIE_NAMESPACE || 'juanie';
-  if (!host || host === 'localhost' || /^\d+\.\d+/.test(host) || host.includes('.')) {
-    return host;
-  }
-  return `${host}.${juanieNamespace}.svc.cluster.local`;
-}
-
-async function provisionSharedPostgreSQL(
-  database: typeof databases.$inferSelect,
-  project: typeof projects.$inferSelect
-): Promise<void> {
-  let adminUrl: string;
-  try {
-    adminUrl = getNormalizedDatabaseUrlFromEnv();
-  } catch {
-    throw new Error(
-      'Control-plane database config is incomplete; cannot provision shared PostgreSQL'
-    );
-  }
-
-  const environment = database.environmentId
-    ? await db.query.environments.findFirst({
-        where: eq(environments.id, database.environmentId),
-        columns: {
-          id: true,
-          name: true,
-          isPreview: true,
-          isProduction: true,
-        },
-      })
-    : null;
-  const environmentSegment = environment?.isPreview
-    ? sanitizePgName(environment.name)
-    : environment?.isProduction
-      ? 'prod'
-      : null;
-  const dbIdentifier = [
-    'juanie',
-    sanitizePgName(project.slug),
-    environmentSegment,
-    sanitizePgName(database.name),
-  ]
-    .filter(Boolean)
-    .join('_')
-    .slice(0, 63);
-  const dbPassword = nanoid(32); // URL-safe chars: A-Za-z0-9_- — safe in SQL string literals
-  const provisionStatements = buildManagedPostgresProvisionStatements({
-    databaseName: dbIdentifier,
-    owner: dbIdentifier,
-    password: dbPassword,
-  });
-
-  const adminConn = postgres(adminUrl, { max: 1 });
-  try {
-    await adminConn.unsafe(provisionStatements.roleCreateOrUpdate);
-
-    const [databaseExists] = await adminConn<{ exists: boolean }[]>`
-      SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = ${dbIdentifier}) AS exists
-    `;
-
-    if (!databaseExists?.exists) {
-      await adminConn.unsafe(provisionStatements.databaseCreate);
-    }
-
-    await adminConn.unsafe(provisionStatements.databaseOwnerStatement);
-    for (const statement of provisionStatements.databaseGrants) {
-      await adminConn.unsafe(statement);
-    }
-
-    const parsedUrl = new URL(adminUrl);
-    const host = toFqdn(parsedUrl.hostname);
-    const port = parseInt(parsedUrl.port || '5432', 10);
-    const connStr = buildNormalizedPostgresUrl({
-      username: dbIdentifier,
-      password: dbPassword,
-      host,
-      port,
-      databaseName: dbIdentifier,
-    });
-
-    const bootstrapUrl = new URL(adminUrl);
-    bootstrapUrl.pathname = `/${dbIdentifier}`;
-    const bootstrapConn = postgres(bootstrapUrl.toString(), { max: 1 });
-    try {
-      for (const statement of provisionStatements.schemaBootstrapStatements) {
-        await bootstrapConn.unsafe(statement);
-      }
-    } finally {
-      await bootstrapConn.end().catch(() => undefined);
-    }
-
-    await db
-      .update(databases)
-      .set({
-        connectionString: connStr,
-        host,
-        port,
-        databaseName: dbIdentifier,
-        username: dbIdentifier,
-        password: dbPassword,
-      })
-      .where(eq(databases.id, database.id));
-
-    await assertManagedPostgresRuntimeAccess({
-      type: 'postgresql',
-      provisionType: 'shared',
-      host,
-      port,
-      databaseName: dbIdentifier,
-      username: dbIdentifier,
-      connectionString: connStr,
-    });
-
-    const latestDatabase = await db.query.databases.findFirst({
-      where: eq(databases.id, database.id),
-    });
-    if (!latestDatabase) {
-      throw new Error(`数据库 ${database.name} 在共享库初始化后丢失，无法兑现能力`);
-    }
-
-    const capabilityCheck = await reconcileDeclaredDatabaseCapabilities(latestDatabase);
-
-    await db
-      .update(databases)
-      .set({ status: capabilityCheck.satisfied ? 'running' : 'failed' })
-      .where(eq(databases.id, database.id));
-
-    if (!capabilityCheck.satisfied) {
-      throw new Error(formatDatabaseCapabilityIssues(database, capabilityCheck.issues));
-    }
-
-    console.log(`✅ Provisioned shared PostgreSQL database ${dbIdentifier}`);
-  } finally {
-    await adminConn.end();
-  }
-}
-
-async function provisionSharedRedis(database: typeof databases.$inferSelect): Promise<void> {
-  // Count existing shared-redis databases (excluding this one) to assign the next db index.
-  // Redis db 0 is reserved for Juanie's BullMQ queues.
-  const sharedRedis = await db
-    .select({ id: databases.id })
-    .from(databases)
-    .where(
-      and(
-        eq(databases.type, 'redis'),
-        eq(databases.provisionType, 'shared'),
-        ne(databases.id, database.id)
-      )
-    );
-  const dbIndex = sharedRedis.length + 1; // 1-based; 0 reserved for BullMQ
-
-  const redisHost = toFqdn(process.env.REDIS_HOST || 'localhost');
-  const redisPort = process.env.REDIS_PORT || '6379';
-  const redisPassword = process.env.REDIS_PASSWORD;
-
-  const connStr = redisPassword
-    ? `redis://:${encodeURIComponent(redisPassword)}@${redisHost}:${redisPort}/${dbIndex}`
-    : `redis://${redisHost}:${redisPort}/${dbIndex}`;
-
-  await db
-    .update(databases)
-    .set({
-      status: 'running',
-      connectionString: connStr,
-      host: redisHost,
-      port: dbIndex, // store redis db index in port field
-    })
-    .where(eq(databases.id, database.id));
-
-  console.log(`✅ Provisioned shared Redis at db index ${dbIndex}`);
-}
-
-// Helper function to create PostgreSQL StatefulSet
-async function createPostgreSQLStatefulSet(
-  namespace: string,
-  name: string,
-  dbName: string,
-  secretName: string,
-  capabilities: readonly string[] | null | undefined
-): Promise<void> {
-  await createStatefulSet(namespace, name, {
-    image: resolveManagedPostgresImage(capabilities),
-    serviceName: name,
-    port: 5432,
-    replicas: 1,
-    env: {
-      POSTGRES_DB: dbName,
-      PGDATA: '/var/lib/postgresql/data/pgdata',
-    },
-    envFrom: {
-      secretName,
-    },
-    volumeName: 'data',
-    storageSize: '10Gi',
-    mountPath: '/var/lib/postgresql/data',
-  });
-}
-
-// Helper function to create Redis Deployment
-async function createRedisDeployment(
-  namespace: string,
-  name: string,
-  secretName: string
-): Promise<void> {
-  const { apps } = getK8sClient();
-
-  await apps.createNamespacedDeployment({
-    namespace,
-    body: {
-      apiVersion: 'apps/v1',
-      kind: 'Deployment',
-      metadata: { name },
-      spec: {
-        replicas: 1,
-        selector: { matchLabels: { app: name } },
-        template: {
-          metadata: { labels: { app: name } },
-          spec: {
-            containers: [
-              {
-                name: 'redis',
-                image: 'redis:7-alpine',
-                ports: [{ containerPort: 6379 }],
-                env: [
-                  {
-                    name: 'REDIS_PASSWORD',
-                    valueFrom: {
-                      secretKeyRef: {
-                        name: secretName,
-                        key: 'password',
-                      },
-                    },
-                  },
-                ],
-                command: ['sh', '-c'],
-                args: ['redis-server --requirepass "$REDIS_PASSWORD"'],
-              },
-            ],
-          },
-        },
-      },
-    },
-  });
-}
-
-// Helper function to create MySQL StatefulSet
-async function createMySQLStatefulSet(
-  namespace: string,
-  name: string,
-  dbName: string,
-  secretName: string
-): Promise<void> {
-  await createStatefulSet(namespace, name, {
-    image: 'mysql:8',
-    serviceName: name,
-    port: 3306,
-    replicas: 1,
-    env: {
-      MYSQL_DATABASE: dbName,
-    },
-    envFrom: {
-      secretName,
-    },
-    volumeName: 'data',
-    storageSize: '10Gi',
-    mountPath: '/var/lib/mysql',
-  });
-}
-
-// Helper function to generate connection strings
-function getConnectionString(
-  type: string,
-  host: string,
-  namespace: string,
-  password: string,
-  dbName: string
-): string {
-  const fullHost = `${host}.${namespace}.svc.cluster.local`;
-  // URL-encode password to handle special characters (@, :, /, #, ?, etc.)
-  const encodedPassword = encodeURIComponent(password);
-  switch (type) {
-    case 'postgresql':
-      return buildNormalizedPostgresUrl({
-        username: 'postgres',
-        password,
-        host: fullHost,
-        port: 5432,
-        databaseName: dbName,
-      });
-    case 'mysql':
-      return `mysql://root:${encodedPassword}@${fullHost}:3306/${dbName}`;
-    case 'redis':
-      return `redis://:${encodedPassword}@${fullHost}:6379`;
-    case 'mongodb':
-      return `mongodb://root:${encodedPassword}@${fullHost}:27017/${dbName}`;
-    default:
-      return '';
-  }
 }
 
 async function configureDns(
@@ -2263,74 +1746,58 @@ async function configureDns(
   const serviceList = await db.query.services.findMany({
     where: eq(services.projectId, project.id),
   });
-  const defaultPublicService = pickDefaultPublicService(serviceList);
+  const environmentList = await db.query.environments.findMany({
+    where: eq(environments.projectId, project.id),
+  });
   const domainList = await db.query.domains.findMany({
     where: eq(domains.projectId, project.id),
-    with: {
-      environment: true,
-      service: true,
+    columns: {
+      environmentId: true,
     },
   });
+  const domainEnvironmentIds = new Set(
+    domainList
+      .map((domain) => domain.environmentId)
+      .filter((value): value is string => Boolean(value))
+  );
+  const targetEnvironments = environmentList.filter(
+    (environment) => environment.kind === 'preview' || domainEnvironmentIds.has(environment.id)
+  );
 
-  if (domainList.length === 0) {
+  if (targetEnvironments.length === 0) {
     await onProgress?.(100, '没有需要配置的域名');
     return;
   }
 
-  for (let i = 0; i < domainList.length; i++) {
-    const domain = domainList[i];
-    const namespace =
-      domain.environment?.namespace ||
-      (domain.environment
-        ? buildEnvironmentNamespace(project.slug, domain.environment)
-        : buildProjectNamespaceBase(project.slug));
-    if (hasK8s) {
-      console.log(`Configuring DNS for ${domain.hostname}`);
+  if (!hasK8s) {
+    await onProgress?.(100, '当前没有可用 Kubernetes，已跳过域名配置');
+    return;
+  }
 
-      // Determine the service name to point to
-      const targetService = domain.service ?? defaultPublicService;
-      const serviceName = targetService
-        ? buildProjectScopedK8sName(project.slug, targetService.name)
-        : buildProjectScopedK8sName(project.slug, 'web');
+  for (let i = 0; i < targetEnvironments.length; i++) {
+    const environment = targetEnvironments[i];
 
-      const servicePort = targetService?.port || 3000;
-      const routeName = buildDomainRouteName(domain.hostname);
+    await reconcileEnvironmentState({
+      project: {
+        id: project.id,
+        slug: project.slug,
+        configJson: project.configJson,
+      },
+      environment: {
+        id: environment.id,
+        name: environment.name,
+        namespace: environment.namespace,
+        kind: environment.kind,
+        isPreview: environment.isPreview,
+        deploymentStrategy: environment.deploymentStrategy,
+      },
+      services: serviceList,
+      scope: 'access',
+    });
 
-      // Create HTTPRoute pointing to shared-gateway (https-wildcard handles *.juanie.art)
-      await reconcileCiliumHTTPRoutesForHostname({
-        namespace,
-        hostname: domain.hostname,
-        canonicalRouteName: routeName,
-      });
-      await createCiliumHTTPRoute({
-        name: routeName,
-        namespace,
-        gatewayName: 'shared-gateway',
-        gatewayNamespace: 'juanie',
-        sectionName: 'https-wildcard',
-        hostnames: [domain.hostname],
-        serviceName,
-        servicePort,
-        path: '/',
-      });
-
-      // Mark domain as gateway configured
-      // NOTE: This sets isVerified=true after creating the Gateway/HTTPRoute,
-      // but does NOT perform actual DNS verification. The field name is misleading
-      // - it actually indicates "gateway is configured", not "DNS is verified".
-      // TODO: Implement actual DNS verification (check TXT/CNAME records) or
-      // rename the column to gatewayConfigured for clarity.
-      await db.update(domains).set({ isVerified: true }).where(eq(domains.id, domain.id));
-
-      console.log(`✅ Configured DNS for ${domain.hostname}`);
-    } else {
-      console.log(`[Mock] Would configure DNS for: ${domain.hostname}`);
-      // See note above about isVerified semantics
-      await db.update(domains).set({ isVerified: true }).where(eq(domains.id, domain.id));
-    }
     await onProgress?.(
-      Math.round(((i + 1) / domainList.length) * 100),
-      `域名 ${domain.hostname} 已配置`
+      Math.round(((i + 1) / targetEnvironments.length) * 100),
+      `已确保 ${environment.name} 环境域名与路由`
     );
   }
 }
@@ -2505,9 +1972,14 @@ export async function injectDatabaseEnvVars(
   }
 
   const scope = environmentId ? `env:${environmentId.slice(0, 8)}` : 'project-scoped';
-  console.log(
-    `✅ Injected ${Object.keys(vars).length} env vars for database ${database.name} [${scope}]: ${Object.keys(vars).join(', ')}`
-  );
+  projectInitLogger.info('Injected database environment variables', {
+    projectId: project.id,
+    databaseId: database.id,
+    databaseName: database.name,
+    scope,
+    variableCount: Object.keys(vars).length,
+    variableKeys: Object.keys(vars),
+  });
 }
 
 const DATABASE_ENV_KEYS = [

@@ -1,7 +1,9 @@
 import type Redis from 'ioredis';
+import { logger } from '@/lib/logger';
 import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 
 const PROJECT_INIT_CHANNEL_PREFIX = 'realtime:project-init:';
+const projectInitRealtimeLogger = logger.child({ component: 'realtime-project-init' });
 
 export interface ProjectInitRealtimeEvent {
   kind: 'step_updated';
@@ -67,7 +69,9 @@ export async function createProjectInitRealtimeSubscriber(input: {
       const parsed = JSON.parse(payload) as ProjectInitRealtimeEvent;
       await input.onEvent(parsed);
     } catch (error) {
-      console.error('Failed to handle project init realtime event:', error);
+      projectInitRealtimeLogger.error('Failed to handle project init realtime event', error, {
+        channel: receivedChannel,
+      });
     }
   };
 

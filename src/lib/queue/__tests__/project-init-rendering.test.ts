@@ -5,8 +5,8 @@ import {
   detectMigrationTool,
   detectPackageManager,
   inferMigrationCommand,
-  resolvePackageScriptCommand,
   renderJuanieConfig,
+  resolvePackageScriptCommand,
 } from '@/lib/queue/project-init';
 
 describe('project init migration inference', () => {

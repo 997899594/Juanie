@@ -1,9 +1,10 @@
 import { and, eq, isNotNull, lt } from 'drizzle-orm';
-import { deprovisionManagedPostgresDatabase } from '@/lib/databases/postgres-ownership';
+import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
 import { databases, domains, environments, environmentVariables } from '@/lib/db/schema';
+import { syncProjectPreviewApplicationSet } from '@/lib/environments/application-set';
 import { isPreviewEnvironment } from '@/lib/environments/model';
-import { deleteNamespace, getIsConnected, initK8sClient, waitForNamespaceDeleted } from '@/lib/k8s';
+import { deleteNamespace, isK8sAvailable, waitForNamespaceDeleted } from '@/lib/k8s';
 import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
 
 export function isActivePreviewReleaseStatus(status: string): boolean {
@@ -39,8 +40,12 @@ export async function deletePreviewEnvironmentById(environmentId: string): Promi
     return { deleted: false, reason: 'active_release' };
   }
 
-  initK8sClient();
-  if (getIsConnected() && environment.namespace) {
+  if (isK8sAvailable() && environment.namespace) {
+    await syncProjectPreviewApplicationSet({
+      projectId: environment.projectId,
+      excludeEnvironmentIds: [environment.id],
+    });
+
     await deleteNamespace(environment.namespace);
     const deleted = await waitForNamespaceDeleted({ name: environment.namespace });
     if (!deleted) {
@@ -59,7 +64,7 @@ export async function deletePreviewEnvironmentById(environmentId: string): Promi
   if (environment.databases.length > 0) {
     for (const database of environment.databases) {
       try {
-        await deprovisionManagedPostgresDatabase(database);
+        await deprovisionManagedDatabase(database);
       } catch (error) {
         throw new Error(
           `Failed to deprovision preview database ${database.databaseName ?? database.name}`,

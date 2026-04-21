@@ -2,10 +2,12 @@ import type {
   DeliveryRuleKind,
   EnvironmentDatabaseStrategy,
   EnvironmentDeliveryMode,
+  EnvironmentDeploymentRuntime,
   EnvironmentDeploymentStrategy,
   EnvironmentKind,
   PromotionFlowStrategy,
 } from '@/lib/db/schema';
+import { inferEnvironmentDeploymentRuntime } from '@/lib/environments/model';
 
 export type CreateEnvironmentTemplate =
   | 'preview_production'
@@ -29,6 +31,7 @@ export interface EnvironmentTopologyBlueprint {
     isProduction: boolean;
     databaseStrategy: EnvironmentDatabaseStrategy;
     deploymentStrategy: EnvironmentDeploymentStrategy;
+    deploymentRuntime: EnvironmentDeploymentRuntime;
   }>;
   deliveryRules: Array<{
     environmentKey: string;
@@ -93,6 +96,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             isProduction: false,
             databaseStrategy: 'direct',
             deploymentStrategy: 'rolling',
+            deploymentRuntime: inferEnvironmentDeploymentRuntime('rolling'),
           },
           {
             key: 'production',
@@ -104,6 +108,9 @@ export function buildEnvironmentTopologyBlueprint(input: {
             isProduction: true,
             databaseStrategy: 'direct',
             deploymentStrategy: input.productionDeploymentStrategy,
+            deploymentRuntime: inferEnvironmentDeploymentRuntime(
+              input.productionDeploymentStrategy
+            ),
           },
         ],
         deliveryRules: [
@@ -147,6 +154,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             isProduction: false,
             databaseStrategy: 'direct',
             deploymentStrategy: 'rolling',
+            deploymentRuntime: inferEnvironmentDeploymentRuntime('rolling'),
           },
           {
             key: 'test',
@@ -158,6 +166,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             isProduction: false,
             databaseStrategy: 'direct',
             deploymentStrategy: 'rolling',
+            deploymentRuntime: inferEnvironmentDeploymentRuntime('rolling'),
           },
           {
             key: 'staging',
@@ -169,6 +178,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             isProduction: false,
             databaseStrategy: 'direct',
             deploymentStrategy: 'rolling',
+            deploymentRuntime: inferEnvironmentDeploymentRuntime('rolling'),
           },
           {
             key: 'production',
@@ -180,6 +190,9 @@ export function buildEnvironmentTopologyBlueprint(input: {
             isProduction: true,
             databaseStrategy: 'direct',
             deploymentStrategy: input.productionDeploymentStrategy,
+            deploymentRuntime: inferEnvironmentDeploymentRuntime(
+              input.productionDeploymentStrategy
+            ),
           },
         ],
         deliveryRules: [
@@ -251,6 +264,7 @@ export function buildEnvironmentTopologyBlueprint(input: {
             isProduction: false,
             databaseStrategy: 'direct',
             deploymentStrategy: 'rolling',
+            deploymentRuntime: inferEnvironmentDeploymentRuntime('rolling'),
           },
           {
             key: 'production',
@@ -262,6 +276,9 @@ export function buildEnvironmentTopologyBlueprint(input: {
             isProduction: true,
             databaseStrategy: 'direct',
             deploymentStrategy: input.productionDeploymentStrategy,
+            deploymentRuntime: inferEnvironmentDeploymentRuntime(
+              input.productionDeploymentStrategy
+            ),
           },
         ],
         deliveryRules: [

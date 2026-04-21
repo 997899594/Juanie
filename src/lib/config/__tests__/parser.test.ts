@@ -65,7 +65,7 @@ databases:
     );
   });
 
-  it('rejects automatic migrations bound to non-postgresql databases', () => {
+  it('accepts automatic migrations bound to mysql databases', () => {
     const parsed = parseJuanieConfig(`
 services:
   - name: web
@@ -86,9 +86,34 @@ databases:
     provisionType: standalone
 `);
 
+    expect(parsed.isValid).toBe(true);
+  });
+
+  it('rejects automatic migrations bound to mongodb databases', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: web
+    type: web
+    run:
+      command: npm start
+      port: 3000
+    databases:
+      - binding: analytics
+        migrate:
+          tool: typeorm
+          workingDirectory: .
+          command: npm run typeorm migration:run
+          executionMode: automatic
+databases:
+  - name: analytics
+    type: mongodb
+    provisionType: external
+    externalUrl: mongodb://127.0.0.1:27017/app
+`);
+
     expect(parsed.isValid).toBe(false);
     expect(parsed.errors).toContain(
-      'Service "web" 绑定的数据库 "mysql" (mysql) 暂不支持 automatic 自动迁移'
+      'Service "web" 绑定的数据库 "analytics" (mongodb) 暂不支持 automatic 自动迁移'
     );
   });
 
