@@ -5,7 +5,7 @@
 
 // Re-export all functions and types from affected.ts
 export {
-  buildImageName,
+  buildMonorepoServiceImageName,
   getAffectedServiceNames,
   getAffectedServices,
   getServiceAppDir,

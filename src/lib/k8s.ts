@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { Writable } from 'node:stream';
 import * as k8s from '@kubernetes/client-node';
+import { logger } from '@/lib/logger';
 
 let k8sCoreApi: k8s.CoreV1Api | null = null;
 let k8sAppsApi: k8s.AppsV1Api | null = null;
@@ -9,6 +10,7 @@ let k8sNetworkingApi: k8s.NetworkingV1Api | null = null;
 let k8sBatchApi: k8s.BatchV1Api | null = null;
 let kubeConfig: k8s.KubeConfig | null = null;
 let initAttempted = false;
+const k8sLogger = logger.child({ component: 'k8s' });
 
 export function initK8sClient(): void {
   if (initAttempted) return;
@@ -22,27 +24,27 @@ export function initK8sClient(): void {
     if (process.env.KUBERNETES_SERVICE_HOST) {
       // Running in K8s cluster, use in-cluster config (ServiceAccount)
       kc.loadFromCluster();
-      console.log('Using in-cluster Kubernetes configuration');
+      k8sLogger.info('Using in-cluster Kubernetes configuration');
     } else if (process.env.KUBECONFIG_CONTENT) {
       // External kubeconfig provided as string
       kc.loadFromString(process.env.KUBECONFIG_CONTENT);
-      console.log('Using KUBECONFIG_CONTENT');
+      k8sLogger.info('Using KUBECONFIG_CONTENT');
     } else {
       // Try to load from file or default
       const kubeconfigPath = process.env.KUBECONFIG || `${process.env.HOME}/.kube/config`;
       if (existsSync(kubeconfigPath)) {
         kc.loadFromFile(kubeconfigPath);
-        console.log(`Using kubeconfig from ${kubeconfigPath}`);
+        k8sLogger.info('Using kubeconfig from file', { kubeconfigPath });
       } else {
         kc.loadFromDefault();
-        console.log('Using default kubeconfig');
+        k8sLogger.info('Using default kubeconfig');
       }
     }
 
     // Check if we have a valid cluster config
     const currentCluster = kc.getCurrentCluster();
     if (!currentCluster) {
-      console.log('⚠️  No Kubernetes cluster configured');
+      k8sLogger.warn('No Kubernetes cluster configured');
       return;
     }
 
@@ -52,12 +54,11 @@ export function initK8sClient(): void {
     k8sCustomApi = kc.makeApiClient(k8s.CustomObjectsApi);
     k8sNetworkingApi = kc.makeApiClient(k8s.NetworkingV1Api);
     k8sBatchApi = kc.makeApiClient(k8s.BatchV1Api);
-    console.log('✅ Kubernetes client initialized');
+    k8sLogger.info('Kubernetes client initialized');
   } catch (error) {
-    console.log(
-      '⚠️  Failed to initialize Kubernetes client:',
-      error instanceof Error ? error.message : 'Unknown error'
-    );
+    k8sLogger.warn('Failed to initialize Kubernetes client', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 }
 
@@ -148,6 +149,26 @@ async function doesNamespaceExist(name: string): Promise<boolean> {
 
     throw e;
   }
+}
+
+export async function waitForNamespaceCreated(input: {
+  name: string;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}): Promise<boolean> {
+  const timeoutMs = input.timeoutMs ?? 45_000;
+  const pollIntervalMs = input.pollIntervalMs ?? 2_000;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (await doesNamespaceExist(input.name)) {
+      return true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return doesNamespaceExist(input.name);
 }
 
 export async function waitForNamespaceDeleted(input: {
@@ -573,6 +594,11 @@ export function getIsConnected(): boolean {
   );
 }
 
+export function isK8sAvailable(): boolean {
+  initK8sClient();
+  return getIsConnected();
+}
+
 const DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT = 2;
 const LEGACY_DEPLOYMENT_ANNOTATIONS_TO_CLEAR = [
   'juanie.dev/last-applied-configuration',
@@ -785,7 +811,10 @@ export async function rolloutRestartDeployments(namespace: string): Promise<void
       .map((d) => d.metadata?.name)
       .filter((n): n is string => Boolean(n));
   } catch (e) {
-    console.warn(`[rolloutRestart] could not list deployments in ${namespace}:`, e);
+    k8sLogger.warn('Could not list deployments for rollout restart', {
+      namespace,
+      errorMessage: e instanceof Error ? e.message : String(e),
+    });
     return;
   }
 
@@ -819,14 +848,20 @@ export async function rolloutRestartDeployments(namespace: string): Promise<void
         };
         await apps.replaceNamespacedDeployment({ namespace, name: deploymentName, body: updated });
       } catch (e) {
-        console.warn(`[rolloutRestart] failed for ${namespace}/${deploymentName}:`, e);
+        k8sLogger.warn('Failed to restart deployment', {
+          namespace,
+          deploymentName,
+          errorMessage: e instanceof Error ? e.message : String(e),
+        });
       }
     })
   );
 
-  console.log(
-    `✅ Rolling restart triggered for ${deploymentNames.length} deployment(s) in ${namespace}: ${deploymentNames.join(', ')}`
-  );
+  k8sLogger.info('Rolling restart triggered for deployments', {
+    namespace,
+    deploymentCount: deploymentNames.length,
+    deploymentNames,
+  });
 }
 
 export async function deleteDeployment(namespace: string, name: string): Promise<void> {
@@ -947,220 +982,6 @@ export async function deleteService(namespace: string, name: string): Promise<vo
       throw e;
     }
   }
-}
-
-export interface ArgoRolloutSpec {
-  name: string;
-  namespace: string;
-  image: string;
-  port: number;
-  replicas: number;
-  stableServiceName: string;
-  previewServiceName: string;
-  strategy: 'controlled' | 'blue_green';
-  envFrom?: Array<{ secretRef?: { name: string }; configMapRef?: { name: string } }>;
-  imagePullSecrets?: string[];
-  healthcheckPath?: string;
-  cpuRequest?: string;
-  cpuLimit?: string;
-  memoryRequest?: string;
-  memoryLimit?: string;
-}
-
-interface ArgoRolloutResourceLike {
-  metadata?: {
-    name?: string;
-    namespace?: string;
-  };
-  spec?: {
-    paused?: boolean;
-    replicas?: number;
-    strategy?: {
-      blueGreen?: {
-        activeService?: string;
-        previewService?: string;
-        autoPromotionEnabled?: boolean;
-        scaleDownDelaySeconds?: number;
-        previewReplicaCount?: number;
-      };
-    };
-    template?: {
-      spec?: {
-        containers?: Array<{
-          image?: string;
-        }>;
-      };
-    };
-  };
-  status?: {
-    phase?: string;
-    pauseConditions?: Array<{
-      reason?: string;
-    }>;
-  };
-}
-
-function buildArgoRolloutBody(spec: ArgoRolloutSpec): Record<string, unknown> {
-  return {
-    apiVersion: 'argoproj.io/v1alpha1',
-    kind: 'Rollout',
-    metadata: {
-      name: spec.name,
-      namespace: spec.namespace,
-    },
-    spec: {
-      replicas: spec.replicas,
-      revisionHistoryLimit: DEFAULT_DEPLOYMENT_REVISION_HISTORY_LIMIT,
-      selector: {
-        matchLabels: {
-          app: spec.name,
-        },
-      },
-      template: {
-        metadata: {
-          labels: {
-            app: spec.name,
-          },
-        },
-        spec: {
-          imagePullSecrets: spec.imagePullSecrets?.map((secretName) => ({ name: secretName })),
-          containers: [
-            {
-              name: 'app',
-              image: spec.image,
-              ports: [{ name: 'http', containerPort: spec.port, protocol: 'TCP' }],
-              envFrom: spec.envFrom,
-              readinessProbe: {
-                httpGet: { path: spec.healthcheckPath || '/api/health/ready', port: spec.port },
-                initialDelaySeconds: 15,
-                periodSeconds: 10,
-                failureThreshold: 6,
-              },
-              livenessProbe: {
-                httpGet: { path: spec.healthcheckPath || '/api/health/live', port: spec.port },
-                initialDelaySeconds: 30,
-                periodSeconds: 20,
-                failureThreshold: 3,
-              },
-              resources: {
-                requests: {
-                  cpu: spec.cpuRequest || '100m',
-                  memory: spec.memoryRequest || '256Mi',
-                },
-                limits: {
-                  cpu: spec.cpuLimit || '500m',
-                  memory: spec.memoryLimit || '512Mi',
-                },
-              },
-            },
-          ],
-        },
-      },
-      strategy: {
-        blueGreen: {
-          activeService: spec.stableServiceName,
-          previewService: spec.previewServiceName,
-          autoPromotionEnabled: false,
-          scaleDownDelaySeconds: spec.strategy === 'blue_green' ? 30 : 120,
-          previewReplicaCount: spec.replicas,
-        },
-      },
-    },
-  };
-}
-
-export async function getArgoRollout(
-  namespace: string,
-  name: string
-): Promise<ArgoRolloutResourceLike | null> {
-  const { custom } = getK8sClient();
-
-  try {
-    return (await custom.getNamespacedCustomObject({
-      group: 'argoproj.io',
-      version: 'v1alpha1',
-      namespace,
-      plural: 'rollouts',
-      name,
-    })) as ArgoRolloutResourceLike;
-  } catch (e: unknown) {
-    const error = e as { code?: number; statusCode?: number };
-    if ((error.code ?? error.statusCode) === 404) {
-      return null;
-    }
-
-    throw e;
-  }
-}
-
-export async function upsertArgoRollout(spec: ArgoRolloutSpec): Promise<void> {
-  const { custom } = getK8sClient();
-  const body = buildArgoRolloutBody(spec);
-
-  try {
-    await custom.getNamespacedCustomObject({
-      group: 'argoproj.io',
-      version: 'v1alpha1',
-      namespace: spec.namespace,
-      plural: 'rollouts',
-      name: spec.name,
-    });
-    await custom.replaceNamespacedCustomObject({
-      group: 'argoproj.io',
-      version: 'v1alpha1',
-      namespace: spec.namespace,
-      plural: 'rollouts',
-      name: spec.name,
-      body,
-    });
-  } catch (e: unknown) {
-    const error = e as { code?: number; statusCode?: number };
-    if ((error.code ?? error.statusCode) === 404) {
-      await custom.createNamespacedCustomObject({
-        group: 'argoproj.io',
-        version: 'v1alpha1',
-        namespace: spec.namespace,
-        plural: 'rollouts',
-        body,
-      });
-      return;
-    }
-
-    throw e;
-  }
-}
-
-export async function resumeArgoRollout(namespace: string, name: string): Promise<void> {
-  const { custom } = getK8sClient();
-  const current = await getArgoRollout(namespace, name);
-
-  if (!current) {
-    throw new Error(`Argo Rollout ${namespace}/${name} not found`);
-  }
-
-  const body = {
-    ...current,
-    spec: {
-      ...current.spec,
-      paused: false,
-      strategy: {
-        ...current.spec?.strategy,
-        blueGreen: {
-          ...current.spec?.strategy?.blueGreen,
-          autoPromotionEnabled: true,
-        },
-      },
-    },
-  };
-
-  await custom.replaceNamespacedCustomObject({
-    group: 'argoproj.io',
-    version: 'v1alpha1',
-    namespace,
-    plural: 'rollouts',
-    name,
-    body,
-  });
 }
 
 export interface CloudNativePgClusterManifest {

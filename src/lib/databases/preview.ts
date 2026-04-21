@@ -12,21 +12,12 @@ import { databases, environments, projects } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { isPreviewEnvironment } from '@/lib/environments/model';
-import { getIsConnected, initK8sClient } from '@/lib/k8s';
+import { isK8sAvailable } from '@/lib/k8s';
 import {
   injectDatabaseEnvVars,
   provisionDatabase,
   removeInjectedDatabaseEnvVars,
 } from '@/lib/queue/project-init';
-
-function getHasK8s(): boolean {
-  try {
-    initK8sClient();
-    return getIsConnected();
-  } catch {
-    return false;
-  }
-}
 
 export async function syncPreviewEnvironmentDatabases(input: {
   projectId: string;
@@ -45,7 +36,7 @@ export async function syncPreviewEnvironmentDatabases(input: {
     return;
   }
 
-  const hasK8s = getHasK8s();
+  const hasK8s = isK8sAvailable();
 
   if (environment.databaseStrategy !== 'isolated_clone') {
     const removableClones = await db.query.databases.findMany({

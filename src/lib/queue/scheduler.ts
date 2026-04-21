@@ -1,20 +1,17 @@
 import { initK8sClient } from '@/lib/k8s';
-import { startDriftDetector } from './drift-detector';
+import { logger } from '@/lib/logger';
 import { startHistoryRetention } from './history-retention';
 import { startInfrastructureRemediation } from './infrastructure-remediation';
 import { startPreviewEnvironmentCleanup } from './preview-cleanup';
 import { startSchemaRepairReviewSync } from './schema-repair-review-sync';
 
+const schedulerLogger = logger.child({ component: 'scheduler' });
+
 initK8sClient();
 
-console.log('Starting Juanie scheduler...');
+schedulerLogger.info('Starting Juanie scheduler');
 
 const enabledTasks: string[] = [];
-
-if (process.env.ENABLE_DRIFT_DETECTOR !== 'false') {
-  startDriftDetector();
-  enabledTasks.push('drift-detector');
-}
 
 if (process.env.ENABLE_PREVIEW_CLEANUP !== 'false') {
   startPreviewEnvironmentCleanup();
@@ -36,12 +33,12 @@ if (process.env.ENABLE_SCHEMA_REPAIR_REVIEW_SYNC !== 'false') {
   enabledTasks.push('schema-repair-review-sync');
 }
 
-console.log(
-  `Scheduler started successfully (${enabledTasks.length > 0 ? enabledTasks.join(', ') : 'no tasks enabled'})`
-);
+schedulerLogger.info('Scheduler started successfully', {
+  enabledTasks,
+});
 
 function shutdown(signal: string): void {
-  console.log(`Shutting down scheduler (${signal})...`);
+  schedulerLogger.info('Shutting down scheduler', { signal });
   process.exit(0);
 }
 

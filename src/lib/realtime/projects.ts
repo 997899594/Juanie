@@ -2,9 +2,11 @@ import { eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 
 const PROJECT_CHANNEL_PREFIX = 'realtime:projects:project:';
+const projectsRealtimeLogger = logger.child({ component: 'realtime-projects' });
 
 export interface ProjectRealtimeRecord {
   id: string;
@@ -141,7 +143,9 @@ export async function createProjectRealtimeSubscriber(input: {
       const parsed = JSON.parse(payload) as ProjectRealtimeEvent;
       await input.onEvent(parsed);
     } catch (error) {
-      console.error('Failed to handle project realtime event:', error);
+      projectsRealtimeLogger.error('Failed to handle project realtime event', error, {
+        channel: receivedChannel,
+      });
     }
   };
 

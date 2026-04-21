@@ -2,7 +2,7 @@ import { Job, Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
-import { getIsConnected } from '@/lib/k8s';
+import { isK8sAvailable } from '@/lib/k8s';
 import { updateDeploymentRealtimeState } from '@/lib/realtime/deployments';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { SupersededDeploymentError } from '@/lib/releases/deployment-coordination';
@@ -18,7 +18,7 @@ function classifyDeploymentFailureStatus(message: string) {
 }
 
 async function cleanupFailedCandidateResources(deploymentId: string): Promise<boolean> {
-  if (!getIsConnected()) {
+  if (!isK8sAvailable()) {
     return false;
   }
 

@@ -17,16 +17,10 @@ import { decrypt, encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { environments, environmentVariables } from '@/lib/db/schema';
 import { getEnvironmentLineage } from '@/lib/environments/inheritance';
-import { getIsConnected, upsertConfigMap, upsertSecret } from '@/lib/k8s';
+import { isK8sAvailable, upsertConfigMap, upsertSecret } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 
-// Simple console logger fallback
-const logger = {
-  info: (msg: string, ctx?: Record<string, unknown>) => console.log('[INFO]', msg, ctx || ''),
-  error: (msg: string, err?: Error, ctx?: Record<string, unknown>) =>
-    console.error('[ERROR]', msg, err?.message || err, ctx || {}),
-  warn: (msg: string, ctx?: Record<string, unknown>) => console.warn('[WARN]', msg, ctx || ''),
-  debug: (msg: string, ctx?: Record<string, unknown>) => console.log('[DEBUG]', msg, ctx || ''),
-};
+const envSyncLogger = logger.child({ component: 'env-sync' });
 
 /**
  * 生成 K8s 资源名称（基于 environmentId 前8位，符合 K8s DNS-1123 规范）
@@ -56,8 +50,11 @@ export function getK8sSvcConfigMapName(serviceId: string): string {
  * K8s 不可用时静默跳过（graceful degrade）
  */
 export async function syncEnvVarsToK8s(projectId: string, environmentId: string): Promise<void> {
-  if (!getIsConnected()) {
-    logger.debug('K8s not connected, skipping env var sync', { projectId, environmentId });
+  if (!isK8sAvailable()) {
+    envSyncLogger.debug('Kubernetes not connected, skipping environment sync', {
+      projectId,
+      environmentId,
+    });
     return;
   }
 
@@ -70,7 +67,9 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
   }
 
   if (!environment?.namespace) {
-    logger.debug('Environment has no namespace, skipping env var sync', { environmentId });
+    envSyncLogger.debug('Environment has no namespace, skipping environment sync', {
+      environmentId,
+    });
     return;
   }
 
@@ -116,7 +115,7 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
         // 老格式：isSecret=true 但未加密（手动插入或旧版代码写入）
         // 自愈迁移：就地加密并回写 DB，之后走正常解密路径
         if (!v.value) {
-          logger.warn('Secret variable has no value and no encryption fields, skipping', {
+          envSyncLogger.warn('Secret variable is missing both encrypted and plaintext values', {
             varId: v.id,
             key: v.key,
           });
@@ -135,19 +134,21 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
             })
             .where(eq(environmentVariables.id, v.id));
           secrets[v.key] = v.value;
-          logger.info('Migrated plaintext secret to encrypted form', { varId: v.id, key: v.key });
+          envSyncLogger.info('Migrated plaintext environment secret to encrypted form', {
+            varId: v.id,
+            key: v.key,
+          });
         } catch (e) {
-          logger.error(
-            'Failed to migrate plaintext secret',
-            e instanceof Error ? e : new Error(String(e)),
-            { varId: v.id, key: v.key }
-          );
+          envSyncLogger.error('Failed to migrate plaintext environment secret', e, {
+            varId: v.id,
+            key: v.key,
+          });
         }
       } else {
         try {
           secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
         } catch (e) {
-          logger.error('Failed to decrypt env var', e instanceof Error ? e : new Error(String(e)), {
+          envSyncLogger.error('Failed to decrypt environment variable', e, {
             varId: v.id,
             key: v.key,
           });
@@ -164,7 +165,7 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
   // 同步 Secret（即使为空也 upsert，确保 K8s 资源存在）
   if (Object.keys(secrets).length > 0) {
     await upsertSecret(namespace, getK8sSecretName(environmentId), secrets);
-    logger.info('Synced env secrets to K8s', {
+    envSyncLogger.info('Synced environment secrets to Kubernetes', {
       namespace,
       secretName: getK8sSecretName(environmentId),
       count: Object.keys(secrets).length,
@@ -174,7 +175,7 @@ export async function syncEnvVarsToK8s(projectId: string, environmentId: string)
   // 同步 ConfigMap
   if (Object.keys(configs).length > 0) {
     await upsertConfigMap(namespace, getK8sConfigMapName(environmentId), configs);
-    logger.info('Synced env configs to K8s', {
+    envSyncLogger.info('Synced environment config maps to Kubernetes', {
       namespace,
       configMapName: getK8sConfigMapName(environmentId),
       count: Object.keys(configs).length,
@@ -195,7 +196,7 @@ export async function syncServiceEnvVarsToK8s(
   serviceId: string,
   namespace: string
 ): Promise<{ hasSecrets: boolean; hasConfigs: boolean }> {
-  if (!getIsConnected()) {
+  if (!isK8sAvailable()) {
     return { hasSecrets: false, hasConfigs: false };
   }
 
@@ -215,8 +216,8 @@ export async function syncServiceEnvVarsToK8s(
     if (v.isSecret) {
       if (!v.encryptedValue || !v.iv || !v.authTag) {
         if (!v.value) {
-          logger.warn(
-            'Service-level secret variable has no value and no encryption fields, skipping',
+          envSyncLogger.warn(
+            'Service secret variable is missing both encrypted and plaintext values',
             {
               varId: v.id,
               key: v.key,
@@ -237,26 +238,24 @@ export async function syncServiceEnvVarsToK8s(
             })
             .where(eq(environmentVariables.id, v.id));
           secrets[v.key] = v.value;
-          logger.info('Migrated plaintext service secret to encrypted form', {
+          envSyncLogger.info('Migrated plaintext service secret to encrypted form', {
             varId: v.id,
             key: v.key,
           });
         } catch (e) {
-          logger.error(
-            'Failed to migrate plaintext service secret',
-            e instanceof Error ? e : new Error(String(e)),
-            { varId: v.id, key: v.key }
-          );
+          envSyncLogger.error('Failed to migrate plaintext service secret', e, {
+            varId: v.id,
+            key: v.key,
+          });
         }
       } else {
         try {
           secrets[v.key] = await decrypt(v.encryptedValue, v.iv, v.authTag);
         } catch (e) {
-          logger.error(
-            'Failed to decrypt service env var',
-            e instanceof Error ? e : new Error(String(e)),
-            { varId: v.id, key: v.key }
-          );
+          envSyncLogger.error('Failed to decrypt service environment variable', e, {
+            varId: v.id,
+            key: v.key,
+          });
           throw new Error(`Failed to decrypt service variable "${v.key}": ${(e as Error).message}`);
         }
       }
@@ -267,7 +266,7 @@ export async function syncServiceEnvVarsToK8s(
 
   if (Object.keys(secrets).length > 0) {
     await upsertSecret(namespace, getK8sSvcSecretName(serviceId), secrets);
-    logger.info('Synced service secrets to K8s', {
+    envSyncLogger.info('Synced service secrets to Kubernetes', {
       namespace,
       secretName: getK8sSvcSecretName(serviceId),
       count: Object.keys(secrets).length,
@@ -276,7 +275,7 @@ export async function syncServiceEnvVarsToK8s(
 
   if (Object.keys(configs).length > 0) {
     await upsertConfigMap(namespace, getK8sSvcConfigMapName(serviceId), configs);
-    logger.info('Synced service configs to K8s', {
+    envSyncLogger.info('Synced service config maps to Kubernetes', {
       namespace,
       configMapName: getK8sSvcConfigMapName(serviceId),
       count: Object.keys(configs).length,

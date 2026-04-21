@@ -45,8 +45,8 @@ import {
   deleteSecret,
   deleteService,
   deleteStatefulSet,
-  getIsConnected,
   getK8sClient,
+  isK8sAvailable,
   upsertCloudNativePgCluster,
   upsertSecret,
 } from '@/lib/k8s';
@@ -691,7 +691,7 @@ async function deprovisionSharedRedisDatabase(
 async function deprovisionNativeK8sDatabase(
   database: ManagedDatabaseCleanupTarget
 ): Promise<boolean> {
-  if (!database.namespace || !database.serviceName || !getIsConnected()) {
+  if (!database.namespace || !database.serviceName || !isK8sAvailable()) {
     return false;
   }
 
@@ -711,7 +711,7 @@ async function deprovisionNativeK8sDatabase(
 async function deprovisionCloudNativePgDatabase(
   database: ManagedDatabaseCleanupTarget
 ): Promise<boolean> {
-  if (!database.namespace || !database.serviceName || !getIsConnected()) {
+  if (!database.namespace || !database.serviceName || !isK8sAvailable()) {
     return false;
   }
 

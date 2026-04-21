@@ -2,10 +2,12 @@ import { and, asc, desc, eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { db } from '@/lib/db';
 import { deploymentLogs, deployments, environments, services } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 
 const DEPLOYMENT_CHANNEL_PREFIX = 'realtime:deployments:project:';
 const DEPLOYMENT_LOG_CHANNEL_PREFIX = 'realtime:deployment-logs:deployment:';
+const deploymentsRealtimeLogger = logger.child({ component: 'realtime-deployments' });
 
 export interface DeploymentRealtimeSummary {
   id: string;
@@ -282,7 +284,9 @@ export async function createDeploymentRealtimeSubscriber(input: {
       const parsed = JSON.parse(payload) as DeploymentRealtimeEvent;
       await input.onEvent(parsed);
     } catch (error) {
-      console.error('Failed to handle deployment realtime event:', error);
+      deploymentsRealtimeLogger.error('Failed to handle deployment realtime event', error, {
+        channel: receivedChannel,
+      });
     }
   };
 
@@ -319,7 +323,9 @@ export async function createDeploymentLogRealtimeSubscriber(input: {
       const parsed = JSON.parse(payload) as DeploymentLogRealtimeEvent;
       await input.onEvent(parsed);
     } catch (error) {
-      console.error('Failed to handle deployment log realtime event:', error);
+      deploymentsRealtimeLogger.error('Failed to handle deployment log realtime event', error, {
+        channel: receivedChannel,
+      });
     }
   };
 

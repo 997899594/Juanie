@@ -2,9 +2,11 @@ import { Cron } from 'croner';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { schemaRepairPlans } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import { syncSchemaRepairReviewState } from '@/lib/schema-management/review-sync';
 
 const DEFAULT_SCHEMA_REPAIR_REVIEW_SYNC_SCHEDULE = '*/15 * * * *';
+const schemaRepairReviewSyncLogger = logger.child({ component: 'schema-repair-review-sync' });
 
 export function startSchemaRepairReviewSync(): void {
   new Cron(DEFAULT_SCHEMA_REPAIR_REVIEW_SYNC_SCHEDULE, async () => {
@@ -22,15 +24,19 @@ export function startSchemaRepairReviewSync(): void {
             planId: plan.id,
           });
         } catch (error) {
-          console.warn(`[SchemaRepairReviewSync] Failed for plan ${plan.id}:`, error);
+          schemaRepairReviewSyncLogger.warn('Failed to sync schema repair review state', {
+            planId: plan.id,
+            projectId: plan.projectId,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
         }
       }
     } catch (error) {
-      console.error('[SchemaRepairReviewSync] Error:', error);
+      schemaRepairReviewSyncLogger.error('Schema repair review sync failed', error);
     }
   });
 
-  console.log(
-    `[SchemaRepairReviewSync] Started (schedule: ${DEFAULT_SCHEMA_REPAIR_REVIEW_SYNC_SCHEDULE})`
-  );
+  schemaRepairReviewSyncLogger.info('Schema repair review sync started', {
+    schedule: DEFAULT_SCHEMA_REPAIR_REVIEW_SYNC_SCHEDULE,
+  });
 }

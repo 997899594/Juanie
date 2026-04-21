@@ -90,7 +90,7 @@ export function getAffectedServices(
  * @param serviceName - Name of the service
  * @returns The full image name
  */
-export function buildImageName(
+export function buildMonorepoServiceImageName(
   registry: string,
   repoFullName: string,
   serviceName: string

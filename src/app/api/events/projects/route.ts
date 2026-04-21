@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
 import {
   createProjectRealtimeSubscriber,
   loadProjectRealtimeRecord,
@@ -9,6 +10,7 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const routeLogger = logger.child({ route: 'api/events/projects' });
 
 function parseProjectIds(request: NextRequest): string[] {
   const url = new URL(request.url);
@@ -97,7 +99,9 @@ export async function GET(request: NextRequest) {
 
         const runSerialized = (task: () => Promise<void>) => {
           emitLock = emitLock.then(task).catch((error) => {
-            console.error('Project stream task failed:', error);
+            routeLogger.error('Project stream task failed', error, {
+              projectIds,
+            });
           });
         };
 
@@ -184,11 +188,15 @@ export async function GET(request: NextRequest) {
                 startPollingFallback();
               }
             } catch (error) {
-              console.error('Failed to subscribe to project realtime events:', error);
+              routeLogger.error('Failed to subscribe to project realtime events', error, {
+                projectIds,
+              });
               startPollingFallback();
             }
           } catch (error) {
-            console.error('Project stream failed:', error);
+            routeLogger.error('Project realtime stream failed', error, {
+              projectIds,
+            });
             sendEvent({
               type: 'error',
               message: '读取项目状态失败',

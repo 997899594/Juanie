@@ -4,10 +4,10 @@ import {
   createJob,
   createNamespace,
   deleteJob,
-  getIsConnected,
   getJob,
   getPodLogs,
   getPods,
+  isK8sAvailable,
 } from '@/lib/k8s';
 
 function sleep(ms: number): Promise<void> {
@@ -32,7 +32,7 @@ export async function clonePostgreSQLDatabase(input: {
     capabilities?: string[] | null;
   };
 }): Promise<string> {
-  if (!getIsConnected() || !input.namespace) {
+  if (!isK8sAvailable() || !input.namespace) {
     throw new Error('独立预览库当前需要 Kubernetes 连接和环境命名空间');
   }
 

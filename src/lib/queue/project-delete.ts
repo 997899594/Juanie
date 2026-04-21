@@ -3,11 +3,13 @@ import { eq } from 'drizzle-orm';
 import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
 import { databases, environments, projects, repositories } from '@/lib/db/schema';
+import { deleteProjectPreviewApplicationSet } from '@/lib/environments/application-set';
 import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
-import { deleteNamespace, getIsConnected, initK8sClient, waitForNamespaceDeleted } from '@/lib/k8s';
+import { deleteNamespace, isK8sAvailable, waitForNamespaceDeleted } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 import {
   publishProjectDeletedRealtimeEvent,
   publishProjectRealtimeSnapshot,
@@ -23,10 +25,11 @@ const JUANIE_GITLAB_CI_MARKERS = [
   'JUANIE_SOURCE_SHA',
   'juanie-ci-meta.json',
 ] as const;
+const projectDeleteLogger = logger.child({ component: 'project-delete' });
 
 type ProjectDeleteRecord = Pick<
   typeof projects.$inferSelect,
-  'id' | 'status' | 'teamId' | 'productionBranch' | 'repositoryId'
+  'id' | 'slug' | 'status' | 'teamId' | 'productionBranch' | 'repositoryId'
 > & {
   repository: Pick<
     typeof repositories.$inferSelect,
@@ -102,7 +105,10 @@ async function cleanupRepositoryArtifacts(project: ProjectDeleteRecord): Promise
       message: 'Remove Juanie managed files [skip ci]',
     });
   } catch (error) {
-    console.warn(`Failed to clean repository artifacts for project ${project.id}:`, error);
+    projectDeleteLogger.warn('Failed to clean repository artifacts for project', {
+      projectId: project.id,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -121,7 +127,10 @@ async function cleanupOrphanRepositoryRecord(repositoryId: string): Promise<void
 
     await db.delete(repositories).where(eq(repositories.id, repositoryId));
   } catch (error) {
-    console.warn(`Failed to clean orphan repository record ${repositoryId}:`, error);
+    projectDeleteLogger.warn('Failed to clean orphan repository record', {
+      repositoryId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -161,6 +170,7 @@ export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
     where: eq(projects.id, job.data.projectId),
     columns: {
       id: true,
+      slug: true,
       status: true,
       teamId: true,
       productionBranch: true,
@@ -179,15 +189,16 @@ export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
 
   if (!project) {
     await publishProjectDeletedRealtimeEvent(job.data.projectId).catch((error) => {
-      console.warn(
-        `Failed to publish project deleted realtime event for missing project ${job.data.projectId}:`,
-        error
+      projectDeleteLogger.warn(
+        'Failed to publish project deleted realtime event for missing project',
+        {
+          projectId: job.data.projectId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        }
       );
     });
     return { success: true, deleted: true, missing: true };
   }
-
-  initK8sClient();
 
   const environmentList = await db.query.environments.findMany({
     where: eq(environments.projectId, project.id),
@@ -204,7 +215,8 @@ export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
     ),
   ];
 
-  if (getIsConnected() && namespaces.length > 0) {
+  if (isK8sAvailable() && namespaces.length > 0) {
+    await deleteProjectPreviewApplicationSet(project.slug);
     await Promise.all(namespaces.map((namespace) => deleteNamespace(namespace)));
 
     const cleanupResults = await Promise.all(
@@ -219,7 +231,10 @@ export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
 
     if (pendingNamespaces.length > 0) {
       await publishProjectRealtimeSnapshot(project.id).catch((error) => {
-        console.warn(`Failed to refresh deleting project snapshot for ${project.id}:`, error);
+        projectDeleteLogger.warn('Failed to refresh deleting project snapshot', {
+          projectId: project.id,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
       });
       throw new Error(`Project resources are still cleaning up: ${pendingNamespaces.join(', ')}`);
     }
@@ -235,7 +250,10 @@ export async function processProjectDelete(job: Job<ProjectDeleteJobData>) {
   }
 
   await publishProjectDeletedRealtimeEvent(project.id).catch((error) => {
-    console.warn(`Failed to publish project deleted realtime event for ${project.id}:`, error);
+    projectDeleteLogger.warn('Failed to publish project deleted realtime event', {
+      projectId: project.id,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
   });
 
   return { success: true, deleted: true };

@@ -1,0 +1,8 @@
+projectSlug: ""
+environmentId: ""
+environmentName: ""
+namespace: ""
+enableStableRoutes: true
+
+services: []
+domains: []

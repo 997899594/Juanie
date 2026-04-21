@@ -2,9 +2,11 @@ import { desc, eq } from 'drizzle-orm';
 import type Redis from 'ioredis';
 import { db } from '@/lib/db';
 import { releases } from '@/lib/db/schema';
+import { logger } from '@/lib/logger';
 import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 
 const RELEASE_CHANNEL_PREFIX = 'realtime:releases:project:';
+const releasesRealtimeLogger = logger.child({ component: 'realtime-releases' });
 
 export interface ReleaseRealtimeRecord {
   id: string;
@@ -202,7 +204,9 @@ export async function createReleaseRealtimeSubscriber(input: {
       const parsed = JSON.parse(payload) as ReleaseRealtimeEvent;
       await input.onEvent(parsed);
     } catch (error) {
-      console.error('Failed to handle release realtime event:', error);
+      releasesRealtimeLogger.error('Failed to handle release realtime event', error, {
+        channel: receivedChannel,
+      });
     }
   };
 

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
+import { logger } from '@/lib/logger';
 import {
   createReleaseRealtimeSubscriber,
   loadLatestProjectReleaseRealtimeRecord,
@@ -11,6 +12,7 @@ import { buildReleaseEventStateKey } from '@/lib/releases/event-state';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const routeLogger = logger.child({ route: 'api/events/releases' });
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,7 +69,10 @@ export async function GET(request: NextRequest) {
 
         const runSerialized = (task: () => Promise<void>) => {
           emitLock = emitLock.then(task).catch((error) => {
-            console.error('Release stream task failed:', error);
+            routeLogger.error('Release stream task failed', error, {
+              projectId,
+              releaseId,
+            });
           });
         };
 
@@ -154,11 +159,17 @@ export async function GET(request: NextRequest) {
                 startPollingFallback();
               }
             } catch (error) {
-              console.error('Failed to subscribe to release realtime events:', error);
+              routeLogger.error('Failed to subscribe to release realtime events', error, {
+                projectId,
+                releaseId,
+              });
               startPollingFallback();
             }
           } catch (error) {
-            console.error('Release stream failed:', error);
+            routeLogger.error('Release realtime stream failed', error, {
+              projectId,
+              releaseId,
+            });
             sendEvent({
               type: 'error',
               message: '读取发布进度失败',

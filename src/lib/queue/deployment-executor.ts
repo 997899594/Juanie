@@ -1,8 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, releases } from '@/lib/db/schema';
-import { buildDeployImageReference } from '@/lib/deploy-images';
-import { ensureEnvironmentDomains } from '@/lib/domains/service';
+import { resolveDeployImageReference } from '@/lib/deploy-images';
 import {
   getK8sConfigMapName,
   getK8sSecretName,
@@ -16,8 +15,9 @@ import {
   getEnvironmentKind,
   usesArgoRolloutsRuntime,
 } from '@/lib/environments/model';
-import { ensureEnvironmentScaffold } from '@/lib/environments/service';
-import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
+import { reconcileEnvironmentState } from '@/lib/environments/service';
+import { deploymentExists, getDeploymentSnapshot, isK8sAvailable } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 import {
   appendDeploymentRealtimeLogs,
   updateDeploymentRealtimeState,
@@ -44,12 +44,21 @@ import {
   syncProjectServiceRuntimeContractsFromRepo,
 } from '@/lib/services/runtime-contract';
 
+const deploymentExecutorLogger = logger.child({ component: 'deployment-executor' });
+
 export async function logDeployment(
   deploymentId: string,
   message: string,
   level: 'info' | 'warn' | 'error' = 'info'
 ) {
-  console.log(`[${level.toUpperCase()}] ${message}`);
+  const scopedLogger = deploymentExecutorLogger.child({ deploymentId });
+  if (level === 'error') {
+    scopedLogger.error(message);
+  } else if (level === 'warn') {
+    scopedLogger.warn(message);
+  } else {
+    scopedLogger.info(message);
+  }
   await appendDeploymentRealtimeLogs([{ deploymentId, message, level }]).catch(() => {
     // Swallow DB errors so log failures never break the deployment.
   });
@@ -126,51 +135,42 @@ export async function executeDeploymentWorkload(
   await logDeployment(deploymentId, 'Deploying to Kubernetes');
   await progress?.(50);
 
-  await ensureEnvironmentScaffold({
-    project: {
-      id: project.id,
-      slug: project.slug,
-      teamId: project.teamId,
-    },
-    environment: {
-      id: environment.id,
-      name: environment.name,
-      namespace: environment.namespace,
-      kind: getEnvironmentKind(environment),
-    },
-  });
-
-  const freshEnvironment = await db.query.environments.findFirst({
-    where: eq(environments.id, environment.id),
-  });
-  const targetEnvironment = freshEnvironment ?? environment;
-  const deploymentStrategy = targetEnvironment.deploymentStrategy ?? 'rolling';
-  const deploymentRuntime = getEnvironmentDeploymentRuntime(targetEnvironment);
-
-  await ensureEnvironmentDomains({
+  const runtimeState = await reconcileEnvironmentState({
     project: {
       id: project.id,
       slug: project.slug,
       configJson: project.configJson,
     },
     environment: {
-      id: targetEnvironment.id,
-      name: targetEnvironment.name,
-      namespace: targetEnvironment.namespace,
-      kind: getEnvironmentKind(targetEnvironment),
+      id: environment.id,
+      name: environment.name,
+      namespace: environment.namespace,
+      kind: getEnvironmentKind(environment),
+      isProduction: environment.isProduction,
+      isPreview: environment.isPreview,
+      deploymentStrategy: environment.deploymentStrategy,
     },
-    services: serviceList.map((service) => ({
-      id: service.id,
-      name: service.name,
-      type: service.type,
-      isPublic: service.isPublic,
-      port: service.port,
-    })),
+    services: serviceList,
+    scope: 'full',
   });
+  const targetEnvironment = {
+    ...environment,
+    namespace: runtimeState.namespace,
+  };
+  const deploymentStrategy = targetEnvironment.deploymentStrategy ?? 'rolling';
+  const deploymentRuntime = getEnvironmentDeploymentRuntime(targetEnvironment);
 
   await syncEnvVarsToK8s(project.id, targetEnvironment.id);
 
-  const imageName = deployment.imageUrl || buildImageName(project, deployment.commitSha);
+  const imageName =
+    deployment.imageUrl ||
+    resolveDeployImageReference(
+      {
+        configJson: project.configJson,
+        repositoryFullName: project.repository?.fullName ?? null,
+      },
+      deployment.commitSha
+    );
   if (!imageName) {
     throw new Error(
       `Cannot resolve image name for project ${project.slug}: no imageUrl in deployment record and repository URL not configured`
@@ -193,7 +193,7 @@ export async function executeDeploymentWorkload(
     await assertDeploymentIsCurrent(deploymentId);
     await logDeployment(deploymentId, `Deploying service ${service.name}`);
 
-    if (!getIsConnected() || !targetEnvironment.namespace) {
+    if (!isK8sAvailable() || !targetEnvironment.namespace) {
       continue;
     }
 
@@ -324,7 +324,7 @@ export async function executeDeploymentWorkload(
       stableExists,
       stableName,
       candidateName,
-      servicePort: service.port ?? 80,
+      servicePort: service.port ?? 3000,
     });
 
     await syncEnvironmentServiceTrafficRoutes({
@@ -361,33 +361,4 @@ export async function executeDeploymentWorkload(
       : 'Deployment completed successfully'
   );
   await progress?.(100);
-}
-
-function buildImageName(
-  project: typeof projects.$inferSelect & {
-    repository: {
-      fullName: string;
-    } | null;
-  },
-  commitSha: string | null | undefined
-): string | null {
-  if (!commitSha) {
-    return null;
-  }
-
-  const config =
-    project.configJson && typeof project.configJson === 'object'
-      ? (project.configJson as Record<string, unknown>)
-      : null;
-  const configuredImageName = typeof config?.imageName === 'string' ? config.imageName.trim() : '';
-
-  if (configuredImageName) {
-    return `${configuredImageName}:sha-${commitSha}`;
-  }
-
-  if (!project.repository?.fullName) {
-    return null;
-  }
-
-  return buildDeployImageReference(project.repository.fullName, commitSha);
 }

@@ -220,7 +220,7 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
         !supportsDatabaseAutomatedMigrations(binding.type)
       ) {
         errors.push(
-          `Service "${service.name}" 的数据库迁移绑定声明了 ${binding.type} automatic 自动迁移，但当前只有 PostgreSQL 支持`
+          `Service "${service.name}" 的数据库迁移绑定声明了 ${binding.type} automatic 自动迁移，但当前只有 PostgreSQL 和 MySQL 支持`
         );
       }
 
@@ -247,13 +247,13 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
     }
 
     if (service.migrate?.executionMode === 'automatic') {
-      const hasPostgresDatabase = (config.databases ?? []).some((database) =>
+      const hasPlatformManagedMigrationDatabase = (config.databases ?? []).some((database) =>
         supportsDatabaseAutomatedMigrations(database.type)
       );
 
-      if (!hasPostgresDatabase) {
+      if (!hasPlatformManagedMigrationDatabase) {
         warnings.push(
-          `Service "${service.name}" 配置了 automatic 自动迁移，但项目中没有可由平台自动处理的 PostgreSQL 数据库`
+          `Service "${service.name}" 配置了 automatic 自动迁移，但项目中没有可由平台自动处理的 PostgreSQL 或 MySQL 数据库`
         );
       }
     }

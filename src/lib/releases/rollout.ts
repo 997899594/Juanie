@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { deployments, environments, projects, services } from '@/lib/db/schema';
 import { getEnvironmentDeploymentRuntime, usesArgoRolloutsRuntime } from '@/lib/environments/model';
-import { deploymentExists, getDeploymentSnapshot, getIsConnected } from '@/lib/k8s';
+import { deploymentExists, getDeploymentSnapshot, isK8sAvailable } from '@/lib/k8s';
 import {
   appendDeploymentRealtimeLogs,
   updateDeploymentRealtimeState,
@@ -143,7 +143,7 @@ export async function buildDeploymentRolloutPlan(input: {
     };
   }
 
-  if (!getIsConnected() || !environment.namespace) {
+  if (!isK8sAvailable() || !environment.namespace) {
     return {
       deployment: {
         id: deployment.id,

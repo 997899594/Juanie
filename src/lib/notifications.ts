@@ -1,9 +1,13 @@
+import { logger } from '@/lib/logger';
+
 export type NotificationEvent =
   | 'deployment.started'
   | 'deployment.completed'
   | 'deployment.failed'
   | 'rollback.completed'
   | 'health_check.failed';
+
+const notificationsLogger = logger.child({ component: 'notifications' });
 
 export interface NotificationPayload {
   event: NotificationEvent;
@@ -34,7 +38,11 @@ export async function sendWebhookNotification(
 
     return response.ok;
   } catch (error) {
-    console.error('Failed to send webhook notification:', error);
+    notificationsLogger.error('Failed to send webhook notification', error, {
+      event: payload.event,
+      projectId: payload.projectId,
+      environment: payload.environment,
+    });
     return false;
   }
 }

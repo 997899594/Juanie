@@ -9,6 +9,8 @@ import {
 } from '@/lib/k8s';
 import { buildProjectScopedK8sName } from '@/lib/k8s/naming';
 
+const DEFAULT_TRAFFIC_SERVICE_PORT = 3000;
+
 export interface TrafficBackendRef {
   serviceName: string;
   servicePort: number;
@@ -67,7 +69,8 @@ export async function syncEnvironmentServiceTrafficRoutes(input: {
       serviceName:
         input.backends[0]?.serviceName ??
         buildStableDeploymentName(input.projectSlug, input.service.name),
-      servicePort: input.backends[0]?.servicePort ?? input.service.port ?? 80,
+      servicePort:
+        input.backends[0]?.servicePort ?? input.service.port ?? DEFAULT_TRAFFIC_SERVICE_PORT,
       backendRefs: input.backends,
       path: '/',
     });

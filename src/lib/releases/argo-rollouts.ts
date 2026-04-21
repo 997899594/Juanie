@@ -1,10 +1,12 @@
 import {
   type ArgoRolloutSpec,
-  deleteDeployment,
-  deploymentExists,
   getArgoRollout,
   resumeArgoRollout,
   upsertArgoRollout,
+} from '@/lib/argocd';
+import {
+  deleteDeployment,
+  deploymentExists,
   upsertService,
   verifyServiceReachability,
 } from '@/lib/k8s';

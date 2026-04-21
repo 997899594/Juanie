@@ -18,9 +18,11 @@ import { encrypt } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { environmentVariables } from '@/lib/db/schema';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
-import { getIsConnected, rolloutRestartDeployments } from '@/lib/k8s';
+import { isK8sAvailable, rolloutRestartDeployments } from '@/lib/k8s';
+import { logger } from '@/lib/logger';
 
 type RouteParams = { params: Promise<{ id: string; varId: string }> };
+const routeLogger = logger.child({ route: 'api/projects/env-var-detail' });
 
 // ============================================
 // PUT - 更新环境变量
@@ -82,7 +84,10 @@ export async function PUT(request: Request, { params }: RouteParams) {
       try {
         return await encrypt(plaintext);
       } catch (e) {
-        console.error('Failed to encrypt secret value:', e);
+        routeLogger.error('Failed to encrypt secret value during variable update', e, {
+          projectId,
+          variableId: varId,
+        });
         return null;
       }
     };
@@ -142,14 +147,25 @@ export async function PUT(request: Request, { params }: RouteParams) {
 
     if (envVar.environmentId) {
       await syncEnvVarsToK8s(projectId, envVar.environmentId).catch((e) => {
-        console.error('Failed to sync env vars to K8s after update', e);
+        routeLogger.warn('Failed to sync env vars to Kubernetes after update', {
+          projectId,
+          variableId: varId,
+          environmentId: envVar.environmentId,
+          reason: e instanceof Error ? e.message : String(e),
+        });
       });
 
-      if (getIsConnected()) {
+      if (isK8sAvailable()) {
         const environment = await getProjectEnvironmentOrThrow(projectId, envVar.environmentId);
         if (environment.namespace) {
           await rolloutRestartDeployments(environment.namespace).catch((e) => {
-            console.warn('Failed to trigger rolling restart after env var update', e);
+            routeLogger.warn('Failed to trigger rollout restart after env var update', {
+              projectId,
+              variableId: varId,
+              environmentId: envVar.environmentId,
+              namespace: environment.namespace,
+              reason: e instanceof Error ? e.message : String(e),
+            });
           });
         }
       }
@@ -193,14 +209,25 @@ export async function DELETE(_request: Request, { params }: RouteParams) {
 
     if (envVar.environmentId) {
       await syncEnvVarsToK8s(projectId, envVar.environmentId).catch((e) => {
-        console.error('Failed to sync env vars to K8s after delete', e);
+        routeLogger.warn('Failed to sync env vars to Kubernetes after delete', {
+          projectId,
+          variableId: varId,
+          environmentId: envVar.environmentId,
+          reason: e instanceof Error ? e.message : String(e),
+        });
       });
 
-      if (getIsConnected()) {
+      if (isK8sAvailable()) {
         const environment = await getProjectEnvironmentOrThrow(projectId, envVar.environmentId);
         if (environment.namespace) {
           await rolloutRestartDeployments(environment.namespace).catch((e) => {
-            console.warn('Failed to trigger rolling restart after env var delete', e);
+            routeLogger.warn('Failed to trigger rollout restart after env var delete', {
+              projectId,
+              variableId: varId,
+              environmentId: envVar.environmentId,
+              namespace: environment.namespace,
+              reason: e instanceof Error ? e.message : String(e),
+            });
           });
         }
       }

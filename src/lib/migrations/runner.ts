@@ -16,10 +16,10 @@ import {
   createJob,
   deleteJob,
   getEvents,
-  getIsConnected,
   getJob,
   getPodLogs,
   getPods,
+  isK8sAvailable,
 } from '@/lib/k8s';
 import { executeMigrationsForDatabase } from '@/lib/migrations/executor';
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
@@ -609,7 +609,7 @@ async function runSqlMigration(
   const logs: string[] = [];
 
   try {
-    await executeMigrationsForDatabase(spec.database, files, async (message) => {
+    const summary = await executeMigrationsForDatabase(spec.database, files, async (message) => {
       logs.push(message);
       await appendRunLog(runId, message);
     });
@@ -629,7 +629,7 @@ async function runSqlMigration(
       .update(migrationRuns)
       .set({
         status: 'success',
-        appliedCount: files.length,
+        appliedCount: summary.appliedCount,
         finishedAt,
         durationMs: startedAt ? finishedAt.getTime() - startedAt.getTime() : null,
         updatedAt: finishedAt,
@@ -661,7 +661,7 @@ async function runCommandMigration(
   imageUrl: string
 ): Promise<void> {
   const namespace = spec.environment.namespace;
-  if (!getIsConnected() || !namespace) {
+  if (!isK8sAvailable() || !namespace) {
     await markRunFailed(
       runId,
       'MIGRATION_JOB_CREATE_FAILED',

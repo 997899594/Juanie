@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getIsConnected, getK8sClient, initK8sClient } from '@/lib/k8s';
+import { getK8sClient, isK8sAvailable } from '@/lib/k8s';
 import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 
 // ============================================
@@ -67,9 +67,8 @@ async function checkRedis(): Promise<HealthCheck> {
 
 async function checkKubernetes(): Promise<HealthCheck> {
   const start = Date.now();
-  initK8sClient();
 
-  if (!getIsConnected()) {
+  if (!isK8sAvailable()) {
     return {
       status: 'warn',
       message: 'Kubernetes client not available',

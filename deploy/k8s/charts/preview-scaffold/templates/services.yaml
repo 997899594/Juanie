@@ -1,0 +1,23 @@
+{{- range .Values.services }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .serviceName }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: juanie
+    juanie.dev/runtime: preview-applicationset
+    juanie.dev/project-slug: {{ $.Values.projectSlug | quote }}
+    juanie.dev/environment-id: {{ $.Values.environmentId | quote }}
+    juanie.dev/environment-name: {{ $.Values.environmentName | quote }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .serviceName }}
+  ports:
+    - name: http
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      protocol: TCP
+---
+{{- end }}

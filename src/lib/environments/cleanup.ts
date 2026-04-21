@@ -2,8 +2,9 @@ import { and, eq, isNotNull, lt } from 'drizzle-orm';
 import { deprovisionManagedDatabase } from '@/lib/databases/provider';
 import { db } from '@/lib/db';
 import { databases, domains, environments, environmentVariables } from '@/lib/db/schema';
+import { syncProjectPreviewApplicationSet } from '@/lib/environments/application-set';
 import { isPreviewEnvironment } from '@/lib/environments/model';
-import { deleteNamespace, getIsConnected, initK8sClient, waitForNamespaceDeleted } from '@/lib/k8s';
+import { deleteNamespace, isK8sAvailable, waitForNamespaceDeleted } from '@/lib/k8s';
 import { isActiveReleaseStatus } from '@/lib/releases/state-machine';
 
 export function isActivePreviewReleaseStatus(status: string): boolean {
@@ -39,8 +40,12 @@ export async function deletePreviewEnvironmentById(environmentId: string): Promi
     return { deleted: false, reason: 'active_release' };
   }
 
-  initK8sClient();
-  if (getIsConnected() && environment.namespace) {
+  if (isK8sAvailable() && environment.namespace) {
+    await syncProjectPreviewApplicationSet({
+      projectId: environment.projectId,
+      excludeEnvironmentIds: [environment.id],
+    });
+
     await deleteNamespace(environment.namespace);
     const deleted = await waitForNamespaceDeleted({ name: environment.namespace });
     if (!deleted) {

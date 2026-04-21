@@ -10,7 +10,7 @@ import { db } from '@/lib/db';
 import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
-import { createJob, deleteJob, getIsConnected } from '@/lib/k8s';
+import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
 import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
@@ -302,7 +302,7 @@ export async function createSchemaRepairAtlasRun(input: {
         ? `${process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY}:${process.env.SCHEMA_RUNNER_IMAGE_TAG}`
         : null;
 
-      if (!getIsConnected()) {
+      if (!isK8sAvailable()) {
         throw new Error('Schema runner draft execution requires Kubernetes connectivity');
       }
       if (!schemaRunnerImage) {
@@ -388,7 +388,7 @@ export async function createSchemaRepairAtlasRun(input: {
     ? `${process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY}:${process.env.SCHEMA_RUNNER_IMAGE_TAG}`
     : null;
 
-  if (!getIsConnected()) {
+  if (!isK8sAvailable()) {
     throw new Error('Schema runner draft execution requires Kubernetes connectivity');
   }
   if (!schemaRunnerImage) {

@@ -6,7 +6,7 @@ import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { environments } from '@/lib/db/schema';
-import { getIsConnected, getK8sClient, initK8sClient } from '@/lib/k8s';
+import { getK8sClient, isK8sAvailable } from '@/lib/k8s';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,8 +34,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return new Response('Environment has no namespace (not yet deployed)', { status: 400 });
     }
 
-    initK8sClient();
-    if (!getIsConnected()) {
+    if (!isK8sAvailable()) {
       return new Response('Kubernetes not connected', { status: 503 });
     }
 
