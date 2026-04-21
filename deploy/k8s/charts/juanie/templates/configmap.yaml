@@ -14,6 +14,14 @@ data:
   DATABASE_USER: {{ .Values.env.DATABASE_USER | default "postgres" | quote }}
   DATABASE_SSL_MODE: {{ .Values.env.DATABASE_SSL_MODE | default "disable" | quote }}
   AUTH_TRUST_HOST: {{ .Values.env.AUTH_TRUST_HOST | default "true" | quote }}
+  JUANIE_BASE_DOMAIN: {{ .Values.env.JUANIE_BASE_DOMAIN | default "juanie.art" | quote }}
+  JUANIE_ARGOCD_NAMESPACE: {{ .Values.env.JUANIE_ARGOCD_NAMESPACE | default "argocd" | quote }}
+  JUANIE_ARGOCD_PROJECT: {{ .Values.env.JUANIE_ARGOCD_PROJECT | default "juanie" | quote }}
+  JUANIE_ARGOCD_DESTINATION_SERVER: {{ .Values.env.JUANIE_ARGOCD_DESTINATION_SERVER | default "https://kubernetes.default.svc" | quote }}
+  JUANIE_PREVIEW_APPLICATIONSET_ENABLED: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_ENABLED | default "true" | quote }}
+  JUANIE_PREVIEW_APPLICATIONSET_REPO_URL: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL | default "" | quote }}
+  JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION | default "main" | quote }}
+  JUANIE_PREVIEW_APPLICATIONSET_PATH: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_PATH | default "deploy/k8s/charts/preview-scaffold" | quote }}
   JUANIE_NAMESPACE: {{ .Values.namespace | quote }}
   SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.schemaRunner.repository | quote }}
   SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.schemaRunner.tag | quote }}

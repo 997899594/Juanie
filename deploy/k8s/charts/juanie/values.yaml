@@ -76,6 +76,14 @@ env:
   DATABASE_USER: "postgres"
   DATABASE_SSL_MODE: "disable"
   AUTH_TRUST_HOST: "true"
+  JUANIE_BASE_DOMAIN: "juanie.art"
+  JUANIE_ARGOCD_NAMESPACE: "argocd"
+  JUANIE_ARGOCD_PROJECT: "juanie"
+  JUANIE_ARGOCD_DESTINATION_SERVER: "https://kubernetes.default.svc"
+  JUANIE_PREVIEW_APPLICATIONSET_ENABLED: "true"
+  JUANIE_PREVIEW_APPLICATIONSET_REPO_URL: ""
+  JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: "main"
+  JUANIE_PREVIEW_APPLICATIONSET_PATH: "deploy/k8s/charts/preview-scaffold"
 
 # Gateway 配置
 hostname: "juanie.art"

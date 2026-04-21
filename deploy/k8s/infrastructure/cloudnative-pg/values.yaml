@@ -1,0 +1,21 @@
+replicaCount: 1
+
+crds:
+  create: true
+
+config:
+  clusterWide: true
+  maxConcurrentReconciles: 10
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+monitoring:
+  podMonitorEnabled: false
+  grafanaDashboard:
+    create: false

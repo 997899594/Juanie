@@ -214,13 +214,11 @@ gh workflow run cd.yml -f environment=staging
 ### 管理 Secrets
 
 ```bash
-# 使用 Sealed Secrets
-kubeseal -f juanie-secret.yaml -w juanie-sealed-secret.yaml
-git add juanie-sealed-secret.yaml
-git commit -m "Add sealed secrets"
-
-# 或使用 External Secrets Operator
-kubectl apply -f k8s/external-secrets/external-secrets.yaml
+# 首次初始化平台（安装 cert-manager / External Secrets / Argo CD / Argo Rollouts / CloudNativePG）
+DNSPOD_SECRET_ID=xxx \
+DNSPOD_SECRET_KEY=xxx \
+JUANIE_PREVIEW_APPLICATIONSET_REPO_URL=https://github.com/997899594/Juanie.git \
+./deploy/k8s/scripts/init-server.sh
 ```
 
 ---

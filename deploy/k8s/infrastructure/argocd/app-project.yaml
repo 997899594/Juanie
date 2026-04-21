@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: juanie
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: juanie
+    app.kubernetes.io/managed-by: juanie-bootstrap
+spec:
+  description: Juanie managed delivery environments
+  sourceRepos:
+    - '*'
+  destinations:
+    - namespace: '*'
+      server: '*'
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
