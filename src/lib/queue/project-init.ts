@@ -625,6 +625,19 @@ export function buildRunScriptCommand(packageManager: PackageManager, script: st
   return `${packageManager} run ${script}`;
 }
 
+export function resolvePackageScriptCommand(
+  packageJson: RepoAutomationContext['packageJson'],
+  packageManager: PackageManager,
+  script: string
+): string {
+  const declared = packageJson?.scripts?.[script]?.trim();
+  if (declared) {
+    return declared;
+  }
+
+  return buildRunScriptCommand(packageManager, script);
+}
+
 export function detectMigrationTool(packageJson: RepoAutomationContext['packageJson']) {
   const dependencies = {
     ...(packageJson?.dependencies ?? {}),
@@ -659,7 +672,11 @@ export function inferMigrationCommand(
     return {
       comment: 'Auto-generated from package.json script db:migrate',
       tool,
-      command: buildRunScriptCommand(automation.packageManager, 'db:migrate'),
+      command: resolvePackageScriptCommand(
+        automation.packageJson,
+        automation.packageManager,
+        'db:migrate'
+      ),
       executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     };
@@ -669,7 +686,11 @@ export function inferMigrationCommand(
     return {
       comment: 'Auto-generated from package.json script db:deploy',
       tool,
-      command: buildRunScriptCommand(automation.packageManager, 'db:deploy'),
+      command: resolvePackageScriptCommand(
+        automation.packageJson,
+        automation.packageManager,
+        'db:deploy'
+      ),
       executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     };

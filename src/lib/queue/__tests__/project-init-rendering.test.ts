@@ -5,6 +5,7 @@ import {
   detectMigrationTool,
   detectPackageManager,
   inferMigrationCommand,
+  resolvePackageScriptCommand,
   renderJuanieConfig,
 } from '@/lib/queue/project-init';
 
@@ -43,7 +44,7 @@ describe('project init migration inference', () => {
     expect(inferred).toEqual({
       comment: 'Auto-generated from package.json script db:migrate',
       tool: 'drizzle',
-      command: 'bun run db:migrate',
+      command: 'drizzle-kit migrate',
       executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
     });
@@ -142,7 +143,7 @@ describe('project init migration inference', () => {
 
     expect(config).toContain('migrate:');
     expect(config).toContain('tool: drizzle');
-    expect(config).toContain('command: bun run db:migrate');
+    expect(config).toContain('command: drizzle-kit migrate');
     expect(config).toContain('executionMode: automatic');
     expect(config).not.toContain('databases:\n      - role:');
   });
@@ -205,5 +206,19 @@ describe('project init migration inference', () => {
 
   it('builds yarn commands without run', () => {
     expect(buildRunScriptCommand('yarn', 'db:migrate')).toBe('yarn db:migrate');
+  });
+
+  it('prefers declared package scripts over synthesized package-manager wrappers', () => {
+    expect(
+      resolvePackageScriptCommand(
+        {
+          scripts: {
+            'db:migrate': 'node scripts/db-migrate.mjs',
+          },
+        },
+        'bun',
+        'db:migrate'
+      )
+    ).toBe('node scripts/db-migrate.mjs');
   });
 });
