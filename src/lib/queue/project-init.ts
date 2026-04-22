@@ -35,6 +35,7 @@ import { logger } from '@/lib/logger';
 import { isPlatformManagedMigrationTool } from '@/lib/migrations/platform-managed';
 import {
   getDefaultSchemaConfigPath,
+  getSchemaConfigCandidates,
   resolveExecutionToolForSchemaSource,
 } from '@/lib/migrations/schema-source';
 import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
@@ -597,7 +598,7 @@ export function resolvePackageScriptCommand(
   return buildRunScriptCommand(packageManager, script);
 }
 
-const managedMigrationScriptNames = ['db:migrate', 'db:deploy'] as const;
+const managedMigrationScriptNames = ['db:push', 'db:migrate', 'db:deploy'] as const;
 
 function detectMigrationToolFromText(
   text: string
@@ -709,12 +710,7 @@ function inferSchemaConfigPath(
   }
 
   if (source === 'drizzle') {
-    const candidates = [
-      'drizzle.config.ts',
-      'drizzle.config.mjs',
-      'drizzle.config.js',
-      'drizzle.config.cjs',
-    ];
+    const candidates = getSchemaConfigCandidates(source);
     return candidates.find((candidate) => automation.rootFiles.includes(candidate)) ?? null;
   }
 
@@ -817,6 +813,9 @@ export function inferSchemaConfig(
   const canPlatformManage = isPlatformManagedMigrationTool(executionTool, databaseType);
   const hasAtlasConfig =
     source === 'atlas' && Boolean(automation.atlasConfigPath || automation.atlasConfigContent);
+  const inferredScriptName = managedMigrationScriptNames.find((scriptName) =>
+    Boolean(scripts[scriptName]?.trim())
+  );
 
   if (hasAtlasConfig) {
     return {
@@ -830,23 +829,11 @@ export function inferSchemaConfig(
     };
   }
 
-  if (scripts['db:migrate']) {
+  if (inferredScriptName) {
     return {
       comment: canPlatformManage
-        ? 'Auto-generated from package.json script db:migrate'
-        : 'Auto-detected from package.json script db:migrate; platform keeps this schema source in external mode',
-      source,
-      ...(configPath ? { config: configPath } : {}),
-      executionMode: canPlatformManage ? 'automatic' : 'external',
-      ...(canPlatformManage ? { approvalPolicy: 'manual_in_production' as const } : {}),
-    };
-  }
-
-  if (scripts['db:deploy']) {
-    return {
-      comment: canPlatformManage
-        ? 'Auto-generated from package.json script db:deploy'
-        : 'Auto-detected from package.json script db:deploy; platform keeps this schema source in external mode',
+        ? `Auto-generated from package.json script ${inferredScriptName}`
+        : `Auto-detected from package.json script ${inferredScriptName}; platform keeps this schema source in external mode`,
       source,
       ...(configPath ? { config: configPath } : {}),
       executionMode: canPlatformManage ? 'automatic' : 'external',

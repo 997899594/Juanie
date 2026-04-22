@@ -8,16 +8,16 @@ describe('schema repair review request', () => {
       fallbackReviewFilePath: '.juanie/schema-repair/plan-123.md',
       generatedArtifacts: {
         files: {
-          'drizzle/0001_fix.sql': '-- sql',
+          '.juanie/schema-repair/generated/0001_fix.sql': '-- sql',
         },
-        generatedFiles: ['drizzle/0001_fix.sql'],
+        generatedFiles: ['.juanie/schema-repair/generated/0001_fix.sql'],
       },
     });
 
     expect(result.files).toEqual({
-      'drizzle/0001_fix.sql': '-- sql',
+      '.juanie/schema-repair/generated/0001_fix.sql': '-- sql',
     });
-    expect(result.generatedFiles).toEqual(['drizzle/0001_fix.sql']);
+    expect(result.generatedFiles).toEqual(['.juanie/schema-repair/generated/0001_fix.sql']);
   });
 
   it('falls back to a review note only when there are no repo artifacts', () => {

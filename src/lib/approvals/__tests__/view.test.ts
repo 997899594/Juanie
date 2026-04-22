@@ -84,7 +84,7 @@ describe('approvals view', () => {
           domains: [],
         },
         project: { name: 'demo' },
-        specification: { tool: 'drizzle', phase: 'preDeploy', command: 'bun run db:migrate' },
+        specification: { tool: 'drizzle', phase: 'preDeploy', command: 'bun run db:push' },
       },
     ]);
 

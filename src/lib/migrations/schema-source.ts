@@ -13,6 +13,13 @@ export const schemaSources = [
 
 export type SchemaSource = (typeof schemaSources)[number];
 
+export const drizzleSchemaConfigCandidates = [
+  'drizzle.config.ts',
+  'drizzle.config.mjs',
+  'drizzle.config.js',
+  'drizzle.config.cjs',
+] as const;
+
 export function usesPlatformInternalCommand(command: string | null | undefined): boolean {
   return typeof command === 'string' && command.startsWith('juanie:platform:');
 }
@@ -60,6 +67,19 @@ export function getDefaultSchemaConfigPath(source: SchemaSource): string | null 
       return 'prisma/schema.prisma';
     default:
       return null;
+  }
+}
+
+export function getSchemaConfigCandidates(source: SchemaSource): string[] {
+  switch (source) {
+    case 'atlas':
+      return ['atlas.hcl'];
+    case 'drizzle':
+      return [...drizzleSchemaConfigCandidates];
+    case 'prisma':
+      return ['prisma/schema.prisma'];
+    default:
+      return [];
   }
 }
 

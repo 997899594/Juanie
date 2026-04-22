@@ -18,7 +18,7 @@ describe('project init migration inference', () => {
     ).toBe('bun');
   });
 
-  it('uses db:migrate as an auto-run schema config', () => {
+  it('uses db:push as the preferred auto-run schema config', () => {
     const inferred = inferSchemaConfig(
       {
         monorepoType: 'none',
@@ -31,7 +31,7 @@ describe('project init migration inference', () => {
         migrationScriptContents: {},
         packageJson: {
           scripts: {
-            'db:migrate': 'drizzle-kit migrate',
+            'db:push': 'drizzle-kit push --config drizzle.config.mjs',
           },
           dependencies: {
             'drizzle-orm': '^0.1.0',
@@ -45,7 +45,7 @@ describe('project init migration inference', () => {
     );
 
     expect(inferred).toEqual({
-      comment: 'Auto-generated from package.json script db:migrate',
+      comment: 'Auto-generated from package.json script db:push',
       source: 'drizzle',
       executionMode: 'automatic',
       approvalPolicy: 'manual_in_production',
@@ -241,7 +241,7 @@ describe('project init migration inference', () => {
         migrationScriptContents: {},
         packageJson: {
           scripts: {
-            'db:migrate': 'drizzle-kit migrate',
+            'db:push': 'drizzle-kit push --config drizzle.config.mjs',
           },
           dependencies: {
             'drizzle-orm': '^0.1.0',
@@ -312,7 +312,7 @@ describe('project init migration inference', () => {
         },
         packageJson: {
           scripts: {
-            'db:migrate': 'node scripts/db-migrate.mjs',
+            'db:push': 'node scripts/db-migrate.mjs',
           },
         },
       }
@@ -393,11 +393,11 @@ describe('project init migration inference', () => {
       resolvePackageScriptCommand(
         {
           scripts: {
-            'db:migrate': 'node scripts/db-migrate.mjs',
+            'db:push': 'node scripts/db-migrate.mjs',
           },
         },
         'bun',
-        'db:migrate'
+        'db:push'
       )
     ).toBe('node scripts/db-migrate.mjs');
   });

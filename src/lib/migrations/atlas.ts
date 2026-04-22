@@ -43,6 +43,11 @@ export interface AtlasSchemaDiffResult {
   diffSql: string;
 }
 
+export interface AtlasSchemaApplyPlan {
+  hasChanges: boolean;
+  planSql: string;
+}
+
 export function parseAtlasMigrationDir(configContent: string | null | undefined): string | null {
   if (!configContent) {
     return null;
@@ -129,6 +134,44 @@ export function summarizeAtlasSchemaDiffOutput(diffSql: string): string | null {
   return firstMeaningfulLine ?? null;
 }
 
+async function runAtlasSchemaDiff(input: {
+  database: AtlasDatabaseTarget;
+  to: string;
+  cwd?: string;
+}): Promise<AtlasSchemaDiffResult> {
+  const databaseUrl = resolveAtlasDatabaseUrl(input.database);
+  if (!databaseUrl) {
+    throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema diff');
+  }
+
+  const args = [
+    'schema',
+    'diff',
+    '--from',
+    databaseUrl,
+    '--to',
+    input.to,
+    '--dev-url',
+    getDefaultAtlasDevUrl(input.database.type),
+    '--format',
+    '{{ sql . }}',
+    ...getAtlasSchemaDiffExcludePatterns(input.database.type).flatMap((pattern) => [
+      '--exclude',
+      pattern,
+    ]),
+  ];
+
+  const { stdout } = await runAtlasCommand(args, {
+    cwd: input.cwd,
+  });
+  const diffSql = stdout.trim();
+
+  return {
+    hasChanges: diffSql.length > 0,
+    diffSql,
+  };
+}
+
 async function ensureAtlasWorkspaceChecksumFile(dir: string): Promise<void> {
   await runAtlasCommand(['migrate', 'hash', '--dir', 'file://migrations'], {
     cwd: dir,
@@ -180,11 +223,6 @@ export async function diffDatabaseSchemaAgainstMigrationDir(input: {
   migrationPath: string;
   revision: string;
 }): Promise<AtlasSchemaDiffResult> {
-  const databaseUrl = resolveAtlasDatabaseUrl(input.database);
-  if (!databaseUrl) {
-    throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema diff');
-  }
-
   const workspace = await prepareAtlasMigrationWorkspace({
     projectId: input.projectId,
     migrationPath: input.migrationPath,
@@ -199,35 +237,92 @@ export async function diffDatabaseSchemaAgainstMigrationDir(input: {
       };
     }
 
-    const args = [
+    return await runAtlasSchemaDiff({
+      database: input.database,
+      to: 'file://migrations',
+      cwd: workspace.dir,
+    });
+  } finally {
+    await workspace.cleanup();
+  }
+}
+
+export async function diffDatabaseSchemaAgainstDesiredSchema(input: {
+  database: AtlasDatabaseTarget;
+  desiredSchemaUrl: string;
+}): Promise<AtlasSchemaDiffResult> {
+  return runAtlasSchemaDiff({
+    database: input.database,
+    to: input.desiredSchemaUrl,
+  });
+}
+
+export async function planApplyDesiredSchema(input: {
+  database: AtlasDatabaseTarget;
+  desiredSchemaUrl: string;
+}): Promise<AtlasSchemaApplyPlan> {
+  const databaseUrl = resolveAtlasDatabaseUrl(input.database);
+  if (!databaseUrl) {
+    throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema apply');
+  }
+
+  const args = [
+    'schema',
+    'apply',
+    '--url',
+    databaseUrl,
+    '--to',
+    input.desiredSchemaUrl,
+    '--dev-url',
+    getDefaultAtlasDevUrl(input.database.type),
+    '--dry-run',
+    '--format',
+    '{{ sql . }}',
+    ...getAtlasSchemaDiffExcludePatterns(input.database.type).flatMap((pattern) => [
+      '--exclude',
+      pattern,
+    ]),
+  ];
+
+  const { stdout } = await runAtlasCommand(args);
+  const planSql = stdout.trim();
+
+  return {
+    hasChanges: planSql.length > 0,
+    planSql,
+  };
+}
+
+export async function applyDesiredSchemaToDatabase(input: {
+  database: AtlasDatabaseTarget;
+  desiredSchemaUrl: string;
+  onOutputLine?: (line: string, stream: 'stdout' | 'stderr') => void;
+}): Promise<void> {
+  const databaseUrl = resolveAtlasDatabaseUrl(input.database);
+  if (!databaseUrl) {
+    throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema apply');
+  }
+
+  await runAtlasCommand(
+    [
       'schema',
-      'diff',
-      '--from',
+      'apply',
+      '--url',
       databaseUrl,
       '--to',
-      'file://migrations',
+      input.desiredSchemaUrl,
       '--dev-url',
       getDefaultAtlasDevUrl(input.database.type),
-      '--format',
-      '{{ sql . }}',
+      '--auto-approve',
       ...getAtlasSchemaDiffExcludePatterns(input.database.type).flatMap((pattern) => [
         '--exclude',
         pattern,
       ]),
-    ];
-
-    const { stdout } = await runAtlasCommand(args, {
-      cwd: workspace.dir,
-    });
-    const diffSql = stdout.trim();
-
-    return {
-      hasChanges: diffSql.length > 0,
-      diffSql,
-    };
-  } finally {
-    await workspace.cleanup();
-  }
+    ],
+    {
+      onOutputLine: input.onOutputLine,
+    }
+  );
 }
 
 async function getAppliedAtlasVersionsPostgres(connectionString: string): Promise<string[]> {

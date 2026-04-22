@@ -1,8 +1,6 @@
 import crypto from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
-import postgres from 'postgres';
 import { db } from '@/lib/db';
-import { buildNormalizedPostgresUrl, normalizeDatabaseUrl } from '@/lib/db/connection-url';
 import {
   databaseMigrations,
   databases,
@@ -12,6 +10,7 @@ import {
   projects,
 } from '@/lib/db/schema';
 import {
+  diffDatabaseSchemaAgainstDesiredSchema,
   diffDatabaseSchemaAgainstMigrationDir,
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
@@ -19,10 +18,8 @@ import {
   isAtlasDatabaseTarget,
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
-import {
-  fetchMigrationFilesFromRepoPath,
-  readRepositoryFileFromRepoPath,
-} from '@/lib/migrations/fetch';
+import { exportDesiredSchemaForSpec } from '@/lib/migrations/desired-schema';
+import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { syncMigrationSpecificationsFromRepo } from '@/lib/migrations/resolver';
 import type {
@@ -34,7 +31,7 @@ import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repai
 import { classifySchemaLedgerState } from './classification';
 
 interface SchemaLedgerInspectionResult {
-  kind: 'atlas' | 'drizzle' | 'sql';
+  kind: 'atlas' | 'drizzle' | 'sql' | 'desired_schema';
   expectedEntries: string[];
   actualEntries: string[];
   hasUserTables: boolean;
@@ -60,11 +57,6 @@ export interface EnvironmentSchemaStateSnapshot {
   updatedAt: Date;
 }
 
-interface DrizzleMigrationFileRecord {
-  name: string;
-  content: string;
-}
-
 function getUnknownResolution(): MigrationResolutionInfo {
   return {
     strategy: 'unknown',
@@ -82,48 +74,6 @@ function buildChecksum(entries: string[]): string | null {
   }
 
   return crypto.createHash('sha256').update(entries.join('\n')).digest('hex');
-}
-
-export function normalizeDrizzleLedgerEntries(input: {
-  repoFiles: DrizzleMigrationFileRecord[];
-  actualLedgerEntries: string[];
-}): string[] {
-  const tagByRawLedgerValue = new Map<string, string>();
-
-  for (const file of input.repoFiles) {
-    const fileTag = file.name.replace(/\.(sql|js)$/u, '');
-    const fileHash = crypto.createHash('sha256').update(file.content).digest('hex');
-
-    tagByRawLedgerValue.set(fileTag, fileTag);
-    tagByRawLedgerValue.set(fileHash, fileTag);
-  }
-
-  return input.actualLedgerEntries.map((entry) => tagByRawLedgerValue.get(entry) ?? entry);
-}
-
-function buildPostgresConnectionString(database: {
-  connectionString: string | null;
-  host: string | null;
-  port: number | null;
-  databaseName: string | null;
-  username: string | null;
-  password: string | null;
-}): string | null {
-  if (database.connectionString) {
-    return normalizeDatabaseUrl(database.connectionString);
-  }
-
-  if (!database.host || !database.databaseName || !database.username) {
-    return null;
-  }
-
-  return buildNormalizedPostgresUrl({
-    username: database.username,
-    password: database.password,
-    host: database.host,
-    port: database.port,
-    databaseName: database.databaseName,
-  });
 }
 
 async function getProjectDefaultRef(projectId: string, branch?: string | null): Promise<string> {
@@ -234,102 +184,45 @@ export async function resolveSchemaManagementSpec(input: {
   });
 }
 
-async function inspectDrizzleLedger(spec: ResolvedMigrationSpec): Promise<{
+async function inspectDrizzleDesiredSchema(spec: ResolvedMigrationSpec): Promise<{
   status: 'ok' | 'blocked';
+  hasChanges?: boolean;
+  driftSummary?: string | null;
   reason?: string;
   snapshot?: SchemaLedgerInspectionResult;
 }> {
-  if (spec.database.type !== 'postgresql') {
+  if (!isAtlasDatabaseTarget(spec.database)) {
     return {
       status: 'blocked',
-      reason: `暂不支持在 ${spec.database.type} 上检查 Drizzle 账本`,
-    };
-  }
-
-  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
-  if (!migrationPath) {
-    return {
-      status: 'blocked',
-      reason: '无法解析 Drizzle migration 路径',
+      reason: `暂不支持在 ${spec.database.type} 上检查 Drizzle desired schema`,
     };
   }
 
   const ref = await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch);
-  const journalContent = await readRepositoryFileFromRepoPath(
-    spec.specification.projectId,
-    `${migrationPath}/meta/_journal.json`,
-    ref
-  );
-
-  const journalEntries = journalContent
-    ? (((JSON.parse(journalContent) as { entries?: Array<{ tag?: unknown }> }).entries ?? [])
-        .map((entry) => (typeof entry?.tag === 'string' ? entry.tag : ''))
-        .filter(Boolean) as string[])
-    : [];
-  const migrationFiles = await fetchMigrationFilesFromRepoPath(
-    spec.specification.projectId,
-    migrationPath,
-    ref
-  );
-  const expectedEntries = journalEntries;
-
-  const connectionString = buildPostgresConnectionString(spec.database);
-  if (!connectionString) {
-    return {
-      status: 'blocked',
-      reason: '数据库缺少可用的 PostgreSQL 连接信息',
-    };
-  }
-
-  const sql = postgres(connectionString, {
-    max: 1,
-    prepare: false,
-  });
+  const desiredSchema = await exportDesiredSchemaForSpec(spec, ref);
 
   try {
-    const [ledgerTableRows, userTableRows] = await Promise.all([
-      sql<{ present: boolean }[]>`
-        SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.tables
-          WHERE table_schema = 'drizzle'
-            AND table_name = '__drizzle_migrations'
-        ) AS "present"
-      `,
-      sql<{ count: number }[]>`
-        SELECT count(*)::int AS "count"
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND table_type = 'BASE TABLE'
-      `,
+    const [diff, hasUserTables] = await Promise.all([
+      diffDatabaseSchemaAgainstDesiredSchema({
+        database: spec.database,
+        desiredSchemaUrl: desiredSchema.schemaFileUrl,
+      }),
+      hasAtlasUserTables(spec.database),
     ]);
-
-    const hasUserTables = Number(userTableRows[0]?.count ?? 0) > 0;
-    const ledgerTablePresent = ledgerTableRows[0]?.present === true;
-    const actualEntries = ledgerTablePresent
-      ? normalizeDrizzleLedgerEntries({
-          repoFiles: migrationFiles,
-          actualLedgerEntries: (
-            await sql<{ hash: string }[]>`
-              SELECT hash
-              FROM "drizzle"."__drizzle_migrations"
-              ORDER BY created_at ASC, id ASC
-            `
-          ).map((row) => row.hash),
-        })
-      : [];
 
     return {
       status: 'ok',
+      hasChanges: diff.hasChanges,
+      driftSummary: summarizeAtlasSchemaDiffOutput(diff.diffSql),
       snapshot: {
-        kind: 'drizzle',
-        expectedEntries,
-        actualEntries,
+        kind: 'desired_schema',
+        expectedEntries: [desiredSchema.revision],
+        actualEntries: diff.hasChanges ? [] : [desiredSchema.revision],
         hasUserTables,
       },
     };
   } finally {
-    await sql.end({ timeout: 5 });
+    await desiredSchema.cleanup();
   }
 }
 
@@ -602,17 +495,59 @@ export async function inspectEnvironmentSchemaState(input: {
   }
 
   try {
+    if (resolvedSpec.specification.tool === 'drizzle') {
+      const desiredSchemaInspection = await inspectDrizzleDesiredSchema(resolvedSpec);
+
+      if (desiredSchemaInspection.status === 'blocked' || !desiredSchemaInspection.snapshot) {
+        const reason = desiredSchemaInspection.reason ?? 'desired schema 检查失败';
+        return upsertEnvironmentSchemaState({
+          projectId: input.projectId,
+          environmentId: database.environmentId,
+          databaseId: database.id,
+          status: 'blocked',
+          expectedEntries: [],
+          actualEntries: [],
+          hasLedger: false,
+          hasUserTables: false,
+          summary: reason,
+          errorCode: 'SCHEMA_STATE_UNSUPPORTED_OR_BLOCKED',
+          errorMessage: reason,
+        });
+      }
+
+      const inspected = classifySchemaLedgerState({
+        kind: desiredSchemaInspection.snapshot.kind,
+        expectedEntries: desiredSchemaInspection.snapshot.expectedEntries,
+        actualEntries: desiredSchemaInspection.snapshot.actualEntries,
+        hasUserTables: desiredSchemaInspection.snapshot.hasUserTables,
+        driftDetected: desiredSchemaInspection.hasChanges === true,
+        driftSummary: desiredSchemaInspection.driftSummary,
+      });
+
+      return upsertEnvironmentSchemaState({
+        projectId: input.projectId,
+        environmentId: database.environmentId,
+        databaseId: database.id,
+        status: inspected.status,
+        expectedEntries: desiredSchemaInspection.snapshot.expectedEntries,
+        actualEntries: desiredSchemaInspection.snapshot.actualEntries,
+        hasLedger: inspected.hasLedger,
+        hasUserTables: inspected.hasUserTables,
+        summary: inspected.summary,
+        errorCode: inspected.status === 'blocked' ? 'SCHEMA_STATE_UNSUPPORTED_OR_BLOCKED' : null,
+        errorMessage: inspected.status === 'blocked' ? inspected.summary : null,
+      });
+    }
+
     const ledgerInspection =
       resolvedSpec.specification.tool === 'atlas'
         ? await inspectAtlasLedger(resolvedSpec)
-        : resolvedSpec.specification.tool === 'drizzle'
-          ? await inspectDrizzleLedger(resolvedSpec)
-          : resolvedSpec.specification.tool === 'sql'
-            ? await inspectSqlLedger(resolvedSpec)
-            : {
-                status: 'blocked' as const,
-                reason: `暂不支持检查 ${resolvedSpec.specification.tool} 迁移账本`,
-              };
+        : resolvedSpec.specification.tool === 'sql'
+          ? await inspectSqlLedger(resolvedSpec)
+          : {
+              status: 'blocked' as const,
+              reason: `暂不支持检查 ${resolvedSpec.specification.tool} 迁移账本`,
+            };
 
     if (ledgerInspection.status === 'blocked' || !ledgerInspection.snapshot) {
       const reason = ledgerInspection.reason ?? '账本检查失败';

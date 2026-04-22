@@ -224,15 +224,17 @@ async function runDrizzleMigration(
   spec: ResolvedMigrationSpec,
   options: ExecuteMigrationRunOptions
 ): Promise<void> {
-  const path = resolveMigrationPath(spec.specification, spec.database.type) ?? 'drizzle';
   const revision =
     options.sourceCommitSha || options.sourceRef || spec.environment.branch || 'main';
+  const itemName = spec.specification.sourceConfigPath
+    ? `desired-schema:${spec.specification.sourceConfigPath}`
+    : 'desired-schema:auto-discovery';
 
   const [item] = await db
     .insert(migrationRunItems)
     .values({
       migrationRunId: runId,
-      name: path,
+      name: itemName,
       status: 'running',
     })
     .returning();

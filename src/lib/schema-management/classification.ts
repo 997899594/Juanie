@@ -1,7 +1,7 @@
 import type { EnvironmentSchemaStateStatus } from '@/lib/db/schema';
 
 export interface SchemaLedgerClassificationInput {
-  kind: 'atlas' | 'drizzle' | 'sql';
+  kind: 'atlas' | 'drizzle' | 'sql' | 'desired_schema';
   expectedEntries: string[];
   actualEntries: string[];
   hasUserTables: boolean;
@@ -29,7 +29,11 @@ function describeKind(kind: SchemaLedgerClassificationInput['kind']): string {
     return 'Atlas';
   }
 
-  return kind === 'drizzle' ? 'Drizzle' : 'SQL';
+  if (kind === 'drizzle') {
+    return 'Drizzle';
+  }
+
+  return kind === 'desired_schema' ? 'desired schema' : 'SQL';
 }
 
 function appendDiffSummary(base: string, driftSummary?: string | null): string {
@@ -41,6 +45,27 @@ export function classifySchemaLedgerState(
 ): SchemaLedgerClassificationResult {
   const hasLedger = input.actualEntries.length > 0;
   const toolLabel = describeKind(input.kind);
+
+  if (input.kind === 'desired_schema') {
+    if (!input.driftDetected) {
+      return {
+        status: 'aligned',
+        summary: 'Atlas diff 未发现 schema 差异，数据库结构与仓库 desired schema 一致',
+        hasLedger: false,
+        hasUserTables: input.hasUserTables,
+      };
+    }
+
+    return {
+      status: 'pending_migrations',
+      summary: appendDiffSummary(
+        '数据库尚未达到仓库 desired schema，可通过正常发布补齐',
+        input.driftSummary
+      ),
+      hasLedger: false,
+      hasUserTables: input.hasUserTables,
+    };
+  }
 
   if (input.expectedEntries.length === 0) {
     return {

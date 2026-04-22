@@ -2,11 +2,16 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { Client as PgClient } from 'pg';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
-import { extractAtlasMigrationVersion, getAppliedAtlasVersions } from '@/lib/migrations/atlas';
+import {
+  diffDatabaseSchemaAgainstDesiredSchema,
+  extractAtlasMigrationVersion,
+  getAppliedAtlasVersions,
+  isAtlasDatabaseTarget,
+} from '@/lib/migrations/atlas';
+import { exportDesiredSchemaFromRepository } from '@/lib/migrations/desired-schema';
 import {
   fetchMigrationFilesFromRepoPath,
   listRepositoryDirectoryFromRepoPath,
-  readRepositoryFileFromRepoPath,
 } from '@/lib/migrations/fetch';
 import { getDefaultMigrationPath } from '@/lib/migrations/path';
 
@@ -52,6 +57,7 @@ interface MigrationFilePreviewRunLike {
   specification?: {
     tool?: string | null;
     migrationPath?: string | null;
+    sourceConfigPath?: string | null;
   } | null;
   database?: {
     id?: string | null;
@@ -86,10 +92,10 @@ interface CachedPreviewEntry {
 }
 
 interface ExecutionStateSnapshot {
-  mode: 'names' | 'ordered_count' | 'versions' | 'unknown';
+  mode: 'names' | 'versions' | 'desired_schema' | 'unknown';
   executedNames?: Set<string>;
-  executedCount?: number;
   executedVersions?: Set<string>;
+  desiredSchemaAligned?: boolean;
   warning?: string | null;
 }
 
@@ -316,6 +322,10 @@ function resolvePath(run: MigrationFilePreviewRunLike): string | null {
     return null;
   }
 
+  if (tool === 'drizzle') {
+    return normalizeRefValue(run.specification?.sourceConfigPath) ?? '__desired_schema_auto__';
+  }
+
   if (run.specification?.migrationPath && run.specification.migrationPath.trim().length > 0) {
     return run.specification.migrationPath;
   }
@@ -326,27 +336,6 @@ function resolvePath(run: MigrationFilePreviewRunLike): string | null {
   }
 
   return getDefaultMigrationPath(tool, databaseType);
-}
-
-function parseDrizzleJournal(content: string): string[] {
-  const parsed = JSON.parse(content) as
-    | {
-        entries?: Array<{
-          tag?: string;
-        }>;
-      }
-    | Array<{ tag?: string }>;
-
-  const entries = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray(parsed.entries)
-      ? parsed.entries
-      : [];
-
-  return entries
-    .map((entry) => entry?.tag?.trim())
-    .filter((tag): tag is string => Boolean(tag))
-    .map((tag) => (tag.endsWith('.sql') ? tag : `${tag}.sql`));
 }
 
 async function resolveSqlDeclaredPreview(
@@ -366,39 +355,14 @@ async function resolveSqlDeclaredPreview(
 }
 
 async function resolveDrizzleDeclaredPreview(
-  projectId: string,
-  migrationPath: string,
-  revision: string
+  sourceConfigPath: string | null
 ): Promise<DeclaredMigrationPreview> {
-  const journalPath = `${migrationPath.replace(/\/$/, '')}/meta/_journal.json`;
-
-  try {
-    const journalContent = await withTimeout(
-      readRepositoryFileFromRepoPath(projectId, journalPath, revision),
-      '读取 Drizzle journal'
-    );
-    if (journalContent) {
-      const files = parseDrizzleJournal(journalContent);
-      if (files.length > 0) {
-        return buildDeclaredPreview('Drizzle 元数据', files);
-      }
-    }
-  } catch (_error) {
-    // Fall back to directory scan.
-  }
-
-  const entries = await withTimeout(
-    listRepositoryDirectoryFromRepoPath(projectId, migrationPath, revision),
-    '扫描 Drizzle 迁移目录'
-  );
-  const files = entries
-    .filter((entry) => entry.type === 'file' && isMigrationFile(entry.name))
-    .map((entry) => entry.name);
-
   return buildDeclaredPreview(
-    'Drizzle 目录扫描',
-    files,
-    files.length === 0 ? '未在 Drizzle 路径下检测到迁移文件，请确认目录结构。' : null
+    'Desired schema',
+    ['desired-schema.sql'],
+    sourceConfigPath
+      ? `基于 ${sourceConfigPath} 导出`
+      : '未指定 schema.config，平台会自动发现 Drizzle 配置'
   );
 }
 
@@ -495,7 +459,7 @@ async function resolveDeclaredPreviewForRun(
     return resolveAtlasDeclaredPreview(run.projectId, migrationPath, revision);
   }
   if (tool === 'drizzle') {
-    return resolveDrizzleDeclaredPreview(run.projectId, migrationPath, revision);
+    return resolveDrizzleDeclaredPreview(normalizeRefValue(run.specification?.sourceConfigPath));
   }
   if (tool === 'prisma') {
     return resolvePrismaDeclaredPreview(run.projectId, migrationPath, revision);
@@ -646,40 +610,6 @@ async function resolvePostgresExecutionState(input: {
     };
   }
 
-  if (tool === 'drizzle') {
-    let executedCount = 0;
-    try {
-      executedCount = await withPostgresClient(
-        input.connectionString,
-        '读取 Drizzle 执行状态',
-        async (client) => {
-          const result = await client.query<{ count: string | number }>(
-            'SELECT COUNT(*) AS count FROM "__drizzle_migrations"'
-          );
-          const rawValue = result.rows[0]?.count ?? 0;
-          const count =
-            typeof rawValue === 'number' ? rawValue : Number.parseInt(String(rawValue), 10);
-          return Number.isNaN(count) ? 0 : count;
-        }
-      );
-    } catch (error) {
-      if (!isMissingPostgresRelation(error, '__drizzle_migrations')) {
-        throw error;
-      }
-
-      return {
-        mode: 'ordered_count',
-        executedCount: 0,
-        warning: '首次迁移，Drizzle 执行记录表尚未创建，按 0 已执行处理。',
-      };
-    }
-
-    return {
-      mode: 'ordered_count',
-      executedCount: Math.max(executedCount, 0),
-    };
-  }
-
   return {
     mode: 'unknown',
     warning: '当前迁移工具暂不支持读取实时执行状态。',
@@ -690,6 +620,71 @@ async function resolveRuntimeExecutionState(
   run: MigrationFilePreviewRunLike,
   tool: SupportedMigrationTool
 ): Promise<ExecutionStateSnapshot> {
+  if (tool === 'drizzle') {
+    const databaseTarget = {
+      type: run.database?.type ?? 'redis',
+      connectionString: normalizeRefValue(run.database?.connectionString),
+      host: null,
+      port: null,
+      databaseName: null,
+      username: null,
+      password: null,
+    };
+
+    if (!isAtlasDatabaseTarget(databaseTarget)) {
+      return {
+        mode: 'unknown',
+        warning: '当前仅支持 PostgreSQL / MySQL 的 desired schema 预览。',
+      };
+    }
+
+    if (!databaseTarget.connectionString) {
+      return {
+        mode: 'unknown',
+        warning: '数据库连接串缺失，无法读取 desired schema 执行状态。',
+      };
+    }
+
+    const revision = resolveRevision(run);
+
+    try {
+      const desiredSchema = await exportDesiredSchemaFromRepository({
+        projectId: run.projectId,
+        source: 'drizzle',
+        revision,
+        sourceConfigPath: run.specification?.sourceConfigPath ?? null,
+        connectionString: databaseTarget.connectionString,
+      });
+
+      try {
+        const diff = await diffDatabaseSchemaAgainstDesiredSchema({
+          database: databaseTarget,
+          desiredSchemaUrl: desiredSchema.schemaFileUrl,
+        });
+
+        return {
+          mode: 'desired_schema',
+          desiredSchemaAligned: !diff.hasChanges,
+          warning: desiredSchema.sourceConfigPath
+            ? `基于 ${desiredSchema.sourceConfigPath} 导出`
+            : '基于自动发现的 Drizzle 配置导出',
+        };
+      } finally {
+        await desiredSchema.cleanup();
+      }
+    } catch (error) {
+      return {
+        mode: 'unknown',
+        warning:
+          error instanceof PreviewTimeoutError
+            ? `${error.operation}超时，已降级为仅显示 desired schema。`
+            : error instanceof Error
+              ? error.message
+              : String(error),
+      };
+    }
+  }
+
   if (tool === 'atlas') {
     if (run.database?.type !== 'postgresql' && run.database?.type !== 'mysql') {
       return {
@@ -780,21 +775,6 @@ function applyExecutionState(input: {
     });
   }
 
-  if (input.executionState.mode === 'ordered_count') {
-    const executedTotal = Math.min(
-      Math.max(input.executionState.executedCount ?? 0, 0),
-      declaredFiles.length
-    );
-    const pending = declaredFiles.slice(executedTotal);
-
-    return buildPendingSnapshot({
-      declaredPreview: input.declaredPreview,
-      pendingFiles: pending,
-      executedTotal,
-      warning: input.executionState.warning,
-    });
-  }
-
   if (input.executionState.mode === 'versions') {
     const executedVersions = input.executionState.executedVersions ?? new Set<string>();
     const pending = declaredFiles.filter((file) => {
@@ -807,6 +787,17 @@ function applyExecutionState(input: {
       declaredPreview: input.declaredPreview,
       pendingFiles: pending,
       executedTotal,
+      warning: input.executionState.warning,
+    });
+  }
+
+  if (input.executionState.mode === 'desired_schema') {
+    const pending = input.executionState.desiredSchemaAligned ? [] : declaredFiles;
+
+    return buildPendingSnapshot({
+      declaredPreview: input.declaredPreview,
+      pendingFiles: pending,
+      executedTotal: input.executionState.desiredSchemaAligned ? declaredFiles.length : 0,
       warning: input.executionState.warning,
     });
   }
@@ -948,7 +939,7 @@ export async function buildMigrationFilePreviewByRunId(
       continue;
     }
 
-    const runtimeKey = `${databaseId}:${tool}`;
+    const runtimeKey = `${databaseId}:${cacheKey}`;
     let executionState = runtimeExecutionStateByKey.get(runtimeKey);
     if (!executionState) {
       executionState = await resolveRuntimeExecutionState(run, tool);

@@ -8,7 +8,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
-import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
+import { buildAuthenticatedCloneUrl } from '@/lib/git/authenticated-clone-url';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { resolveMigrationPath } from '@/lib/migrations/path';
@@ -17,31 +17,6 @@ import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
 import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
 
 const execFileAsync = promisify(execFile);
-
-function buildAuthenticatedCloneUrl(input: {
-  cloneUrl: string | null;
-  fullName: string;
-  provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
-  accessToken: string;
-  serverUrl: string | null;
-}): string {
-  const fallbackUrl =
-    input.cloneUrl ??
-    (input.provider === 'github'
-      ? `https://github.com/${input.fullName}.git`
-      : `${normalizeGitLabServerUrl(input.serverUrl)}/${input.fullName}.git`);
-  const url = new URL(fallbackUrl);
-
-  if (input.provider === 'github') {
-    url.username = 'x-access-token';
-    url.password = input.accessToken;
-  } else {
-    url.username = 'oauth2';
-    url.password = input.accessToken;
-  }
-
-  return url.toString();
-}
 
 async function runCommand(
   command: string,
@@ -586,7 +561,10 @@ export async function executeSchemaRepairAtlasRun(input: {
       throw new Error('无法解析 schema repair 对应的迁移配置');
     }
 
-    const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
+    const migrationPath =
+      spec.specification.tool === 'drizzle'
+        ? '.juanie/schema-repair/generated'
+        : resolveMigrationPath(spec.specification, spec.database.type);
     if (!migrationPath) {
       throw new Error('当前迁移工具没有可用的 migration 目录，无法运行 Atlas');
     }
@@ -596,7 +574,6 @@ export async function executeSchemaRepairAtlasRun(input: {
       tool: spec.specification.tool,
       databaseType: spec.database.type,
       migrationPath,
-      existingMigrationNames: [],
       planId: plan.id,
       title: plan.title,
       summary: plan.summary,
@@ -605,6 +582,7 @@ export async function executeSchemaRepairAtlasRun(input: {
       databaseName: plan.database?.name ?? 'database',
       expectedVersion: plan.expectedVersion,
       actualVersion: plan.actualVersion,
+      sourceConfigPath: spec.specification.sourceConfigPath,
     });
     const runtimeDir = path.join(repoDir, '.juanie', 'schema-repair');
     await mkdir(runtimeDir, { recursive: true });

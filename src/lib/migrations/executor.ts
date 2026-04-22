@@ -7,17 +7,15 @@ import { AtlasCommandError, runAtlasCommand } from '@/lib/atlas/cli';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
 import {
+  applyDesiredSchemaToDatabase,
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
   isAtlasDatabaseTarget,
+  planApplyDesiredSchema,
   prepareAtlasMigrationWorkspace,
   resolveAtlasDatabaseUrl,
 } from '@/lib/migrations/atlas';
-import { drizzleTagToFilename, parseDrizzleJournalEntries } from '@/lib/migrations/drizzle';
-import {
-  fetchMigrationFilesFromRepoPath,
-  readRepositoryFileFromRepoPath,
-} from '@/lib/migrations/fetch';
+import { exportDesiredSchemaForSpec } from '@/lib/migrations/desired-schema';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
 
@@ -316,126 +314,44 @@ return undefined;
   }
 }
 
-async function ensureDrizzleLedger(client: PgClient): Promise<void> {
-  await client.query('CREATE SCHEMA IF NOT EXISTS "drizzle"');
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
-      id serial PRIMARY KEY,
-      hash text NOT NULL,
-      created_at bigint
-    )
-  `);
-}
-
-async function getExecutedDrizzleTags(
-  client: PgClient,
-  files: MigrationFile[],
-  journalTags: string[]
-): Promise<Set<string>> {
-  const result = await client.query<{ hash: string }>(
-    'SELECT hash FROM "drizzle"."__drizzle_migrations" ORDER BY created_at ASC, id ASC'
-  );
-
-  const normalized = new Set<string>();
-  const tagByRawLedgerValue = new Map<string, string>();
-
-  for (const tag of journalTags) {
-    tagByRawLedgerValue.set(tag, tag);
-  }
-
-  for (const file of files) {
-    const fileTag = file.name.replace(/\.(sql|js)$/u, '');
-    const fileHash = crypto.createHash('sha256').update(file.content).digest('hex');
-    tagByRawLedgerValue.set(fileTag, fileTag);
-    tagByRawLedgerValue.set(fileHash, fileTag);
-  }
-
-  for (const row of result.rows) {
-    if (!row.hash) {
-      continue;
-    }
-
-    normalized.add(tagByRawLedgerValue.get(row.hash) ?? row.hash);
-  }
-
-  return normalized;
-}
-
-async function executeSingleDrizzleMigration(
+function buildDesiredSchemaMigrationFilename(
   spec: ResolvedMigrationSpec,
-  file: MigrationFile,
-  journalTag: string,
-  createdAt: number,
-  log: (message: string, level: 'info' | 'warn' | 'error') => Promise<void>
-): Promise<void> {
-  const checksum = crypto.createHash('sha256').update(file.content).digest('hex');
+  revision: string
+): string {
+  const source = spec.specification.source ?? spec.specification.tool;
+  const revisionDigest = crypto.createHash('sha1').update(revision).digest('hex').slice(0, 12);
+  return `${source}/desired-schema-${revisionDigest}.sql`;
+}
 
-  const existing = await db.query.databaseMigrations.findFirst({
-    where: and(
-      eq(databaseMigrations.databaseId, spec.database.id),
-      eq(databaseMigrations.filename, file.name)
-    ),
-  });
+async function markDesiredSchemaExecution(input: {
+  spec: ResolvedMigrationSpec;
+  revision: string;
+  schemaSql: string;
+  output: string;
+}): Promise<void> {
+  const filename = buildDesiredSchemaMigrationFilename(input.spec, input.revision);
+  const checksum = crypto.createHash('sha256').update(input.schemaSql).digest('hex');
 
-  if (existing?.status === 'success') {
-    await log(`⏭️  ${file.name} 已执行，跳过`, 'info');
-    return;
-  }
-
-  if (existing && existing.checksum !== checksum) {
-    throw new Error(`迁移文件 ${file.name} 内容已变更，禁止执行`);
-  }
-
-  const [migration] = await db
+  await db
     .insert(databaseMigrations)
     .values({
-      databaseId: spec.database.id,
-      filename: file.name,
+      databaseId: input.spec.database.id,
+      filename,
       checksum,
-      status: 'running',
+      status: 'success',
+      output: input.output,
+      executedAt: new Date(),
     })
     .onConflictDoUpdate({
       target: [databaseMigrations.databaseId, databaseMigrations.filename],
-      set: { status: 'running', checksum },
-    })
-    .returning();
-
-  await log(`▶️  执行 Drizzle 迁移: ${file.name}`, 'info');
-
-  const client = new PgClient({ connectionString: spec.database.connectionString! });
-  await client.connect();
-
-  try {
-    await ensureDrizzleLedger(client);
-    await client.query(file.content);
-    await client.query(
-      'INSERT INTO "drizzle"."__drizzle_migrations" ("hash", "created_at") VALUES ($1, $2)',
-      [journalTag, createdAt]
-    );
-
-    await db
-      .update(databaseMigrations)
-      .set({
+      set: {
+        checksum,
         status: 'success',
-        output: `Applied Drizzle migration ${journalTag}`,
+        output: input.output,
         executedAt: new Date(),
-      })
-      .where(eq(databaseMigrations.id, migration.id));
-
-    await log(`✅ ${file.name} 执行成功`, 'info');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    await db
-      .update(databaseMigrations)
-      .set({ status: 'failed', error: message })
-      .where(eq(databaseMigrations.id, migration.id));
-
-    await log(`❌ ${file.name} 失败: ${message}`, 'error');
-    throw error;
-  } finally {
-    await client.end();
-  }
+        error: null,
+      },
+    });
 }
 
 export async function executeDrizzleMigrationsForSpec(
@@ -449,77 +365,51 @@ export async function executeDrizzleMigrationsForSpec(
     throw new Error(`Drizzle 平台迁移暂不支持 ${spec.database.type}`);
   }
 
-  if (!spec.database.connectionString) {
-    throw new Error('PostgreSQL connectionString 为空');
+  if (!isAtlasDatabaseTarget(spec.database)) {
+    throw new Error(`Drizzle desired schema 发布暂不支持 ${spec.database.type}`);
   }
 
-  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
-  if (!migrationPath) {
-    throw new Error('无法解析 Drizzle migration 路径');
-  }
-
-  const journalContent = await readRepositoryFileFromRepoPath(
-    spec.specification.projectId,
-    `${migrationPath}/meta/_journal.json`,
-    revision
-  );
-  const journalEntries = parseDrizzleJournalEntries(journalContent);
-  const files = (
-    await fetchMigrationFilesFromRepoPath(spec.specification.projectId, migrationPath, revision)
-  ).filter((file) => file.name.endsWith('.sql'));
-
-  const fileByName = new Map(files.map((file) => [file.name, file]));
-  const declaredFiles =
-    journalEntries.length > 0
-      ? journalEntries.map((entry) => ({
-          ...entry,
-          file: fileByName.get(drizzleTagToFilename(entry.tag)) ?? null,
-        }))
-      : files.map((file, index) => ({
-          idx: index,
-          tag: file.name.replace(/\.sql$/u, ''),
-          when: Date.now(),
-          file,
-        }));
-
-  const missingFiles = declaredFiles.filter((entry) => !entry.file).map((entry) => entry.tag);
-  if (missingFiles.length > 0) {
-    throw new Error(`Drizzle journal 引用了缺失的迁移文件: ${missingFiles.join(', ')}`);
-  }
-
-  let pending = declaredFiles;
-  const client = new PgClient({ connectionString: spec.database.connectionString });
-  await client.connect();
-
+  const artifact = await exportDesiredSchemaForSpec(spec, revision);
   try {
-    await ensureDrizzleLedger(client);
-    const executedTags = await getExecutedDrizzleTags(
-      client,
-      files,
-      declaredFiles.map((entry) => entry.tag)
+    await log(
+      `🧭 ${spec.database.name}: 使用 ${artifact.sourceConfigPath ?? '自动发现配置'} 导出 desired schema`,
+      'info'
     );
 
-    pending = declaredFiles.filter((entry) => !executedTags.has(entry.tag));
+    const plan = await planApplyDesiredSchema({
+      database: spec.database,
+      desiredSchemaUrl: artifact.schemaFileUrl,
+    });
 
-    if (pending.length === 0) {
-      await log(`✅ ${spec.database.name}: 无待执行 Drizzle 迁移`, 'info');
+    if (!plan.hasChanges) {
+      await log(`✅ ${spec.database.name}: 数据库已与 desired schema 对齐`, 'info');
       return 0;
     }
 
-    await log(`🔄 ${spec.database.name}: 发现 ${pending.length} 个待执行 Drizzle 迁移`, 'info');
+    await log(`🔄 ${spec.database.name}: 检测到 desired schema 变更，准备通过 Atlas 应用`, 'info');
+
+    await applyDesiredSchemaToDatabase({
+      database: spec.database,
+      desiredSchemaUrl: artifact.schemaFileUrl,
+      onOutputLine: (line, stream) => {
+        void log(line, stream === 'stderr' ? 'warn' : 'info');
+      },
+    });
+
+    await markDesiredSchemaExecution({
+      spec,
+      revision: artifact.revision,
+      schemaSql: artifact.schemaSql,
+      output:
+        plan.planSql ||
+        `Applied desired schema from ${artifact.sourceConfigPath ?? 'auto-discovery'}`,
+    });
+
+    await log(`✅ ${spec.database.name}: desired schema 已应用`, 'info');
+    return 1;
   } finally {
-    await client.end();
+    await artifact.cleanup();
   }
-
-  for (const entry of pending) {
-    if (!entry.file) {
-      continue;
-    }
-
-    await executeSingleDrizzleMigration(spec, entry.file, entry.tag, entry.when, log);
-  }
-
-  return pending.length;
 }
 
 async function markAtlasMigrationsApplied(input: {

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'bun:test';
-import { drizzleTagToFilename, parseDrizzleJournalEntries } from '@/lib/migrations/drizzle';
 import {
   isPlatformManagedMigrationSpec,
   isPlatformManagedMigrationTool,
@@ -37,25 +36,5 @@ describe('platform managed migrations', () => {
         } as never,
       })
     ).toBe(false);
-  });
-});
-
-describe('drizzle helpers', () => {
-  it('parses drizzle journal entries in order', () => {
-    expect(
-      parseDrizzleJournalEntries(
-        JSON.stringify({
-          entries: [
-            { idx: 1, tag: '0001_add_users', when: 20 },
-            { idx: 0, tag: '0000_init', when: 10 },
-          ],
-        })
-      ).map((entry) => entry.tag)
-    ).toEqual(['0000_init', '0001_add_users']);
-  });
-
-  it('maps drizzle tags to sql filenames', () => {
-    expect(drizzleTagToFilename('0000_init')).toBe('0000_init.sql');
-    expect(drizzleTagToFilename('0000_init.sql')).toBe('0000_init.sql');
   });
 });

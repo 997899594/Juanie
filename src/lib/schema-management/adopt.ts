@@ -1,10 +1,8 @@
 import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import postgres from 'postgres';
 import { runAtlasCommand } from '@/lib/atlas/cli';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
-import { buildNormalizedPostgresUrl, normalizeDatabaseUrl } from '@/lib/db/connection-url';
 import { databaseMigrations, projects } from '@/lib/db/schema';
 import {
   getAtlasDeclaredVersions,
@@ -12,40 +10,12 @@ import {
   prepareAtlasMigrationWorkspace,
   resolveAtlasDatabaseUrl,
 } from '@/lib/migrations/atlas';
-import {
-  fetchMigrationFilesFromRepoPath,
-  readRepositoryFileFromRepoPath,
-} from '@/lib/migrations/fetch';
+import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import {
   inspectEnvironmentSchemaState,
   resolveSchemaManagementSpec,
 } from '@/lib/schema-management/inspect';
-
-function buildPostgresConnectionString(database: {
-  connectionString: string | null;
-  host: string | null;
-  port: number | null;
-  databaseName: string | null;
-  username: string | null;
-  password: string | null;
-}): string | null {
-  if (database.connectionString) {
-    return normalizeDatabaseUrl(database.connectionString);
-  }
-
-  if (!database.host || !database.databaseName || !database.username) {
-    return null;
-  }
-
-  return buildNormalizedPostgresUrl({
-    username: database.username,
-    password: database.password,
-    host: database.host,
-    port: database.port,
-    databaseName: database.databaseName,
-  });
-}
 
 async function getProjectDefaultRef(projectId: string, branch?: string | null): Promise<string> {
   if (branch) {
@@ -60,87 +30,6 @@ async function getProjectDefaultRef(projectId: string, branch?: string | null): 
   });
 
   return project?.repository?.defaultBranch ?? 'main';
-}
-
-async function markDrizzleSchemaAligned(input: {
-  projectId: string;
-  databaseId: string;
-  sourceRef?: string | null;
-  sourceCommitSha?: string | null;
-}) {
-  const spec = await resolveSchemaManagementSpec(input);
-  if (!spec) {
-    throw new Error('未找到迁移配置');
-  }
-
-  if (spec.specification.tool !== 'drizzle' || spec.database.type !== 'postgresql') {
-    throw new Error('当前只支持为 PostgreSQL + Drizzle 执行账本接管');
-  }
-
-  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
-  if (!migrationPath) {
-    throw new Error('无法解析 Drizzle migration 路径');
-  }
-
-  const ref = await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch);
-  const journalContent = await readRepositoryFileFromRepoPath(
-    spec.specification.projectId,
-    `${migrationPath}/meta/_journal.json`,
-    input.sourceCommitSha ?? input.sourceRef ?? ref
-  );
-
-  const entries = journalContent
-    ? (
-        (JSON.parse(journalContent) as { entries?: Array<{ tag?: unknown; when?: unknown }> })
-          .entries ?? []
-      )
-        .map((entry) => ({
-          tag: typeof entry?.tag === 'string' ? entry.tag : '',
-          when: Number(entry?.when ?? Date.now()),
-        }))
-        .filter((entry) => entry.tag.length > 0 && Number.isFinite(entry.when))
-    : [];
-
-  if (entries.length === 0) {
-    throw new Error('仓库中没有可接管的 Drizzle 迁移账本');
-  }
-
-  const connectionString = buildPostgresConnectionString(spec.database);
-  if (!connectionString) {
-    throw new Error('数据库缺少可用的 PostgreSQL 连接信息');
-  }
-
-  const sql = postgres(connectionString, {
-    max: 1,
-    prepare: false,
-  });
-
-  try {
-    await sql`CREATE SCHEMA IF NOT EXISTS "drizzle";`;
-    await sql.unsafe(`
-      CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
-        id serial PRIMARY KEY,
-        hash text NOT NULL,
-        created_at bigint
-      );
-    `);
-
-    const [row] = await sql`SELECT count(*)::int AS count FROM "drizzle"."__drizzle_migrations";`;
-    const appliedCount = Number(row?.count ?? 0);
-
-    if (appliedCount > 0) {
-      throw new Error('目标数据库已经存在 Drizzle 账本，不能执行标记为已对齐');
-    }
-
-    for (const entry of entries) {
-      await sql`
-        INSERT INTO "drizzle"."__drizzle_migrations" ("hash", "created_at")
-        VALUES (${entry.tag}, ${entry.when})
-      `;
-    }
-  } finally {
-    await sql.end({ timeout: 5 });
-  }
 }
 
 async function markSqlSchemaAligned(input: {
@@ -195,10 +84,6 @@ export function canMarkSchemaAligned(input: {
   tool: 'atlas' | 'drizzle' | 'sql' | 'prisma' | 'knex' | 'typeorm' | 'custom';
   databaseType: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
 }): boolean {
-  if (input.tool === 'drizzle') {
-    return input.databaseType === 'postgresql';
-  }
-
   if (input.tool === 'atlas' || input.tool === 'sql') {
     return input.databaseType === 'postgresql' || input.databaseType === 'mysql';
   }
@@ -314,12 +199,7 @@ export async function markEnvironmentSchemaAligned(input: {
     throw new Error('当前工具暂不支持标记为已对齐');
   }
 
-  if (spec.specification.tool === 'drizzle') {
-    await markDrizzleSchemaAligned({
-      projectId: input.projectId,
-      databaseId: input.databaseId,
-    });
-  } else if (spec.specification.tool === 'sql') {
+  if (spec.specification.tool === 'sql') {
     await markSqlSchemaAligned({
       projectId: input.projectId,
       databaseId: input.databaseId,

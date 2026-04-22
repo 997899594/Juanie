@@ -55,6 +55,19 @@ describe('schema ledger classification', () => {
     expect(result.status).toBe('unmanaged');
   });
 
+  it('treats desired schema without drift as aligned', () => {
+    const result = classifySchemaLedgerState({
+      kind: 'desired_schema',
+      expectedEntries: ['a1b2c3d4'],
+      actualEntries: ['a1b2c3d4'],
+      hasUserTables: true,
+      driftDetected: false,
+    });
+
+    expect(result.status).toBe('aligned');
+    expect(result.hasLedger).toBe(false);
+  });
+
   it('marks missing ledger with drift as drifted instead of aligned_untracked', () => {
     const result = classifySchemaLedgerState({
       kind: 'atlas',

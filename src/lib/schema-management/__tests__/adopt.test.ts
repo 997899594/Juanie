@@ -7,8 +7,8 @@ describe('schema adoption support matrix', () => {
     expect(canMarkSchemaAligned({ tool: 'atlas', databaseType: 'mysql' })).toBe(true);
   });
 
-  it('only supports drizzle adoption on postgresql', () => {
-    expect(canMarkSchemaAligned({ tool: 'drizzle', databaseType: 'postgresql' })).toBe(true);
+  it('no longer exposes desired-schema sources as ledger adoption targets', () => {
+    expect(canMarkSchemaAligned({ tool: 'drizzle', databaseType: 'postgresql' })).toBe(false);
     expect(canMarkSchemaAligned({ tool: 'drizzle', databaseType: 'mysql' })).toBe(false);
   });
 
