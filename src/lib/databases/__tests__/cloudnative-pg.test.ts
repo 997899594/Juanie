@@ -1,11 +1,27 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { resolveManagedPostgresImage } from '@/lib/databases/capabilities';
 import {
   buildCloudNativePgClusterManifest,
   buildCloudNativePgConnectionDetails,
 } from '@/lib/databases/cloudnative-pg';
 
+const ORIGINAL_ENV = { ...process.env };
+
+function resetDatabaseSslEnv() {
+  process.env = { ...ORIGINAL_ENV };
+  delete process.env.DATABASE_SSL_MODE;
+  delete process.env.PGSSLMODE;
+}
+
 describe('cloudnativepg helpers', () => {
+  beforeEach(() => {
+    resetDatabaseSslEnv();
+  });
+
+  afterEach(() => {
+    resetDatabaseSslEnv();
+  });
+
   it('builds a bootstrap cluster manifest with juanie-managed credentials', () => {
     const manifest = buildCloudNativePgClusterManifest({
       name: 'juanie-demo-db',
@@ -48,5 +64,21 @@ describe('cloudnativepg helpers', () => {
       connectionString:
         'postgresql://juanie_demo_app:secret@juanie-demo-db-rw.juanie-demo-staging.svc.cluster.local:5432/juanie_demo_app',
     });
+  });
+
+  it('inherits sslmode normalization when postgres ssl env is configured', () => {
+    process.env.PGSSLMODE = 'disable';
+
+    expect(
+      buildCloudNativePgConnectionDetails({
+        clusterName: 'juanie-demo-db',
+        namespace: 'juanie-demo-staging',
+        username: 'juanie_demo_app',
+        password: 'secret',
+        databaseName: 'juanie_demo_app',
+      }).connectionString
+    ).toBe(
+      'postgresql://juanie_demo_app:secret@juanie-demo-db-rw.juanie-demo-staging.svc.cluster.local:5432/juanie_demo_app?sslmode=disable'
+    );
   });
 });
