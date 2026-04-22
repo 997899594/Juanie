@@ -7,7 +7,9 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
+import { toPersistedSchemaRepairPlan } from '@/lib/schema-management/repair-plan';
 
 function sanitizeBranchSegment(value: string): string {
   return value
@@ -216,6 +218,10 @@ export async function createSchemaRepairReviewRequest(input: {
         reviewState: review.state,
         reviewStateLabel: review.stateLabel,
         reviewSyncedAt: new Date(),
+        atlasExecutionStatus: 'idle',
+        atlasExecutionStartedAt: null,
+        atlasExecutionFinishedAt: null,
+        atlasExecutionLog: null,
         generatedFiles: reviewPayload.generatedFiles,
         errorMessage: null,
         updatedAt: new Date(),
@@ -238,9 +244,14 @@ export async function createSchemaRepairReviewRequest(input: {
       },
     });
 
+    await publishSchemaRepairRealtimeSnapshot({
+      projectId: input.projectId,
+      databaseId: plan.databaseId,
+    });
+
     return {
       review,
-      plan: updated,
+      plan: toPersistedSchemaRepairPlan(updated),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -253,6 +264,11 @@ export async function createSchemaRepairReviewRequest(input: {
         updatedAt: new Date(),
       })
       .where(eq(schemaRepairPlans.id, plan.id));
+
+    await publishSchemaRepairRealtimeSnapshot({
+      projectId: input.projectId,
+      databaseId: plan.databaseId,
+    });
     throw error;
   }
 }

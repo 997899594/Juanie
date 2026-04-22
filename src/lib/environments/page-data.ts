@@ -27,6 +27,7 @@ import {
 import { decorateEnvironmentList } from '@/lib/environments/view';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
+import { syncLatestSchemaRepairPlans } from '@/lib/schema-management/review-sync';
 
 export function buildProjectEnvironmentListData<
   TEnvironment extends Parameters<typeof decorateEnvironmentList>[0][number],
@@ -74,7 +75,7 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
     deploymentList,
     migrationRunList,
     recentAuditLogs,
-    latestRepairPlans,
+    latestRepairPlansResult,
     latestAtlasRuns,
     deliveryRuleList,
     promotionFlowList,
@@ -180,6 +181,7 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
       orderBy: [promotionFlows.createdAt],
     }),
   ]);
+  const latestRepairPlans = await syncLatestSchemaRepairPlans(latestRepairPlansResult);
   const runtimeIndexes = buildEnvironmentRuntimeIndexes({
     releases: releaseList,
     deployments: deploymentList,

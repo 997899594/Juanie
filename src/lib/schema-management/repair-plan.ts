@@ -6,6 +6,7 @@ import type {
   SchemaRepairPlanStatus,
 } from '@/lib/db/schema';
 import { schemaRepairPlans } from '@/lib/db/schema';
+import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 
 export type SchemaRepairPlanKind =
   | 'no_action'
@@ -48,6 +49,35 @@ export interface PersistedSchemaRepairPlan extends SchemaRepairPlan {
   createdByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export function toPersistedSchemaRepairPlan(
+  record: typeof schemaRepairPlans.$inferSelect
+): PersistedSchemaRepairPlan {
+  return {
+    ...record,
+    kind: record.kind,
+    status: record.status,
+    title: record.title,
+    summary: record.summary,
+    riskLevel: record.riskLevel as SchemaRepairPlan['riskLevel'],
+    expectedVersion: record.expectedVersion,
+    actualVersion: record.actualVersion,
+    nextActionLabel: record.nextActionLabel,
+    steps: Array.isArray(record.steps) ? (record.steps as string[]) : [],
+    generatedFiles: Array.isArray(record.generatedFiles) ? (record.generatedFiles as string[]) : [],
+    branchName: record.branchName,
+    reviewNumber: record.reviewNumber,
+    reviewUrl: record.reviewUrl,
+    reviewState: record.reviewState ?? 'unknown',
+    reviewStateLabel: record.reviewStateLabel,
+    reviewSyncedAt: record.reviewSyncedAt,
+    atlasExecutionStatus: record.atlasExecutionStatus ?? 'idle',
+    atlasExecutionLog: record.atlasExecutionLog,
+    atlasExecutionStartedAt: record.atlasExecutionStartedAt,
+    atlasExecutionFinishedAt: record.atlasExecutionFinishedAt,
+    errorMessage: record.errorMessage,
+  };
 }
 
 export function isSchemaRepairResolvedStatus(status: EnvironmentSchemaStateStatus): boolean {
@@ -200,30 +230,12 @@ export async function createSchemaRepairPlanRecord(input: {
     })
     .returning();
 
-  return {
-    ...record,
-    kind: record.kind,
-    status: record.status,
-    title: record.title,
-    summary: record.summary,
-    riskLevel: record.riskLevel as SchemaRepairPlan['riskLevel'],
-    expectedVersion: record.expectedVersion,
-    actualVersion: record.actualVersion,
-    nextActionLabel: record.nextActionLabel,
-    steps: Array.isArray(record.steps) ? (record.steps as string[]) : [],
-    generatedFiles: Array.isArray(record.generatedFiles) ? (record.generatedFiles as string[]) : [],
-    branchName: record.branchName,
-    reviewNumber: record.reviewNumber,
-    reviewUrl: record.reviewUrl,
-    reviewState: record.reviewState ?? 'unknown',
-    reviewStateLabel: record.reviewStateLabel,
-    reviewSyncedAt: record.reviewSyncedAt,
-    atlasExecutionStatus: record.atlasExecutionStatus ?? 'idle',
-    atlasExecutionLog: record.atlasExecutionLog,
-    atlasExecutionStartedAt: record.atlasExecutionStartedAt,
-    atlasExecutionFinishedAt: record.atlasExecutionFinishedAt,
-    errorMessage: record.errorMessage,
-  };
+  await publishSchemaRepairRealtimeSnapshot({
+    projectId: input.projectId,
+    databaseId: input.databaseId,
+  });
+
+  return toPersistedSchemaRepairPlan(record);
 }
 
 export async function markSchemaRepairPlanApplied(input: {
@@ -234,6 +246,10 @@ export async function markSchemaRepairPlanApplied(input: {
     .update(schemaRepairPlans)
     .set({
       status: 'applied',
+      atlasExecutionStatus: 'idle',
+      atlasExecutionStartedAt: null,
+      atlasExecutionFinishedAt: null,
+      atlasExecutionLog: null,
       errorMessage: null,
       updatedAt: new Date(),
     })
@@ -261,30 +277,12 @@ export async function markSchemaRepairPlanApplied(input: {
       )
     );
 
-  return {
-    ...record,
-    kind: record.kind,
-    status: 'applied',
-    title: record.title,
-    summary: record.summary,
-    riskLevel: record.riskLevel as SchemaRepairPlan['riskLevel'],
-    expectedVersion: record.expectedVersion,
-    actualVersion: record.actualVersion,
-    nextActionLabel: record.nextActionLabel,
-    steps: Array.isArray(record.steps) ? (record.steps as string[]) : [],
-    generatedFiles: Array.isArray(record.generatedFiles) ? (record.generatedFiles as string[]) : [],
-    branchName: record.branchName,
-    reviewNumber: record.reviewNumber,
-    reviewUrl: record.reviewUrl,
-    reviewState: record.reviewState ?? 'unknown',
-    reviewStateLabel: record.reviewStateLabel,
-    reviewSyncedAt: record.reviewSyncedAt,
-    atlasExecutionStatus: record.atlasExecutionStatus ?? 'idle',
-    atlasExecutionLog: record.atlasExecutionLog,
-    atlasExecutionStartedAt: record.atlasExecutionStartedAt,
-    atlasExecutionFinishedAt: record.atlasExecutionFinishedAt,
-    errorMessage: null,
-  };
+  await publishSchemaRepairRealtimeSnapshot({
+    projectId: input.projectId,
+    databaseId: record.databaseId,
+  });
+
+  return toPersistedSchemaRepairPlan(record);
 }
 
 export async function discardSchemaRepairPlan(input: {
@@ -295,6 +293,10 @@ export async function discardSchemaRepairPlan(input: {
     .update(schemaRepairPlans)
     .set({
       status: 'superseded',
+      atlasExecutionStatus: 'idle',
+      atlasExecutionStartedAt: null,
+      atlasExecutionFinishedAt: null,
+      atlasExecutionLog: null,
       errorMessage: null,
       updatedAt: new Date(),
     })
@@ -307,30 +309,12 @@ export async function discardSchemaRepairPlan(input: {
     throw new Error('修复计划不存在');
   }
 
-  return {
-    ...record,
-    kind: record.kind,
-    status: 'superseded',
-    title: record.title,
-    summary: record.summary,
-    riskLevel: record.riskLevel as SchemaRepairPlan['riskLevel'],
-    expectedVersion: record.expectedVersion,
-    actualVersion: record.actualVersion,
-    nextActionLabel: record.nextActionLabel,
-    steps: Array.isArray(record.steps) ? (record.steps as string[]) : [],
-    generatedFiles: Array.isArray(record.generatedFiles) ? (record.generatedFiles as string[]) : [],
-    branchName: record.branchName,
-    reviewNumber: record.reviewNumber,
-    reviewUrl: record.reviewUrl,
-    reviewState: record.reviewState ?? 'unknown',
-    reviewStateLabel: record.reviewStateLabel,
-    reviewSyncedAt: record.reviewSyncedAt,
-    atlasExecutionStatus: record.atlasExecutionStatus ?? 'idle',
-    atlasExecutionLog: record.atlasExecutionLog,
-    atlasExecutionStartedAt: record.atlasExecutionStartedAt,
-    atlasExecutionFinishedAt: record.atlasExecutionFinishedAt,
-    errorMessage: null,
-  };
+  await publishSchemaRepairRealtimeSnapshot({
+    projectId: input.projectId,
+    databaseId: record.databaseId,
+  });
+
+  return toPersistedSchemaRepairPlan(record);
 }
 
 export async function getLatestSchemaRepairPlansForProject(projectId: string) {
@@ -346,30 +330,7 @@ export async function getLatestSchemaRepairPlansForProject(projectId: string) {
       continue;
     }
 
-    latestByDatabaseId.set(row.databaseId, {
-      ...row,
-      kind: row.kind,
-      status: row.status,
-      title: row.title,
-      summary: row.summary,
-      riskLevel: row.riskLevel as SchemaRepairPlan['riskLevel'],
-      expectedVersion: row.expectedVersion,
-      actualVersion: row.actualVersion,
-      nextActionLabel: row.nextActionLabel,
-      steps: Array.isArray(row.steps) ? (row.steps as string[]) : [],
-      generatedFiles: Array.isArray(row.generatedFiles) ? (row.generatedFiles as string[]) : [],
-      branchName: row.branchName,
-      reviewNumber: row.reviewNumber,
-      reviewUrl: row.reviewUrl,
-      reviewState: row.reviewState ?? 'unknown',
-      reviewStateLabel: row.reviewStateLabel,
-      reviewSyncedAt: row.reviewSyncedAt,
-      atlasExecutionStatus: row.atlasExecutionStatus ?? 'idle',
-      atlasExecutionLog: row.atlasExecutionLog,
-      atlasExecutionStartedAt: row.atlasExecutionStartedAt,
-      atlasExecutionFinishedAt: row.atlasExecutionFinishedAt,
-      errorMessage: row.errorMessage,
-    });
+    latestByDatabaseId.set(row.databaseId, toPersistedSchemaRepairPlan(row));
   }
 
   return latestByDatabaseId;

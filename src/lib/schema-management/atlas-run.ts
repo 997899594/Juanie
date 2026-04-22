@@ -12,6 +12,7 @@ import { normalizeGitLabServerUrl } from '@/lib/git/gitlab-server';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { resolveMigrationPath } from '@/lib/migrations/path';
+import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
 import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
 
@@ -332,6 +333,10 @@ export async function createSchemaRepairAtlasRun(input: {
           updatedAt: requeuedAt,
         })
         .where(eq(schemaRepairAtlasRuns.id, activeRun.id));
+      await publishSchemaRepairRealtimeSnapshot({
+        projectId: input.projectId,
+        databaseId: plan.databaseId,
+      });
 
       try {
         await deleteJob(namespace, jobName).catch(() => undefined);
@@ -371,6 +376,10 @@ export async function createSchemaRepairAtlasRun(input: {
             updatedAt: failedAt,
           })
           .where(eq(schemaRepairAtlasRuns.id, activeRun.id));
+        await publishSchemaRepairRealtimeSnapshot({
+          projectId: input.projectId,
+          databaseId: plan.databaseId,
+        });
 
         throw error;
       }
@@ -439,6 +448,10 @@ export async function createSchemaRepairAtlasRun(input: {
         userId: input.userId,
       })
     );
+    await publishSchemaRepairRealtimeSnapshot({
+      projectId: input.projectId,
+      databaseId: plan.databaseId,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failedAt = new Date();
@@ -464,6 +477,10 @@ export async function createSchemaRepairAtlasRun(input: {
         updatedAt: failedAt,
       })
       .where(eq(schemaRepairAtlasRuns.id, run.id));
+    await publishSchemaRepairRealtimeSnapshot({
+      projectId: input.projectId,
+      databaseId: plan.databaseId,
+    });
 
     throw error;
   }
@@ -541,6 +558,10 @@ export async function executeSchemaRepairAtlasRun(input: {
       updatedAt: startTime,
     })
     .where(eq(schemaRepairAtlasRuns.id, run.id));
+  await publishSchemaRepairRealtimeSnapshot({
+    projectId: input.projectId,
+    databaseId: plan.databaseId,
+  });
 
   try {
     let logs = '';
@@ -643,6 +664,10 @@ export async function executeSchemaRepairAtlasRun(input: {
           updatedAt: finishedAt,
         })
         .where(eq(schemaRepairAtlasRuns.id, run.id));
+      await publishSchemaRepairRealtimeSnapshot({
+        projectId: input.projectId,
+        databaseId: plan.databaseId,
+      });
 
       await createAuditLog({
         teamId: project.teamId,
@@ -685,6 +710,10 @@ export async function executeSchemaRepairAtlasRun(input: {
         updatedAt: finishedAt,
       })
       .where(eq(schemaRepairAtlasRuns.id, run.id));
+    await publishSchemaRepairRealtimeSnapshot({
+      projectId: input.projectId,
+      databaseId: plan.databaseId,
+    });
     throw error;
   } finally {
     await rm(tempRoot, { recursive: true, force: true }).catch(() => {});

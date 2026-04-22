@@ -5,6 +5,7 @@ import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governa
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
+import { syncLatestSchemaRepairPlans } from '@/lib/schema-management/review-sync';
 
 export async function getProjectSchemaCenterData(
   projectId: string,
@@ -33,7 +34,7 @@ export async function getProjectSchemaCenterData(
     };
   }
 
-  const [environmentList, latestRepairPlans, latestAtlasRuns] = await Promise.all([
+  const [environmentList, latestRepairPlansResult, latestAtlasRuns] = await Promise.all([
     db.query.environments.findMany({
       where: eq(environments.projectId, projectId),
       orderBy: [environments.createdAt],
@@ -68,6 +69,7 @@ export async function getProjectSchemaCenterData(
       orderBy: [desc(schemaRepairAtlasRuns.createdAt)],
     }),
   ]);
+  const latestRepairPlans = await syncLatestSchemaRepairPlans(latestRepairPlansResult);
 
   const latestAtlasRunByDatabase = new Map<string, (typeof latestAtlasRuns)[number]>();
   for (const run of latestAtlasRuns) {

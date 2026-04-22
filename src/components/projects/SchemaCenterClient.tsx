@@ -2,11 +2,12 @@
 
 import { Database, ExternalLink, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { useSchemaRepairs } from '@/hooks/useSchemaRepairs';
 import {
   createDatabaseRepairPlan,
   createDatabaseRepairReviewRequest,
@@ -17,6 +18,11 @@ import {
   runDatabaseRepairAtlas,
 } from '@/lib/environments/client-actions';
 import { fetchProjectSchemaCenter } from '@/lib/schema-management/client-actions';
+import {
+  getSchemaRepairPlanPresentation,
+  isSchemaRepairSuggestionRequired,
+} from '@/lib/schema-management/presentation';
+import { buildSchemaRepairRealtimeStateIndex } from '@/lib/schema-management/realtime';
 
 interface SchemaCenterDatabaseRecord {
   id: string;
@@ -97,32 +103,6 @@ type SchemaCenterSchemaStateStatus = NonNullable<
   SchemaCenterDatabaseRecord['schemaState']
 >['status'];
 
-function isSuggestionRequired(kind: DatabaseSchemaRepairPlan['kind'] | null | undefined): boolean {
-  return kind === 'repair_pr_required' || kind === 'adopt_current_db';
-}
-
-function getSuggestionStatusLabel(repairPlan: DatabaseSchemaRepairPlan): string {
-  if (repairPlan.kind === 'manual_investigation') {
-    return repairPlan.reviewUrl ? '已转排查 PR' : '待人工排查';
-  }
-
-  if (!isSuggestionRequired(repairPlan.kind)) {
-    return '无需处理';
-  }
-
-  switch (repairPlan.atlasExecutionStatus) {
-    case 'queued':
-    case 'running':
-      return '处理中';
-    case 'succeeded':
-      return repairPlan.reviewUrl ? '已创建修复' : '已生成';
-    case 'failed':
-      return '失败';
-    default:
-      return '待生成';
-  }
-}
-
 function getSchemaStateBadgeClass(
   status: SchemaCenterSchemaStateStatus | null | undefined
 ): string {
@@ -160,32 +140,6 @@ function formatTimestamp(value: string | Date | null | undefined): string | null
   });
 }
 
-function getSuggestionSummary(
-  repairPlan: DatabaseSchemaRepairPlan | null,
-  latestAtlasRun: SchemaCenterDatabaseRecord['latestAtlasRun']
-): string | null {
-  if (!repairPlan) {
-    return null;
-  }
-
-  if (!isSuggestionRequired(repairPlan.kind)) {
-    return repairPlan.summary;
-  }
-
-  switch (repairPlan.atlasExecutionStatus) {
-    case 'queued':
-      return '排队中';
-    case 'running':
-      return '生成中';
-    case 'succeeded':
-      return latestAtlasRun?.diffSummary ? '已生成' : '等待确认';
-    case 'failed':
-      return repairPlan.errorMessage ?? '执行失败';
-    default:
-      return '待生成';
-  }
-}
-
 export function SchemaCenterClient({
   projectId,
   initialData,
@@ -200,6 +154,7 @@ export function SchemaCenterClient({
     databaseId: string;
     action: SchemaCenterActionKey;
   } | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
     const next = await fetchProjectSchemaCenter<SchemaCenterData>(
@@ -208,6 +163,39 @@ export function SchemaCenterClient({
     );
     setData(next);
   }, [initialData.selectedEnvId, initialEnvId, projectId]);
+  const schemaRepairStateIndex = useMemo(
+    () => buildSchemaRepairRealtimeStateIndex(data.environments),
+    [data.environments]
+  );
+  const scheduleRealtimeRefresh = useCallback(() => {
+    if (refreshTimerRef.current !== null) {
+      window.clearTimeout(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = window.setTimeout(() => {
+      void refresh().catch((error) => {
+        console.error('Failed to refresh schema center after realtime event:', error);
+      });
+    }, 120);
+  }, [refresh]);
+
+  useEffect(
+    () => () => {
+      if (refreshTimerRef.current !== null) {
+        window.clearTimeout(refreshTimerRef.current);
+      }
+    },
+    []
+  );
+
+  useSchemaRepairs({
+    projectId,
+    envId: initialEnvId ?? data.selectedEnvId ?? null,
+    initialStateByDatabaseId: schemaRepairStateIndex,
+    onRepair: () => {
+      scheduleRealtimeRefresh();
+    },
+  });
 
   const isPendingAction = (databaseId: string, action: SchemaCenterActionKey): boolean =>
     pendingAction?.databaseId === databaseId && pendingAction?.action === action;
@@ -233,7 +221,7 @@ export function SchemaCenterClient({
   const generateSuggestion = async (databaseId: string) => {
     const plan = await createDatabaseRepairPlan(projectId, databaseId);
 
-    if (isSuggestionRequired(plan.kind)) {
+    if (isSchemaRepairSuggestionRequired(plan.kind)) {
       await runDatabaseRepairAtlas(projectId, databaseId);
     }
 
@@ -287,7 +275,11 @@ export function SchemaCenterClient({
                 const state = database.schemaState;
                 const repairPlan = database.latestRepairPlan;
                 const latestAtlasRun = database.latestAtlasRun;
-                const suggestionSummary = getSuggestionSummary(repairPlan, latestAtlasRun);
+                const repairPresentation = repairPlan
+                  ? getSchemaRepairPlanPresentation(repairPlan, {
+                      hasGeneratedDiff: Boolean(latestAtlasRun?.diffSummary),
+                    })
+                  : null;
                 const hasPendingAction = pendingAction !== null;
                 const versionSummary =
                   state?.actualVersion || state?.expectedVersion
@@ -304,7 +296,7 @@ export function SchemaCenterClient({
                   (!repairPlan || ['draft', 'failed', 'superseded'].includes(repairPlan.status));
                 const canConfirmRepair =
                   !!repairPlan &&
-                  ((isSuggestionRequired(repairPlan.kind) &&
+                  ((isSchemaRepairSuggestionRequired(repairPlan.kind) &&
                     repairPlan.status === 'draft' &&
                     repairPlan.atlasExecutionStatus === 'succeeded') ||
                     (repairPlan.kind === 'manual_investigation' &&
@@ -334,7 +326,7 @@ export function SchemaCenterClient({
                           </Badge>
                           {repairPlan ? (
                             <Badge variant="secondary">
-                              {getSuggestionStatusLabel(repairPlan)}
+                              {repairPresentation?.badgeLabel ?? '处理中'}
                             </Badge>
                           ) : null}
                         </div>
@@ -474,14 +466,14 @@ export function SchemaCenterClient({
                       </div>
                     </div>
 
-                    {repairPlan && suggestionSummary ? (
+                    {repairPlan && repairPresentation?.summary ? (
                       <div className="mt-4 rounded-2xl bg-background/70 px-4 py-3">
                         <div className="text-sm font-medium text-foreground">处理</div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {repairPlan.summary}
                         </div>
                         <div className="mt-2 rounded-[16px] bg-[rgba(243,240,233,0.64)] px-3 py-2 text-sm text-foreground">
-                          {suggestionSummary}
+                          {repairPresentation.summary}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
                           {[

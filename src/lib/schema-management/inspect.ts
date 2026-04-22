@@ -30,6 +30,7 @@ import type {
   MigrationSpecificationRecord,
   ResolvedMigrationSpec,
 } from '@/lib/migrations/types';
+import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import { classifySchemaLedgerState } from './classification';
 
 interface SchemaLedgerInspectionResult {
@@ -535,6 +536,11 @@ async function upsertEnvironmentSchemaState(input: {
       },
     })
     .returning();
+
+  await publishSchemaRepairRealtimeSnapshot({
+    projectId: input.projectId,
+    databaseId: input.databaseId,
+  });
 
   return state;
 }
