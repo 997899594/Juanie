@@ -84,6 +84,12 @@ env:
   JUANIE_PREVIEW_APPLICATIONSET_REPO_URL: ""
   JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: "main"
   JUANIE_PREVIEW_APPLICATIONSET_PATH: "deploy/k8s/charts/preview-scaffold"
+  AI_ENABLED: "false"
+  AI_302_BASE_URL: "https://api.302.ai/v1"
+  AI_DEFAULT_PLAN: "free"
+  AI_MODEL: "gpt-5.2"
+  AI_MODEL_PRO: "gpt-5.2-pro"
+  AI_MODEL_TOOL: "gpt-5.2"
 
 # Gateway 配置
 hostname: "juanie.art"
@@ -105,3 +111,4 @@ secret:
   githubClientSecret: ""
   gitlabClientId: ""
   gitlabClientSecret: ""
+  ai302ApiKey: ""

@@ -22,6 +22,12 @@ data:
   JUANIE_PREVIEW_APPLICATIONSET_REPO_URL: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_REPO_URL | default "" | quote }}
   JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_TARGET_REVISION | default "main" | quote }}
   JUANIE_PREVIEW_APPLICATIONSET_PATH: {{ .Values.env.JUANIE_PREVIEW_APPLICATIONSET_PATH | default "deploy/k8s/charts/preview-scaffold" | quote }}
+  AI_ENABLED: {{ .Values.env.AI_ENABLED | default "false" | quote }}
+  AI_302_BASE_URL: {{ .Values.env.AI_302_BASE_URL | default "https://api.302.ai/v1" | quote }}
+  AI_DEFAULT_PLAN: {{ .Values.env.AI_DEFAULT_PLAN | default "free" | quote }}
+  AI_MODEL: {{ .Values.env.AI_MODEL | default "gpt-5.2" | quote }}
+  AI_MODEL_PRO: {{ .Values.env.AI_MODEL_PRO | default "gpt-5.2-pro" | quote }}
+  AI_MODEL_TOOL: {{ .Values.env.AI_MODEL_TOOL | default "gpt-5.2" | quote }}
   JUANIE_NAMESPACE: {{ .Values.namespace | quote }}
   SCHEMA_RUNNER_IMAGE_REPOSITORY: {{ .Values.images.schemaRunner.repository | quote }}
   SCHEMA_RUNNER_IMAGE_TAG: {{ .Values.images.schemaRunner.tag | quote }}
