@@ -92,9 +92,13 @@ export function ReleaseAIRefreshActions(input: {
         variant="ghost"
         size={input.compact ? 'icon' : 'sm'}
         className={cn(
-          input.compact ? 'h-9 w-9 rounded-full' : 'rounded-full px-3',
-          status === 'success' && 'text-emerald-600 hover:bg-emerald-500/8 hover:text-emerald-700',
-          status === 'error' && 'text-destructive hover:bg-destructive/8 hover:text-destructive'
+          input.compact
+            ? 'h-9 w-9 rounded-full bg-[rgba(15,23,42,0.045)] text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]'
+            : 'rounded-full bg-[rgba(15,23,42,0.045)] px-3 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]',
+          status === 'success' &&
+            'bg-[rgba(5,150,105,0.08)] text-emerald-700 hover:bg-[rgba(5,150,105,0.12)]',
+          status === 'error' &&
+            'bg-[rgba(185,28,28,0.08)] text-[rgba(185,28,28,0.82)] hover:bg-[rgba(185,28,28,0.12)]'
         )}
         onClick={handleRefresh}
         title={buttonTitle}
@@ -107,7 +111,7 @@ export function ReleaseAIRefreshActions(input: {
         <div
           className={cn(
             'text-xs',
-            status === 'error' ? 'text-destructive' : 'text-muted-foreground'
+            status === 'error' ? 'text-[rgba(185,28,28,0.82)]' : 'text-[rgba(15,23,42,0.42)]'
           )}
         >
           {message}

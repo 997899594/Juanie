@@ -3,6 +3,7 @@
 import { Command, Loader2, Sparkles } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { StreamdownMessage } from '@/components/projects/StreamdownMessage';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,10 +16,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { getCommandBarConfig } from '@/lib/ai/command-bar';
 import { cn } from '@/lib/utils';
-
-interface CopilotReplyPayload {
-  message: string;
-}
 
 interface TaskReplyPayload {
   summary: string;
@@ -93,12 +90,8 @@ export function AICommandBar() {
         }),
       });
 
-      const data = (await response.json().catch(() => null)) as
-        | CopilotReplyPayload
-        | { error?: string }
-        | null;
-
       if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(
           data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
             ? data.error
@@ -106,7 +99,26 @@ export function AICommandBar() {
         );
       }
 
-      setResult((data as CopilotReplyPayload).message);
+      if (!response.body) {
+        throw new Error('AI 响应流不可用');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        streamedContent += decoder.decode(value, { stream: true });
+        setResult(streamedContent);
+      }
+
+      streamedContent += decoder.decode();
+      setResult(streamedContent);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'AI 暂时不可用');
     } finally {
@@ -161,33 +173,36 @@ export function AICommandBar() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-3xl">
-        <div className="overflow-hidden rounded-[28px] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,238,0.96))] shadow-[0_1px_0_rgba(255,255,255,0.92)_inset,0_0_0_1px_rgba(17,17,17,0.05),0_24px_60px_rgba(55,53,47,0.12)]">
-          <DialogHeader className="border-b border-[rgba(17,17,17,0.06)] px-6 py-5 text-left">
+        <div className="overflow-hidden rounded-[30px] bg-[rgba(251,250,247,0.98)] shadow-[0_28px_80px_rgba(15,23,42,0.08)] ring-1 ring-[rgba(15,23,42,0.06)] backdrop-blur">
+          <DialogHeader className="px-6 py-6 text-left">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[rgba(244,240,232,0.92)] text-foreground shadow-[0_1px_0_rgba(255,255,255,0.86)_inset]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(15,23,42,0.04)] text-[rgba(15,23,42,0.72)]">
                     <Sparkles className="h-4.5 w-4.5" />
                   </div>
                   <div>
-                    <DialogTitle className="text-base font-semibold tracking-[-0.03em] text-foreground">
-                      AI Command
+                    <DialogTitle className="text-[15px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.96)]">
+                      AI
                     </DialogTitle>
-                    <DialogDescription className="mt-1 text-sm leading-6 text-muted-foreground">
+                    <DialogDescription className="mt-1 text-[13px] leading-6 text-[rgba(15,23,42,0.56)]">
                       {config.description}
                     </DialogDescription>
                   </div>
                 </div>
               </div>
-              <Badge variant="secondary" className="rounded-full px-2.5 py-0.5">
-                {config.title}
+              <Badge
+                variant="secondary"
+                className="rounded-full border-0 bg-[rgba(15,23,42,0.05)] px-3 py-1 text-[11px] font-medium text-[rgba(15,23,42,0.56)] shadow-none"
+              >
+                当前对象
               </Badge>
             </div>
           </DialogHeader>
 
-          <div className="space-y-5 px-6 py-5">
-            <div className="flex items-center gap-3 rounded-[20px] bg-[rgba(251,250,247,0.96)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
-              <Command className="h-4 w-4 text-muted-foreground" />
+          <div className="space-y-5 px-6 pb-6">
+            <div className="flex items-center gap-3 rounded-[22px] bg-[rgba(255,255,255,0.76)] px-4 py-3 ring-1 ring-[rgba(15,23,42,0.06)] transition duration-200 focus-within:bg-white focus-within:ring-[rgba(15,23,42,0.12)] focus-within:shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+              <Command className="h-4 w-4 text-[rgba(15,23,42,0.38)]" />
               <Input
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -196,7 +211,7 @@ export function AICommandBar() {
                     ? '直接问当前对象。按 Enter 发送。'
                     : '当前页面还没有对象级 AI 上下文'
                 }
-                className="h-auto border-0 bg-transparent px-0 py-0 text-base shadow-none focus-visible:ring-0"
+                className="h-auto border-0 bg-transparent px-0 py-0 text-[15px] text-[rgba(15,23,42,0.92)] shadow-none placeholder:text-[rgba(15,23,42,0.34)] focus-visible:ring-0"
                 disabled={!config.endpoint || loading || taskLoading}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
@@ -205,7 +220,7 @@ export function AICommandBar() {
                   }
                 }}
               />
-              <div className="hidden text-xs text-muted-foreground sm:block">⌘K</div>
+              <div className="hidden text-[11px] text-[rgba(15,23,42,0.34)] sm:block">⌘K</div>
             </div>
 
             {config.suggestions.length > 0 ? (
@@ -214,7 +229,7 @@ export function AICommandBar() {
                   <button
                     key={suggestion}
                     type="button"
-                    className="rounded-full bg-[rgba(244,240,232,0.88)] px-3 py-1.5 text-left text-xs text-foreground shadow-[0_1px_0_rgba(255,255,255,0.78)_inset] transition hover:bg-white"
+                    className="rounded-full bg-[rgba(15,23,42,0.045)] px-3.5 py-1.5 text-left text-[12px] font-medium text-[rgba(15,23,42,0.72)] transition hover:bg-[rgba(15,23,42,0.08)]"
                     onClick={() => void ask(suggestion)}
                     disabled={loading || taskLoading}
                   >
@@ -226,26 +241,22 @@ export function AICommandBar() {
 
             <div
               className={cn(
-                'min-h-[180px] rounded-[22px] bg-[rgba(251,250,247,0.9)] px-5 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]',
+                'min-h-[180px] rounded-[24px] bg-[rgba(255,255,255,0.72)] px-5 py-4 ring-1 ring-[rgba(15,23,42,0.06)]',
                 !result && !errorMessage && !loading && 'flex items-center'
               )}
             >
               {loading || taskLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 text-sm text-[rgba(15,23,42,0.48)]">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {taskLoading ? '正在加入任务中心…' : '正在整理当前对象上下文…'}
                 </div>
               ) : errorMessage ? (
-                <div className="text-sm leading-6 text-destructive">{errorMessage}</div>
+                <div className="text-sm leading-6 text-[rgba(185,28,28,0.88)]">{errorMessage}</div>
               ) : result ? (
-                <div className="whitespace-pre-wrap text-sm leading-7 text-foreground">
-                  {result}
-                </div>
+                <StreamdownMessage content={result} />
               ) : (
-                <div className="text-sm leading-6 text-muted-foreground">
-                  {config.endpoint
-                    ? '只问当前环境或当前发布最关键的问题。这里不做泛化聊天。'
-                    : '进入环境页或发布页后，再用这里快速分析当前对象。'}
+                <div className="text-sm leading-6 text-[rgba(15,23,42,0.48)]">
+                  {config.endpoint ? '只问当前对象最关键的问题。' : '进入环境页或发布页后再使用。'}
                 </div>
               )}
             </div>
@@ -253,13 +264,13 @@ export function AICommandBar() {
             <div className="flex items-center justify-end gap-3">
               <Button
                 variant="ghost"
-                className="h-10 rounded-full px-4"
+                className="h-10 rounded-full bg-[rgba(15,23,42,0.045)] px-4 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
                 onClick={() => setOpen(false)}
               >
                 关闭
               </Button>
               <Button
-                className="h-10 rounded-full px-5"
+                className="h-10 rounded-full bg-[rgba(15,23,42,0.92)] px-5 text-white shadow-none hover:bg-[rgba(15,23,42,0.82)]"
                 disabled={!canSubmit || taskLoading}
                 onClick={() => void ask(draft)}
               >
@@ -268,12 +279,12 @@ export function AICommandBar() {
               </Button>
               <Button
                 variant="outline"
-                className="h-10 rounded-full px-5"
+                className="h-10 rounded-full border-0 bg-[rgba(15,23,42,0.06)] px-5 text-[rgba(15,23,42,0.72)] shadow-none hover:bg-[rgba(15,23,42,0.1)]"
                 disabled={!canSubmit || loading || !config.taskEndpoint}
                 onClick={() => void runAsTask(draft)}
               >
                 {taskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                作为任务运行
+                加入任务
               </Button>
             </div>
           </div>

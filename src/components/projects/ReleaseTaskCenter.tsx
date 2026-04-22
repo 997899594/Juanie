@@ -130,20 +130,25 @@ export function ReleaseTaskCenter(input: {
   };
 
   return (
-    <section className="rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]">
+    <section className="rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)] ring-1 ring-[rgba(15,23,42,0.06)]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
             待处理事项
           </div>
-          <div className="mt-2 text-sm text-muted-foreground">
+          <div className="mt-2 text-sm text-[rgba(15,23,42,0.48)]">
             {loading ? '正在整理待处理事项…' : (snapshot?.summary ?? '当前发布没有待处理事项')}
           </div>
           {!input.canManageActions && input.disabledSummary ? (
-            <div className="mt-2 text-xs text-muted-foreground">{input.disabledSummary}</div>
+            <div className="mt-2 text-xs text-[rgba(15,23,42,0.42)]">{input.disabledSummary}</div>
           ) : null}
         </div>
-        <Button type="button" variant="ghost" className="h-10 rounded-full px-4" onClick={load}>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-10 rounded-full bg-[rgba(15,23,42,0.045)] px-4 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
+          onClick={load}
+        >
           <RefreshCw className="h-4 w-4" />
           刷新
         </Button>
@@ -154,19 +159,19 @@ export function ReleaseTaskCenter(input: {
           {snapshot.tasks.map((task) => (
             <div
               key={task.id}
-              className="flex flex-col gap-4 rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset] lg:flex-row lg:items-center lg:justify-between"
+              className="flex flex-col gap-4 rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4 lg:flex-row lg:items-center lg:justify-between"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-sm font-medium text-foreground">{task.title}</div>
                   <Badge
                     variant={getTaskTone(task.kind) === 'warning' ? 'warning' : 'secondary'}
-                    className="rounded-full px-2.5 py-0.5"
+                    className="rounded-full border-0 px-3 py-1 shadow-none"
                   >
                     {task.statusLabel}
                   </Badge>
                 </div>
-                <div className="mt-2 text-sm text-muted-foreground">{task.summary}</div>
+                <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">{task.summary}</div>
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -174,7 +179,7 @@ export function ReleaseTaskCenter(input: {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-9 rounded-full px-4"
+                    className="h-9 rounded-full border-0 bg-[rgba(255,255,255,0.72)] px-4 text-[rgba(15,23,42,0.72)] shadow-none hover:bg-white"
                     onClick={() => setSelectedTask(task)}
                   >
                     <Sparkles className="h-4 w-4" />
@@ -186,7 +191,7 @@ export function ReleaseTaskCenter(input: {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-9 rounded-full px-4"
+                    className="h-9 rounded-full border-0 bg-[rgba(255,255,255,0.72)] px-4 text-[rgba(15,23,42,0.72)] shadow-none hover:bg-white"
                     onClick={() => handleMigrationAction(task)}
                     disabled={pendingTaskId === task.id || !input.canManageActions}
                   >
@@ -203,7 +208,7 @@ export function ReleaseTaskCenter(input: {
           ))}
         </div>
       ) : !loading ? (
-        <div className="mt-5 rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+        <div className="mt-5 rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4 text-sm text-[rgba(15,23,42,0.48)]">
           没有需要你现在处理的事项。
         </div>
       ) : null}

@@ -64,9 +64,9 @@ function getCheckBadgeVariant(
 
 function renderUnavailableState(panel: ResolvedAIPluginSnapshot, emptyLabel: string) {
   return (
-    <div className="rounded-[20px] bg-[rgba(243,240,233,0.7)] px-4 py-5 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset]">
+    <div className="rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-5">
       <div className="text-sm font-medium text-foreground">{emptyLabel}</div>
-      <div className="mt-2 text-sm text-muted-foreground">
+      <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">
         {panel.errorMessage ?? panel.availability.blockedReason ?? '无结果'}
       </div>
     </div>
@@ -77,9 +77,8 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
   const releasePlanSnapshot = props.releasePlan.snapshot?.output ?? null;
   const incidentSnapshot = props.incidentAnalysis.snapshot?.output ?? null;
   const shellClassName =
-    'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
-  const subCardClassName =
-    'rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+    'rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)] ring-1 ring-[rgba(15,23,42,0.06)]';
+  const subCardClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4';
 
   return (
     <section className="space-y-4">
@@ -91,10 +90,12 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <ReleaseAIRefreshActions projectId={props.projectId} releaseId={props.releaseId} />
-              <Badge variant="secondary">
+              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
                 {getSourceLabel(props.releasePlan.source, props.releasePlan.stale)}
               </Badge>
-              <Badge variant="secondary">{props.releasePlan.availability.plan}</Badge>
+              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                {props.releasePlan.availability.plan}
+              </Badge>
             </div>
           </div>
 
@@ -105,44 +106,56 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               )}
               <div className={subCardClassName}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{releasePlanSnapshot.recommendation.strategy}</Badge>
-                  <Badge variant={getRiskBadgeVariant(releasePlanSnapshot.risk.level)}>
+                  <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                    {releasePlanSnapshot.recommendation.strategy}
+                  </Badge>
+                  <Badge
+                    variant={getRiskBadgeVariant(releasePlanSnapshot.risk.level)}
+                    className="rounded-full border-0 shadow-none"
+                  >
                     {releasePlanSnapshot.risk.level}
                   </Badge>
-                  <Badge variant="secondary">{releasePlanSnapshot.recommendation.confidence}</Badge>
+                  <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                    {releasePlanSnapshot.recommendation.confidence}
+                  </Badge>
                 </div>
                 <div className="mt-3 text-sm font-medium text-foreground">
                   {releasePlanSnapshot.recommendation.summary}
                 </div>
-                <div className="mt-2 text-sm text-muted-foreground">
+                <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">
                   {releasePlanSnapshot.operatorNarrative}
                 </div>
-                <div className="mt-3 text-xs text-muted-foreground">
+                <div className="mt-3 text-xs text-[rgba(15,23,42,0.42)]">
                   {formatPlatformDateTime(props.releasePlan.snapshot?.generatedAt) ?? '—'}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
                   检查
                 </div>
                 {releasePlanSnapshot.checks.slice(0, 4).map((check) => (
                   <div key={check.key} className={subCardClassName}>
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-medium">{check.label}</div>
-                      <Badge variant={getCheckBadgeVariant(check.status)}>{check.status}</Badge>
+                      <Badge
+                        variant={getCheckBadgeVariant(check.status)}
+                        className="rounded-full border-0 shadow-none"
+                      >
+                        {check.status}
+                      </Badge>
                     </div>
-                    <div className="mt-1 text-sm text-muted-foreground">{check.summary}</div>
+                    <div className="mt-1 text-sm text-[rgba(15,23,42,0.56)]">{check.summary}</div>
                   </div>
                 ))}
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className={subCardClassName}>
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
                     步骤
                   </div>
-                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <div className="mt-3 space-y-2 text-sm text-[rgba(15,23,42,0.56)]">
                     {releasePlanSnapshot.executionSteps.slice(0, 5).map((step, index) => (
                       <div key={`${step.type}:${step.step}`} className="flex gap-2">
                         <span className="text-foreground">{index + 1}.</span>
@@ -155,21 +168,24 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                   </div>
                 </div>
                 <div className={subCardClassName}>
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
                     回滚
                   </div>
                   <div className="mt-3 text-sm text-foreground">
                     {releasePlanSnapshot.rollbackPlan.summary}
                   </div>
                   {releasePlanSnapshot.rollbackPlan.target && (
-                    <div className="mt-2 text-sm text-muted-foreground">
+                    <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">
                       {releasePlanSnapshot.rollbackPlan.target}
                     </div>
                   )}
                   {releasePlanSnapshot.rollbackPlan.triggerSignals.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {releasePlanSnapshot.rollbackPlan.triggerSignals.slice(0, 4).map((signal) => (
-                        <Badge key={signal} variant="secondary">
+                        <Badge
+                          key={signal}
+                          className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none"
+                        >
                           {signal}
                         </Badge>
                       ))}
@@ -189,10 +205,12 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
               <div className="text-sm font-semibold">故障归因</div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">
+              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
                 {getSourceLabel(props.incidentAnalysis.source, props.incidentAnalysis.stale)}
               </Badge>
-              <Badge variant="secondary">{props.incidentAnalysis.availability.plan}</Badge>
+              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                {props.incidentAnalysis.availability.plan}
+              </Badge>
             </div>
           </div>
 
@@ -211,44 +229,47 @@ export function ReleaseAISnapshotPanel(props: ReleaseAISnapshotPanelProps) {
                           ? 'medium'
                           : 'low'
                     )}
+                    className="rounded-full border-0 shadow-none"
                   >
                     {incidentSnapshot.diagnosis.confidence}
                   </Badge>
-                  <Badge variant="secondary">{incidentSnapshot.diagnosis.category}</Badge>
+                  <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.62)] shadow-none">
+                    {incidentSnapshot.diagnosis.category}
+                  </Badge>
                 </div>
                 <div className="mt-3 text-sm font-medium text-foreground">
                   {incidentSnapshot.diagnosis.summary}
                 </div>
-                <div className="mt-2 text-sm text-muted-foreground">
+                <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">
                   {incidentSnapshot.diagnosis.rootCause}
                 </div>
-                <div className="mt-3 text-xs text-muted-foreground">
+                <div className="mt-3 text-xs text-[rgba(15,23,42,0.42)]">
                   {formatPlatformDateTime(props.incidentAnalysis.snapshot?.generatedAt) ?? '—'}
                 </div>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className={subCardClassName}>
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
                     过程
                   </div>
                   <div className="mt-3 space-y-3">
                     {incidentSnapshot.causalChain.slice(0, 4).map((item, index) => (
                       <div key={`${item.at ?? 'na'}:${item.event}:${index}`} className="text-sm">
                         <div className="font-medium text-foreground">{item.event}</div>
-                        <div className="mt-1 text-muted-foreground">{item.impact}</div>
+                        <div className="mt-1 text-[rgba(15,23,42,0.56)]">{item.impact}</div>
                         {item.at && (
-                          <div className="mt-1 text-xs text-muted-foreground">{item.at}</div>
+                          <div className="mt-1 text-xs text-[rgba(15,23,42,0.42)]">{item.at}</div>
                         )}
                       </div>
                     ))}
                   </div>
                 </div>
                 <div className={subCardClassName}>
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
                     证据
                   </div>
-                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <div className="mt-3 space-y-2 text-sm text-[rgba(15,23,42,0.56)]">
                     {incidentSnapshot.evidence.slice(0, 5).map((item, index) => (
                       <div key={`${item.source}:${index}`}>
                         <span className="font-medium text-foreground">{item.source}</span>

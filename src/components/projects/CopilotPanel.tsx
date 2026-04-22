@@ -175,47 +175,52 @@ export function CopilotPanel(input: CopilotPanelProps) {
 
   return (
     <aside className="xl:sticky xl:top-24">
-      <section className="overflow-hidden rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,238,0.95))] shadow-[0_1px_0_rgba(255,255,255,0.92)_inset,0_0_0_1px_rgba(17,17,17,0.05),0_22px_52px_rgba(55,53,47,0.08)]">
-        <div className="border-b border-[rgba(17,17,17,0.06)] px-5 py-5">
-          <div className="flex items-start justify-between gap-3">
+      <section className="overflow-hidden rounded-[28px] bg-[rgba(251,250,247,0.96)] shadow-[0_24px_60px_rgba(15,23,42,0.06)] ring-1 ring-[rgba(15,23,42,0.06)] backdrop-blur">
+        <div className="px-6 pb-4 pt-6">
+          <div className="flex items-start justify-between gap-4">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-[rgba(244,240,232,0.92)] text-foreground shadow-[0_1px_0_rgba(255,255,255,0.86)_inset]">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[rgba(17,24,39,0.04)] text-[rgba(17,24,39,0.72)]">
                   <Sparkles className="h-4 w-4" />
                 </div>
                 <div>
-                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[rgba(17,24,39,0.42)]">
                     Copilot
                   </div>
-                  <div className="text-base font-semibold tracking-[-0.03em] text-foreground">
+                  <div className="text-[15px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.96)]">
                     {input.title}
                   </div>
                 </div>
               </div>
-              <div className="text-sm leading-6 text-muted-foreground">{input.description}</div>
+              <div className="max-w-[28rem] text-[13px] leading-6 text-[rgba(15,23,42,0.58)]">
+                {input.description}
+              </div>
             </div>
-            <Badge variant="secondary" className="rounded-full px-2.5 py-0.5">
-              对象内
+            <Badge
+              variant="secondary"
+              className="rounded-full border-0 bg-[rgba(17,24,39,0.05)] px-3 py-1 text-[11px] font-medium text-[rgba(15,23,42,0.56)] shadow-none"
+            >
+              当前对象
             </Badge>
           </div>
         </div>
 
-        <div className="px-5 py-4">
+        <div className="px-6 pb-6">
           <div
             ref={viewportRef}
-            className="max-h-[48vh] space-y-3 overflow-y-auto pr-1 xl:max-h-[54vh]"
+            className="max-h-[48vh] space-y-4 overflow-y-auto pr-1 xl:max-h-[54vh]"
           >
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={cn(
-                  'rounded-[18px] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]',
+                  'rounded-[22px] px-4 py-3.5 transition-colors',
                   message.role === 'assistant'
-                    ? 'bg-[rgba(243,240,233,0.72)]'
-                    : 'bg-[rgba(251,250,247,0.96)]'
+                    ? 'bg-[rgba(15,23,42,0.035)]'
+                    : 'ml-8 bg-[rgba(15,23,42,0.06)]'
                 )}
               >
-                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
                   {message.role === 'assistant' ? (
                     <>
                       <MessageSquareText className="h-3.5 w-3.5" />
@@ -226,26 +231,26 @@ export function CopilotPanel(input: CopilotPanelProps) {
                   )}
                 </div>
                 {message.role === 'assistant' ? (
-                  <div className="mt-2 text-sm leading-6 text-foreground">
+                  <div className="mt-2 text-sm leading-7 text-[rgba(15,23,42,0.88)]">
                     <StreamdownMessage
                       content={message.content}
                       isStreaming={streamingMessageId === message.id}
                     />
                   </div>
                 ) : (
-                  <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                  <div className="mt-2 whitespace-pre-wrap text-sm leading-7 text-[rgba(15,23,42,0.88)]">
                     {message.content}
                   </div>
                 )}
                 {message.meta ? (
-                  <div className="mt-2 text-[11px] text-muted-foreground">{message.meta}</div>
+                  <div className="mt-3 text-[11px] text-[rgba(15,23,42,0.42)]">{message.meta}</div>
                 ) : null}
               </div>
             ))}
 
             {loading ? (
-              <div className="rounded-[18px] bg-[rgba(243,240,233,0.72)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset]">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="rounded-[22px] bg-[rgba(15,23,42,0.035)] px-4 py-3.5">
+                <div className="flex items-center gap-2 text-sm text-[rgba(15,23,42,0.5)]">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {emptyHint}
                 </div>
@@ -253,12 +258,12 @@ export function CopilotPanel(input: CopilotPanelProps) {
             ) : null}
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-wrap gap-2">
             {suggestions.map((suggestion) => (
               <button
                 key={suggestion}
                 type="button"
-                className="rounded-full bg-[rgba(244,240,232,0.88)] px-3 py-1.5 text-left text-xs text-foreground shadow-[0_1px_0_rgba(255,255,255,0.78)_inset] transition hover:bg-white"
+                className="rounded-full bg-[rgba(15,23,42,0.045)] px-3.5 py-1.5 text-left text-[12px] font-medium text-[rgba(15,23,42,0.72)] transition hover:bg-[rgba(15,23,42,0.08)]"
                 onClick={() => send(suggestion)}
                 disabled={loading}
               >
@@ -267,32 +272,36 @@ export function CopilotPanel(input: CopilotPanelProps) {
             ))}
           </div>
 
-          <div className="mt-4 space-y-3">
-            <Textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="直接问当前对象。只问这个环境 / 这次发布最有价值的事。"
-              className="min-h-[136px] resize-none"
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  void send(trimmedDraft);
-                }
-              }}
-            />
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs text-muted-foreground">{emptyHint}</div>
-              <Button
-                type="button"
-                className="h-10 rounded-full px-5"
-                disabled={!canSubmit}
-                onClick={() => send(trimmedDraft)}
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                发送
-              </Button>
+          <div className="mt-5 rounded-[24px] bg-[rgba(255,255,255,0.72)] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-[rgba(15,23,42,0.06)] transition duration-200 focus-within:bg-white focus-within:ring-[rgba(15,23,42,0.12)] focus-within:shadow-[0_18px_44px_rgba(15,23,42,0.06)]">
+            <div className="space-y-3">
+              <Textarea
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder="直接问当前对象最关键的事。"
+                className="min-h-[140px] resize-none border-0 bg-transparent px-1 py-1 text-[14px] leading-7 text-[rgba(15,23,42,0.9)] shadow-none ring-0 placeholder:text-[rgba(15,23,42,0.34)] focus-visible:ring-0 focus-visible:ring-offset-0"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    void send(trimmedDraft);
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between gap-3 border-t border-[rgba(15,23,42,0.06)] px-1 pt-3">
+                <div className="text-[12px] text-[rgba(15,23,42,0.42)]">{emptyHint}</div>
+                <Button
+                  type="button"
+                  className="h-10 rounded-full bg-[rgba(15,23,42,0.92)] px-5 text-white shadow-none hover:bg-[rgba(15,23,42,0.82)]"
+                  disabled={!canSubmit}
+                  onClick={() => send(trimmedDraft)}
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  发送
+                </Button>
+              </div>
+              {errorMessage ? (
+                <div className="px-1 text-sm text-[rgba(185,28,28,0.88)]">{errorMessage}</div>
+              ) : null}
             </div>
-            {errorMessage ? <div className="text-sm text-destructive">{errorMessage}</div> : null}
           </div>
         </div>
       </section>

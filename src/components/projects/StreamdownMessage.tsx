@@ -36,7 +36,7 @@ export function StreamdownMessage(input: StreamdownMessageProps) {
   }
 
   return (
-    <div className="prose prose-sm max-w-none text-foreground prose-headings:tracking-[-0.03em] prose-p:my-2 prose-pre:rounded-2xl prose-pre:border prose-pre:border-[rgba(17,17,17,0.08)] prose-pre:bg-[rgba(255,255,255,0.72)] prose-code:text-[0.92em] prose-strong:text-foreground prose-ul:my-2 prose-ol:my-2">
+    <div className="prose prose-sm max-w-none text-[rgba(15,23,42,0.88)] prose-headings:mb-2 prose-headings:mt-4 prose-headings:font-semibold prose-headings:tracking-[-0.03em] prose-p:my-2 prose-p:text-[rgba(15,23,42,0.82)] prose-strong:text-[rgba(15,23,42,0.96)] prose-ul:my-2 prose-ol:my-2 prose-li:marker:text-[rgba(15,23,42,0.35)] prose-code:rounded prose-code:bg-[rgba(15,23,42,0.06)] prose-code:px-1 prose-code:py-0.5 prose-code:text-[0.9em] prose-code:text-[rgba(15,23,42,0.84)] prose-pre:rounded-[18px] prose-pre:border-0 prose-pre:bg-[rgba(15,23,42,0.94)] prose-pre:shadow-none prose-blockquote:border-l-[2px] prose-blockquote:border-[rgba(15,23,42,0.16)] prose-blockquote:text-[rgba(15,23,42,0.58)]">
       <SafeStreamdown {...input} className={input.className} />
     </div>
   );
