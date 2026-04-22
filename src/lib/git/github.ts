@@ -123,6 +123,87 @@ export class GitHubProvider implements GitProvider {
     });
   }
 
+  private buildApiUrl(path: string, searchParams?: Record<string, string | undefined>): string {
+    const url = new URL(`https://api.github.com${path}`);
+
+    if (searchParams) {
+      for (const [key, value] of Object.entries(searchParams)) {
+        if (typeof value === 'string' && value.length > 0) {
+          url.searchParams.set(key, value);
+        }
+      }
+    }
+
+    return url.toString();
+  }
+
+  private async requestJson<T>(
+    accessToken: string,
+    path: string,
+    options?: {
+      method?: string;
+      body?: unknown;
+      searchParams?: Record<string, string | undefined>;
+    }
+  ): Promise<T> {
+    const response = await fetch(this.buildApiUrl(path, options?.searchParams), {
+      method: options?.method ?? 'GET',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: options?.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    const raw = await response.text();
+    const payload = raw.length > 0 ? this.parseJsonSafely(raw) : null;
+
+    if (!response.ok) {
+      throw Object.assign(
+        new Error(this.extractGitHubErrorMessage(payload, raw, response.statusText)),
+        { status: response.status }
+      );
+    }
+
+    return payload as T;
+  }
+
+  private parseJsonSafely(raw: string): unknown {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
+
+  private extractGitHubErrorMessage(payload: unknown, raw: string, fallback: string): string {
+    if (typeof payload === 'object' && payload !== null && 'message' in payload) {
+      const message = payload.message;
+      if (typeof message === 'string' && message.trim().length > 0) {
+        return message;
+      }
+    }
+
+    if (raw.trim().length > 0) {
+      return raw;
+    }
+
+    return fallback || 'GitHub API request failed';
+  }
+
+  private encodeContentPath(path: string): string {
+    return path
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+  }
+
   private parseRepoFullName(repoFullName: string): { owner: string; repo: string } {
     const [owner, repo] = repoFullName.split('/');
 
@@ -290,15 +371,15 @@ export class GitHubProvider implements GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<string | null> {
-    const client = this.getClient(accessToken);
-    const { owner, repo } = this.parseRepoFullName(repoFullName);
-
     if (ref.startsWith('refs/heads/')) {
       const branch = ref.slice('refs/heads/'.length);
 
       try {
-        const response = await client.rest.repos.getBranch({ owner, repo, branch });
-        return response.data.commit.sha;
+        const response = await this.requestJson<{ commit?: { sha?: string | null } }>(
+          accessToken,
+          `/repos/${repoFullName}/branches/${encodeURIComponent(branch)}`
+        );
+        return response.commit?.sha ?? null;
       } catch (error) {
         if (isNotFoundError(error)) {
           return null;
@@ -314,12 +395,10 @@ export class GitHubProvider implements GitProvider {
     }
 
     const [, prNumber, target] = prMatch;
-    const response = await client.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: Number(prNumber),
-    });
-    const data = response.data as unknown as GitHubPullRequestPayload;
+    const data = await this.requestJson<GitHubPullRequestPayload>(
+      accessToken,
+      `/repos/${repoFullName}/pulls/${prNumber}`
+    );
 
     if (target === 'merge' && typeof data.merge_commit_sha === 'string') {
       return data.merge_commit_sha;
@@ -332,8 +411,6 @@ export class GitHubProvider implements GitProvider {
     accessToken: string,
     options: TriggerReleaseBuildOptions
   ): Promise<void> {
-    const client = this.getClient(accessToken);
-    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
     let dispatchRef: string | null = null;
 
     if (options.ref.startsWith('refs/heads/')) {
@@ -341,12 +418,10 @@ export class GitHubProvider implements GitProvider {
     } else {
       const prMatch = options.ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
       if (prMatch) {
-        const response = await client.rest.pulls.get({
-          owner,
-          repo,
-          pull_number: Number(prMatch[1]),
-        });
-        const data = response.data as unknown as GitHubPullRequestPayload;
+        const data = await this.requestJson<GitHubPullRequestPayload>(
+          accessToken,
+          `/repos/${options.repoFullName}/pulls/${prMatch[1]}`
+        );
         dispatchRef = data.head?.ref ?? null;
       }
     }
@@ -356,17 +431,21 @@ export class GitHubProvider implements GitProvider {
     }
 
     try {
-      await client.rest.actions.createWorkflowDispatch({
-        owner,
-        repo,
-        workflow_id: 'juanie-ci.yml',
-        ref: dispatchRef,
-        inputs: {
-          juanie_source_sha: options.sourceCommitSha,
-          juanie_release_ref: options.releaseRef ?? options.ref,
-          juanie_force_full_build: options.forceFullBuild ? 'true' : 'false',
-        },
-      });
+      await this.requestJson<void>(
+        accessToken,
+        `/repos/${options.repoFullName}/actions/workflows/juanie-ci.yml/dispatches`,
+        {
+          method: 'POST',
+          body: {
+            ref: dispatchRef,
+            inputs: {
+              juanie_source_sha: options.sourceCommitSha,
+              juanie_release_ref: options.releaseRef ?? options.ref,
+              juanie_force_full_build: options.forceFullBuild ? 'true' : 'false',
+            },
+          },
+        }
+      );
     } catch (error) {
       throw new Error(mapGitHubWorkflowDispatchError(getErrorMessage(error, '')));
     }
@@ -413,9 +492,6 @@ export class GitHubProvider implements GitProvider {
   }
 
   async syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void> {
-    const client = this.getClient(accessToken);
-    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
-    const branchRef = `heads/${options.branch}`;
     const currentSha = await this.resolveRefToCommitSha(
       accessToken,
       options.repoFullName,
@@ -427,49 +503,64 @@ export class GitHubProvider implements GitProvider {
     }
 
     if (currentSha) {
-      await client.rest.git.updateRef({
-        owner,
-        repo,
-        ref: branchRef,
-        sha: options.commitSha,
-        force: true,
-      });
+      await this.requestJson<{ ref: string }>(
+        accessToken,
+        `/repos/${options.repoFullName}/git/refs/heads/${options.branch}`,
+        {
+          method: 'PATCH',
+          body: {
+            sha: options.commitSha,
+            force: true,
+          },
+        }
+      );
       return;
     }
 
     try {
-      await client.rest.git.createRef({
-        owner,
-        repo,
-        ref: `refs/heads/${options.branch}`,
-        sha: options.commitSha,
-      });
+      await this.requestJson<{ ref: string }>(
+        accessToken,
+        `/repos/${options.repoFullName}/git/refs`,
+        {
+          method: 'POST',
+          body: {
+            ref: `refs/heads/${options.branch}`,
+            sha: options.commitSha,
+          },
+        }
+      );
     } catch (error) {
       if (!('status' in Object(error ?? {}) && (error as { status?: number }).status === 422)) {
         throw new Error(getErrorMessage(error, `Failed to create branch ${options.branch}`));
       }
 
-      await client.rest.git.updateRef({
-        owner,
-        repo,
-        ref: branchRef,
-        sha: options.commitSha,
-        force: true,
-      });
+      await this.requestJson<{ ref: string }>(
+        accessToken,
+        `/repos/${options.repoFullName}/git/refs/heads/${options.branch}`,
+        {
+          method: 'PATCH',
+          body: {
+            sha: options.commitSha,
+            force: true,
+          },
+        }
+      );
     }
   }
 
   async createTag(accessToken: string, options: CreateTagOptions): Promise<void> {
-    const client = this.getClient(accessToken);
-    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
-
     try {
-      await client.rest.git.createRef({
-        owner,
-        repo,
-        ref: `refs/tags/${options.tag}`,
-        sha: options.commitSha,
-      });
+      await this.requestJson<{ ref: string }>(
+        accessToken,
+        `/repos/${options.repoFullName}/git/refs`,
+        {
+          method: 'POST',
+          body: {
+            ref: `refs/tags/${options.tag}`,
+            sha: options.commitSha,
+          },
+        }
+      );
     } catch (error) {
       if (!('status' in Object(error ?? {}) && (error as { status?: number }).status === 422)) {
         throw new Error(getErrorMessage(error, `Failed to create tag ${options.tag}`));
@@ -557,21 +648,21 @@ export class GitHubProvider implements GitProvider {
   }
 
   async deleteFiles(accessToken: string, options: DeleteFilesOptions): Promise<void> {
-    const client = this.getClient(accessToken);
-    const { owner, repo } = this.parseRepoFullName(options.repoFullName);
-
     for (const path of options.paths) {
       let existingFileSha: string | null = null;
 
       try {
-        const existing = await client.rest.repos.getContent({
-          owner,
-          repo,
-          path,
-          ref: options.branch,
-        });
-        if (!Array.isArray(existing.data)) {
-          existingFileSha = (existing.data as unknown as GitHubContentFilePayload).sha;
+        const existing = await this.requestJson<GitHubContentPayload>(
+          accessToken,
+          `/repos/${options.repoFullName}/contents/${this.encodeContentPath(path)}`,
+          {
+            searchParams: {
+              ref: options.branch,
+            },
+          }
+        );
+        if (!Array.isArray(existing)) {
+          existingFileSha = (existing as GitHubContentFilePayload).sha;
         }
       } catch (error) {
         if (isNotFoundError(error)) {
@@ -586,14 +677,18 @@ export class GitHubProvider implements GitProvider {
       }
 
       try {
-        await client.rest.repos.deleteFile({
-          owner,
-          repo,
-          path,
-          message: options.message,
-          sha: existingFileSha,
-          branch: options.branch,
-        });
+        await this.requestJson<void>(
+          accessToken,
+          `/repos/${options.repoFullName}/contents/${this.encodeContentPath(path)}`,
+          {
+            method: 'DELETE',
+            body: {
+              message: options.message,
+              sha: existingFileSha,
+              branch: options.branch,
+            },
+          }
+        );
       } catch (error) {
         if (isNotFoundError(error)) {
           continue;

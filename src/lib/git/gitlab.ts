@@ -46,10 +46,22 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 function isStatusError(error: unknown, status: number): boolean {
-  return typeof error === 'object' && error !== null && 'cause' in error
-    ? ((error.cause as { response?: { status?: number } } | undefined)?.response?.status ??
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+
+  if ('status' in error && error.status === status) {
+    return true;
+  }
+
+  if ('cause' in error) {
+    return (
+      ((error.cause as { response?: { status?: number } } | undefined)?.response?.status ??
         null) === status
-    : false;
+    );
+  }
+
+  return false;
 }
 
 export class GitLabProvider implements GitProvider {
@@ -71,6 +83,95 @@ export class GitLabProvider implements GitProvider {
       host: this.serverUrl,
       token: accessToken,
     });
+  }
+
+  private buildApiUrl(path: string): string {
+    return new URL(`/api/v4${path}`, this.serverUrl).toString();
+  }
+
+  private async requestJson<T>(
+    accessToken: string,
+    path: string,
+    options?: {
+      method?: string;
+      body?: unknown;
+    }
+  ): Promise<T> {
+    const response = await fetch(this.buildApiUrl(path), {
+      method: options?.method,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: options?.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    const raw = await response.text();
+    const payload = raw.length > 0 ? this.parseJsonSafely(raw) : null;
+
+    if (!response.ok) {
+      throw Object.assign(new Error(this.extractGitLabErrorMessage(payload, raw)), {
+        status: response.status,
+      });
+    }
+
+    return payload as T;
+  }
+
+  private parseJsonSafely(raw: string): unknown {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
+
+  private extractGitLabErrorMessage(payload: unknown, raw: string): string {
+    if (typeof payload === 'object' && payload !== null) {
+      if ('message' in payload) {
+        const message = payload.message;
+
+        if (typeof message === 'string' && message.trim().length > 0) {
+          return message;
+        }
+
+        if (Array.isArray(message)) {
+          return message.join(', ');
+        }
+
+        if (message && typeof message === 'object') {
+          return Object.entries(message as Record<string, string[]>)
+            .flatMap(([key, value]) => value.map((entry) => `${key}: ${entry}`))
+            .join(', ');
+        }
+      }
+
+      if (
+        'error' in payload &&
+        typeof payload.error === 'string' &&
+        payload.error.trim().length > 0
+      ) {
+        return payload.error;
+      }
+    }
+
+    return raw.trim().length > 0 ? raw : 'GitLab API request failed';
+  }
+
+  private encodeProjectId(repoFullName: string): string {
+    return encodeURIComponent(repoFullName);
+  }
+
+  private encodePath(path: string): string {
+    return path
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
   }
 
   getAuthUrl(state: string): string {
@@ -201,13 +302,14 @@ export class GitLabProvider implements GitProvider {
     repoFullName: string,
     ref: string
   ): Promise<string | null> {
-    const client = this.getClient(accessToken);
-
     if (ref.startsWith('refs/heads/')) {
       const branch = ref.slice('refs/heads/'.length);
 
       try {
-        const data = (await client.Branches.show(repoFullName, branch)) as BranchSchema;
+        const data = await this.requestJson<BranchSchema>(
+          accessToken,
+          `/projects/${this.encodeProjectId(repoFullName)}/repository/branches/${encodeURIComponent(branch)}`
+        );
         return data.commit?.id ?? null;
       } catch (error) {
         if (isStatusError(error, 404)) {
@@ -223,10 +325,10 @@ export class GitLabProvider implements GitProvider {
       return null;
     }
 
-    const data = (await client.MergeRequests.show(
-      repoFullName,
-      Number(prMatch[1])
-    )) as ExpandedMergeRequestSchema;
+    const data = await this.requestJson<ExpandedMergeRequestSchema>(
+      accessToken,
+      `/projects/${this.encodeProjectId(repoFullName)}/merge_requests/${prMatch[1]}`
+    );
 
     if (typeof data.sha === 'string') {
       return data.sha;
@@ -239,7 +341,6 @@ export class GitLabProvider implements GitProvider {
     accessToken: string,
     options: TriggerReleaseBuildOptions
   ): Promise<void> {
-    const client = this.getClient(accessToken);
     let pipelineRef: string | null = null;
 
     if (options.ref.startsWith('refs/heads/')) {
@@ -247,10 +348,10 @@ export class GitLabProvider implements GitProvider {
     } else {
       const prMatch = options.ref.match(/^refs\/pull\/(\d+)\/(head|merge)$/);
       if (prMatch) {
-        const data = (await client.MergeRequests.show(
-          options.repoFullName,
-          Number(prMatch[1])
-        )) as ExpandedMergeRequestSchema;
+        const data = await this.requestJson<ExpandedMergeRequestSchema>(
+          accessToken,
+          `/projects/${this.encodeProjectId(options.repoFullName)}/merge_requests/${prMatch[1]}`
+        );
         pipelineRef =
           typeof data.source_branch === 'string' && data.source_branch.trim().length > 0
             ? data.source_branch
@@ -263,22 +364,30 @@ export class GitLabProvider implements GitProvider {
     }
 
     try {
-      await client.Pipelines.create(options.repoFullName, pipelineRef, {
-        variables: [
-          {
-            key: 'JUANIE_SOURCE_SHA',
-            value: options.sourceCommitSha,
+      await this.requestJson<{ id: number }>(
+        accessToken,
+        `/projects/${this.encodeProjectId(options.repoFullName)}/pipeline`,
+        {
+          method: 'POST',
+          body: {
+            ref: pipelineRef,
+            variables: [
+              {
+                key: 'JUANIE_SOURCE_SHA',
+                value: options.sourceCommitSha,
+              },
+              {
+                key: 'JUANIE_RELEASE_REF',
+                value: options.releaseRef ?? options.ref,
+              },
+              {
+                key: 'JUANIE_FORCE_FULL_BUILD',
+                value: options.forceFullBuild ? '1' : '0',
+              },
+            ],
           },
-          {
-            key: 'JUANIE_RELEASE_REF',
-            value: options.releaseRef ?? options.ref,
-          },
-          {
-            key: 'JUANIE_FORCE_FULL_BUILD',
-            value: options.forceFullBuild ? '1' : '0',
-          },
-        ],
-      });
+        }
+      );
     } catch (error) {
       throw new Error(getErrorMessage(error, 'Failed to trigger GitLab preview build pipeline'));
     }
@@ -309,7 +418,6 @@ export class GitLabProvider implements GitProvider {
   }
 
   async syncBranchRef(accessToken: string, options: SyncBranchRefOptions): Promise<void> {
-    const client = this.getClient(accessToken);
     const currentSha = await this.resolveRefToCommitSha(
       accessToken,
       options.repoFullName,
@@ -322,7 +430,13 @@ export class GitLabProvider implements GitProvider {
 
     if (currentSha) {
       try {
-        await client.Branches.remove(options.repoFullName, options.branch);
+        await this.requestJson<void>(
+          accessToken,
+          `/projects/${this.encodeProjectId(options.repoFullName)}/repository/branches/${encodeURIComponent(options.branch)}`,
+          {
+            method: 'DELETE',
+          }
+        );
       } catch (error) {
         if (!isStatusError(error, 404)) {
           throw new Error(getErrorMessage(error, `Failed to reset branch ${options.branch}`));
@@ -330,14 +444,32 @@ export class GitLabProvider implements GitProvider {
       }
     }
 
-    await client.Branches.create(options.repoFullName, options.branch, options.commitSha);
+    await this.requestJson<{ name: string }>(
+      accessToken,
+      `/projects/${this.encodeProjectId(options.repoFullName)}/repository/branches`,
+      {
+        method: 'POST',
+        body: {
+          branch: options.branch,
+          ref: options.commitSha,
+        },
+      }
+    );
   }
 
   async createTag(accessToken: string, options: CreateTagOptions): Promise<void> {
-    const client = this.getClient(accessToken);
-
     try {
-      await client.Tags.create(options.repoFullName, options.tag, options.commitSha);
+      await this.requestJson<{ name: string }>(
+        accessToken,
+        `/projects/${this.encodeProjectId(options.repoFullName)}/repository/tags`,
+        {
+          method: 'POST',
+          body: {
+            tag_name: options.tag,
+            ref: options.commitSha,
+          },
+        }
+      );
     } catch (error) {
       const message = getErrorMessage(error, '');
       if (!message.includes('already exists')) {
@@ -407,15 +539,18 @@ export class GitLabProvider implements GitProvider {
   }
 
   async deleteFiles(accessToken: string, options: DeleteFilesOptions): Promise<void> {
-    const client = this.getClient(accessToken);
-
     for (const path of options.paths) {
       try {
-        await client.RepositoryFiles.remove(
-          options.repoFullName,
-          path,
-          options.branch,
-          options.message
+        await this.requestJson<void>(
+          accessToken,
+          `/projects/${this.encodeProjectId(options.repoFullName)}/repository/files/${this.encodePath(path)}`,
+          {
+            method: 'DELETE',
+            body: {
+              branch: options.branch,
+              commit_message: options.message,
+            },
+          }
         );
       } catch (error) {
         const message = getErrorMessage(error, '');
