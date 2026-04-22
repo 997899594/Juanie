@@ -70,6 +70,8 @@ type GitHubContentPayload =
   | GitHubContentDirectoryPayload
   | Array<GitHubContentFilePayload | GitHubContentDirectoryPayload>;
 
+const GITHUB_JUANIE_WORKFLOW_PATH = '.github/workflows/juanie-ci.yml';
+
 function mapGitHubWorkflowDispatchError(message?: string | null): string {
   const normalizedMessage = message?.trim();
 
@@ -87,7 +89,70 @@ function mapGitHubWorkflowDispatchError(message?: string | null): string {
     return '当前仓库的 .github/workflows/juanie-ci.yml 已被禁用，Juanie 无法触发预览构建。请先在 GitHub Actions 中重新启用该 workflow。';
   }
 
+  const unexpectedInputs = parseUnexpectedWorkflowDispatchInputs(normalizedMessage);
+  if (unexpectedInputs.length > 0) {
+    return `当前仓库的 .github/workflows/juanie-ci.yml 未声明这些 dispatch inputs：${unexpectedInputs.join('、')}。请同步更新 workflow，或让 Juanie 按兼容模式重试。`;
+  }
+
   return normalizedMessage || 'Failed to trigger GitHub preview build workflow';
+}
+
+function parseUnexpectedWorkflowDispatchInputs(message?: string | null): string[] {
+  const normalizedMessage = message?.trim();
+  if (!normalizedMessage) {
+    return [];
+  }
+
+  const match = normalizedMessage.match(/Unexpected inputs provided:\s*\[(.+)\]/i);
+  if (!match?.[1]) {
+    return [];
+  }
+
+  return match[1]
+    .split(',')
+    .map((value) => value.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((value) => value.length > 0);
+}
+
+function parseWorkflowDispatchInputsFromYaml(content: string | null): Set<string> | null {
+  if (!content?.trim()) {
+    return null;
+  }
+
+  try {
+    const { parse } = require('yaml') as { parse: (input: string) => unknown };
+    const parsed = parse(content) as Record<string, unknown> | null;
+
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const onConfig = parsed.on ?? parsed.true;
+    if (!onConfig || typeof onConfig !== 'object' || Array.isArray(onConfig)) {
+      return null;
+    }
+
+    const workflowDispatch = (onConfig as Record<string, unknown>).workflow_dispatch;
+    if (!workflowDispatch) {
+      return new Set<string>();
+    }
+
+    if (typeof workflowDispatch !== 'object' || Array.isArray(workflowDispatch)) {
+      return new Set<string>();
+    }
+
+    const inputs = (workflowDispatch as Record<string, unknown>).inputs;
+    if (!inputs || typeof inputs !== 'object' || Array.isArray(inputs)) {
+      return new Set<string>();
+    }
+
+    return new Set(Object.keys(inputs));
+  } catch (error) {
+    gitHubProviderLogger.warn('Failed to parse GitHub workflow dispatch inputs', {
+      error: getErrorMessage(error, 'unknown'),
+    });
+    return null;
+  }
 }
 
 function isNotFoundError(error: unknown): boolean {
@@ -430,25 +495,125 @@ export class GitHubProvider implements GitProvider {
       throw new Error('当前来源无法触发 GitHub 预览构建，请改用分支启动');
     }
 
+    const supportedInputs = await this.getWorkflowDispatchInputNames(
+      accessToken,
+      options.repoFullName,
+      dispatchRef
+    );
+    let inputs = this.buildWorkflowDispatchInputs(options, supportedInputs);
+
     try {
-      await this.requestJson<void>(
+      await this.dispatchWorkflow(accessToken, options.repoFullName, dispatchRef, inputs);
+    } catch (error) {
+      const message = getErrorMessage(error, '');
+      const unsupportedInputs = parseUnexpectedWorkflowDispatchInputs(message);
+
+      if (unsupportedInputs.length > 0) {
+        const filteredEntries = Object.entries(inputs).filter(
+          ([key]) => !unsupportedInputs.includes(key)
+        );
+
+        if (filteredEntries.length !== Object.keys(inputs).length) {
+          inputs = Object.fromEntries(filteredEntries);
+
+          gitHubProviderLogger.warn(
+            'Retrying GitHub workflow dispatch without unsupported inputs',
+            {
+              repoFullName: options.repoFullName,
+              ref: dispatchRef,
+              unsupportedInputs,
+            }
+          );
+
+          try {
+            await this.dispatchWorkflow(accessToken, options.repoFullName, dispatchRef, inputs);
+            return;
+          } catch (retryError) {
+            throw new Error(mapGitHubWorkflowDispatchError(getErrorMessage(retryError, '')));
+          }
+        }
+      }
+
+      throw new Error(mapGitHubWorkflowDispatchError(message));
+    }
+  }
+
+  private async dispatchWorkflow(
+    accessToken: string,
+    repoFullName: string,
+    dispatchRef: string,
+    inputs: Record<string, string>
+  ): Promise<void> {
+    await this.requestJson<void>(
+      accessToken,
+      `/repos/${repoFullName}/actions/workflows/juanie-ci.yml/dispatches`,
+      {
+        method: 'POST',
+        body: {
+          ref: dispatchRef,
+          inputs,
+        },
+      }
+    );
+  }
+
+  private async getWorkflowDispatchInputNames(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<Set<string> | null> {
+    try {
+      const response = await this.requestJson<GitHubContentPayload>(
         accessToken,
-        `/repos/${options.repoFullName}/actions/workflows/juanie-ci.yml/dispatches`,
+        `/repos/${repoFullName}/contents/${this.encodeContentPath(GITHUB_JUANIE_WORKFLOW_PATH)}`,
         {
-          method: 'POST',
-          body: {
-            ref: dispatchRef,
-            inputs: {
-              juanie_source_sha: options.sourceCommitSha,
-              juanie_release_ref: options.releaseRef ?? options.ref,
-              juanie_force_full_build: options.forceFullBuild ? 'true' : 'false',
-            },
+          searchParams: {
+            ref,
           },
         }
       );
+
+      if (Array.isArray(response)) {
+        return null;
+      }
+
+      if (response.type !== 'file' || !response.content) {
+        return null;
+      }
+
+      const content = Buffer.from(response.content, 'base64').toString('utf-8');
+      return parseWorkflowDispatchInputsFromYaml(content);
     } catch (error) {
-      throw new Error(mapGitHubWorkflowDispatchError(getErrorMessage(error, '')));
+      if (isNotFoundError(error)) {
+        return null;
+      }
+
+      gitHubProviderLogger.warn('Failed to inspect GitHub workflow dispatch inputs', {
+        repoFullName,
+        ref,
+        error: getErrorMessage(error, 'unknown'),
+      });
+      return null;
     }
+  }
+
+  private buildWorkflowDispatchInputs(
+    options: TriggerReleaseBuildOptions,
+    supportedInputs: Set<string> | null
+  ): Record<string, string> {
+    const inputs: Record<string, string> = {
+      juanie_source_sha: options.sourceCommitSha,
+      juanie_release_ref: options.releaseRef ?? options.ref,
+    };
+
+    if (
+      options.forceFullBuild &&
+      (!supportedInputs || supportedInputs.has('juanie_force_full_build'))
+    ) {
+      inputs.juanie_force_full_build = 'true';
+    }
+
+    return inputs;
   }
 
   async createRepository(accessToken: string, options: CreateRepoOptions): Promise<GitRepository> {

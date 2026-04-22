@@ -13,6 +13,10 @@ on:
         description: Logical release ref to send back to Juanie
         required: false
         type: string
+      juanie_force_full_build:
+        description: Reserved for preview bootstrap compatibility
+        required: false
+        type: string
 
 env:
   IMAGE_REGISTRY: ghcr.io

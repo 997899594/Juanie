@@ -48,6 +48,31 @@ describe('GitHubProvider preview build trigger', () => {
           init,
         });
 
+        if (
+          String(input).includes('/contents/.github/workflows/juanie-ci.yml') &&
+          String(input).includes('ref=codex%2Fevidence-event-knowledge-os')
+        ) {
+          return new Response(
+            JSON.stringify({
+              type: 'file',
+              encoding: 'base64',
+              content: Buffer.from(`
+name: Juanie CI
+on:
+  workflow_dispatch:
+    inputs:
+      juanie_source_sha:
+          required: false
+      juanie_release_ref:
+          required: false
+      juanie_force_full_build:
+          required: false
+`).toString('base64'),
+            }),
+            { status: 200 }
+          );
+        }
+
         return new Response(null, { status: 204 });
       }) as typeof fetch;
 
@@ -66,17 +91,80 @@ describe('GitHubProvider preview build trigger', () => {
         forceFullBuild: true,
       });
 
-      expect(requests.length).toBe(1);
-      expect(requests[0]?.url).toBe(
+      const dispatchRequest = requests.find((request) => request.init?.method === 'POST');
+      expect(dispatchRequest?.url).toBe(
         'https://api.github.com/repos/997899594/nexusnote/actions/workflows/juanie-ci.yml/dispatches'
       );
-      expect(requests[0]?.init?.method).toBe('POST');
-      expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({
+      expect(JSON.parse(String(dispatchRequest?.init?.body))).toEqual({
         ref: 'codex/evidence-event-knowledge-os',
         inputs: {
           juanie_source_sha: 'eff1991cae3b54c221a080f665122de9e43e8161',
           juanie_release_ref: 'refs/heads/codex/evidence-event-knowledge-os',
           juanie_force_full_build: 'true',
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('omits unsupported optional inputs for legacy workflow contracts', async () => {
+    try {
+      const requests: Array<{ url: string; init?: RequestInit }> = [];
+
+      globalThis.fetch = (async (input, init) => {
+        requests.push({
+          url: String(input),
+          init,
+        });
+
+        if (
+          String(input).includes('/contents/.github/workflows/juanie-ci.yml') &&
+          String(input).includes('ref=codex%2Fevidence-event-knowledge-os')
+        ) {
+          return new Response(
+            JSON.stringify({
+              type: 'file',
+              encoding: 'base64',
+              content: Buffer.from(`
+name: Juanie CI
+on:
+  workflow_dispatch:
+    inputs:
+      juanie_source_sha:
+          required: false
+      juanie_release_ref:
+          required: false
+`).toString('base64'),
+            }),
+            { status: 200 }
+          );
+        }
+
+        return new Response(null, { status: 204 });
+      }) as typeof fetch;
+
+      const provider = new GitHubProvider({
+        type: 'github',
+        clientId: '',
+        clientSecret: '',
+        redirectUri: '',
+      });
+
+      await provider.triggerReleaseBuild('token', {
+        repoFullName: '997899594/nexusnote',
+        ref: 'refs/heads/codex/evidence-event-knowledge-os',
+        releaseRef: 'refs/heads/codex/evidence-event-knowledge-os',
+        sourceCommitSha: 'eff1991cae3b54c221a080f665122de9e43e8161',
+        forceFullBuild: true,
+      });
+
+      const dispatchRequest = requests.find((request) => request.init?.method === 'POST');
+      expect(JSON.parse(String(dispatchRequest?.init?.body))).toEqual({
+        ref: 'codex/evidence-event-knowledge-os',
+        inputs: {
+          juanie_source_sha: 'eff1991cae3b54c221a080f665122de9e43e8161',
+          juanie_release_ref: 'refs/heads/codex/evidence-event-knowledge-os',
         },
       });
     } finally {
