@@ -32,7 +32,12 @@ test:
         provider: 'github',
         gitlabCiContent: null,
       })
-    ).toEqual(['juanie.yaml', '.env.juanie.example', '.github/workflows/juanie-ci.yml']);
+    ).toEqual([
+      'juanie.yaml',
+      '.env.juanie.example',
+      'JUANIE.md',
+      '.github/workflows/juanie-ci.yml',
+    ]);
 
     expect(
       buildJuanieRepositoryCleanupPaths({
@@ -44,13 +49,13 @@ script:
   - cat juanie-ci-meta.json
 `,
       })
-    ).toEqual(['juanie.yaml', '.env.juanie.example', '.gitlab-ci.yml']);
+    ).toEqual(['juanie.yaml', '.env.juanie.example', 'JUANIE.md', '.gitlab-ci.yml']);
 
     expect(
       buildJuanieRepositoryCleanupPaths({
         provider: 'gitlab-self-hosted',
         gitlabCiContent: 'stages: [test]',
       })
-    ).toEqual(['juanie.yaml', '.env.juanie.example']);
+    ).toEqual(['juanie.yaml', '.env.juanie.example', 'JUANIE.md']);
   });
 });

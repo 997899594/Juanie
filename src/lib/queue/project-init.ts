@@ -501,6 +501,7 @@ async function pushTemplate(
 // ============================================
 
 const TEMPLATES_DIR = join(process.cwd(), 'templates');
+const JUANIE_MANAGED_DOC_PATH = 'JUANIE.md';
 
 interface ProjectInitRenderContext {
   services: Array<typeof services.$inferSelect>;
@@ -1303,6 +1304,7 @@ async function pushCicdConfig(
 
   const envTemplate = await renderEnvTemplate(project);
   files['.env.juanie.example'] = envTemplate;
+  files[JUANIE_MANAGED_DOC_PATH] = renderJuanieManagedDoc(project, session.provider);
 
   if (Object.keys(files).length > 0) {
     await onProgress?.(90, '推送 Juanie 配置到仓库');
@@ -1730,6 +1732,29 @@ async function renderEnvTemplate(
   }
 
   return `${lines.join('\n')}\n`;
+}
+
+function renderJuanieManagedDoc(
+  project: typeof projects.$inferSelect & {
+    repository: typeof repositories.$inferSelect | null;
+  },
+  provider: 'github' | 'gitlab' | 'gitlab-self-hosted'
+): string {
+  const templatePath = join(TEMPLATES_DIR, 'docs', 'JUANIE.md');
+  const ciFile = provider === 'github' ? '.github/workflows/juanie-ci.yml' : '.gitlab-ci.yml';
+
+  if (existsSync(templatePath)) {
+    let content = readFileSync(templatePath, 'utf-8');
+    content = content
+      .replace(/\{\{PROJECT_NAME\}\}/g, project.name)
+      .replace(/\{\{PROJECT_SLUG\}\}/g, project.slug)
+      .replace(/\{\{CI_FILE\}\}/g, ciFile);
+    return content;
+  }
+
+  throw new Error(
+    `Juanie managed doc template file not found at ${templatePath}. Ensure templates are bundled correctly.`
+  );
 }
 
 /**
