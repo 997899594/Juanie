@@ -4,6 +4,7 @@ import {
   buildManagedPostgresOwnershipStatements,
   buildManagedPostgresProvisionStatements,
   deprovisionManagedPostgresDatabase,
+  shouldAssertManagedPostgresRuntimeAccess,
 } from '@/lib/databases/postgres-ownership';
 
 describe('managed postgres ownership repair', () => {
@@ -161,6 +162,27 @@ describe('managed postgres ownership repair', () => {
 
     expect(result).toBe(false);
     expect((connect.mock?.calls ?? []).length).toBe(0);
+  });
+
+  it('only enables runtime ownership assertions for shared postgres', () => {
+    expect(
+      shouldAssertManagedPostgresRuntimeAccess({
+        type: 'postgresql',
+        provisionType: 'shared',
+      })
+    ).toBe(true);
+    expect(
+      shouldAssertManagedPostgresRuntimeAccess({
+        type: 'postgresql',
+        provisionType: 'external',
+      })
+    ).toBe(false);
+    expect(
+      shouldAssertManagedPostgresRuntimeAccess({
+        type: 'mysql',
+        provisionType: 'standalone',
+      })
+    ).toBe(false);
   });
 
   it('fails loudly when shared postgres cleanup is required but admin config is unavailable', async () => {

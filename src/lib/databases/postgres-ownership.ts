@@ -456,7 +456,7 @@ export async function deprovisionManagedPostgresDatabase(
 export async function assertManagedPostgresRuntimeAccess(
   database: ManagedPostgresDatabase
 ): Promise<boolean> {
-  if (database.type !== 'postgresql' || database.provisionType !== 'shared') {
+  if (!shouldAssertManagedPostgresRuntimeAccess(database)) {
     return false;
   }
 
@@ -489,4 +489,10 @@ export async function assertManagedPostgresRuntimeAccess(
   } finally {
     await appConnection.end().catch(() => undefined);
   }
+}
+
+export function shouldAssertManagedPostgresRuntimeAccess(
+  database: Pick<ManagedPostgresDatabase, 'type' | 'provisionType'>
+): boolean {
+  return database.type === 'postgresql' && database.provisionType === 'shared';
 }

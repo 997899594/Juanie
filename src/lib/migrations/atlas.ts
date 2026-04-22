@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import mysql from 'mysql2/promise';
 import { Client as PgClient } from 'pg';
-import { runAtlasCommand } from '@/lib/atlas/cli';
+import { normalizeAtlasDatabaseUrl, runAtlasCommand } from '@/lib/atlas/cli';
 import { buildNormalizedPostgresUrl, normalizeDatabaseUrl } from '@/lib/db/connection-url';
 import {
   fetchMigrationFilesFromRepoPath,
@@ -38,6 +38,11 @@ export interface PreparedAtlasMigrationWorkspace {
   cleanup: () => Promise<void>;
 }
 
+export interface AtlasSchemaDiffResult {
+  hasChanges: boolean;
+  diffSql: string;
+}
+
 export function parseAtlasMigrationDir(configContent: string | null | undefined): string | null {
   if (!configContent) {
     return null;
@@ -69,10 +74,10 @@ export function getAtlasDeclaredVersions(files: Array<{ name: string }>): string
 export function resolveAtlasDatabaseUrl(database: AtlasDatabaseTarget): string | null {
   if (database.connectionString) {
     if (database.type === 'postgresql') {
-      return normalizeDatabaseUrl(database.connectionString);
+      return normalizeAtlasDatabaseUrl(normalizeDatabaseUrl(database.connectionString));
     }
 
-    return database.connectionString.trim();
+    return normalizeAtlasDatabaseUrl(database.connectionString.trim());
   }
 
   if (!database.host || !database.databaseName || !database.username) {
@@ -80,13 +85,15 @@ export function resolveAtlasDatabaseUrl(database: AtlasDatabaseTarget): string |
   }
 
   if (database.type === 'postgresql') {
-    return buildNormalizedPostgresUrl({
-      username: database.username,
-      password: database.password,
-      host: database.host,
-      port: database.port,
-      databaseName: database.databaseName,
-    });
+    return normalizeAtlasDatabaseUrl(
+      buildNormalizedPostgresUrl({
+        username: database.username,
+        password: database.password,
+        host: database.host,
+        port: database.port,
+        databaseName: database.databaseName,
+      })
+    );
   }
 
   const username = encodeURIComponent(database.username);
@@ -94,7 +101,32 @@ export function resolveAtlasDatabaseUrl(database: AtlasDatabaseTarget): string |
   const auth = database.password ? `${username}:${password}` : username;
   const port = database.port ? `:${database.port}` : '';
 
-  return `mysql://${auth}@${database.host}${port}/${encodeURIComponent(database.databaseName)}`;
+  return normalizeAtlasDatabaseUrl(
+    `mysql://${auth}@${database.host}${port}/${encodeURIComponent(database.databaseName)}`
+  );
+}
+
+export function getDefaultAtlasDevUrl(databaseType: AtlasDatabaseTarget['type']): string {
+  return databaseType === 'postgresql' ? 'docker://postgres/16/dev' : 'docker://mysql/8/dev';
+}
+
+export function getAtlasSchemaDiffExcludePatterns(
+  databaseType: AtlasDatabaseTarget['type']
+): string[] {
+  if (databaseType === 'postgresql') {
+    return ['*.atlas_schema_revisions', 'drizzle.__drizzle_migrations'];
+  }
+
+  return ['*.atlas_schema_revisions', '*.__drizzle_migrations'];
+}
+
+export function summarizeAtlasSchemaDiffOutput(diffSql: string): string | null {
+  const firstMeaningfulLine = diffSql
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+
+  return firstMeaningfulLine ?? null;
 }
 
 async function ensureAtlasWorkspaceChecksumFile(dir: string): Promise<void> {
@@ -140,6 +172,62 @@ export async function prepareAtlasMigrationWorkspace(input: {
       await rm(dir, { recursive: true, force: true });
     },
   };
+}
+
+export async function diffDatabaseSchemaAgainstMigrationDir(input: {
+  database: AtlasDatabaseTarget;
+  projectId: string;
+  migrationPath: string;
+  revision: string;
+}): Promise<AtlasSchemaDiffResult> {
+  const databaseUrl = resolveAtlasDatabaseUrl(input.database);
+  if (!databaseUrl) {
+    throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema diff');
+  }
+
+  const workspace = await prepareAtlasMigrationWorkspace({
+    projectId: input.projectId,
+    migrationPath: input.migrationPath,
+    revision: input.revision,
+  });
+
+  try {
+    if (workspace.files.length === 0) {
+      return {
+        hasChanges: false,
+        diffSql: '',
+      };
+    }
+
+    const args = [
+      'schema',
+      'diff',
+      '--from',
+      databaseUrl,
+      '--to',
+      'file://migrations',
+      '--dev-url',
+      getDefaultAtlasDevUrl(input.database.type),
+      '--format',
+      '{{ sql . }}',
+      ...getAtlasSchemaDiffExcludePatterns(input.database.type).flatMap((pattern) => [
+        '--exclude',
+        pattern,
+      ]),
+    ];
+
+    const { stdout } = await runAtlasCommand(args, {
+      cwd: workspace.dir,
+    });
+    const diffSql = stdout.trim();
+
+    return {
+      hasChanges: diffSql.length > 0,
+      diffSql,
+    };
+  } finally {
+    await workspace.cleanup();
+  }
 }
 
 async function getAppliedAtlasVersionsPostgres(connectionString: string): Promise<string[]> {

@@ -10,6 +10,7 @@ describe('platform managed migrations', () => {
     expect(isPlatformManagedMigrationTool('drizzle', 'postgresql')).toBe(true);
     expect(isPlatformManagedMigrationTool('drizzle', 'mysql')).toBe(false);
     expect(isPlatformManagedMigrationTool('sql', 'mysql')).toBe(true);
+    expect(isPlatformManagedMigrationTool('sql', 'mongodb')).toBe(false);
   });
 
   it('requires non-external execution mode for platform management', () => {

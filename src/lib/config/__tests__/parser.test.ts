@@ -107,6 +107,36 @@ databases:
     );
   });
 
+  it('rejects manual platform-managed sql migrations on mongodb databases', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: worker
+    type: worker
+    run:
+      command: npm start
+    databases:
+      - binding: analytics
+        schema:
+          source: sql
+          executionMode: manual_platform
+databases:
+  - name: analytics
+    type: mongodb
+    provisionType: external
+    externalUrl: mongodb://127.0.0.1:27017/app
+`);
+
+    expect(parsed.isValid).toBe(false);
+    expect(
+      parsed.errors.some(
+        (error) =>
+          error.includes('schema.source=sql') &&
+          error.includes('mongodb') &&
+          error.includes('请改为 external')
+      )
+    ).toBe(true);
+  });
+
   it('explains unsupported managed sources without implying Atlas must become app release truth', () => {
     const parsed = parseJuanieConfig(`
 services:

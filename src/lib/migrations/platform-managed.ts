@@ -5,7 +5,7 @@ export function isPlatformManagedMigrationTool(
   databaseType: DatabaseRecord['type']
 ): boolean {
   return (
-    tool === 'sql' ||
+    (tool === 'sql' && ['postgresql', 'mysql'].includes(databaseType)) ||
     (tool === 'drizzle' && databaseType === 'postgresql') ||
     (tool === 'atlas' && ['postgresql', 'mysql'].includes(databaseType))
   );

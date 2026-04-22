@@ -3,7 +3,10 @@ import {
   formatDatabaseCapabilityIssues,
   verifyDeclaredDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
-import { assertManagedPostgresRuntimeAccess } from '@/lib/databases/postgres-ownership';
+import {
+  assertManagedPostgresRuntimeAccess,
+  shouldAssertManagedPostgresRuntimeAccess,
+} from '@/lib/databases/postgres-ownership';
 import {
   formatDatabaseRuntimeAccessIssues,
   verifyDeclaredDatabaseRuntimeAccess,
@@ -462,7 +465,9 @@ export async function executeMigrationRun(
     );
   }
 
-  await assertManagedPostgresRuntimeAccess(spec.database);
+  if (shouldAssertManagedPostgresRuntimeAccess(spec.database)) {
+    await assertManagedPostgresRuntimeAccess(spec.database);
+  }
 
   if (spec.specification.tool === 'sql') {
     await runSqlMigration(runId, spec, options);

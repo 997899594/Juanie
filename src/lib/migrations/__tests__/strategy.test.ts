@@ -17,9 +17,9 @@ describe('migration strategy guidance', () => {
     expect(formatPlatformManagedSchemaSources('mysql')).toBe('drizzle / atlas / sql');
   });
 
-  it('reflects the current managed source contract for mongodb', () => {
-    expect(getPlatformManagedSchemaSources('mongodb')).toEqual(['sql']);
-    expect(formatPlatformManagedSchemaSources('mongodb')).toBe('sql');
+  it('keeps mongodb external-only for schema execution', () => {
+    expect(getPlatformManagedSchemaSources('mongodb')).toEqual([]);
+    expect(formatPlatformManagedSchemaSources('mongodb')).toBe(null);
   });
 
   it('explains that Atlas is the governance layer, not the only app release truth', () => {
@@ -33,6 +33,20 @@ describe('migration strategy guidance', () => {
     expect(message).toContain('schema.source=drizzle / atlas / sql');
     expect(message).toContain('Atlas 做 diff / repair / adopt 治理');
     expect(message).toContain('不是要求子应用把发布主链统一改成 Atlas');
+  });
+
+  it('does not claim Atlas governance for databases outside the relational support matrix', () => {
+    const message = buildUnsupportedManagedSchemaSourceMessage({
+      serviceName: 'worker',
+      source: 'sql',
+      databaseType: 'mongodb',
+      databaseName: 'analytics',
+    });
+
+    expect(message).toContain('请改为 external');
+    expect(message).toContain('mongodb 还没有平台托管迁移执行器');
+    expect(message).toContain('不支持平台内 schema 治理');
+    expect(message).not.toContain('Atlas 做 diff / repair / adopt 治理');
   });
 
   it('renders placeholder comments that describe the split between app truth and Atlas repair', () => {

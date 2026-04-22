@@ -16,6 +16,18 @@ const schemaSourceRecommendationOrder: SchemaSource[] = [
   'custom',
 ];
 
+function supportsAtlasSchemaGovernance(databaseType: DatabaseType): boolean {
+  return databaseType === 'postgresql' || databaseType === 'mysql';
+}
+
+function buildGovernanceTail(databaseType: DatabaseType): string {
+  if (supportsAtlasSchemaGovernance(databaseType)) {
+    return '平台仍会统一用 Atlas 做 diff / repair / adopt 治理，而不是要求子应用把发布主链统一改成 Atlas。';
+  }
+
+  return `当前 ${databaseType} 还不支持平台内 schema 治理，请保持 external，并由子应用或外部流程负责迁移与修复。`;
+}
+
 export function canPlatformExecuteSchemaSource(
   source: SchemaSource,
   databaseType: DatabaseType
@@ -51,10 +63,10 @@ export function buildUnsupportedManagedSchemaSourceMessage(input: {
   const supportedSources = formatPlatformManagedSchemaSources(input.databaseType);
 
   if (!supportedSources) {
-    return `${scope}。请改为 external；当前 ${input.databaseType} 还没有平台托管迁移执行器。平台仍会统一用 Atlas 做 diff / repair / adopt 治理，而不是要求子应用把发布主链统一改成 Atlas。`;
+    return `${scope}。请改为 external；当前 ${input.databaseType} 还没有平台托管迁移执行器。${buildGovernanceTail(input.databaseType)}`;
   }
 
-  return `${scope}。请改为 external，或改用平台当前支持的托管发布主链 schema.source=${supportedSources}。平台仍会统一用 Atlas 做 diff / repair / adopt 治理，而不是要求子应用把发布主链统一改成 Atlas。`;
+  return `${scope}。请改为 external，或改用平台当前支持的托管发布主链 schema.source=${supportedSources}。${buildGovernanceTail(input.databaseType)}`;
 }
 
 export function buildSchemaContractCommentLines(indent = ''): string[] {

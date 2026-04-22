@@ -1,10 +1,17 @@
 import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import postgres from 'postgres';
+import { runAtlasCommand } from '@/lib/atlas/cli';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { buildNormalizedPostgresUrl, normalizeDatabaseUrl } from '@/lib/db/connection-url';
 import { databaseMigrations, projects } from '@/lib/db/schema';
+import {
+  getAtlasDeclaredVersions,
+  isAtlasDatabaseTarget,
+  prepareAtlasMigrationWorkspace,
+  resolveAtlasDatabaseUrl,
+} from '@/lib/migrations/atlas';
 import {
   fetchMigrationFilesFromRepoPath,
   readRepositoryFileFromRepoPath,
@@ -184,6 +191,97 @@ async function markSqlSchemaAligned(input: {
   }
 }
 
+export function canMarkSchemaAligned(input: {
+  tool: 'atlas' | 'drizzle' | 'sql' | 'prisma' | 'knex' | 'typeorm' | 'custom';
+  databaseType: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
+}): boolean {
+  if (input.tool === 'drizzle') {
+    return input.databaseType === 'postgresql';
+  }
+
+  if (input.tool === 'atlas' || input.tool === 'sql') {
+    return input.databaseType === 'postgresql' || input.databaseType === 'mysql';
+  }
+
+  return false;
+}
+
+async function markAtlasSchemaAligned(input: {
+  projectId: string;
+  databaseId: string;
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
+}) {
+  const spec = await resolveSchemaManagementSpec(input);
+  if (!spec) {
+    throw new Error('未找到迁移配置');
+  }
+
+  if (
+    spec.specification.tool !== 'atlas' ||
+    !canMarkSchemaAligned({
+      tool: spec.specification.tool,
+      databaseType: spec.database.type,
+    }) ||
+    !isAtlasDatabaseTarget(spec.database)
+  ) {
+    throw new Error('当前只支持为 PostgreSQL / MySQL + Atlas 执行账本接管');
+  }
+
+  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
+  if (!migrationPath) {
+    throw new Error('无法解析 Atlas migration 路径');
+  }
+
+  const ref = await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch);
+  const revision = input.sourceCommitSha ?? input.sourceRef ?? ref;
+  const databaseUrl = resolveAtlasDatabaseUrl(spec.database);
+
+  if (!databaseUrl) {
+    throw new Error('数据库缺少可用的连接信息，无法执行 Atlas 账本接管');
+  }
+
+  const workspace = await prepareAtlasMigrationWorkspace({
+    projectId: spec.specification.projectId,
+    migrationPath,
+    revision,
+  });
+
+  try {
+    const declaredVersions = getAtlasDeclaredVersions(workspace.files);
+    const latestVersion = declaredVersions.at(-1);
+
+    if (!latestVersion) {
+      throw new Error('仓库中没有可接管的 Atlas 迁移版本');
+    }
+
+    await runAtlasCommand(
+      ['migrate', 'set', latestVersion, '--dir', 'file://migrations', '--url', databaseUrl],
+      {
+        cwd: workspace.dir,
+      }
+    );
+
+    const now = new Date();
+
+    for (const file of workspace.files) {
+      await db
+        .insert(databaseMigrations)
+        .values({
+          databaseId: spec.database.id,
+          filename: file.name,
+          checksum: crypto.createHash('sha256').update(file.content).digest('hex'),
+          status: 'success',
+          output: 'marked aligned by platform',
+          executedAt: now,
+        })
+        .onConflictDoNothing();
+    }
+  } finally {
+    await workspace.cleanup();
+  }
+}
+
 export async function markEnvironmentSchemaAligned(input: {
   projectId: string;
   databaseId: string;
@@ -207,6 +305,15 @@ export async function markEnvironmentSchemaAligned(input: {
     throw new Error('未找到迁移配置');
   }
 
+  if (
+    !canMarkSchemaAligned({
+      tool: spec.specification.tool,
+      databaseType: spec.database.type,
+    })
+  ) {
+    throw new Error('当前工具暂不支持标记为已对齐');
+  }
+
   if (spec.specification.tool === 'drizzle') {
     await markDrizzleSchemaAligned({
       projectId: input.projectId,
@@ -214,6 +321,11 @@ export async function markEnvironmentSchemaAligned(input: {
     });
   } else if (spec.specification.tool === 'sql') {
     await markSqlSchemaAligned({
+      projectId: input.projectId,
+      databaseId: input.databaseId,
+    });
+  } else if (spec.specification.tool === 'atlas') {
+    await markAtlasSchemaAligned({
       projectId: input.projectId,
       databaseId: input.databaseId,
     });

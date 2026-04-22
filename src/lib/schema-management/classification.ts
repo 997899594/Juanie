@@ -5,6 +5,8 @@ export interface SchemaLedgerClassificationInput {
   expectedEntries: string[];
   actualEntries: string[];
   hasUserTables: boolean;
+  driftDetected: boolean;
+  driftSummary?: string | null;
 }
 
 export interface SchemaLedgerClassificationResult {
@@ -30,6 +32,10 @@ function describeKind(kind: SchemaLedgerClassificationInput['kind']): string {
   return kind === 'drizzle' ? 'Drizzle' : 'SQL';
 }
 
+function appendDiffSummary(base: string, driftSummary?: string | null): string {
+  return driftSummary ? `${base}：${driftSummary}` : base;
+}
+
 export function classifySchemaLedgerState(
   input: SchemaLedgerClassificationInput
 ): SchemaLedgerClassificationResult {
@@ -45,28 +51,52 @@ export function classifySchemaLedgerState(
     };
   }
 
-  if (input.actualEntries.length === 0) {
-    if (input.hasUserTables) {
+  if (!input.driftDetected) {
+    if (input.actualEntries.length === 0) {
       return {
         status: 'aligned_untracked',
-        summary: `数据库已有业务表，但缺少 ${toolLabel} 迁移账本，需要人工接管`,
+        summary: `Atlas diff 未发现 schema 差异，但缺少 ${toolLabel} 迁移账本，需要人工接管`,
+        hasLedger,
+        hasUserTables: input.hasUserTables,
+      };
+    }
+
+    if (arraysEqual(input.actualEntries, input.expectedEntries)) {
+      return {
+        status: 'aligned',
+        summary: `Atlas diff 未发现 schema 差异，数据库结构与仓库 ${toolLabel} 迁移链一致`,
         hasLedger,
         hasUserTables: input.hasUserTables,
       };
     }
 
     return {
-      status: 'unmanaged',
-      summary: '数据库还没有可识别的业务表或迁移账本',
+      status: 'aligned_untracked',
+      summary: `Atlas diff 未发现 schema 差异，但数据库账本与仓库 ${toolLabel} 迁移链不一致，需要人工接管`,
       hasLedger,
       hasUserTables: input.hasUserTables,
     };
   }
 
-  if (arraysEqual(input.actualEntries, input.expectedEntries)) {
+  if (input.actualEntries.length === 0) {
+    if (input.hasUserTables) {
+      return {
+        status: 'drifted',
+        summary: appendDiffSummary(
+          `Atlas diff 检测到 schema 差异，且缺少 ${toolLabel} 迁移账本`,
+          input.driftSummary
+        ),
+        hasLedger,
+        hasUserTables: input.hasUserTables,
+      };
+    }
+
     return {
-      status: 'aligned',
-      summary: `数据库账本与仓库 ${toolLabel} 迁移链一致`,
+      status: 'pending_migrations',
+      summary: appendDiffSummary(
+        `数据库尚未应用仓库 ${toolLabel} 迁移链，可通过正常发布补齐`,
+        input.driftSummary
+      ),
       hasLedger,
       hasUserTables: input.hasUserTables,
     };
@@ -75,7 +105,10 @@ export function classifySchemaLedgerState(
   if (isPrefix(input.actualEntries, input.expectedEntries)) {
     return {
       status: 'pending_migrations',
-      summary: `数据库落后于仓库迁移链，已执行 ${input.actualEntries.length}/${input.expectedEntries.length} 项，可通过正常发布补齐`,
+      summary: appendDiffSummary(
+        `数据库落后于仓库迁移链，已执行 ${input.actualEntries.length}/${input.expectedEntries.length} 项，可通过正常发布补齐`,
+        input.driftSummary
+      ),
       hasLedger,
       hasUserTables: input.hasUserTables,
     };
@@ -83,7 +116,7 @@ export function classifySchemaLedgerState(
 
   return {
     status: 'drifted',
-    summary: `数据库账本与仓库 ${toolLabel} 迁移链不一致`,
+    summary: appendDiffSummary(`数据库账本与仓库 ${toolLabel} 迁移链不一致`, input.driftSummary),
     hasLedger,
     hasUserTables: input.hasUserTables,
   };
