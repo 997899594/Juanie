@@ -107,6 +107,36 @@ databases:
     );
   });
 
+  it('explains unsupported managed sources without implying Atlas must become app release truth', () => {
+    const parsed = parseJuanieConfig(`
+services:
+  - name: web
+    type: web
+    run:
+      command: npm start
+      port: 3000
+    databases:
+      - binding: primary
+        schema:
+          source: prisma
+          executionMode: automatic
+databases:
+  - name: primary
+    type: postgresql
+    provisionType: standalone
+`);
+
+    expect(parsed.isValid).toBe(false);
+    expect(
+      parsed.errors.some(
+        (error) =>
+          error.includes('schema.source=drizzle / atlas / sql') &&
+          error.includes('Atlas 做 diff / repair / adopt 治理') &&
+          error.includes('不是要求子应用把发布主链统一改成 Atlas')
+      )
+    ).toBe(true);
+  });
+
   it('rejects external urls whose protocol does not match the database type', () => {
     const parsed = parseJuanieConfig(`
 services:

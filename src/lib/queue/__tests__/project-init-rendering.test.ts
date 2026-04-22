@@ -375,8 +375,10 @@ describe('project init migration inference', () => {
       }
     );
 
-    expect(config).toContain('Juanie could not infer a schema source for this service.');
-    expect(config).toContain('Add a schema block manually before enabling managed migrations.');
+    expect(config).toContain('Juanie could not infer a tracked schema source for this service.');
+    expect(config).toContain(
+      'Add schema.source manually; the app keeps its own migration truth, and Juanie uses Atlas for diff / repair workflows.'
+    );
     expect(config).not.toContain('command: npm run db:migrate');
     expect(config).not.toContain('executionMode: manual_platform');
     expect(config).not.toContain('migrate:');

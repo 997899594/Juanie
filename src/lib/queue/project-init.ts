@@ -37,6 +37,7 @@ import {
   getDefaultSchemaConfigPath,
   resolveExecutionToolForSchemaSource,
 } from '@/lib/migrations/schema-source';
+import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
@@ -928,10 +929,7 @@ export function buildSchemaConfigLines(
   inferred: ReturnType<typeof inferSchemaConfig>
 ): string[] {
   if (!inferred) {
-    return [
-      `${indent}# Juanie could not infer a schema source for this service.`,
-      `${indent}# Add a schema block manually before enabling managed migrations.`,
-    ];
+    return buildSchemaContractCommentLines(indent);
   }
 
   const lines = [

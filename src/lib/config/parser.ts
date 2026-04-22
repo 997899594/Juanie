@@ -6,11 +6,11 @@ import {
   platformDatabaseProvisionTypes,
   supportsDatabaseAutomatedMigrations,
 } from '@/lib/databases/platform-support';
-import { isPlatformManagedMigrationTool } from '@/lib/migrations/platform-managed';
 import {
-  resolveExecutionToolForSchemaSource,
-  type SchemaSource,
-} from '@/lib/migrations/schema-source';
+  buildSchemaContractCommentLines,
+  buildUnsupportedManagedSchemaSourceMessage,
+  canPlatformExecuteSchemaSource,
+} from '@/lib/migrations/strategy';
 
 const migrationExecutionModes = ['automatic', 'manual_platform', 'external'] as const;
 const schemaSources = ['atlas', 'drizzle', 'prisma', 'knex', 'typeorm', 'sql', 'custom'] as const;
@@ -166,14 +166,6 @@ export interface ParsedConfig extends JuanieConfig {
   warnings: string[];
 }
 
-function canPlatformExecuteSchemaSource(
-  source: SchemaSource,
-  databaseType: DatabaseConfig['type']
-): boolean {
-  const executionTool = resolveExecutionToolForSchemaSource(source, databaseType);
-  return isPlatformManagedMigrationTool(executionTool, databaseType);
-}
-
 export function parseJuanieConfig(yamlContent: string): ParsedConfig {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -236,7 +228,11 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
         !canPlatformExecuteSchemaSource(binding.schema.source, binding.type)
       ) {
         errors.push(
-          `Service "${service.name}" 的 schema.source=${binding.schema.source} 目前无法由平台直接执行 ${binding.type} 迁移，请改为 external 或切换到平台支持的 schema source`
+          buildUnsupportedManagedSchemaSourceMessage({
+            serviceName: service.name,
+            source: binding.schema.source,
+            databaseType: binding.type,
+          })
         );
       }
 
@@ -267,7 +263,12 @@ export function parseJuanieConfig(yamlContent: string): ParsedConfig {
         !canPlatformExecuteSchemaSource(binding.schema.source, database.type)
       ) {
         errors.push(
-          `Service "${service.name}" 绑定的数据库 "${database.name}" (${database.type}) 当前不支持以 schema.source=${binding.schema.source} 由平台直接执行迁移`
+          buildUnsupportedManagedSchemaSourceMessage({
+            serviceName: service.name,
+            source: binding.schema.source,
+            databaseType: database.type,
+            databaseName: database.name,
+          })
         );
       }
 
@@ -328,10 +329,7 @@ export function generateDefaultConfig(
   ];
 
   if (options?.database === 'postgresql') {
-    lines.push(
-      `    # Juanie could not infer a schema source for this service.`,
-      `    # Add a schema block manually before enabling managed migrations.`
-    );
+    lines.push(...buildSchemaContractCommentLines('    '));
   }
 
   if (options?.hasWorker) {

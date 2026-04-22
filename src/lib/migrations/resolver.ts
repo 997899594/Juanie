@@ -22,6 +22,7 @@ import {
   resolveExecutionToolForSchemaSource,
   type SchemaSource,
 } from './schema-source';
+import { buildUnsupportedManagedSchemaSourceMessage } from './strategy';
 import type { ResolvedMigrationSpec } from './types';
 
 interface ServiceDatabaseBindingConfig {
@@ -309,7 +310,12 @@ export async function syncMigrationSpecificationsFromRepo(
         !isPlatformManagedMigrationTool(executionTool, databaseRecord.type)
       ) {
         throw new Error(
-          `Service "${serviceRecord.name}" 绑定数据库 "${databaseRecord.name}" (${databaseRecord.type}) 的 schema.source=${binding.schema.source} 当前无法由平台直接执行，请改为 external 或切换到 Atlas / SQL / 受支持的 Drizzle 方案`
+          buildUnsupportedManagedSchemaSourceMessage({
+            serviceName: serviceRecord.name,
+            source: binding.schema.source,
+            databaseType: databaseRecord.type,
+            databaseName: databaseRecord.name,
+          })
         );
       }
       const sourceConfigPath =
