@@ -2,8 +2,8 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects, releases } from '@/lib/db/schema';
 import { extractBranchFromRef, extractPrNumberFromRef } from '@/lib/environments/preview';
-import { setPreviewEnvironmentBuildState } from '@/lib/environments/preview-build-state';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
+import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -289,7 +289,7 @@ export async function launchPreviewEnvironmentFromRef(input: {
 
   const previewBuildStartedAt = new Date();
 
-  await setPreviewEnvironmentBuildState({
+  await setEnvironmentSourceBuildState({
     environmentId: environment.id,
     status: 'building',
     sourceRef: input.ref,
@@ -304,7 +304,7 @@ export async function launchPreviewEnvironmentFromRef(input: {
       sourceCommitSha,
     });
   } catch (error) {
-    await setPreviewEnvironmentBuildState({
+    await setEnvironmentSourceBuildState({
       environmentId: environment.id,
       status: 'failed',
       sourceRef: input.ref,

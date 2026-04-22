@@ -3,12 +3,18 @@ import { db } from '@/lib/db';
 import { auditLogs } from '@/lib/db/schema';
 
 export type AuditAction =
+  | 'ai.plugin_executed'
+  | 'ai.task_requested'
+  | 'ai.tool_executed'
+  | 'environment.copilot_asked'
   | 'project.created'
   | 'project.updated'
   | 'project.deleted'
   | 'deployment.triggered'
   | 'deployment.rolled_back'
+  | 'release.copilot_asked'
   | 'release.ai_analysis_refreshed'
+  | 'environment.ai_summary_refreshed'
   | 'environment.created'
   | 'environment.preview_deleted'
   | 'environment.preview_cleanup_completed'
@@ -83,12 +89,18 @@ export async function getAuditLogs(
 
 export function formatAuditAction(action: AuditAction): string {
   const actionLabels: Record<AuditAction, string> = {
+    'ai.plugin_executed': 'executed AI plugin',
+    'ai.task_requested': 'requested AI task',
+    'ai.tool_executed': 'executed AI tool',
+    'environment.copilot_asked': 'asked environment copilot',
     'project.created': 'created project',
     'project.updated': 'updated project',
     'project.deleted': 'deleted project',
     'deployment.triggered': 'triggered deployment',
     'deployment.rolled_back': 'rolled back deployment',
+    'release.copilot_asked': 'asked release copilot',
     'release.ai_analysis_refreshed': 'refreshed release AI analysis',
+    'environment.ai_summary_refreshed': 'refreshed environment AI summary',
     'environment.created': 'created environment',
     'environment.preview_deleted': 'deleted preview environment',
     'environment.preview_cleanup_completed': 'completed preview cleanup',

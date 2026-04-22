@@ -5,14 +5,15 @@ import {
 } from '@/lib/environments/lifecycle-summary';
 import { isPreviewEnvironment, isPromoteOnlyEnvironment } from '@/lib/environments/model';
 import {
+  type EnvironmentSourceBuildPresentation,
   formatEnvironmentExpiry,
   formatEnvironmentTimestamp,
   getEnvironmentDatabaseStrategyLabel,
   getEnvironmentDeploymentStrategyLabel,
   getEnvironmentInheritancePresentation,
   getEnvironmentScopeLabel,
+  getEnvironmentSourceBuildPresentation,
   getEnvironmentSourceLabel,
-  getPreviewBuildPresentation,
   getPreviewDatabasePresentation,
 } from '@/lib/environments/presentation';
 import { isPreviewEnvironmentExpired } from '@/lib/environments/preview';
@@ -100,6 +101,7 @@ export interface EnvironmentListDecorations {
     createdAtLabel: string | null;
     statusDecoration: ReleaseStatusDecoration;
   } | null;
+  sourceBuild: EnvironmentSourceBuildPresentation | null;
   gitTracking: {
     state: 'pending' | 'synced';
     releaseId: string | null;
@@ -120,7 +122,8 @@ export interface EnvironmentListDecorations {
 }
 
 function buildEnvironmentGitTracking(
-  environment: EnvironmentViewLike
+  environment: EnvironmentViewLike,
+  sourceBuild: EnvironmentSourceBuildPresentation | null
 ): EnvironmentListDecorations['gitTracking'] {
   if (isPreviewEnvironment(environment)) {
     return null;
@@ -139,13 +142,22 @@ function buildEnvironmentGitTracking(
       trackingBranchName,
       expectsPromotionTag,
       releaseTagName: null,
-      sourceRef: environment.branch ?? null,
-      commitSha: null,
-      shortCommitSha: null,
-      syncedAtLabel: null,
-      summary: expectsPromotionTag
-        ? '当前环境还没有成功提升，首次成功后会建立追踪分支并生成提升标签。'
-        : '当前环境还没有成功发布，首次成功后会建立追踪分支。',
+      sourceRef: environment.previewBuildSourceRef ?? environment.branch ?? null,
+      commitSha: environment.previewBuildSourceCommitSha ?? null,
+      shortCommitSha: sourceBuild?.shortCommitSha ?? null,
+      syncedAtLabel: sourceBuild?.startedAtLabel ?? null,
+      summary:
+        sourceBuild?.status === 'building'
+          ? expectsPromotionTag
+            ? `首发构建已触发，成功后会建立 ${trackingBranchName} 并生成提升标签。`
+            : `首发构建已触发，成功后会建立 ${trackingBranchName}。`
+          : sourceBuild?.status === 'failed'
+            ? expectsPromotionTag
+              ? `首发构建失败，${trackingBranchName} 和提升标签都还没有建立。`
+              : `首发构建失败，${trackingBranchName} 还没有建立。`
+            : expectsPromotionTag
+              ? '当前环境还没有成功提升，首次成功后会建立追踪分支并生成提升标签。'
+              : '当前环境还没有成功发布，首次成功后会建立追踪分支。',
     };
   }
 
@@ -184,7 +196,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
     const inheritance = getEnvironmentInheritancePresentation(environment);
     const inheritanceLabel = inheritance?.label ?? null;
     const previewDatabase = getPreviewDatabasePresentation({ environment });
-    const previewBuild = getPreviewBuildPresentation({ environment });
+    const sourceBuild = getEnvironmentSourceBuildPresentation({ environment });
     const expiryLabel = formatEnvironmentExpiry(environment.expiresAt);
     const primaryDomainUrl = (() => {
       if (!environment.domains?.length) {
@@ -206,7 +218,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
           statusDecoration: getReleaseStatusDecoration(environment.latestRelease.status),
         }
       : null;
-    const gitTracking = buildEnvironmentGitTracking(environment);
+    const gitTracking = buildEnvironmentGitTracking(environment, sourceBuild);
     const policy = evaluateEnvironmentPolicy(environment);
     const previewLifecycle = isPreviewEnvironment(environment)
       ? buildPreviewLifecycleSummary({
@@ -267,19 +279,19 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
                 },
               ]
             : []),
-          ...(previewBuild
+          ...(sourceBuild
             ? [
                 {
-                  key: previewBuild.key,
-                  label: previewBuild.label,
-                  tone: previewBuild.tone,
+                  key: sourceBuild.key,
+                  label: sourceBuild.label,
+                  tone: sourceBuild.tone,
                 },
               ]
             : []),
         ],
-        customSummary: previewBuild?.summary ?? previewDatabase?.summary ?? null,
+        customSummary: sourceBuild?.summary ?? previewDatabase?.summary ?? null,
         customNextActionLabel:
-          previewBuild?.nextActionLabel ?? previewDatabase?.nextActionLabel ?? null,
+          sourceBuild?.nextActionLabel ?? previewDatabase?.nextActionLabel ?? null,
         environmentPolicySignals: policy.signals,
         environmentPolicySignal: policy.primarySignal,
         previewLifecycle,
@@ -294,6 +306,7 @@ export function decorateEnvironmentList<T extends EnvironmentViewLike>(
       primaryDomainUrl,
       previewLifecycle,
       latestReleaseCard,
+      sourceBuild,
       gitTracking,
       cleanupState,
     };

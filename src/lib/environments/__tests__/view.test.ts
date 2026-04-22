@@ -46,6 +46,27 @@ describe('environment list view', () => {
     expect(environment?.platformSignals.nextActionLabel !== null).toBe(true);
   });
 
+  it('keeps persistent environments in pending tracking while first build is in progress', () => {
+    const [environment] = decorateEnvironmentList([
+      {
+        id: 'env-staging',
+        name: 'staging',
+        kind: 'persistent' as const,
+        deliveryMode: 'direct' as const,
+        branch: 'main',
+        previewBuildStatus: 'building',
+        previewBuildSourceRef: 'refs/heads/main',
+        previewBuildSourceCommitSha: '1234567890abcdef',
+        previewBuildStartedAt: '2026-03-25T08:30:00.000Z',
+      },
+    ]);
+
+    expect(environment?.sourceBuild?.label).toBe('首发构建中');
+    expect(environment?.gitTracking?.state).toBe('pending');
+    expect(environment?.gitTracking?.summary).toContain('首发构建已触发');
+    expect(environment?.platformSignals.primarySummary).toContain('自动创建首个版本');
+  });
+
   it('builds git tracking state from the latest successful release', () => {
     const [environment] = decorateEnvironmentList([
       {

@@ -3,8 +3,8 @@ import {
   formatEnvironmentExpiry,
   formatEnvironmentTimestamp,
   getEnvironmentScopeLabel,
+  getEnvironmentSourceBuildPresentation,
   getEnvironmentSourceLabel,
-  getPreviewBuildPresentation,
 } from '@/lib/environments/presentation';
 
 describe('environment presentation helpers', () => {
@@ -36,7 +36,7 @@ describe('environment presentation helpers', () => {
   });
 
   it('builds persistent preview build summaries', () => {
-    const building = getPreviewBuildPresentation({
+    const building = getEnvironmentSourceBuildPresentation({
       environment: {
         isPreview: true,
         previewPrNumber: 42,
@@ -51,7 +51,7 @@ describe('environment presentation helpers', () => {
     expect(building?.status).toBe('building');
     expect(building?.shortCommitSha).toBe('abc1234');
 
-    const failed = getPreviewBuildPresentation({
+    const failed = getEnvironmentSourceBuildPresentation({
       environment: {
         isPreview: true,
         branch: 'feature/search',
@@ -64,5 +64,20 @@ describe('environment presentation helpers', () => {
     expect(failed?.tone).toBe('danger');
     expect(failed?.status).toBe('failed');
     expect(failed?.shortCommitSha).toBe('def9876');
+  });
+
+  it('builds persistent source build summaries for first direct deploys', () => {
+    const building = getEnvironmentSourceBuildPresentation({
+      environment: {
+        kind: 'persistent',
+        branch: 'main',
+        previewBuildStatus: 'building',
+        previewBuildSourceCommitSha: 'fedcba9876543210',
+      },
+    });
+
+    expect(building?.label).toBe('首发构建中');
+    expect(building?.summary).toContain('自动创建首个版本');
+    expect(building?.shortCommitSha).toBe('fedcba9');
   });
 });

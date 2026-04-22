@@ -1,39 +1,21 @@
 import { execFile } from 'node:child_process';
-import { access, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { access, mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import { eq } from 'drizzle-orm';
 import { hasExecutable } from '@/lib/atlas/cli';
-import { db } from '@/lib/db';
-import { projects, repositories } from '@/lib/db/schema';
-import { buildAuthenticatedCloneUrl } from '@/lib/git/authenticated-clone-url';
-import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import {
   drizzleSchemaConfigCandidates,
   resolveSpecificationSource,
   type SchemaSource,
 } from '@/lib/migrations/schema-source';
 import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
+import {
+  createProjectSourceWorkspace,
+  type SourceWorkspaceContext,
+} from '@/lib/repositories/source-workspace';
 
 const execFileAsync = promisify(execFile);
-
-const SOURCE_WORKSPACE_IGNORED_DIRS = new Set([
-  '.git',
-  'node_modules',
-  '.next',
-  '.turbo',
-  'dist',
-  'build',
-  'coverage',
-]);
-
-interface SourceWorkspaceContext {
-  tempRoot: string;
-  repoDir: string;
-  revision: string;
-}
 
 export interface DesiredSchemaArtifact {
   source: SchemaSource;
@@ -83,76 +65,15 @@ async function runCommand(
   };
 }
 
-async function getRepositorySourceContext(projectId: string): Promise<{
-  fullName: string;
-  cloneUrl: string | null;
-  defaultBranch: string;
-  provider: 'github' | 'gitlab' | 'gitlab-self-hosted';
-  accessToken: string;
-  serverUrl: string | null;
-}> {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-  });
-
-  if (!project?.repositoryId) {
-    throw new Error('项目缺少仓库绑定，无法导出 desired schema');
-  }
-
-  const repository = await db.query.repositories.findFirst({
-    where: eq(repositories.id, project.repositoryId),
-  });
-
-  if (!repository) {
-    throw new Error('仓库不存在，无法导出 desired schema');
-  }
-
-  const session = await getTeamIntegrationSession({
-    teamId: project.teamId,
-    requiredCapabilities: ['read_repo'],
-  });
-
-  return {
-    fullName: repository.fullName,
-    cloneUrl: repository.cloneUrl ?? null,
-    defaultBranch: repository.defaultBranch || 'main',
-    provider: session.provider,
-    accessToken: session.accessToken,
-    serverUrl: session.serverUrl,
-  };
-}
-
 async function createSourceWorkspace(input: {
   projectId: string;
   revision?: string | null;
 }): Promise<SourceWorkspaceContext> {
-  const repository = await getRepositorySourceContext(input.projectId);
-  const requestedRevision = input.revision?.trim() || repository.defaultBranch;
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'juanie-source-schema-'));
-  const repoDir = path.join(tempRoot, 'repo');
-  await mkdir(repoDir, { recursive: true });
-
-  const cloneUrl = buildAuthenticatedCloneUrl({
-    cloneUrl: repository.cloneUrl,
-    fullName: repository.fullName,
-    provider: repository.provider,
-    accessToken: repository.accessToken,
-    serverUrl: repository.serverUrl,
+  return createProjectSourceWorkspace({
+    projectId: input.projectId,
+    revision: input.revision,
+    requiredCapabilities: ['read_repo'],
   });
-
-  await runCommand('git', ['init'], { cwd: repoDir });
-  await runCommand('git', ['remote', 'add', 'origin', cloneUrl], { cwd: repoDir });
-  await runCommand('git', ['fetch', '--depth', '1', 'origin', requestedRevision], { cwd: repoDir });
-  await runCommand('git', ['checkout', '--detach', 'FETCH_HEAD'], { cwd: repoDir });
-  const resolvedRevision = (
-    await runCommand('git', ['rev-parse', 'HEAD'], { cwd: repoDir })
-  ).stdout.trim();
-
-  return {
-    tempRoot,
-    repoDir,
-    revision: resolvedRevision || requestedRevision,
-  };
 }
 
 async function listMatchingFilesRecursively(
@@ -166,7 +87,11 @@ async function listMatchingFilesRecursively(
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (SOURCE_WORKSPACE_IGNORED_DIRS.has(entry.name)) {
+        if (
+          ['.git', 'node_modules', '.next', '.turbo', 'dist', 'build', 'coverage'].includes(
+            entry.name
+          )
+        ) {
           continue;
         }
 
@@ -426,13 +351,11 @@ export async function exportDesiredSchemaFromRepository(
       source: input.source,
       revision: workspace.revision,
       workspaceDir: workspace.repoDir,
-      cleanup: async () => {
-        await rm(workspace.tempRoot, { recursive: true, force: true });
-      },
+      cleanup: workspace.cleanup,
       ...result,
     };
   } catch (error) {
-    await rm(workspace.tempRoot, { recursive: true, force: true });
+    await workspace.cleanup();
     throw error;
   }
 }

@@ -13,6 +13,7 @@ let _releaseQueue: Queue | null = null;
 let _deploymentQueue: Queue | null = null;
 let _migrationQueue: Queue | null = null;
 let _schemaRepairAtlasQueue: Queue | null = null;
+let _aiTaskQueue: Queue | null = null;
 
 export function getProjectInitQueue(): Queue {
   if (!_projectInitQueue) {
@@ -56,6 +57,13 @@ export function getSchemaRepairAtlasQueue(): Queue {
   return _schemaRepairAtlasQueue;
 }
 
+export function getAITaskQueue(): Queue {
+  if (!_aiTaskQueue) {
+    _aiTaskQueue = new Queue('ai-task', { connection: getConnection() });
+  }
+  return _aiTaskQueue;
+}
+
 export type ProjectInitJobData = {
   projectId: string;
   mode: 'import' | 'create';
@@ -85,6 +93,11 @@ export type SchemaRepairAtlasJobData = {
   atlasRunId: string;
   projectId: string;
   userId: string | null;
+};
+
+export type AITaskJobData = {
+  taskId: string;
+  kind: 'environment_deep_analysis' | 'release_deep_analysis';
 };
 
 export async function addProjectInitJob(
@@ -178,6 +191,23 @@ export async function addSchemaRepairAtlasJob(
   );
 }
 
+export async function addAITaskJob(
+  taskId: string,
+  kind: 'environment_deep_analysis' | 'release_deep_analysis'
+) {
+  return getAITaskQueue().add(
+    'ai-task',
+    {
+      taskId,
+      kind,
+    },
+    {
+      attempts: 1,
+      jobId: `ai-task-${taskId}`,
+    }
+  );
+}
+
 export async function closeQueues() {
   const promises: Promise<void>[] = [];
   if (_projectInitQueue) promises.push(_projectInitQueue.close());
@@ -186,5 +216,6 @@ export async function closeQueues() {
   if (_deploymentQueue) promises.push(_deploymentQueue.close());
   if (_migrationQueue) promises.push(_migrationQueue.close());
   if (_schemaRepairAtlasQueue) promises.push(_schemaRepairAtlasQueue.close());
+  if (_aiTaskQueue) promises.push(_aiTaskQueue.close());
   return Promise.all(promises);
 }

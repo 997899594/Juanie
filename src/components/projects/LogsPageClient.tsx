@@ -35,6 +35,12 @@ interface LogLine {
 
 type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'ended' | 'error';
 
+const shellClassName =
+  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+
+const subCardClassName =
+  'rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+
 interface LogsPageClientProps {
   projectId: string;
   projectName: string;
@@ -176,51 +182,53 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
       <PageHeader title="日志" description={selectedEnvironment?.name} />
       <EnvironmentSectionNav projectId={projectId} environmentId={envId || null} />
 
-      <div className="ui-floating px-4 py-4">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <ScrollText className="h-4 w-4" />
+      <div className={shellClassName}>
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <ScrollText className="h-4 w-4 text-muted-foreground" />
           日志范围
         </div>
-        <div className="flex flex-wrap items-center gap-3 overflow-x-auto pb-1">
-          <Select value={envId} onValueChange={setEnvId}>
-            <SelectTrigger className="h-10 w-40 text-xs">
-              <SelectValue placeholder="环境" />
-            </SelectTrigger>
-            <SelectContent>
-              {initialData.environments.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="grid gap-3 md:grid-cols-3">
+            <Select value={envId} onValueChange={setEnvId}>
+              <SelectTrigger className="h-11 rounded-[16px] border-0 bg-white/75 text-sm shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]">
+                <SelectValue placeholder="环境" />
+              </SelectTrigger>
+              <SelectContent>
+                {initialData.environments.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select value={podName} onValueChange={setPodName} disabled={pods.length === 0}>
-            <SelectTrigger className="h-10 w-72 text-xs font-mono">
-              <SelectValue placeholder={pods.length === 0 ? '没有 Pod' : '选择 Pod'} />
-            </SelectTrigger>
-            <SelectContent>
-              {pods.map((p) => (
-                <SelectItem key={p.metadata.name} value={p.metadata.name}>
-                  {p.metadata.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={podName} onValueChange={setPodName} disabled={pods.length === 0}>
+              <SelectTrigger className="h-11 rounded-[16px] border-0 bg-white/75 font-mono text-sm shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]">
+                <SelectValue placeholder={pods.length === 0 ? '没有 Pod' : '选择 Pod'} />
+              </SelectTrigger>
+              <SelectContent>
+                {pods.map((p) => (
+                  <SelectItem key={p.metadata.name} value={p.metadata.name}>
+                    {p.metadata.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select value={tail} onValueChange={setTail}>
-            <SelectTrigger className="h-10 w-32 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="50">最近 50 条</SelectItem>
-              <SelectItem value="100">最近 100 条</SelectItem>
-              <SelectItem value="200">最近 200 条</SelectItem>
-              <SelectItem value="500">最近 500 条</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select value={tail} onValueChange={setTail}>
+              <SelectTrigger className="h-11 rounded-[16px] border-0 bg-white/75 text-sm shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="50">最近 50 条</SelectItem>
+                <SelectItem value="100">最近 100 条</SelectItem>
+                <SelectItem value="200">最近 200 条</SelectItem>
+                <SelectItem value="500">最近 500 条</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
             <Button
               variant="ghost"
               size="sm"
@@ -239,9 +247,44 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             </Button>
           </div>
         </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              环境
+            </div>
+            <div className="mt-2 text-sm font-medium text-foreground">
+              {selectedEnvironment?.name ?? '未选择'}
+            </div>
+          </div>
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Pod</div>
+            <div className="mt-2 truncate font-mono text-sm text-foreground">
+              {selectedPod?.metadata.name ?? '等待选择'}
+            </div>
+          </div>
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              状态
+            </div>
+            <div className="mt-2">
+              <StatusIndicator
+                status={statusColor[status]}
+                pulse={status === 'streaming'}
+                label={statusLabel[status]}
+              />
+            </div>
+          </div>
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              最新输出
+            </div>
+            <div className="mt-2 text-sm text-foreground">{lastLineLabel ?? '等待输出'}</div>
+          </div>
+        </div>
       </div>
 
-      <div className="h-[56vh] overflow-hidden rounded-[20px] bg-zinc-950 shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_12px_32px_rgba(15,23,42,0.18)] md:h-[calc(100vh-320px)]">
+      <div className="h-[56vh] overflow-hidden rounded-[24px] bg-zinc-950 shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_24px_48px_rgba(15,23,42,0.22)] md:h-[calc(100vh-340px)]">
         <div className="bg-zinc-950/90 px-4 py-3 shadow-[inset_0_-1px_0_rgba(63,63,70,0.75)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -272,7 +315,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             />
           </div>
         </div>
-        <div className="h-full overflow-y-auto p-4 font-mono text-xs leading-5">
+        <div className="h-full overflow-y-auto px-4 py-4 font-mono text-xs leading-5 sm:px-5">
           {status === 'idle' && !podName ? (
             <span className="text-zinc-500">选择环境和 Pod</span>
           ) : status === 'connecting' ? (

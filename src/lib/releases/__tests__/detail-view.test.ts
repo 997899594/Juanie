@@ -40,6 +40,7 @@ describe('release detail view', () => {
           {
             id: 'run-1',
             status: 'awaiting_approval',
+            approvalToken: 'token-1',
             service: { id: 'svc-1', name: 'web' },
             serviceId: 'svc-1',
             database: { id: 'db-1', name: 'postgres' },
@@ -76,5 +77,6 @@ describe('release detail view', () => {
     expect(release.timeline.some((item) => item.key === 'source-release-rel-1')).toBe(true);
     expect(release.deploymentItems[0]?.serviceName).toBe('web');
     expect(release.migrationItems[0]?.imageUrl).toBe('ghcr.io/demo/web:2');
+    expect(release.migrationItems[0]?.approvalToken).toBe('token-1');
   });
 });

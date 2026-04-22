@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { migrationRuns, projects, type ReleaseStatus, teamMembers } from '@/lib/db/schema';
 import { createMigrationRun, findActiveMigrationRun, getMigrationRunById } from '@/lib/migrations';
+import { approveMigrationRunForActor } from '@/lib/migrations/actions';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
 import { addMigrationJob } from '@/lib/queue';
 import {
@@ -114,42 +115,28 @@ export async function POST(
     );
   }
 
-  const { action, errorMessage } = await request.json().catch(() => ({}));
+  const { action, errorMessage, approvalToken } = await request.json().catch(() => ({}));
 
   if (action === 'approve') {
-    if (run.status !== 'awaiting_approval') {
-      return NextResponse.json({ error: '当前迁移不在待审批状态' }, { status: 400 });
+    if (typeof approvalToken !== 'string' || approvalToken.trim().length === 0) {
+      return NextResponse.json({ error: '审批操作缺少 approvalToken' }, { status: 400 });
     }
 
-    await db
-      .update(migrationRuns)
-      .set({
-        status: 'queued',
-        errorCode: null,
-        errorMessage: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(migrationRuns.id, run.id));
-
-    if (run.releaseId && run.release) {
-      const nextReleaseStatus = getReleaseRunningStatusForMigrationPhase(run.specification.phase);
-
-      if (nextReleaseStatus) {
-        await updateReleaseStatus(run.releaseId, nextReleaseStatus);
-      }
-    }
-
-    await addMigrationJob(run.id, {
-      allowApprovalBypass: true,
-    });
-
-    return NextResponse.json(
-      {
-        message: '迁移审批已通过，已重新加入队列',
+    try {
+      const result = await approveMigrationRunForActor({
+        actorUserId: session.user.id,
+        projectId,
         runId: run.id,
-      },
-      { status: 202 }
-    );
+        approvalToken,
+      });
+
+      return NextResponse.json(result, { status: 202 });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : '迁移审批失败' },
+        { status: 400 }
+      );
+    }
   }
 
   if (action === 'mark_external_complete') {

@@ -10,11 +10,11 @@ import {
   services,
 } from '@/lib/db/schema';
 import { resolveProjectPreviewDatabaseStrategy } from '@/lib/environments/database-strategy';
-import {
-  clearPreviewEnvironmentBuildState,
-  setPreviewEnvironmentBuildState,
-} from '@/lib/environments/preview-build-state';
 import { ensurePreviewEnvironmentForRef } from '@/lib/environments/service';
+import {
+  clearEnvironmentSourceBuildState,
+  setEnvironmentSourceBuildState,
+} from '@/lib/environments/source-build-state';
 import { logger } from '@/lib/logger';
 import { invalidateMigrationFilePreviewCache } from '@/lib/migrations/file-preview';
 import { addReleaseJob } from '@/lib/queue';
@@ -205,8 +205,8 @@ async function persistRelease(
     }))
   );
 
-  if (environment.kind === 'preview') {
-    await clearPreviewEnvironmentBuildState(environment.id);
+  if (environment.previewBuildStatus) {
+    await clearEnvironmentSourceBuildState(environment.id);
   }
 
   await addReleaseJob(release.id);
@@ -327,8 +327,8 @@ export async function createRepositoryRelease(input: CreateRepositoryReleaseInpu
       summary: input.summary ?? null,
     });
   } catch (error) {
-    if (environment.kind === 'preview' && environment.previewBuildStatus === 'building') {
-      await setPreviewEnvironmentBuildState({
+    if (environment.previewBuildStatus === 'building') {
+      await setEnvironmentSourceBuildState({
         environmentId: environment.id,
         status: 'failed',
         sourceRef: input.ref,

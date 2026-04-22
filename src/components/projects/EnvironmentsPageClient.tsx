@@ -5,7 +5,13 @@ import { ArrowRight, GitBranch, Globe, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { EnvironmentAISummaryPanel } from '@/components/projects/EnvironmentAISummaryPanel';
+import { EnvironmentCopilotPanel } from '@/components/projects/EnvironmentCopilotPanel';
+import { EnvironmentDynamicPluginPanel } from '@/components/projects/EnvironmentDynamicPluginPanel';
+import { EnvironmentEnvvarRiskPanel } from '@/components/projects/EnvironmentEnvvarRiskPanel';
+import { EnvironmentMigrationReviewPanel } from '@/components/projects/EnvironmentMigrationReviewPanel';
 import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
+import { EnvironmentTaskCenter } from '@/components/projects/EnvironmentTaskCenter';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +50,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { ResolvedAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
+import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output';
+import type { EnvironmentSummary } from '@/lib/ai/schemas/environment-summary';
+import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
+import type { MigrationReview } from '@/lib/ai/schemas/migration-review';
+import type { EnvironmentTaskCenterSnapshot } from '@/lib/ai/tasks/environment-task-center';
 import {
   createPreviewEnvironment,
   type DatabaseSchemaRepairPlan,
@@ -230,6 +242,15 @@ interface EnvironmentRecord {
     shortCommitSha: string | null;
     createdAtLabel: string | null;
     statusDecoration: ActivityStatusDecoration;
+  } | null;
+  sourceBuild: {
+    label: string;
+    summary: string;
+    nextActionLabel: string;
+    tone: 'danger' | 'neutral';
+    status: 'building' | 'failed';
+    shortCommitSha: string | null;
+    startedAtLabel: string | null;
   } | null;
   gitTracking: {
     state: 'pending' | 'synced';
@@ -532,6 +553,13 @@ function buildEnvironmentSourceSummary(environment: EnvironmentRecord): {
   label: string;
   summary: string;
 } {
+  if (environment.sourceBuild) {
+    return {
+      label: environment.sourceBuild.label,
+      summary: environment.sourceBuild.summary,
+    };
+  }
+
   if (environment.gitTracking) {
     return {
       label: environment.sourceLabel ?? '来源',
@@ -559,6 +587,13 @@ function buildEnvironmentVersionSummary(environment: EnvironmentRecord): {
   label: string;
   summary: string;
 } {
+  if (environment.sourceBuild && !environment.latestReleaseCard) {
+    return {
+      label: environment.sourceBuild.label,
+      summary: environment.sourceBuild.nextActionLabel,
+    };
+  }
+
   if (!environment.latestReleaseCard) {
     return {
       label: '暂无版本',
@@ -677,6 +712,11 @@ function EnvironmentOverviewPanel({
   environment,
   savingStrategy,
   onStrategyChange,
+  initialAiSummary,
+  initialMigrationReview,
+  initialEnvvarRisk,
+  initialTaskCenter,
+  initialDynamicPluginPanels,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
@@ -684,12 +724,16 @@ function EnvironmentOverviewPanel({
   onStrategyChange: (
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
+  initialAiSummary?: ResolvedAIPluginSnapshot<EnvironmentSummary> | null;
+  initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
+  initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
+  initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
+  initialDynamicPluginPanels?: Array<{
+    pluginId: string;
+    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
+  }>;
 }) {
   const [variableSummary, setVariableSummary] = useState('变量状态加载中');
-  const statusBadges = [
-    environment.policy.primarySignal?.label ?? null,
-    environment.previewLifecycle?.stateLabel ?? null,
-  ].filter(Boolean);
   const hasStrategyControl = environment.actions.canConfigureStrategy;
   const sourceSummary = buildEnvironmentSourceSummary(environment);
   const versionSummary = buildEnvironmentVersionSummary(environment);
@@ -769,7 +813,44 @@ function EnvironmentOverviewPanel({
         </section>
       ) : null}
 
-      <section className="grid gap-3 xl:grid-cols-[1.1fr_1fr_1fr]">
+      <EnvironmentAISummaryPanel
+        projectId={projectId}
+        environmentId={environment.id}
+        initialPanel={initialAiSummary}
+      />
+      <section className="grid gap-3 lg:grid-cols-2">
+        <EnvironmentMigrationReviewPanel
+          projectId={projectId}
+          environmentId={environment.id}
+          initialPanel={initialMigrationReview}
+        />
+        <EnvironmentEnvvarRiskPanel
+          projectId={projectId}
+          environmentId={environment.id}
+          initialPanel={initialEnvvarRisk}
+        />
+      </section>
+      <EnvironmentTaskCenter
+        projectId={projectId}
+        environmentId={environment.id}
+        initialSnapshot={initialTaskCenter}
+      />
+
+      {initialDynamicPluginPanels && initialDynamicPluginPanels.length > 0 ? (
+        <section className="grid gap-3 lg:grid-cols-2">
+          {initialDynamicPluginPanels.map((panel) => (
+            <EnvironmentDynamicPluginPanel
+              key={panel.pluginId}
+              projectId={projectId}
+              environmentId={environment.id}
+              pluginId={panel.pluginId}
+              initialPanel={panel.snapshot}
+            />
+          ))}
+        </section>
+      ) : null}
+
+      <section className="grid gap-3 lg:grid-cols-2">
         <div className={shellClassName}>
           <div className={titleClassName}>来源</div>
           <div className={valueClassName}>{sourceSummary.label}</div>
@@ -777,45 +858,29 @@ function EnvironmentOverviewPanel({
         </div>
 
         <div className={shellClassName}>
-          <div className={titleClassName}>版本</div>
+          <div className={titleClassName}>当前版本</div>
           <div className={valueClassName}>{versionSummary.label}</div>
           <div className={summaryClassName}>{versionSummary.summary}</div>
-        </div>
-
-        <div className={shellClassName}>
-          <div className={titleClassName}>状态</div>
-          <div className={valueClassName}>
+          <div className="mt-4 text-xs text-muted-foreground">
             {environment.policy.primarySignal?.label ??
               environment.previewLifecycle?.stateLabel ??
               '运行中'}
+            {' · '}
+            {buildEnvironmentStatusSummary(environment)}
           </div>
-          <div className={summaryClassName}>{buildEnvironmentStatusSummary(environment)}</div>
-          {statusBadges.length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {statusBadges.map((label) => (
-                <Badge
-                  key={label}
-                  variant="secondary"
-                  className="rounded-full bg-secondary/88 px-3 py-1 text-[11px] font-medium text-foreground shadow-none"
-                >
-                  {label}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
         </div>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-3">
+      <section className="grid gap-3 lg:grid-cols-2">
         <div
           className={cn(
             shellClassName,
             'bg-[linear-gradient(180deg,rgba(244,241,234,0.92),rgba(255,255,255,0.94))]'
           )}
         >
-          <div className="flex items-center justify-between gap-3">
-            <div className={titleClassName}>发布方式</div>
-            {savingStrategy ? <div className="text-xs text-muted-foreground">保存中...</div> : null}
+          <div className={titleClassName}>发布方式</div>
+          <div className="mt-3 text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground">
+            {environment.strategyLabel ?? '未设置'}
           </div>
           {hasStrategyControl ? (
             <div className="mt-4">
@@ -838,28 +903,19 @@ function EnvironmentOverviewPanel({
                 </SelectContent>
               </Select>
             </div>
-          ) : (
-            <div className="mt-3 text-xl font-semibold tracking-tight text-foreground">
-              {environment.strategyLabel ?? '未设置'}
-            </div>
-          )}
+          ) : null}
+          {savingStrategy ? (
+            <div className="mt-3 text-xs text-muted-foreground">保存中...</div>
+          ) : null}
           {strategyHelper || environment.strategyLabel ? (
             <div className={summaryClassName}>{strategyHelper ?? environment.strategyLabel}</div>
           ) : null}
         </div>
 
         <div className={shellClassName}>
-          <div className={titleClassName}>数据库状态</div>
-          <div className="mt-3 text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground">
-            {buildEnvironmentDatabaseSummary(environment)}
-          </div>
-        </div>
-
-        <div className={shellClassName}>
-          <div className={titleClassName}>变量状态</div>
-          <div className="mt-3 text-xl font-semibold leading-tight tracking-[-0.02em] text-foreground">
-            {variableSummary}
-          </div>
+          <div className={titleClassName}>配置概览</div>
+          <div className={valueClassName}>{buildEnvironmentDatabaseSummary(environment)}</div>
+          <div className={summaryClassName}>{variableSummary}</div>
         </div>
       </section>
     </div>
@@ -871,6 +927,11 @@ function EnvironmentExpandedContent({
   environment,
   savingStrategy,
   onStrategyChange,
+  initialAiSummary,
+  initialMigrationReview,
+  initialEnvvarRisk,
+  initialTaskCenter,
+  initialDynamicPluginPanels,
 }: {
   projectId: string;
   environment: EnvironmentRecord;
@@ -878,14 +939,34 @@ function EnvironmentExpandedContent({
   onStrategyChange: (
     deploymentStrategy: 'rolling' | 'controlled' | 'canary' | 'blue_green'
   ) => void;
+  initialAiSummary?: ResolvedAIPluginSnapshot<EnvironmentSummary> | null;
+  initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
+  initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
+  initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
+  initialDynamicPluginPanels?: Array<{
+    pluginId: string;
+    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
+  }>;
 }) {
   return (
-    <EnvironmentOverviewPanel
-      projectId={projectId}
-      environment={environment}
-      savingStrategy={savingStrategy}
-      onStrategyChange={onStrategyChange}
-    />
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+      <EnvironmentOverviewPanel
+        projectId={projectId}
+        environment={environment}
+        savingStrategy={savingStrategy}
+        onStrategyChange={onStrategyChange}
+        initialAiSummary={initialAiSummary}
+        initialMigrationReview={initialMigrationReview}
+        initialEnvvarRisk={initialEnvvarRisk}
+        initialTaskCenter={initialTaskCenter}
+        initialDynamicPluginPanels={initialDynamicPluginPanels}
+      />
+      <EnvironmentCopilotPanel
+        projectId={projectId}
+        environmentId={environment.id}
+        environmentName={environment.name}
+      />
+    </div>
   );
 }
 
@@ -894,6 +975,14 @@ interface EnvironmentsPageClientProps {
   initialEnvId?: string | null;
   focusMode?: boolean;
   initialCreateOpen?: boolean;
+  initialAiSummary?: ResolvedAIPluginSnapshot<EnvironmentSummary> | null;
+  initialMigrationReview?: ResolvedAIPluginSnapshot<MigrationReview> | null;
+  initialEnvvarRisk?: ResolvedAIPluginSnapshot<EnvvarRisk> | null;
+  initialTaskCenter?: EnvironmentTaskCenterSnapshot | null;
+  initialDynamicPluginPanels?: Array<{
+    pluginId: string;
+    snapshot: ResolvedAIPluginSnapshot<DynamicPluginOutput>;
+  }>;
   initialData: {
     governance: {
       roleLabel: string;
@@ -937,6 +1026,11 @@ export function EnvironmentsPageClient({
   initialEnvId,
   focusMode = false,
   initialCreateOpen = false,
+  initialAiSummary,
+  initialMigrationReview,
+  initialEnvvarRisk,
+  initialTaskCenter,
+  initialDynamicPluginPanels,
   initialData,
 }: EnvironmentsPageClientProps) {
   const [environments, setEnvironments] = useState(initialData.environments);
@@ -1132,6 +1226,11 @@ export function EnvironmentsPageClient({
               environment={focusedEnvironment}
               savingStrategy={savingStrategyId === focusedEnvironment.id}
               onStrategyChange={(value) => handleStrategyChange(focusedEnvironment.id, value)}
+              initialAiSummary={initialAiSummary}
+              initialMigrationReview={initialMigrationReview}
+              initialEnvvarRisk={initialEnvvarRisk}
+              initialTaskCenter={initialTaskCenter}
+              initialDynamicPluginPanels={initialDynamicPluginPanels}
             />
           ) : (
             <>

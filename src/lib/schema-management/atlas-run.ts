@@ -1,6 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { V1Job } from '@kubernetes/client-node';
@@ -8,11 +7,16 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
-import { buildAuthenticatedCloneUrl } from '@/lib/git/authenticated-clone-url';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
+import {
+  buildWorkspaceDiffSummary,
+  collectWorkspaceArtifactFiles,
+  collectWorkspaceFileSnapshot,
+  createRepositorySourceWorkspace,
+} from '@/lib/repositories/source-workspace';
 import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
 import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
 
@@ -43,47 +47,6 @@ async function fileExists(pathname: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function collectArtifactFiles(repoDir: string, changedFiles: string[]) {
-  const artifactFiles: Record<string, string> = {};
-
-  for (const file of changedFiles) {
-    const absolutePath = path.join(repoDir, file);
-    if (!(await fileExists(absolutePath))) {
-      continue;
-    }
-
-    artifactFiles[file] = await readFile(absolutePath, 'utf8');
-  }
-
-  return artifactFiles;
-}
-
-async function collectDiffSummary(repoDir: string) {
-  const diffNamesRaw = await runCommand('git', ['diff', '--name-only'], { cwd: repoDir });
-  const diffStatsRaw = await runCommand('git', ['diff', '--numstat'], { cwd: repoDir });
-  const changedFiles = diffNamesRaw
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const fileStats = diffStatsRaw
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [added, removed, file] = line.split('\t');
-      return {
-        file,
-        added: Number.parseInt(added ?? '0', 10) || 0,
-        removed: Number.parseInt(removed ?? '0', 10) || 0,
-      };
-    });
-
-  return {
-    changedFiles,
-    fileStats,
-  };
 }
 
 async function assertAtlasGeneratedQuality(input: {
@@ -501,18 +464,9 @@ export async function executeSchemaRepairAtlasRun(input: {
   const session = await getTeamIntegrationSession({
     teamId: project.teamId,
     actingUserId: input.userId ?? null,
-    requiredCapabilities: ['write_repo'],
+    requiredCapabilities: ['read_repo', 'write_repo'],
   });
 
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'juanie-schema-repair-'));
-  const repoDir = path.join(tempRoot, 'repo');
-  const cloneUrl = buildAuthenticatedCloneUrl({
-    cloneUrl: project.repository.cloneUrl ?? null,
-    fullName: project.repository.fullName,
-    provider: session.provider,
-    accessToken: session.accessToken,
-    serverUrl: session.serverUrl,
-  });
   const baseBranch = project.repository.defaultBranch || 'main';
   const startTime = new Date();
   await db
@@ -540,131 +494,137 @@ export async function executeSchemaRepairAtlasRun(input: {
 
   try {
     let logs = '';
-
-    logs += await runCommand('git', [
-      'clone',
-      '--depth',
-      '1',
-      '--branch',
-      baseBranch,
-      cloneUrl,
-      repoDir,
-    ]);
-    logs += '\n';
-
-    const spec = await resolveSchemaManagementSpec({
-      projectId: input.projectId,
-      databaseId: plan.databaseId,
+    const workspace = await createRepositorySourceWorkspace({
+      session,
+      repoFullName: project.repository.fullName,
+      defaultBranch: baseBranch,
+      revision: baseBranch,
     });
+    const repoDir = workspace.repoDir;
+    const initialSnapshot = await collectWorkspaceFileSnapshot(repoDir);
 
-    if (!spec) {
-      throw new Error('无法解析 schema repair 对应的迁移配置');
-    }
-
-    const migrationPath =
-      spec.specification.tool === 'drizzle'
-        ? '.juanie/schema-repair/generated'
-        : resolveMigrationPath(spec.specification, spec.database.type);
-    if (!migrationPath) {
-      throw new Error('当前迁移工具没有可用的 migration 目录，无法运行 Atlas');
-    }
-
-    const runtimeArtifacts = buildSchemaRepairRuntimeArtifacts({
-      provider: session.provider,
-      tool: spec.specification.tool,
-      databaseType: spec.database.type,
-      migrationPath,
-      planId: plan.id,
-      title: plan.title,
-      summary: plan.summary,
-      planKind: plan.kind,
-      stateStatus: plan.stateStatus,
-      databaseName: plan.database?.name ?? 'database',
-      expectedVersion: plan.expectedVersion,
-      actualVersion: plan.actualVersion,
-      sourceConfigPath: spec.specification.sourceConfigPath,
-    });
-    const runtimeDir = path.join(repoDir, '.juanie', 'schema-repair');
-    await mkdir(runtimeDir, { recursive: true });
-    await Promise.all(
-      Object.entries(runtimeArtifacts.files).map(([relativePath, content]) =>
-        writeFile(path.join(repoDir, relativePath), content, 'utf8')
-      )
-    );
-    const scriptPath = path.join(repoDir, runtimeArtifacts.atlasScriptPath);
-
-    const env = {
-      ...process.env,
-      ATLAS_DEV_URL: process.env.ATLAS_DEV_URL ?? 'docker://postgres/16/dev',
-      ATLAS_SRC_URL:
-        plan.kind === 'adopt_current_db'
-          ? (plan.database?.connectionString ?? '')
-          : process.env.ATLAS_SRC_URL,
-    };
-
-    logs += await runCommand('bash', [scriptPath], {
-      cwd: repoDir,
-      env,
-    });
-    logs += '\n';
-
-    const status = await runCommand('git', ['status', '--short'], { cwd: repoDir });
-    const diffSummary = await collectDiffSummary(repoDir);
-    await assertAtlasGeneratedQuality({
-      repoDir,
-      changedFiles: diffSummary.changedFiles,
-    });
-    if (status.trim().length > 0) {
-      logs += status;
-      logs += '\n';
-      const artifactFiles = await collectArtifactFiles(repoDir, diffSummary.changedFiles);
-      const finishedAt = new Date();
-      const [updated] = await db
-        .update(schemaRepairPlans)
-        .set({
-          atlasExecutionStatus: 'succeeded',
-          atlasExecutionLog: clipLog(logs),
-          atlasExecutionFinishedAt: finishedAt,
-          updatedAt: finishedAt,
-        })
-        .where(eq(schemaRepairPlans.id, plan.id))
-        .returning();
-      await db
-        .update(schemaRepairAtlasRuns)
-        .set({
-          status: 'succeeded',
-          generatedFiles: diffSummary.changedFiles,
-          artifactFiles,
-          diffSummary,
-          commitSha: null,
-          log: clipLog(logs),
-          finishedAt,
-          updatedAt: finishedAt,
-        })
-        .where(eq(schemaRepairAtlasRuns.id, run.id));
-      await publishSchemaRepairRealtimeSnapshot({
+    try {
+      const spec = await resolveSchemaManagementSpec({
         projectId: input.projectId,
         databaseId: plan.databaseId,
       });
 
-      await createAuditLog({
-        teamId: project.teamId,
-        userId: input.userId ?? undefined,
-        action: 'project.updated',
-        resourceType: 'project',
-        resourceId: project.id,
-        metadata: {
-          schemaAction: 'run_atlas_draft',
-          databaseId: plan.databaseId,
-          planId: plan.id,
-          atlasRunId: run.id,
-        },
+      if (!spec) {
+        throw new Error('无法解析 schema repair 对应的迁移配置');
+      }
+
+      const migrationPath =
+        spec.specification.tool === 'drizzle'
+          ? '.juanie/schema-repair/generated'
+          : resolveMigrationPath(spec.specification, spec.database.type);
+      if (!migrationPath) {
+        throw new Error('当前迁移工具没有可用的 migration 目录，无法运行 Atlas');
+      }
+
+      const runtimeArtifacts = buildSchemaRepairRuntimeArtifacts({
+        provider: session.provider,
+        tool: spec.specification.tool,
+        databaseType: spec.database.type,
+        migrationPath,
+        planId: plan.id,
+        title: plan.title,
+        summary: plan.summary,
+        planKind: plan.kind,
+        stateStatus: plan.stateStatus,
+        databaseName: plan.database?.name ?? 'database',
+        expectedVersion: plan.expectedVersion,
+        actualVersion: plan.actualVersion,
+        sourceConfigPath: spec.specification.sourceConfigPath,
       });
+      const runtimeDir = path.join(repoDir, '.juanie', 'schema-repair');
+      await mkdir(runtimeDir, { recursive: true });
+      await Promise.all(
+        Object.entries(runtimeArtifacts.files).map(([relativePath, content]) =>
+          writeFile(path.join(repoDir, relativePath), content, 'utf8')
+        )
+      );
+      const scriptPath = path.join(repoDir, runtimeArtifacts.atlasScriptPath);
 
-      return updated;
+      const env = {
+        ...process.env,
+        ATLAS_DEV_URL: process.env.ATLAS_DEV_URL ?? 'docker://postgres/16/dev',
+        ATLAS_SRC_URL:
+          plan.kind === 'adopt_current_db'
+            ? (plan.database?.connectionString ?? '')
+            : process.env.ATLAS_SRC_URL,
+      };
+
+      logs += await runCommand('bash', [scriptPath], {
+        cwd: repoDir,
+        env,
+      });
+      logs += '\n';
+
+      const diffSummary = buildWorkspaceDiffSummary(
+        initialSnapshot,
+        await collectWorkspaceFileSnapshot(repoDir)
+      );
+      await assertAtlasGeneratedQuality({
+        repoDir,
+        changedFiles: diffSummary.changedFiles,
+      });
+      if (diffSummary.changedFiles.length > 0) {
+        logs += diffSummary.changedFiles.map((file) => `M ${file}`).join('\n');
+        logs += '\n';
+        const artifactFiles = await collectWorkspaceArtifactFiles(
+          repoDir,
+          diffSummary.changedFiles
+        );
+        const finishedAt = new Date();
+        const [updated] = await db
+          .update(schemaRepairPlans)
+          .set({
+            atlasExecutionStatus: 'succeeded',
+            atlasExecutionLog: clipLog(logs),
+            atlasExecutionFinishedAt: finishedAt,
+            updatedAt: finishedAt,
+          })
+          .where(eq(schemaRepairPlans.id, plan.id))
+          .returning();
+        await db
+          .update(schemaRepairAtlasRuns)
+          .set({
+            status: 'succeeded',
+            generatedFiles: diffSummary.changedFiles,
+            artifactFiles,
+            diffSummary,
+            commitSha: null,
+            log: clipLog(logs),
+            finishedAt,
+            updatedAt: finishedAt,
+          })
+          .where(eq(schemaRepairAtlasRuns.id, run.id));
+        await publishSchemaRepairRealtimeSnapshot({
+          projectId: input.projectId,
+          databaseId: plan.databaseId,
+        });
+
+        await createAuditLog({
+          teamId: project.teamId,
+          userId: input.userId ?? undefined,
+          action: 'project.updated',
+          resourceType: 'project',
+          resourceId: project.id,
+          metadata: {
+            schemaAction: 'run_atlas_draft',
+            databaseId: plan.databaseId,
+            planId: plan.id,
+            atlasRunId: run.id,
+          },
+        });
+
+        return updated;
+      }
+
+      throw new Error('Atlas 执行完成但没有产生任何文件变更');
+    } finally {
+      await workspace.cleanup();
     }
-
-    throw new Error('Atlas 执行完成但没有产生任何文件变更');
   } catch (error) {
     const finishedAt = new Date();
     const message = error instanceof Error ? error.message : String(error);
@@ -693,7 +653,5 @@ export async function executeSchemaRepairAtlasRun(input: {
       databaseId: plan.databaseId,
     });
     throw error;
-  } finally {
-    await rm(tempRoot, { recursive: true, force: true }).catch(() => {});
   }
 }

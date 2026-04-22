@@ -126,6 +126,12 @@ function getErrorMessage(errors: unknown[]): string | null {
   return null;
 }
 
+const shellClassName =
+  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+
+const subCardClassName =
+  'rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+
 function EnvVarDialog({
   projectId,
   environmentId,
@@ -559,8 +565,8 @@ function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
   return (
     <div className="space-y-3">
       {groups.map((group) => (
-        <div key={group.serviceId} className="console-grid-table overflow-hidden rounded-[20px]">
-          <div className="console-grid-table-head bg-secondary/30 px-4 py-3 sm:px-5">
+        <div key={group.serviceId} className={shellClassName}>
+          <div className="px-0 pb-4">
             <div className="flex items-center gap-2">
               <code className="text-sm font-medium">{group.serviceName}</code>
               <span className="text-xs text-muted-foreground">
@@ -568,7 +574,7 @@ function ServiceOverridePanel({ groups }: { groups: ServiceOverrideGroup[] }) {
               </span>
             </div>
           </div>
-          <div className="console-list bg-background">
+          <div className="overflow-hidden rounded-[18px] bg-white/72">
             {group.variables.map((variable) => (
               <ReadonlyEnvVarRow
                 key={variable.id}
@@ -629,22 +635,12 @@ export function EnvVarManager({
   );
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-sm font-medium capitalize">{environmentName}</h3>
           {!loading && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {[
-                directVars.length === 0
-                  ? '没有直接变量'
-                  : `${directPlainCount} 个普通变量${directSecretCount > 0 ? `，${directSecretCount} 个密文变量` : ''}`,
-                effectiveVars.length > 0 ? `实际生效 ${effectiveVars.length} 个` : null,
-                serviceOverrideCount > 0 ? `服务覆盖 ${serviceOverrideCount} 个` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">变量、继承链和服务覆盖都收在这里。</p>
           )}
         </div>
         <EnvVarDialog
@@ -657,6 +653,7 @@ export function EnvVarManager({
             <Button
               size="sm"
               variant="default"
+              className="rounded-full"
               disabled={!canManage}
               title={!canManage ? (disabledSummary ?? undefined) : undefined}
             >
@@ -671,16 +668,47 @@ export function EnvVarManager({
         <div className="text-xs text-muted-foreground">{disabledSummary}</div>
       )}
 
+      {!loading ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              直配
+            </div>
+            <div className="mt-2 text-lg font-semibold text-foreground">{directVars.length}</div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {directPlainCount} 普通
+              {directSecretCount > 0 ? ` · ${directSecretCount} 密文` : ''}
+            </div>
+          </div>
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              生效
+            </div>
+            <div className="mt-2 text-lg font-semibold text-foreground">{effectiveVars.length}</div>
+            <div className="mt-1 text-sm text-muted-foreground">当前环境实际拿到的变量总数</div>
+          </div>
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              服务覆盖
+            </div>
+            <div className="mt-2 text-lg font-semibold text-foreground">{serviceOverrideCount}</div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {serviceOverrides.length} 个服务存在覆盖项
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <Tabs defaultValue="direct" className="space-y-4">
-        <TabsList className="h-11">
+        <TabsList className="h-11 rounded-full bg-[rgba(243,240,233,0.72)] p-1">
           <TabsTrigger value="direct">直配变量</TabsTrigger>
           <TabsTrigger value="effective">实际生效</TabsTrigger>
           <TabsTrigger value="service">服务覆盖</TabsTrigger>
         </TabsList>
 
         <TabsContent value="direct">
-          <div className="console-grid-table overflow-hidden rounded-[20px] bg-background">
-            <div className="console-grid-table-head hidden items-center gap-3 bg-secondary/30 px-5 py-3 sm:flex">
+          <div className={shellClassName}>
+            <div className="hidden items-center gap-3 px-0 pb-4 sm:flex">
               <span className="w-56 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 变量名
               </span>
@@ -690,7 +718,7 @@ export function EnvVarManager({
             </div>
 
             {loading ? (
-              <div className="console-list">
+              <div className="overflow-hidden rounded-[18px] bg-white/72">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -726,7 +754,7 @@ export function EnvVarManager({
                 />
               </div>
             ) : (
-              <div className={cn('console-list')}>
+              <div className={cn('overflow-hidden rounded-[18px] bg-white/72')}>
                 {directVars.map((v) => (
                   <EnvVarRow
                     key={v.id}
@@ -745,9 +773,9 @@ export function EnvVarManager({
         </TabsContent>
 
         <TabsContent value="effective">
-          <div className="console-grid-table overflow-hidden rounded-[20px] bg-background">
+          <div className={shellClassName}>
             {loading ? (
-              <div className="console-list">
+              <div className="overflow-hidden rounded-[18px] bg-white/72">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
@@ -764,7 +792,7 @@ export function EnvVarManager({
                 <p className="text-sm text-muted-foreground">没有生效变量</p>
               </div>
             ) : (
-              <div className="console-list">
+              <div className="overflow-hidden rounded-[18px] bg-white/72">
                 {effectiveVars.map((envVar) => (
                   <ReadonlyEnvVarRow
                     key={envVar.id}
@@ -779,7 +807,7 @@ export function EnvVarManager({
 
         <TabsContent value="service">
           <div className="mb-3 px-1 text-sm text-muted-foreground">
-            这些变量按服务生效，会在对应容器启动时追加注入；如果键名相同，会覆盖环境级同名变量。
+            只看服务级追加项；同名键会覆盖环境级值。
           </div>
 
           {loading ? (

@@ -56,6 +56,7 @@ export function buildEnvironmentRuntimeIndexes<
 export function attachEnvironmentRecentActivity<
   TEnvironment extends {
     id: string;
+    isPreview?: boolean | null;
     branch?: string | null;
     previewPrNumber?: number | null;
     latestRelease?: {
@@ -126,8 +127,9 @@ export function attachEnvironmentRecentActivity<
             releaseId: environment.latestDeployment.releaseId ?? null,
           }
         : null,
-      latestPreviewBuild: environment.previewBuildStatus
+      latestSourceBuild: environment.previewBuildStatus
         ? {
+            title: environment.isPreview ? '预览构建' : '首发构建',
             status: environment.previewBuildStatus,
             sourceLabel: environment.previewPrNumber
               ? `PR #${environment.previewPrNumber}`

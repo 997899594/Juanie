@@ -44,7 +44,7 @@ export interface PreviewDatabasePresentation {
   tone: 'danger' | 'neutral';
 }
 
-export interface PreviewBuildPresentation {
+export interface EnvironmentSourceBuildPresentation {
   key: string;
   label: string;
   summary: string;
@@ -64,6 +64,7 @@ interface PreviewDatabaseLike {
 
 interface PreviewBuildLike {
   previewBuildStatus?: DeploymentStatus | string | null;
+  previewBuildSourceRef?: string | null;
   previewBuildSourceCommitSha?: string | null;
   previewBuildStartedAt?: Date | string | null;
 }
@@ -209,18 +210,15 @@ export function getPreviewDatabasePresentation(input: {
   };
 }
 
-export function getPreviewBuildPresentation(input: {
+export function getEnvironmentSourceBuildPresentation(input: {
   environment: PresentableEnvironment & PreviewBuildLike;
-}): PreviewBuildPresentation | null {
-  if (!isPreviewEnvironment(input.environment)) {
-    return null;
-  }
-
+}): EnvironmentSourceBuildPresentation | null {
   const status = input.environment.previewBuildStatus;
   if (status !== 'building' && status !== 'failed') {
     return null;
   }
 
+  const isPreview = isPreviewEnvironment(input.environment);
   const shortCommitSha = input.environment.previewBuildSourceCommitSha?.slice(0, 7) ?? null;
   const sourceLabel = getEnvironmentSourceLabel(input.environment) ?? '当前来源';
   const startedAtLabel = formatEnvironmentTimestamp(input.environment.previewBuildStartedAt);
@@ -228,12 +226,20 @@ export function getPreviewBuildPresentation(input: {
 
   if (status === 'failed') {
     return {
-      key: 'preview-build:failed',
-      label: '预览构建失败',
-      summary: [sourceLabel, commitLabel, '最近一次仓库构建没有成功进入发布链路']
+      key: `${isPreview ? 'preview' : 'source'}-build:failed`,
+      label: isPreview ? '预览构建失败' : '首发构建失败',
+      summary: [
+        sourceLabel,
+        commitLabel,
+        isPreview
+          ? '最近一次仓库构建没有成功进入发布链路'
+          : '最近一次仓库构建没有成功进入首个发布链路',
+      ]
         .filter(Boolean)
         .join(' · '),
-      nextActionLabel: '检查仓库流水线后重新启动预览环境',
+      nextActionLabel: isPreview
+        ? '检查仓库流水线后重新启动预览环境'
+        : '检查仓库流水线后重新触发首发构建',
       tone: 'danger',
       status,
       shortCommitSha,
@@ -242,9 +248,15 @@ export function getPreviewBuildPresentation(input: {
   }
 
   return {
-    key: 'preview-build:building',
-    label: '预览构建中',
-    summary: [sourceLabel, commitLabel, '平台已触发仓库构建，完成后会自动发布']
+    key: `${isPreview ? 'preview' : 'source'}-build:building`,
+    label: isPreview ? '预览构建中' : '首发构建中',
+    summary: [
+      sourceLabel,
+      commitLabel,
+      isPreview
+        ? '平台已触发仓库构建，完成后会自动发布'
+        : '平台已触发仓库构建，完成后会自动创建首个版本',
+    ]
       .filter(Boolean)
       .join(' · '),
     nextActionLabel: startedAtLabel

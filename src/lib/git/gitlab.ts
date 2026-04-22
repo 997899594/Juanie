@@ -64,6 +64,18 @@ function isStatusError(error: unknown, status: number): boolean {
   return false;
 }
 
+function normalizeArchiveRef(ref: string): string {
+  if (ref.startsWith('refs/heads/')) {
+    return ref.slice('refs/heads/'.length);
+  }
+
+  if (ref.startsWith('refs/tags/')) {
+    return ref.slice('refs/tags/'.length);
+  }
+
+  return ref;
+}
+
 export class GitLabProvider implements GitProvider {
   type = 'gitlab' as const;
   private serverUrl: string;
@@ -121,6 +133,26 @@ export class GitLabProvider implements GitProvider {
     }
 
     return payload as T;
+  }
+
+  private async requestBinary(accessToken: string, path: string): Promise<Uint8Array> {
+    const response = await fetch(this.buildApiUrl(path), {
+      headers: {
+        Accept: 'application/octet-stream',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const raw = await response.text();
+      const payload = raw.length > 0 ? this.parseJsonSafely(raw) : null;
+
+      throw Object.assign(new Error(this.extractGitLabErrorMessage(payload, raw)), {
+        status: response.status,
+      });
+    }
+
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   private parseJsonSafely(raw: string): unknown {
@@ -648,6 +680,19 @@ export class GitLabProvider implements GitProvider {
       path: item.path,
       type: item.type === 'tree' ? 'dir' : 'file',
     }));
+  }
+
+  async downloadRepositoryArchive(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<Uint8Array> {
+    const archiveRef = normalizeArchiveRef(ref);
+
+    return this.requestBinary(
+      accessToken,
+      `/projects/${this.encodeProjectId(repoFullName)}/repository/archive.tar.gz?sha=${encodeURIComponent(archiveRef)}`
+    );
   }
 
   private mapRepository(data: ProjectSchema): GitRepository {

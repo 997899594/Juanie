@@ -24,6 +24,7 @@ import {
 import { resolveDeployImageRepository } from '@/lib/deploy-images';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
 import { ensureEnvironmentNamespace, reconcileEnvironmentState } from '@/lib/environments/service';
+import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -1854,6 +1855,27 @@ export function buildInitialAutoDeploySummary(input: {
   return segments.join('，') || '没有可触发的首发构建';
 }
 
+function normalizeInitialAutoDeployRef(branch: string | null | undefined): string | null {
+  const normalized = branch?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.startsWith('refs/heads/') ? normalized : `refs/heads/${normalized}`;
+}
+
+function resolveInitialAutoDeployEnvironmentsForRef(
+  environmentsForProject: Array<typeof environments.$inferSelect>,
+  ref: string
+): Array<typeof environments.$inferSelect> {
+  return environmentsForProject.filter(
+    (environment) =>
+      environment.autoDeploy &&
+      !environment.isPreview &&
+      normalizeInitialAutoDeployRef(environment.branch) === ref
+  );
+}
+
 async function triggerInitialAutoDeployBuilds(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -1893,6 +1915,7 @@ async function triggerInitialAutoDeployBuilds(
 
   for (let index = 0; index < refs.length; index += 1) {
     const ref = refs[index];
+    const matchedEnvironments = resolveInitialAutoDeployEnvironmentsForRef(environmentList, ref);
     await onProgress?.(
       Math.round((index / refs.length) * 90),
       `检查 ${ref.replace(/^refs\/heads\//, '')} 最新提交`
@@ -1912,13 +1935,41 @@ async function triggerInitialAutoDeployBuilds(
       continue;
     }
 
-    await gateway.triggerReleaseBuild(session, {
-      repoFullName: project.repository.fullName,
-      ref,
-      releaseRef: ref,
-      sourceCommitSha,
-      forceFullBuild: true,
-    });
+    const buildStartedAt = new Date();
+    await Promise.all(
+      matchedEnvironments.map((environment) =>
+        setEnvironmentSourceBuildState({
+          environmentId: environment.id,
+          status: 'building',
+          sourceRef: ref,
+          sourceCommitSha,
+          startedAt: buildStartedAt,
+        })
+      )
+    );
+
+    try {
+      await gateway.triggerReleaseBuild(session, {
+        repoFullName: project.repository.fullName,
+        ref,
+        releaseRef: ref,
+        sourceCommitSha,
+        forceFullBuild: true,
+      });
+    } catch (error) {
+      await Promise.all(
+        matchedEnvironments.map((environment) =>
+          setEnvironmentSourceBuildState({
+            environmentId: environment.id,
+            status: 'failed',
+            sourceRef: ref,
+            sourceCommitSha,
+            startedAt: buildStartedAt,
+          })
+        )
+      );
+      throw error;
+    }
     triggeredRefs.push(ref);
 
     scopedLogger.info('Triggered initial auto-deploy build', {

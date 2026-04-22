@@ -293,6 +293,15 @@ export const gateway = {
     return provider.listDirectory(session.accessToken, repoFullName, path, branch);
   },
 
+  async downloadRepositoryArchive(
+    session: IntegrationSession,
+    repoFullName: string,
+    ref: string
+  ): Promise<Uint8Array> {
+    const provider = resolveProvider(session);
+    return provider.downloadRepositoryArchive(session.accessToken, repoFullName, ref);
+  },
+
   async pushFiles(session: IntegrationSession, options: PushOptions): Promise<void> {
     const provider = resolveProvider(session);
     return provider.pushFiles(session.accessToken, options);

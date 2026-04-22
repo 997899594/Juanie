@@ -83,6 +83,49 @@ describe('GitHubProvider preview build trigger', () => {
     }
   });
 
+  it('downloads repository archives through the provider API instead of shell git', async () => {
+    try {
+      const requests: Array<string> = [];
+
+      globalThis.fetch = (async (input) => {
+        requests.push(String(input));
+
+        if (String(input).includes('/branches/feature%2Fpreview-checkout')) {
+          return new Response(
+            JSON.stringify({
+              commit: {
+                sha: 'eff1991cae3b54c221a080f665122de9e43e8161',
+              },
+            }),
+            { status: 200 }
+          );
+        }
+
+        return new Response('archive', { status: 200 });
+      }) as typeof fetch;
+
+      const provider = new GitHubProvider({
+        type: 'github',
+        clientId: '',
+        clientSecret: '',
+        redirectUri: '',
+      });
+
+      const archive = await provider.downloadRepositoryArchive(
+        'token',
+        'acme/juanie-demo',
+        'refs/heads/feature/preview-checkout'
+      );
+
+      expect(archive instanceof Uint8Array).toBe(true);
+      expect(requests).toEqual([
+        'https://api.github.com/repos/acme/juanie-demo/tarball/feature%2Fpreview-checkout',
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('returns an actionable error when the repo-side workflow contract is stale', async () => {
     try {
       globalThis.fetch = (async () =>

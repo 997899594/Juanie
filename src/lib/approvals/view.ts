@@ -100,6 +100,7 @@ export interface ApprovalItemDecorations {
   branchLabel: string;
   previewSourceMeta: PreviewSourceMetadata;
   previewLifecycle: PreviewLifecycleSummary | null;
+  approvalToken?: string | null;
 }
 
 export function formatApprovalStatusLabel(value: string): string {

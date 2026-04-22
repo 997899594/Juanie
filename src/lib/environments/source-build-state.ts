@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { type DeploymentStatus, environments } from '@/lib/db/schema';
 
-interface SetPreviewEnvironmentBuildStateInput {
+interface SetEnvironmentSourceBuildStateInput {
   environmentId: string;
   status: Extract<DeploymentStatus, 'building' | 'failed'> | null;
   sourceRef?: string | null;
@@ -10,12 +10,14 @@ interface SetPreviewEnvironmentBuildStateInput {
   startedAt?: Date | null;
 }
 
-export async function setPreviewEnvironmentBuildState(
-  input: SetPreviewEnvironmentBuildStateInput
+export async function setEnvironmentSourceBuildState(
+  input: SetEnvironmentSourceBuildStateInput
 ): Promise<void> {
   await db
     .update(environments)
     .set({
+      // Persist source-build state in the existing environment build columns so preview and
+      // persistent direct environments share one code path without introducing a second store.
       previewBuildStatus: input.status,
       previewBuildSourceRef: input.status ? (input.sourceRef ?? null) : null,
       previewBuildSourceCommitSha: input.status ? (input.sourceCommitSha ?? null) : null,
@@ -25,8 +27,8 @@ export async function setPreviewEnvironmentBuildState(
     .where(eq(environments.id, input.environmentId));
 }
 
-export async function clearPreviewEnvironmentBuildState(environmentId: string): Promise<void> {
-  await setPreviewEnvironmentBuildState({
+export async function clearEnvironmentSourceBuildState(environmentId: string): Promise<void> {
+  await setEnvironmentSourceBuildState({
     environmentId,
     status: null,
   });

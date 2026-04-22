@@ -127,6 +127,18 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function normalizeArchiveRef(ref: string): string {
+  if (ref.startsWith('refs/heads/')) {
+    return ref.slice('refs/heads/'.length);
+  }
+
+  if (ref.startsWith('refs/tags/')) {
+    return ref.slice('refs/tags/'.length);
+  }
+
+  return ref;
+}
+
 export class GitHubProvider implements GitProvider {
   type = 'github' as const;
   private clientId: string;
@@ -194,6 +206,37 @@ export class GitHubProvider implements GitProvider {
     }
 
     return payload as T;
+  }
+
+  private async requestBinary(
+    accessToken: string,
+    path: string,
+    options?: {
+      method?: string;
+      searchParams?: Record<string, string | undefined>;
+    }
+  ): Promise<Uint8Array> {
+    const response = await fetch(this.buildApiUrl(path, options?.searchParams), {
+      method: options?.method ?? 'GET',
+      headers: {
+        Accept: 'application/octet-stream',
+        Authorization: `Bearer ${accessToken}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      redirect: 'follow',
+    });
+
+    if (!response.ok) {
+      const raw = await response.text();
+      const payload = raw.length > 0 ? this.parseJsonSafely(raw) : null;
+
+      throw Object.assign(
+        new Error(this.extractGitHubErrorMessage(payload, raw, response.statusText)),
+        { status: response.status }
+      );
+    }
+
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   private parseJsonSafely(raw: string): unknown {
@@ -820,6 +863,20 @@ export class GitHubProvider implements GitProvider {
     branch?: string
   ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>> {
     return this.getDirectoryContents(accessToken, repoFullName, path, branch);
+  }
+
+  async downloadRepositoryArchive(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<Uint8Array> {
+    const { owner, repo } = this.parseRepoFullName(repoFullName);
+    const archiveRef = normalizeArchiveRef(ref);
+
+    return this.requestBinary(
+      accessToken,
+      `/repos/${owner}/${repo}/tarball/${encodeURIComponent(archiveRef)}`
+    );
   }
 
   private async getDirectoryContents(

@@ -116,4 +116,37 @@ describe('GitLabProvider preview build trigger', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('downloads repository archives through the provider API instead of shell git', async () => {
+    const calls: Array<string> = [];
+
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = input instanceof URL ? input.toString() : String(input);
+        calls.push(url);
+        return new Response('archive', { status: 200 });
+      }) as typeof fetch;
+
+      const provider = new GitLabProvider({
+        type: 'gitlab',
+        clientId: '',
+        clientSecret: '',
+        redirectUri: '',
+        serverUrl: 'https://gitlab.example.com',
+      });
+
+      const archive = await provider.downloadRepositoryArchive(
+        'token',
+        'acme/juanie-demo',
+        'refs/heads/feature/preview-checkout'
+      );
+
+      expect(archive instanceof Uint8Array).toBe(true);
+      expect(calls).toEqual([
+        'https://gitlab.example.com/api/v4/projects/acme%2Fjuanie-demo/repository/archive.tar.gz?sha=feature%2Fpreview-checkout',
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

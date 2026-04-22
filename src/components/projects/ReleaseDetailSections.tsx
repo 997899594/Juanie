@@ -5,10 +5,12 @@ import { DeploymentRollbackAction } from '@/components/projects/DeploymentRollba
 import { DeploymentRolloutAction } from '@/components/projects/DeploymentRolloutAction';
 import { MigrationSpecDetails } from '@/components/projects/MigrationSpecDetails';
 import { ReleaseAISnapshotPanel } from '@/components/projects/ReleaseAISnapshotPanel';
-import { ReleaseMigrationActions } from '@/components/projects/ReleaseMigrationActions';
+import { ReleaseTaskCenter } from '@/components/projects/ReleaseTaskCenter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusIndicator } from '@/components/ui/status-indicator';
+import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output';
+import type { ReleaseTaskCenterSnapshot } from '@/lib/ai/tasks/release-task-center';
 import type { TeamRole } from '@/lib/db/schema';
 import { getMigrationPhaseLabel } from '@/lib/migrations/presentation';
 import { buildReleaseEnvironmentActionSnapshot } from '@/lib/releases/governance-view';
@@ -22,7 +24,7 @@ type ReleasePageData = NonNullable<Awaited<ReturnType<typeof getReleaseDetailPag
 const releaseShellClassName =
   'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
 const releaseSubtleClassName =
-  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
+  'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
 const releaseSectionTitleClassName =
   'text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground';
 
@@ -406,6 +408,8 @@ export function ReleaseExecutionSections({
   release,
   releasePlanSnapshot,
   incidentSnapshot,
+  dynamicPluginPanels,
+  initialTaskCenter,
 }: {
   projectId: string;
   releaseId: string;
@@ -425,6 +429,15 @@ export function ReleaseExecutionSections({
       >
     >
   >;
+  dynamicPluginPanels?: Array<{
+    pluginId: string;
+    snapshot: Awaited<
+      ReturnType<
+        typeof import('@/lib/ai/runtime/plugin-service').resolveAIPluginSnapshot<DynamicPluginOutput>
+      >
+    >;
+  }>;
+  initialTaskCenter?: ReleaseTaskCenterSnapshot | null;
 }) {
   const releaseActions = buildReleaseEnvironmentActionSnapshot(role, release.environment);
 
@@ -538,6 +551,14 @@ export function ReleaseExecutionSections({
       </div>
 
       <div className="space-y-4">
+        <ReleaseTaskCenter
+          projectId={projectId}
+          releaseId={releaseId}
+          canManageActions={releaseActions.canManage}
+          disabledSummary={releaseActions.summary}
+          initialSnapshot={initialTaskCenter}
+        />
+
         <section className={releaseShellClassName}>
           <div className="mb-4 text-sm font-semibold">迁移记录</div>
           {release.migrationRuns.length === 0 ? (
@@ -558,13 +579,6 @@ export function ReleaseExecutionSections({
                       <Badge variant="secondary">{run.serviceName}</Badge>
                       <Badge variant="secondary">{run.database.name}</Badge>
                     </div>
-                    <ReleaseMigrationActions
-                      projectId={projectId}
-                      runId={run.id}
-                      status={run.status}
-                      disabled={!releaseActions.canManage}
-                      disabledSummary={releaseActions.summary}
-                    />
                   </div>
                   <MigrationSpecDetails
                     specification={run.specification}
@@ -602,6 +616,7 @@ export function ReleaseExecutionSections({
               releaseId={releaseId}
               releasePlan={releasePlanSnapshot}
               incidentAnalysis={incidentSnapshot}
+              dynamicPluginPanels={dynamicPluginPanels}
             />
             <details className={releaseSubtleClassName}>
               <summary className="cursor-pointer list-none text-sm font-medium text-foreground">

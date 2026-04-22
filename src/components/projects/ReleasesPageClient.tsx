@@ -379,7 +379,7 @@ export function ReleasesPageClient({ projectId, initialData }: ReleasesPageClien
       <ReleaseCardList projectId={projectId} releases={filtered} />
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-        <div className="ui-floating flex items-center gap-2 rounded-[24px] p-2 backdrop-blur">
+        <div className="flex items-center gap-2 rounded-[24px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] p-2 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)] backdrop-blur">
           <Button asChild variant="ghost" size="sm" className="min-w-0 flex-1 rounded-full">
             <Link
               href={

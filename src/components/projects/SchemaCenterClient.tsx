@@ -140,6 +140,12 @@ function formatTimestamp(value: string | Date | null | undefined): string | null
   });
 }
 
+const shellClassName =
+  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+
+const subCardClassName =
+  'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+
 export function SchemaCenterClient({
   projectId,
   initialData,
@@ -249,22 +255,48 @@ export function SchemaCenterClient({
         }
       />
 
-      <div className="rounded-[18px] bg-[rgba(243,240,233,0.72)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset]">
-        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <span>{data.summary.databaseCount} 个数据库</span>
-          <span>{data.summary.blockingCount} 个门禁阻塞</span>
-          <span>{data.summary.pendingCount} 个待执行迁移</span>
-          <span className="ml-auto">{data.roleLabel}</span>
+      <div className={shellClassName}>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              数据库
+            </div>
+            <div className="mt-2 text-lg font-semibold text-foreground">
+              {data.summary.databaseCount}
+            </div>
+          </div>
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              阻塞
+            </div>
+            <div className="mt-2 text-lg font-semibold text-foreground">
+              {data.summary.blockingCount}
+            </div>
+          </div>
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              待迁移
+            </div>
+            <div className="mt-2 text-lg font-semibold text-foreground">
+              {data.summary.pendingCount}
+            </div>
+          </div>
+          <div className={subCardClassName}>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+              当前权限
+            </div>
+            <div className="mt-2 text-sm font-medium text-foreground">{data.roleLabel}</div>
+          </div>
         </div>
       </div>
 
       <div className="space-y-4">
         {data.environments.map((environment) => (
-          <section key={environment.id} className="ui-floating px-4 py-4">
+          <section key={environment.id} className={shellClassName}>
             {!focusedEnvironment ? (
-              <div className="mb-4 flex items-center gap-2">
-                <Database className="h-4 w-4" />
-                <div className="text-sm font-semibold">{environment.name}</div>
+              <div className="mb-5 flex items-center gap-2">
+                <Database className="h-4 w-4 text-muted-foreground" />
+                <div className="text-sm font-semibold text-foreground">{environment.name}</div>
                 {environment.isProduction ? <Badge variant="secondary">生产</Badge> : null}
                 {environment.isPreview ? <Badge variant="secondary">预览</Badge> : null}
               </div>
@@ -309,10 +341,7 @@ export function SchemaCenterClient({
                     repairPlan.atlasExecutionStatus === 'failed');
 
                 return (
-                  <div
-                    key={database.id}
-                    className="rounded-2xl bg-[linear-gradient(180deg,rgba(243,240,233,0.72),rgba(255,255,255,0.88))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.66)_inset,0_0_0_1px_rgba(17,17,17,0.028)]"
-                  >
+                  <div key={database.id} className={subCardClassName}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -467,12 +496,12 @@ export function SchemaCenterClient({
                     </div>
 
                     {repairPlan && repairPresentation?.summary ? (
-                      <div className="mt-4 rounded-2xl bg-background/70 px-4 py-3">
-                        <div className="text-sm font-medium text-foreground">处理</div>
+                      <div className="mt-4 rounded-[16px] bg-white/70 px-4 py-3">
+                        <div className="text-sm font-medium text-foreground">处理建议</div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {repairPlan.summary}
                         </div>
-                        <div className="mt-2 rounded-[16px] bg-[rgba(243,240,233,0.64)] px-3 py-2 text-sm text-foreground">
+                        <div className="mt-2 rounded-[14px] bg-[rgba(243,240,233,0.64)] px-3 py-2 text-sm text-foreground">
                           {repairPresentation.summary}
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">
@@ -489,7 +518,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.diffSummary ? (
-                      <div className="mt-4 rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+                      <div className="mt-4 rounded-[16px] bg-white/70 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">迁移详情</Badge>
                           <Badge variant="secondary">
@@ -509,7 +538,7 @@ export function SchemaCenterClient({
                             {Object.entries(latestAtlasRun.artifactFiles).map(([file, content]) => (
                               <div
                                 key={`${database.id}-schema-center-artifact-${file}`}
-                                className="rounded-2xl bg-background/75 px-4 py-3"
+                                className="rounded-[14px] bg-[rgba(243,240,233,0.58)] px-4 py-3"
                               >
                                 <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                   {file}
@@ -525,7 +554,7 @@ export function SchemaCenterClient({
                     ) : null}
 
                     {latestAtlasRun?.log ? (
-                      <details className="mt-4 rounded-[18px] bg-[rgba(243,240,233,0.68)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+                      <details className="mt-4 rounded-[16px] bg-white/70 px-4 py-3">
                         <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
                           执行日志
                         </summary>

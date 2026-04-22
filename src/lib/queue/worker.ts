@@ -1,5 +1,6 @@
 import { initK8sClient } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
+import { createAITaskWorker } from './ai-task';
 import { createDeploymentWorker } from './deployment';
 import { createMigrationWorker } from './migration';
 import { createProjectDeleteWorker } from './project-delete';
@@ -19,6 +20,7 @@ const releaseWorker = createReleaseWorker();
 const deploymentWorker = createDeploymentWorker();
 const migrationWorker = createMigrationWorker();
 const schemaRepairAtlasWorker = createSchemaRepairAtlasWorker();
+const aiTaskWorker = createAITaskWorker();
 
 projectInitWorker.on('completed', (job) => {
   workerLogger.info('Project init job completed', { jobId: job.id, queue: 'project-init' });
@@ -77,6 +79,20 @@ schemaRepairAtlasWorker.on('failed', (job, err) => {
   });
 });
 
+aiTaskWorker.on('completed', (job) => {
+  workerLogger.info('AI task job completed', {
+    jobId: job.id,
+    queue: 'ai-task',
+  });
+});
+
+aiTaskWorker.on('failed', (job, err) => {
+  workerLogger.error('AI task job failed', err, {
+    jobId: job?.id,
+    queue: 'ai-task',
+  });
+});
+
 process.on('SIGTERM', async () => {
   workerLogger.info('Shutting down workers', { signal: 'SIGTERM' });
   await Promise.all([
@@ -86,6 +102,7 @@ process.on('SIGTERM', async () => {
     deploymentWorker.close(),
     migrationWorker.close(),
     schemaRepairAtlasWorker.close(),
+    aiTaskWorker.close(),
   ]);
   process.exit(0);
 });
@@ -99,6 +116,7 @@ process.on('SIGINT', async () => {
     deploymentWorker.close(),
     migrationWorker.close(),
     schemaRepairAtlasWorker.close(),
+    aiTaskWorker.close(),
   ]);
   process.exit(0);
 });
@@ -111,5 +129,6 @@ workerLogger.info('Workers started successfully', {
     'deployment',
     'migration',
     'schema-repair-atlas',
+    'ai-task',
   ],
 });

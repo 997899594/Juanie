@@ -79,6 +79,10 @@ export function buildProjectOverviewPageData<
     previewPrNumber?: number | null;
     branch?: string | null;
     expiresAt?: Date | string | null;
+    previewBuildStatus?: string | null;
+    previewBuildSourceRef?: string | null;
+    previewBuildSourceCommitSha?: string | null;
+    previewBuildStartedAt?: Date | string | null;
     deploymentStrategy?: 'rolling' | 'controlled' | 'canary' | 'blue_green' | null;
     domains?: Array<{
       id: string;

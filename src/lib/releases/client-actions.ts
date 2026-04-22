@@ -337,6 +337,7 @@ export async function executeMigrationRunAction(input: {
   projectId: string;
   runId: string;
   action: 'approve' | 'retry' | 'mark_external_complete' | 'mark_external_failed';
+  approvalToken?: string | null;
 }): Promise<MigrationRunActionResponse> {
   const response = await fetch(`/api/projects/${input.projectId}/migration-runs/${input.runId}`, {
     method: 'POST',
@@ -345,6 +346,7 @@ export async function executeMigrationRunAction(input: {
     },
     body: JSON.stringify({
       action: input.action,
+      approvalToken: input.approvalToken ?? null,
     }),
   });
 

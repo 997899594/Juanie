@@ -41,6 +41,7 @@ jobs:
       - run: bun run db:validate
       - run: bunx biome check
       - run: bun run lint
+      - run: bun run ai:eval
       - run: bun run test
       - run: bun run build
 

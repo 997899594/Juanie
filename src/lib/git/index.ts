@@ -180,6 +180,16 @@ export interface GitProvider {
     path: string,
     branch?: string
   ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir' }>>;
+
+  /**
+   * Download a repository archive for the given ref.
+   * Returned bytes should be a tar.gz archive that can be extracted locally.
+   */
+  downloadRepositoryArchive(
+    accessToken: string,
+    repoFullName: string,
+    ref: string
+  ): Promise<Uint8Array>;
 }
 
 export function createGitProvider(config: GitProviderConfig): GitProvider {

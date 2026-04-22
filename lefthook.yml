@@ -9,3 +9,5 @@ pre-push:
   commands:
     typecheck:
       run: bun run typecheck
+    ai-eval:
+      run: bun run ai:eval

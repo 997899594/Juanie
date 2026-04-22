@@ -38,6 +38,7 @@ export async function prewarmReleaseMigrationPreviewCache(
         specification: {
           tool: spec.specification.tool,
           migrationPath: spec.specification.migrationPath,
+          sourceConfigPath: spec.specification.sourceConfigPath,
         },
         database: {
           id: spec.database.id,

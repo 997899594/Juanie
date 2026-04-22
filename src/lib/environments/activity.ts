@@ -35,7 +35,8 @@ interface RecentDeploymentInput {
   releaseId?: string | null;
 }
 
-interface RecentPreviewBuildInput {
+interface RecentSourceBuildInput {
+  title: string;
   status: string;
   sourceLabel?: string | null;
   shortCommitSha?: string | null;
@@ -72,7 +73,7 @@ export function buildEnvironmentRecentActivity(input: {
   environmentId: string;
   latestRelease?: RecentReleaseInput | null;
   latestDeployment?: RecentDeploymentInput | null;
-  latestPreviewBuild?: RecentPreviewBuildInput | null;
+  latestSourceBuild?: RecentSourceBuildInput | null;
   latestMigration?: RecentMigrationInput | null;
   latestGovernance?: RecentGovernanceInput | null;
 }): EnvironmentRecentActivityItem[] {
@@ -124,27 +125,27 @@ export function buildEnvironmentRecentActivity(input: {
     });
   }
 
-  if (input.latestPreviewBuild) {
-    const statusDecoration = getDeploymentStatusDecoration(input.latestPreviewBuild.status);
+  if (input.latestSourceBuild) {
+    const statusDecoration = getDeploymentStatusDecoration(input.latestSourceBuild.status);
     items.push({
-      key: `preview-build:${input.environmentId}`,
+      key: `source-build:${input.environmentId}`,
       kind: 'deployment',
       kindLabel: '构建',
-      title: '预览构建',
+      title: input.latestSourceBuild.title,
       summary: [
-        input.latestPreviewBuild.sourceLabel ?? '预览环境',
+        input.latestSourceBuild.sourceLabel ?? '当前来源',
         statusDecoration.label,
-        input.latestPreviewBuild.shortCommitSha
-          ? `commit ${input.latestPreviewBuild.shortCommitSha}`
+        input.latestSourceBuild.shortCommitSha
+          ? `commit ${input.latestSourceBuild.shortCommitSha}`
           : null,
       ]
         .filter(Boolean)
         .join(' · '),
-      createdAtLabel: formatPlatformTimeContext(input.latestPreviewBuild.createdAt),
+      createdAtLabel: formatPlatformTimeContext(input.latestSourceBuild.createdAt),
       href: null,
       actionLabel: null,
       statusDecoration,
-      timestamp: toTimestamp(input.latestPreviewBuild.createdAt),
+      timestamp: toTimestamp(input.latestSourceBuild.createdAt),
     });
   }
 

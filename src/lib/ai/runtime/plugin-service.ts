@@ -1,6 +1,6 @@
 import { aiProvider } from '@/lib/ai/core/provider';
 import { type AIPluginAvailability, getAIPluginAvailability } from '@/lib/ai/runtime/entitlements';
-import { getAIPluginById } from '@/lib/ai/runtime/plugin-registry';
+import { getAIPluginByIdForTeam } from '@/lib/ai/runtime/plugin-registry';
 import { runAIPlugin } from '@/lib/ai/runtime/plugin-runner';
 import {
   computeAIInputHash,
@@ -9,10 +9,22 @@ import {
   type StoredAIPluginSnapshot,
   saveAIPluginSnapshot,
 } from '@/lib/ai/runtime/snapshot-service';
-import type { AIPluginContext, AIPluginManifest } from '@/lib/ai/runtime/types';
+import type { AIPlugin, AIPluginContext, AIPluginManifest } from '@/lib/ai/runtime/types';
+import { resolvePrimarySkill } from '@/lib/ai/skills/runtime';
 
-function resolvePluginResourceId(context: AIPluginContext): string {
-  if (context.releaseId) {
+function resolvePluginResourceId(
+  plugin: AIPlugin<unknown, unknown>,
+  context: AIPluginContext
+): string {
+  if (plugin.manifest.resourceType === 'team') {
+    return context.teamId;
+  }
+
+  if (plugin.manifest.resourceType === 'release' || context.releaseId) {
+    if (!context.releaseId) {
+      throw new Error(`AI plugin ${plugin.manifest.id} is missing releaseId`);
+    }
+
     return context.releaseId;
   }
 
@@ -20,7 +32,11 @@ function resolvePluginResourceId(context: AIPluginContext): string {
     return context.previewEnvironmentId;
   }
 
-  if (context.environmentId) {
+  if (plugin.manifest.resourceType === 'environment' || context.environmentId) {
+    if (!context.environmentId) {
+      throw new Error(`AI plugin ${plugin.manifest.id} is missing environmentId`);
+    }
+
     return context.environmentId;
   }
 
@@ -46,12 +62,13 @@ export async function resolveAIPluginSnapshot<TOutput>(input: {
   context: AIPluginContext;
   forceRefresh?: boolean;
 }): Promise<ResolvedAIPluginSnapshot<TOutput>> {
-  const plugin = getAIPluginById(input.pluginId);
+  const plugin = await getAIPluginByIdForTeam(input.context.teamId, input.pluginId);
   if (!plugin) {
     throw new Error(`Unknown AI plugin: ${input.pluginId}`);
   }
+  resolvePrimarySkill(plugin);
 
-  const resourceId = resolvePluginResourceId(input.context);
+  const resourceId = resolvePluginResourceId(plugin, input.context);
   const evidence = await plugin.buildEvidence(input.context);
   const inputHash = computeAIInputHash(evidence);
 

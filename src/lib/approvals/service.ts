@@ -1,3 +1,4 @@
+import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
 import {
   type ApprovalRunLike,
   buildApprovalStats,
@@ -35,6 +36,7 @@ export type ApprovalsPageData = ReturnType<typeof buildApprovalsPageData>;
 export async function getApprovalsPageData(input: {
   teamIds: string[];
   filterState: AttentionFilterState;
+  actorUserId?: string | null;
 }) {
   const visibleProjects =
     input.teamIds.length > 0
@@ -104,6 +106,7 @@ export async function getApprovalsPageData(input: {
         ? {
             tool: run.specification.tool,
             migrationPath: run.specification.migrationPath,
+            sourceConfigPath: run.specification.sourceConfigPath,
           }
         : null,
       database: run.database
@@ -127,7 +130,7 @@ export async function getApprovalsPageData(input: {
     }))
   );
 
-  return buildApprovalsPageData({
+  const data = buildApprovalsPageData({
     runs: runs.map((run) => ({
       ...run,
       specification:
@@ -141,4 +144,21 @@ export async function getApprovalsPageData(input: {
     })),
     filterState: input.filterState,
   });
+
+  return {
+    ...data,
+    attentionRuns: data.attentionRuns.map((run) => ({
+      ...run,
+      approvalToken:
+        run.status === 'awaiting_approval' && input.actorUserId
+          ? createMigrationApprovalToken({
+              teamId: run.project.teamId,
+              projectId: run.projectId,
+              environmentId: run.environment.id,
+              runId: run.id,
+              actorUserId: input.actorUserId,
+            })
+          : null,
+    })),
+  };
 }

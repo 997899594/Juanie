@@ -258,12 +258,28 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-semibold">{plugin.name}</div>
                       <Badge variant="secondary">{plugin.tierLabel}</Badge>
+                      <Badge variant="secondary">{plugin.scopeLabel}</Badge>
                       <Badge variant="secondary">{plugin.surfaceLabel}</Badge>
+                      <Badge variant="secondary">{plugin.permissionLabel}</Badge>
                     </div>
+                    <div className="text-sm text-muted-foreground">{plugin.description}</div>
                     <div className="text-xs text-muted-foreground">
                       schema：{plugin.snapshotSchema} · 缓存{' '}
                       {Math.round(plugin.cacheTtlSeconds / 60)} 分钟
                       {plugin.supportsManualRefresh ? ' · 支持手动刷新' : ''}
+                      {plugin.requiresAudit ? ' · 记录审计' : ''}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {[
+                        plugin.skills.length > 0 ? `${plugin.skills.length} 个技能` : null,
+                        plugin.tools.length > 0 ? `${plugin.tools.length} 个工具` : null,
+                        plugin.actions.length > 0 ? `${plugin.actions.length} 个动作` : null,
+                        plugin.capabilities.length > 0
+                          ? `${plugin.capabilities.length} 个能力`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">

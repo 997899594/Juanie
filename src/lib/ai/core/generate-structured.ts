@@ -16,6 +16,11 @@ export async function generateStructuredObject<TSchema extends ZodTypeAny>(input
   provider: string;
   model: string;
   degraded: ReturnType<typeof createDegradationState>;
+  usage: {
+    inputTokens: number | null;
+    outputTokens: number | null;
+    totalTokens: number | null;
+  } | null;
 }> {
   if (!aiProvider.isEnabled()) {
     throw new Error('AI provider is not enabled or configured');
@@ -38,5 +43,10 @@ export async function generateStructuredObject<TSchema extends ZodTypeAny>(input
     provider: aiProvider.getProviderLabel(),
     model: getModelNameForPolicy(policy),
     degraded: createDegradationState(null),
+    usage: {
+      inputTokens: result.usage?.inputTokens ?? null,
+      outputTokens: result.usage?.outputTokens ?? null,
+      totalTokens: result.usage?.totalTokens ?? null,
+    },
   };
 }

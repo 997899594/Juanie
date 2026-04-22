@@ -319,6 +319,12 @@ function getPillChoiceClass(selected: boolean, disabled = false): string {
   );
 }
 
+const reviewShellClassName =
+  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+
+const reviewSubtleClassName =
+  'rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+
 interface SectionHeadingProps {
   title: string;
   description?: string;
@@ -398,7 +404,7 @@ interface DisclosurePanelProps {
 
 function DisclosurePanel({ title, meta, open, onToggle, children }: DisclosurePanelProps) {
   return (
-    <div className="ui-floating overflow-hidden">
+    <div className={cn(reviewShellClassName, 'overflow-hidden px-0 py-0')}>
       <Button
         type="button"
         variant="ghost"
@@ -416,7 +422,7 @@ function DisclosurePanel({ title, meta, open, onToggle, children }: DisclosurePa
         </div>
       </Button>
 
-      {open ? <div className="console-divider-top space-y-4 px-4 py-4">{children}</div> : null}
+      {open ? <div className="console-divider-top space-y-4 px-5 py-4">{children}</div> : null}
     </div>
   );
 }
@@ -887,7 +893,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
         {currentStep === 'repository' && (
           <div className="space-y-6">
-            <div className="ui-floating rounded-[22px] p-4">
+            <div className={cn(reviewShellClassName, 'p-4')}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-medium">{selectedTeam?.name}</div>
@@ -920,7 +926,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   />
                 </div>
 
-                <div className="ui-floating max-h-96 overflow-y-auto">
+                <div className={cn(reviewShellClassName, 'max-h-96 overflow-y-auto p-0')}>
                   {!selectedTeam?.importEnabled ? (
                     <EmptyState title="没有可用代码托管授权" className="min-h-40 rounded-none" />
                   ) : repositories.length === 0 ? (
@@ -1036,7 +1042,12 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         {currentStep === 'config' && (
           <div className="space-y-6">
             {isLoadingAnalyze ? (
-              <div className="ui-floating flex flex-col items-center justify-center py-12">
+              <div
+                className={cn(
+                  reviewShellClassName,
+                  'flex flex-col items-center justify-center py-12'
+                )}
+              >
                 <Loader2 className="mb-4 h-8 w-8 animate-spin text-foreground" />
                 <p className="text-sm text-muted-foreground">正在识别仓库结构...</p>
               </div>
@@ -1238,7 +1249,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
           <div className="space-y-6">
             <SectionHeading title="最后确认" />
 
-            <div className="ui-floating px-4 py-4">
+            <div className={reviewShellClassName}>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0 space-y-2">
                   <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -1267,19 +1278,19 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 </div>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-4">
-                <div className="ui-control-muted px-4 py-3">
+                <div className={reviewSubtleClassName}>
                   <div className="text-xs text-muted-foreground">环境链路</div>
                   <div className="mt-1 text-sm font-medium">{environmentTemplateLabel}</div>
                 </div>
-                <div className="ui-control-muted px-4 py-3">
+                <div className={reviewSubtleClassName}>
                   <div className="text-xs text-muted-foreground">生产分支</div>
                   <div className="mt-1 text-sm font-medium">{formData.productionBranch}</div>
                 </div>
-                <div className="ui-control-muted px-4 py-3">
+                <div className={reviewSubtleClassName}>
                   <div className="text-xs text-muted-foreground">启用服务</div>
                   <div className="mt-1 text-sm font-medium">{activeServices.length} 个</div>
                 </div>
-                <div className="ui-control-muted px-4 py-3">
+                <div className={reviewSubtleClassName}>
                   <div className="text-xs text-muted-foreground">数据库</div>
                   <div className="mt-1 text-sm font-medium">{formData.databases.length} 个</div>
                 </div>
@@ -1295,12 +1306,14 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
               open={reviewServicesOpen}
               onToggle={() => setReviewServicesOpen((current) => !current)}
             >
-              <div className="ui-control overflow-hidden">
+              <div className="space-y-3">
                 {formData.services.length === 0 ? (
-                  <EmptyState title="没有识别到服务" className="min-h-40 rounded-none" />
+                  <div className="overflow-hidden rounded-[18px] bg-white/72">
+                    <EmptyState title="没有识别到服务" className="min-h-40 rounded-none" />
+                  </div>
                 ) : (
                   formData.services.map((service) => (
-                    <div key={service._id} className="console-grid-table-row px-4 py-4">
+                    <div key={service._id} className={reviewSubtleClassName}>
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex min-w-0 items-center gap-3">
@@ -1331,7 +1344,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                       {!service.disabled && (
                         <div className="mt-4 space-y-4 pl-11">
                           {service.type === 'web' && (
-                            <div className="ui-control-muted flex items-center justify-between px-4 py-3">
+                            <div className="flex items-center justify-between rounded-[14px] bg-white/70 px-4 py-3">
                               <div>
                                 <div className="text-sm font-medium">公网入口</div>
                                 <div className="mt-1 text-xs text-muted-foreground">
@@ -1525,13 +1538,15 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                 </div>
               </div>
 
-              <div className="ui-control overflow-hidden">
+              <div className="space-y-3">
                 {formData.databases.length === 0 ? (
-                  <EmptyState
-                    icon={<Database className="h-5 w-5 opacity-40" />}
-                    title="没有数据库"
-                    className="min-h-40 rounded-none"
-                  />
+                  <div className="overflow-hidden rounded-[18px] bg-white/72">
+                    <EmptyState
+                      icon={<Database className="h-5 w-5 opacity-40" />}
+                      title="没有数据库"
+                      className="min-h-40 rounded-none"
+                    />
+                  </div>
                 ) : (
                   formData.databases.map((database) => {
                     const updateDatabase = (updates: Partial<DatabaseWithId>) => {
@@ -1544,10 +1559,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                     };
 
                     return (
-                      <div
-                        key={database._id}
-                        className="console-grid-table-row space-y-4 px-4 py-4"
-                      >
+                      <div key={database._id} className={reviewSubtleClassName}>
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex min-w-0 flex-1 items-center gap-3">
                             <Database className="h-4 w-4 text-muted-foreground" />
@@ -1670,7 +1682,12 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
       </div>
 
       <div className="pointer-events-none sticky bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-20 mt-6 -mx-4 px-4 py-3 md:static md:mx-0 md:px-0 md:py-0">
-        <div className="pointer-events-auto ui-floating flex items-center justify-between gap-3 p-3 md:bg-transparent md:p-0 md:shadow-none">
+        <div
+          className={cn(
+            reviewShellClassName,
+            'pointer-events-auto flex items-center justify-between gap-3 p-3 md:bg-transparent md:p-0 md:shadow-none'
+          )}
+        >
           <Button
             variant="ghost"
             className="rounded-full px-4"

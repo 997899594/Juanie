@@ -190,6 +190,10 @@ export type AIPlan = (typeof aiPlans)[number];
 
 export const aiPluginRunStatuses = ['succeeded', 'failed'] as const;
 export type AIPluginRunStatus = (typeof aiPluginRunStatuses)[number];
+export const aiTaskKinds = ['environment_deep_analysis', 'release_deep_analysis'] as const;
+export type AITaskKind = (typeof aiTaskKinds)[number];
+export const aiTaskStatuses = ['queued', 'running', 'succeeded', 'failed'] as const;
+export type AITaskStatus = (typeof aiTaskStatuses)[number];
 
 export const teamRoles = ['owner', 'admin', 'member'] as const;
 export type TeamRole = (typeof teamRoles)[number];
@@ -214,6 +218,8 @@ export const teamRoleEnum = pgEnum('teamRole', teamRoles);
 export const integrationCapabilityEnum = pgEnum('integrationCapability', integrationCapabilities);
 export const integrationAuthModeEnum = pgEnum('integrationAuthMode', integrationAuthModes);
 export const aiPlanEnum = pgEnum('aiPlan', aiPlans);
+export const aiTaskKindEnum = pgEnum('aiTaskKind', aiTaskKinds);
+export const aiTaskStatusEnum = pgEnum('aiTaskStatus', aiTaskStatuses);
 export const migrationToolEnum = pgEnum('migrationTool', migrationTools);
 export const migrationPhaseEnum = pgEnum('migrationPhase', migrationPhases);
 export const migrationExecutionModeEnum = pgEnum('migrationExecutionMode', migrationExecutionModes);
@@ -1423,6 +1429,8 @@ export const aiPluginRuns = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     pluginId: varchar('pluginId', { length: 100 }).notNull(),
+    skillId: varchar('skillId', { length: 100 }),
+    actorUserId: uuid('actorUserId').references(() => users.id, { onDelete: 'set null' }),
     teamId: uuid('teamId')
       .notNull()
       .references(() => teams.id, { onDelete: 'cascade' }),
@@ -1435,6 +1443,23 @@ export const aiPluginRuns = pgTable(
     resourceId: uuid('resourceId').notNull(),
     provider: varchar('provider', { length: 100 }),
     model: varchar('model', { length: 255 }),
+    promptKey: varchar('promptKey', { length: 100 }),
+    promptVersion: varchar('promptVersion', { length: 50 }),
+    outputSchema: varchar('outputSchema', { length: 100 }),
+    toolCalls: jsonb('toolCalls')
+      .$type<
+        Array<{
+          toolId: string;
+          scope: string;
+          riskLevel: string;
+          reason: string | null;
+        }>
+      >()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    inputTokens: integer('inputTokens'),
+    outputTokens: integer('outputTokens'),
+    totalTokens: integer('totalTokens'),
     inputHash: varchar('inputHash', { length: 64 }),
     status: aiPluginRunStatusEnum('status').notNull().default('succeeded'),
     latencyMs: integer('latencyMs'),
@@ -1451,6 +1476,44 @@ export const aiPluginRuns = pgTable(
   })
 );
 
+export const aiTasks = pgTable(
+  'aiTask',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    kind: aiTaskKindEnum('kind').notNull(),
+    status: aiTaskStatusEnum('status').notNull().default('queued'),
+    title: varchar('title', { length: 255 }).notNull(),
+    actorUserId: uuid('actorUserId').references(() => users.id, { onDelete: 'set null' }),
+    teamId: uuid('teamId')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    projectId: uuid('projectId').references(() => projects.id, { onDelete: 'set null' }),
+    environmentId: uuid('environmentId').references(() => environments.id, {
+      onDelete: 'set null',
+    }),
+    releaseId: uuid('releaseId').references(() => releases.id, { onDelete: 'set null' }),
+    inputSummary: text('inputSummary').notNull(),
+    resultSummary: text('resultSummary'),
+    provider: varchar('provider', { length: 100 }),
+    model: varchar('model', { length: 255 }),
+    inputTokens: integer('inputTokens'),
+    outputTokens: integer('outputTokens'),
+    totalTokens: integer('totalTokens'),
+    errorMessage: text('errorMessage'),
+    startedAt: timestamp('startedAt'),
+    completedAt: timestamp('completedAt'),
+    createdAt: timestamp('createdAt').defaultNow().notNull(),
+  },
+  (table) => ({
+    teamIdIdx: index('aiTask_teamId_idx').on(table.teamId),
+    projectIdIdx: index('aiTask_projectId_idx').on(table.projectId),
+    environmentIdIdx: index('aiTask_environmentId_idx').on(table.environmentId),
+    releaseIdIdx: index('aiTask_releaseId_idx').on(table.releaseId),
+    createdAtIdx: index('aiTask_createdAt_idx').on(table.createdAt),
+    kindStatusIdx: index('aiTask_kind_status_idx').on(table.kind, table.status),
+  })
+);
+
 // ============================================
 // Relations
 // ============================================
@@ -1462,6 +1525,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   teamMemberships: many(teamMembers),
   teamIntegrationBindings: many(teamIntegrationBindings),
   aiPluginInstallations: many(aiPluginInstallations),
+  aiTasks: many(aiTasks),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -1504,6 +1568,7 @@ export const teamsRelations = relations(teams, ({ many }) => ({
   aiEntitlements: many(aiEntitlements),
   aiPluginRuns: many(aiPluginRuns),
   aiPluginSnapshots: many(aiPluginSnapshots),
+  aiTasks: many(aiTasks),
 }));
 
 export const teamMembersRelations = relations(teamMembers, ({ one }) => ({
@@ -1560,6 +1625,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   initSteps: many(projectInitSteps),
   aiPluginRuns: many(aiPluginRuns),
   aiPluginSnapshots: many(aiPluginSnapshots),
+  aiTasks: many(aiTasks),
 }));
 
 export const projectInitStepsRelations = relations(projectInitSteps, ({ one }) => ({
@@ -1610,6 +1676,7 @@ export const environmentsRelations = relations(environments, ({ one, many }) => 
   databases: many(databases),
   aiPluginRuns: many(aiPluginRuns),
   aiPluginSnapshots: many(aiPluginSnapshots),
+  aiTasks: many(aiTasks),
 }));
 
 export const deliveryRulesRelations = relations(deliveryRules, ({ one }) => ({
@@ -1854,6 +1921,7 @@ export const releasesRelations = relations(releases, ({ one, many }) => ({
   migrationRuns: many(migrationRuns),
   aiPluginRuns: many(aiPluginRuns),
   aiPluginSnapshots: many(aiPluginSnapshots),
+  aiTasks: many(aiTasks),
 }));
 
 export const releaseArtifactsRelations = relations(releaseArtifacts, ({ one }) => ({
@@ -1947,6 +2015,10 @@ export const aiPluginSnapshotsRelations = relations(aiPluginSnapshots, ({ one })
 }));
 
 export const aiPluginRunsRelations = relations(aiPluginRuns, ({ one }) => ({
+  actor: one(users, {
+    fields: [aiPluginRuns.actorUserId],
+    references: [users.id],
+  }),
   team: one(teams, {
     fields: [aiPluginRuns.teamId],
     references: [teams.id],
@@ -1961,6 +2033,29 @@ export const aiPluginRunsRelations = relations(aiPluginRuns, ({ one }) => ({
   }),
   release: one(releases, {
     fields: [aiPluginRuns.releaseId],
+    references: [releases.id],
+  }),
+}));
+
+export const aiTasksRelations = relations(aiTasks, ({ one }) => ({
+  actor: one(users, {
+    fields: [aiTasks.actorUserId],
+    references: [users.id],
+  }),
+  team: one(teams, {
+    fields: [aiTasks.teamId],
+    references: [teams.id],
+  }),
+  project: one(projects, {
+    fields: [aiTasks.projectId],
+    references: [projects.id],
+  }),
+  environment: one(environments, {
+    fields: [aiTasks.environmentId],
+    references: [environments.id],
+  }),
+  release: one(releases, {
+    fields: [aiTasks.releaseId],
     references: [releases.id],
   }),
 }));

@@ -10,6 +10,7 @@ interface ReleaseMigrationActionsProps {
   projectId: string;
   runId: string;
   status: string;
+  approvalToken?: string | null;
   disabled?: boolean;
   disabledSummary?: string | null;
 }
@@ -18,6 +19,7 @@ export function ReleaseMigrationActions({
   projectId,
   runId,
   status,
+  approvalToken,
   disabled = false,
   disabledSummary,
 }: ReleaseMigrationActionsProps) {
@@ -26,7 +28,8 @@ export function ReleaseMigrationActions({
     'approve' | 'retry' | 'mark_external_complete' | 'mark_external_failed' | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const canApprove = status === 'awaiting_approval';
+  const canApprove = status === 'awaiting_approval' && !!approvalToken;
+  const approvalMissing = status === 'awaiting_approval' && !approvalToken;
   const canMarkExternal = status === 'awaiting_external_completion';
   const canRetry = status === 'failed' || status === 'canceled';
 
@@ -41,6 +44,7 @@ export function ReleaseMigrationActions({
         projectId,
         runId,
         action,
+        approvalToken: action === 'approve' ? (approvalToken ?? null) : null,
       });
       router.refresh();
     } catch (actionError) {
@@ -50,7 +54,7 @@ export function ReleaseMigrationActions({
     }
   };
 
-  if (!canApprove && !canMarkExternal && !canRetry) {
+  if (!canApprove && !canMarkExternal && !canRetry && !approvalMissing) {
     return null;
   }
 
@@ -69,6 +73,17 @@ export function ReleaseMigrationActions({
             {pendingAction === 'approve' ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : null}
+            审批通过
+          </Button>
+        )}
+        {approvalMissing && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-full px-3 text-xs"
+            disabled
+            title="审批确认暂不可用，请刷新页面"
+          >
             审批通过
           </Button>
         )}
@@ -118,6 +133,9 @@ export function ReleaseMigrationActions({
           </Button>
         )}
       </div>
+      {approvalMissing ? (
+        <div className="text-xs text-muted-foreground">审批确认暂不可用，请刷新页面。</div>
+      ) : null}
       {disabled && disabledSummary ? (
         <div className="text-xs text-muted-foreground">{disabledSummary}</div>
       ) : null}

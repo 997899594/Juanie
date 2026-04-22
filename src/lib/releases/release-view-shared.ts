@@ -131,6 +131,7 @@ export interface ReleaseViewLike {
       filePreview?: MigrationFilePreviewSnapshot | null;
     } | null;
     status: string;
+    approvalToken?: string | null;
   }>;
   status: string;
   errorMessage?: string | null;
@@ -219,6 +220,7 @@ export interface ReleaseDetailDecorations {
   migrationItems: Array<{
     id: string;
     status: string;
+    approvalToken?: string | null;
     serviceId: string | null;
     database: {
       id: string;
@@ -440,6 +442,7 @@ export function buildMigrationItems(
   return release.migrationRuns.map((run, index) => ({
     id: run.id ?? `${release.id}-migration-${index}`,
     status: run.status,
+    approvalToken: run.approvalToken ?? null,
     serviceId: run.serviceId ?? null,
     database: run.database ?? {
       id: run.databaseId ?? `database-${index}`,

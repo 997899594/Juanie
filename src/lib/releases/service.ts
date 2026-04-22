@@ -1,4 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
+import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
 import { resolveAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
 import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snapshot-service';
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
@@ -61,6 +62,7 @@ async function attachReleaseMigrationFilePreviews<
         ? {
             tool: run.specification.tool,
             migrationPath: run.specification.migrationPath,
+            sourceConfigPath: run.specification.sourceConfigPath,
           }
         : null,
       database: run.database
@@ -96,6 +98,32 @@ async function attachReleaseMigrationFilePreviews<
         },
       };
     }),
+  };
+}
+
+function attachReleaseApprovalTokens<TRelease extends Awaited<ReturnType<typeof getReleaseById>>>(
+  release: TRelease,
+  actorUserId?: string | null
+) {
+  if (!release || !actorUserId) {
+    return release;
+  }
+
+  return {
+    ...release,
+    migrationRuns: release.migrationRuns.map((run) => ({
+      ...run,
+      approvalToken:
+        run.status === 'awaiting_approval'
+          ? createMigrationApprovalToken({
+              teamId: release.project.teamId,
+              projectId: release.projectId,
+              environmentId: release.environmentId,
+              runId: run.id,
+              actorUserId,
+            })
+          : null,
+    })),
   };
 }
 
@@ -585,7 +613,11 @@ export function buildReleaseDetailPageData<
   };
 }
 
-export async function getReleaseDetailPageData(input: { projectId: string; releaseId: string }) {
+export async function getReleaseDetailPageData(input: {
+  projectId: string;
+  releaseId: string;
+  actorUserId?: string | null;
+}) {
   if (!isUuid(input.projectId) || !isUuid(input.releaseId)) {
     return null;
   }
@@ -646,12 +678,16 @@ export async function getReleaseDetailPageData(input: { projectId: string; relea
   });
 
   const releaseWithFilePreviews = await attachReleaseMigrationFilePreviews(release);
+  const releaseWithApprovalTokens = attachReleaseApprovalTokens(
+    releaseWithFilePreviews,
+    input.actorUserId
+  );
 
   return buildReleaseDetailPageData({
     projectId: input.projectId,
     release: {
-      ...releaseWithFilePreviews,
-      previewReviewMetadata: previewReviewMetadataById.get(releaseWithFilePreviews.id) ?? null,
+      ...releaseWithApprovalTokens,
+      previewReviewMetadata: previewReviewMetadataById.get(releaseWithApprovalTokens.id) ?? null,
       infrastructureDiagnostics: runtimeContext.infrastructureDiagnostics,
       governanceEvents: runtimeContext.governanceEvents,
     },

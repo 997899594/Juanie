@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { AICommandBar } from './ai-command-bar';
 import { Header } from './header';
 import { MobileBottomNav } from './mobile-bottom-nav';
 import { Sidebar } from './sidebar';
@@ -27,6 +28,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="mx-auto max-w-[1400px]">{children}</div>
         </main>
       </div>
+      <AICommandBar />
       <MobileBottomNav />
     </div>
   );
