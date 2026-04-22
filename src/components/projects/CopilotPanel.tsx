@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { StreamdownMessage } from './StreamdownMessage';
 
 interface CopilotPanelProps {
   title: string;
@@ -20,14 +21,6 @@ interface CopilotMessage {
   role: 'user' | 'assistant';
   content: string;
   meta?: string | null;
-}
-
-interface CopilotReplyPayload {
-  message: string;
-  suggestions: string[];
-  provider: string | null;
-  model: string | null;
-  generatedAt: string;
 }
 
 function buildMessageId(): string {
@@ -45,6 +38,7 @@ export function CopilotPanel(input: CopilotPanelProps) {
   ]);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState(input.initialPrompts);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -63,6 +57,8 @@ export function CopilotPanel(input: CopilotPanelProps) {
     if (!content || loading) {
       return;
     }
+
+    const assistantMessageId = buildMessageId();
 
     const nextMessages: CopilotMessage[] = [
       ...messages,
@@ -92,12 +88,8 @@ export function CopilotPanel(input: CopilotPanelProps) {
         }),
       });
 
-      const data = (await response.json().catch(() => null)) as
-        | CopilotReplyPayload
-        | { error?: string }
-        | null;
-
       if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
         throw new Error(
           data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
             ? data.error
@@ -105,20 +97,73 @@ export function CopilotPanel(input: CopilotPanelProps) {
         );
       }
 
-      const reply = data as CopilotReplyPayload;
+      const provider = response.headers.get('X-AI-Provider');
+      const model = response.headers.get('X-AI-Model');
+      const suggestionHeader = response.headers.get('X-Copilot-Suggestions');
+
+      if (suggestionHeader) {
+        try {
+          const parsedSuggestions = JSON.parse(decodeURIComponent(suggestionHeader)) as string[];
+          if (Array.isArray(parsedSuggestions) && parsedSuggestions.length > 0) {
+            setSuggestions(parsedSuggestions);
+          }
+        } catch {}
+      }
+
+      setStreamingMessageId(assistantMessageId);
       setMessages((current) => [
         ...current,
         {
-          id: buildMessageId(),
+          id: assistantMessageId,
           role: 'assistant',
-          content: reply.message,
-          meta: reply.provider && reply.model ? `${reply.provider} · ${reply.model}` : 'Juanie AI',
+          content: '',
+          meta: provider && model ? `${provider} · ${model}` : 'Juanie AI',
         },
       ]);
-      setSuggestions(reply.suggestions);
+
+      if (!response.body) {
+        throw new Error('Copilot 响应流不可用');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        streamedContent += decoder.decode(value, { stream: true });
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: streamedContent,
+                }
+              : message
+          )
+        );
+      }
+
+      streamedContent += decoder.decode();
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantMessageId
+            ? {
+                ...message,
+                content: streamedContent,
+              }
+            : message
+        )
+      );
     } catch (error) {
+      setMessages((current) => current.filter((message) => message.id !== assistantMessageId));
       setErrorMessage(error instanceof Error ? error.message : 'Copilot 暂时不可用');
     } finally {
+      setStreamingMessageId(null);
       setLoading(false);
     }
   };
@@ -180,9 +225,18 @@ export function CopilotPanel(input: CopilotPanelProps) {
                     '你'
                   )}
                 </div>
-                <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
-                  {message.content}
-                </div>
+                {message.role === 'assistant' ? (
+                  <div className="mt-2 text-sm leading-6 text-foreground">
+                    <StreamdownMessage
+                      content={message.content}
+                      isStreaming={streamingMessageId === message.id}
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground">
+                    {message.content}
+                  </div>
+                )}
                 {message.meta ? (
                   <div className="mt-2 text-[11px] text-muted-foreground">{message.meta}</div>
                 ) : null}

@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { copilotRequestSchema, generateReleaseCopilotReply } from '@/lib/ai/copilot/service';
+import { copilotRequestSchema, generateReleaseCopilotStream } from '@/lib/ai/copilot/service';
 import { createAuditLog } from '@/lib/audit';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -57,7 +57,7 @@ export async function POST(
     return NextResponse.json({ error: 'Copilot 请求格式不正确' }, { status: 400 });
   }
 
-  const reply = await generateReleaseCopilotReply({
+  const reply = await generateReleaseCopilotStream({
     projectId: release.projectId,
     releaseId: release.id,
     messages: parsed.data.messages,
@@ -78,5 +78,13 @@ export async function POST(
     },
   }).catch(() => undefined);
 
-  return NextResponse.json(reply);
+  return new Response(reply.stream, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-AI-Provider': reply.provider,
+      'X-AI-Model': reply.model,
+      'X-Copilot-Suggestions': encodeURIComponent(JSON.stringify(reply.suggestions)),
+    },
+  });
 }

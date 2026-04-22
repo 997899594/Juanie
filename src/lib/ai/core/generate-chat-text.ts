@@ -1,4 +1,4 @@
-import { generateText } from 'ai';
+import { generateText, smoothStream, streamText } from 'ai';
 import { createDegradationState } from '@/lib/ai/core/degradation';
 import {
   type AIModelPolicy,
@@ -43,5 +43,35 @@ export async function generateChatText(input: {
       outputTokens: result.usage?.outputTokens ?? null,
       totalTokens: result.usage?.totalTokens ?? null,
     },
+  };
+}
+
+export function generateChatTextStream(input: {
+  policy?: Exclude<AIModelPolicy, 'tool-first'>;
+  system: string;
+  prompt: string;
+}): {
+  stream: ReadableStream<string>;
+  provider: string;
+  model: string;
+} {
+  if (!aiProvider.isEnabled()) {
+    throw new Error('AI provider is not enabled or configured');
+  }
+
+  const policy = input.policy ?? 'interactive-fast';
+  const result = streamText({
+    model: getReasoningModelForPolicy(policy),
+    system: input.system,
+    prompt: input.prompt,
+    experimental_transform: smoothStream({
+      chunking: new Intl.Segmenter('zh-Hans', { granularity: 'word' }),
+    }),
+  });
+
+  return {
+    stream: result.textStream,
+    provider: aiProvider.getProviderLabel(),
+    model: getModelNameForPolicy(policy),
   };
 }
