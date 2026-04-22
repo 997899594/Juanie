@@ -48,31 +48,6 @@ describe('GitHubProvider preview build trigger', () => {
           init,
         });
 
-        if (
-          String(input).includes('/contents/.github/workflows/juanie-ci.yml') &&
-          String(input).includes('ref=codex%2Fevidence-event-knowledge-os')
-        ) {
-          return new Response(
-            JSON.stringify({
-              type: 'file',
-              encoding: 'base64',
-              content: Buffer.from(`
-name: Juanie CI
-on:
-  workflow_dispatch:
-    inputs:
-      juanie_source_sha:
-          required: false
-      juanie_release_ref:
-          required: false
-      juanie_force_full_build:
-          required: false
-`).toString('base64'),
-            }),
-            { status: 200 }
-          );
-        }
-
         return new Response(null, { status: 204 });
       }) as typeof fetch;
 
@@ -108,41 +83,15 @@ on:
     }
   });
 
-  it('omits unsupported optional inputs for legacy workflow contracts', async () => {
+  it('returns an actionable error when the repo-side workflow contract is stale', async () => {
     try {
-      const requests: Array<{ url: string; init?: RequestInit }> = [];
-
-      globalThis.fetch = (async (input, init) => {
-        requests.push({
-          url: String(input),
-          init,
-        });
-
-        if (
-          String(input).includes('/contents/.github/workflows/juanie-ci.yml') &&
-          String(input).includes('ref=codex%2Fevidence-event-knowledge-os')
-        ) {
-          return new Response(
-            JSON.stringify({
-              type: 'file',
-              encoding: 'base64',
-              content: Buffer.from(`
-name: Juanie CI
-on:
-  workflow_dispatch:
-    inputs:
-      juanie_source_sha:
-          required: false
-      juanie_release_ref:
-          required: false
-`).toString('base64'),
-            }),
-            { status: 200 }
-          );
-        }
-
-        return new Response(null, { status: 204 });
-      }) as typeof fetch;
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            message: 'Unexpected inputs provided: [juanie_force_full_build]',
+          }),
+          { status: 422 }
+        )) as typeof fetch;
 
       const provider = new GitHubProvider({
         type: 'github',
@@ -151,22 +100,24 @@ on:
         redirectUri: '',
       });
 
-      await provider.triggerReleaseBuild('token', {
-        repoFullName: '997899594/nexusnote',
-        ref: 'refs/heads/codex/evidence-event-knowledge-os',
-        releaseRef: 'refs/heads/codex/evidence-event-knowledge-os',
-        sourceCommitSha: 'eff1991cae3b54c221a080f665122de9e43e8161',
-        forceFullBuild: true,
-      });
+      let thrown: unknown;
 
-      const dispatchRequest = requests.find((request) => request.init?.method === 'POST');
-      expect(JSON.parse(String(dispatchRequest?.init?.body))).toEqual({
-        ref: 'codex/evidence-event-knowledge-os',
-        inputs: {
-          juanie_source_sha: 'eff1991cae3b54c221a080f665122de9e43e8161',
-          juanie_release_ref: 'refs/heads/codex/evidence-event-knowledge-os',
-        },
-      });
+      try {
+        await provider.triggerReleaseBuild('token', {
+          repoFullName: '997899594/nexusnote',
+          ref: 'refs/heads/codex/evidence-event-knowledge-os',
+          releaseRef: 'refs/heads/codex/evidence-event-knowledge-os',
+          sourceCommitSha: 'eff1991cae3b54c221a080f665122de9e43e8161',
+          forceFullBuild: true,
+        });
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown instanceof Error).toBe(true);
+      expect((thrown as Error).message).toContain('契约不一致');
+      expect((thrown as Error).message).toContain('juanie_force_full_build');
+      expect((thrown as Error).message).toContain('重新通过 Juanie 导入或同步配置');
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -205,7 +156,8 @@ on:
 
       expect(thrown instanceof Error).toBe(true);
       expect((thrown as Error).message).toContain('workflow_dispatch');
-      expect((thrown as Error).message).toContain('直接按远端分支最新提交启动预览环境');
+      expect((thrown as Error).message).toContain('重新同步平台注入配置');
+      expect((thrown as Error).message).toContain('按远端分支最新提交启动预览环境');
     } finally {
       globalThis.fetch = originalFetch;
     }

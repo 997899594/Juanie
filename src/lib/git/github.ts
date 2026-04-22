@@ -70,19 +70,17 @@ type GitHubContentPayload =
   | GitHubContentDirectoryPayload
   | Array<GitHubContentFilePayload | GitHubContentDirectoryPayload>;
 
-const GITHUB_JUANIE_WORKFLOW_PATH = '.github/workflows/juanie-ci.yml';
-
 function mapGitHubWorkflowDispatchError(message?: string | null): string {
   const normalizedMessage = message?.trim();
 
   if (normalizedMessage === "Workflow does not have 'workflow_dispatch' trigger") {
-    return '当前仓库的 .github/workflows/juanie-ci.yml 还没有启用 workflow_dispatch，Juanie 暂时无法直接按远端分支最新提交启动预览环境。请在 workflow 的 on: 下加入 workflow_dispatch 后重试。';
+    return '当前仓库的 .github/workflows/juanie-ci.yml 没有启用 workflow_dispatch，Juanie 不会兼容旧版手写配置。请重新同步平台注入配置后，再按远端分支最新提交启动预览环境。';
   }
 
   if (
     normalizedMessage === 'Workflow does not exist or does not have a workflow_dispatch trigger'
   ) {
-    return '当前仓库缺少可用于直启预览环境的 .github/workflows/juanie-ci.yml，或者它还没有启用 workflow_dispatch。请检查 workflow 文件后重试。';
+    return '当前仓库缺少 Juanie 注入的 .github/workflows/juanie-ci.yml，或者它还没有启用 workflow_dispatch。Juanie 不会兼容旧版手写配置，请重新同步平台注入配置后重试。';
   }
 
   if (normalizedMessage === 'Workflow was disabled manually') {
@@ -91,7 +89,7 @@ function mapGitHubWorkflowDispatchError(message?: string | null): string {
 
   const unexpectedInputs = parseUnexpectedWorkflowDispatchInputs(normalizedMessage);
   if (unexpectedInputs.length > 0) {
-    return `当前仓库的 .github/workflows/juanie-ci.yml 未声明这些 dispatch inputs：${unexpectedInputs.join('、')}。请同步更新 workflow，或让 Juanie 按兼容模式重试。`;
+    return `当前仓库的 .github/workflows/juanie-ci.yml 与 Juanie 当前契约不一致，缺少这些 dispatch inputs：${unexpectedInputs.join('、')}。Juanie 不会兼容旧版手写配置，请删除仓库内旧的 Juanie 配置并重新通过 Juanie 导入或同步配置后重试。`;
   }
 
   return normalizedMessage || 'Failed to trigger GitHub preview build workflow';
@@ -112,47 +110,6 @@ function parseUnexpectedWorkflowDispatchInputs(message?: string | null): string[
     .split(',')
     .map((value) => value.trim().replace(/^['"]|['"]$/g, ''))
     .filter((value) => value.length > 0);
-}
-
-function parseWorkflowDispatchInputsFromYaml(content: string | null): Set<string> | null {
-  if (!content?.trim()) {
-    return null;
-  }
-
-  try {
-    const { parse } = require('yaml') as { parse: (input: string) => unknown };
-    const parsed = parse(content) as Record<string, unknown> | null;
-
-    if (!parsed || typeof parsed !== 'object') {
-      return null;
-    }
-
-    const onConfig = parsed.on ?? parsed.true;
-    if (!onConfig || typeof onConfig !== 'object' || Array.isArray(onConfig)) {
-      return null;
-    }
-
-    const workflowDispatch = (onConfig as Record<string, unknown>).workflow_dispatch;
-    if (!workflowDispatch) {
-      return new Set<string>();
-    }
-
-    if (typeof workflowDispatch !== 'object' || Array.isArray(workflowDispatch)) {
-      return new Set<string>();
-    }
-
-    const inputs = (workflowDispatch as Record<string, unknown>).inputs;
-    if (!inputs || typeof inputs !== 'object' || Array.isArray(inputs)) {
-      return new Set<string>();
-    }
-
-    return new Set(Object.keys(inputs));
-  } catch (error) {
-    gitHubProviderLogger.warn('Failed to parse GitHub workflow dispatch inputs', {
-      error: getErrorMessage(error, 'unknown'),
-    });
-    return null;
-  }
 }
 
 function isNotFoundError(error: unknown): boolean {
@@ -495,46 +452,12 @@ export class GitHubProvider implements GitProvider {
       throw new Error('当前来源无法触发 GitHub 预览构建，请改用分支启动');
     }
 
-    const supportedInputs = await this.getWorkflowDispatchInputNames(
-      accessToken,
-      options.repoFullName,
-      dispatchRef
-    );
-    let inputs = this.buildWorkflowDispatchInputs(options, supportedInputs);
+    const inputs = this.buildWorkflowDispatchInputs(options);
 
     try {
       await this.dispatchWorkflow(accessToken, options.repoFullName, dispatchRef, inputs);
     } catch (error) {
-      const message = getErrorMessage(error, '');
-      const unsupportedInputs = parseUnexpectedWorkflowDispatchInputs(message);
-
-      if (unsupportedInputs.length > 0) {
-        const filteredEntries = Object.entries(inputs).filter(
-          ([key]) => !unsupportedInputs.includes(key)
-        );
-
-        if (filteredEntries.length !== Object.keys(inputs).length) {
-          inputs = Object.fromEntries(filteredEntries);
-
-          gitHubProviderLogger.warn(
-            'Retrying GitHub workflow dispatch without unsupported inputs',
-            {
-              repoFullName: options.repoFullName,
-              ref: dispatchRef,
-              unsupportedInputs,
-            }
-          );
-
-          try {
-            await this.dispatchWorkflow(accessToken, options.repoFullName, dispatchRef, inputs);
-            return;
-          } catch (retryError) {
-            throw new Error(mapGitHubWorkflowDispatchError(getErrorMessage(retryError, '')));
-          }
-        }
-      }
-
-      throw new Error(mapGitHubWorkflowDispatchError(message));
+      throw new Error(mapGitHubWorkflowDispatchError(getErrorMessage(error, '')));
     }
   }
 
@@ -557,59 +480,13 @@ export class GitHubProvider implements GitProvider {
     );
   }
 
-  private async getWorkflowDispatchInputNames(
-    accessToken: string,
-    repoFullName: string,
-    ref: string
-  ): Promise<Set<string> | null> {
-    try {
-      const response = await this.requestJson<GitHubContentPayload>(
-        accessToken,
-        `/repos/${repoFullName}/contents/${this.encodeContentPath(GITHUB_JUANIE_WORKFLOW_PATH)}`,
-        {
-          searchParams: {
-            ref,
-          },
-        }
-      );
-
-      if (Array.isArray(response)) {
-        return null;
-      }
-
-      if (response.type !== 'file' || !response.content) {
-        return null;
-      }
-
-      const content = Buffer.from(response.content, 'base64').toString('utf-8');
-      return parseWorkflowDispatchInputsFromYaml(content);
-    } catch (error) {
-      if (isNotFoundError(error)) {
-        return null;
-      }
-
-      gitHubProviderLogger.warn('Failed to inspect GitHub workflow dispatch inputs', {
-        repoFullName,
-        ref,
-        error: getErrorMessage(error, 'unknown'),
-      });
-      return null;
-    }
-  }
-
-  private buildWorkflowDispatchInputs(
-    options: TriggerReleaseBuildOptions,
-    supportedInputs: Set<string> | null
-  ): Record<string, string> {
+  private buildWorkflowDispatchInputs(options: TriggerReleaseBuildOptions): Record<string, string> {
     const inputs: Record<string, string> = {
       juanie_source_sha: options.sourceCommitSha,
       juanie_release_ref: options.releaseRef ?? options.ref,
     };
 
-    if (
-      options.forceFullBuild &&
-      (!supportedInputs || supportedInputs.has('juanie_force_full_build'))
-    ) {
+    if (options.forceFullBuild) {
       inputs.juanie_force_full_build = 'true';
     }
 
