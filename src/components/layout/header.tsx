@@ -74,11 +74,11 @@ export function Header() {
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            className="h-10 rounded-full bg-[rgba(244,240,232,0.72)] px-4 text-sm shadow-[0_1px_0_rgba(255,255,255,0.72)_inset] hover:bg-white"
+            className="h-10 rounded-full bg-[rgba(15,23,42,0.045)] px-4 text-sm text-[rgba(15,23,42,0.76)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
             onClick={() => openAICommandBar()}
           >
             <Sparkles className="h-4 w-4" />
-            AI Command
+            AI
           </Button>
           <UserMenu />
         </div>
@@ -117,7 +117,7 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-10 w-10 rounded-2xl bg-card/80"
+              className="h-10 w-10 rounded-2xl bg-[rgba(15,23,42,0.045)] text-[rgba(15,23,42,0.76)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
               onClick={() => openAICommandBar()}
             >
               <Sparkles className="h-4 w-4" />

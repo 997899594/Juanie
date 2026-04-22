@@ -11,10 +11,10 @@ const DialogPortal = DialogPrimitive.Portal;
 const DialogClose = DialogPrimitive.Close;
 
 const dialogContentSizeClasses = {
-  compact: 'sm:[--dialog-content-width:40rem] lg:[--dialog-content-width:46rem]',
-  form: 'sm:[--dialog-content-width:56rem] lg:[--dialog-content-width:72rem]',
+  compact: 'sm:[--dialog-content-width:42rem] lg:[--dialog-content-width:50rem]',
+  form: 'sm:[--dialog-content-width:62rem] lg:[--dialog-content-width:78rem]',
   workspace:
-    'sm:[--dialog-content-width:62rem] lg:[--dialog-content-width:88rem] xl:[--dialog-content-width:104rem]',
+    'sm:[--dialog-content-width:68rem] lg:[--dialog-content-width:96rem] xl:[--dialog-content-width:112rem]',
 } as const;
 
 type DialogContentSize = keyof typeof dialogContentSizeClasses;
@@ -45,14 +45,14 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 grid max-h-[90dvh] w-full gap-5 overflow-y-auto bg-[linear-gradient(180deg,rgba(252,251,249,0.997),rgba(246,244,239,0.992))] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 shadow-[0_-28px_88px_rgba(55,53,47,0.12)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:max-h-[94vh] sm:w-[min(calc(100vw-2.5rem),var(--dialog-content-width,40rem))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[34px] sm:px-8 sm:pb-8 sm:pt-8 sm:shadow-[0_1px_0_rgba(255,255,255,0.94)_inset,0_0_0_1px_rgba(17,17,17,0.05),0_36px_112px_rgba(55,53,47,0.18)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
+        'fixed inset-x-0 bottom-0 z-50 grid max-h-[92dvh] w-full gap-5 overflow-y-auto bg-[rgba(251,250,247,0.99)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-5 shadow-[0_-28px_88px_rgba(15,23,42,0.12)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 sm:left-[50%] sm:top-[50%] sm:max-h-[94vh] sm:w-[min(calc(100vw-2rem),var(--dialog-content-width,42rem))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-[36px] sm:px-8 sm:pb-8 sm:pt-8 sm:shadow-[0_32px_100px_rgba(15,23,42,0.12)] sm:ring-1 sm:ring-[rgba(15,23,42,0.06)] sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:slide-out-to-left-1/2 sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2 sm:data-[state=open]:slide-in-from-top-[48%]',
         dialogContentSizeClasses[size],
         className
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-[18px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(243,240,233,0.9))] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.82)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_12px_24px_rgba(55,53,47,0.05)] transition-[background-color,box-shadow,color,transform] hover:-translate-y-px hover:bg-white hover:text-foreground hover:shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.05),0_16px_28px_rgba(55,53,47,0.07)] focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none sm:right-6 sm:top-6">
+      <DialogPrimitive.Close className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(15,23,42,0.045)] text-[rgba(15,23,42,0.56)] shadow-none transition-[background-color,box-shadow,color,transform] hover:-translate-y-px hover:bg-[rgba(15,23,42,0.08)] hover:text-[rgba(15,23,42,0.84)] hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)] focus:outline-none focus:ring-2 focus:ring-ring disabled:pointer-events-none sm:right-6 sm:top-6">
         <X className="h-4 w-4" />
         <span className="sr-only">关闭</span>
       </DialogPrimitive.Close>

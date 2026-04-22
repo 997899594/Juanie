@@ -16,14 +16,14 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'group flex h-11 w-full items-center justify-between gap-3 rounded-[18px] bg-[rgba(255,255,255,0.8)] px-4 py-2 text-sm text-foreground shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.032),0_4px_14px_rgba(55,53,47,0.022)] transition-[background-color,box-shadow,color] outline-none hover:bg-[rgba(255,255,255,0.92)] hover:shadow-[0_1px_0_rgba(255,255,255,0.94)_inset,0_0_0_1px_rgba(17,17,17,0.038),0_8px_20px_rgba(55,53,47,0.032)] focus-visible:bg-white focus-visible:shadow-[0_1px_0_rgba(255,255,255,0.98)_inset,0_0_0_1px_rgba(17,17,17,0.045),0_0_0_3px_rgba(55,53,47,0.03),0_10px_24px_rgba(55,53,47,0.04)] data-[state=open]:bg-white data-[state=open]:shadow-[0_1px_0_rgba(255,255,255,0.98)_inset,0_0_0_1px_rgba(17,17,17,0.045),0_0_0_3px_rgba(55,53,47,0.03),0_10px_24px_rgba(55,53,47,0.04)] disabled:cursor-not-allowed disabled:opacity-45 [&>span]:line-clamp-1 [&>span[data-placeholder]]:text-muted-foreground/52',
+      'group flex h-11 w-full items-center justify-between gap-3 rounded-[18px] bg-[rgba(255,255,255,0.76)] px-4 py-2 text-sm text-[rgba(15,23,42,0.9)] shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_1px_2px_rgba(15,23,42,0.02),0_12px_28px_rgba(15,23,42,0.035)] ring-1 ring-[rgba(15,23,42,0.06)] transition-[background-color,box-shadow,color,transform] outline-none hover:bg-[rgba(255,255,255,0.9)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_2px_6px_rgba(15,23,42,0.03),0_16px_32px_rgba(15,23,42,0.05)] hover:ring-[rgba(15,23,42,0.08)] focus-visible:bg-white focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_2px_8px_rgba(15,23,42,0.04),0_20px_40px_rgba(15,23,42,0.06)] focus-visible:ring-[rgba(15,23,42,0.14)] data-[state=open]:bg-white data-[state=open]:shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_2px_8px_rgba(15,23,42,0.04),0_20px_40px_rgba(15,23,42,0.06)] data-[state=open]:ring-[rgba(15,23,42,0.14)] disabled:cursor-not-allowed disabled:opacity-45 [&>span]:line-clamp-1 [&>span[data-placeholder]]:text-[rgba(15,23,42,0.34)]',
       className
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground/58 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+      <ChevronDown className="h-4 w-4 shrink-0 text-[rgba(15,23,42,0.42)] transition-transform duration-200 group-data-[state=open]:rotate-180" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -65,7 +65,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.992),rgba(248,246,242,0.975))] text-popover-foreground shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.042),0_16px_36px_rgba(55,53,47,0.075)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-[24px] bg-[rgba(251,250,247,0.98)] text-popover-foreground shadow-[0_24px_60px_rgba(15,23,42,0.08)] ring-1 ring-[rgba(15,23,42,0.06)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         position === 'popper' &&
           'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
         className
@@ -96,7 +96,7 @@ const SelectLabel = React.forwardRef<
   <SelectPrimitive.Label
     ref={ref}
     className={cn(
-      'px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground',
+      'px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]',
       className
     )}
     {...props}
@@ -111,7 +111,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-2xl py-2.5 pl-3 pr-8 text-sm outline-none transition-[background-color,color,box-shadow] focus:bg-[rgba(241,239,235,0.82)] focus:text-foreground focus:shadow-[0_1px_0_rgba(255,255,255,0.55)_inset,0_6px_16px_rgba(55,53,47,0.035)] data-[state=checked]:bg-[rgba(241,239,235,0.72)] data-[state=checked]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
+      'relative flex w-full cursor-default select-none items-center rounded-[18px] py-2.5 pl-3 pr-8 text-sm text-[rgba(15,23,42,0.84)] outline-none transition-[background-color,color,box-shadow] focus:bg-[rgba(15,23,42,0.045)] focus:text-[rgba(15,23,42,0.96)] focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] data-[state=checked]:bg-[rgba(15,23,42,0.06)] data-[state=checked]:text-[rgba(15,23,42,0.96)] data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
       className
     )}
     {...props}
