@@ -470,10 +470,7 @@ export function TeamMembersClient({ teamId, initialData }: TeamMembersClientProp
 
       <div className="grid gap-2 md:grid-cols-3">
         {overview.stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-[20px] bg-[linear-gradient(180deg,rgba(243,240,233,0.74),rgba(255,255,255,0.88))] px-5 py-4 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset,0_0_0_1px_rgba(17,17,17,0.028)]"
-          >
+          <div key={stat.label} className="rounded-[20px] bg-[rgba(15,23,42,0.03)] px-5 py-4">
             <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {stat.label}
             </div>

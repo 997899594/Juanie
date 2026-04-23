@@ -350,12 +350,12 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="text-sm font-semibold">{environment.name}</div>
                           {environment.isProduction && (
-                            <span className="rounded-full bg-white/84 px-2.5 py-1 text-[11px] text-foreground shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(17,17,17,0.04)]">
+                            <span className="rounded-full bg-[rgba(15,23,42,0.05)] px-2.5 py-1 text-[11px] text-foreground">
                               生产
                             </span>
                           )}
                           {environment.isPreview && (
-                            <span className="rounded-full bg-white/84 px-2.5 py-1 text-[11px] text-foreground shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(17,17,17,0.04)]">
+                            <span className="rounded-full bg-[rgba(15,23,42,0.05)] px-2.5 py-1 text-[11px] text-foreground">
                               预览
                             </span>
                           )}
@@ -423,7 +423,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
             <div className="px-5 py-4">
               {project.yourRole === 'owner' ? (
                 <>
-                  <div className="rounded-[22px] bg-[linear-gradient(180deg,rgba(196,85,77,0.08),rgba(255,255,255,0.92))] p-4 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(196,85,77,0.08)] sm:p-5 md:flex md:items-center md:justify-between">
+                  <div className="rounded-[22px] bg-[rgba(196,85,77,0.08)] p-4 sm:p-5 md:flex md:items-center md:justify-between">
                     <div className="space-y-1">
                       <div className="text-sm font-medium text-foreground">删除项目</div>
                       <div className="text-sm text-muted-foreground">
@@ -449,7 +449,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                             <span className="font-medium text-foreground">{project.name}</span>？
                           </AlertDialogDescription>
                         </AlertDialogHeader>
-                        <div className="rounded-[20px] bg-[rgba(196,85,77,0.06)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+                        <div className="rounded-[20px] bg-[rgba(196,85,77,0.06)] px-4 py-3 text-sm text-muted-foreground">
                           {isDeleting
                             ? '删除任务已经提交，项目、环境和发布记录会在清理完成后一起移除。'
                             : '项目、环境和发布记录会一起删除。'}

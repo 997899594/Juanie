@@ -1307,7 +1307,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             >
               <div className="space-y-3">
                 {formData.services.length === 0 ? (
-                  <div className="overflow-hidden rounded-[18px] bg-[rgba(255,255,255,0.72)] shadow-[0_14px_30px_-24px_rgba(55,53,47,0.14)]">
+                  <div className="overflow-hidden rounded-[18px] bg-[rgba(15,23,42,0.03)]">
                     <EmptyState title="没有识别到服务" className="min-h-40 rounded-none" />
                   </div>
                 ) : (
@@ -1343,7 +1343,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                       {!service.disabled && (
                         <div className="mt-4 space-y-4 pl-11">
                           {service.type === 'web' && (
-                            <div className="flex items-center justify-between rounded-[14px] bg-[rgba(255,255,255,0.72)] px-4 py-3 shadow-[0_10px_24px_-22px_rgba(55,53,47,0.12)]">
+                            <div className="flex items-center justify-between rounded-[14px] bg-[rgba(15,23,42,0.03)] px-4 py-3">
                               <div>
                                 <div className="text-sm font-medium">公网入口</div>
                                 <div className="mt-1 text-xs text-muted-foreground">
@@ -1539,7 +1539,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
 
               <div className="space-y-3">
                 {formData.databases.length === 0 ? (
-                  <div className="overflow-hidden rounded-[18px] bg-[rgba(255,255,255,0.72)] shadow-[0_14px_30px_-24px_rgba(55,53,47,0.14)]">
+                  <div className="overflow-hidden rounded-[18px] bg-[rgba(15,23,42,0.03)]">
                     <EmptyState
                       icon={<Database className="h-5 w-5 opacity-40" />}
                       title="没有数据库"
