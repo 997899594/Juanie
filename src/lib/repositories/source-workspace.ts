@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import { projects, repositories } from '@/lib/db/schema';
 import { buildAuthenticatedCloneUrl } from '@/lib/git/authenticated-clone-url';
 import {
+  gateway,
   getTeamIntegrationSession,
   type IntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
@@ -24,6 +25,9 @@ const SOURCE_WORKSPACE_IGNORED_DIRS = new Set([
   'coverage',
 ]);
 
+const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
+const GITHUB_SOURCE_WORKSPACE_BLOB_CONCURRENCY = 8;
+
 export interface SourceWorkspaceContext {
   tempRoot: string;
   repoDir: string;
@@ -32,6 +36,22 @@ export interface SourceWorkspaceContext {
 }
 
 export type WorkspaceFileSnapshot = Map<string, Buffer>;
+
+interface GitHubTreeEntry {
+  path?: string | null;
+  type?: 'blob' | 'tree' | 'commit' | null;
+  sha?: string | null;
+}
+
+interface GitHubTreeResponse {
+  truncated?: boolean;
+  tree?: GitHubTreeEntry[];
+}
+
+interface GitHubBlobResponse {
+  content?: string;
+  encoding?: string;
+}
 
 async function runCommand(
   command: string,
@@ -59,6 +79,149 @@ function normalizeGitFetchRef(value: string): string {
   }
 
   return normalized;
+}
+
+function normalizeRevisionRef(value: string): string | null {
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.startsWith('refs/')) {
+    return normalized;
+  }
+
+  if (COMMIT_SHA_PATTERN.test(normalized)) {
+    return normalized;
+  }
+
+  return `refs/heads/${normalized}`;
+}
+
+function parseGitHubRepoFullName(repoFullName: string): { owner: string; repo: string } {
+  const [owner, repo] = repoFullName.split('/');
+  if (!owner || !repo) {
+    throw new Error(`Invalid GitHub repository full name: ${repoFullName}`);
+  }
+
+  return { owner, repo };
+}
+
+async function requestGitHubJson<T>(
+  accessToken: string,
+  repoFullName: string,
+  pathname: string,
+  searchParams?: Record<string, string>
+): Promise<T> {
+  const { owner, repo } = parseGitHubRepoFullName(repoFullName);
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}${pathname}`);
+
+  if (searchParams) {
+    for (const [key, value] of Object.entries(searchParams)) {
+      url.searchParams.set(key, value);
+    }
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${accessToken}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+
+  if (!response.ok) {
+    const message = (await response.text()).trim() || response.statusText;
+    throw new Error(`GitHub API request failed: ${message}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function resolveWorkspaceRevision(input: {
+  session: IntegrationSession;
+  repoFullName: string;
+  requestedRevision: string;
+}): Promise<string> {
+  const normalizedRef = normalizeRevisionRef(input.requestedRevision);
+  if (!normalizedRef) {
+    return input.requestedRevision;
+  }
+
+  try {
+    return (
+      (await gateway.resolveRefToCommitSha(input.session, input.repoFullName, normalizedRef)) ??
+      input.requestedRevision
+    );
+  } catch {
+    return input.requestedRevision;
+  }
+}
+
+async function materializeGitHubRepositoryWorkspaceWithApi(input: {
+  session: IntegrationSession;
+  repoFullName: string;
+  revision: string;
+  repoDir: string;
+}): Promise<string> {
+  const resolvedRevision = await resolveWorkspaceRevision({
+    session: input.session,
+    repoFullName: input.repoFullName,
+    requestedRevision: input.revision,
+  });
+  const treeResponse = await requestGitHubJson<GitHubTreeResponse>(
+    input.session.accessToken,
+    input.repoFullName,
+    `/git/trees/${encodeURIComponent(resolvedRevision)}`,
+    {
+      recursive: '1',
+    }
+  );
+
+  if (treeResponse.truncated) {
+    throw new Error('GitHub 仓库树过大，当前无法完整物化源码工作区');
+  }
+
+  const blobEntries = (treeResponse.tree ?? []).filter(
+    (entry): entry is Required<Pick<GitHubTreeEntry, 'path' | 'sha'>> & GitHubTreeEntry =>
+      entry.type === 'blob' && Boolean(entry.path) && Boolean(entry.sha)
+  );
+
+  for (
+    let startIndex = 0;
+    startIndex < blobEntries.length;
+    startIndex += GITHUB_SOURCE_WORKSPACE_BLOB_CONCURRENCY
+  ) {
+    const batch = blobEntries.slice(
+      startIndex,
+      startIndex + GITHUB_SOURCE_WORKSPACE_BLOB_CONCURRENCY
+    );
+
+    await Promise.all(
+      batch.map(async (entry) => {
+        const filePath = entry.path;
+        if (!filePath) {
+          return;
+        }
+
+        const blob = await requestGitHubJson<GitHubBlobResponse>(
+          input.session.accessToken,
+          input.repoFullName,
+          `/git/blobs/${entry.sha}`
+        );
+
+        if (blob.encoding !== 'base64' || typeof blob.content !== 'string') {
+          throw new Error(`GitHub blob ${filePath} 返回了不支持的编码`);
+        }
+
+        const absolutePath = path.join(input.repoDir, filePath);
+        await mkdir(path.dirname(absolutePath), { recursive: true });
+        await writeFile(absolutePath, Buffer.from(blob.content.replaceAll('\n', ''), 'base64'));
+      })
+    );
+  }
+
+  return resolvedRevision;
 }
 
 async function materializeRepositoryWorkspaceWithGit(input: {
@@ -124,12 +287,20 @@ export async function createRepositorySourceWorkspace(input: {
   await mkdir(repoDir, { recursive: true });
 
   try {
-    const resolvedRevision = await materializeRepositoryWorkspaceWithGit({
-      session: input.session,
-      repoFullName: input.repoFullName,
-      revision: requestedRevision,
-      repoDir,
-    });
+    const resolvedRevision =
+      input.session.provider === 'github'
+        ? await materializeGitHubRepositoryWorkspaceWithApi({
+            session: input.session,
+            repoFullName: input.repoFullName,
+            revision: requestedRevision,
+            repoDir,
+          })
+        : await materializeRepositoryWorkspaceWithGit({
+            session: input.session,
+            repoFullName: input.repoFullName,
+            revision: requestedRevision,
+            repoDir,
+          });
 
     return {
       tempRoot,
