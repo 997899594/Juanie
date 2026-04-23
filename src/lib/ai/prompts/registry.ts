@@ -3,9 +3,11 @@ import { loadMarkdownAsset } from '@/lib/ai/assets/markdown';
 
 const promptAssetPaths = {
   'dynamic-plugin': 'src/lib/ai/prompts/definitions/dynamic-plugin.md',
+  'environment-copilot': 'src/lib/ai/prompts/definitions/environment-copilot.md',
   'environment-summary': 'src/lib/ai/prompts/definitions/environment-summary.md',
   'envvar-risk': 'src/lib/ai/prompts/definitions/envvar-risk.md',
   'incident-analysis': 'src/lib/ai/prompts/definitions/incident-analysis.md',
+  'release-copilot': 'src/lib/ai/prompts/definitions/release-copilot.md',
   'migration-review': 'src/lib/ai/prompts/definitions/migration-review.md',
   'release-plan': 'src/lib/ai/prompts/definitions/release-plan.md',
 } as const;

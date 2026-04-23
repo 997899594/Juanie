@@ -1,26 +1,9 @@
 import { z } from 'zod';
+import { type CopilotScopeKind, getCopilotDefinition } from '@/lib/ai/copilot/registry';
 import { generateChatText, generateChatTextStream } from '@/lib/ai/core/generate-chat-text';
 import type { AIModelPolicy } from '@/lib/ai/core/model-policy';
-import {
-  buildEnvironmentEnvvarRiskEvidence,
-  type EnvironmentEnvvarRiskEvidence,
-} from '@/lib/ai/evidence/environment-envvar-risk';
-import {
-  buildEnvironmentEvidencePack,
-  type EnvironmentEvidencePack,
-} from '@/lib/ai/evidence/environment-evidence';
-import {
-  buildEnvironmentMigrationReviewEvidence,
-  type EnvironmentMigrationReviewEvidence,
-} from '@/lib/ai/evidence/environment-migration-review';
-import {
-  buildIncidentEvidencePack,
-  type IncidentEvidencePack,
-} from '@/lib/ai/evidence/incident-evidence';
-import {
-  buildReleaseEvidencePack,
-  type ReleaseEvidencePack,
-} from '@/lib/ai/evidence/release-evidence';
+import { getPromptDefinition } from '@/lib/ai/prompts/registry';
+import { executeJuanieTool } from '@/lib/ai/tools/runtime';
 
 const copilotMessageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -39,6 +22,19 @@ export interface CopilotReply {
   provider: string | null;
   model: string | null;
   generatedAt: string;
+  skillId: string;
+  promptKey: string;
+  promptVersion: string;
+}
+
+export interface CopilotStreamReply {
+  stream: ReadableStream<string>;
+  provider: string;
+  model: string;
+  suggestions: string[];
+  skillId: string;
+  promptKey: string;
+  promptVersion: string;
 }
 
 function formatConversation(messages: CopilotMessage[]): string {
@@ -52,42 +48,83 @@ function cleanAssistantText(text: string): string {
   return text.trim().replace(/\n{3,}/g, '\n\n');
 }
 
-export function buildEnvironmentSuggestions(question?: string): string[] {
-  const normalized = question?.toLowerCase() ?? '';
-
-  if (normalized.includes('变量') || normalized.includes('env')) {
-    return ['哪些变量最值得先检查？', '继承链里哪里最容易出错？', '现在改变量会影响什么？'];
+function appendSystemPrompt(baseSystem: string, systemAppendix?: string): string {
+  if (!systemAppendix?.trim()) {
+    return baseSystem;
   }
 
-  if (normalized.includes('数据库') || normalized.includes('迁移')) {
-    return ['哪个数据库最需要先处理？', '现在适合继续迁移吗？', '先看风险还是先看下一步？'];
-  }
-
-  return [
-    '当前环境最该先看什么？',
-    '这个环境为什么是现在这个状态？',
-    '我下一步最合理的动作是什么？',
-  ];
+  return `${baseSystem}\n${systemAppendix.trim()}`;
 }
 
-export function buildReleaseSuggestions(question?: string): string[] {
-  const normalized = question?.toLowerCase() ?? '';
+async function buildEnvironmentCopilotEvidence(input: {
+  teamId: string;
+  projectId: string;
+  environmentId: string;
+  actorUserId?: string | null;
+}) {
+  const sharedContext = {
+    actorUserId: input.actorUserId,
+    teamId: input.teamId,
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+  };
 
-  if (normalized.includes('失败') || normalized.includes('故障')) {
-    return ['最像根因的信号是什么？', '先处理迁移还是先处理部署？', '有没有可以立刻执行的动作？'];
-  }
+  const [environment, migration, envvar] = await Promise.all([
+    executeJuanieTool({
+      toolId: 'read-environment-context',
+      context: sharedContext,
+    }),
+    executeJuanieTool({
+      toolId: 'read-environment-migrations',
+      context: sharedContext,
+    }),
+    executeJuanieTool({
+      toolId: 'read-environment-variables',
+      context: sharedContext,
+    }),
+  ]);
 
-  if (normalized.includes('回滚') || normalized.includes('发布')) {
-    return ['现在适合继续推进吗？', '回滚触发条件是什么？', '我应该先确认哪几个检查项？'];
-  }
-
-  return ['这次发布现在安全吗？', '最关键的阻塞点是什么？', '我下一步该做什么？'];
+  return {
+    environment,
+    migration,
+    envvar,
+  };
 }
 
-function buildEnvironmentPrompt(input: {
-  environment: EnvironmentEvidencePack;
-  migration: EnvironmentMigrationReviewEvidence;
-  envvar: EnvironmentEnvvarRiskEvidence;
+async function buildReleaseCopilotEvidence(input: {
+  teamId: string;
+  projectId: string;
+  releaseId: string;
+  actorUserId?: string | null;
+}) {
+  const sharedContext = {
+    actorUserId: input.actorUserId,
+    teamId: input.teamId,
+    projectId: input.projectId,
+    releaseId: input.releaseId,
+  };
+
+  const [release, incident] = await Promise.all([
+    executeJuanieTool({
+      toolId: 'read-release-context',
+      context: sharedContext,
+    }),
+    executeJuanieTool({
+      toolId: 'read-incident-context',
+      context: sharedContext,
+    }),
+  ]);
+
+  return {
+    release,
+    incident,
+  };
+}
+
+function buildEnvironmentCopilotPrompt(input: {
+  environment: Awaited<ReturnType<typeof buildEnvironmentCopilotEvidence>>['environment'];
+  migration: Awaited<ReturnType<typeof buildEnvironmentCopilotEvidence>>['migration'];
+  envvar: Awaited<ReturnType<typeof buildEnvironmentCopilotEvidence>>['envvar'];
   messages: CopilotMessage[];
 }): string {
   return [
@@ -95,10 +132,7 @@ function buildEnvironmentPrompt(input: {
     'Rules:',
     '- Project is the entry, environment is the operational center.',
     '- Do not create new product entry points.',
-    '- Answer only from provided context.',
-    '- Keep the answer clear, concise, and operational.',
     '- Prefer: current state, risks, next step.',
-    '- If the user asks outside this environment scope, say so directly.',
     '',
     'Environment context:',
     JSON.stringify(input.environment),
@@ -114,9 +148,9 @@ function buildEnvironmentPrompt(input: {
   ].join('\n');
 }
 
-function buildReleasePrompt(input: {
-  release: ReleaseEvidencePack;
-  incident: IncidentEvidencePack;
+function buildReleaseCopilotPrompt(input: {
+  release: Awaited<ReturnType<typeof buildReleaseCopilotEvidence>>['release'];
+  incident: Awaited<ReturnType<typeof buildReleaseCopilotEvidence>>['incident'];
   messages: CopilotMessage[];
 }): string {
   return [
@@ -124,10 +158,7 @@ function buildReleasePrompt(input: {
     'Rules:',
     '- Project is the entry, environment is the operational center, release belongs to environment.',
     '- Do not create duplicate CTA or extra product lanes.',
-    '- Answer only from provided context.',
-    '- Keep the answer clear, concise, and operational.',
     '- Prefer: current state, risk, blocker, next step.',
-    '- If the user asks outside this release scope, say so directly.',
     '',
     'Release context:',
     JSON.stringify(input.release),
@@ -140,200 +171,195 @@ function buildReleasePrompt(input: {
   ].join('\n');
 }
 
-function buildEnvironmentSystemPrompt(systemAppendix?: string): string {
-  return [
-    '你是 Juanie 的环境 Copilot。',
-    '你的任务是解释当前环境，而不是做泛化聊天。',
-    '只基于给定上下文作答，不得编造。',
-    '回答要少即是多，链路清楚，避免废话。',
-    '优先回答当前状态、风险、阻塞、下一步。',
-    systemAppendix ?? null,
-  ].join('\n');
+async function generateCopilotReply(input: {
+  kind: CopilotScopeKind;
+  teamId: string;
+  projectId: string;
+  environmentId?: string;
+  releaseId?: string;
+  actorUserId?: string | null;
+  messages: CopilotMessage[];
+  policy?: Exclude<AIModelPolicy, 'tool-first'>;
+  systemAppendix?: string;
+}): Promise<CopilotReply> {
+  const definition = getCopilotDefinition(input.kind);
+  const promptDefinition = getPromptDefinition(definition.promptKey);
+  const latestQuestion = input.messages
+    .filter((message) => message.role === 'user')
+    .at(-1)?.content;
+
+  const prompt =
+    input.kind === 'environment'
+      ? buildEnvironmentCopilotPrompt({
+          ...(await buildEnvironmentCopilotEvidence({
+            teamId: input.teamId,
+            projectId: input.projectId,
+            environmentId: input.environmentId ?? '',
+            actorUserId: input.actorUserId,
+          })),
+          messages: input.messages,
+        })
+      : buildReleaseCopilotPrompt({
+          ...(await buildReleaseCopilotEvidence({
+            teamId: input.teamId,
+            projectId: input.projectId,
+            releaseId: input.releaseId ?? '',
+            actorUserId: input.actorUserId,
+          })),
+          messages: input.messages,
+        });
+
+  const result = await generateChatText({
+    policy: input.policy,
+    system: appendSystemPrompt(promptDefinition.system, input.systemAppendix),
+    prompt,
+  });
+
+  return {
+    message: cleanAssistantText(result.text),
+    suggestions: definition.getSuggestions(latestQuestion),
+    provider: result.provider,
+    model: result.model,
+    generatedAt: new Date().toISOString(),
+    skillId: definition.skillId,
+    promptKey: promptDefinition.key,
+    promptVersion: promptDefinition.version,
+  };
 }
 
-function buildReleaseSystemPrompt(systemAppendix?: string): string {
-  return [
-    '你是 Juanie 的发布 Copilot。',
-    '你的任务是解释当前发布、风险、阻塞和下一步。',
-    '只基于给定上下文作答，不得编造。',
-    '回答要少即是多，结论前置，不要重复页面废话。',
-    '优先指出当前是否安全、卡在哪、先做什么。',
-    systemAppendix ?? null,
-  ].join('\n');
+async function generateCopilotStream(input: {
+  kind: CopilotScopeKind;
+  teamId: string;
+  projectId: string;
+  environmentId?: string;
+  releaseId?: string;
+  actorUserId?: string | null;
+  messages: CopilotMessage[];
+  policy?: Exclude<AIModelPolicy, 'tool-first'>;
+  systemAppendix?: string;
+}): Promise<CopilotStreamReply> {
+  const definition = getCopilotDefinition(input.kind);
+  const promptDefinition = getPromptDefinition(definition.promptKey);
+  const latestQuestion = input.messages
+    .filter((message) => message.role === 'user')
+    .at(-1)?.content;
+
+  const prompt =
+    input.kind === 'environment'
+      ? buildEnvironmentCopilotPrompt({
+          ...(await buildEnvironmentCopilotEvidence({
+            teamId: input.teamId,
+            projectId: input.projectId,
+            environmentId: input.environmentId ?? '',
+            actorUserId: input.actorUserId,
+          })),
+          messages: input.messages,
+        })
+      : buildReleaseCopilotPrompt({
+          ...(await buildReleaseCopilotEvidence({
+            teamId: input.teamId,
+            projectId: input.projectId,
+            releaseId: input.releaseId ?? '',
+            actorUserId: input.actorUserId,
+          })),
+          messages: input.messages,
+        });
+
+  const result = generateChatTextStream({
+    policy: input.policy,
+    system: appendSystemPrompt(promptDefinition.system, input.systemAppendix),
+    prompt,
+  });
+
+  return {
+    ...result,
+    suggestions: definition.getSuggestions(latestQuestion),
+    skillId: definition.skillId,
+    promptKey: promptDefinition.key,
+    promptVersion: promptDefinition.version,
+  };
 }
 
 export async function generateEnvironmentCopilotReply(input: {
+  teamId: string;
   projectId: string;
   environmentId: string;
+  actorUserId?: string | null;
   messages: CopilotMessage[];
   policy?: Exclude<AIModelPolicy, 'tool-first'>;
   systemAppendix?: string;
 }): Promise<CopilotReply> {
-  const [environment, migration, envvar] = await Promise.all([
-    buildEnvironmentEvidencePack({
-      projectId: input.projectId,
-      environmentId: input.environmentId,
-    }),
-    buildEnvironmentMigrationReviewEvidence({
-      projectId: input.projectId,
-      environmentId: input.environmentId,
-    }),
-    buildEnvironmentEnvvarRiskEvidence({
-      projectId: input.projectId,
-      environmentId: input.environmentId,
-    }),
-  ]);
-
-  const result = await generateChatText({
+  return generateCopilotReply({
+    kind: 'environment',
+    teamId: input.teamId,
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+    actorUserId: input.actorUserId,
+    messages: input.messages,
     policy: input.policy,
-    system: buildEnvironmentSystemPrompt(input.systemAppendix),
-    prompt: buildEnvironmentPrompt({
-      environment,
-      migration,
-      envvar,
-      messages: input.messages,
-    }),
+    systemAppendix: input.systemAppendix,
   });
-
-  const latestQuestion = input.messages
-    .filter((message) => message.role === 'user')
-    .at(-1)?.content;
-
-  return {
-    message: cleanAssistantText(result.text),
-    suggestions: buildEnvironmentSuggestions(latestQuestion),
-    provider: result.provider,
-    model: result.model,
-    generatedAt: new Date().toISOString(),
-  };
 }
 
 export async function generateReleaseCopilotReply(input: {
+  teamId: string;
   projectId: string;
   releaseId: string;
+  actorUserId?: string | null;
   messages: CopilotMessage[];
   policy?: Exclude<AIModelPolicy, 'tool-first'>;
   systemAppendix?: string;
 }): Promise<CopilotReply> {
-  const [release, incident] = await Promise.all([
-    buildReleaseEvidencePack({
-      projectId: input.projectId,
-      releaseId: input.releaseId,
-    }),
-    buildIncidentEvidencePack({
-      projectId: input.projectId,
-      releaseId: input.releaseId,
-    }),
-  ]);
-
-  const result = await generateChatText({
+  return generateCopilotReply({
+    kind: 'release',
+    teamId: input.teamId,
+    projectId: input.projectId,
+    releaseId: input.releaseId,
+    actorUserId: input.actorUserId,
+    messages: input.messages,
     policy: input.policy,
-    system: buildReleaseSystemPrompt(input.systemAppendix),
-    prompt: buildReleasePrompt({
-      release,
-      incident,
-      messages: input.messages,
-    }),
+    systemAppendix: input.systemAppendix,
   });
-
-  const latestQuestion = input.messages
-    .filter((message) => message.role === 'user')
-    .at(-1)?.content;
-
-  return {
-    message: cleanAssistantText(result.text),
-    suggestions: buildReleaseSuggestions(latestQuestion),
-    provider: result.provider,
-    model: result.model,
-    generatedAt: new Date().toISOString(),
-  };
 }
 
 export async function generateEnvironmentCopilotStream(input: {
+  teamId: string;
   projectId: string;
   environmentId: string;
+  actorUserId?: string | null;
   messages: CopilotMessage[];
   policy?: Exclude<AIModelPolicy, 'tool-first'>;
   systemAppendix?: string;
-}): Promise<{
-  stream: ReadableStream<string>;
-  provider: string;
-  model: string;
-  suggestions: string[];
-}> {
-  const [environment, migration, envvar] = await Promise.all([
-    buildEnvironmentEvidencePack({
-      projectId: input.projectId,
-      environmentId: input.environmentId,
-    }),
-    buildEnvironmentMigrationReviewEvidence({
-      projectId: input.projectId,
-      environmentId: input.environmentId,
-    }),
-    buildEnvironmentEnvvarRiskEvidence({
-      projectId: input.projectId,
-      environmentId: input.environmentId,
-    }),
-  ]);
-
-  const latestQuestion = input.messages
-    .filter((message) => message.role === 'user')
-    .at(-1)?.content;
-  const result = generateChatTextStream({
+}): Promise<CopilotStreamReply> {
+  return generateCopilotStream({
+    kind: 'environment',
+    teamId: input.teamId,
+    projectId: input.projectId,
+    environmentId: input.environmentId,
+    actorUserId: input.actorUserId,
+    messages: input.messages,
     policy: input.policy,
-    system: buildEnvironmentSystemPrompt(input.systemAppendix),
-    prompt: buildEnvironmentPrompt({
-      environment,
-      migration,
-      envvar,
-      messages: input.messages,
-    }),
+    systemAppendix: input.systemAppendix,
   });
-
-  return {
-    ...result,
-    suggestions: buildEnvironmentSuggestions(latestQuestion),
-  };
 }
 
 export async function generateReleaseCopilotStream(input: {
+  teamId: string;
   projectId: string;
   releaseId: string;
+  actorUserId?: string | null;
   messages: CopilotMessage[];
   policy?: Exclude<AIModelPolicy, 'tool-first'>;
   systemAppendix?: string;
-}): Promise<{
-  stream: ReadableStream<string>;
-  provider: string;
-  model: string;
-  suggestions: string[];
-}> {
-  const [release, incident] = await Promise.all([
-    buildReleaseEvidencePack({
-      projectId: input.projectId,
-      releaseId: input.releaseId,
-    }),
-    buildIncidentEvidencePack({
-      projectId: input.projectId,
-      releaseId: input.releaseId,
-    }),
-  ]);
-
-  const latestQuestion = input.messages
-    .filter((message) => message.role === 'user')
-    .at(-1)?.content;
-  const result = generateChatTextStream({
+}): Promise<CopilotStreamReply> {
+  return generateCopilotStream({
+    kind: 'release',
+    teamId: input.teamId,
+    projectId: input.projectId,
+    releaseId: input.releaseId,
+    actorUserId: input.actorUserId,
+    messages: input.messages,
     policy: input.policy,
-    system: buildReleaseSystemPrompt(input.systemAppendix),
-    prompt: buildReleasePrompt({
-      release,
-      incident,
-      messages: input.messages,
-    }),
+    systemAppendix: input.systemAppendix,
   });
-
-  return {
-    ...result,
-    suggestions: buildReleaseSuggestions(latestQuestion),
-  };
 }

@@ -41,8 +41,10 @@ export async function executeEnvironmentDeepAnalysisTask(
 
   try {
     const reply = await generateEnvironmentCopilotReply({
+      teamId: task.teamId,
       projectId: task.projectId,
       environmentId: task.environmentId,
+      actorUserId: task.actorUserId,
       messages: [{ role: 'user', content: task.inputSummary }],
       policy: 'structured-high-quality',
       systemAppendix:
@@ -98,8 +100,10 @@ export async function executeReleaseDeepAnalysisTask(taskId: string): Promise<Ge
 
   try {
     const reply = await generateReleaseCopilotReply({
+      teamId: task.teamId,
       projectId: task.projectId,
       releaseId: task.releaseId,
+      actorUserId: task.actorUserId,
       messages: [{ role: 'user', content: task.inputSummary }],
       policy: 'structured-high-quality',
       systemAppendix:

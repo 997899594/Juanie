@@ -58,8 +58,10 @@ export async function POST(
   }
 
   const reply = await generateReleaseCopilotStream({
+    teamId: release.project.teamId,
     projectId: release.projectId,
     releaseId: release.id,
+    actorUserId: session.user.id,
     messages: parsed.data.messages,
   });
 
@@ -75,6 +77,9 @@ export async function POST(
       messageCount: parsed.data.messages.length,
       provider: reply.provider,
       model: reply.model,
+      skillId: reply.skillId,
+      promptKey: reply.promptKey,
+      promptVersion: reply.promptVersion,
     },
   }).catch(() => undefined);
 
@@ -84,6 +89,9 @@ export async function POST(
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'X-AI-Provider': reply.provider,
       'X-AI-Model': reply.model,
+      'X-Copilot-Skill-Id': reply.skillId,
+      'X-Copilot-Prompt-Key': reply.promptKey,
+      'X-Copilot-Prompt-Version': reply.promptVersion,
       'X-Copilot-Suggestions': encodeURIComponent(JSON.stringify(reply.suggestions)),
     },
   });

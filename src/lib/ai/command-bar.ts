@@ -1,3 +1,5 @@
+import { getCopilotDefinition } from '@/lib/ai/copilot/registry';
+
 export type CommandBarScope =
   | {
       kind: 'environment';
@@ -64,27 +66,27 @@ export function getCommandBarConfig(pathname: string): CommandBarConfig {
   const scope = resolveCommandBarScope(pathname);
 
   if (scope.kind === 'release') {
+    const definition = getCopilotDefinition('release');
+
     return {
       kind: 'chat',
-      title: '当前发布',
+      title: definition.title,
       endpoint: `/api/projects/${scope.projectId}/releases/${scope.releaseId}/copilot`,
       taskEndpoint: `/api/projects/${scope.projectId}/releases/${scope.releaseId}/tasks`,
-      suggestions: ['这次发布现在安全吗？', '最关键的阻塞点是什么？', '我下一步该先做什么？'],
+      suggestions: definition.getSuggestions(),
       routes: [],
     };
   }
 
   if (scope.kind === 'environment') {
+    const definition = getCopilotDefinition('environment');
+
     return {
       kind: 'chat',
-      title: '当前环境',
+      title: definition.title,
       endpoint: `/api/projects/${scope.projectId}/environments/${scope.environmentId}/copilot`,
       taskEndpoint: `/api/projects/${scope.projectId}/environments/${scope.environmentId}/tasks`,
-      suggestions: [
-        '当前环境最该先看什么？',
-        '这个环境为什么是现在这个状态？',
-        '变量和数据库里最需要关注哪一项？',
-      ],
+      suggestions: definition.getSuggestions(),
       routes: [],
     };
   }
