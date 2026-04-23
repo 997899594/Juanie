@@ -1,6 +1,5 @@
 import { ArrowLeft, ScrollText } from 'lucide-react';
 import Link from 'next/link';
-import { ReleaseCopilotPanel } from '@/components/projects/ReleaseCopilotPanel';
 import { ReleaseDetailLiveSync } from '@/components/projects/ReleaseDetailLiveSync';
 import {
   ReleaseDiffSection,
@@ -60,61 +59,53 @@ export function ReleaseDetailDashboard({
         initialStatus={release.status}
         initialStateKey={releaseStateKey}
       />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-        <div className="space-y-6">
-          <PageHeader
-            title={releaseTitle}
-            description={release.sourceRef}
-            eyebrow="发布"
-            meta="看这次发生了什么。"
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild size="sm" className="h-9 px-4">
-                  <Link href={environmentLogsHref}>
-                    <ScrollText className="h-3.5 w-3.5" />
-                    日志
-                  </Link>
-                </Button>
-                <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
-                  <Link href={releasesHref}>
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    返回发布
-                  </Link>
-                </Button>
-              </div>
-            }
-          />
+      <div className="space-y-6">
+        <PageHeader
+          title={releaseTitle}
+          description={release.sourceRef}
+          eyebrow="发布"
+          meta="看这次发生了什么。"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button asChild size="sm" className="h-9 px-4">
+                <Link href={environmentLogsHref}>
+                  <ScrollText className="h-3.5 w-3.5" />
+                  日志
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="h-9 rounded-full px-4">
+                <Link href={releasesHref}>
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  返回发布
+                </Link>
+              </Button>
+            </div>
+          }
+        />
 
-          <ReleaseTopSummarySection release={release} />
+        <ReleaseTopSummarySection release={release} />
 
-          <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-            <ReleaseNarrativeSection release={release} />
-            <ReleaseTimelineSection release={release} />
-          </section>
+        <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+          <ReleaseNarrativeSection release={release} />
+          <ReleaseTimelineSection release={release} />
+        </section>
 
-          <ReleaseDiffSection
-            projectId={projectId}
-            sourceReleaseLink={sourceReleaseLink}
-            previousReleaseLink={previousReleaseLink}
-            release={release}
-          />
+        <ReleaseDiffSection
+          projectId={projectId}
+          sourceReleaseLink={sourceReleaseLink}
+          previousReleaseLink={previousReleaseLink}
+          release={release}
+        />
 
-          <ReleaseExecutionSections
-            projectId={projectId}
-            releaseId={releaseId}
-            role={role}
-            release={release}
-            releasePlanSnapshot={releasePlanSnapshot}
-            incidentSnapshot={incidentSnapshot}
-            dynamicPluginPanels={dynamicPluginPanels}
-            initialTaskCenter={initialTaskCenter}
-          />
-        </div>
-
-        <ReleaseCopilotPanel
+        <ReleaseExecutionSections
           projectId={projectId}
           releaseId={releaseId}
-          releaseTitle={releaseTitle}
+          role={role}
+          release={release}
+          releasePlanSnapshot={releasePlanSnapshot}
+          incidentSnapshot={incidentSnapshot}
+          dynamicPluginPanels={dynamicPluginPanels}
+          initialTaskCenter={initialTaskCenter}
         />
       </div>
     </div>

@@ -1,12 +1,9 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { openAICommandBar } from './ai-command-bar';
 import { BrandLockup } from './brand';
 import { buildEnvironmentNavHref, environmentNav, isNavItemActive, mainNav } from './navigation';
 import { UserMenu } from './user-menu';
@@ -58,17 +55,6 @@ export function Sidebar() {
             subtitleClassName="tracking-[0.12em] uppercase"
             priority
           />
-          <Button
-            variant="ghost"
-            className="mt-4 h-11 w-full justify-between rounded-[18px] bg-[rgba(15,23,42,0.045)] px-3 text-sm text-[rgba(15,23,42,0.76)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
-            onClick={() => openAICommandBar()}
-          >
-            <span className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4" />
-              AI
-            </span>
-            <span className="text-xs text-[rgba(15,23,42,0.34)]">⌘K</span>
-          </Button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-4">

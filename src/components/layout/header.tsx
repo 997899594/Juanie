@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, Menu, Sparkles } from 'lucide-react';
+import { ChevronRight, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useMemo, useState } from 'react';
@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useProjectContext } from '@/lib/project-context';
 import { cn } from '@/lib/utils';
-import { openAICommandBar } from './ai-command-bar';
 import { BrandLockup } from './brand';
 import { buildEnvironmentNavHref, environmentNav, isNavItemActive, mainNav } from './navigation';
 import { UserMenu } from './user-menu';
@@ -71,17 +70,7 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            className="h-10 rounded-full bg-[rgba(15,23,42,0.045)] px-4 text-sm text-[rgba(15,23,42,0.76)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
-            onClick={() => openAICommandBar()}
-          >
-            <Sparkles className="h-4 w-4" />
-            AI
-          </Button>
-          <UserMenu />
-        </div>
+        <UserMenu />
       </div>
 
       <div className="lg:hidden">
@@ -113,17 +102,7 @@ export function Header() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-2xl bg-[rgba(15,23,42,0.045)] text-[rgba(15,23,42,0.76)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
-              onClick={() => openAICommandBar()}
-            >
-              <Sparkles className="h-4 w-4" />
-            </Button>
-            <UserMenu />
-          </div>
+          <UserMenu />
         </div>
 
         {mobileEnvironmentTabs.length > 0 && (

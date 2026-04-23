@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { EnvironmentAISummaryPanel } from '@/components/projects/EnvironmentAISummaryPanel';
-import { EnvironmentCopilotPanel } from '@/components/projects/EnvironmentCopilotPanel';
 import { EnvironmentDynamicPluginPanel } from '@/components/projects/EnvironmentDynamicPluginPanel';
 import { EnvironmentEnvvarRiskPanel } from '@/components/projects/EnvironmentEnvvarRiskPanel';
 import { EnvironmentMigrationReviewPanel } from '@/components/projects/EnvironmentMigrationReviewPanel';
@@ -949,24 +948,17 @@ function EnvironmentExpandedContent({
   }>;
 }) {
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-      <EnvironmentOverviewPanel
-        projectId={projectId}
-        environment={environment}
-        savingStrategy={savingStrategy}
-        onStrategyChange={onStrategyChange}
-        initialAiSummary={initialAiSummary}
-        initialMigrationReview={initialMigrationReview}
-        initialEnvvarRisk={initialEnvvarRisk}
-        initialTaskCenter={initialTaskCenter}
-        initialDynamicPluginPanels={initialDynamicPluginPanels}
-      />
-      <EnvironmentCopilotPanel
-        projectId={projectId}
-        environmentId={environment.id}
-        environmentName={environment.name}
-      />
-    </div>
+    <EnvironmentOverviewPanel
+      projectId={projectId}
+      environment={environment}
+      savingStrategy={savingStrategy}
+      onStrategyChange={onStrategyChange}
+      initialAiSummary={initialAiSummary}
+      initialMigrationReview={initialMigrationReview}
+      initialEnvvarRisk={initialEnvvarRisk}
+      initialTaskCenter={initialTaskCenter}
+      initialDynamicPluginPanels={initialDynamicPluginPanels}
+    />
   );
 }
 
