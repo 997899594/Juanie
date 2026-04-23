@@ -1,19 +1,12 @@
 'use client';
 
-import { Command, Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Send, Sparkles } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StreamdownMessage } from '@/components/projects/StreamdownMessage';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { getCommandBarConfig } from '@/lib/ai/command-bar';
 import { cn } from '@/lib/utils';
 
@@ -21,7 +14,17 @@ interface TaskReplyPayload {
   summary: string;
 }
 
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 const openEventName = 'juanie:open-ai-command-bar';
+
+function buildMessageId(): string {
+  return `ai-command-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export function openAICommandBar(): void {
   window.dispatchEvent(new Event(openEventName));
@@ -32,10 +35,12 @@ export function AICommandBar() {
   const config = useMemo(() => getCommandBarConfig(pathname), [pathname]);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [taskLoading, setTaskLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -58,26 +63,53 @@ export function AICommandBar() {
   }, []);
 
   useEffect(() => {
+    viewportRef.current?.scrollTo({
+      top: viewportRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  });
+
+  useEffect(() => {
     if (!open) {
       setDraft('');
-      setResult(null);
+      setMessages([]);
       setErrorMessage(null);
       setLoading(false);
       setTaskLoading(false);
+      setStreamingMessageId(null);
     }
   }, [open]);
 
-  const canSubmit = draft.trim().length > 0 && !!config.endpoint && !loading;
+  const trimmedDraft = draft.trim();
+  const canSubmit = trimmedDraft.length > 0 && !!config.endpoint && !loading && !taskLoading;
 
-  const ask = async (question: string) => {
+  const send = async (question: string) => {
     const content = question.trim();
     if (!content || !config.endpoint || loading) {
       return;
     }
 
-    setDraft(content);
+    const userMessage: ChatMessage = {
+      id: buildMessageId(),
+      role: 'user',
+      content,
+    };
+    const assistantMessageId = buildMessageId();
+    const nextMessages = [...messages, userMessage];
+
+    setMessages(nextMessages);
+    setDraft('');
     setLoading(true);
     setErrorMessage(null);
+    setStreamingMessageId(assistantMessageId);
+    setMessages((current) => [
+      ...current,
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+      },
+    ]);
 
     try {
       const response = await fetch(config.endpoint, {
@@ -86,7 +118,10 @@ export function AICommandBar() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [{ role: 'user', content }],
+          messages: nextMessages.map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
         }),
       });
 
@@ -114,25 +149,33 @@ export function AICommandBar() {
         }
 
         streamedContent += decoder.decode(value, { stream: true });
-        setResult(streamedContent);
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantMessageId ? { ...message, content: streamedContent } : message
+          )
+        );
       }
 
       streamedContent += decoder.decode();
-      setResult(streamedContent);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantMessageId ? { ...message, content: streamedContent } : message
+        )
+      );
     } catch (error) {
+      setMessages((current) => current.filter((message) => message.id !== assistantMessageId));
       setErrorMessage(error instanceof Error ? error.message : 'AI 暂时不可用');
     } finally {
       setLoading(false);
+      setStreamingMessageId(null);
     }
   };
 
-  const runAsTask = async (question: string) => {
-    const content = question.trim();
-    if (!content || !config.taskEndpoint || taskLoading) {
+  const runAsTask = async () => {
+    if (!trimmedDraft || !config.taskEndpoint || taskLoading) {
       return;
     }
 
-    setDraft(content);
     setTaskLoading(true);
     setErrorMessage(null);
 
@@ -144,7 +187,7 @@ export function AICommandBar() {
         },
         body: JSON.stringify({
           kind: 'deep_analysis',
-          question: content,
+          question: trimmedDraft,
         }),
       });
 
@@ -161,7 +204,15 @@ export function AICommandBar() {
         );
       }
 
-      setResult(`已加入任务中心。\n\n${(data as TaskReplyPayload).summary}`);
+      setDraft('');
+      setMessages((current) => [
+        ...current,
+        {
+          id: buildMessageId(),
+          role: 'assistant',
+          content: `已加入任务。\n\n${(data as TaskReplyPayload).summary}`,
+        },
+      ]);
       window.dispatchEvent(new Event('juanie:refresh-ai-task-center'));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'AI 任务提交失败');
@@ -169,6 +220,8 @@ export function AICommandBar() {
       setTaskLoading(false);
     }
   };
+
+  const scopeLabel = config.endpoint ? config.title : '未进入对象';
 
   return (
     <>
@@ -182,67 +235,78 @@ export function AICommandBar() {
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-3xl">
-          <div className="overflow-hidden rounded-[30px] bg-[rgba(251,250,247,0.98)] shadow-[0_28px_80px_rgba(15,23,42,0.08)] ring-1 ring-[rgba(15,23,42,0.06)] backdrop-blur">
-            <DialogHeader className="px-6 py-6 text-left">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(15,23,42,0.04)] text-[rgba(15,23,42,0.72)]">
-                      <Sparkles className="h-4.5 w-4.5" />
-                    </div>
-                    <div>
-                      <DialogTitle className="text-[15px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.96)]">
-                        AI
-                      </DialogTitle>
-                      <DialogDescription className="mt-1 text-[13px] leading-6 text-[rgba(15,23,42,0.56)]">
-                        {config.description}
-                      </DialogDescription>
-                    </div>
-                  </div>
+        <DialogContent className="overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-[min(100vw-2rem,30rem)] lg:mr-8 lg:ml-auto lg:mt-8 lg:h-[calc(100vh-4rem)] lg:max-h-[calc(100vh-4rem)] lg:max-w-[30rem] lg:translate-x-0 lg:translate-y-0 lg:top-0 lg:left-auto">
+          <section className="flex h-full min-h-[38rem] flex-col overflow-hidden rounded-[30px] bg-[rgba(251,250,247,0.98)] shadow-[0_28px_80px_rgba(15,23,42,0.08)] ring-1 ring-[rgba(15,23,42,0.06)] backdrop-blur">
+            <DialogHeader className="border-b border-[rgba(15,23,42,0.06)] px-5 py-5 text-left">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(15,23,42,0.04)] text-[rgba(15,23,42,0.72)]">
+                  <Sparkles className="h-4.5 w-4.5" />
                 </div>
-                {config.endpoint ? (
-                  <Badge
-                    variant="secondary"
-                    className="rounded-full border-0 bg-[rgba(15,23,42,0.05)] px-3 py-1 text-[11px] font-medium text-[rgba(15,23,42,0.56)] shadow-none"
-                  >
-                    当前对象
-                  </Badge>
-                ) : null}
+                <div className="min-w-0">
+                  <DialogTitle className="text-[15px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.96)]">
+                    AI
+                  </DialogTitle>
+                  <div className="mt-1 text-[13px] text-[rgba(15,23,42,0.5)]">{scopeLabel}</div>
+                </div>
               </div>
             </DialogHeader>
 
-            <div className="space-y-5 px-6 pb-6">
-              <div className="flex items-center gap-3 rounded-[22px] bg-[rgba(255,255,255,0.76)] px-4 py-3 ring-1 ring-[rgba(15,23,42,0.06)] transition duration-200 focus-within:bg-white focus-within:ring-[rgba(15,23,42,0.12)] focus-within:shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-                <Command className="h-4 w-4 text-[rgba(15,23,42,0.38)]" />
-                <Input
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder={
-                    config.endpoint
-                      ? '直接问当前对象。按 Enter 发送。'
-                      : '当前页面还没有对象级 AI 上下文'
-                  }
-                  className="h-auto border-0 bg-transparent px-0 py-0 text-[15px] text-[rgba(15,23,42,0.92)] shadow-none placeholder:text-[rgba(15,23,42,0.34)] focus-visible:ring-0"
-                  disabled={!config.endpoint || loading || taskLoading}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      void ask(draft);
-                    }
-                  }}
-                />
-                <div className="hidden text-[11px] text-[rgba(15,23,42,0.34)] sm:block">⌘K</div>
-              </div>
+            <div ref={viewportRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              {!config.endpoint ? (
+                <div className="rounded-[22px] bg-[rgba(15,23,42,0.035)] px-4 py-3.5 text-sm leading-7 text-[rgba(15,23,42,0.52)]">
+                  进入环境或发布后使用。
+                </div>
+              ) : null}
 
-              {config.suggestions.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {config.suggestions.map((suggestion) => (
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={cn('flex', message.role === 'user' ? 'justify-end' : 'justify-start')}
+                >
+                  <div
+                    className={cn(
+                      'max-w-[88%] rounded-[24px] px-4 py-3.5 text-sm leading-7',
+                      message.role === 'user'
+                        ? 'rounded-br-md bg-[rgba(15,23,42,0.96)] text-white shadow-[0_18px_36px_-28px_rgba(15,23,42,0.3)]'
+                        : 'rounded-bl-md bg-[rgba(15,23,42,0.035)] text-[rgba(15,23,42,0.88)]'
+                    )}
+                  >
+                    {message.role === 'assistant' ? (
+                      <StreamdownMessage
+                        content={message.content}
+                        isStreaming={streamingMessageId === message.id}
+                      />
+                    ) : (
+                      <div className="whitespace-pre-wrap">{message.content}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {loading && !messages.some((message) => message.id === streamingMessageId) ? (
+                <div className="flex justify-start">
+                  <div className="rounded-[24px] rounded-bl-md bg-[rgba(15,23,42,0.035)] px-4 py-3 text-[rgba(15,23,42,0.5)]">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                </div>
+              ) : null}
+
+              {errorMessage ? (
+                <div className="rounded-[18px] bg-[rgba(185,28,28,0.06)] px-4 py-3 text-sm text-[rgba(185,28,28,0.84)]">
+                  {errorMessage}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="border-t border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.6)] px-4 pb-4 pt-4">
+              {config.endpoint && config.suggestions.length > 0 && messages.length === 0 ? (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {config.suggestions.slice(0, 2).map((suggestion) => (
                     <button
                       key={suggestion}
                       type="button"
-                      className="rounded-full bg-[rgba(15,23,42,0.045)] px-3.5 py-1.5 text-left text-[12px] font-medium text-[rgba(15,23,42,0.72)] transition hover:bg-[rgba(15,23,42,0.08)]"
-                      onClick={() => void ask(suggestion)}
+                      className="rounded-full bg-[rgba(15,23,42,0.045)] px-3.5 py-1.5 text-[12px] font-medium text-[rgba(15,23,42,0.72)] transition hover:bg-[rgba(15,23,42,0.08)]"
+                      onClick={() => void send(suggestion)}
                       disabled={loading || taskLoading}
                     >
                       {suggestion}
@@ -251,60 +315,47 @@ export function AICommandBar() {
                 </div>
               ) : null}
 
-              <div
-                className={cn(
-                  'min-h-[180px] rounded-[24px] bg-[rgba(255,255,255,0.72)] px-5 py-4 ring-1 ring-[rgba(15,23,42,0.06)]',
-                  !result && !errorMessage && !loading && 'flex items-center'
-                )}
-              >
-                {loading || taskLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-[rgba(15,23,42,0.48)]">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {taskLoading ? '正在加入任务中心…' : '正在整理当前对象上下文…'}
-                  </div>
-                ) : errorMessage ? (
-                  <div className="text-sm leading-6 text-[rgba(185,28,28,0.88)]">
-                    {errorMessage}
-                  </div>
-                ) : result ? (
-                  <StreamdownMessage content={result} />
-                ) : (
-                  <div className="text-sm leading-6 text-[rgba(15,23,42,0.48)]">
-                    {config.endpoint
-                      ? '只问当前对象最关键的问题。'
-                      : '进入环境页或发布页后再使用。'}
-                  </div>
-                )}
-              </div>
+              <div className="rounded-[24px] bg-white p-3 shadow-[0_18px_44px_-30px_rgba(15,23,42,0.12)] ring-1 ring-[rgba(15,23,42,0.06)]">
+                <Textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder={config.endpoint ? '问当前对象' : '当前不可用'}
+                  className="min-h-[92px] resize-none border-0 bg-transparent px-1 py-1 text-[14px] leading-7 text-[rgba(15,23,42,0.9)] shadow-none ring-0 placeholder:text-[rgba(15,23,42,0.34)] focus-visible:ring-0 focus-visible:ring-offset-0"
+                  disabled={!config.endpoint || loading || taskLoading}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      void send(trimmedDraft);
+                    }
+                  }}
+                />
+                <div className="mt-3 flex items-center justify-between border-t border-[rgba(15,23,42,0.06)] pt-3">
+                  <button
+                    type="button"
+                    className="text-[12px] text-[rgba(15,23,42,0.42)] transition hover:text-[rgba(15,23,42,0.7)]"
+                    disabled={!trimmedDraft || loading || taskLoading || !config.taskEndpoint}
+                    onClick={() => void runAsTask()}
+                  >
+                    加入任务
+                  </button>
 
-              <div className="flex items-center justify-end gap-3">
-                <Button
-                  variant="ghost"
-                  className="h-10 rounded-full bg-[rgba(15,23,42,0.045)] px-4 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
-                  onClick={() => setOpen(false)}
-                >
-                  关闭
-                </Button>
-                <Button
-                  className="h-10 rounded-full bg-[rgba(15,23,42,0.92)] px-5 text-white shadow-none hover:bg-[rgba(15,23,42,0.82)]"
-                  disabled={!canSubmit || taskLoading}
-                  onClick={() => void ask(draft)}
-                >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  发送
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-full border-0 bg-[rgba(15,23,42,0.06)] px-5 text-[rgba(15,23,42,0.72)] shadow-none hover:bg-[rgba(15,23,42,0.1)]"
-                  disabled={!canSubmit || loading || !config.taskEndpoint}
-                  onClick={() => void runAsTask(draft)}
-                >
-                  {taskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  加入任务
-                </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-11 w-11 rounded-full bg-[rgba(15,23,42,0.96)] text-white shadow-none hover:bg-[rgba(15,23,42,0.84)]"
+                    disabled={!canSubmit}
+                    onClick={() => void send(trimmedDraft)}
+                  >
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
         </DialogContent>
       </Dialog>
     </>
