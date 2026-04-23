@@ -87,9 +87,8 @@ const databaseStrategyLabels: Record<'direct' | 'inherit' | 'isolated_clone', st
 };
 
 const settingsPanelClassName =
-  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
-const settingsSubtleClassName =
-  'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+  'rounded-[22px] bg-[rgba(251,250,247,0.96)] shadow-[0_16px_34px_rgba(55,53,47,0.05)]';
+const settingsSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
 
 export function ProjectSettingsClient({ projectId, initialData }: ProjectSettingsClientProps) {
   const router = useRouter();

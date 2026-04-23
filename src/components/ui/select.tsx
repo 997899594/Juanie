@@ -16,7 +16,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'group flex h-11 w-full items-center justify-between gap-3 rounded-[18px] bg-[rgba(255,255,255,0.76)] px-4 py-2 text-sm text-[rgba(15,23,42,0.9)] shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_1px_2px_rgba(15,23,42,0.02),0_12px_28px_rgba(15,23,42,0.035)] ring-1 ring-[rgba(15,23,42,0.06)] transition-[background-color,box-shadow,color,transform] outline-none hover:bg-[rgba(255,255,255,0.9)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_2px_6px_rgba(15,23,42,0.03),0_16px_32px_rgba(15,23,42,0.05)] hover:ring-[rgba(15,23,42,0.08)] focus-visible:bg-white focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_2px_8px_rgba(15,23,42,0.04),0_20px_40px_rgba(15,23,42,0.06)] focus-visible:ring-[rgba(15,23,42,0.14)] data-[state=open]:bg-white data-[state=open]:shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_2px_8px_rgba(15,23,42,0.04),0_20px_40px_rgba(15,23,42,0.06)] data-[state=open]:ring-[rgba(15,23,42,0.14)] disabled:cursor-not-allowed disabled:opacity-45 [&>span]:line-clamp-1 [&>span[data-placeholder]]:text-[rgba(15,23,42,0.34)]',
+      'group flex h-11 w-full items-center justify-between gap-3 rounded-[18px] bg-[rgba(255,255,255,0.72)] px-4 py-2 text-sm text-[rgba(15,23,42,0.9)] shadow-[inset_0_1px_0_rgba(255,255,255,0.86),0_10px_26px_-20px_rgba(15,23,42,0.12)] ring-1 ring-[rgba(15,23,42,0.045)] transition-[background-color,box-shadow,color,transform,ring-color] outline-none hover:bg-[rgba(255,255,255,0.84)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_14px_34px_-22px_rgba(15,23,42,0.16)] hover:ring-[rgba(15,23,42,0.065)] focus-visible:-translate-y-[1px] focus-visible:bg-white focus-visible:shadow-[inset_0_1px_0_rgba(255,255,255,0.94),0_18px_38px_-24px_rgba(15,23,42,0.2)] focus-visible:ring-[rgba(15,23,42,0.09)] data-[state=open]:-translate-y-[1px] data-[state=open]:bg-white data-[state=open]:shadow-[inset_0_1px_0_rgba(255,255,255,0.94),0_18px_38px_-24px_rgba(15,23,42,0.2)] data-[state=open]:ring-[rgba(15,23,42,0.09)] disabled:cursor-not-allowed disabled:opacity-45 [&>span]:line-clamp-1 [&>span[data-placeholder]]:text-[rgba(15,23,42,0.32)]',
       className
     )}
     {...props}
@@ -65,7 +65,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-[24px] bg-[rgba(251,250,247,0.98)] text-popover-foreground shadow-[0_24px_60px_rgba(15,23,42,0.08)] ring-1 ring-[rgba(15,23,42,0.06)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-[24px] bg-[rgba(251,250,247,0.985)] text-popover-foreground shadow-[0_24px_60px_rgba(15,23,42,0.08)] ring-1 ring-[rgba(15,23,42,0.05)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         position === 'popper' &&
           'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
         className
@@ -111,7 +111,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-[18px] py-2.5 pl-3 pr-8 text-sm text-[rgba(15,23,42,0.84)] outline-none transition-[background-color,color,box-shadow] focus:bg-[rgba(15,23,42,0.045)] focus:text-[rgba(15,23,42,0.96)] focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] data-[state=checked]:bg-[rgba(15,23,42,0.06)] data-[state=checked]:text-[rgba(15,23,42,0.96)] data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
+      'relative flex w-full cursor-default select-none items-center rounded-[18px] py-2.5 pl-3 pr-8 text-sm text-[rgba(15,23,42,0.84)] outline-none transition-[background-color,color,box-shadow] focus:bg-[rgba(15,23,42,0.04)] focus:text-[rgba(15,23,42,0.96)] focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] data-[state=checked]:bg-[rgba(15,23,42,0.055)] data-[state=checked]:text-[rgba(15,23,42,0.96)] data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
       className
     )}
     {...props}

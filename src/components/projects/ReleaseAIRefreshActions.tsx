@@ -59,14 +59,14 @@ export function ReleaseAIRefreshActions(input: {
       const failed = responses.find((response) => !response.ok);
       if (failed) {
         const data = (await failed.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? 'AI 刷新失败');
+        throw new Error(data?.error ?? '刷新失败');
       }
 
       setMessage('已刷新');
       setStatus('success');
       router.refresh();
     } catch (error) {
-      setMessage(`刷新失败：${error instanceof Error ? error.message : '未知错误'}`);
+      setMessage(error instanceof Error ? error.message : '刷新失败');
       setStatus('error');
     } finally {
       setRefreshing(false);
@@ -84,7 +84,7 @@ export function ReleaseAIRefreshActions(input: {
     <Sparkles className="h-3.5 w-3.5" />
   );
 
-  const buttonTitle = message ?? '刷新 AI';
+  const buttonTitle = message ?? '刷新';
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -93,29 +93,22 @@ export function ReleaseAIRefreshActions(input: {
         size={input.compact ? 'icon' : 'sm'}
         className={cn(
           input.compact
-            ? 'h-9 w-9 rounded-full bg-[rgba(15,23,42,0.045)] text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]'
-            : 'rounded-full bg-[rgba(15,23,42,0.045)] px-3 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]',
+            ? 'h-9 w-9 rounded-full bg-[rgba(15,23,42,0.04)] text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]'
+            : 'rounded-full bg-[rgba(15,23,42,0.04)] px-3 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]',
           status === 'success' &&
-            'bg-[rgba(5,150,105,0.08)] text-emerald-700 hover:bg-[rgba(5,150,105,0.12)]',
+            'bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.72)] hover:bg-[rgba(15,23,42,0.09)]',
           status === 'error' &&
-            'bg-[rgba(185,28,28,0.08)] text-[rgba(185,28,28,0.82)] hover:bg-[rgba(185,28,28,0.12)]'
+            'bg-[rgba(15,23,42,0.06)] text-[rgba(15,23,42,0.5)] hover:bg-[rgba(15,23,42,0.09)]'
         )}
         onClick={handleRefresh}
         title={buttonTitle}
         aria-label={buttonTitle}
       >
         {icon}
-        {!input.compact && (refreshing ? '刷新中...' : '刷新 AI')}
+        {!input.compact && (refreshing ? '刷新中…' : '刷新')}
       </Button>
       {(input.showMessage ?? true) && message && (
-        <div
-          className={cn(
-            'text-xs',
-            status === 'error' ? 'text-[rgba(185,28,28,0.82)]' : 'text-[rgba(15,23,42,0.42)]'
-          )}
-        >
-          {message}
-        </div>
+        <div className="text-xs text-[rgba(15,23,42,0.42)]">{message}</div>
       )}
     </div>
   );

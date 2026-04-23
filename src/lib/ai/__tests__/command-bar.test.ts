@@ -19,9 +19,9 @@ describe('ai command bar', () => {
     });
   });
 
-  it('marks unsupported routes clearly', () => {
+  it('marks routes without object context as none', () => {
     expect(resolveCommandBarScope('/projects')).toEqual({
-      kind: 'unsupported',
+      kind: 'none',
     });
   });
 
@@ -39,5 +39,19 @@ describe('ai command bar', () => {
     expect(config.endpoint).toBe('/api/projects/p1/releases/r1/copilot');
     expect(config.taskEndpoint).toBe('/api/projects/p1/releases/r1/tasks');
     expect(config.suggestions).toContain('这次发布现在安全吗？');
+  });
+
+  it('builds resolver config when no object context exists', () => {
+    const config = getCommandBarConfig('/teams');
+
+    expect(config.kind).toBe('resolver');
+    expect(config.title).toBe('选择范围');
+    expect(config.endpoint).toBe(null);
+    expect(config.routes).toEqual([
+      { label: '项目', href: '/projects' },
+      { label: '待办', href: '/inbox' },
+      { label: '团队', href: '/teams' },
+      { label: '设置', href: '/settings' },
+    ]);
   });
 });

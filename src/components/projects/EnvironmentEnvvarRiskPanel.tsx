@@ -10,14 +10,14 @@ import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
 
 function getSourceLabel(source: ResolvedAIPluginSnapshot['source'], stale: boolean): string {
   if (source === 'fresh') {
-    return '刚生成';
+    return '最新';
   }
 
   if (source === 'cache') {
-    return stale ? '历史快照' : '缓存快照';
+    return stale ? '历史' : '缓存';
   }
 
-  return '暂无快照';
+  return '无结果';
 }
 
 export function EnvironmentEnvvarRiskPanel(input: {
@@ -104,11 +104,11 @@ export function EnvironmentEnvvarRiskPanel(input: {
   const output = panel?.snapshot?.output ?? null;
 
   return (
-    <section className="rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]">
+    <section className="rounded-[20px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_18px_40px_rgba(55,53,47,0.05)]">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            变量风险
+            变量
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {output?.headline.status ? (
@@ -128,7 +128,7 @@ export function EnvironmentEnvvarRiskPanel(input: {
         <Button
           type="button"
           variant="ghost"
-          className="h-10 rounded-full px-4"
+          className="h-9 rounded-full bg-[rgba(15,23,42,0.04)] px-3.5 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]"
           onClick={() => load(true)}
           disabled={refreshing}
         >
@@ -137,7 +137,7 @@ export function EnvironmentEnvvarRiskPanel(input: {
       </div>
 
       {loading && !panel ? (
-        <div className="mt-4 text-sm text-muted-foreground">正在整理变量状态…</div>
+        <div className="mt-4 text-sm text-muted-foreground">分析中…</div>
       ) : output ? (
         <div className="mt-5 space-y-4">
           <div>
@@ -145,15 +145,13 @@ export function EnvironmentEnvvarRiskPanel(input: {
               {output.headline.summary}
             </div>
             {output.headline.nextAction ? (
-              <div className="mt-2 text-sm text-muted-foreground">
-                下一步：{output.headline.nextAction}
-              </div>
+              <div className="mt-2 text-sm text-muted-foreground">{output.headline.nextAction}</div>
             ) : null}
           </div>
 
-          <div className="rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+          <div className="rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-4">
             <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              覆盖情况
+              覆盖
             </div>
             <div className="mt-2 text-sm font-medium text-foreground">
               {output.coverage.summary}
@@ -174,9 +172,9 @@ export function EnvironmentEnvvarRiskPanel(input: {
             </div>
           </div>
 
-          <div className="rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+          <div className="rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-4">
             <div className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-              风险点
+              风险
             </div>
             <div className="mt-2 space-y-1.5">
               {output.risks.map((risk) => (
@@ -189,7 +187,7 @@ export function EnvironmentEnvvarRiskPanel(input: {
         </div>
       ) : (
         <div className="mt-4 text-sm text-muted-foreground">
-          {panel?.availability.blockedReason ?? panel?.errorMessage ?? '当前还没有变量风险摘要'}
+          {panel?.availability.blockedReason ?? panel?.errorMessage ?? '暂无结果'}
         </div>
       )}
     </section>

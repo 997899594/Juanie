@@ -10,14 +10,14 @@ import type { EnvironmentSummary } from '@/lib/ai/schemas/environment-summary';
 
 function getSourceLabel(source: ResolvedAIPluginSnapshot['source'], stale: boolean): string {
   if (source === 'fresh') {
-    return '刚生成';
+    return '最新';
   }
 
   if (source === 'cache') {
-    return stale ? '历史快照' : '缓存快照';
+    return stale ? '历史' : '缓存';
   }
 
-  return '暂无快照';
+  return '无结果';
 }
 
 export function EnvironmentAISummaryPanel(input: {
@@ -105,11 +105,11 @@ export function EnvironmentAISummaryPanel(input: {
 
   if (loading && !panel) {
     return (
-      <section className="rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)] ring-1 ring-[rgba(15,23,42,0.06)]">
+      <section className="rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)]">
         <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
-          AI 摘要
+          摘要
         </div>
-        <div className="mt-3 text-sm text-[rgba(15,23,42,0.48)]">正在分析当前环境…</div>
+        <div className="mt-3 text-sm text-[rgba(15,23,42,0.48)]">分析中…</div>
       </section>
     );
   }
@@ -117,11 +117,11 @@ export function EnvironmentAISummaryPanel(input: {
   const output = panel?.snapshot?.output ?? null;
 
   return (
-    <section className="rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)] ring-1 ring-[rgba(15,23,42,0.06)]">
+    <section className="rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)]">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
-            AI 摘要
+            摘要
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {output?.headline.status ? (
@@ -137,8 +137,8 @@ export function EnvironmentAISummaryPanel(input: {
               {getSourceLabel(panel?.source ?? 'none', panel?.stale ?? false)}
             </Badge>
             {panel?.errorMessage ? (
-              <Badge className="rounded-full border-0 bg-[rgba(185,28,28,0.08)] px-3 py-1 text-[11px] font-medium text-[rgba(185,28,28,0.82)] shadow-none">
-                暂不可用
+              <Badge className="rounded-full border-0 bg-[rgba(15,23,42,0.05)] px-3 py-1 text-[11px] font-medium text-[rgba(15,23,42,0.48)] shadow-none">
+                异常
               </Badge>
             ) : null}
           </div>
@@ -147,12 +147,12 @@ export function EnvironmentAISummaryPanel(input: {
         <Button
           type="button"
           variant="ghost"
-          className="h-10 rounded-full bg-[rgba(15,23,42,0.045)] px-4 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
+          className="h-9 rounded-full bg-[rgba(15,23,42,0.04)] px-3.5 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]"
           onClick={() => load(true)}
           disabled={refreshing}
         >
           <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-          {refreshing ? '刷新中...' : '刷新 AI'}
+          {refreshing ? '刷新中…' : '刷新'}
         </Button>
       </div>
 
@@ -165,15 +165,15 @@ export function EnvironmentAISummaryPanel(input: {
               </div>
               {output.headline.nextAction ? (
                 <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">
-                  下一步：{output.headline.nextAction}
+                  {output.headline.nextAction}
                 </div>
               ) : null}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4">
+              <div className="rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-4">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                  来源链路
+                  来源
                 </div>
                 <div className="mt-2 text-sm font-medium text-foreground">
                   {output.sourceOfTruth.sourceLabel ?? '未标注来源'}
@@ -185,9 +185,9 @@ export function EnvironmentAISummaryPanel(input: {
                 ) : null}
               </div>
 
-              <div className="rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4">
+              <div className="rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-4">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                  AI 结论
+                  结论
                 </div>
                 <div className="mt-2 text-sm text-foreground">{output.operatorNarrative}</div>
               </div>
@@ -195,9 +195,9 @@ export function EnvironmentAISummaryPanel(input: {
           </div>
 
           <div className="space-y-3">
-            <div className="rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4">
+            <div className="rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-4">
               <div className="text-[10px] uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                资源摘要
+                资源
               </div>
               <div className="mt-2 text-sm text-foreground">{output.resources.databaseSummary}</div>
               <div className="mt-1 text-sm text-[rgba(15,23,42,0.56)]">
@@ -205,9 +205,9 @@ export function EnvironmentAISummaryPanel(input: {
               </div>
             </div>
 
-            <div className="rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4">
+            <div className="rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-4">
               <div className="text-[10px] uppercase tracking-[0.18em] text-[rgba(15,23,42,0.42)]">
-                当前重点
+                重点
               </div>
               <div className="mt-2 space-y-1.5">
                 {output.focusPoints.map((point) => (
@@ -221,7 +221,7 @@ export function EnvironmentAISummaryPanel(input: {
         </div>
       ) : (
         <div className="mt-4 text-sm text-[rgba(15,23,42,0.48)]">
-          {panel?.availability.blockedReason ?? panel?.errorMessage ?? '当前还没有 AI 摘要'}
+          {panel?.availability.blockedReason ?? panel?.errorMessage ?? '暂无结果'}
         </div>
       )}
     </section>

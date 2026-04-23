@@ -9,14 +9,14 @@ import type { DynamicPluginOutput } from '@/lib/ai/schemas/dynamic-plugin-output
 
 function getSourceLabel(source: ResolvedAIPluginSnapshot['source'], stale: boolean): string {
   if (source === 'fresh') {
-    return '刚生成';
+    return '最新';
   }
 
   if (source === 'cache') {
-    return stale ? '历史快照' : '缓存快照';
+    return stale ? '历史' : '缓存';
   }
 
-  return '暂无快照';
+  return '无结果';
 }
 
 function getToneVariant(
@@ -96,8 +96,8 @@ export function ReleaseDynamicPluginPanel(input: {
 
   if (loading && !panel) {
     return (
-      <div className="rounded-[20px] bg-[rgba(243,240,233,0.7)] px-4 py-5 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset]">
-        <div className="text-sm font-medium text-foreground">正在加载插件结果…</div>
+      <div className="rounded-[20px] bg-[rgba(251,250,247,0.96)] px-4 py-5 shadow-[0_18px_40px_rgba(55,53,47,0.05)]">
+        <div className="text-sm text-[rgba(15,23,42,0.48)]">加载中…</div>
       </div>
     );
   }
@@ -107,7 +107,7 @@ export function ReleaseDynamicPluginPanel(input: {
   }
 
   return (
-    <div className="rounded-[20px] bg-[rgba(243,240,233,0.7)] px-4 py-5 shadow-[0_1px_0_rgba(255,255,255,0.68)_inset]">
+    <div className="rounded-[20px] bg-[rgba(251,250,247,0.96)] px-4 py-5 shadow-[0_18px_40px_rgba(55,53,47,0.05)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
           <div className="text-sm font-medium text-foreground">{panel.manifest.title}</div>
@@ -119,12 +119,12 @@ export function ReleaseDynamicPluginPanel(input: {
         <Button
           type="button"
           variant="ghost"
-          className="h-9 rounded-full px-4"
+          className="h-9 rounded-full bg-[rgba(15,23,42,0.04)] px-3.5 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]"
           onClick={() => load(true)}
           disabled={refreshing}
         >
           <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-          刷新
+          {refreshing ? '刷新中…' : '刷新'}
         </Button>
       </div>
 
@@ -158,11 +158,13 @@ export function ReleaseDynamicPluginPanel(input: {
         </div>
       ) : (
         <div className="mt-3 text-sm text-muted-foreground">
-          {panel.availability.blockedReason ?? panel.errorMessage ?? '当前没有插件输出'}
+          {panel.availability.blockedReason ?? panel.errorMessage ?? '暂无结果'}
         </div>
       )}
 
-      {actionError ? <div className="mt-3 text-sm text-destructive">{actionError}</div> : null}
+      {actionError ? (
+        <div className="mt-3 text-sm text-[rgba(15,23,42,0.48)]">{actionError}</div>
+      ) : null}
     </div>
   );
 }

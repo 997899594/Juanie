@@ -142,45 +142,44 @@ export function EnvironmentTaskCenter(input: {
   };
 
   return (
-    <section className="rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)] ring-1 ring-[rgba(15,23,42,0.06)]">
+    <section className="rounded-[24px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_20px_48px_rgba(15,23,42,0.05)]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
-            待处理事项
+            事项
           </div>
           <div className="mt-2 text-sm text-[rgba(15,23,42,0.48)]">
-            {loading ? '正在整理待处理事项…' : (snapshot?.summary ?? '当前环境没有待处理事项')}
+            {loading ? '整理中…' : (snapshot?.summary ?? '当前环境没有事项')}
           </div>
         </div>
         <Button
           type="button"
           variant="ghost"
-          className="h-10 rounded-full bg-[rgba(15,23,42,0.045)] px-4 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
+          className="h-9 rounded-full bg-[rgba(15,23,42,0.04)] px-3.5 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]"
           onClick={load}
         >
           <RefreshCw className="h-4 w-4" />
-          刷新
         </Button>
       </div>
 
       {snapshot?.tasks.length ? (
-        <div className="mt-5 space-y-3">
+        <div className="mt-5 space-y-2.5">
           {snapshot.tasks.map((task) => (
             <div
               key={task.id}
-              className="flex flex-col gap-4 rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4 lg:flex-row lg:items-center lg:justify-between"
+              className="flex flex-col gap-3 rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3.5 lg:flex-row lg:items-center lg:justify-between"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-sm font-medium text-foreground">{task.title}</div>
                   <Badge
                     variant={getTaskTone(task.kind) === 'warning' ? 'warning' : 'secondary'}
-                    className="rounded-full border-0 px-3 py-1 shadow-none"
+                    className="rounded-full border-0 px-2.5 py-1 shadow-none"
                   >
                     {task.statusLabel}
                   </Badge>
                 </div>
-                <div className="mt-2 text-sm text-[rgba(15,23,42,0.56)]">{task.summary}</div>
+                <div className="mt-1.5 text-sm text-[rgba(15,23,42,0.54)]">{task.summary}</div>
               </div>
 
               <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -188,11 +187,11 @@ export function EnvironmentTaskCenter(input: {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-9 rounded-full border-0 bg-[rgba(255,255,255,0.72)] px-4 text-[rgba(15,23,42,0.72)] shadow-none hover:bg-white"
+                    className="h-8 rounded-full border-0 bg-[rgba(255,255,255,0.76)] px-3.5 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-white"
                     onClick={() => setSelectedTask(task)}
                   >
                     <Sparkles className="h-4 w-4" />
-                    查看结果
+                    结果
                   </Button>
                 ) : null}
 
@@ -200,7 +199,7 @@ export function EnvironmentTaskCenter(input: {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-9 rounded-full border-0 bg-[rgba(255,255,255,0.72)] px-4 text-[rgba(15,23,42,0.72)] shadow-none hover:bg-white"
+                    className="h-8 rounded-full border-0 bg-[rgba(255,255,255,0.76)] px-3.5 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-white"
                     onClick={() => handleMigrationAction(task)}
                     disabled={pendingTaskId === task.id}
                   >
@@ -217,10 +216,10 @@ export function EnvironmentTaskCenter(input: {
                   <Button
                     asChild
                     variant="ghost"
-                    className="h-9 rounded-full bg-[rgba(15,23,42,0.045)] px-4 text-[rgba(15,23,42,0.68)] shadow-none hover:bg-[rgba(15,23,42,0.08)]"
+                    className="h-8 rounded-full bg-[rgba(15,23,42,0.04)] px-3.5 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]"
                   >
                     <Link href={task.href}>
-                      进入处理
+                      打开
                       <ExternalLink className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -230,8 +229,8 @@ export function EnvironmentTaskCenter(input: {
           ))}
         </div>
       ) : !loading ? (
-        <div className="mt-5 rounded-[18px] bg-[rgba(15,23,42,0.035)] px-4 py-4 text-sm text-[rgba(15,23,42,0.48)]">
-          没有需要你现在处理的事项。
+        <div className="mt-5 rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-4 text-sm text-[rgba(15,23,42,0.48)]">
+          暂无事项
         </div>
       ) : null}
 
