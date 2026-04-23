@@ -219,7 +219,7 @@ export class GitHubProvider implements GitProvider {
     const response = await fetch(this.buildApiUrl(path, options?.searchParams), {
       method: options?.method ?? 'GET',
       headers: {
-        Accept: 'application/octet-stream',
+        Accept: 'application/vnd.github+json',
         Authorization: `Bearer ${accessToken}`,
         'X-GitHub-Api-Version': '2022-11-28',
       },

@@ -85,10 +85,10 @@ describe('GitHubProvider preview build trigger', () => {
 
   it('downloads repository archives through the provider API instead of shell git', async () => {
     try {
-      const requests: Array<string> = [];
+      const requests: Array<{ url: string; init?: RequestInit }> = [];
 
-      globalThis.fetch = (async (input) => {
-        requests.push(String(input));
+      globalThis.fetch = (async (input, init) => {
+        requests.push({ url: String(input), init });
 
         if (String(input).includes('/branches/feature%2Fpreview-checkout')) {
           return new Response(
@@ -118,9 +118,12 @@ describe('GitHubProvider preview build trigger', () => {
       );
 
       expect(archive instanceof Uint8Array).toBe(true);
-      expect(requests).toEqual([
-        'https://api.github.com/repos/acme/juanie-demo/tarball/feature%2Fpreview-checkout',
-      ]);
+      expect(requests[0]?.url).toBe(
+        'https://api.github.com/repos/acme/juanie-demo/tarball/feature%2Fpreview-checkout'
+      );
+      expect((requests[0]?.init?.headers as Record<string, string> | undefined)?.Accept).toBe(
+        'application/vnd.github+json'
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }
