@@ -20,17 +20,17 @@ interface ChatMessage {
   content: string;
 }
 
-const openEventName = 'juanie:open-ai-command-bar';
+const openEventName = 'juanie:open-global-ai-panel';
 
 function buildMessageId(): string {
   return `ai-command-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function openAICommandBar(): void {
+export function openGlobalAIPanel(): void {
   window.dispatchEvent(new Event(openEventName));
 }
 
-export function AICommandBar() {
+export function GlobalAIPanel() {
   const pathname = usePathname();
   const config = useMemo(() => getCommandBarConfig(pathname), [pathname]);
   const [open, setOpen] = useState(false);
