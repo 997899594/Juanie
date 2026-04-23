@@ -1,4 +1,4 @@
-h1:3/uyOV5G/+uP+I+jMM0PJhD2yO7qUZPmbsXgCNQ6D6k=
+h1:AGsJz+dWVOZLZ4tg+RjuwvpUFsLw02g9UxTlVYykp9w=
 20260414193000_control_plane_baseline.sql h1:Ntik26xgO1CoOU8s1lYeJ8bfHW/vbqb0Wlo3n1xjU08=
 20260415035534_add_integration_identity_server_url.sql h1:0/VIVniLSTgeFEYxpPljuHOBvNjMmqYhiHvdVPUxS4Q=
 20260415081041_environment_routing_phase1.sql h1:cLOjJfEKXM6rCuE7FayG7HxPRMBSFiu5B13KKcYDx9E=
@@ -11,5 +11,6 @@ h1:3/uyOV5G/+uP+I+jMM0PJhD2yO7qUZPmbsXgCNQ6D6k=
 20260421143000_remove_legacy_migration_runner.sql h1:VTQsDtreWWYmKkSeHL/tvFfaATqKJ9QoojElHVejyqM=
 20260422173000_ai_plugin_run_prompt_metadata.sql h1:WaiB73MkdHQvG8HOhbxlKX0GYE0/CZfdAhLon+7cNxw=
 20260422191000_ai_plugin_run_execution_metadata.sql h1:mRme+gN8vgFKes0/Or/GGbi8L0csmMq2OTeQL/CASZg=
-20260422194000_ai_plugin_run_token_usage.sql h1:pMW/s8+xLUZnbiXaEeng/9wSDz6rB4+FAzdLeapF+6I=
-20260422195500_ai_tasks.sql h1:vnhW3aXEd9m2BNvSnVUvLWorKSY01dmIHCKnRg2HsZ8=
+20260422193000_project_status_message.sql h1:vnPSMOc/x7HcrPE0AgQSKOyAljjN46bxCPehkdH+rUg=
+20260422194000_ai_plugin_run_token_usage.sql h1:PY3RpCq/kag7kDs9qOz81TNLQdWXAZk2mrIdgsp1VOk=
+20260422195500_ai_tasks.sql h1:bA9Hffczvo6Txy9Yc9r2jpfh87va/XTIUQPY6rg6in8=

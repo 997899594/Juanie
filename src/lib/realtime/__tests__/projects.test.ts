@@ -31,6 +31,7 @@ const createRedisClientMock = mock(() => {
 mock.module('@/lib/redis/config', () => ({
   createRedisClient: createRedisClientMock,
   isRedisConfigured: () => true,
+  resolveRedisConnectionOptions: () => ({}),
 }));
 
 describe('project realtime events', () => {
@@ -63,6 +64,7 @@ describe('project realtime events', () => {
           id: 'proj_456',
           name: 'NexusNote',
           status: 'deleting',
+          statusMessage: '项目删除重试中：namespace still exists',
           updatedAt: '2026-04-20T09:00:00.000Z',
         },
         timestamp: 456,
@@ -76,6 +78,7 @@ describe('project realtime events', () => {
         id: 'proj_456',
         name: 'NexusNote',
         status: 'deleting',
+        statusMessage: '项目删除重试中：namespace still exists',
         updatedAt: '2026-04-20T09:00:00.000Z',
       },
       timestamp: 456,

@@ -52,6 +52,7 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
       repositoryWebUrl: project.repository?.webUrl ?? null,
       productionBranch: project.productionBranch ?? 'main',
       status: project.status ?? 'initializing',
+      statusMessage: project.statusMessage ?? null,
       teamName: team?.name ?? '团队',
       teamSlug: team?.slug ?? '',
       yourRole: teamMember.role,

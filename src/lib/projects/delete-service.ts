@@ -8,6 +8,7 @@ import { publishProjectRealtimeSnapshot } from '@/lib/realtime/projects';
 export interface ProjectDeletionRequestResult {
   status: 'deleting';
   alreadyDeleting: boolean;
+  statusMessage: string | null;
 }
 
 const projectDeleteServiceLogger = logger.child({ component: 'project-delete-service' });
@@ -20,6 +21,7 @@ export async function requestProjectDeletion(
     columns: {
       id: true,
       status: true,
+      statusMessage: true,
     },
   });
 
@@ -38,6 +40,7 @@ export async function requestProjectDeletion(
     return {
       status: 'deleting',
       alreadyDeleting: true,
+      statusMessage: project.statusMessage ?? null,
     };
   }
 
@@ -46,6 +49,7 @@ export async function requestProjectDeletion(
     .update(projects)
     .set({
       status: 'deleting',
+      statusMessage: null,
       updatedAt: new Date(),
     })
     .where(eq(projects.id, projectId));
@@ -73,5 +77,6 @@ export async function requestProjectDeletion(
   return {
     status: 'deleting',
     alreadyDeleting: false,
+    statusMessage: null,
   };
 }

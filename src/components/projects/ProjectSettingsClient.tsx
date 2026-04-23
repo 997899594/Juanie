@@ -45,6 +45,7 @@ interface ProjectSettingsClientProps {
       repositoryWebUrl: string | null;
       productionBranch: string;
       status: string;
+      statusMessage: string | null;
       teamName: string;
       teamSlug: string;
       yourRole: string;
@@ -104,6 +105,11 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
     productionBranch: initialData.project.productionBranch || 'main',
   });
   const isDeleting = project.status === 'deleting';
+  const statusDescription = isDeleting
+    ? (project.statusMessage ?? '项目正在删除中，环境资源清理完成后会自动从列表移除。')
+    : project.status === 'failed' && project.statusMessage
+      ? project.statusMessage
+      : undefined;
   const overviewStats = [
     { label: '团队', value: project.teamName },
     { label: '角色', value: project.governance.roleLabel },
@@ -124,6 +130,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
       setProject((current) => ({
         ...current,
         status: event.project.status ?? current.status,
+        statusMessage: event.project.statusMessage ?? current.statusMessage,
       }));
     },
   });
@@ -199,6 +206,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
         setProject((current) => ({
           ...current,
           status: payload?.status ?? 'deleting',
+          statusMessage: payload?.statusMessage ?? null,
         }));
         return;
       }
@@ -211,12 +219,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader
-        title="设置"
-        description={
-          isDeleting ? '项目正在删除中，环境资源清理完成后会自动从列表移除。' : undefined
-        }
-      />
+      <PageHeader title="设置" description={statusDescription} />
 
       <div className="grid gap-2 md:grid-cols-3">
         {overviewStats.map((stat) => (

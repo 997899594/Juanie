@@ -541,6 +541,7 @@ export const projects = pgTable(
     configUpdatedAt: timestamp('configUpdatedAt'),
 
     status: projectStatusEnum('status').default('initializing'),
+    statusMessage: text('statusMessage'),
 
     createdAt: timestamp('createdAt').defaultNow().notNull(),
     updatedAt: timestamp('updatedAt').defaultNow().notNull(),

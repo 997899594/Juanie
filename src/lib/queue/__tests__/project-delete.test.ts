@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   buildJuanieRepositoryCleanupPaths,
   isJuanieManagedGitLabCi,
+  shouldDeleteProjectPreviewApplicationSet,
 } from '@/lib/queue/project-delete';
 
 describe('project delete repository cleanup planning', () => {
@@ -57,5 +58,21 @@ script:
         gitlabCiContent: 'stages: [test]',
       })
     ).toEqual(['juanie.yaml', '.env.juanie.example', 'JUANIE.md']);
+  });
+
+  it('only deletes preview ApplicationSet when the project actually has preview environments', () => {
+    expect(
+      shouldDeleteProjectPreviewApplicationSet([
+        { namespace: 'juanie-demo-prod', isPreview: false },
+        { namespace: 'juanie-demo-staging', isPreview: false },
+      ])
+    ).toBe(false);
+
+    expect(
+      shouldDeleteProjectPreviewApplicationSet([
+        { namespace: 'juanie-demo-prod', isPreview: false },
+        { namespace: 'juanie-demo-preview-pr-7', isPreview: true },
+      ])
+    ).toBe(true);
   });
 });

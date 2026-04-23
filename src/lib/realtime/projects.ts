@@ -12,6 +12,7 @@ export interface ProjectRealtimeRecord {
   id: string;
   name: string;
   status: string | null;
+  statusMessage: string | null;
   updatedAt: string;
 }
 
@@ -60,6 +61,7 @@ export async function loadProjectRealtimeRecord(
       id: true,
       name: true,
       status: true,
+      statusMessage: true,
       updatedAt: true,
     },
   });
@@ -72,6 +74,7 @@ export async function loadProjectRealtimeRecord(
     id: project.id,
     name: project.name,
     status: project.status ?? null,
+    statusMessage: project.statusMessage ?? null,
     updatedAt: project.updatedAt.toISOString(),
   };
 }
