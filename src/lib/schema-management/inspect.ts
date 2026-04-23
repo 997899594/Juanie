@@ -28,6 +28,10 @@ import type {
   ResolvedMigrationSpec,
 } from '@/lib/migrations/types';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
+import {
+  canUseSchemaRunnerJobs,
+  runSchemaRunnerJobAndWait,
+} from '@/lib/schema-management/schema-runner-job';
 import { classifySchemaLedgerState } from './classification';
 
 interface SchemaLedgerInspectionResult {
@@ -55,6 +59,18 @@ export interface EnvironmentSchemaStateSnapshot {
   lastErrorMessage: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface EnvironmentSchemaInspectionInput {
+  projectId: string;
+  databaseId: string;
+  sourceRef?: string | null;
+  sourceCommitSha?: string | null;
+}
+
+interface InspectionDatabaseTarget {
+  id: string;
+  environmentId: string | null;
 }
 
 function getUnknownResolution(): MigrationResolutionInfo {
@@ -452,12 +468,9 @@ export async function getEnvironmentSchemaState(
   return state ?? null;
 }
 
-export async function inspectEnvironmentSchemaState(input: {
-  projectId: string;
-  databaseId: string;
-  sourceRef?: string | null;
-  sourceCommitSha?: string | null;
-}): Promise<EnvironmentSchemaStateSnapshot> {
+async function loadInspectionDatabase(
+  input: EnvironmentSchemaInspectionInput
+): Promise<InspectionDatabaseTarget> {
   const database = await db.query.databases.findFirst({
     where: and(eq(databases.id, input.databaseId), eq(databases.projectId, input.projectId)),
     with: {
@@ -473,6 +486,129 @@ export async function inspectEnvironmentSchemaState(input: {
     throw new Error('Database has no environment binding');
   }
 
+  return {
+    id: database.id,
+    environmentId: database.environmentId,
+  };
+}
+
+async function buildSchemaInspectionFailureState(
+  input: EnvironmentSchemaInspectionInput,
+  database: InspectionDatabaseTarget,
+  message: string
+): Promise<EnvironmentSchemaStateSnapshot> {
+  return upsertEnvironmentSchemaState({
+    projectId: input.projectId,
+    environmentId: database.environmentId as string,
+    databaseId: database.id,
+    status: 'blocked',
+    expectedEntries: [],
+    actualEntries: [],
+    hasLedger: false,
+    hasUserTables: false,
+    summary: `检查失败: ${message}`,
+    errorCode: 'SCHEMA_STATE_INSPECTION_FAILED',
+    errorMessage: message,
+  });
+}
+
+function buildSchemaInspectJobName(input: EnvironmentSchemaInspectionInput): string {
+  const digest = crypto
+    .createHash('sha1')
+    .update(
+      [
+        input.projectId,
+        input.databaseId,
+        input.sourceRef ?? '',
+        input.sourceCommitSha ?? '',
+        `${Date.now()}:${Math.random()}`,
+      ].join(':')
+    )
+    .digest('hex')
+    .slice(0, 10);
+
+  return `schema-inspect-${input.databaseId.slice(0, 8)}-${digest}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForFreshSchemaState(
+  input: EnvironmentSchemaInspectionInput,
+  startedAt: Date
+): Promise<EnvironmentSchemaStateSnapshot | null> {
+  const deadline = Date.now() + 10_000;
+
+  while (Date.now() < deadline) {
+    const state = await getEnvironmentSchemaState(input.projectId, input.databaseId);
+    if (state?.lastInspectedAt && state.lastInspectedAt.getTime() >= startedAt.getTime() - 1_000) {
+      return state;
+    }
+
+    await sleep(1_000);
+  }
+
+  return await getEnvironmentSchemaState(input.projectId, input.databaseId);
+}
+
+async function inspectEnvironmentSchemaStateInRunner(
+  input: EnvironmentSchemaInspectionInput
+): Promise<EnvironmentSchemaStateSnapshot> {
+  const startedAt = new Date();
+  const env = [
+    {
+      name: 'SCHEMA_INSPECT_PROJECT_ID',
+      value: input.projectId,
+    },
+    {
+      name: 'SCHEMA_INSPECT_DATABASE_ID',
+      value: input.databaseId,
+    },
+    ...(input.sourceRef
+      ? [
+          {
+            name: 'SCHEMA_INSPECT_SOURCE_REF',
+            value: input.sourceRef,
+          },
+        ]
+      : []),
+    ...(input.sourceCommitSha
+      ? [
+          {
+            name: 'SCHEMA_INSPECT_SOURCE_COMMIT_SHA',
+            value: input.sourceCommitSha,
+          },
+        ]
+      : []),
+  ];
+
+  await runSchemaRunnerJobAndWait({
+    jobName: buildSchemaInspectJobName(input),
+    mode: 'inspect',
+    labels: {
+      'juanie.dev/schema-inspect': 'true',
+      'juanie.dev/database-id': input.databaseId,
+    },
+    env,
+  });
+
+  const state = await waitForFreshSchemaState(input, startedAt);
+  if (
+    !state ||
+    !state.lastInspectedAt ||
+    state.lastInspectedAt.getTime() < startedAt.getTime() - 1_000
+  ) {
+    throw new Error('Schema runner 未写入最新 schema 检查结果');
+  }
+
+  return state;
+}
+
+async function inspectEnvironmentSchemaStateLocallyInternal(
+  input: EnvironmentSchemaInspectionInput,
+  database: InspectionDatabaseTarget
+): Promise<EnvironmentSchemaStateSnapshot> {
   const resolvedSpec = await resolveSchemaInspectionSpec(input.projectId, input.databaseId, {
     sourceRef: input.sourceRef,
     sourceCommitSha: input.sourceCommitSha,
@@ -481,7 +617,7 @@ export async function inspectEnvironmentSchemaState(input: {
   if (!resolvedSpec) {
     return upsertEnvironmentSchemaState({
       projectId: input.projectId,
-      environmentId: database.environmentId,
+      environmentId: database.environmentId as string,
       databaseId: database.id,
       status: 'unmanaged',
       expectedEntries: [],
@@ -502,7 +638,7 @@ export async function inspectEnvironmentSchemaState(input: {
         const reason = desiredSchemaInspection.reason ?? 'desired schema 检查失败';
         return upsertEnvironmentSchemaState({
           projectId: input.projectId,
-          environmentId: database.environmentId,
+          environmentId: database.environmentId as string,
           databaseId: database.id,
           status: 'blocked',
           expectedEntries: [],
@@ -526,7 +662,7 @@ export async function inspectEnvironmentSchemaState(input: {
 
       return upsertEnvironmentSchemaState({
         projectId: input.projectId,
-        environmentId: database.environmentId,
+        environmentId: database.environmentId as string,
         databaseId: database.id,
         status: inspected.status,
         expectedEntries: desiredSchemaInspection.snapshot.expectedEntries,
@@ -553,7 +689,7 @@ export async function inspectEnvironmentSchemaState(input: {
       const reason = ledgerInspection.reason ?? '账本检查失败';
       return upsertEnvironmentSchemaState({
         projectId: input.projectId,
-        environmentId: database.environmentId,
+        environmentId: database.environmentId as string,
         databaseId: database.id,
         status: 'blocked',
         expectedEntries: [],
@@ -571,7 +707,7 @@ export async function inspectEnvironmentSchemaState(input: {
       const reason = atlasDiff.reason ?? 'Atlas schema diff 失败';
       return upsertEnvironmentSchemaState({
         projectId: input.projectId,
-        environmentId: database.environmentId,
+        environmentId: database.environmentId as string,
         databaseId: database.id,
         status: 'blocked',
         expectedEntries: ledgerInspection.snapshot.expectedEntries,
@@ -595,7 +731,7 @@ export async function inspectEnvironmentSchemaState(input: {
 
     return upsertEnvironmentSchemaState({
       projectId: input.projectId,
-      environmentId: database.environmentId,
+      environmentId: database.environmentId as string,
       databaseId: database.id,
       status: inspected.status,
       expectedEntries: ledgerInspection.snapshot.expectedEntries,
@@ -608,18 +744,30 @@ export async function inspectEnvironmentSchemaState(input: {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return upsertEnvironmentSchemaState({
-      projectId: input.projectId,
-      environmentId: database.environmentId,
-      databaseId: database.id,
-      status: 'blocked',
-      expectedEntries: [],
-      actualEntries: [],
-      hasLedger: false,
-      hasUserTables: false,
-      summary: `检查失败: ${message}`,
-      errorCode: 'SCHEMA_STATE_INSPECTION_FAILED',
-      errorMessage: message,
-    });
+    return buildSchemaInspectionFailureState(input, database, message);
+  }
+}
+
+export async function inspectEnvironmentSchemaStateLocally(
+  input: EnvironmentSchemaInspectionInput
+): Promise<EnvironmentSchemaStateSnapshot> {
+  const database = await loadInspectionDatabase(input);
+  return inspectEnvironmentSchemaStateLocallyInternal(input, database);
+}
+
+export async function inspectEnvironmentSchemaState(
+  input: EnvironmentSchemaInspectionInput
+): Promise<EnvironmentSchemaStateSnapshot> {
+  const database = await loadInspectionDatabase(input);
+
+  if (!canUseSchemaRunnerJobs() || process.env.JUANIE_SCHEMA_INSPECT_FORCE_LOCAL === 'true') {
+    return inspectEnvironmentSchemaStateLocallyInternal(input, database);
+  }
+
+  try {
+    return await inspectEnvironmentSchemaStateInRunner(input);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return buildSchemaInspectionFailureState(input, database, message);
   }
 }

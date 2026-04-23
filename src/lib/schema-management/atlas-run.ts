@@ -19,6 +19,10 @@ import {
 } from '@/lib/repositories/source-workspace';
 import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
 import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
+import {
+  buildSchemaRunnerJob,
+  resolveSchemaRunnerImage,
+} from '@/lib/schema-management/schema-runner-job';
 
 const execFileAsync = promisify(execFile);
 
@@ -97,100 +101,29 @@ function buildSchemaRepairDraftJob(input: {
   projectId: string;
   userId: string | null;
 }) {
-  return {
-    apiVersion: 'batch/v1',
-    kind: 'Job',
-    metadata: {
-      name: input.jobName,
-      namespace: input.namespace,
-      labels: {
-        'app.kubernetes.io/name': 'juanie',
-        'app.kubernetes.io/component': 'schema-runner',
-        'juanie.dev/schema-repair-run-id': input.atlasRunId,
-      },
+  return buildSchemaRunnerJob({
+    namespace: input.namespace,
+    jobName: input.jobName,
+    image: input.image,
+    mode: 'schema-repair',
+    labels: {
+      'juanie.dev/schema-repair-run-id': input.atlasRunId,
     },
-    spec: {
-      backoffLimit: 0,
-      ttlSecondsAfterFinished: 3600,
-      template: {
-        metadata: {
-          labels: {
-            'job-name': input.jobName,
-            'juanie.dev/schema-repair-run-id': input.atlasRunId,
-          },
-        },
-        spec: {
-          restartPolicy: 'Never',
-          serviceAccountName: 'juanie',
-          securityContext: {
-            runAsNonRoot: true,
-            runAsUser: 1001,
-            fsGroup: 1001,
-          },
-          initContainers: [
-            {
-              name: 'wait-for-postgres',
-              image: 'busybox:1.36',
-              command: [
-                'sh',
-                '-c',
-                'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done',
-              ],
-            },
-            {
-              name: 'wait-for-redis',
-              image: 'busybox:1.36',
-              command: [
-                'sh',
-                '-c',
-                'until nc -z redis 6379; do echo waiting for redis; sleep 2; done',
-              ],
-            },
-          ],
-          containers: [
-            {
-              name: 'schema-runner',
-              image: input.image,
-              imagePullPolicy: 'IfNotPresent',
-              command: ['./schema-runner'],
-              envFrom: [
-                {
-                  configMapRef: {
-                    name: 'juanie-config',
-                  },
-                },
-                {
-                  secretRef: {
-                    name: 'juanie-secret',
-                  },
-                },
-              ],
-              env: [
-                {
-                  name: 'SCHEMA_REPAIR_ATLAS_RUN_ID',
-                  value: input.atlasRunId,
-                },
-                {
-                  name: 'SCHEMA_REPAIR_PROJECT_ID',
-                  value: input.projectId,
-                },
-                {
-                  name: 'SCHEMA_REPAIR_USER_ID',
-                  value: input.userId ?? '',
-                },
-              ],
-              securityContext: {
-                allowPrivilegeEscalation: false,
-                capabilities: {
-                  drop: ['ALL'],
-                },
-              },
-            },
-          ],
-        },
+    env: [
+      {
+        name: 'SCHEMA_REPAIR_ATLAS_RUN_ID',
+        value: input.atlasRunId,
       },
-    },
-  } satisfies V1Job;
+      {
+        name: 'SCHEMA_REPAIR_PROJECT_ID',
+        value: input.projectId,
+      },
+      {
+        name: 'SCHEMA_REPAIR_USER_ID',
+        value: input.userId ?? '',
+      },
+    ],
+  }) satisfies V1Job;
 }
 
 export async function createSchemaRepairAtlasRun(input: {
@@ -234,12 +167,7 @@ export async function createSchemaRepairAtlasRun(input: {
       const requeuedAt = new Date();
       const jobName = activeRun.jobName ?? buildSchemaRepairJobName(activeRun.id);
       const namespace = process.env.JUANIE_NAMESPACE ?? 'juanie';
-      const schemaRunnerImage = [
-        process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY,
-        process.env.SCHEMA_RUNNER_IMAGE_TAG,
-      ].every(Boolean)
-        ? `${process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY}:${process.env.SCHEMA_RUNNER_IMAGE_TAG}`
-        : null;
+      const schemaRunnerImage = resolveSchemaRunnerImage();
 
       if (!isK8sAvailable()) {
         throw new Error('Schema runner draft execution requires Kubernetes connectivity');
@@ -328,12 +256,7 @@ export async function createSchemaRepairAtlasRun(input: {
 
   const queuedAt = new Date();
   const namespace = process.env.JUANIE_NAMESPACE ?? 'juanie';
-  const schemaRunnerImage = [
-    process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY,
-    process.env.SCHEMA_RUNNER_IMAGE_TAG,
-  ].every(Boolean)
-    ? `${process.env.SCHEMA_RUNNER_IMAGE_REPOSITORY}:${process.env.SCHEMA_RUNNER_IMAGE_TAG}`
-    : null;
+  const schemaRunnerImage = resolveSchemaRunnerImage();
 
   if (!isK8sAvailable()) {
     throw new Error('Schema runner draft execution requires Kubernetes connectivity');
