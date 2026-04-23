@@ -16,6 +16,7 @@ describe('ai prompt registry', () => {
 
     expect(prompt.key).toBe('release-plan');
     expect(prompt.version).toBe('v1');
+    expect(prompt.assetPath.endsWith('src/lib/ai/prompts/definitions/release-plan.md')).toBe(true);
     expect(prompt.system.includes('只能依据 evidence 作答')).toBe(true);
   });
 });

@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'bun:test';
 import type { AIPlugin } from '@/lib/ai/runtime/types';
+import { getJuanieSkillById } from '@/lib/ai/skills/registry';
 import { resolvePrimarySkill } from '@/lib/ai/skills/runtime';
 
 describe('ai skill runtime', () => {
+  it('loads first-party skill definitions from markdown assets', () => {
+    const skill = getJuanieSkillById('environment-skill');
+
+    expect(skill?.promptKey).toBe('environment-summary');
+    expect(
+      skill?.assetPath?.endsWith('src/lib/ai/skills/definitions/environment-skill/SKILL.md')
+    ).toBe(true);
+  });
+
   it('resolves a valid primary skill for a registered plugin contract', () => {
     const plugin: AIPlugin<unknown, unknown> = {
       manifest: {

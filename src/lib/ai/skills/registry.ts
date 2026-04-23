@@ -1,62 +1,62 @@
+import { z } from 'zod';
+import { loadMarkdownAsset } from '@/lib/ai/assets/markdown';
 import type { JuanieSkillDefinition } from '@/lib/ai/skills/types';
 
-const builtInSkills = [
-  {
-    id: 'release-skill',
-    title: 'Release Skill',
-    description: 'Analyze a release with release evidence and structured AI output.',
-    scope: 'release',
-    pluginIds: ['release-intelligence'],
-    toolIds: ['read-release-context'],
-    contextProviderIds: ['release-evidence'],
-    outputSchema: 'release-plan-v1',
-  },
-  {
-    id: 'incident-skill',
-    title: 'Incident Skill',
-    description: 'Diagnose a failed or degraded release with incident evidence.',
-    scope: 'release',
-    pluginIds: ['incident-intelligence'],
-    toolIds: ['read-incident-context'],
-    contextProviderIds: ['incident-evidence'],
-    outputSchema: 'incident-analysis-v1',
-  },
-  {
-    id: 'environment-skill',
-    title: 'Environment Skill',
-    description: 'Summarize environment health, access URLs, variables, and databases.',
-    scope: 'environment',
-    pluginIds: ['environment-summary'],
-    toolIds: ['read-environment-context', 'read-environment-variables', 'read-environment-schema'],
-    contextProviderIds: ['environment-context'],
-    outputSchema: 'environment-summary-v1',
-  },
-  {
-    id: 'migration-skill',
-    title: 'Migration Skill',
-    description: 'Review migration status and recommended next actions.',
-    scope: 'environment',
-    pluginIds: ['migration-review'],
-    toolIds: ['read-environment-migrations', 'read-environment-schema'],
-    contextProviderIds: ['environment-migration-review'],
-    outputSchema: 'migration-review-v1',
-  },
-  {
-    id: 'envvar-skill',
-    title: 'Env Var Skill',
-    description: 'Summarize environment variable state and risk.',
-    scope: 'environment',
-    pluginIds: ['envvar-risk'],
-    toolIds: ['read-environment-variables'],
-    contextProviderIds: ['environment-envvar-risk'],
-    outputSchema: 'envvar-risk-v1',
-  },
-] satisfies JuanieSkillDefinition[];
+const skillAssetPaths = [
+  'src/lib/ai/skills/definitions/environment-skill/SKILL.md',
+  'src/lib/ai/skills/definitions/migration-skill/SKILL.md',
+  'src/lib/ai/skills/definitions/envvar-skill/SKILL.md',
+  'src/lib/ai/skills/definitions/release-skill/SKILL.md',
+  'src/lib/ai/skills/definitions/incident-skill/SKILL.md',
+] as const;
+
+const skillFrontmatterSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  scope: z.enum(['team', 'project', 'environment', 'release']),
+  pluginIds: z.array(z.string().min(1)).min(1),
+  toolIds: z.array(z.string().min(1)),
+  contextProviderIds: z.array(z.string().min(1)),
+  promptKey: z.string().min(1).nullable().optional(),
+  outputSchema: z.string().min(1).nullable().optional(),
+});
+
+let cachedSkills: JuanieSkillDefinition[] | null = null;
+
+function loadSkillDefinitions(): JuanieSkillDefinition[] {
+  if (cachedSkills) {
+    return cachedSkills;
+  }
+
+  cachedSkills = skillAssetPaths.map((assetPath) => {
+    const asset = loadMarkdownAsset<unknown>(assetPath);
+    const frontmatter = skillFrontmatterSchema.parse(asset.frontmatter);
+    const folderId = assetPath.split('/').at(-2);
+    if (!folderId) {
+      throw new Error(`Skill asset path is invalid: ${assetPath}`);
+    }
+    if (frontmatter.id !== folderId) {
+      throw new Error(
+        `Skill asset id mismatch: expected "${folderId}" but got "${frontmatter.id}" in ${assetPath}`
+      );
+    }
+
+    return {
+      ...frontmatter,
+      promptKey: frontmatter.promptKey ?? null,
+      outputSchema: frontmatter.outputSchema ?? null,
+      assetPath,
+    } satisfies JuanieSkillDefinition;
+  });
+
+  return cachedSkills;
+}
 
 export function listJuanieSkills(): JuanieSkillDefinition[] {
-  return [...builtInSkills];
+  return [...loadSkillDefinitions()];
 }
 
 export function getJuanieSkillById(id: string): JuanieSkillDefinition | null {
-  return builtInSkills.find((skill) => skill.id === id) ?? null;
+  return loadSkillDefinitions().find((skill) => skill.id === id) ?? null;
 }

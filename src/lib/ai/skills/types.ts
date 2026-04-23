@@ -6,5 +6,7 @@ export interface JuanieSkillDefinition {
   pluginIds: string[];
   toolIds: string[];
   contextProviderIds: string[];
+  promptKey?: string | null;
+  assetPath?: string;
   outputSchema?: string | null;
 }
