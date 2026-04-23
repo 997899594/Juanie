@@ -1,13 +1,13 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects, repositories } from '@/lib/db/schema';
+import { buildAuthenticatedCloneUrl } from '@/lib/git/authenticated-clone-url';
 import {
-  gateway,
   getTeamIntegrationSession,
   type IntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
@@ -23,8 +23,6 @@ const SOURCE_WORKSPACE_IGNORED_DIRS = new Set([
   'build',
   'coverage',
 ]);
-
-const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
 
 export interface SourceWorkspaceContext {
   tempRoot: string;
@@ -50,35 +48,67 @@ async function runCommand(
   });
 }
 
-function normalizeBranchRef(value: string): string | null {
+function normalizeGitFetchRef(value: string): string {
   const normalized = value.trim();
-  if (!normalized || COMMIT_SHA_PATTERN.test(normalized)) {
-    return null;
+  if (normalized.startsWith('refs/heads/')) {
+    return normalized.slice('refs/heads/'.length);
   }
 
-  if (normalized.startsWith('refs/')) {
-    return normalized;
+  if (normalized.startsWith('refs/tags/')) {
+    return normalized.slice('refs/tags/'.length);
   }
 
-  return `refs/heads/${normalized}`;
+  return normalized;
 }
 
-async function resolveWorkspaceRevision(input: {
+async function materializeRepositoryWorkspaceWithGit(input: {
   session: IntegrationSession;
   repoFullName: string;
-  requestedRevision: string;
+  revision: string;
+  repoDir: string;
 }): Promise<string> {
-  const branchRef = normalizeBranchRef(input.requestedRevision);
-  if (!branchRef) {
-    return input.requestedRevision;
-  }
+  const remoteUrl = buildAuthenticatedCloneUrl({
+    cloneUrl: null,
+    fullName: input.repoFullName,
+    provider: input.session.provider,
+    accessToken: input.session.accessToken,
+    serverUrl: input.session.serverUrl,
+  });
+  const gitEnv = {
+    ...process.env,
+    GIT_TERMINAL_PROMPT: '0',
+  };
 
-  try {
-    const sha = await gateway.resolveRefToCommitSha(input.session, input.repoFullName, branchRef);
-    return sha ?? input.requestedRevision;
-  } catch {
-    return input.requestedRevision;
-  }
+  await runCommand('git', ['init'], {
+    cwd: input.repoDir,
+    env: gitEnv,
+  });
+  await runCommand('git', ['remote', 'add', 'origin', remoteUrl], {
+    cwd: input.repoDir,
+    env: gitEnv,
+  });
+  await runCommand(
+    'git',
+    ['fetch', '--depth', '1', '--no-tags', 'origin', normalizeGitFetchRef(input.revision)],
+    {
+      cwd: input.repoDir,
+      env: gitEnv,
+    }
+  );
+  await runCommand('git', ['checkout', '--force', '--detach', 'FETCH_HEAD'], {
+    cwd: input.repoDir,
+    env: gitEnv,
+  });
+
+  const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
+    cwd: input.repoDir,
+    env: gitEnv,
+    maxBuffer: 1024 * 1024,
+  });
+
+  await rm(path.join(input.repoDir, '.git'), { recursive: true, force: true }).catch(() => {});
+
+  return stdout.trim();
 }
 
 export async function createRepositorySourceWorkspace(input: {
@@ -88,25 +118,18 @@ export async function createRepositorySourceWorkspace(input: {
   revision?: string | null;
 }): Promise<SourceWorkspaceContext> {
   const requestedRevision = input.revision?.trim() || input.defaultBranch || 'main';
-  const resolvedRevision = await resolveWorkspaceRevision({
-    session: input.session,
-    repoFullName: input.repoFullName,
-    requestedRevision,
-  });
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'juanie-source-workspace-'));
   const repoDir = path.join(tempRoot, 'repo');
-  const archivePath = path.join(tempRoot, 'repo.tar.gz');
 
   await mkdir(repoDir, { recursive: true });
 
   try {
-    const archive = await gateway.downloadRepositoryArchive(
-      input.session,
-      input.repoFullName,
-      resolvedRevision
-    );
-    await writeFile(archivePath, archive);
-    await runCommand('tar', ['-xzf', archivePath, '-C', repoDir, '--strip-components=1']);
+    const resolvedRevision = await materializeRepositoryWorkspaceWithGit({
+      session: input.session,
+      repoFullName: input.repoFullName,
+      revision: requestedRevision,
+      repoDir,
+    });
 
     return {
       tempRoot,

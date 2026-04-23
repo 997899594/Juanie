@@ -200,7 +200,10 @@ export async function resolveSchemaManagementSpec(input: {
   });
 }
 
-async function inspectDrizzleDesiredSchema(spec: ResolvedMigrationSpec): Promise<{
+async function inspectDrizzleDesiredSchema(
+  spec: ResolvedMigrationSpec,
+  revision: string
+): Promise<{
   status: 'ok' | 'blocked';
   hasChanges?: boolean;
   driftSummary?: string | null;
@@ -214,8 +217,7 @@ async function inspectDrizzleDesiredSchema(spec: ResolvedMigrationSpec): Promise
     };
   }
 
-  const ref = await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch);
-  const desiredSchema = await exportDesiredSchemaForSpec(spec, ref);
+  const desiredSchema = await exportDesiredSchemaForSpec(spec, revision);
 
   try {
     const [diff, hasUserTables] = await Promise.all([
@@ -242,7 +244,10 @@ async function inspectDrizzleDesiredSchema(spec: ResolvedMigrationSpec): Promise
   }
 }
 
-async function inspectSqlLedger(spec: ResolvedMigrationSpec): Promise<{
+async function inspectSqlLedger(
+  spec: ResolvedMigrationSpec,
+  revision: string
+): Promise<{
   status: 'ok' | 'blocked';
   reason?: string;
   snapshot?: SchemaLedgerInspectionResult;
@@ -255,9 +260,8 @@ async function inspectSqlLedger(spec: ResolvedMigrationSpec): Promise<{
     };
   }
 
-  const ref = await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch);
   const expectedEntries = (
-    await fetchMigrationFilesFromRepoPath(spec.specification.projectId, migrationPath, ref)
+    await fetchMigrationFilesFromRepoPath(spec.specification.projectId, migrationPath, revision)
   ).map((file) => file.name);
 
   const actualEntries = (
@@ -294,7 +298,10 @@ async function inspectSqlLedger(spec: ResolvedMigrationSpec): Promise<{
   };
 }
 
-async function inspectAtlasLedger(spec: ResolvedMigrationSpec): Promise<{
+async function inspectAtlasLedger(
+  spec: ResolvedMigrationSpec,
+  revision: string
+): Promise<{
   status: 'ok' | 'blocked';
   reason?: string;
   snapshot?: SchemaLedgerInspectionResult;
@@ -321,9 +328,8 @@ async function inspectAtlasLedger(spec: ResolvedMigrationSpec): Promise<{
     };
   }
 
-  const ref = await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch);
   const migrationFiles = (
-    await fetchMigrationFilesFromRepoPath(spec.specification.projectId, migrationPath, ref)
+    await fetchMigrationFilesFromRepoPath(spec.specification.projectId, migrationPath, revision)
   ).filter((file) => file.name.endsWith('.sql'));
   const expectedEntries = getAtlasDeclaredVersions(migrationFiles);
 
@@ -350,7 +356,10 @@ async function inspectAtlasLedger(spec: ResolvedMigrationSpec): Promise<{
   }
 }
 
-async function inspectAtlasSchemaDiff(spec: ResolvedMigrationSpec): Promise<{
+async function inspectAtlasSchemaDiff(
+  spec: ResolvedMigrationSpec,
+  revision: string
+): Promise<{
   status: 'ok' | 'blocked';
   hasChanges?: boolean;
   driftSummary?: string | null;
@@ -371,14 +380,12 @@ async function inspectAtlasSchemaDiff(spec: ResolvedMigrationSpec): Promise<{
     };
   }
 
-  const ref = await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch);
-
   try {
     const diff = await diffDatabaseSchemaAgainstMigrationDir({
       database: spec.database,
       projectId: spec.specification.projectId,
       migrationPath,
-      revision: ref,
+      revision,
     });
 
     return {
@@ -392,6 +399,22 @@ async function inspectAtlasSchemaDiff(spec: ResolvedMigrationSpec): Promise<{
       reason: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function normalizeInspectionRevision(value?: string | null): string | null {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : null;
+}
+
+async function resolveSchemaInspectionRevision(
+  spec: ResolvedMigrationSpec,
+  input: EnvironmentSchemaInspectionInput
+): Promise<string> {
+  return (
+    normalizeInspectionRevision(input.sourceCommitSha) ??
+    normalizeInspectionRevision(input.sourceRef) ??
+    (await getProjectDefaultRef(spec.specification.projectId, spec.environment.branch))
+  );
 }
 
 async function upsertEnvironmentSchemaState(input: {
@@ -631,8 +654,13 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
   }
 
   try {
+    const inspectionRevision = await resolveSchemaInspectionRevision(resolvedSpec, input);
+
     if (resolvedSpec.specification.tool === 'drizzle') {
-      const desiredSchemaInspection = await inspectDrizzleDesiredSchema(resolvedSpec);
+      const desiredSchemaInspection = await inspectDrizzleDesiredSchema(
+        resolvedSpec,
+        inspectionRevision
+      );
 
       if (desiredSchemaInspection.status === 'blocked' || !desiredSchemaInspection.snapshot) {
         const reason = desiredSchemaInspection.reason ?? 'desired schema 检查失败';
@@ -677,9 +705,9 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
 
     const ledgerInspection =
       resolvedSpec.specification.tool === 'atlas'
-        ? await inspectAtlasLedger(resolvedSpec)
+        ? await inspectAtlasLedger(resolvedSpec, inspectionRevision)
         : resolvedSpec.specification.tool === 'sql'
-          ? await inspectSqlLedger(resolvedSpec)
+          ? await inspectSqlLedger(resolvedSpec, inspectionRevision)
           : {
               status: 'blocked' as const,
               reason: `暂不支持检查 ${resolvedSpec.specification.tool} 迁移账本`,
@@ -702,7 +730,7 @@ async function inspectEnvironmentSchemaStateLocallyInternal(
       });
     }
 
-    const atlasDiff = await inspectAtlasSchemaDiff(resolvedSpec);
+    const atlasDiff = await inspectAtlasSchemaDiff(resolvedSpec, inspectionRevision);
     if (atlasDiff.status === 'blocked') {
       const reason = atlasDiff.reason ?? 'Atlas schema diff 失败';
       return upsertEnvironmentSchemaState({
