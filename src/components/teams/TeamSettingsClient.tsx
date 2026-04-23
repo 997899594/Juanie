@@ -38,9 +38,8 @@ interface TeamSettingsClientProps {
 }
 
 const settingsPanelClassName =
-  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)]';
-const settingsSubtleClassName =
-  'rounded-[18px] bg-[linear-gradient(180deg,rgba(243,240,233,0.88),rgba(255,255,255,0.9))] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_0_0_1px_rgba(17,17,17,0.035)]';
+  'rounded-[22px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_16px_34px_rgba(55,53,47,0.05)]';
+const settingsSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
 
 export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientProps) {
   const router = useRouter();
@@ -169,7 +168,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             className={`mt-4 rounded-full px-3 py-1.5 text-xs ${
               saveMsg.startsWith('错误')
                 ? 'bg-destructive/[0.08] text-destructive'
-                : 'bg-[rgba(255,255,255,0.74)] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_6px_18px_rgba(55,53,47,0.03)]'
+                : 'bg-[rgba(15,23,42,0.04)] text-muted-foreground'
             }`}
           >
             {saveMsg}
@@ -249,10 +248,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
 
           <div className="space-y-3">
             {aiPlugins.map((plugin) => (
-              <div
-                key={plugin.id}
-                className="rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(248,245,240,0.9))] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.8)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_12px_26px_rgba(55,53,47,0.04)]"
-              >
+              <div key={plugin.id} className="rounded-[20px] bg-[rgba(15,23,42,0.03)] px-4 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -309,7 +305,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
             className={`mt-4 rounded-full px-3 py-1.5 text-xs ${
               aiMessage.startsWith('错误')
                 ? 'bg-destructive/[0.08] text-destructive'
-                : 'bg-[rgba(255,255,255,0.74)] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_6px_18px_rgba(55,53,47,0.03)]'
+                : 'bg-[rgba(15,23,42,0.04)] text-muted-foreground'
             }`}
           >
             {aiMessage}
@@ -357,7 +353,7 @@ export function TeamSettingsClient({ teamId, initialData }: TeamSettingsClientPr
       </section>
 
       <section className={settingsPanelClassName}>
-        <div className="flex flex-col gap-4 rounded-[22px] bg-[linear-gradient(180deg,rgba(196,85,77,0.08),rgba(255,255,255,0.92))] p-4 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(196,85,77,0.08)] sm:p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 rounded-[22px] bg-[rgba(196,85,77,0.08)] p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
             <div className="text-sm font-semibold text-destructive">删除团队</div>
             <div className="text-xs text-muted-foreground">该操作无法恢复。</div>

@@ -130,9 +130,8 @@ interface ManualReleaseDialogProps {
 }
 
 const dialogPanelClassName =
-  'rounded-[20px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.92))] p-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_16px_34px_rgba(55,53,47,0.05)] sm:p-6';
-const dialogSubtleClassName =
-  'rounded-[18px] bg-[rgba(243,240,233,0.66)] px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+  'rounded-[20px] bg-[rgba(251,250,247,0.96)] p-5 shadow-[0_16px_34px_rgba(55,53,47,0.05)] sm:p-6';
+const dialogSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
 
 export function ManualReleaseDialog({
   projectId,
@@ -304,7 +303,7 @@ export function ManualReleaseDialog({
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.16fr)_minmax(420px,0.84fr)]">
             <div className="space-y-4">
               {disabledSummary && environments.length > 0 && (
-                <div className="rounded-[20px] bg-[rgba(243,240,233,0.66)] px-4 py-3 text-sm text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]">
+                <div className="rounded-[20px] bg-[rgba(15,23,42,0.03)] px-4 py-3 text-sm text-muted-foreground">
                   {disabledSummary}
                 </div>
               )}

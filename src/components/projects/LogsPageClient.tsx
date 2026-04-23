@@ -36,10 +36,9 @@ interface LogLine {
 type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'ended' | 'error';
 
 const shellClassName =
-  'rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(250,248,244,0.92))] px-5 py-5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_0_0_1px_rgba(17,17,17,0.04),0_18px_40px_rgba(55,53,47,0.055)]';
+  'rounded-[22px] bg-[rgba(251,250,247,0.96)] px-5 py-5 shadow-[0_18px_40px_rgba(55,53,47,0.05)]';
 
-const subCardClassName =
-  'rounded-[16px] bg-[rgba(243,240,233,0.66)] px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.64)_inset]';
+const subCardClassName = 'rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-4';
 
 interface LogsPageClientProps {
   projectId: string;
@@ -190,7 +189,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
         <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
           <div className="grid gap-3 md:grid-cols-3">
             <Select value={envId} onValueChange={setEnvId}>
-              <SelectTrigger className="h-11 rounded-[16px] border-0 bg-white/75 text-sm shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]">
+              <SelectTrigger className="h-11 rounded-[16px] text-sm">
                 <SelectValue placeholder="环境" />
               </SelectTrigger>
               <SelectContent>
@@ -203,7 +202,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             </Select>
 
             <Select value={podName} onValueChange={setPodName} disabled={pods.length === 0}>
-              <SelectTrigger className="h-11 rounded-[16px] border-0 bg-white/75 font-mono text-sm shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]">
+              <SelectTrigger className="h-11 rounded-[16px] font-mono text-sm">
                 <SelectValue placeholder={pods.length === 0 ? '没有 Pod' : '选择 Pod'} />
               </SelectTrigger>
               <SelectContent>
@@ -216,7 +215,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
             </Select>
 
             <Select value={tail} onValueChange={setTail}>
-              <SelectTrigger className="h-11 rounded-[16px] border-0 bg-white/75 text-sm shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]">
+              <SelectTrigger className="h-11 rounded-[16px] text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -341,7 +340,7 @@ export function LogsPageClient({ projectId, initialData, initialEnvId }: LogsPag
       </div>
 
       <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4 lg:hidden">
-        <div className="flex items-center gap-2 rounded-2xl bg-background/95 p-2 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset,0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="flex items-center gap-2 rounded-2xl bg-background/95 p-2 shadow-[0_12px_32px_rgba(15,23,42,0.08)] backdrop-blur">
           <Button
             variant="ghost"
             size="sm"
