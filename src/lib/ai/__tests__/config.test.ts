@@ -26,6 +26,17 @@ describe('ai config', () => {
     expect(isAIEnabled(config)).toBe(false);
   });
 
+  it('treats provider configuration as the enable source when no explicit override is set', () => {
+    const config = createAIConfig({
+      AI_ENABLED: undefined,
+      AI_302_API_KEY: 'secret',
+    });
+
+    expect(config.enabledOverride).toBe(null);
+    expect(isAIConfigured(config)).toBe(true);
+    expect(isAIEnabled(config)).toBe(true);
+  });
+
   it('uses model-specific overrides without leaking vendor details into callers', () => {
     const config = createAIConfig({
       AI_302_API_KEY: 'secret',

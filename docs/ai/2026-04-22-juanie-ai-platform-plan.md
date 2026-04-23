@@ -17,6 +17,7 @@
 - `2026-04-22-juanie-ai-architecture.md`：架构原则与历史基线
 - `2026-04-22-juanie-plugin-system.md`：插件系统专题
 - `2026-04-22-juanie-phase-1-implementation-plan.md`：phase 1 实施与完成状态
+- `2026-04-23-juanie-ai-assets-and-deploy-rules.md`：markdown 资产层与生产部署规则
 
 当几份文档存在表述差异时，以本文档为当前主线方案。
 
@@ -27,6 +28,8 @@
 - `foundation`: done
 - `plugin-runtime-governance`: done
 - `core-evals-and-gates`: done
+- `markdown skill/prompt assets`: done
+- `production deploy-safe ai enable rule`: done
 - `environment/release ai surfaces`: done
 - `chat UI / copilot panel product surface`: done
 - `command bar`: done
@@ -197,6 +200,12 @@ Juanie 的 AI 推荐按 6 层建设：
 - 绑定上下文、工具、输出格式、UI 规则
 
 当前状态：done for first-party core skills
+
+补充：
+
+- `skills` 现在以 `SKILL.md` 作为资产真源
+- `prompts` 现在以 markdown prompt files 作为资产真源
+- typed registry 只负责加载、校验和暴露稳定 contract
 
 ### Plugin Layer
 

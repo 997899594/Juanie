@@ -18,6 +18,9 @@
   - dynamic plugin runtime
   - eval fixtures and gates
   - audit / usage persistence
+  - markdown prompt assets
+  - markdown skill assets
+  - production deploy-safe ai enable rule
 
 仍未纳入本阶段、后续再做：
 
@@ -56,20 +59,25 @@ docs/ai/
 
 src/lib/ai/
   config.ts
+  assets/
+    markdown.ts
   provider/
     adapter.ts
     index.ts
     providers/
       provider-302.ts
   prompts/
+    definitions/
+      release-plan.md
+      incident-analysis.md
     registry.ts
-    resources/
-      release-plan.ts
-      incident-analysis.ts
   plugins/
     manifest.ts
     registry.ts
   skills/
+    definitions/
+      release-skill/SKILL.md
+      incident-skill/SKILL.md
     registry.ts
     types.ts
 ```
@@ -181,6 +189,8 @@ phase 1 至少验证：
 - phase 1 默认保留 `302`
 - 使用 `AI_302_API_KEY` 和 `AI_302_BASE_URL`
 - `AI_ENABLED` 仅作为临时 override，不作为长期唯一真源
+- production chart 不再默认写死 `AI_ENABLED=false`
+- production values 显式开启 `AI_ENABLED=true`
 
 ### Skills
 
@@ -192,10 +202,18 @@ phase 1 先注册，不强行全部实现：
 - `migration-skill`
 - `envvar-skill`
 
-其中真正先接通的是：
+当前补充状态：
 
-- `release-skill`
-- `incident-skill`
+- `release-skill`：done
+- `incident-skill`：done
+- `environment-skill`：done
+- `migration-skill`：done
+- `envvar-skill`：done
+
+并且：
+
+- skill 资产已迁移到 `SKILL.md`
+- prompt 资产已迁移到 markdown files
 
 ### Plugin surfaces
 
