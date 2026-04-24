@@ -50,7 +50,6 @@ import {
   getEnvironmentDatabaseStrategyLabel,
   getEnvironmentDeploymentStrategyLabel,
 } from '@/lib/environments/presentation';
-import { getRepositoryDefaultBranch } from '@/lib/projects/context';
 import { submitCreateProject } from '@/lib/projects/create-client-actions';
 import {
   applyRuntimeProfileToServices,
@@ -67,6 +66,7 @@ import {
   createEnvironmentTemplates,
   getCreateEnvironmentTemplateLabel,
 } from '@/lib/projects/environment-topology';
+import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 import { cn } from '@/lib/utils';
 
 interface AnalyzeServiceResponse {

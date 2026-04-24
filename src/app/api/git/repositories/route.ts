@@ -7,7 +7,7 @@ import {
   normalizeApiError,
   statusByCode,
 } from '@/lib/integrations/service/integration-control-plane';
-import { getRepositoryDefaultBranch } from '@/lib/projects/context';
+import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 
 type NormalizableError = {
   code?: string;

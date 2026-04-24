@@ -5,7 +5,7 @@ import {
   getProjectProductionRef,
   getProjectSourceRef,
   getRepositoryDefaultBranch,
-} from '@/lib/projects/context';
+} from '@/lib/projects/refs';
 
 describe('project context helpers', () => {
   it('falls back to main when a repository default branch is absent', () => {

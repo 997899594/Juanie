@@ -28,7 +28,8 @@ import {
   type MigrationPolicySignalSnapshot,
   type ReleasePolicySnapshot,
 } from '@/lib/policies/delivery';
-import { getProjectSourceRef, requireProjectRepositoryContext } from '@/lib/projects/context';
+import { requireProjectRepositoryContext } from '@/lib/projects/context';
+import { getProjectSourceRef } from '@/lib/projects/refs';
 import type { ReleaseServiceInput } from '@/lib/releases';
 import {
   canCreateReleaseWithEntryPoint,

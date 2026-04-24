@@ -8,10 +8,8 @@ import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
-import {
-  getRepositoryDefaultBranch,
-  requireProjectRepositoryContext,
-} from '@/lib/projects/context';
+import { requireProjectRepositoryContext } from '@/lib/projects/context';
+import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 import { isPlatformManagedMigrationTool } from './platform-managed';
 import {
   buildPlatformInternalCommand,

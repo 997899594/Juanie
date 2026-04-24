@@ -17,10 +17,8 @@ import {
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 import { logger } from '@/lib/logger';
-import {
-  getRepositoryDefaultBranch,
-  requireProjectRepositoryContext,
-} from '@/lib/projects/context';
+import { requireProjectRepositoryContext } from '@/lib/projects/context';
+import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 
 interface RuntimeContractSyncInput {
   projectId: string;

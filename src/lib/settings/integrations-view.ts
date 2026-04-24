@@ -1,6 +1,6 @@
 import type { TeamRole } from '@/lib/db/schema';
 import type { Capability } from '@/lib/integrations/domain/models';
-import { getRepositoryDefaultBranch } from '@/lib/projects/context';
+import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 
 interface IntegrationLike {
   id: string;

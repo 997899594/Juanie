@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import type { EnvironmentSchemaStateStatus, SchemaRepairPlanKind } from '@/lib/db/schema';
 import { schemaRepairPlans } from '@/lib/db/schema';
 import { gateway } from '@/lib/integrations/service/integration-control-plane';
-import { getRepositoryDefaultBranch } from '@/lib/projects/context';
+import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import {

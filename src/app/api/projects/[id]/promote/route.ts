@@ -10,7 +10,7 @@ import { db } from '@/lib/db';
 import { environments, releases } from '@/lib/db/schema';
 import { isPromoteOnlyEnvironment } from '@/lib/environments/model';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
-import { getProjectProductionRef } from '@/lib/projects/context';
+import { getProjectProductionRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildPromotionPlan } from '@/lib/releases/planning';

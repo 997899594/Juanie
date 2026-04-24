@@ -10,7 +10,7 @@ import { schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { resolveMigrationPath } from '@/lib/migrations/path';
-import { getRepositoryDefaultBranch } from '@/lib/projects/context';
+import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import {
   buildWorkspaceDiffSummary,

@@ -8,10 +8,8 @@ import {
   getTeamIntegrationSession,
   type IntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
-import {
-  getRepositoryDefaultBranch,
-  requireProjectRepositoryContext,
-} from '@/lib/projects/context';
+import { requireProjectRepositoryContext } from '@/lib/projects/context';
+import { getRepositoryDefaultBranch } from '@/lib/projects/refs';
 
 const execFileAsync = promisify(execFile);
 

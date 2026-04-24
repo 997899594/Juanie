@@ -8,7 +8,7 @@ import {
   isPreviewEnvironment,
   isProductionEnvironment,
 } from '@/lib/environments/model';
-import { getProjectProductionBranch } from '@/lib/projects/context';
+import { getProjectProductionBranch } from '@/lib/projects/refs';
 import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 

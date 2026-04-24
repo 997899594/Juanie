@@ -5,7 +5,7 @@ import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
-import { getProjectSourceRef } from '@/lib/projects/context';
+import { getProjectSourceRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
 import { getProjectDeploymentContextOrThrow } from '@/lib/releases/deployment-access';
 import { buildRollbackPlan } from '@/lib/releases/planning';

@@ -10,7 +10,7 @@ import {
 } from '@/lib/integrations/service/integration-control-plane';
 import { deleteNamespace, isK8sAvailable, waitForNamespaceDeleted } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
-import { getProjectProductionBranch } from '@/lib/projects/context';
+import { getProjectProductionBranch } from '@/lib/projects/refs';
 import {
   publishProjectDeletedRealtimeEvent,
   publishProjectRealtimeSnapshot,

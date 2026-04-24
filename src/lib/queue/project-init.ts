@@ -41,7 +41,7 @@ import {
 import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
-import { getProjectProductionBranch } from '@/lib/projects/context';
+import { getProjectProductionBranch } from '@/lib/projects/refs';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { TemplateService } from '@/lib/templates';

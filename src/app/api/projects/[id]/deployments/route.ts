@@ -17,7 +17,7 @@ import {
   services,
 } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
-import { getProjectSourceRef } from '@/lib/projects/context';
+import { getProjectSourceRef } from '@/lib/projects/refs';
 import { createProjectRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
 import { buildProjectReleasePlan } from '@/lib/releases/planning';
