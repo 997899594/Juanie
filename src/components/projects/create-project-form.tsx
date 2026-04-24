@@ -35,6 +35,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import type { ServiceConfig } from '@/lib/config/parser';
+import { type DatabaseCapability } from '@/lib/databases/capabilities';
 import type {
   PlatformDatabaseProvisionType,
   PlatformDatabaseType,
@@ -141,6 +142,7 @@ interface DatabaseWithId {
   type: PlatformDatabaseType;
   plan: 'starter' | 'standard' | 'premium';
   provisionType: PlatformDatabaseProvisionType;
+  capabilities: DatabaseCapability[];
   externalUrl?: string;
 }
 
@@ -219,6 +221,15 @@ const DATABASE_PLAN_OPTIONS = [
   { value: 'premium', label: 'Premium' },
 ] as const;
 
+const POSTGRES_CAPABILITY_OPTIONS: Array<{
+  value: DatabaseCapability;
+  label: string;
+  description: string;
+}> = [
+  { value: 'vector', label: 'vector', description: '向量检索与 embedding' },
+  { value: 'pg_trgm', label: 'pg_trgm', description: '模糊搜索与相似度匹配' },
+];
+
 function withServiceIds(services: Omit<ServiceWithId, '_id'>[]): ServiceWithId[] {
   return services.map((service) => ({
     _id: nanoid(),
@@ -287,6 +298,7 @@ function createDatabaseDraft(type: DatabaseWithId['type']): DatabaseWithId {
     type,
     plan: 'starter',
     provisionType: getDefaultDatabaseProvisionType(type),
+    capabilities: [],
   };
 }
 
@@ -730,6 +742,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
           type: database.type,
           plan: database.plan,
           provisionType: database.provisionType,
+          capabilities: database.capabilities,
           ...(database.externalUrl ? { externalUrl: database.externalUrl } : {}),
         })),
         domain: formData.domain || undefined,
@@ -1649,6 +1662,52 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                             </div>
                           </div>
                         </div>
+
+                        {database.type === 'postgresql' ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <Label>数据库能力</Label>
+                              {database.capabilities.length > 0 ? (
+                                <Badge variant="secondary">
+                                  {database.capabilities.length} 已启用
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {POSTGRES_CAPABILITY_OPTIONS.map((option) => {
+                                const selected = database.capabilities.includes(option.value);
+
+                                return (
+                                  <Button
+                                    key={option.value}
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      updateDatabase({
+                                        capabilities: selected
+                                          ? database.capabilities.filter(
+                                              (capability) => capability !== option.value
+                                            )
+                                          : [...database.capabilities, option.value],
+                                      })
+                                    }
+                                    className={getPillChoiceClass(selected)}
+                                  >
+                                    {option.label}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                              {POSTGRES_CAPABILITY_OPTIONS.map((option) => (
+                                <span
+                                  key={option.value}
+                                >{`${option.label}: ${option.description}`}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
 
                         {database.provisionType === 'external' && (
                           <div className="space-y-2">

@@ -1,6 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { getProjectWithRepositoryAccessOrNull } from '@/lib/api/page-access';
 import { db } from '@/lib/db';
-import { environments, projects, teamMembers, teams } from '@/lib/db/schema';
+import { databases, environments, teams } from '@/lib/db/schema';
 import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governance-view';
 import {
   getEnvironmentKind,
@@ -11,58 +12,59 @@ import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
 export async function getProjectSettingsPageData(projectId: string, userId: string) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    with: {
-      repository: true,
-    },
-  });
-
-  if (!project) {
+  const access = await getProjectWithRepositoryAccessOrNull(projectId, userId);
+  if (!access) {
     return null;
   }
 
-  const [teamMember, team, environmentList] = await Promise.all([
-    db.query.teamMembers.findFirst({
-      where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
-    }),
+  const [team, environmentList, projectDatabases] = await Promise.all([
     db.query.teams.findFirst({
-      where: eq(teams.id, project.teamId),
+      where: eq(teams.id, access.project.teamId),
     }),
     db.query.environments.findMany({
       where: eq(environments.projectId, projectId),
     }),
+    db.query.databases.findMany({
+      where: eq(databases.projectId, projectId),
+      orderBy: (database, { asc }) => [asc(database.createdAt)],
+    }),
   ]);
 
-  if (!teamMember) {
-    return null;
-  }
-
   const governance = buildProjectGovernanceSnapshot({
-    role: teamMember.role,
+    role: access.member.role,
     environments: environmentList,
   });
   const runtimeStatus = resolveProjectRuntimeStatus({
-    status: project.status,
+    status: access.project.status,
     environments: environmentList,
   });
 
   return {
     project: {
-      id: project.id,
-      name: project.name,
-      slug: project.slug,
-      description: project.description,
-      repositoryFullName: project.repository?.fullName ?? null,
-      repositoryWebUrl: project.repository?.webUrl ?? null,
-      productionBranch: project.productionBranch ?? 'main',
+      id: access.project.id,
+      name: access.project.name,
+      slug: access.project.slug,
+      description: access.project.description,
+      repositoryFullName: access.project.repository?.fullName ?? null,
+      repositoryWebUrl: access.project.repository?.webUrl ?? null,
+      productionBranch: access.project.productionBranch ?? 'main',
       status: runtimeStatus.status ?? 'initializing',
       statusLabel: runtimeStatus.statusLabel,
-      statusMessage: project.statusMessage ?? runtimeStatus.summary ?? null,
+      statusMessage: access.project.statusMessage ?? runtimeStatus.summary ?? null,
       teamName: team?.name ?? '团队',
       teamSlug: team?.slug ?? '',
-      yourRole: teamMember.role,
+      yourRole: access.member.role,
       governance,
+      databases: projectDatabases.map((database) => ({
+        id: database.id,
+        name: database.name,
+        type: database.type,
+        plan: database.plan,
+        provisionType: database.provisionType,
+        environmentId: database.environmentId,
+        serviceId: database.serviceId,
+        capabilities: database.capabilities ?? [],
+      })),
       environments: environmentList.map((environment) => ({
         id: environment.id,
         name: environment.name,
@@ -71,7 +73,7 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
         isPreview: isPreviewEnvironment(environment),
         deploymentStrategy: environment.deploymentStrategy,
         databaseStrategy: environment.databaseStrategy,
-        actions: buildEnvironmentManageActionSnapshot(teamMember.role, environment),
+        actions: buildEnvironmentManageActionSnapshot(access.member.role, environment),
       })),
     },
     overview: {

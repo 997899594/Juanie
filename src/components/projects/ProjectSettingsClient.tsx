@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
+import type { DatabaseCapability } from '@/lib/databases/capabilities';
 import { updateEnvironmentStrategy } from '@/lib/environments/client-actions';
 import type { ProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 import { cn } from '@/lib/utils';
@@ -50,6 +52,16 @@ interface ProjectSettingsClientProps {
       teamSlug: string;
       yourRole: string;
       governance: ProjectGovernanceSnapshot;
+      databases: Array<{
+        id: string;
+        name: string;
+        type: string;
+        plan: string;
+        provisionType: string | null;
+        environmentId: string | null;
+        serviceId: string | null;
+        capabilities: DatabaseCapability[];
+      }>;
       environments: Array<{
         id: string;
         name: string;
@@ -86,6 +98,15 @@ const databaseStrategyLabels: Record<'direct' | 'inherit' | 'isolated_clone', st
   isolated_clone: '独立预览库',
 };
 
+const postgresCapabilityOptions: Array<{
+  value: DatabaseCapability;
+  label: string;
+  description: string;
+}> = [
+  { value: 'vector', label: 'vector', description: '向量检索与 embedding' },
+  { value: 'pg_trgm', label: 'pg_trgm', description: '模糊搜索与相似度匹配' },
+];
+
 const settingsPanelClassName =
   'rounded-[22px] bg-[rgba(251,250,247,0.96)] shadow-[0_16px_34px_rgba(55,53,47,0.05)]';
 const settingsSubtleClassName = 'rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-3';
@@ -96,6 +117,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [savingEnvironmentId, setSavingEnvironmentId] = useState<string | null>(null);
+  const [savingDatabaseId, setSavingDatabaseId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -192,6 +214,37 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
     }
   };
 
+  const handleDatabaseCapabilitiesChange = async (
+    databaseId: string,
+    capabilities: DatabaseCapability[]
+  ) => {
+    setSavingDatabaseId(databaseId);
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/databases/${databaseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ capabilities }),
+      });
+
+      if (!res.ok) {
+        return;
+      }
+
+      const payload = await res.json();
+      setProject((prev) => ({
+        ...prev,
+        databases: prev.databases.map((database) =>
+          database.id === databaseId
+            ? { ...database, capabilities: payload.capabilities ?? capabilities }
+            : database
+        ),
+      }));
+    } finally {
+      setSavingDatabaseId(null);
+    }
+  };
+
   const handleDelete = async () => {
     setDeleteError(null);
     setDeleting(true);
@@ -237,6 +290,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
           <TabsTrigger value="general">常规</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="environments">环境</TabsTrigger>
+          <TabsTrigger value="databases">数据库</TabsTrigger>
           <TabsTrigger value="governance">治理</TabsTrigger>
           <TabsTrigger value="danger">危险操作</TabsTrigger>
         </TabsList>
@@ -398,6 +452,93 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="databases">
+          <div className={cn(settingsPanelClassName, 'overflow-hidden')}>
+            <div className="console-divider-bottom px-5 py-4">
+              <div className="text-sm font-semibold">数据库</div>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              {project.databases.length === 0 ? (
+                <div className={settingsSubtleClassName}>
+                  <div className="text-sm text-muted-foreground">没有数据库</div>
+                </div>
+              ) : (
+                project.databases.map((database) => {
+                  const isPostgres = database.type === 'postgresql';
+                  const isSaving = savingDatabaseId === database.id;
+
+                  return (
+                    <div key={database.id} className={settingsSubtleClassName}>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold">{database.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {[database.type, database.plan, database.provisionType]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                        </div>
+                        {database.capabilities.length > 0 ? (
+                          <Badge variant="secondary">{database.capabilities.length} 已启用</Badge>
+                        ) : null}
+                      </div>
+
+                      {isPostgres ? (
+                        <div className="mt-4 space-y-3">
+                          <div className="flex flex-wrap gap-2">
+                            {postgresCapabilityOptions.map((option) => {
+                              const selected = database.capabilities.includes(option.value);
+
+                              return (
+                                <Button
+                                  key={option.value}
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={!canEdit || isSaving}
+                                  onClick={() =>
+                                    handleDatabaseCapabilitiesChange(
+                                      database.id,
+                                      selected
+                                        ? database.capabilities.filter(
+                                            (capability) => capability !== option.value
+                                          )
+                                        : [...database.capabilities, option.value]
+                                    )
+                                  }
+                                  className={cn(
+                                    'rounded-full px-3.5 py-2 text-xs font-medium transition-all duration-150',
+                                    selected
+                                      ? 'bg-primary text-primary-foreground shadow-[0_10px_24px_rgba(55,53,47,0.16)]'
+                                      : 'bg-[rgba(255,255,255,0.78)] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.78)_inset,0_6px_18px_rgba(55,53,47,0.03)] hover:bg-[rgba(255,255,255,0.94)] hover:text-foreground'
+                                  )}
+                                >
+                                  {option.label}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                            {postgresCapabilityOptions.map((option) => (
+                              <span
+                                key={option.value}
+                              >{`${option.label}: ${option.description}`}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-4 text-xs text-muted-foreground">
+                          当前只有 PostgreSQL 支持数据库能力。
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

@@ -24,6 +24,30 @@ const postgresCapabilitySpecs: Record<
   },
 };
 
+const capabilityDetectors: Array<{
+  capability: DatabaseCapability;
+  patterns: RegExp[];
+}> = [
+  {
+    capability: 'vector',
+    patterns: [
+      /\bensurePgvector\b/i,
+      /\bpgvector\b/i,
+      /create\s+extension\s+if\s+not\s+exists\s+["']?vector["']?/i,
+      /\bvector\s*\(/i,
+      /::vector\b/i,
+    ],
+  },
+  {
+    capability: 'pg_trgm',
+    patterns: [
+      /create\s+extension\s+if\s+not\s+exists\s+["']?pg_trgm["']?/i,
+      /\bgin_trgm_ops\b/i,
+      /\bsimilarity\s*\(/i,
+    ],
+  },
+];
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -63,6 +87,29 @@ export function getPostgresCapabilityExtensions(
       )
     )
   );
+}
+
+export function inferDatabaseCapabilitiesFromText(
+  text: string,
+  initialCapabilities?: readonly string[] | null
+): DatabaseCapability[] {
+  const normalizedText = text.trim();
+  const inferred = normalizeDatabaseCapabilities(initialCapabilities);
+
+  if (!normalizedText) {
+    return inferred;
+  }
+
+  for (const detector of capabilityDetectors) {
+    if (
+      !inferred.includes(detector.capability) &&
+      detector.patterns.some((pattern) => pattern.test(normalizedText))
+    ) {
+      inferred.push(detector.capability);
+    }
+  }
+
+  return normalizeDatabaseCapabilities(inferred);
 }
 
 export interface DatabaseCapabilityTarget {
@@ -204,7 +251,14 @@ export async function verifyDeclaredDatabaseCapabilities(
 export async function reconcileDeclaredDatabaseCapabilities(
   database: DatabaseCapabilityTarget
 ): Promise<DatabaseCapabilityCheckResult> {
-  const capabilities = normalizeDatabaseCapabilities(database.capabilities);
+  return reconcileDatabaseCapabilities(database, database.capabilities);
+}
+
+export async function reconcileDatabaseCapabilities(
+  database: DatabaseCapabilityTarget,
+  requestedCapabilities: readonly string[] | null | undefined
+): Promise<DatabaseCapabilityCheckResult> {
+  const capabilities = normalizeDatabaseCapabilities(requestedCapabilities);
 
   if (capabilities.length === 0 || database.type !== 'postgresql') {
     return {

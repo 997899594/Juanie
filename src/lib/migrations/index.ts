@@ -1,6 +1,8 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import {
   formatDatabaseCapabilityIssues,
+  inferDatabaseCapabilitiesFromText,
+  reconcileDatabaseCapabilities,
   verifyDeclaredDatabaseCapabilities,
 } from '@/lib/databases/capabilities';
 import {
@@ -21,6 +23,50 @@ import { resolveMigrationSpecifications } from './resolver';
 import type { MigrationExecutionPlan, ResolvedMigrationSpec } from './types';
 
 export { resolveMigrationSpecifications } from './resolver';
+
+async function inferRequiredCapabilitiesForSpec(
+  spec: ResolvedMigrationSpec,
+  ref?: string | null
+): Promise<ReturnType<typeof inferDatabaseCapabilitiesFromText>> {
+  if (
+    spec.database.type !== 'postgresql' ||
+    (spec.specification.tool !== 'sql' && spec.specification.tool !== 'atlas')
+  ) {
+    return [];
+  }
+
+  const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
+  if (!migrationPath) {
+    return [];
+  }
+
+  const files = await fetchMigrationFilesFromRepoPath(
+    spec.specification.projectId,
+    migrationPath,
+    ref ?? spec.environment.branch ?? 'main'
+  );
+
+  return inferDatabaseCapabilitiesFromText(
+    files.map((file) => file.content).join('\n'),
+    spec.database.capabilities
+  );
+}
+
+async function reconcileRequiredCapabilitiesForSpec(
+  spec: ResolvedMigrationSpec,
+  ref?: string | null
+): Promise<void> {
+  const requiredCapabilities = await inferRequiredCapabilitiesForSpec(spec, ref);
+
+  if (requiredCapabilities.length === 0) {
+    return;
+  }
+
+  const result = await reconcileDatabaseCapabilities(spec.database, requiredCapabilities);
+  if (!result.satisfied) {
+    throw new Error(formatDatabaseCapabilityIssues(spec.database, result.issues));
+  }
+}
 
 function buildPlanEnvVars(spec: ResolvedMigrationSpec): string[] {
   const envVars: string[] = [];
@@ -114,6 +160,8 @@ export async function resolveAndCreateMigrationRuns(
   const runs = [];
 
   for (const spec of specs) {
+    await reconcileRequiredCapabilitiesForSpec(spec, input.sourceCommitSha ?? input.sourceRef);
+
     let initialStatus: MigrationRunStatus = 'queued';
 
     if (phase !== 'manual') {
