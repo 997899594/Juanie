@@ -1,22 +1,16 @@
-import type { AIToolTraceEntry } from '@/lib/ai/runtime/tool-trace';
+import type { AIRunMetadata, AIUsageSummary } from '@/lib/ai/run-metadata';
 
-export interface CopilotUsageSummary {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-}
-
-export interface CopilotSessionMetadata {
+export interface CopilotSessionMetadata
+  extends Required<
+    Pick<
+      AIRunMetadata,
+      'provider' | 'model' | 'skillId' | 'promptKey' | 'promptVersion' | 'toolCalls'
+    >
+  > {
   conversationId: string;
   generatedAt: string;
-  provider: string;
-  model: string;
   suggestions: string[];
-  skillId: string;
-  promptKey: string;
-  promptVersion: string;
-  toolCalls: AIToolTraceEntry[];
-  usage: CopilotUsageSummary | null;
+  usage: AIUsageSummary | null;
 }
 
 export interface CopilotReplayMessageInput {

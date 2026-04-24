@@ -3,6 +3,7 @@ import {
   type DynamicPluginOutput,
   dynamicPluginOutputSchema,
 } from '@/lib/ai/schemas/dynamic-plugin-output';
+import type { StructuredWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 import type { StructuredWorkflowRuntime } from '@/lib/ai/workflows/shared';
 import { runStructuredWorkflow } from '@/lib/ai/workflows/shared';
 
@@ -25,12 +26,18 @@ export async function runDynamicPluginWorkflow(
     runtime?: StructuredWorkflowRuntime;
   }
 ): Promise<import('@/lib/ai/runtime/types').AIPluginRunEnvelope<DynamicPluginOutput>> {
-  return runStructuredWorkflow({
+  const workflow: StructuredWorkflowDefinition<typeof dynamicPluginOutputSchema> = {
+    pluginId: input.evidence.manifest.id,
     promptKey: 'dynamic-plugin',
-    skillId: input.skillId ?? null,
+    skillId: input.skillId ?? 'dynamic-plugin',
     schema: dynamicPluginOutputSchema,
     schemaName: 'dynamicPluginOutput',
+    snapshotSchema: `${input.evidence.manifest.id}-dynamic-v1`,
     description: `${input.evidence.manifest.title} dynamic plugin output`,
+  };
+
+  return runStructuredWorkflow({
+    workflow,
     evidence: input.evidence,
     buildPrompt: buildDynamicPluginPrompt,
     runtime: options?.runtime,

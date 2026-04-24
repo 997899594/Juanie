@@ -1,6 +1,7 @@
 import type { EnvironmentMigrationReviewEvidence } from '@/lib/ai/evidence/environment-migration-review';
 import type { AIPluginRunEnvelope } from '@/lib/ai/runtime/types';
-import { type MigrationReview, migrationReviewSchema } from '@/lib/ai/schemas/migration-review';
+import type { MigrationReview } from '@/lib/ai/schemas/migration-review';
+import { migrationReviewWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 import type { StructuredWorkflowRuntime } from '@/lib/ai/workflows/shared';
 import { runStructuredWorkflow } from '@/lib/ai/workflows/shared';
 
@@ -19,11 +20,7 @@ export async function runMigrationReviewWorkflow(
   }
 ): Promise<AIPluginRunEnvelope<MigrationReview>> {
   return runStructuredWorkflow({
-    promptKey: 'migration-review',
-    skillId: 'migration-skill',
-    schema: migrationReviewSchema,
-    schemaName: 'migrationReview',
-    description: 'Juanie 环境迁移审阅',
+    workflow: migrationReviewWorkflowDefinition,
     evidence,
     buildPrompt: buildMigrationReviewPrompt,
     runtime: options?.runtime,

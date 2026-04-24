@@ -1,8 +1,10 @@
 import type { infer as Infer, ZodTypeAny } from 'zod';
 import { createDegradationState } from '@/lib/ai/core/degradation';
 import { generateStructuredObject } from '@/lib/ai/core/generate-structured';
-import { getPromptDefinition, type JuaniePromptKey } from '@/lib/ai/prompts/registry';
+import { getPromptDefinition } from '@/lib/ai/prompts/registry';
+import { buildAIRunMetadata } from '@/lib/ai/run-metadata';
 import type { AIPluginRunEnvelope } from '@/lib/ai/runtime/types';
+import type { StructuredWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 
 export interface StructuredWorkflowGeneratorResult<TSchema extends ZodTypeAny> {
   object: Infer<TSchema>;
@@ -39,34 +41,32 @@ const defaultStructuredWorkflowRuntime: StructuredWorkflowRuntime = {
 };
 
 export async function runStructuredWorkflow<TEvidence, TSchema extends ZodTypeAny>(input: {
-  promptKey: JuaniePromptKey;
-  skillId: string | null;
-  schema: TSchema;
-  schemaName: string;
-  description: string;
+  workflow: StructuredWorkflowDefinition<TSchema>;
   evidence: TEvidence;
   buildPrompt(evidence: TEvidence): string;
   runtime?: StructuredWorkflowRuntime;
 }): Promise<AIPluginRunEnvelope<Infer<TSchema>>> {
-  const promptDefinition = getPromptDefinition(input.promptKey);
+  const promptDefinition = getPromptDefinition(input.workflow.promptKey);
   const runtime = input.runtime ?? defaultStructuredWorkflowRuntime;
   const result = await runtime.generateObject({
-    schema: input.schema,
-    schemaName: input.schemaName,
-    description: input.description,
+    schema: input.workflow.schema,
+    schemaName: input.workflow.schemaName,
+    description: input.workflow.description,
     system: promptDefinition.system,
     prompt: input.buildPrompt(input.evidence),
   });
 
   return {
     output: result.object,
-    provider: result.provider,
-    model: result.model,
     degradation: createDegradationState(null),
-    skillId: input.skillId,
-    promptKey: promptDefinition.key,
-    promptVersion: promptDefinition.version,
-    outputSchema: input.schemaName,
-    usage: result.usage,
+    ...buildAIRunMetadata({
+      provider: result.provider,
+      model: result.model,
+      skillId: input.workflow.skillId,
+      promptKey: promptDefinition.key,
+      promptVersion: promptDefinition.version,
+      usage: result.usage,
+    }),
+    outputSchema: input.workflow.schemaName,
   };
 }

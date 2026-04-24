@@ -1,4 +1,5 @@
 import type { AIPluginManifest } from '@/lib/ai/runtime/types';
+import { envvarRiskWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 
 export const envvarRiskManifest = {
   id: 'envvar-risk',
@@ -14,12 +15,12 @@ export const envvarRiskManifest = {
   surfaces: ['inline-card', 'action-center'],
   resourceType: 'environment',
   billingMetric: 'per_run',
-  snapshotSchema: 'envvar-risk-v1',
+  snapshotSchema: envvarRiskWorkflowDefinition.snapshotSchema,
   cacheTtlSeconds: 900,
   supportsManualRefresh: true,
   eventTriggers: ['environment.variables.updated', 'environment.updated'],
   capabilities: ['envvar-risk', 'structured-output'],
-  skills: ['envvar-skill'],
+  skills: [envvarRiskWorkflowDefinition.skillId],
   tools: ['read-environment-variables'],
   actions: [],
   contextProviders: ['environment-envvar-risk'],

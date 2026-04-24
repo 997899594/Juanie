@@ -1,6 +1,7 @@
 import type { ReleaseEvidencePack } from '@/lib/ai/evidence/release-evidence';
 import type { AIPluginRunEnvelope } from '@/lib/ai/runtime/types';
-import { type ReleasePlan, releasePlanSchema } from '@/lib/ai/schemas/release-plan';
+import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
+import { releasePlanWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 import type { StructuredWorkflowRuntime } from '@/lib/ai/workflows/shared';
 import { runStructuredWorkflow } from '@/lib/ai/workflows/shared';
 
@@ -19,11 +20,7 @@ export async function runReleasePlanWorkflow(
   }
 ): Promise<AIPluginRunEnvelope<ReleasePlan>> {
   return runStructuredWorkflow({
-    promptKey: 'release-plan',
-    skillId: 'release-skill',
-    schema: releasePlanSchema,
-    schemaName: 'releasePlan',
-    description: 'Juanie 发布计划',
+    workflow: releasePlanWorkflowDefinition,
     evidence,
     buildPrompt: buildReleasePlanPrompt,
     runtime: options?.runtime,

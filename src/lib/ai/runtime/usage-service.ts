@@ -1,10 +1,9 @@
-import type { AIToolTraceEntry } from '@/lib/ai/runtime/tool-trace';
+import type { AIRunMetadata } from '@/lib/ai/run-metadata';
 import { db } from '@/lib/db';
 import { aiPluginRuns } from '@/lib/db/schema';
 
-export interface AIPluginUsageRecord {
+export interface AIPluginUsageRecord extends AIRunMetadata {
   pluginId: string;
-  skillId?: string | null;
   actorUserId?: string | null;
   teamId: string;
   projectId?: string;
@@ -12,17 +11,7 @@ export interface AIPluginUsageRecord {
   releaseId?: string;
   resourceType: string;
   resourceId: string;
-  provider: string | null;
-  model: string | null;
-  promptKey?: string | null;
-  promptVersion?: string | null;
   outputSchema?: string | null;
-  toolCalls?: AIToolTraceEntry[];
-  usage?: {
-    inputTokens: number | null;
-    outputTokens: number | null;
-    totalTokens: number | null;
-  } | null;
   inputHash?: string | null;
   status: 'succeeded' | 'failed';
   latencyMs: number | null;

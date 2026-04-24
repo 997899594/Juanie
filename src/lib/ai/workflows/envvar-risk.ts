@@ -1,6 +1,7 @@
 import type { EnvironmentEnvvarRiskEvidence } from '@/lib/ai/evidence/environment-envvar-risk';
 import type { AIPluginRunEnvelope } from '@/lib/ai/runtime/types';
-import { type EnvvarRisk, envvarRiskSchema } from '@/lib/ai/schemas/envvar-risk';
+import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
+import { envvarRiskWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 import type { StructuredWorkflowRuntime } from '@/lib/ai/workflows/shared';
 import { runStructuredWorkflow } from '@/lib/ai/workflows/shared';
 
@@ -19,11 +20,7 @@ export async function runEnvvarRiskWorkflow(
   }
 ): Promise<AIPluginRunEnvelope<EnvvarRisk>> {
   return runStructuredWorkflow({
-    promptKey: 'envvar-risk',
-    skillId: 'envvar-skill',
-    schema: envvarRiskSchema,
-    schemaName: 'envvarRisk',
-    description: 'Juanie 环境变量风险摘要',
+    workflow: envvarRiskWorkflowDefinition,
     evidence,
     buildPrompt: buildEnvvarRiskPrompt,
     runtime: options?.runtime,

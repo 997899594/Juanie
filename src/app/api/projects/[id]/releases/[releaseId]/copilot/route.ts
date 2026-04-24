@@ -1,114 +1,39 @@
-import { and, eq } from 'drizzle-orm';
-import { NextResponse } from 'next/server';
-import { copilotRequestSchema, generateReleaseCopilotStream } from '@/lib/ai/copilot/service';
-import { createCopilotEventStream } from '@/lib/ai/copilot/transport';
-import { createAuditLog } from '@/lib/audit';
-import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { releases, teamMembers } from '@/lib/db/schema';
+import { handleCopilotRoute } from '@/lib/ai/copilot/route';
+import { generateReleaseCopilotStream } from '@/lib/ai/copilot/service';
+import { getProjectReleaseAccessOrThrow, requireSession } from '@/lib/api/access';
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; releaseId: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: '请先登录' }, { status: 401 });
-  }
+  return handleCopilotRoute({
+    request,
+    loadScope: async () => {
+      const session = await requireSession();
+      const { id: projectId, releaseId } = await params;
+      const { project, release } = await getProjectReleaseAccessOrThrow(
+        projectId,
+        releaseId,
+        session.user.id
+      );
 
-  const { id, releaseId } = await params;
-  const release = await db.query.releases.findFirst({
-    where: and(eq(releases.id, releaseId), eq(releases.projectId, id)),
-    columns: {
-      id: true,
-      projectId: true,
-      environmentId: true,
+      return {
+        teamId: project.teamId,
+        userId: session.user.id,
+        projectId: project.id,
+        resourceId: release.id,
+        resourceType: 'release' as const,
+        action: 'release.copilot_asked' as const,
+        environmentId: release.environmentId,
+      };
     },
-    with: {
-      project: {
-        columns: {
-          teamId: true,
-        },
-      },
-    },
+    generateReply: (scope, messages) =>
+      generateReleaseCopilotStream({
+        teamId: scope.teamId,
+        projectId: scope.projectId,
+        releaseId: scope.resourceId,
+        actorUserId: scope.userId,
+        messages,
+      }),
   });
-
-  if (!release) {
-    return NextResponse.json({ error: '发布不存在' }, { status: 404 });
-  }
-
-  const member = await db.query.teamMembers.findFirst({
-    where: and(
-      eq(teamMembers.teamId, release.project.teamId),
-      eq(teamMembers.userId, session.user.id)
-    ),
-    columns: {
-      id: true,
-    },
-  });
-
-  if (!member) {
-    return NextResponse.json({ error: '你没有查看这个发布的权限' }, { status: 403 });
-  }
-
-  const body = await request.json().catch(() => null);
-  const parsed = copilotRequestSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Copilot 请求格式不正确' }, { status: 400 });
-  }
-
-  const reply = await generateReleaseCopilotStream({
-    teamId: release.project.teamId,
-    projectId: release.projectId,
-    releaseId: release.id,
-    actorUserId: session.user.id,
-    messages: parsed.data.messages,
-  });
-
-  await createAuditLog({
-    teamId: release.project.teamId,
-    userId: session.user.id,
-    action: 'release.copilot_asked',
-    resourceType: 'release',
-    resourceId: release.id,
-    metadata: {
-      projectId: release.projectId,
-      environmentId: release.environmentId,
-      messageCount: parsed.data.messages.length,
-      conversationId: reply.conversationId,
-      provider: reply.provider,
-      model: reply.model,
-      skillId: reply.skillId,
-      promptKey: reply.promptKey,
-      promptVersion: reply.promptVersion,
-      toolCalls: reply.toolCalls,
-      usage: reply.usage,
-    },
-  }).catch(() => undefined);
-
-  return new Response(
-    createCopilotEventStream({
-      metadata: {
-        conversationId: reply.conversationId,
-        generatedAt: reply.generatedAt,
-        provider: reply.provider,
-        model: reply.model,
-        suggestions: reply.suggestions,
-        skillId: reply.skillId,
-        promptKey: reply.promptKey,
-        promptVersion: reply.promptVersion,
-        toolCalls: reply.toolCalls,
-        usage: reply.usage,
-      },
-      textStream: reply.stream,
-    }),
-    {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Connection: 'keep-alive',
-      },
-    }
-  );
 }

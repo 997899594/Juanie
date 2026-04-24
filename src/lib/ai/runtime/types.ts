@@ -1,4 +1,5 @@
 import type { AIDegradationState } from '@/lib/ai/core/degradation';
+import type { AIRunMetadata } from '@/lib/ai/run-metadata';
 
 export type AIPluginSurface =
   | 'release'
@@ -66,20 +67,10 @@ export interface AIPluginContext {
   actorUserId?: string | null;
 }
 
-export interface AIPluginRunEnvelope<TOutput> {
+export interface AIPluginRunEnvelope<TOutput> extends AIRunMetadata {
   output: TOutput;
-  provider: string | null;
-  model: string | null;
   degradation: AIDegradationState;
-  skillId?: string | null;
-  promptKey?: string | null;
-  promptVersion?: string | null;
   outputSchema?: string | null;
-  usage?: {
-    inputTokens: number | null;
-    outputTokens: number | null;
-    totalTokens: number | null;
-  } | null;
 }
 
 export interface AIPlugin<TEvidence, TOutput> {

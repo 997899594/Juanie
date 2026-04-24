@@ -2,6 +2,11 @@ import { and, eq } from 'drizzle-orm';
 import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
 import { listRecentReleaseAITasks } from '@/lib/ai/tasks/generic-task-service';
 import {
+  type AITaskCenterItem,
+  buildAITaskCenterSnapshot,
+  toAIAnalysisTaskItem,
+} from '@/lib/ai/tasks/view-model';
+import {
   type ApprovalItemDecorations,
   decorateApprovalRuns,
   formatApprovalStatusLabel,
@@ -9,7 +14,6 @@ import {
 import { db } from '@/lib/db';
 import { migrationRuns, releases } from '@/lib/db/schema';
 import { collapseRunsToLatestByLockKey } from '@/lib/migrations/attention';
-import { formatPlatformTimeContext } from '@/lib/time/format';
 
 type RawReleaseMigrationRun = Awaited<ReturnType<typeof db.query.migrationRuns.findMany>>[number];
 
@@ -23,23 +27,7 @@ type DecoratedReleaseApprovalRun = RawReleaseMigrationRun &
     } | null;
   };
 
-export interface ReleaseTaskItem {
-  id: string;
-  kind: 'migration_approval' | 'migration_external' | 'migration_failed' | 'ai_analysis';
-  title: string;
-  summary: string;
-  statusLabel: string;
-  actionLabel: string | null;
-  inputSummary?: string | null;
-  detail?: string | null;
-  createdAtLabel?: string | null;
-  completedAtLabel?: string | null;
-  provider?: string | null;
-  model?: string | null;
-  migrationRunId?: string | null;
-  migrationRunStatus?: string | null;
-  approvalToken?: string | null;
-}
+export interface ReleaseTaskItem extends AITaskCenterItem {}
 
 export interface ReleaseTaskCenterSnapshot {
   summary: string;
@@ -49,11 +37,13 @@ export interface ReleaseTaskCenterSnapshot {
 
 export function sortReleaseTasks(tasks: ReleaseTaskItem[]): ReleaseTaskItem[] {
   return [...tasks].sort((left, right) => {
-    const priority = {
+    const priority: Record<ReleaseTaskItem['kind'], number> = {
       migration_approval: 0,
       migration_external: 1,
       migration_failed: 2,
       ai_analysis: 3,
+      schema_repair: 4,
+      preview_cleanup_blocked: 5,
     };
 
     return priority[left.kind] - priority[right.kind];
@@ -65,14 +55,10 @@ export function buildReleaseTaskCenterSnapshot(
 ): ReleaseTaskCenterSnapshot {
   const sortedTasks = sortReleaseTasks(tasks);
 
-  return {
-    summary:
-      sortedTasks.length > 0
-        ? `当前发布有 ${sortedTasks.length} 个待处理事项`
-        : '当前发布没有待处理事项',
-    actionableCount: sortedTasks.length,
+  return buildAITaskCenterSnapshot({
     tasks: sortedTasks,
-  };
+    subjectLabel: '发布',
+  });
 }
 
 function toReleaseTask(
@@ -194,25 +180,9 @@ export async function getReleaseTaskCenterData(input: {
 
   for (const task of recentAITasks) {
     tasks.push({
-      id: `ai-${task.id}`,
-      kind: 'ai_analysis',
-      title: `AI 深度分析 · ${task.title}`,
-      summary: task.resultSummary ?? task.errorMessage ?? task.inputSummary,
-      statusLabel:
-        task.status === 'succeeded'
-          ? '已完成'
-          : task.status === 'failed'
-            ? '失败'
-            : task.status === 'running'
-              ? '进行中'
-              : '排队中',
-      actionLabel: null,
-      inputSummary: task.inputSummary,
-      detail: task.resultSummary ?? task.errorMessage,
-      createdAtLabel: formatPlatformTimeContext(task.createdAt),
-      completedAtLabel: formatPlatformTimeContext(task.completedAt),
-      provider: task.provider,
-      model: task.model,
+      ...toAIAnalysisTaskItem({
+        task,
+      }),
     });
   }
 

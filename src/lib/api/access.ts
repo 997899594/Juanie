@@ -169,6 +169,19 @@ export async function getProjectEnvironmentOrThrow(
   return environment;
 }
 
+export async function getProjectEnvironmentAccessOrThrow(
+  projectId: string,
+  environmentId: string,
+  userId: string
+) {
+  const [{ project, member }, environment] = await Promise.all([
+    getProjectAccessOrThrow(projectId, userId),
+    getProjectEnvironmentOrThrow(projectId, environmentId),
+  ]);
+
+  return { project, member, environment };
+}
+
 export async function getProjectServiceOrThrow(projectId: string, serviceId?: string | null) {
   if (!isUuid(projectId)) {
     throw accessError('not_found', 'Project not found');
@@ -222,4 +235,18 @@ export async function getReleaseAccessOrThrow(releaseId: string, userId: string)
   }
 
   return { release, project: release.project, member };
+}
+
+export async function getProjectReleaseAccessOrThrow(
+  projectId: string,
+  releaseId: string,
+  userId: string
+) {
+  const { release, project, member } = await getReleaseAccessOrThrow(releaseId, userId);
+
+  if (release.projectId !== projectId) {
+    throw accessError('invalid_scope', 'Release does not belong to project');
+  }
+
+  return { release, project, member };
 }

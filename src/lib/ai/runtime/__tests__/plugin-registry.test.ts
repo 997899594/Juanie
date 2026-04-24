@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { listBuiltInAIPlugins, listBuiltInJuaniePluginManifests } from '@/lib/ai/plugins/builtins';
 import {
   getAIPluginById,
   getJuaniePluginManifestById,
@@ -22,6 +23,12 @@ describe('ai plugin registry', () => {
     expect(listAIPlugins().map((plugin) => plugin.manifest.id)).toContain('environment-summary');
     expect(listJuaniePluginManifests().map((manifest) => manifest.id)).toContain(
       'environment-summary'
+    );
+  });
+
+  it('uses a single built-in plugin catalog for runtime and manifest registries', () => {
+    expect(listBuiltInAIPlugins().map((plugin) => plugin.manifest.id)).toEqual(
+      listBuiltInJuaniePluginManifests().map((manifest) => manifest.id)
     );
   });
 

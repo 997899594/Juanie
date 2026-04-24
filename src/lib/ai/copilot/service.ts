@@ -5,6 +5,11 @@ import type { CopilotSessionMetadata } from '@/lib/ai/copilot/types';
 import { generateChatText, generateChatTextStream } from '@/lib/ai/core/generate-chat-text';
 import type { AIModelPolicy } from '@/lib/ai/core/model-policy';
 import { getPromptDefinition } from '@/lib/ai/prompts/registry';
+import {
+  type AIRunMetadata,
+  type AIUsageSummary,
+  buildRequiredAIRunMetadata,
+} from '@/lib/ai/run-metadata';
 import { withAIToolTrace } from '@/lib/ai/runtime/tool-trace';
 import { executeJuanieTool } from '@/lib/ai/tools/runtime';
 
@@ -25,6 +30,21 @@ export interface CopilotReply extends CopilotSessionMetadata {
 
 export interface CopilotStreamReply extends CopilotSessionMetadata {
   stream: ReadableStream<string>;
+}
+
+interface BaseCopilotScopeInput {
+  teamId: string;
+  projectId: string;
+  actorUserId?: string | null;
+  messages: CopilotMessage[];
+}
+
+interface EnvironmentCopilotScopeInput extends BaseCopilotScopeInput {
+  environmentId: string;
+}
+
+interface ReleaseCopilotScopeInput extends BaseCopilotScopeInput {
+  releaseId: string;
 }
 
 function formatConversation(messages: CopilotMessage[]): string {
@@ -126,6 +146,81 @@ async function buildReleaseCopilotEvidence(input: {
   };
 }
 
+type EnvironmentCopilotEvidence = Awaited<ReturnType<typeof buildEnvironmentCopilotEvidence>>;
+type ReleaseCopilotEvidence = Awaited<ReturnType<typeof buildReleaseCopilotEvidence>>;
+
+interface CopilotScopeDescriptor<
+  TScopeInput extends BaseCopilotScopeInput,
+  TEvidence,
+  TIdentityKey extends 'environmentId' | 'releaseId',
+> {
+  identityKey: TIdentityKey;
+  buildEvidence: (input: TScopeInput) => Promise<TEvidence>;
+  buildPrompt: (input: TEvidence & { messages: CopilotMessage[] }) => string;
+}
+
+const copilotScopeDescriptors = {
+  environment: {
+    identityKey: 'environmentId',
+    buildEvidence: buildEnvironmentCopilotEvidence,
+    buildPrompt: buildEnvironmentCopilotPrompt,
+  },
+  release: {
+    identityKey: 'releaseId',
+    buildEvidence: buildReleaseCopilotEvidence,
+    buildPrompt: buildReleaseCopilotPrompt,
+  },
+} satisfies {
+  environment: CopilotScopeDescriptor<
+    EnvironmentCopilotScopeInput,
+    EnvironmentCopilotEvidence,
+    'environmentId'
+  >;
+  release: CopilotScopeDescriptor<ReleaseCopilotScopeInput, ReleaseCopilotEvidence, 'releaseId'>;
+};
+
+async function buildCopilotPrompt(input: {
+  kind: CopilotScopeKind;
+  teamId: string;
+  projectId: string;
+  environmentId?: string;
+  releaseId?: string;
+  actorUserId?: string | null;
+  messages: CopilotMessage[];
+}): Promise<string> {
+  if (input.kind === 'environment') {
+    const scopeInput: EnvironmentCopilotScopeInput = {
+      teamId: input.teamId,
+      projectId: input.projectId,
+      environmentId: input.environmentId ?? '',
+      actorUserId: input.actorUserId,
+      messages: input.messages,
+    };
+    const descriptor = copilotScopeDescriptors.environment;
+    const evidence = await descriptor.buildEvidence(scopeInput);
+
+    return descriptor.buildPrompt({
+      ...evidence,
+      messages: scopeInput.messages,
+    });
+  }
+
+  const scopeInput: ReleaseCopilotScopeInput = {
+    teamId: input.teamId,
+    projectId: input.projectId,
+    releaseId: input.releaseId ?? '',
+    actorUserId: input.actorUserId,
+    messages: input.messages,
+  };
+  const descriptor = copilotScopeDescriptors.release;
+  const evidence = await descriptor.buildEvidence(scopeInput);
+
+  return descriptor.buildPrompt({
+    ...evidence,
+    messages: scopeInput.messages,
+  });
+}
+
 function buildEnvironmentCopilotPrompt(input: {
   environment: Awaited<ReturnType<typeof buildEnvironmentCopilotEvidence>>['environment'];
   migration: Awaited<ReturnType<typeof buildEnvironmentCopilotEvidence>>['migration'];
@@ -151,6 +246,61 @@ function buildEnvironmentCopilotPrompt(input: {
     'Conversation:',
     formatConversation(input.messages),
   ].join('\n');
+}
+
+function getLatestQuestion(messages: CopilotMessage[]): string | undefined {
+  return messages.filter((message) => message.role === 'user').at(-1)?.content;
+}
+
+function buildCopilotSessionMetadata(input: {
+  conversationId: string;
+  generatedAt: string;
+  suggestions: string[];
+  provider: AIRunMetadata['provider'];
+  model: AIRunMetadata['model'];
+  skillId: string;
+  promptKey: string;
+  promptVersion: string;
+  toolCalls: NonNullable<AIRunMetadata['toolCalls']>;
+  usage?: AIUsageSummary | null;
+}): CopilotSessionMetadata {
+  return {
+    conversationId: input.conversationId,
+    generatedAt: input.generatedAt,
+    suggestions: input.suggestions,
+    ...buildRequiredAIRunMetadata({
+      provider: input.provider,
+      model: input.model,
+      skillId: input.skillId,
+      promptKey: input.promptKey,
+      promptVersion: input.promptVersion,
+      toolCalls: input.toolCalls,
+      usage: input.usage,
+    }),
+  };
+}
+
+function buildCopilotSessionBase(input: {
+  definition: ReturnType<typeof getCopilotDefinition>;
+  promptDefinition: ReturnType<typeof getPromptDefinition>;
+  messages: CopilotMessage[];
+  provider: AIRunMetadata['provider'];
+  model: AIRunMetadata['model'];
+  toolCalls: NonNullable<AIRunMetadata['toolCalls']>;
+  usage?: AIUsageSummary | null;
+}): CopilotSessionMetadata {
+  return buildCopilotSessionMetadata({
+    conversationId: nanoid(),
+    generatedAt: new Date().toISOString(),
+    suggestions: input.definition.getSuggestions(getLatestQuestion(input.messages)),
+    provider: input.provider,
+    model: input.model,
+    skillId: input.definition.skillId,
+    promptKey: input.promptDefinition.key,
+    promptVersion: input.promptDefinition.version,
+    toolCalls: input.toolCalls,
+    usage: input.usage,
+  });
 }
 
 function buildReleaseCopilotPrompt(input: {
@@ -189,33 +339,17 @@ async function generateCopilotReply(input: {
 }): Promise<CopilotReply> {
   const definition = getCopilotDefinition(input.kind);
   const promptDefinition = getPromptDefinition(definition.promptKey);
-  const conversationId = nanoid();
-  const generatedAt = new Date().toISOString();
-  const latestQuestion = input.messages
-    .filter((message) => message.role === 'user')
-    .at(-1)?.content;
 
   const traced = await withAIToolTrace(async () => {
-    const prompt =
-      input.kind === 'environment'
-        ? buildEnvironmentCopilotPrompt({
-            ...(await buildEnvironmentCopilotEvidence({
-              teamId: input.teamId,
-              projectId: input.projectId,
-              environmentId: input.environmentId ?? '',
-              actorUserId: input.actorUserId,
-            })),
-            messages: input.messages,
-          })
-        : buildReleaseCopilotPrompt({
-            ...(await buildReleaseCopilotEvidence({
-              teamId: input.teamId,
-              projectId: input.projectId,
-              releaseId: input.releaseId ?? '',
-              actorUserId: input.actorUserId,
-            })),
-            messages: input.messages,
-          });
+    const prompt = await buildCopilotPrompt({
+      kind: input.kind,
+      teamId: input.teamId,
+      projectId: input.projectId,
+      environmentId: input.environmentId,
+      releaseId: input.releaseId,
+      actorUserId: input.actorUserId,
+      messages: input.messages,
+    });
 
     return generateChatText({
       policy: input.policy,
@@ -224,19 +358,19 @@ async function generateCopilotReply(input: {
     });
   });
   const result = traced.result;
-
-  return {
-    conversationId,
-    message: cleanAssistantText(result.text),
-    suggestions: definition.getSuggestions(latestQuestion),
+  const session = buildCopilotSessionBase({
+    definition,
+    promptDefinition,
+    messages: input.messages,
     provider: result.provider,
     model: result.model,
-    generatedAt,
-    skillId: definition.skillId,
-    promptKey: promptDefinition.key,
-    promptVersion: promptDefinition.version,
     toolCalls: traced.calls,
     usage: result.usage,
+  });
+
+  return {
+    ...session,
+    message: cleanAssistantText(result.text),
   };
 }
 
@@ -253,33 +387,17 @@ async function generateCopilotStream(input: {
 }): Promise<CopilotStreamReply> {
   const definition = getCopilotDefinition(input.kind);
   const promptDefinition = getPromptDefinition(definition.promptKey);
-  const conversationId = nanoid();
-  const generatedAt = new Date().toISOString();
-  const latestQuestion = input.messages
-    .filter((message) => message.role === 'user')
-    .at(-1)?.content;
 
   const traced = await withAIToolTrace(async () => {
-    const prompt =
-      input.kind === 'environment'
-        ? buildEnvironmentCopilotPrompt({
-            ...(await buildEnvironmentCopilotEvidence({
-              teamId: input.teamId,
-              projectId: input.projectId,
-              environmentId: input.environmentId ?? '',
-              actorUserId: input.actorUserId,
-            })),
-            messages: input.messages,
-          })
-        : buildReleaseCopilotPrompt({
-            ...(await buildReleaseCopilotEvidence({
-              teamId: input.teamId,
-              projectId: input.projectId,
-              releaseId: input.releaseId ?? '',
-              actorUserId: input.actorUserId,
-            })),
-            messages: input.messages,
-          });
+    const prompt = await buildCopilotPrompt({
+      kind: input.kind,
+      teamId: input.teamId,
+      projectId: input.projectId,
+      environmentId: input.environmentId,
+      releaseId: input.releaseId,
+      actorUserId: input.actorUserId,
+      messages: input.messages,
+    });
 
     return generateChatTextStream({
       policy: input.policy,
@@ -288,21 +406,76 @@ async function generateCopilotStream(input: {
     });
   });
   const result = traced.result;
+  const session = buildCopilotSessionBase({
+    definition,
+    promptDefinition,
+    messages: input.messages,
+    provider: result.provider,
+    model: result.model,
+    toolCalls: traced.calls,
+  });
 
   return {
-    conversationId,
-    generatedAt,
+    ...session,
     ...result,
-    suggestions: definition.getSuggestions(latestQuestion),
-    skillId: definition.skillId,
-    promptKey: promptDefinition.key,
-    promptVersion: promptDefinition.version,
-    toolCalls: traced.calls,
-    usage: null,
   };
 }
 
-export async function generateEnvironmentCopilotReply(input: {
+function toEnvironmentCopilotGenerationInput(
+  input: EnvironmentCopilotScopeInput & {
+    policy?: Exclude<AIModelPolicy, 'tool-first'>;
+    systemAppendix?: string;
+  }
+): {
+  kind: 'environment';
+  teamId: string;
+  projectId: string;
+  actorUserId?: string | null;
+  messages: CopilotMessage[];
+  environmentId?: string;
+  policy?: Exclude<AIModelPolicy, 'tool-first'>;
+  systemAppendix?: string;
+} {
+  return {
+    kind: 'environment',
+    teamId: input.teamId,
+    projectId: input.projectId,
+    actorUserId: input.actorUserId,
+    messages: input.messages,
+    environmentId: input.environmentId,
+    policy: input.policy,
+    systemAppendix: input.systemAppendix,
+  };
+}
+
+function toReleaseCopilotGenerationInput(
+  input: ReleaseCopilotScopeInput & {
+    policy?: Exclude<AIModelPolicy, 'tool-first'>;
+    systemAppendix?: string;
+  }
+): {
+  kind: 'release';
+  teamId: string;
+  projectId: string;
+  actorUserId?: string | null;
+  messages: CopilotMessage[];
+  releaseId?: string;
+  policy?: Exclude<AIModelPolicy, 'tool-first'>;
+  systemAppendix?: string;
+} {
+  return {
+    kind: 'release',
+    teamId: input.teamId,
+    projectId: input.projectId,
+    actorUserId: input.actorUserId,
+    messages: input.messages,
+    releaseId: input.releaseId,
+    policy: input.policy,
+    systemAppendix: input.systemAppendix,
+  };
+}
+
+type EnvironmentCopilotGenerateInput = {
   teamId: string;
   projectId: string;
   environmentId: string;
@@ -310,20 +483,9 @@ export async function generateEnvironmentCopilotReply(input: {
   messages: CopilotMessage[];
   policy?: Exclude<AIModelPolicy, 'tool-first'>;
   systemAppendix?: string;
-}): Promise<CopilotReply> {
-  return generateCopilotReply({
-    kind: 'environment',
-    teamId: input.teamId,
-    projectId: input.projectId,
-    environmentId: input.environmentId,
-    actorUserId: input.actorUserId,
-    messages: input.messages,
-    policy: input.policy,
-    systemAppendix: input.systemAppendix,
-  });
-}
+};
 
-export async function generateReleaseCopilotReply(input: {
+type ReleaseCopilotGenerateInput = {
   teamId: string;
   projectId: string;
   releaseId: string;
@@ -331,57 +493,28 @@ export async function generateReleaseCopilotReply(input: {
   messages: CopilotMessage[];
   policy?: Exclude<AIModelPolicy, 'tool-first'>;
   systemAppendix?: string;
-}): Promise<CopilotReply> {
-  return generateCopilotReply({
-    kind: 'release',
-    teamId: input.teamId,
-    projectId: input.projectId,
-    releaseId: input.releaseId,
-    actorUserId: input.actorUserId,
-    messages: input.messages,
-    policy: input.policy,
-    systemAppendix: input.systemAppendix,
-  });
+};
+
+export async function generateEnvironmentCopilotReply(
+  input: EnvironmentCopilotGenerateInput
+): Promise<CopilotReply> {
+  return generateCopilotReply(toEnvironmentCopilotGenerationInput(input));
 }
 
-export async function generateEnvironmentCopilotStream(input: {
-  teamId: string;
-  projectId: string;
-  environmentId: string;
-  actorUserId?: string | null;
-  messages: CopilotMessage[];
-  policy?: Exclude<AIModelPolicy, 'tool-first'>;
-  systemAppendix?: string;
-}): Promise<CopilotStreamReply> {
-  return generateCopilotStream({
-    kind: 'environment',
-    teamId: input.teamId,
-    projectId: input.projectId,
-    environmentId: input.environmentId,
-    actorUserId: input.actorUserId,
-    messages: input.messages,
-    policy: input.policy,
-    systemAppendix: input.systemAppendix,
-  });
+export async function generateReleaseCopilotReply(
+  input: ReleaseCopilotGenerateInput
+): Promise<CopilotReply> {
+  return generateCopilotReply(toReleaseCopilotGenerationInput(input));
 }
 
-export async function generateReleaseCopilotStream(input: {
-  teamId: string;
-  projectId: string;
-  releaseId: string;
-  actorUserId?: string | null;
-  messages: CopilotMessage[];
-  policy?: Exclude<AIModelPolicy, 'tool-first'>;
-  systemAppendix?: string;
-}): Promise<CopilotStreamReply> {
-  return generateCopilotStream({
-    kind: 'release',
-    teamId: input.teamId,
-    projectId: input.projectId,
-    releaseId: input.releaseId,
-    actorUserId: input.actorUserId,
-    messages: input.messages,
-    policy: input.policy,
-    systemAppendix: input.systemAppendix,
-  });
+export async function generateEnvironmentCopilotStream(
+  input: EnvironmentCopilotGenerateInput
+): Promise<CopilotStreamReply> {
+  return generateCopilotStream(toEnvironmentCopilotGenerationInput(input));
+}
+
+export async function generateReleaseCopilotStream(
+  input: ReleaseCopilotGenerateInput
+): Promise<CopilotStreamReply> {
+  return generateCopilotStream(toReleaseCopilotGenerationInput(input));
 }

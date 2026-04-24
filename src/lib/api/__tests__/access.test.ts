@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { getProjectAccessOrThrow, getTeamAccessOrThrow } from '@/lib/api/access';
+import {
+  getProjectAccessOrThrow,
+  getProjectEnvironmentAccessOrThrow,
+  getProjectReleaseAccessOrThrow,
+  getTeamAccessOrThrow,
+} from '@/lib/api/access';
 import { isAccessError } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 
@@ -56,6 +61,59 @@ describe('api access guards', () => {
       }
     } finally {
       (db.query.teams as { findFirst: typeof originalFindFirst }).findFirst = originalFindFirst;
+    }
+  });
+
+  it('rejects invalid environment ids before querying the database', async () => {
+    let environmentQueryCalled = false;
+    const originalFindFirst = db.query.environments.findFirst;
+
+    (db.query.environments as { findFirst: typeof originalFindFirst }).findFirst = (async () => {
+      environmentQueryCalled = true;
+      return null;
+    }) as unknown as typeof originalFindFirst;
+
+    try {
+      await getProjectEnvironmentAccessOrThrow(
+        '11111111-1111-1111-1111-111111111111',
+        'new',
+        'user-1'
+      );
+      throw new Error('Expected invalid environment id to throw');
+    } catch (error) {
+      expect(environmentQueryCalled).toBe(false);
+      expect(isAccessError(error)).toBe(true);
+      if (isAccessError(error)) {
+        expect(error.code).toBe('not_found');
+        expect(error.status).toBe(404);
+      }
+    } finally {
+      (db.query.environments as { findFirst: typeof originalFindFirst }).findFirst =
+        originalFindFirst;
+    }
+  });
+
+  it('rejects invalid release ids before querying the database', async () => {
+    let releaseQueryCalled = false;
+    const originalFindFirst = db.query.releases.findFirst;
+
+    (db.query.releases as { findFirst: typeof originalFindFirst }).findFirst = (async () => {
+      releaseQueryCalled = true;
+      return null;
+    }) as unknown as typeof originalFindFirst;
+
+    try {
+      await getProjectReleaseAccessOrThrow('11111111-1111-1111-1111-111111111111', 'new', 'user-1');
+      throw new Error('Expected invalid release id to throw');
+    } catch (error) {
+      expect(releaseQueryCalled).toBe(false);
+      expect(isAccessError(error)).toBe(true);
+      if (isAccessError(error)) {
+        expect(error.code).toBe('not_found');
+        expect(error.status).toBe(404);
+      }
+    } finally {
+      (db.query.releases as { findFirst: typeof originalFindFirst }).findFirst = originalFindFirst;
     }
   });
 });

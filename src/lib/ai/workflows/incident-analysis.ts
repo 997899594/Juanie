@@ -1,6 +1,7 @@
 import type { IncidentEvidencePack } from '@/lib/ai/evidence/incident-evidence';
 import type { AIPluginRunEnvelope } from '@/lib/ai/runtime/types';
-import { type IncidentAnalysis, incidentAnalysisSchema } from '@/lib/ai/schemas/incident-analysis';
+import type { IncidentAnalysis } from '@/lib/ai/schemas/incident-analysis';
+import { incidentAnalysisWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 import type { StructuredWorkflowRuntime } from '@/lib/ai/workflows/shared';
 import { runStructuredWorkflow } from '@/lib/ai/workflows/shared';
 
@@ -19,11 +20,7 @@ export async function runIncidentAnalysisWorkflow(
   }
 ): Promise<AIPluginRunEnvelope<IncidentAnalysis>> {
   return runStructuredWorkflow({
-    promptKey: 'incident-analysis',
-    skillId: 'incident-skill',
-    schema: incidentAnalysisSchema,
-    schemaName: 'incidentAnalysis',
-    description: 'Juanie 故障归因分析',
+    workflow: incidentAnalysisWorkflowDefinition,
     evidence,
     buildPrompt: buildIncidentPrompt,
     runtime: options?.runtime,

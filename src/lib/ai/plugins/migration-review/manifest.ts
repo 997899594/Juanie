@@ -1,4 +1,5 @@
 import type { AIPluginManifest } from '@/lib/ai/runtime/types';
+import { migrationReviewWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 
 export const migrationReviewManifest = {
   id: 'migration-review',
@@ -13,12 +14,12 @@ export const migrationReviewManifest = {
   surfaces: ['inline-card', 'task-center'],
   resourceType: 'environment',
   billingMetric: 'per_run',
-  snapshotSchema: 'migration-review-v1',
+  snapshotSchema: migrationReviewWorkflowDefinition.snapshotSchema,
   cacheTtlSeconds: 900,
   supportsManualRefresh: true,
   eventTriggers: ['migration.updated', 'release.updated', 'schema.updated'],
   capabilities: ['migration-review', 'structured-output'],
-  skills: ['migration-skill'],
+  skills: [migrationReviewWorkflowDefinition.skillId],
   tools: ['read-environment-migrations', 'read-environment-schema'],
   actions: [],
   contextProviders: ['environment-migration-review'],

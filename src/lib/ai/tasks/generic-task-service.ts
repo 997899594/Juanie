@@ -3,13 +3,14 @@ import {
   generateEnvironmentCopilotReply,
   generateReleaseCopilotReply,
 } from '@/lib/ai/copilot/service';
+import { type AITaskKind, getAITaskDefinition } from '@/lib/ai/tasks/catalog';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import { aiTasks, environments, releases } from '@/lib/db/schema';
 
 export interface GenericAITaskRecord {
   id: string;
-  kind: 'environment_deep_analysis' | 'release_deep_analysis';
+  kind: AITaskKind;
   title: string;
   inputSummary: string;
   resultSummary: string | null;
@@ -21,132 +22,198 @@ export interface GenericAITaskRecord {
   completedAt: Date | null;
 }
 
+const deepAnalysisSystemAppendix =
+  '这是一个会进入任务中心的深度分析任务。输出请更完整一些，但仍然保持清楚、克制。优先使用 3 段：当前状态、关键风险、下一步。';
+
+async function markAITaskRunning(taskId: string): Promise<void> {
+  await db
+    .update(aiTasks)
+    .set({
+      status: 'running',
+      startedAt: new Date(),
+      errorMessage: null,
+    })
+    .where(eq(aiTasks.id, taskId));
+}
+
+async function markAITaskSucceeded(input: {
+  taskId: string;
+  reply: {
+    message: string;
+    provider: string | null;
+    model: string | null;
+  };
+}): Promise<GenericAITaskRecord> {
+  const [completedTask] = await db
+    .update(aiTasks)
+    .set({
+      status: 'succeeded',
+      resultSummary: input.reply.message,
+      provider: input.reply.provider,
+      model: input.reply.model,
+      completedAt: new Date(),
+    })
+    .where(eq(aiTasks.id, input.taskId))
+    .returning();
+
+  return completedTask;
+}
+
+async function markAITaskFailed(taskId: string, error: unknown): Promise<GenericAITaskRecord> {
+  const message = error instanceof Error ? error.message : 'AI 任务执行失败';
+  const [failedTask] = await db
+    .update(aiTasks)
+    .set({
+      status: 'failed',
+      errorMessage: message,
+      completedAt: new Date(),
+    })
+    .where(eq(aiTasks.id, taskId))
+    .returning();
+
+  return failedTask;
+}
+
+async function getQueuedAITaskOrThrow(taskId: string): Promise<
+  GenericAITaskRecord & {
+    teamId: string;
+    projectId: string | null;
+    environmentId: string | null;
+    releaseId: string | null;
+    actorUserId: string | null;
+  }
+> {
+  const task = await db.query.aiTasks.findFirst({
+    where: eq(aiTasks.id, taskId),
+  });
+
+  if (!task) {
+    throw new Error('AI 任务不存在');
+  }
+
+  return task;
+}
+
+async function executeDeepAnalysisTask(input: {
+  taskId: string;
+  generateReply: (task: Awaited<ReturnType<typeof getQueuedAITaskOrThrow>>) => Promise<{
+    message: string;
+    provider: string | null;
+    model: string | null;
+  }>;
+}): Promise<GenericAITaskRecord> {
+  const task = await getQueuedAITaskOrThrow(input.taskId);
+  await markAITaskRunning(input.taskId);
+
+  try {
+    const reply = await input.generateReply(task);
+    return markAITaskSucceeded({
+      taskId: input.taskId,
+      reply,
+    });
+  } catch (error) {
+    return markAITaskFailed(input.taskId, error);
+  }
+}
+
+async function createAITaskRecord(input: {
+  kind: AITaskKind;
+  actorUserId: string;
+  teamId: string;
+  projectId: string;
+  question: string;
+  environmentId?: string | null;
+  releaseId?: string | null;
+}): Promise<GenericAITaskRecord> {
+  const definition = getAITaskDefinition(input.kind);
+  const [createdTask] = await db
+    .insert(aiTasks)
+    .values({
+      kind: input.kind,
+      status: 'queued',
+      title: definition.buildTitle(input.question),
+      actorUserId: input.actorUserId,
+      teamId: input.teamId,
+      projectId: input.projectId,
+      environmentId: input.environmentId ?? null,
+      releaseId: input.releaseId ?? null,
+      inputSummary: input.question,
+    })
+    .returning();
+
+  await createAuditLog({
+    teamId: input.teamId,
+    userId: input.actorUserId,
+    action: 'ai.task_requested',
+    resourceType: definition.resourceType,
+    resourceId:
+      definition.resourceType === 'release'
+        ? (input.releaseId ?? undefined)
+        : (input.environmentId ?? undefined),
+    metadata: {
+      taskId: createdTask.id,
+      taskKind: createdTask.kind,
+      projectId: input.projectId,
+      environmentId: input.environmentId ?? undefined,
+    },
+  }).catch(() => undefined);
+
+  return createdTask;
+}
+
 export async function executeEnvironmentDeepAnalysisTask(
   taskId: string
 ): Promise<GenericAITaskRecord> {
-  const task = await db.query.aiTasks.findFirst({
-    where: eq(aiTasks.id, taskId),
+  return executeDeepAnalysisTask({
+    taskId,
+    generateReply: async (task) => {
+      if (!task.projectId || !task.environmentId) {
+        throw new Error('AI 任务不存在');
+      }
+
+      return generateEnvironmentCopilotReply({
+        teamId: task.teamId,
+        projectId: task.projectId,
+        environmentId: task.environmentId,
+        actorUserId: task.actorUserId,
+        messages: [{ role: 'user', content: task.inputSummary }],
+        policy: 'structured-high-quality',
+        systemAppendix: deepAnalysisSystemAppendix,
+      });
+    },
   });
-
-  if (!task || !task.projectId || !task.environmentId) {
-    throw new Error('AI 任务不存在');
-  }
-
-  await db
-    .update(aiTasks)
-    .set({
-      status: 'running',
-      startedAt: new Date(),
-      errorMessage: null,
-    })
-    .where(eq(aiTasks.id, taskId));
-
-  try {
-    const reply = await generateEnvironmentCopilotReply({
-      teamId: task.teamId,
-      projectId: task.projectId,
-      environmentId: task.environmentId,
-      actorUserId: task.actorUserId,
-      messages: [{ role: 'user', content: task.inputSummary }],
-      policy: 'structured-high-quality',
-      systemAppendix:
-        '这是一个会进入任务中心的深度分析任务。输出请更完整一些，但仍然保持清楚、克制。优先使用 3 段：当前状态、关键风险、下一步。',
-    });
-
-    const [completedTask] = await db
-      .update(aiTasks)
-      .set({
-        status: 'succeeded',
-        resultSummary: reply.message,
-        provider: reply.provider,
-        model: reply.model,
-        completedAt: new Date(),
-      })
-      .where(eq(aiTasks.id, taskId))
-      .returning();
-
-    return completedTask;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'AI 任务执行失败';
-    const [failedTask] = await db
-      .update(aiTasks)
-      .set({
-        status: 'failed',
-        errorMessage: message,
-        completedAt: new Date(),
-      })
-      .where(eq(aiTasks.id, taskId))
-      .returning();
-
-    return failedTask;
-  }
 }
 
 export async function executeReleaseDeepAnalysisTask(taskId: string): Promise<GenericAITaskRecord> {
-  const task = await db.query.aiTasks.findFirst({
-    where: eq(aiTasks.id, taskId),
+  return executeDeepAnalysisTask({
+    taskId,
+    generateReply: async (task) => {
+      if (!task.projectId || !task.releaseId) {
+        throw new Error('AI 任务不存在');
+      }
+
+      return generateReleaseCopilotReply({
+        teamId: task.teamId,
+        projectId: task.projectId,
+        releaseId: task.releaseId,
+        actorUserId: task.actorUserId,
+        messages: [{ role: 'user', content: task.inputSummary }],
+        policy: 'structured-high-quality',
+        systemAppendix: deepAnalysisSystemAppendix,
+      });
+    },
   });
-
-  if (!task || !task.projectId || !task.releaseId) {
-    throw new Error('AI 任务不存在');
-  }
-
-  await db
-    .update(aiTasks)
-    .set({
-      status: 'running',
-      startedAt: new Date(),
-      errorMessage: null,
-    })
-    .where(eq(aiTasks.id, taskId));
-
-  try {
-    const reply = await generateReleaseCopilotReply({
-      teamId: task.teamId,
-      projectId: task.projectId,
-      releaseId: task.releaseId,
-      actorUserId: task.actorUserId,
-      messages: [{ role: 'user', content: task.inputSummary }],
-      policy: 'structured-high-quality',
-      systemAppendix:
-        '这是一个会进入任务中心的深度分析任务。输出请更完整一些，但仍然保持清楚、克制。优先使用 3 段：当前状态、关键风险、下一步。',
-    });
-
-    const [completedTask] = await db
-      .update(aiTasks)
-      .set({
-        status: 'succeeded',
-        resultSummary: reply.message,
-        provider: reply.provider,
-        model: reply.model,
-        completedAt: new Date(),
-      })
-      .where(eq(aiTasks.id, taskId))
-      .returning();
-
-    return completedTask;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'AI 任务执行失败';
-    const [failedTask] = await db
-      .update(aiTasks)
-      .set({
-        status: 'failed',
-        errorMessage: message,
-        completedAt: new Date(),
-      })
-      .where(eq(aiTasks.id, taskId))
-      .returning();
-
-    return failedTask;
-  }
 }
 
-function buildEnvironmentTaskTitle(question: string): string {
-  return question.length > 36 ? `${question.slice(0, 36)}...` : question;
-}
+export async function executeAITask(
+  taskId: string,
+  kind: AITaskKind
+): Promise<GenericAITaskRecord> {
+  if (kind === 'environment_deep_analysis') {
+    return executeEnvironmentDeepAnalysisTask(taskId);
+  }
 
-function buildReleaseTaskTitle(question: string): string {
-  return question.length > 36 ? `${question.slice(0, 36)}...` : question;
+  return executeReleaseDeepAnalysisTask(taskId);
 }
 
 export async function createEnvironmentDeepAnalysisTask(input: {
@@ -178,34 +245,14 @@ export async function createEnvironmentDeepAnalysisTask(input: {
     throw new Error('环境不存在');
   }
 
-  const [createdTask] = await db
-    .insert(aiTasks)
-    .values({
-      kind: 'environment_deep_analysis',
-      status: 'queued',
-      title: buildEnvironmentTaskTitle(input.question),
-      actorUserId: input.actorUserId,
-      teamId: environment.project.teamId,
-      projectId: input.projectId,
-      environmentId: input.environmentId,
-      inputSummary: input.question,
-    })
-    .returning();
-
-  await createAuditLog({
+  return createAITaskRecord({
+    kind: 'environment_deep_analysis',
+    actorUserId: input.actorUserId,
     teamId: environment.project.teamId,
-    userId: input.actorUserId,
-    action: 'ai.task_requested',
-    resourceType: 'environment',
-    resourceId: input.environmentId,
-    metadata: {
-      taskId: createdTask.id,
-      taskKind: createdTask.kind,
-      projectId: input.projectId,
-    },
-  }).catch(() => undefined);
-
-  return createdTask;
+    projectId: input.projectId,
+    question: input.question,
+    environmentId: input.environmentId,
+  });
 }
 
 export async function createReleaseDeepAnalysisTask(input: {
@@ -234,36 +281,15 @@ export async function createReleaseDeepAnalysisTask(input: {
     throw new Error('发布不存在');
   }
 
-  const [createdTask] = await db
-    .insert(aiTasks)
-    .values({
-      kind: 'release_deep_analysis',
-      status: 'queued',
-      title: buildReleaseTaskTitle(input.question),
-      actorUserId: input.actorUserId,
-      teamId: release.project.teamId,
-      projectId: input.projectId,
-      environmentId: release.environmentId,
-      releaseId: input.releaseId,
-      inputSummary: input.question,
-    })
-    .returning();
-
-  await createAuditLog({
+  return createAITaskRecord({
+    kind: 'release_deep_analysis',
+    actorUserId: input.actorUserId,
     teamId: release.project.teamId,
-    userId: input.actorUserId,
-    action: 'ai.task_requested',
-    resourceType: 'release',
-    resourceId: input.releaseId,
-    metadata: {
-      taskId: createdTask.id,
-      taskKind: createdTask.kind,
-      projectId: input.projectId,
-      environmentId: release.environmentId,
-    },
-  }).catch(() => undefined);
-
-  return createdTask;
+    projectId: input.projectId,
+    question: input.question,
+    environmentId: release.environmentId,
+    releaseId: input.releaseId,
+  });
 }
 
 export async function listRecentEnvironmentAITasks(input: {

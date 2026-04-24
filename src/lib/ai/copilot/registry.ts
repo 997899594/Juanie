@@ -1,13 +1,26 @@
 import type { JuaniePromptKey } from '@/lib/ai/prompts/registry';
+import type { AITaskKind } from '@/lib/ai/tasks/catalog';
 
 export type CopilotScopeKind = 'environment' | 'release';
+
+export type CopilotTarget =
+  | {
+      kind: 'environment';
+      projectId: string;
+      environmentId: string;
+    }
+  | {
+      kind: 'release';
+      projectId: string;
+      releaseId: string;
+    };
 
 export interface CopilotDefinition {
   kind: CopilotScopeKind;
   title: string;
   skillId: string;
   promptKey: JuaniePromptKey;
-  taskKind: 'environment_deep_analysis' | 'release_deep_analysis';
+  taskKind: AITaskKind;
   getSuggestions(latestQuestion?: string): string[];
 }
 
@@ -64,4 +77,20 @@ const copilotDefinitions: Record<CopilotScopeKind, CopilotDefinition> = {
 
 export function getCopilotDefinition(kind: CopilotScopeKind): CopilotDefinition {
   return copilotDefinitions[kind];
+}
+
+export function buildCopilotEndpoint(target: CopilotTarget): string {
+  if (target.kind === 'environment') {
+    return `/api/projects/${target.projectId}/environments/${target.environmentId}/copilot`;
+  }
+
+  return `/api/projects/${target.projectId}/releases/${target.releaseId}/copilot`;
+}
+
+export function buildCopilotTaskEndpoint(target: CopilotTarget): string {
+  if (target.kind === 'environment') {
+    return `/api/projects/${target.projectId}/environments/${target.environmentId}/tasks`;
+  }
+
+  return `/api/projects/${target.projectId}/releases/${target.releaseId}/tasks`;
 }

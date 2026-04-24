@@ -1,4 +1,5 @@
 import type { AIPluginManifest } from '@/lib/ai/runtime/types';
+import { incidentAnalysisWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 
 export const incidentIntelligenceManifest = {
   id: 'incident-intelligence',
@@ -13,12 +14,12 @@ export const incidentIntelligenceManifest = {
   surfaces: ['inline-card', 'action-center'],
   resourceType: 'release',
   billingMetric: 'per_run',
-  snapshotSchema: 'incident-analysis-v1',
+  snapshotSchema: incidentAnalysisWorkflowDefinition.snapshotSchema,
   cacheTtlSeconds: 900,
   supportsManualRefresh: true,
   eventTriggers: ['release.failed', 'release.degraded', 'environment.remediation_triggered'],
   capabilities: ['incident-analysis', 'structured-output'],
-  skills: ['incident-skill'],
+  skills: [incidentAnalysisWorkflowDefinition.skillId],
   tools: ['read-incident-context'],
   actions: [],
   contextProviders: ['incident-evidence'],

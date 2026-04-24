@@ -1,38 +1,26 @@
 import { eq } from 'drizzle-orm';
+import { getBuiltInAIPluginById, listBuiltInAIPlugins } from '@/lib/ai/plugins/builtins';
 import { createDynamicAIPlugin } from '@/lib/ai/plugins/dynamic-plugin';
 import { extractDynamicPluginManifestsFromConfig } from '@/lib/ai/plugins/dynamic-registry';
-import { environmentSummaryPlugin } from '@/lib/ai/plugins/environment-summary/plugin';
-import { envvarRiskPlugin } from '@/lib/ai/plugins/envvar-risk/plugin';
-import { incidentIntelligencePlugin } from '@/lib/ai/plugins/incident-intelligence/plugin';
 import type { JuaniePluginManifest } from '@/lib/ai/plugins/manifest';
-import { migrationReviewPlugin } from '@/lib/ai/plugins/migration-review/plugin';
 import { getJuaniePluginManifestById, listJuaniePluginManifests } from '@/lib/ai/plugins/registry';
-import { releaseIntelligencePlugin } from '@/lib/ai/plugins/release-intelligence/plugin';
 import type { AIPlugin } from '@/lib/ai/runtime/types';
 import { db } from '@/lib/db';
 import { aiPluginInstallations } from '@/lib/db/schema';
 
-const BUILT_IN_PLUGINS = [
-  environmentSummaryPlugin,
-  migrationReviewPlugin,
-  envvarRiskPlugin,
-  releaseIntelligencePlugin,
-  incidentIntelligencePlugin,
-] as const;
-
 export function listAIPlugins(): AIPlugin<unknown, unknown>[] {
-  return [...BUILT_IN_PLUGINS];
+  return listBuiltInAIPlugins();
 }
 
 export function getAIPluginById(id: string): AIPlugin<unknown, unknown> | null {
-  return BUILT_IN_PLUGINS.find((plugin) => plugin.manifest.id === id) ?? null;
+  return getBuiltInAIPluginById(id);
 }
 
 export function listAIPluginsForDynamicManifests(
   dynamicManifests: JuaniePluginManifest[]
 ): AIPlugin<unknown, unknown>[] {
   return [
-    ...BUILT_IN_PLUGINS,
+    ...listBuiltInAIPlugins(),
     ...dynamicManifests.map((manifest) => createDynamicAIPlugin(manifest)),
   ];
 }

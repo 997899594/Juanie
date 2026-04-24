@@ -1,4 +1,8 @@
-import { getCopilotDefinition } from '@/lib/ai/copilot/registry';
+import {
+  buildCopilotEndpoint,
+  buildCopilotTaskEndpoint,
+  getCopilotDefinition,
+} from '@/lib/ai/copilot/registry';
 
 export type CommandBarScope =
   | {
@@ -71,8 +75,16 @@ export function getCommandBarConfig(pathname: string): CommandBarConfig {
     return {
       kind: 'chat',
       title: definition.title,
-      endpoint: `/api/projects/${scope.projectId}/releases/${scope.releaseId}/copilot`,
-      taskEndpoint: `/api/projects/${scope.projectId}/releases/${scope.releaseId}/tasks`,
+      endpoint: buildCopilotEndpoint({
+        kind: 'release',
+        projectId: scope.projectId,
+        releaseId: scope.releaseId,
+      }),
+      taskEndpoint: buildCopilotTaskEndpoint({
+        kind: 'release',
+        projectId: scope.projectId,
+        releaseId: scope.releaseId,
+      }),
       suggestions: definition.getSuggestions(),
       routes: [],
     };
@@ -84,8 +96,16 @@ export function getCommandBarConfig(pathname: string): CommandBarConfig {
     return {
       kind: 'chat',
       title: definition.title,
-      endpoint: `/api/projects/${scope.projectId}/environments/${scope.environmentId}/copilot`,
-      taskEndpoint: `/api/projects/${scope.projectId}/environments/${scope.environmentId}/tasks`,
+      endpoint: buildCopilotEndpoint({
+        kind: 'environment',
+        projectId: scope.projectId,
+        environmentId: scope.environmentId,
+      }),
+      taskEndpoint: buildCopilotTaskEndpoint({
+        kind: 'environment',
+        projectId: scope.projectId,
+        environmentId: scope.environmentId,
+      }),
       suggestions: definition.getSuggestions(),
       routes: [],
     };

@@ -1,4 +1,5 @@
 import { type ConnectionOptions, Queue } from 'bullmq';
+import type { AITaskKind } from '@/lib/ai/tasks/catalog';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 
 function getConnection(): ConnectionOptions {
@@ -97,7 +98,7 @@ export type SchemaRepairAtlasJobData = {
 
 export type AITaskJobData = {
   taskId: string;
-  kind: 'environment_deep_analysis' | 'release_deep_analysis';
+  kind: AITaskKind;
 };
 
 export async function addProjectInitJob(
@@ -191,10 +192,7 @@ export async function addSchemaRepairAtlasJob(
   );
 }
 
-export async function addAITaskJob(
-  taskId: string,
-  kind: 'environment_deep_analysis' | 'release_deep_analysis'
-) {
+export async function addAITaskJob(taskId: string, kind: AITaskKind) {
   return getAITaskQueue().add(
     'ai-task',
     {

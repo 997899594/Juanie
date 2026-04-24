@@ -1,4 +1,5 @@
 import type { AIPluginManifest } from '@/lib/ai/runtime/types';
+import { environmentSummaryWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 
 export const environmentSummaryManifest = {
   id: 'environment-summary',
@@ -13,12 +14,12 @@ export const environmentSummaryManifest = {
   surfaces: ['inline-card', 'action-center'],
   resourceType: 'environment',
   billingMetric: 'per_run',
-  snapshotSchema: 'environment-summary-v1',
+  snapshotSchema: environmentSummaryWorkflowDefinition.snapshotSchema,
   cacheTtlSeconds: 900,
   supportsManualRefresh: true,
   eventTriggers: ['environment.updated', 'release.updated', 'environment.variables.updated'],
   capabilities: ['environment-summary', 'structured-output'],
-  skills: ['environment-skill'],
+  skills: [environmentSummaryWorkflowDefinition.skillId],
   tools: ['read-environment-context', 'read-environment-variables', 'read-environment-schema'],
   actions: [],
   contextProviders: ['environment-context'],

@@ -1,10 +1,12 @@
 import { ZodError, type ZodTypeAny } from 'zod';
 import type { JuanieEvalFixture } from '@/lib/ai/evals/types';
-import { environmentSummarySchema } from '@/lib/ai/schemas/environment-summary';
-import { envvarRiskSchema } from '@/lib/ai/schemas/envvar-risk';
-import { incidentAnalysisSchema } from '@/lib/ai/schemas/incident-analysis';
-import { migrationReviewSchema } from '@/lib/ai/schemas/migration-review';
-import { releasePlanSchema } from '@/lib/ai/schemas/release-plan';
+import {
+  environmentSummaryWorkflowDefinition,
+  envvarRiskWorkflowDefinition,
+  incidentAnalysisWorkflowDefinition,
+  migrationReviewWorkflowDefinition,
+  releasePlanWorkflowDefinition,
+} from '@/lib/ai/workflows/catalog';
 import { runEnvironmentSummaryWorkflow } from '@/lib/ai/workflows/environment-summary';
 import { runEnvvarRiskWorkflow } from '@/lib/ai/workflows/envvar-risk';
 import { runIncidentAnalysisWorkflow } from '@/lib/ai/workflows/incident-analysis';
@@ -31,23 +33,23 @@ export interface JuanieWorkflowEvalDefinition<TInput = unknown, TOutput = unknow
 
 const workflowEvalRegistry: Record<string, JuanieWorkflowEvalDefinition> = {
   'environment-summary': {
-    schema: environmentSummarySchema,
+    schema: environmentSummaryWorkflowDefinition.schema,
     run: (input, runtime) => runEnvironmentSummaryWorkflow(input as never, { runtime }),
   },
   'envvar-risk': {
-    schema: envvarRiskSchema,
+    schema: envvarRiskWorkflowDefinition.schema,
     run: (input, runtime) => runEnvvarRiskWorkflow(input as never, { runtime }),
   },
   'incident-intelligence': {
-    schema: incidentAnalysisSchema,
+    schema: incidentAnalysisWorkflowDefinition.schema,
     run: (input, runtime) => runIncidentAnalysisWorkflow(input as never, { runtime }),
   },
   'migration-review': {
-    schema: migrationReviewSchema,
+    schema: migrationReviewWorkflowDefinition.schema,
     run: (input, runtime) => runMigrationReviewWorkflow(input as never, { runtime }),
   },
   'release-intelligence': {
-    schema: releasePlanSchema,
+    schema: releasePlanWorkflowDefinition.schema,
     run: (input, runtime) => runReleasePlanWorkflow(input as never, { runtime }),
   },
 };

@@ -3,6 +3,11 @@ import { loadAIEnvironmentContext } from '@/lib/ai/context/environment-context';
 import { createMigrationApprovalToken } from '@/lib/ai/runtime/approval-token';
 import { listRecentEnvironmentAITasks } from '@/lib/ai/tasks/generic-task-service';
 import {
+  type AITaskCenterItem,
+  buildAITaskCenterSnapshot,
+  toAIAnalysisTaskItem,
+} from '@/lib/ai/tasks/view-model';
+import {
   type ApprovalItemDecorations,
   decorateApprovalRuns,
   formatApprovalStatusLabel,
@@ -10,7 +15,6 @@ import {
 import { db } from '@/lib/db';
 import { migrationRuns } from '@/lib/db/schema';
 import { collapseRunsToLatestByLockKey } from '@/lib/migrations/attention';
-import { formatPlatformTimeContext } from '@/lib/time/format';
 
 type RawEnvironmentMigrationRun = Awaited<
   ReturnType<typeof db.query.migrationRuns.findMany>
@@ -26,29 +30,8 @@ type DecoratedEnvironmentApprovalRun = RawEnvironmentMigrationRun &
     } | null;
   };
 
-export interface EnvironmentTaskItem {
-  id: string;
-  kind:
-    | 'migration_approval'
-    | 'migration_external'
-    | 'migration_failed'
-    | 'ai_analysis'
-    | 'schema_repair'
-    | 'preview_cleanup_blocked';
-  title: string;
-  summary: string;
-  statusLabel: string;
-  actionLabel: string | null;
+export interface EnvironmentTaskItem extends AITaskCenterItem {
   href: string | null;
-  inputSummary?: string | null;
-  detail?: string | null;
-  createdAtLabel?: string | null;
-  completedAtLabel?: string | null;
-  provider?: string | null;
-  model?: string | null;
-  migrationRunId?: string | null;
-  migrationRunStatus?: string | null;
-  approvalToken?: string | null;
 }
 
 export interface EnvironmentTaskCenterSnapshot {
@@ -77,14 +60,10 @@ export function buildEnvironmentTaskCenterSnapshot(
 ): EnvironmentTaskCenterSnapshot {
   const sortedTasks = sortEnvironmentTasks(tasks);
 
-  return {
-    summary:
-      sortedTasks.length > 0
-        ? `当前环境有 ${sortedTasks.length} 个待处理事项`
-        : '当前环境没有待处理事项',
-    actionableCount: sortedTasks.length,
+  return buildAITaskCenterSnapshot({
     tasks: sortedTasks,
-  };
+    subjectLabel: '环境',
+  });
 }
 
 function toApprovalTask(
@@ -222,26 +201,11 @@ export async function getEnvironmentTaskCenterData(input: {
 
   for (const task of recentAITasks) {
     tasks.push({
-      id: `ai-${task.id}`,
-      kind: 'ai_analysis',
-      title: `AI 深度分析 · ${task.title}`,
-      summary: task.resultSummary ?? task.errorMessage ?? task.inputSummary,
-      statusLabel:
-        task.status === 'succeeded'
-          ? '已完成'
-          : task.status === 'failed'
-            ? '失败'
-            : task.status === 'running'
-              ? '进行中'
-              : '排队中',
-      actionLabel: null,
+      ...toAIAnalysisTaskItem({
+        task,
+        href: `/projects/${input.projectId}/environments/${input.environmentId}`,
+      }),
       href: `/projects/${input.projectId}/environments/${input.environmentId}`,
-      inputSummary: task.inputSummary,
-      detail: task.resultSummary ?? task.errorMessage,
-      createdAtLabel: formatPlatformTimeContext(task.createdAt),
-      completedAtLabel: formatPlatformTimeContext(task.completedAt),
-      provider: task.provider,
-      model: task.model,
     });
   }
 

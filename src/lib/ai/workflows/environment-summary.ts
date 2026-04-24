@@ -1,9 +1,7 @@
 import type { EnvironmentEvidencePack } from '@/lib/ai/evidence/environment-evidence';
 import type { AIPluginRunEnvelope } from '@/lib/ai/runtime/types';
-import {
-  type EnvironmentSummary,
-  environmentSummarySchema,
-} from '@/lib/ai/schemas/environment-summary';
+import type { EnvironmentSummary } from '@/lib/ai/schemas/environment-summary';
+import { environmentSummaryWorkflowDefinition } from '@/lib/ai/workflows/catalog';
 import type { StructuredWorkflowRuntime } from '@/lib/ai/workflows/shared';
 import { runStructuredWorkflow } from '@/lib/ai/workflows/shared';
 
@@ -22,11 +20,7 @@ export async function runEnvironmentSummaryWorkflow(
   }
 ): Promise<AIPluginRunEnvelope<EnvironmentSummary>> {
   return runStructuredWorkflow({
-    promptKey: 'environment-summary',
-    skillId: 'environment-skill',
-    schema: environmentSummarySchema,
-    schemaName: 'environmentSummary',
-    description: 'Juanie 环境摘要',
+    workflow: environmentSummaryWorkflowDefinition,
     evidence,
     buildPrompt: buildEnvironmentSummaryPrompt,
     runtime: options?.runtime,
