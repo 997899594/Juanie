@@ -55,6 +55,10 @@ function normalizeConfiguredMySqlDevUrl(rawUrl: string): string {
   return normalizeAtlasDatabaseUrl(rawUrl.trim());
 }
 
+export function buildPostgresScratchSearchPath(schemaName: string): string {
+  return `${schemaName},public`;
+}
+
 async function createPostgresScratchSchema(baseUrl: string): Promise<AtlasDevDatabaseSession> {
   const normalizedBaseUrl = normalizeConfiguredPostgresDevUrl(baseUrl);
   const schemaName = buildScratchIdentifier('atlas_dev');
@@ -69,7 +73,7 @@ async function createPostgresScratchSchema(baseUrl: string): Promise<AtlasDevDat
   }
 
   const url = new URL(normalizedBaseUrl);
-  url.searchParams.set('search_path', schemaName);
+  url.searchParams.set('search_path', buildPostgresScratchSearchPath(schemaName));
 
   return {
     url: url.toString(),
