@@ -4,6 +4,7 @@ import { startHistoryRetention } from './history-retention';
 import { startInfrastructureRemediation } from './infrastructure-remediation';
 import { startPreviewEnvironmentCleanup } from './preview-cleanup';
 import { startSchemaRepairReviewSync } from './schema-repair-review-sync';
+import { startSchemaStateHealing } from './schema-state-healing';
 
 const schedulerLogger = logger.child({ component: 'scheduler' });
 
@@ -31,6 +32,11 @@ if (process.env.ENABLE_HISTORY_RETENTION !== 'false') {
 if (process.env.ENABLE_SCHEMA_REPAIR_REVIEW_SYNC !== 'false') {
   startSchemaRepairReviewSync();
   enabledTasks.push('schema-repair-review-sync');
+}
+
+if (process.env.ENABLE_SCHEMA_STATE_HEALING !== 'false') {
+  startSchemaStateHealing();
+  enabledTasks.push('schema-state-healing');
 }
 
 schedulerLogger.info('Scheduler started successfully', {
