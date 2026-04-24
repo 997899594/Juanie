@@ -6,7 +6,6 @@ import { promisify } from 'node:util';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projects, repositories } from '@/lib/db/schema';
-import { buildAuthenticatedCloneUrl } from '@/lib/git/authenticated-clone-url';
 import {
   gateway,
   getTeamIntegrationSession,
@@ -26,7 +25,6 @@ const SOURCE_WORKSPACE_IGNORED_DIRS = new Set([
 ]);
 
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
-const GITHUB_SOURCE_WORKSPACE_BLOB_CONCURRENCY = 8;
 
 export interface SourceWorkspaceContext {
   tempRoot: string;
@@ -36,22 +34,6 @@ export interface SourceWorkspaceContext {
 }
 
 export type WorkspaceFileSnapshot = Map<string, Buffer>;
-
-interface GitHubTreeEntry {
-  path?: string | null;
-  type?: 'blob' | 'tree' | 'commit' | null;
-  sha?: string | null;
-}
-
-interface GitHubTreeResponse {
-  truncated?: boolean;
-  tree?: GitHubTreeEntry[];
-}
-
-interface GitHubBlobResponse {
-  content?: string;
-  encoding?: string;
-}
 
 async function runCommand(
   command: string,
@@ -66,19 +48,6 @@ async function runCommand(
     env: options?.env,
     maxBuffer: 20 * 1024 * 1024,
   });
-}
-
-function normalizeGitFetchRef(value: string): string {
-  const normalized = value.trim();
-  if (normalized.startsWith('refs/heads/')) {
-    return normalized.slice('refs/heads/'.length);
-  }
-
-  if (normalized.startsWith('refs/tags/')) {
-    return normalized.slice('refs/tags/'.length);
-  }
-
-  return normalized;
 }
 
 function normalizeRevisionRef(value: string): string | null {
@@ -96,46 +65,6 @@ function normalizeRevisionRef(value: string): string | null {
   }
 
   return `refs/heads/${normalized}`;
-}
-
-function parseGitHubRepoFullName(repoFullName: string): { owner: string; repo: string } {
-  const [owner, repo] = repoFullName.split('/');
-  if (!owner || !repo) {
-    throw new Error(`Invalid GitHub repository full name: ${repoFullName}`);
-  }
-
-  return { owner, repo };
-}
-
-async function requestGitHubJson<T>(
-  accessToken: string,
-  repoFullName: string,
-  pathname: string,
-  searchParams?: Record<string, string>
-): Promise<T> {
-  const { owner, repo } = parseGitHubRepoFullName(repoFullName);
-  const url = new URL(`https://api.github.com/repos/${owner}/${repo}${pathname}`);
-
-  if (searchParams) {
-    for (const [key, value] of Object.entries(searchParams)) {
-      url.searchParams.set(key, value);
-    }
-  }
-
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${accessToken}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  });
-
-  if (!response.ok) {
-    const message = (await response.text()).trim() || response.statusText;
-    throw new Error(`GitHub API request failed: ${message}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 async function resolveWorkspaceRevision(input: {
@@ -158,10 +87,11 @@ async function resolveWorkspaceRevision(input: {
   }
 }
 
-async function materializeGitHubRepositoryWorkspaceWithApi(input: {
+async function materializeRepositoryWorkspaceFromArchive(input: {
   session: IntegrationSession;
   repoFullName: string;
   revision: string;
+  tempRoot: string;
   repoDir: string;
 }): Promise<string> {
   const resolvedRevision = await resolveWorkspaceRevision({
@@ -169,109 +99,20 @@ async function materializeGitHubRepositoryWorkspaceWithApi(input: {
     repoFullName: input.repoFullName,
     requestedRevision: input.revision,
   });
-  const treeResponse = await requestGitHubJson<GitHubTreeResponse>(
-    input.session.accessToken,
+  const archive = await gateway.downloadRepositoryArchive(
+    input.session,
     input.repoFullName,
-    `/git/trees/${encodeURIComponent(resolvedRevision)}`,
-    {
-      recursive: '1',
-    }
+    resolvedRevision
   );
+  const archivePath = path.join(input.tempRoot, 'source.tar.gz');
 
-  if (treeResponse.truncated) {
-    throw new Error('GitHub 仓库树过大，当前无法完整物化源码工作区');
-  }
-
-  const blobEntries = (treeResponse.tree ?? []).filter(
-    (entry): entry is Required<Pick<GitHubTreeEntry, 'path' | 'sha'>> & GitHubTreeEntry =>
-      entry.type === 'blob' && Boolean(entry.path) && Boolean(entry.sha)
-  );
-
-  for (
-    let startIndex = 0;
-    startIndex < blobEntries.length;
-    startIndex += GITHUB_SOURCE_WORKSPACE_BLOB_CONCURRENCY
-  ) {
-    const batch = blobEntries.slice(
-      startIndex,
-      startIndex + GITHUB_SOURCE_WORKSPACE_BLOB_CONCURRENCY
-    );
-
-    await Promise.all(
-      batch.map(async (entry) => {
-        const filePath = entry.path;
-        if (!filePath) {
-          return;
-        }
-
-        const blob = await requestGitHubJson<GitHubBlobResponse>(
-          input.session.accessToken,
-          input.repoFullName,
-          `/git/blobs/${entry.sha}`
-        );
-
-        if (blob.encoding !== 'base64' || typeof blob.content !== 'string') {
-          throw new Error(`GitHub blob ${filePath} 返回了不支持的编码`);
-        }
-
-        const absolutePath = path.join(input.repoDir, filePath);
-        await mkdir(path.dirname(absolutePath), { recursive: true });
-        await writeFile(absolutePath, Buffer.from(blob.content.replaceAll('\n', ''), 'base64'));
-      })
-    );
-  }
+  await writeFile(archivePath, archive);
+  await runCommand('tar', ['-xzf', archivePath, '-C', input.repoDir, '--strip-components=1'], {
+    cwd: input.tempRoot,
+  });
+  await rm(archivePath, { force: true }).catch(() => {});
 
   return resolvedRevision;
-}
-
-async function materializeRepositoryWorkspaceWithGit(input: {
-  session: IntegrationSession;
-  repoFullName: string;
-  revision: string;
-  repoDir: string;
-}): Promise<string> {
-  const remoteUrl = buildAuthenticatedCloneUrl({
-    cloneUrl: null,
-    fullName: input.repoFullName,
-    provider: input.session.provider,
-    accessToken: input.session.accessToken,
-    serverUrl: input.session.serverUrl,
-  });
-  const gitEnv = {
-    ...process.env,
-    GIT_TERMINAL_PROMPT: '0',
-  };
-
-  await runCommand('git', ['init'], {
-    cwd: input.repoDir,
-    env: gitEnv,
-  });
-  await runCommand('git', ['remote', 'add', 'origin', remoteUrl], {
-    cwd: input.repoDir,
-    env: gitEnv,
-  });
-  await runCommand(
-    'git',
-    ['fetch', '--depth', '1', '--no-tags', 'origin', normalizeGitFetchRef(input.revision)],
-    {
-      cwd: input.repoDir,
-      env: gitEnv,
-    }
-  );
-  await runCommand('git', ['checkout', '--force', '--detach', 'FETCH_HEAD'], {
-    cwd: input.repoDir,
-    env: gitEnv,
-  });
-
-  const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
-    cwd: input.repoDir,
-    env: gitEnv,
-    maxBuffer: 1024 * 1024,
-  });
-
-  await rm(path.join(input.repoDir, '.git'), { recursive: true, force: true }).catch(() => {});
-
-  return stdout.trim();
 }
 
 export async function createRepositorySourceWorkspace(input: {
@@ -287,20 +128,13 @@ export async function createRepositorySourceWorkspace(input: {
   await mkdir(repoDir, { recursive: true });
 
   try {
-    const resolvedRevision =
-      input.session.provider === 'github'
-        ? await materializeGitHubRepositoryWorkspaceWithApi({
-            session: input.session,
-            repoFullName: input.repoFullName,
-            revision: requestedRevision,
-            repoDir,
-          })
-        : await materializeRepositoryWorkspaceWithGit({
-            session: input.session,
-            repoFullName: input.repoFullName,
-            revision: requestedRevision,
-            repoDir,
-          });
+    const resolvedRevision = await materializeRepositoryWorkspaceFromArchive({
+      session: input.session,
+      repoFullName: input.repoFullName,
+      revision: requestedRevision,
+      tempRoot,
+      repoDir,
+    });
 
     return {
       tempRoot,

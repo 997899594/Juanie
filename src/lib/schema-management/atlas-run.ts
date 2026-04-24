@@ -9,6 +9,7 @@ import { db } from '@/lib/db';
 import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
 import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
+import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import {
@@ -468,20 +469,30 @@ export async function executeSchemaRepairAtlasRun(input: {
       );
       const scriptPath = path.join(repoDir, runtimeArtifacts.atlasScriptPath);
 
-      const env = {
-        ...process.env,
-        ATLAS_DEV_URL: process.env.ATLAS_DEV_URL ?? 'docker://postgres/16/dev',
-        ATLAS_SRC_URL:
-          plan.kind === 'adopt_current_db'
-            ? (plan.database?.connectionString ?? '')
-            : process.env.ATLAS_SRC_URL,
-      };
+      if (spec.database.type !== 'postgresql' && spec.database.type !== 'mysql') {
+        throw new Error(`Atlas 修复暂不支持 ${spec.database.type} 数据库`);
+      }
 
-      logs += await runCommand('bash', [scriptPath], {
-        cwd: repoDir,
-        env,
-      });
-      logs += '\n';
+      const devDatabase = await prepareAtlasDevDatabaseSession(spec.database.type);
+
+      try {
+        const env = {
+          ...process.env,
+          ATLAS_DEV_URL: devDatabase.url,
+          ATLAS_SRC_URL:
+            plan.kind === 'adopt_current_db'
+              ? (plan.database?.connectionString ?? '')
+              : process.env.ATLAS_SRC_URL,
+        };
+
+        logs += await runCommand('bash', [scriptPath], {
+          cwd: repoDir,
+          env,
+        });
+        logs += '\n';
+      } finally {
+        await devDatabase.cleanup().catch(() => undefined);
+      }
 
       const diffSummary = buildWorkspaceDiffSummary(
         initialSnapshot,

@@ -111,3 +111,6 @@ secret:
   gitlabClientId: ""
   gitlabClientSecret: ""
   ai302ApiKey: ""
+  atlasDevUrl: ""
+  atlasDevUrlPostgresql: ""
+  atlasDevUrlMysql: ""

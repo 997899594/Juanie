@@ -1,14 +1,42 @@
 import { describe, expect, it } from 'bun:test';
 import {
   getAtlasSchemaDiffExcludePatterns,
-  getDefaultAtlasDevUrl,
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
+import {
+  getAtlasDevUrlEnvNames,
+  getDefaultAtlasDevUrl,
+  resolveAtlasDevUrlOverrideFromEnv,
+} from '@/lib/migrations/atlas-dev-database';
 
 describe('atlas migration helpers', () => {
-  it('uses database-specific dev urls for schema diff replay', () => {
+  it('keeps docker dev urls as the last-resort fallback', () => {
     expect(getDefaultAtlasDevUrl('postgresql')).toBe('docker://postgres/16/dev');
     expect(getDefaultAtlasDevUrl('mysql')).toBe('docker://mysql/8/dev');
+  });
+
+  it('prefers database-specific atlas dev url overrides', () => {
+    expect(
+      resolveAtlasDevUrlOverrideFromEnv('postgresql', {
+        ATLAS_DEV_URL_POSTGRESQL: 'postgresql://postgres:postgres@postgres/dev',
+        ATLAS_DEV_URL: 'postgresql://shared/shared',
+      })
+    ).toBe('postgresql://postgres:postgres@postgres/dev');
+
+    expect(
+      resolveAtlasDevUrlOverrideFromEnv('mysql', {
+        ATLAS_DEV_URL_MYSQL: 'mysql://root:root@mysql/dev',
+        ATLAS_DEV_URL: 'mysql://shared/shared',
+      })
+    ).toBe('mysql://root:root@mysql/dev');
+  });
+
+  it('exposes the expected env names for atlas dev url overrides', () => {
+    expect(getAtlasDevUrlEnvNames('postgresql')).toEqual([
+      'ATLAS_DEV_URL_POSTGRESQL',
+      'ATLAS_DEV_URL',
+    ]);
+    expect(getAtlasDevUrlEnvNames('mysql')).toEqual(['ATLAS_DEV_URL_MYSQL', 'ATLAS_DEV_URL']);
   });
 
   it('excludes platform ledger tables from schema diff', () => {
