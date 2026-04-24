@@ -10,6 +10,7 @@ import { schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { resolveMigrationPath } from '@/lib/migrations/path';
+import { getRepositoryDefaultBranch } from '@/lib/projects/context';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import {
   buildWorkspaceDiffSummary,
@@ -353,7 +354,7 @@ export async function executeSchemaRepairAtlasRun(input: {
     requiredCapabilities: ['read_repo', 'write_repo'],
   });
 
-  const baseBranch = project.repository.defaultBranch || 'main';
+  const baseBranch = getRepositoryDefaultBranch(project.repository);
   const startTime = new Date();
   await db
     .update(schemaRepairPlans)

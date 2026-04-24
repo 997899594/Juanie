@@ -50,6 +50,7 @@ import {
   getEnvironmentDatabaseStrategyLabel,
   getEnvironmentDeploymentStrategyLabel,
 } from '@/lib/environments/presentation';
+import { getRepositoryDefaultBranch } from '@/lib/projects/context';
 import { submitCreateProject } from '@/lib/projects/create-client-actions';
 import {
   applyRuntimeProfileToServices,
@@ -705,6 +706,8 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   };
 
   const selectRepository = async (repository: (typeof repositories)[0]) => {
+    const defaultBranch = getRepositoryDefaultBranch(repository);
+
     setFormData((prev) => ({
       ...prev,
       repositoryId: repository.id,
@@ -715,10 +718,10 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, ''),
-      productionBranch: repository.defaultBranch || 'main',
+      productionBranch: defaultBranch,
     }));
 
-    await analyzeRepository(repository.fullName, repository.defaultBranch || 'main');
+    await analyzeRepository(repository.fullName, defaultBranch);
     setCurrentStep('config');
   };
 

@@ -84,15 +84,15 @@ describe('resolvePrimaryPromotionFlow', () => {
     expect(result.targetEnvironment?.id).toBe('env_production');
   });
 
-  it('falls back to legacy staging-production semantics when no flow exists', () => {
+  it('returns an empty resolution when no explicit flow exists', () => {
     const result = resolvePrimaryPromotionFlow({
       environments: environmentsList,
       promotionFlows: [],
     });
 
     expect(result.flow).toBe(null);
-    expect(result.sourceEnvironment?.id).toBe('env_staging');
-    expect(result.targetEnvironment?.id).toBe('env_production');
+    expect(result.sourceEnvironment).toBe(null);
+    expect(result.targetEnvironment).toBe(null);
   });
 
   it('returns every active promotion flow in topology order', () => {

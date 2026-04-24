@@ -16,7 +16,6 @@ import {
 } from '@/lib/environments/presentation';
 import {
   type PromotionFlowResolution,
-  resolvePrimaryPromotionFlow,
   resolvePromotionFlow,
   resolvePromotionFlows,
 } from '@/lib/environments/promotion';
@@ -29,6 +28,7 @@ import {
   type MigrationPolicySignalSnapshot,
   type ReleasePolicySnapshot,
 } from '@/lib/policies/delivery';
+import { getProjectSourceRef, requireProjectRepositoryContext } from '@/lib/projects/context';
 import type { ReleaseServiceInput } from '@/lib/releases';
 import {
   canCreateReleaseWithEntryPoint,
@@ -580,14 +580,7 @@ export async function buildPromotionPlan(
     flowId?: string | null;
   }
 ): Promise<PromotionPlanSnapshot> {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    with: { repository: true },
-  });
-
-  if (!project) {
-    throw new Error('Project not found');
-  }
+  await requireProjectRepositoryContext(projectId);
 
   const envList = await db.query.environments.findMany({
     where: eq(environments.projectId, projectId),
@@ -595,21 +588,34 @@ export async function buildPromotionPlan(
   const flowList = await db.query.promotionFlows.findMany({
     where: eq(promotionFlows.projectId, projectId),
   });
-  const resolution = input?.flowId
-    ? resolvePromotionFlow({
-        environments: envList,
-        promotionFlows: flowList,
-        flowId: input.flowId,
-      })
-    : resolvePrimaryPromotionFlow({
-        environments: envList,
-        promotionFlows: flowList,
-      });
+  const resolutions = resolvePromotionFlows({
+    environments: envList,
+    promotionFlows: flowList,
+  });
 
-  if (!resolution.targetEnvironment && input?.flowId) {
-    return buildStaticPromotionPlan({
+  if (input?.flowId) {
+    const resolution = resolvePromotionFlow({
+      environments: envList,
+      promotionFlows: flowList,
       flowId: input.flowId,
-      blockingReason: '未找到对应的提升链路',
+    });
+
+    if (!resolution.flow) {
+      return buildStaticPromotionPlan({
+        flowId: input.flowId,
+        blockingReason: '未找到对应的提升链路',
+        environment: { isProduction: false },
+      });
+    }
+
+    return buildPromotionPlanForResolution(projectId, resolution);
+  }
+
+  const resolution = resolutions[0] ?? null;
+
+  if (!resolution) {
+    return buildStaticPromotionPlan({
+      blockingReason: '当前项目还没有配置环境提升链路',
       environment: { isProduction: false },
     });
   }
@@ -665,14 +671,7 @@ export async function buildRollbackPlan(input: {
   } | null;
   plan: ReleasePlanningSnapshot;
 }> {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, input.projectId),
-    with: { repository: true },
-  });
-
-  if (!project) {
-    throw new Error('Project not found');
-  }
+  const { project } = await requireProjectRepositoryContext(input.projectId);
 
   const targetDeployment = await db.query.deployments.findFirst({
     where: eq(deployments.id, input.deploymentId),
@@ -726,9 +725,7 @@ export async function buildRollbackPlan(input: {
         image: targetDeployment.imageUrl,
       },
     ],
-    sourceRef: targetDeployment.branch
-      ? `refs/heads/${targetDeployment.branch}`
-      : `refs/heads/${project.productionBranch ?? 'main'}`,
+    sourceRef: getProjectSourceRef({ branch: targetDeployment.branch, ...project }),
     sourceCommitSha: targetDeployment.commitSha ?? null,
     entryPoint: 'rollback',
   });

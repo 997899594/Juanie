@@ -7,7 +7,6 @@ import {
   type EnvironmentSchemaStateStatus,
   environmentSchemaStates,
   migrationSpecifications,
-  projects,
 } from '@/lib/db/schema';
 import {
   diffDatabaseSchemaAgainstDesiredSchema,
@@ -27,6 +26,7 @@ import type {
   MigrationSpecificationRecord,
   ResolvedMigrationSpec,
 } from '@/lib/migrations/types';
+import { resolveProjectRepositoryDefaultBranch } from '@/lib/projects/context';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import {
   canUseSchemaRunnerJobs,
@@ -93,18 +93,7 @@ function buildChecksum(entries: string[]): string | null {
 }
 
 async function getProjectDefaultRef(projectId: string, branch?: string | null): Promise<string> {
-  if (branch) {
-    return branch;
-  }
-
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    with: {
-      repository: true,
-    },
-  });
-
-  return project?.repository?.defaultBranch ?? 'main';
+  return resolveProjectRepositoryDefaultBranch(projectId, branch);
 }
 
 function pickResolvedSpecForDatabase(

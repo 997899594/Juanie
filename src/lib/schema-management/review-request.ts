@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import type { EnvironmentSchemaStateStatus, SchemaRepairPlanKind } from '@/lib/db/schema';
 import { schemaRepairPlans } from '@/lib/db/schema';
 import { gateway } from '@/lib/integrations/service/integration-control-plane';
+import { getRepositoryDefaultBranch } from '@/lib/projects/context';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import {
@@ -115,7 +116,7 @@ export async function createSchemaRepairReviewRequest(input: {
     requiredCapabilities: ['write_repo'],
   });
 
-  const baseBranch = project.repository.defaultBranch || 'main';
+  const baseBranch = getRepositoryDefaultBranch(project.repository);
   const branchName = [
     'schema-repair',
     sanitizeBranchSegment(plan.database?.name ?? 'database'),

@@ -62,9 +62,7 @@ export function buildReleasePageGovernanceSnapshot(input: {
   const manageableEnvironmentIds = input.environments
     .filter((environment) => canManageEnvironment(input.role, environment))
     .map((environment) => environment.id);
-  const promotionTargets =
-    input.promotionTargets ??
-    input.environments.filter((environment) => isProductionEnvironment(environment));
+  const promotionTargets = input.promotionTargets ?? [];
   const manageablePromotionTargets = promotionTargets.filter((environment) =>
     canManageEnvironment(input.role, environment)
   );

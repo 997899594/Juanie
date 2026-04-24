@@ -2,19 +2,16 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { parseJuanieConfig } from '@/lib/config/parser';
 import { supportsDatabaseAutomatedMigrations } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
-import {
-  databases,
-  environments,
-  migrationSpecifications,
-  projects,
-  repositories,
-  services,
-} from '@/lib/db/schema';
+import { databases, environments, migrationSpecifications, services } from '@/lib/db/schema';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import {
+  getRepositoryDefaultBranch,
+  requireProjectRepositoryContext,
+} from '@/lib/projects/context';
 import { isPlatformManagedMigrationTool } from './platform-managed';
 import {
   buildPlatformInternalCommand,
@@ -225,39 +222,38 @@ export async function syncMigrationSpecificationsFromRepo(
     sourceCommitSha?: string | null;
   }
 ): Promise<ResolvedMigrationSpec[]> {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-  });
-  if (!project?.repositoryId) {
+  const context = await requireProjectRepositoryContext(projectId).catch(() => null);
+  if (!context) {
     return [];
   }
 
-  const [environment, repository, serviceList, databaseList] = await Promise.all([
+  const [environment, serviceList, databaseList] = await Promise.all([
     db.query.environments.findFirst({ where: eq(environments.id, environmentId) }),
-    db.query.repositories.findFirst({ where: eq(repositories.id, project.repositoryId) }),
     db.query.services.findMany({ where: eq(services.projectId, projectId) }),
     getDatabasesForEnvironment({ projectId, environmentId }),
   ]);
 
-  if (!environment || !repository) {
+  if (!environment) {
     return [];
   }
 
   const session = await getTeamIntegrationSession({
-    teamId: project.teamId,
+    teamId: context.project.teamId,
     requiredCapabilities: ['read_repo'],
   });
 
   const configPaths = ['juanie.yaml', 'juanie.yml'];
   let configContent: string | null = null;
   const configRef =
-    options?.sourceCommitSha || options?.sourceRef || repository.defaultBranch || 'main';
+    options?.sourceCommitSha ||
+    options?.sourceRef ||
+    getRepositoryDefaultBranch(context.repository);
 
   for (const configPath of configPaths) {
     try {
       const content = await gateway.getFileContent(
         session,
-        repository.fullName,
+        context.repository.fullName,
         configPath,
         configRef
       );

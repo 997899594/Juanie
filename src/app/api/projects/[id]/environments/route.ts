@@ -7,9 +7,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const session = await requireSession();
-    const { member } = await getProjectAccessOrThrow(id, session.user.id);
+    const { project, member } = await getProjectAccessOrThrow(id, session.user.id);
 
-    return NextResponse.json(await getProjectEnvironmentListData(id, member.role));
+    return NextResponse.json(
+      await getProjectEnvironmentListData({
+        project,
+        role: member.role,
+      })
+    );
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

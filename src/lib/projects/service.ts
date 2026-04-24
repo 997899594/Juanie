@@ -1,4 +1,5 @@
-import { and, count, desc, eq } from 'drizzle-orm';
+import { count, desc, eq } from 'drizzle-orm';
+import { getProjectWithRepositoryAccessOrNull } from '@/lib/api/page-access';
 import { db } from '@/lib/db';
 import {
   databases,
@@ -6,7 +7,6 @@ import {
   domains,
   environments,
   migrationRuns,
-  projects,
   releases,
   services,
   teamMembers,
@@ -196,18 +196,14 @@ export function buildProjectOverviewPageData<
 export type ProjectOverviewPageData = ReturnType<typeof buildProjectOverviewPageData>;
 
 export async function getProjectOverviewPageData(projectId: string, userId: string) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    with: { repository: true },
-  });
-
-  if (!project) {
+  const access = await getProjectWithRepositoryAccessOrNull(projectId, userId);
+  if (!access) {
     return null;
   }
 
+  const project = access.project;
   const [
     team,
-    member,
     teamMemberCountResult,
     teamMembersPreview,
     projectEnvironments,
@@ -220,9 +216,6 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
     deploymentImageCandidates,
   ] = await Promise.all([
     db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }),
-    db.query.teamMembers.findFirst({
-      where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
-    }),
     db.select({ count: count() }).from(teamMembers).where(eq(teamMembers.teamId, project.teamId)),
     db
       .select({
@@ -312,10 +305,6 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
     }),
   ]);
 
-  if (!member) {
-    return null;
-  }
-
   const previewReviewMetadataById = await buildPreviewReviewMetadataByItemId({
     projects: [
       {
@@ -349,7 +338,7 @@ export async function getProjectOverviewPageData(projectId: string, userId: stri
     project,
     manualMigrationCapability:
       buildProjectGovernanceSnapshot({
-        role: member.role,
+        role: access.member.role,
         environments: projectEnvironments,
       }).capabilities.find((item) => item.key === 'manual_migration') ?? null,
     team,

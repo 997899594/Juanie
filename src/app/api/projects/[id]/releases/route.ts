@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
+import { getProjectWithRepositoryAccessOrThrow, requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { getProjectReleaseListData } from '@/lib/releases/service';
 
@@ -7,9 +7,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const session = await requireSession();
-    await getProjectAccessOrThrow(id, session.user.id);
+    const { project } = await getProjectWithRepositoryAccessOrThrow(id, session.user.id);
 
-    return NextResponse.json(await getProjectReleaseListData(id));
+    return NextResponse.json(await getProjectReleaseListData(project));
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

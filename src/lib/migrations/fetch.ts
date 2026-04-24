@@ -1,10 +1,8 @@
-import { eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { projects, repositories } from '@/lib/db/schema';
 import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import { requireProjectRepositoryContext } from '@/lib/projects/context';
 
 interface MigrationFile {
   name: string;
@@ -12,25 +10,10 @@ interface MigrationFile {
 }
 
 async function getProjectRepositoryContext(projectId: string) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
+  const { project, repository } = await requireProjectRepositoryContext(projectId, {
+    projectNotFound: 'Project not found',
+    repositoryMissing: 'Project has no repository',
   });
-
-  if (!project) {
-    throw new Error('Project not found');
-  }
-
-  if (!project.repositoryId) {
-    throw new Error('Project has no repository');
-  }
-
-  const repo = await db.query.repositories.findFirst({
-    where: eq(repositories.id, project.repositoryId),
-  });
-
-  if (!repo) {
-    throw new Error('Repository not found');
-  }
 
   const session = await getTeamIntegrationSession({
     teamId: project.teamId,
@@ -43,7 +26,7 @@ async function getProjectRepositoryContext(projectId: string) {
 
   return {
     session,
-    repoFullName: repo.fullName,
+    repoFullName: repository.fullName,
   };
 }
 

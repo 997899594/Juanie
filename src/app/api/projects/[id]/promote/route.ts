@@ -10,6 +10,7 @@ import { db } from '@/lib/db';
 import { environments, releases } from '@/lib/db/schema';
 import { isPromoteOnlyEnvironment } from '@/lib/environments/model';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
+import { getProjectProductionRef } from '@/lib/projects/context';
 import { createProjectRelease } from '@/lib/releases';
 import { buildReleaseEnvironmentTagName } from '@/lib/releases/environment-tracking';
 import { buildPromotionPlan } from '@/lib/releases/planning';
@@ -138,7 +139,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         digest: artifact.imageDigest,
       })),
       sourceRepository: project.repository?.fullName ?? project.name,
-      sourceRef: sourceRelease.sourceRef ?? `refs/heads/${project.productionBranch ?? 'main'}`,
+      sourceRef: sourceRelease.sourceRef ?? getProjectProductionRef(project),
       sourceCommitSha: sourceRelease.sourceCommitSha,
       configCommitSha: sourceRelease.configCommitSha,
       sourceReleaseId: sourceRelease.id,

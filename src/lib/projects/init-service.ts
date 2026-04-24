@@ -1,6 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { getProjectAccessOrNull } from '@/lib/api/page-access';
 import { db } from '@/lib/db';
-import { projectInitSteps, projects, teamMembers } from '@/lib/db/schema';
+import { environments, projectInitSteps, projects } from '@/lib/db/schema';
 import { buildProjectInitOverview } from '@/lib/projects/init-view';
 import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 
@@ -101,54 +102,44 @@ export async function getProjectInitRetryContext(
   retryAllowed: boolean;
   retryBlockedReason: string | null;
 } | null> {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    with: {
-      environments: {
-        columns: {
-          id: true,
-          name: true,
-          isPreview: true,
-          deliveryMode: true,
-          previewBuildStatus: true,
-        },
+  const access = await getProjectAccessOrNull(projectId, userId);
+  if (!access) {
+    return null;
+  }
+
+  const [projectEnvironments, steps] = await Promise.all([
+    db.query.environments.findMany({
+      where: eq(environments.projectId, access.project.id),
+      columns: {
+        id: true,
+        name: true,
+        isPreview: true,
+        deliveryMode: true,
+        previewBuildStatus: true,
       },
-    },
-  });
-
-  if (!project) {
-    return null;
-  }
-
-  const member = await db.query.teamMembers.findFirst({
-    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
-  });
-
-  if (!member) {
-    return null;
-  }
-
-  const steps = await db.query.projectInitSteps.findMany({
-    where: eq(projectInitSteps.projectId, projectId),
-    orderBy: (step, { asc }) => [asc(step.createdAt)],
-  });
+    }),
+    db.query.projectInitSteps.findMany({
+      where: eq(projectInitSteps.projectId, projectId),
+      orderBy: (step, { asc }) => [asc(step.createdAt)],
+    }),
+  ]);
 
   const failedStepIndex = steps.findIndex((step) => step.status === 'failed');
   if (failedStepIndex < 0) {
     return null;
   }
 
-  const metadata = resolveProjectInitMode(project.configJson, steps);
+  const metadata = resolveProjectInitMode(access.project.configJson, steps);
   const overview = buildProjectInitOverview(steps.map(mapProjectInitStep), {
-    projectId: project.id,
+    projectId: access.project.id,
     runtimeStatus: resolveProjectRuntimeStatus({
-      status: project.status,
-      environments: project.environments,
+      status: access.project.status,
+      environments: projectEnvironments,
     }),
   });
 
   return {
-    projectId: project.id,
+    projectId: access.project.id,
     mode: metadata.mode,
     template: metadata.template,
     failedStepId: steps[failedStepIndex].id,
@@ -167,40 +158,29 @@ export async function getProjectInitPageData(
   projectId: string,
   userId: string
 ): Promise<ProjectInitPageData | null> {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    with: {
-      environments: {
-        columns: {
-          id: true,
-          name: true,
-          isPreview: true,
-          deliveryMode: true,
-          previewBuildStatus: true,
-        },
-      },
+  const access = await getProjectAccessOrNull(projectId, userId);
+  if (!access) {
+    return null;
+  }
+
+  const projectEnvironments = await db.query.environments.findMany({
+    where: eq(environments.projectId, access.project.id),
+    columns: {
+      id: true,
+      name: true,
+      isPreview: true,
+      deliveryMode: true,
+      previewBuildStatus: true,
     },
   });
 
-  if (!project) {
-    return null;
-  }
-
-  const member = await db.query.teamMembers.findFirst({
-    where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
-  });
-
-  if (!member) {
-    return null;
-  }
-
   return {
     project: {
-      id: project.id,
-      name: project.name,
+      id: access.project.id,
+      name: access.project.name,
       status: resolveProjectRuntimeStatus({
-        status: project.status,
-        environments: project.environments,
+        status: access.project.status,
+        environments: projectEnvironments,
       }).status,
     },
     overview: await getProjectInitOverviewSnapshot(projectId),

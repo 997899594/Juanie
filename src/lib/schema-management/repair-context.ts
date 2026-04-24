@@ -1,8 +1,9 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
+import { schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import type { Capability } from '@/lib/integrations/domain/models';
 import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { requireProjectRepositoryContext } from '@/lib/projects/context';
 
 export interface SchemaRepairGeneratedArtifacts {
   files: Record<string, string>;
@@ -44,18 +45,9 @@ function normalizeSchemaRepairGeneratedArtifacts(
 }
 
 async function requireSchemaRepairProject(projectId: string) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    with: {
-      repository: true,
-    },
+  const { project, repository } = await requireProjectRepositoryContext(projectId, {
+    repositoryMissing: '项目缺少仓库绑定',
   });
-
-  const repository = project?.repository;
-
-  if (!project || !repository) {
-    throw new Error('项目缺少仓库绑定');
-  }
 
   return {
     ...project,

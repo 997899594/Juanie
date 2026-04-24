@@ -2,8 +2,8 @@ import { notFound, redirect } from 'next/navigation';
 import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { EnvVarManager } from '@/components/projects/EnvVarManager';
 import { PageHeader } from '@/components/ui/page-header';
+import { getProjectAccessOrNull, getProjectEnvironmentOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
-import { getProjectEnvironmentOrNull, getProjectMemberRole } from '@/lib/environments/page-context';
 
 export default async function ProjectEnvironmentVariablesPage({
   params,
@@ -17,7 +17,7 @@ export default async function ProjectEnvironmentVariablesPage({
     redirect('/login');
   }
 
-  const access = await getProjectMemberRole(id, session.user.id);
+  const access = await getProjectAccessOrNull(id, session.user.id);
   if (!access) {
     redirect('/projects');
   }

@@ -17,6 +17,7 @@ import {
   services,
 } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
+import { getProjectSourceRef } from '@/lib/projects/context';
 import { createProjectRelease } from '@/lib/releases';
 import { ReleaseAdmissionError } from '@/lib/releases/admission';
 import { buildProjectReleasePlan } from '@/lib/releases/planning';
@@ -191,7 +192,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         projectId: id,
         environmentId,
         services: requestedServices,
-        sourceRef: ref ?? `refs/heads/${environment.branch ?? project.productionBranch ?? 'main'}`,
+        sourceRef: ref ?? getProjectSourceRef({ branch: environment.branch, ...project }),
         sourceCommitSha: commitSha ?? null,
         entryPoint: 'manual_release',
       });
@@ -204,7 +205,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       environmentId,
       services: requestedServices,
       sourceRepository: projectWithRepository?.repository?.fullName ?? project.name,
-      sourceRef: ref ?? `refs/heads/${environment.branch ?? project.productionBranch ?? 'main'}`,
+      sourceRef: ref ?? getProjectSourceRef({ branch: environment.branch, ...project }),
       sourceCommitSha: commitSha ?? null,
       configCommitSha: commitSha ?? null,
       sourceReleaseId: typeof sourceReleaseId === 'string' ? sourceReleaseId : null,

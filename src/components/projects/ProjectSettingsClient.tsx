@@ -123,7 +123,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
   const [formData, setFormData] = useState({
     name: initialData.project.name || '',
     description: initialData.project.description || '',
-    productionBranch: initialData.project.productionBranch || 'main',
+    productionBranch: initialData.project.productionBranch,
   });
   const isDeleting = project.status === 'deleting';
   const statusDescription = isDeleting

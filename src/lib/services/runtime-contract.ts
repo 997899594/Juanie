@@ -11,12 +11,16 @@ import {
   toPlatformDatabaseProvisionType,
 } from '@/lib/databases/platform-support';
 import { db } from '@/lib/db';
-import { databases, projects, repositories, services } from '@/lib/db/schema';
+import { databases, services } from '@/lib/db/schema';
 import {
   gateway,
   getTeamIntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
 import { logger } from '@/lib/logger';
+import {
+  getRepositoryDefaultBranch,
+  requireProjectRepositoryContext,
+} from '@/lib/projects/context';
 
 interface RuntimeContractSyncInput {
   projectId: string;
@@ -107,26 +111,9 @@ async function loadProjectConfigFromRepo(input: RuntimeContractSyncInput): Promi
     throw new Error('No runtime contracts to sync');
   }
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, input.projectId),
-    columns: {
-      id: true,
-      teamId: true,
-      repositoryId: true,
-    },
+  const { project, repository } = await requireProjectRepositoryContext(input.projectId, {
+    repositoryMissing: 'Project has no repository',
   });
-
-  if (!project?.repositoryId) {
-    throw new Error('Project has no repository');
-  }
-
-  const repository = await db.query.repositories.findFirst({
-    where: eq(repositories.id, project.repositoryId),
-  });
-
-  if (!repository) {
-    throw new Error('Repository not found');
-  }
 
   let session: Awaited<ReturnType<typeof getTeamIntegrationSession>>;
   try {
@@ -142,7 +129,8 @@ async function loadProjectConfigFromRepo(input: RuntimeContractSyncInput): Promi
     throw error;
   }
 
-  const configRef = input.sourceCommitSha || input.sourceRef || repository.defaultBranch || 'main';
+  const configRef =
+    input.sourceCommitSha || input.sourceRef || getRepositoryDefaultBranch(repository);
   let configContent: string | null = null;
 
   for (const configPath of ['juanie.yaml', 'juanie.yml']) {

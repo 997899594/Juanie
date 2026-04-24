@@ -1,5 +1,6 @@
 import type { TeamRole } from '@/lib/db/schema';
 import type { Capability } from '@/lib/integrations/domain/models';
+import { getRepositoryDefaultBranch } from '@/lib/projects/context';
 
 interface IntegrationLike {
   id: string;
@@ -123,7 +124,7 @@ export function buildIntegrationsControlPlaneView(input: {
       id: repository.id,
       fullName: repository.fullName,
       providerLabel: formatProviderLabel(integration.provider),
-      defaultBranchLabel: repository.defaultBranch || 'main',
+      defaultBranchLabel: getRepositoryDefaultBranch(repository),
       webUrl: repository.webUrl,
       usageSummary:
         repository.projects.length > 0

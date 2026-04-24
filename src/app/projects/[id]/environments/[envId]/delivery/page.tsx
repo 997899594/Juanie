@@ -1,7 +1,10 @@
 import { notFound, redirect } from 'next/navigation';
 import { ReleasesPageClient } from '@/components/projects/ReleasesPageClient';
+import {
+  getProjectEnvironmentOrNull,
+  getProjectWithRepositoryAccessOrNull,
+} from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
-import { getProjectEnvironmentOrNull, getProjectMemberRole } from '@/lib/environments/page-context';
 import { getProjectReleasesPageData } from '@/lib/releases/service';
 
 export default async function EnvironmentDeliveryPage({
@@ -19,7 +22,7 @@ export default async function EnvironmentDeliveryPage({
     redirect('/login');
   }
 
-  const access = await getProjectMemberRole(id, session.user.id);
+  const access = await getProjectWithRepositoryAccessOrNull(id, session.user.id);
   if (!access) {
     redirect('/projects');
   }
@@ -30,7 +33,7 @@ export default async function EnvironmentDeliveryPage({
   }
 
   const pageData = await getProjectReleasesPageData({
-    projectId: id,
+    project: access.project,
     role: access.member.role,
     envFilter: envId,
     riskFilter: resolvedSearchParams?.risk,

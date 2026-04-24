@@ -5,6 +5,7 @@ import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
+import { getProjectSourceRef } from '@/lib/projects/context';
 import { createProjectRelease } from '@/lib/releases';
 import { getProjectDeploymentContextOrThrow } from '@/lib/releases/deployment-access';
 import { buildRollbackPlan } from '@/lib/releases/planning';
@@ -91,9 +92,7 @@ export async function POST(
         },
       ],
       sourceRepository: project.repository?.fullName ?? project.name,
-      sourceRef: targetDeployment.branch
-        ? `refs/heads/${targetDeployment.branch}`
-        : `refs/heads/${project.productionBranch ?? 'main'}`,
+      sourceRef: getProjectSourceRef({ branch: targetDeployment.branch, ...project }),
       sourceCommitSha: targetDeployment.commitSha ?? null,
       configCommitSha: targetDeployment.commitSha ?? null,
       sourceReleaseId: targetDeployment.releaseId ?? null,

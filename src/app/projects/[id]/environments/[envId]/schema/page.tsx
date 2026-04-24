@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { SchemaCenterClient } from '@/components/projects/SchemaCenterClient';
+import { getProjectAccessOrNull, getProjectEnvironmentOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
-import { getProjectEnvironmentOrNull, getProjectMemberRole } from '@/lib/environments/page-context';
 import { getProjectSchemaCenterData } from '@/lib/schema-management/page-data';
 
 export default async function EnvironmentSchemaPage({
@@ -16,7 +16,7 @@ export default async function EnvironmentSchemaPage({
     redirect('/login');
   }
 
-  const access = await getProjectMemberRole(id, session.user.id);
+  const access = await getProjectAccessOrNull(id, session.user.id);
   if (!access) {
     redirect('/projects');
   }
@@ -26,7 +26,11 @@ export default async function EnvironmentSchemaPage({
     notFound();
   }
 
-  const initialData = await getProjectSchemaCenterData(id, access.member.role, envId);
+  const initialData = await getProjectSchemaCenterData({
+    project: access.project,
+    role: access.member.role,
+    selectedEnvId: envId,
+  });
 
   return <SchemaCenterClient projectId={id} initialData={initialData} initialEnvId={envId} />;
 }

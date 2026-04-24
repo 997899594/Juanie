@@ -10,6 +10,7 @@ import {
 } from '@/lib/integrations/service/integration-control-plane';
 import { deleteNamespace, isK8sAvailable, waitForNamespaceDeleted } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
+import { getProjectProductionBranch } from '@/lib/projects/context';
 import {
   publishProjectDeletedRealtimeEvent,
   publishProjectRealtimeSnapshot,
@@ -105,19 +106,21 @@ async function cleanupRepositoryArtifacts(project: ProjectDeleteRecord): Promise
     return;
   }
 
+  const repository = project.repository;
+
   try {
     const session = await getTeamIntegrationSession({
-      integrationId: project.repository.providerId,
+      integrationId: repository.providerId,
       teamId: project.teamId,
       requiredCapabilities: ['read_repo', 'write_repo'],
     });
-    const branch = project.productionBranch || project.repository.defaultBranch || 'main';
+    const branch = getProjectProductionBranch(project);
     let gitlabCiContent: string | null = null;
 
     if (session.provider === 'gitlab' || session.provider === 'gitlab-self-hosted') {
       gitlabCiContent = await gateway.getFileContent(
         session,
-        project.repository.fullName,
+        repository.fullName,
         JUANIE_GITLAB_CI_PATH,
         branch
       );
@@ -133,7 +136,7 @@ async function cleanupRepositoryArtifacts(project: ProjectDeleteRecord): Promise
     }
 
     await gateway.deleteFiles(session, {
-      repoFullName: project.repository.fullName,
+      repoFullName: repository.fullName,
       branch,
       paths,
       message: 'Remove Juanie managed files [skip ci]',

@@ -3,14 +3,15 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { projects, repositories } from '@/lib/db/schema';
 import {
   gateway,
   getTeamIntegrationSession,
   type IntegrationSession,
 } from '@/lib/integrations/service/integration-control-plane';
+import {
+  getRepositoryDefaultBranch,
+  requireProjectRepositoryContext,
+} from '@/lib/projects/context';
 
 const execFileAsync = promisify(execFile);
 
@@ -121,7 +122,8 @@ export async function createRepositorySourceWorkspace(input: {
   defaultBranch?: string | null;
   revision?: string | null;
 }): Promise<SourceWorkspaceContext> {
-  const requestedRevision = input.revision?.trim() || input.defaultBranch || 'main';
+  const requestedRevision =
+    input.revision?.trim() || getRepositoryDefaultBranch({ defaultBranch: input.defaultBranch });
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'juanie-source-workspace-'));
   const repoDir = path.join(tempRoot, 'repo');
 
@@ -156,21 +158,10 @@ export async function createProjectSourceWorkspace(input: {
   actingUserId?: string | null;
   requiredCapabilities?: Array<'read_repo' | 'write_repo'>;
 }): Promise<SourceWorkspaceContext> {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, input.projectId),
+  const { project, repository } = await requireProjectRepositoryContext(input.projectId, {
+    projectNotFound: '项目缺少仓库绑定，无法准备源码工作区',
+    repositoryMissing: '项目缺少仓库绑定，无法准备源码工作区',
   });
-
-  if (!project?.repositoryId) {
-    throw new Error('项目缺少仓库绑定，无法准备源码工作区');
-  }
-
-  const repository = await db.query.repositories.findFirst({
-    where: eq(repositories.id, project.repositoryId),
-  });
-
-  if (!repository) {
-    throw new Error('仓库不存在，无法准备源码工作区');
-  }
 
   const session = await getTeamIntegrationSession({
     integrationId: repository.providerId,
@@ -182,7 +173,7 @@ export async function createProjectSourceWorkspace(input: {
   return createRepositorySourceWorkspace({
     session,
     repoFullName: repository.fullName,
-    defaultBranch: repository.defaultBranch || 'main',
+    defaultBranch: getRepositoryDefaultBranch(repository),
     revision: input.revision,
   });
 }

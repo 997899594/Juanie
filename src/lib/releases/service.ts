@@ -4,7 +4,7 @@ import { resolveAIPluginSnapshot } from '@/lib/ai/runtime/plugin-service';
 import { listLatestAIPluginSnapshotsByResourceIds } from '@/lib/ai/runtime/snapshot-service';
 import type { ReleasePlan } from '@/lib/ai/schemas/release-plan';
 import { db } from '@/lib/db';
-import { environments, projects, releases, type TeamRole } from '@/lib/db/schema';
+import { environments, releases, type TeamRole } from '@/lib/db/schema';
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import {
   getEnvironmentScopeLabel,
@@ -45,6 +45,15 @@ export function buildProjectReleaseListData<
     ...release,
     aiReleasePlan: aiReleasePlans?.get(release.id) ?? null,
   }));
+}
+
+interface ProjectReleaseContext {
+  id: string;
+  teamId: string;
+  repository?: {
+    fullName: string;
+    providerId: string;
+  } | null;
 }
 
 async function attachReleaseMigrationFilePreviews<
@@ -222,115 +231,100 @@ function buildLightweightReleaseListStats(
   ];
 }
 
-export async function getProjectReleaseListData(projectId: string) {
-  const [project, releaseList] = await Promise.all([
-    db.query.projects.findFirst({
-      where: eq(projects.id, projectId),
-      columns: {
-        id: true,
-        teamId: true,
-      },
-      with: {
-        repository: {
-          columns: {
-            fullName: true,
-            providerId: true,
+export async function getProjectReleaseListData(project: ProjectReleaseContext) {
+  const releaseList = await db.query.releases.findMany({
+    where: eq(releases.projectId, project.id),
+    orderBy: [desc(releases.createdAt)],
+    with: {
+      environment: {
+        with: {
+          baseEnvironment: {
+            columns: {
+              id: true,
+              name: true,
+            },
           },
-        },
-      },
-    }),
-    db.query.releases.findMany({
-      where: eq(releases.projectId, projectId),
-      orderBy: [desc(releases.createdAt)],
-      with: {
-        environment: {
-          with: {
-            baseEnvironment: {
-              columns: {
-                id: true,
-                name: true,
-              },
+          domains: {
+            with: {
+              service: true,
             },
-            domains: {
-              with: {
-                service: true,
-              },
-            },
-            databases: {
-              columns: {
-                id: true,
-                name: true,
-                status: true,
-                sourceDatabaseId: true,
-              },
+          },
+          databases: {
+            columns: {
+              id: true,
+              name: true,
+              status: true,
+              sourceDatabaseId: true,
             },
           },
         },
-        artifacts: {
-          with: {
-            service: true,
-          },
-        },
-        deployments: {
-          with: {
-            service: true,
-          },
-        },
-        migrationRuns: {
-          with: {
-            service: true,
-            database: true,
-            specification: true,
-          },
+      },
+      artifacts: {
+        with: {
+          service: true,
         },
       },
-    }),
-  ]);
+      deployments: {
+        with: {
+          service: true,
+        },
+      },
+      migrationRuns: {
+        with: {
+          service: true,
+          database: true,
+          specification: true,
+        },
+      },
+    },
+  });
 
-  const previewReviewMetadataById = project
-    ? await buildPreviewReviewMetadataByItemId({
-        projects: [project],
-        items: releaseList.map((release) => ({
-          id: release.id,
-          projectId: release.projectId,
-          sourceRef: release.sourceRef,
-          environment: release.environment,
-        })),
-      })
-    : new Map();
-
-  const aiReleasePlans = project
-    ? await listLatestAIPluginSnapshotsByResourceIds<ReleasePlan>({
-        pluginId: 'release-intelligence',
+  const previewReviewMetadataById = await buildPreviewReviewMetadataByItemId({
+    projects: [
+      {
+        id: project.id,
         teamId: project.teamId,
-        resourceType: 'release',
-        resourceIds: releaseList.map((release) => release.id),
-      }).then((snapshotMap) => {
-        const result = new Map<
-          string,
-          {
-            summary: string;
-            strategy: ReleasePlan['recommendation']['strategy'];
-            riskLevel: ReleasePlan['risk']['level'];
-            confidence: ReleasePlan['recommendation']['confidence'];
-            generatedAt: string;
-          }
-        >();
+        repository: project.repository ?? null,
+      },
+    ],
+    items: releaseList.map((release) => ({
+      id: release.id,
+      projectId: release.projectId,
+      sourceRef: release.sourceRef,
+      environment: release.environment,
+    })),
+  });
 
-        for (const [releaseId, snapshot] of snapshotMap) {
-          const output = snapshot.output;
-          result.set(releaseId, {
-            summary: output.recommendation.summary,
-            strategy: output.recommendation.strategy,
-            riskLevel: output.risk.level,
-            confidence: output.recommendation.confidence,
-            generatedAt: snapshot.generatedAt,
-          });
-        }
+  const aiReleasePlans = await listLatestAIPluginSnapshotsByResourceIds<ReleasePlan>({
+    pluginId: 'release-intelligence',
+    teamId: project.teamId,
+    resourceType: 'release',
+    resourceIds: releaseList.map((release) => release.id),
+  }).then((snapshotMap) => {
+    const result = new Map<
+      string,
+      {
+        summary: string;
+        strategy: ReleasePlan['recommendation']['strategy'];
+        riskLevel: ReleasePlan['risk']['level'];
+        confidence: ReleasePlan['recommendation']['confidence'];
+        generatedAt: string;
+      }
+    >();
 
-        return result;
-      })
-    : new Map();
+    for (const [releaseId, snapshot] of snapshotMap) {
+      const output = snapshot.output;
+      result.set(releaseId, {
+        summary: output.recommendation.summary,
+        strategy: output.recommendation.strategy,
+        riskLevel: output.risk.level,
+        confidence: output.recommendation.confidence,
+        generatedAt: snapshot.generatedAt,
+      });
+    }
+
+    return result;
+  });
 
   return buildProjectReleaseListData(
     releaseList.map((release) => ({
@@ -493,21 +487,15 @@ export function buildProjectReleasesPageData(input: {
 }
 
 export async function getProjectReleasesPageData(input: {
-  projectId: string;
+  project: ProjectReleaseContext;
   role: TeamRole;
   envFilter?: string | null;
   riskFilter?: string | null;
 }) {
-  const [project, releaseCards, environmentList, promotionPlansRaw] = await Promise.all([
-    db.query.projects.findFirst({
-      where: eq(projects.id, input.projectId),
-      columns: {
-        teamId: true,
-      },
-    }),
-    getProjectReleaseListData(input.projectId),
+  const [releaseCards, environmentList, promotionPlansRaw] = await Promise.all([
+    getProjectReleaseListData(input.project),
     db.query.environments.findMany({
-      where: eq(environments.projectId, input.projectId),
+      where: eq(environments.projectId, input.project.id),
       orderBy: [environments.createdAt],
       with: {
         baseEnvironment: {
@@ -533,7 +521,7 @@ export async function getProjectReleasesPageData(input: {
         },
       },
     }),
-    buildPromotionPlans(input.projectId).catch(() => []),
+    buildPromotionPlans(input.project.id).catch(() => []),
   ]);
   const promotionPlans = await Promise.all(
     promotionPlansRaw.map(async (plan) => {
@@ -543,14 +531,13 @@ export async function getProjectReleasesPageData(input: {
 
       return {
         ...plan,
-        ai:
-          project && sourceRelease
-            ? await resolvePromotionAIView({
-                teamId: project.teamId,
-                projectId: input.projectId,
-                release: sourceRelease,
-              }).catch(() => null)
-            : null,
+        ai: sourceRelease
+          ? await resolvePromotionAIView({
+              teamId: input.project.teamId,
+              projectId: input.project.id,
+              release: sourceRelease,
+            }).catch(() => null)
+          : null,
       };
     })
   );

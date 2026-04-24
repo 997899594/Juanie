@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { LogsPageClient } from '@/components/projects/LogsPageClient';
+import { getProjectEnvironmentOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
-import { getProjectEnvironmentOrNull } from '@/lib/environments/page-context';
 import { getProjectObservabilityPageData } from '@/lib/observability/page-data';
 
 export default async function ProjectEnvironmentLogsPage({

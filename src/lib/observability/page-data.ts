@@ -1,6 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { getProjectAccessOrNull } from '@/lib/api/page-access';
 import { db } from '@/lib/db';
-import { environments, projects, teamMembers } from '@/lib/db/schema';
+import { environments } from '@/lib/db/schema';
 import { buildObservabilityGovernanceSnapshot } from '@/lib/observability/governance-view';
 
 export interface ObservabilityEnvironmentOption {
@@ -19,43 +20,26 @@ export interface ObservabilityPageData {
 }
 
 export async function getProjectObservabilityPageData(projectId: string, userId: string) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
+  const access = await getProjectAccessOrNull(projectId, userId);
+  if (!access) {
+    return null;
+  }
+
+  const projectEnvironments = await db.query.environments.findMany({
+    where: eq(environments.projectId, access.project.id),
     columns: {
       id: true,
       name: true,
-      teamId: true,
+      namespace: true,
     },
   });
 
-  if (!project) {
-    return null;
-  }
-
-  const [member, projectEnvironments] = await Promise.all([
-    db.query.teamMembers.findFirst({
-      where: and(eq(teamMembers.teamId, project.teamId), eq(teamMembers.userId, userId)),
-    }),
-    db.query.environments.findMany({
-      where: eq(environments.projectId, projectId),
-      columns: {
-        id: true,
-        name: true,
-        namespace: true,
-      },
-    }),
-  ]);
-
-  if (!member) {
-    return null;
-  }
-
   return {
     project: {
-      id: project.id,
-      name: project.name,
+      id: access.project.id,
+      name: access.project.name,
     },
     environments: projectEnvironments,
-    governance: buildObservabilityGovernanceSnapshot(member.role),
+    governance: buildObservabilityGovernanceSnapshot(access.member.role),
   } satisfies ObservabilityPageData;
 }

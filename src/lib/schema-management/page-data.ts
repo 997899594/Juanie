@@ -1,38 +1,21 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { environments, projects, schemaRepairAtlasRuns, type TeamRole } from '@/lib/db/schema';
+import { environments, schemaRepairAtlasRuns, type TeamRole } from '@/lib/db/schema';
 import { buildEnvironmentManageActionSnapshot } from '@/lib/environments/governance-view';
 import { isPreviewEnvironment, isProductionEnvironment } from '@/lib/environments/model';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
 import { getLatestSchemaRepairPlansForProject } from '@/lib/schema-management/repair-plan';
 import { syncLatestSchemaRepairPlans } from '@/lib/schema-management/review-sync';
 
-export async function getProjectSchemaCenterData(
-  projectId: string,
-  role: TeamRole,
-  selectedEnvId?: string | null
-) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    columns: {
-      id: true,
-      teamId: true,
-      name: true,
-    },
-  });
-
-  if (!project) {
-    return {
-      projectName: '',
-      roleLabel: role,
-      environments: [],
-      summary: {
-        databaseCount: 0,
-        blockingCount: 0,
-        pendingCount: 0,
-      },
-    };
-  }
+export async function getProjectSchemaCenterData(input: {
+  project: {
+    id: string;
+    name: string;
+  };
+  role: TeamRole;
+  selectedEnvId?: string | null;
+}) {
+  const projectId = input.project.id;
 
   const [environmentList, latestRepairPlansResult, latestAtlasRuns] = await Promise.all([
     db.query.environments.findMany({
@@ -84,7 +67,7 @@ export async function getProjectSchemaCenterData(
     kind: environment.kind,
     isProduction: isProductionEnvironment(environment),
     isPreview: isPreviewEnvironment(environment),
-    actions: buildEnvironmentManageActionSnapshot(role, environment),
+    actions: buildEnvironmentManageActionSnapshot(input.role, environment),
     databases: environment.databases.map((database) => {
       const latestRepairPlan = latestRepairPlans.get(database.id) ?? null;
       const latestAtlasRun = latestAtlasRunByDatabase.get(database.id) ?? null;
@@ -129,8 +112,8 @@ export async function getProjectSchemaCenterData(
     }),
   }));
 
-  const selectedEnvironment = selectedEnvId
-    ? (environmentsWithSchema.find((environment) => environment.id === selectedEnvId) ?? null)
+  const selectedEnvironment = input.selectedEnvId
+    ? (environmentsWithSchema.find((environment) => environment.id === input.selectedEnvId) ?? null)
     : null;
   const visibleEnvironments = selectedEnvironment ? [selectedEnvironment] : environmentsWithSchema;
   const allDatabases = visibleEnvironments.flatMap((environment) => environment.databases);
@@ -144,8 +127,8 @@ export async function getProjectSchemaCenterData(
   ).length;
 
   return {
-    projectName: project.name,
-    roleLabel: role,
+    projectName: input.project.name,
+    roleLabel: input.role,
     environments: visibleEnvironments,
     selectedEnvId: selectedEnvironment?.id ?? null,
     summary: {

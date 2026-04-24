@@ -6,7 +6,6 @@ import {
   deployments,
   environments,
   migrationRuns,
-  projects,
   promotionFlows,
   releases,
   schemaRepairAtlasRuns,
@@ -41,33 +40,14 @@ export function buildProjectEnvironmentListData<
   }));
 }
 
-export async function getProjectEnvironmentListData(projectId: string, role: TeamRole) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    columns: {
-      id: true,
-      teamId: true,
-    },
-  });
-
-  if (!project) {
-    return {
-      governance: buildEnvironmentGovernanceData({
-        projectId,
-        role,
-        environments: [],
-        activeReleaseCountByEnvironment: new Map(),
-        recentAuditLogs: [],
-      }).governance,
-      deliveryControl: buildDeliveryControlSnapshot({
-        role,
-        environments: [],
-        deliveryRules: [],
-        promotionFlows: [],
-      }),
-      environments: [],
-    };
-  }
+export async function getProjectEnvironmentListData(input: {
+  project: {
+    id: string;
+    teamId: string;
+  };
+  role: TeamRole;
+}) {
+  const projectId = input.project.id;
 
   const [
     environmentList,
@@ -163,7 +143,7 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
       },
     }),
     db.query.auditLogs.findMany({
-      where: (log, { eq }) => eq(log.teamId, project.teamId),
+      where: (log, { eq }) => eq(log.teamId, input.project.teamId),
       orderBy: [desc(auditLogs.createdAt)],
       limit: 40,
     }),
@@ -258,7 +238,7 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
   );
   const governanceData = buildEnvironmentGovernanceData({
     projectId,
-    role,
+    role: input.role,
     environments: environmentList,
     activeReleaseCountByEnvironment: runtimeIndexes.activeReleaseCountByEnvironment,
     recentAuditLogs,
@@ -306,14 +286,14 @@ export async function getProjectEnvironmentListData(projectId: string, role: Tea
         latestGovernanceEvent:
           governanceData.latestGovernanceByEnvironment.get(environment.id) ?? null,
       })),
-      role
+      input.role
     )
   );
 
   return {
     governance: governanceData.governance,
     deliveryControl: buildDeliveryControlSnapshot({
-      role,
+      role: input.role,
       environments: environmentList,
       deliveryRules: deliveryRuleList,
       promotionFlows: promotionFlowList,

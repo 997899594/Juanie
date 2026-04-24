@@ -9,9 +9,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { searchParams } = new URL(request.url);
     const envId = searchParams.get('env');
     const session = await requireSession();
-    const { member } = await getProjectAccessOrThrow(id, session.user.id);
+    const { project, member } = await getProjectAccessOrThrow(id, session.user.id);
 
-    return NextResponse.json(await getProjectSchemaCenterData(id, member.role, envId));
+    return NextResponse.json(
+      await getProjectSchemaCenterData({
+        project,
+        role: member.role,
+        selectedEnvId: envId,
+      })
+    );
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);

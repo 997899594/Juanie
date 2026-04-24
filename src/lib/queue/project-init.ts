@@ -19,7 +19,6 @@ import {
   projects,
   repositories,
   services,
-  teams,
 } from '@/lib/db/schema';
 import { resolveDeployImageRepository } from '@/lib/deploy-images';
 import { syncEnvVarsToK8s } from '@/lib/env-sync';
@@ -42,6 +41,7 @@ import {
 import { buildSchemaContractCommentLines } from '@/lib/migrations/strategy';
 import type { MonorepoType } from '@/lib/monorepo';
 import { detectMonorepoType } from '@/lib/monorepo';
+import { getProjectProductionBranch } from '@/lib/projects/context';
 import { publishProjectInitRealtimeEvent } from '@/lib/realtime/project-init';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { TemplateService } from '@/lib/templates';
@@ -208,11 +208,27 @@ async function loadProjectInitProject(projectId: string) {
     where: eq(projects.id, projectId),
     with: {
       repository: true,
+      team: {
+        columns: {
+          name: true,
+        },
+      },
     },
   });
 }
 
 type ProjectInitProjectRecord = NonNullable<Awaited<ReturnType<typeof loadProjectInitProject>>>;
+
+function requireProjectInitRepository(
+  project: Pick<ProjectInitProjectRecord, 'repository'>,
+  message = 'Project has no repository'
+): typeof repositories.$inferSelect {
+  if (!project.repository) {
+    throw new Error(message);
+  }
+
+  return project.repository;
+}
 
 interface ProjectInitExecutionContext {
   hasK8s: boolean;
@@ -363,7 +379,9 @@ async function validateRepository(
   scopedLogger.info('Starting repository validation', { projectName: project.name });
   await onProgress?.(10, '检查仓库绑定');
 
-  if (!project.repository) {
+  const repository = project.repository;
+
+  if (!repository) {
     scopedLogger.warn('No repository linked');
     if (isDev) {
       scopedLogger.info('Skipping repository validation in development mode');
@@ -374,7 +392,7 @@ async function validateRepository(
   }
 
   scopedLogger.info('Validating repository access', {
-    repositoryFullName: project.repository.fullName,
+    repositoryFullName: repository.fullName,
   });
   await onProgress?.(45, '验证团队仓库授权');
 
@@ -385,9 +403,9 @@ async function validateRepository(
   });
 
   await onProgress?.(80, '读取仓库元数据');
-  const repo = await gateway.getRepository(session, project.repository.fullName);
+  const repo = await gateway.getRepository(session, repository.fullName);
   scopedLogger.info('Resolved repository access', {
-    repositoryFullName: project.repository.fullName,
+    repositoryFullName: repository.fullName,
     accessGranted: Boolean(repo),
   });
 
@@ -451,6 +469,9 @@ async function createRepository(
 async function pushTemplate(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
+    team?: {
+      name: string;
+    } | null;
   },
   template?: string,
   onProgress?: StepProgressReporter
@@ -462,9 +483,8 @@ async function pushTemplate(
   scopedLogger.info('Pushing template to project repository', { projectName: project.name });
   await onProgress?.(10, '准备模板内容');
 
-  if (!project.repository) {
-    throw new Error('Project has no repository');
-  }
+  const repository = requireProjectInitRepository(project);
+  const targetBranch = getProjectProductionBranch(project);
 
   const session = await getTeamIntegrationSession({
     teamId: project.teamId,
@@ -477,15 +497,14 @@ async function pushTemplate(
   const files = await new TemplateService(templateId, {
     projectName: project.name,
     projectSlug: project.slug,
-    teamName:
-      (await db.query.teams.findFirst({ where: eq(teams.id, project.teamId) }))?.name || 'Team',
+    teamName: project.team?.name || 'Team',
     description: project.description || '',
   }).renderToMemory();
 
   await onProgress?.(85, '推送模板到仓库');
   await gateway.pushFiles(session, {
-    repoFullName: project.repository.fullName,
-    branch: project.productionBranch || 'main',
+    repoFullName: repository.fullName,
+    branch: targetBranch,
     files: Object.fromEntries(files),
     message: 'Initial commit from Juanie template',
   });
@@ -493,7 +512,7 @@ async function pushTemplate(
   await onProgress?.(100, '模板已推送');
   scopedLogger.info('Pushed template files to repository', {
     fileCount: files.size,
-    repositoryFullName: project.repository.fullName,
+    repositoryFullName: repository.fullName,
   });
 }
 
@@ -994,6 +1013,7 @@ export function renderJuanieConfig(
   context: ProjectInitRenderContext,
   automation: RepoAutomationContextLike
 ): string {
+  const targetBranch = getProjectProductionBranch(project);
   const lines: string[] = ['# juanie.yaml', `name: ${project.slug}`, '', 'services:'];
 
   for (const service of context.services) {
@@ -1080,9 +1100,9 @@ export function renderJuanieConfig(
     '',
     'environments:',
     '  production:',
-    `    branch: ${project.productionBranch || 'main'}`,
+    `    branch: ${targetBranch}`,
     '  staging:',
-    `    branch: ${project.productionBranch || 'main'}`
+    `    branch: ${targetBranch}`
   );
 
   return `${lines.join('\n')}\n`;
@@ -1111,6 +1131,9 @@ async function pushCicdConfig(
     return;
   }
 
+  const repository = project.repository;
+  const targetBranch = getProjectProductionBranch(project);
+
   // Obtain integration session with required capabilities
   const session = await getTeamIntegrationSession({
     teamId: project.teamId,
@@ -1130,15 +1153,11 @@ async function pushCicdConfig(
 
   try {
     await onProgress?.(20, '扫描仓库根目录与构建入口');
-    rootFiles = await gateway.listRootFiles(
-      session,
-      project.repository.fullName,
-      project.productionBranch || 'main'
-    );
+    rootFiles = await gateway.listRootFiles(session, repository.fullName, targetBranch);
     monorepoType = detectMonorepoType(rootFiles);
     scopedLogger.info('Detected repository topology for CI/CD config', {
       monorepoType,
-      repositoryFullName: project.repository.fullName,
+      repositoryFullName: repository.fullName,
     });
 
     if (rootFiles.includes('package.json')) {
@@ -1146,14 +1165,14 @@ async function pushCicdConfig(
         await onProgress?.(35, '读取 package.json 分析运行时');
         const packageJsonContent = await gateway.getFileContent(
           session,
-          project.repository.fullName,
+          repository.fullName,
           'package.json',
-          project.productionBranch || 'main'
+          targetBranch
         );
         packageJson = packageJsonContent ? JSON.parse(packageJsonContent) : null;
       } catch (error) {
         scopedLogger.warn('Failed to parse package.json, falling back to migration skeleton', {
-          repositoryFullName: project.repository.fullName,
+          repositoryFullName: repository.fullName,
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }
@@ -1165,9 +1184,9 @@ async function pushCicdConfig(
       try {
         atlasConfigContent = await gateway.getFileContent(
           session,
-          project.repository.fullName,
+          repository.fullName,
           atlasConfigPath,
-          project.productionBranch || 'main'
+          targetBranch
         );
 
         if (atlasConfigContent) {
@@ -1175,9 +1194,9 @@ async function pushCicdConfig(
             try {
               const content = await gateway.getFileContent(
                 session,
-                project.repository.fullName,
+                repository.fullName,
                 sourcePath,
-                project.productionBranch || 'main'
+                targetBranch
               );
 
               if (content) {
@@ -1187,7 +1206,7 @@ async function pushCicdConfig(
               scopedLogger.warn(
                 'Failed to inspect Atlas schema source while inferring capabilities',
                 {
-                  repositoryFullName: project.repository.fullName,
+                  repositoryFullName: repository.fullName,
                   sourcePath,
                   errorMessage: error instanceof Error ? error.message : String(error),
                 }
@@ -1197,7 +1216,7 @@ async function pushCicdConfig(
         }
       } catch (error) {
         scopedLogger.warn('Failed to read atlas.hcl while inferring migrations', {
-          repositoryFullName: project.repository.fullName,
+          repositoryFullName: repository.fullName,
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }
@@ -1207,9 +1226,9 @@ async function pushCicdConfig(
       try {
         const content = await gateway.getFileContent(
           session,
-          project.repository.fullName,
+          repository.fullName,
           scriptPath,
-          project.productionBranch || 'main'
+          targetBranch
         );
 
         if (content) {
@@ -1217,7 +1236,7 @@ async function pushCicdConfig(
         }
       } catch (error) {
         scopedLogger.warn('Failed to inspect migration script while inferring tool', {
-          repositoryFullName: project.repository.fullName,
+          repositoryFullName: repository.fullName,
           scriptPath,
           errorMessage: error instanceof Error ? error.message : String(error),
         });
@@ -1237,23 +1256,23 @@ async function pushCicdConfig(
         await onProgress?.(50, '分析 docker-bake 定义');
         const bakeContent = await gateway.getFileContent(
           session,
-          project.repository.fullName,
+          repository.fullName,
           bakeDefinitionPath,
-          project.productionBranch || 'main'
+          targetBranch
         );
         if (bakeContent) {
           bakeTargets = parseDockerBakeTargets(bakeContent);
         }
       } catch (error) {
         scopedLogger.warn('Failed to inspect docker-bake definition, continuing without targets', {
-          repositoryFullName: project.repository.fullName,
+          repositoryFullName: repository.fullName,
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }
     }
   } catch (error) {
     scopedLogger.warn('Failed to inspect repository root, falling back to generated skeleton', {
-      repositoryFullName: project.repository.fullName,
+      repositoryFullName: repository.fullName,
       errorMessage: error instanceof Error ? error.message : String(error),
     });
   }
@@ -1310,8 +1329,8 @@ async function pushCicdConfig(
   if (Object.keys(files).length > 0) {
     await onProgress?.(90, '推送 Juanie 配置到仓库');
     await gateway.pushFiles(session, {
-      repoFullName: project.repository.fullName,
-      branch: project.productionBranch || 'main',
+      repoFullName: repository.fullName,
+      branch: targetBranch,
       files,
       message: 'Configure Juanie CI/CD [skip ci]',
     });
@@ -1334,7 +1353,7 @@ async function pushCicdConfig(
   await onProgress?.(100, 'Juanie CI/CD 配置已注入');
   scopedLogger.info('Pushed Juanie CI/CD config', {
     monorepoType: isMonorepo ? monorepoType : 'none',
-    repositoryFullName: project.repository.fullName,
+    repositoryFullName: repository.fullName,
   });
 }
 
@@ -1775,7 +1794,9 @@ async function configureReleaseTrigger(
   scopedLogger.info('Configuring release trigger for project', { projectName: project.name });
   await onProgress?.(20, '准备发布触发配置');
 
-  if (!project.repository) {
+  const repository = project.repository;
+
+  if (!repository) {
     scopedLogger.warn('No repository linked, skipping release trigger configuration');
     await onProgress?.(100, '项目还没有仓库，跳过发布触发配置');
     return;
@@ -1786,11 +1807,11 @@ async function configureReleaseTrigger(
   await onProgress?.(60, '计算镜像仓库地址');
   const imageName = resolveDeployImageRepository({
     configJson: project.configJson,
-    repositoryFullName: project.repository.fullName,
+    repositoryFullName: repository.fullName,
   });
 
   if (!imageName) {
-    throw new Error(`Cannot resolve deploy image repository for ${project.repository.fullName}`);
+    throw new Error(`Cannot resolve deploy image repository for ${repository.fullName}`);
   }
 
   await db
@@ -1806,7 +1827,7 @@ async function configureReleaseTrigger(
 
   await onProgress?.(100, '发布触发配置完成');
   scopedLogger.info('Configured release trigger for repository', {
-    repositoryFullName: project.repository.fullName,
+    repositoryFullName: repository.fullName,
     imageName,
   });
 }
@@ -1882,7 +1903,9 @@ async function triggerInitialAutoDeployBuilds(
   },
   onProgress?: StepProgressReporter
 ): Promise<void> {
-  if (!project.repository?.fullName || !project.repository.providerId) {
+  const repository = project.repository;
+
+  if (!repository?.fullName || !repository.providerId) {
     await onProgress?.(100, '项目还没有仓库，跳过首发构建触发');
     return;
   }
@@ -1901,11 +1924,11 @@ async function triggerInitialAutoDeployBuilds(
   const scopedLogger = projectInitLogger.child({
     projectId: project.id,
     step: 'trigger_initial_auto_deploy_builds',
-    repositoryFullName: project.repository.fullName,
+    repositoryFullName: repository.fullName,
   });
 
   const session = await getTeamIntegrationSession({
-    integrationId: project.repository.providerId,
+    integrationId: repository.providerId,
     teamId: project.teamId,
     requiredCapabilities: requiredCapabilitiesForStep('trigger_initial_builds'),
   });
@@ -1921,11 +1944,7 @@ async function triggerInitialAutoDeployBuilds(
       `检查 ${ref.replace(/^refs\/heads\//, '')} 最新提交`
     );
 
-    const sourceCommitSha = await gateway.resolveRefToCommitSha(
-      session,
-      project.repository.fullName,
-      ref
-    );
+    const sourceCommitSha = await gateway.resolveRefToCommitSha(session, repository.fullName, ref);
 
     if (!sourceCommitSha) {
       missingRefs.push(ref);
@@ -1950,7 +1969,7 @@ async function triggerInitialAutoDeployBuilds(
 
     try {
       await gateway.triggerReleaseBuild(session, {
-        repoFullName: project.repository.fullName,
+        repoFullName: repository.fullName,
         ref,
         releaseRef: ref,
         sourceCommitSha,

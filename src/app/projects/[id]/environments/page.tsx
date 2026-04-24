@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { EnvironmentsPageClient } from '@/components/projects/EnvironmentsPageClient';
+import { getProjectAccessOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
-import { getProjectMemberRole } from '@/lib/environments/page-context';
 import { getProjectEnvironmentListData } from '@/lib/environments/page-data';
 
 export default async function ProjectEnvironmentsPage({
@@ -19,18 +19,19 @@ export default async function ProjectEnvironmentsPage({
     redirect('/login');
   }
 
-  const access = await getProjectMemberRole(id, session.user.id);
+  const access = await getProjectAccessOrNull(id, session.user.id);
   if (!access) {
     redirect('/projects');
   }
 
-  if (resolvedSearchParams?.new === 'preview') {
-    const initialData = await getProjectEnvironmentListData(id, access.member.role);
+  const initialData = await getProjectEnvironmentListData({
+    project: access.project,
+    role: access.member.role,
+  });
 
+  if (resolvedSearchParams?.new === 'preview') {
     return <EnvironmentsPageClient projectId={id} initialData={initialData} initialCreateOpen />;
   }
-
-  const initialData = await getProjectEnvironmentListData(id, access.member.role);
 
   return <EnvironmentsPageClient projectId={id} initialData={initialData} />;
 }

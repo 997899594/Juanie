@@ -7,8 +7,8 @@ import type { EnvironmentSummary } from '@/lib/ai/schemas/environment-summary';
 import type { EnvvarRisk } from '@/lib/ai/schemas/envvar-risk';
 import type { MigrationReview } from '@/lib/ai/schemas/migration-review';
 import { getEnvironmentTaskCenterData } from '@/lib/ai/tasks/environment-task-center';
+import { getProjectAccessOrNull, getProjectEnvironmentOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
-import { getProjectEnvironmentOrNull, getProjectMemberRole } from '@/lib/environments/page-context';
 import { getProjectEnvironmentListData } from '@/lib/environments/page-data';
 
 export default async function ProjectEnvironmentDetailPage({
@@ -23,7 +23,7 @@ export default async function ProjectEnvironmentDetailPage({
     redirect('/login');
   }
 
-  const access = await getProjectMemberRole(id, session.user.id);
+  const access = await getProjectAccessOrNull(id, session.user.id);
   if (!access) {
     redirect('/projects');
   }
@@ -41,7 +41,10 @@ export default async function ProjectEnvironmentDetailPage({
     initialTaskCenter,
     initialDynamicPluginPanels,
   ] = await Promise.all([
-    getProjectEnvironmentListData(id, access.member.role),
+    getProjectEnvironmentListData({
+      project: access.project,
+      role: access.member.role,
+    }),
     resolveAIPluginSnapshot<EnvironmentSummary>({
       pluginId: 'environment-summary',
       context: {

@@ -1,9 +1,8 @@
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
 import { runAtlasCommand } from '@/lib/atlas/cli';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
-import { databaseMigrations, projects } from '@/lib/db/schema';
+import { databaseMigrations } from '@/lib/db/schema';
 import {
   getAtlasDeclaredVersions,
   isAtlasDatabaseTarget,
@@ -13,23 +12,16 @@ import {
 import { fetchMigrationFilesFromRepoPath } from '@/lib/migrations/fetch';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import {
+  requireProjectRepositoryContext,
+  resolveProjectRepositoryDefaultBranch,
+} from '@/lib/projects/context';
+import {
   inspectEnvironmentSchemaState,
   resolveSchemaManagementSpec,
 } from '@/lib/schema-management/inspect';
 
 async function getProjectDefaultRef(projectId: string, branch?: string | null): Promise<string> {
-  if (branch) {
-    return branch;
-  }
-
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, projectId),
-    with: {
-      repository: true,
-    },
-  });
-
-  return project?.repository?.defaultBranch ?? 'main';
+  return resolveProjectRepositoryDefaultBranch(projectId, branch);
 }
 
 async function markSqlSchemaAligned(input: {
@@ -222,21 +214,17 @@ export async function markEnvironmentSchemaAligned(input: {
     throw new Error('账本接管后状态仍未对齐');
   }
 
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, input.projectId),
-    columns: {
-      id: true,
-      teamId: true,
-    },
-  });
+  const context = await requireProjectRepositoryContext(input.projectId, {
+    repositoryMissing: '项目缺少仓库绑定',
+  }).catch(() => null);
 
-  if (project) {
+  if (context) {
     await createAuditLog({
-      teamId: project.teamId,
+      teamId: context.project.teamId,
       userId: input.userId,
       action: 'project.updated',
       resourceType: 'project',
-      resourceId: project.id,
+      resourceId: context.project.id,
       metadata: {
         databaseId: input.databaseId,
         schemaAction: 'mark_aligned',

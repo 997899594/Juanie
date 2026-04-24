@@ -1,5 +1,6 @@
 import { and, count, desc, eq, gt, inArray } from 'drizzle-orm';
 import { getTeamAIControlPlane } from '@/lib/ai/runtime/control-plane';
+import { getTeamAccessOrNull } from '@/lib/api/page-access';
 import { db } from '@/lib/db';
 import {
   auditLogs,
@@ -9,7 +10,6 @@ import {
   teamIntegrationBindings,
   teamInvitations,
   teamMembers,
-  teams,
   users,
 } from '@/lib/db/schema';
 import { backfillOwnerBindingForTeam } from '@/lib/integrations/service/team-binding-service';
@@ -21,31 +21,9 @@ import {
   buildTeamOverviewView,
   buildTeamSettingsView,
 } from '@/lib/teams/view';
-import { isUuid } from '@/lib/uuid';
-
-async function getTeamAccess(teamId: string, userId: string) {
-  if (!isUuid(teamId)) {
-    return null;
-  }
-
-  const [team, member] = await Promise.all([
-    db.query.teams.findFirst({
-      where: eq(teams.id, teamId),
-    }),
-    db.query.teamMembers.findFirst({
-      where: and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, userId)),
-    }),
-  ]);
-
-  if (!team || !member) {
-    return null;
-  }
-
-  return { team, member };
-}
 
 export async function getTeamLayoutData(teamId: string, userId: string) {
-  const access = await getTeamAccess(teamId, userId);
+  const access = await getTeamAccessOrNull(teamId, userId);
 
   if (!access) {
     return null;
@@ -59,7 +37,7 @@ export async function getTeamLayoutData(teamId: string, userId: string) {
 }
 
 export async function getTeamOverviewPageData(teamId: string, userId: string) {
-  const access = await getTeamAccess(teamId, userId);
+  const access = await getTeamAccessOrNull(teamId, userId);
 
   if (!access) {
     return null;
@@ -88,7 +66,7 @@ export async function getTeamOverviewPageData(teamId: string, userId: string) {
 }
 
 export async function getTeamMembersPageData(teamId: string, userId: string) {
-  const access = await getTeamAccess(teamId, userId);
+  const access = await getTeamAccessOrNull(teamId, userId);
 
   if (!access) {
     return null;
@@ -132,7 +110,7 @@ export async function getTeamMembersPageData(teamId: string, userId: string) {
 }
 
 export async function getTeamSettingsPageData(teamId: string, userId: string) {
-  const access = await getTeamAccess(teamId, userId);
+  const access = await getTeamAccessOrNull(teamId, userId);
 
   if (!access) {
     return null;
@@ -179,7 +157,7 @@ export async function getTeamSettingsPageData(teamId: string, userId: string) {
 }
 
 export async function getTeamIntegrationsPageData(teamId: string, userId: string) {
-  const access = await getTeamAccess(teamId, userId);
+  const access = await getTeamAccessOrNull(teamId, userId);
 
   if (!access) {
     return null;

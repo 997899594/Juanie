@@ -7,6 +7,7 @@ import {
   normalizeApiError,
   statusByCode,
 } from '@/lib/integrations/service/integration-control-plane';
+import { getRepositoryDefaultBranch } from '@/lib/projects/context';
 
 type NormalizableError = {
   code?: string;
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
         id: repo.id,
         fullName: repo.fullName,
         name: repo.name,
-        defaultBranch: repo.defaultBranch || 'main',
+        defaultBranch: getRepositoryDefaultBranch(repo),
       }))
     );
   } catch (error) {

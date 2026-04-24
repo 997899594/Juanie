@@ -2,8 +2,8 @@ import { notFound, redirect } from 'next/navigation';
 import { EnvironmentResourcePanel } from '@/components/projects/EnvironmentResourcePanel';
 import { EnvironmentSectionNav } from '@/components/projects/EnvironmentSectionNav';
 import { PageHeader } from '@/components/ui/page-header';
+import { getProjectAccessOrNull, getProjectEnvironmentOrNull } from '@/lib/api/page-access';
 import { auth } from '@/lib/auth';
-import { getProjectEnvironmentOrNull, getProjectMemberRole } from '@/lib/environments/page-context';
 
 export default async function ProjectEnvironmentDiagnosticsPage({
   params,
@@ -17,7 +17,7 @@ export default async function ProjectEnvironmentDiagnosticsPage({
     redirect('/login');
   }
 
-  const access = await getProjectMemberRole(id, session.user.id);
+  const access = await getProjectAccessOrNull(id, session.user.id);
   if (!access) {
     redirect('/projects');
   }

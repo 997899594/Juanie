@@ -8,6 +8,7 @@ import {
   isPreviewEnvironment,
   isProductionEnvironment,
 } from '@/lib/environments/model';
+import { getProjectProductionBranch } from '@/lib/projects/context';
 import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
@@ -47,7 +48,7 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
       description: access.project.description,
       repositoryFullName: access.project.repository?.fullName ?? null,
       repositoryWebUrl: access.project.repository?.webUrl ?? null,
-      productionBranch: access.project.productionBranch ?? 'main',
+      productionBranch: getProjectProductionBranch(access.project),
       status: runtimeStatus.status ?? 'initializing',
       statusLabel: runtimeStatus.statusLabel,
       statusMessage: access.project.statusMessage ?? runtimeStatus.summary ?? null,
