@@ -6,8 +6,7 @@ import type { V1Job } from '@kubernetes/client-node';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
-import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
-import { getTeamIntegrationSession } from '@/lib/integrations/service/integration-control-plane';
+import { schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
 import { createJob, deleteJob, isK8sAvailable } from '@/lib/k8s';
 import { prepareAtlasDevDatabaseSession } from '@/lib/migrations/atlas-dev-database';
 import { resolveMigrationPath } from '@/lib/migrations/path';
@@ -19,6 +18,11 @@ import {
   createRepositorySourceWorkspace,
 } from '@/lib/repositories/source-workspace';
 import { resolveSchemaManagementSpec } from '@/lib/schema-management/inspect';
+import {
+  loadSchemaRepairAtlasRunExecutionContext,
+  loadSchemaRepairPlanExecutionContext,
+  requireSchemaRepairRepositorySession,
+} from '@/lib/schema-management/repair-context';
 import { buildSchemaRepairRuntimeArtifacts } from '@/lib/schema-management/review-request-helpers';
 import {
   buildSchemaRunnerJob,
@@ -132,27 +136,10 @@ export async function createSchemaRepairAtlasRun(input: {
   planId: string;
   userId: string;
 }) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, input.projectId),
-    with: {
-      repository: true,
-    },
+  const { plan } = await loadSchemaRepairPlanExecutionContext({
+    projectId: input.projectId,
+    planId: input.planId,
   });
-
-  if (!project?.repository) {
-    throw new Error('项目缺少仓库绑定');
-  }
-
-  const plan = await db.query.schemaRepairPlans.findFirst({
-    where: eq(schemaRepairPlans.id, input.planId),
-    with: {
-      database: true,
-    },
-  });
-
-  if (!plan || plan.projectId !== input.projectId) {
-    throw new Error('修复计划不存在');
-  }
 
   const activeRun = await db.query.schemaRepairAtlasRuns.findFirst({
     where: and(
@@ -355,39 +342,14 @@ export async function executeSchemaRepairAtlasRun(input: {
   projectId: string;
   userId?: string | null;
 }) {
-  const run = await db.query.schemaRepairAtlasRuns.findFirst({
-    where: eq(schemaRepairAtlasRuns.id, input.atlasRunId),
+  const { project, plan, run } = await loadSchemaRepairAtlasRunExecutionContext({
+    projectId: input.projectId,
+    atlasRunId: input.atlasRunId,
   });
 
-  if (!run || run.projectId !== input.projectId) {
-    throw new Error('Atlas 执行记录不存在');
-  }
-
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, input.projectId),
-    with: {
-      repository: true,
-    },
-  });
-
-  if (!project?.repository) {
-    throw new Error('项目缺少仓库绑定');
-  }
-
-  const plan = await db.query.schemaRepairPlans.findFirst({
-    where: eq(schemaRepairPlans.id, run.planId),
-    with: {
-      database: true,
-    },
-  });
-
-  if (!plan) {
-    throw new Error('修复计划不存在');
-  }
-
-  const session = await getTeamIntegrationSession({
+  const session = await requireSchemaRepairRepositorySession({
     teamId: project.teamId,
-    actingUserId: input.userId ?? null,
+    userId: input.userId ?? null,
     requiredCapabilities: ['read_repo', 'write_repo'],
   });
 

@@ -1,14 +1,16 @@
-import { desc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { createAuditLog } from '@/lib/audit';
 import { db } from '@/lib/db';
 import type { EnvironmentSchemaStateStatus, SchemaRepairPlanKind } from '@/lib/db/schema';
-import { projects, schemaRepairAtlasRuns, schemaRepairPlans } from '@/lib/db/schema';
-import {
-  gateway,
-  getTeamIntegrationSession,
-} from '@/lib/integrations/service/integration-control-plane';
+import { schemaRepairPlans } from '@/lib/db/schema';
+import { gateway } from '@/lib/integrations/service/integration-control-plane';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
+import {
+  loadLatestSchemaRepairGeneratedArtifacts,
+  loadSchemaRepairPlanExecutionContext,
+  requireSchemaRepairRepositorySession,
+} from '@/lib/schema-management/repair-context';
 import { toPersistedSchemaRepairPlan } from '@/lib/schema-management/repair-plan';
 
 function sanitizeBranchSegment(value: string): string {
@@ -98,36 +100,18 @@ export async function createSchemaRepairReviewRequest(input: {
   planId: string;
   userId: string;
 }) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, input.projectId),
-    with: {
-      repository: true,
-    },
+  const { project, plan } = await loadSchemaRepairPlanExecutionContext({
+    projectId: input.projectId,
+    planId: input.planId,
   });
-
-  if (!project?.repository) {
-    throw new Error('项目缺少仓库绑定，无法生成修复 PR');
-  }
-
-  const plan = await db.query.schemaRepairPlans.findFirst({
-    where: eq(schemaRepairPlans.id, input.planId),
-    with: {
-      database: true,
-      environment: true,
-    },
-  });
-
-  if (!plan || plan.projectId !== input.projectId) {
-    throw new Error('修复计划不存在');
-  }
 
   if (!['repair_pr_required', 'adopt_current_db', 'manual_investigation'].includes(plan.kind)) {
     throw new Error('当前修复计划不需要生成 PR');
   }
 
-  const session = await getTeamIntegrationSession({
+  const session = await requireSchemaRepairRepositorySession({
     teamId: project.teamId,
-    actingUserId: input.userId,
+    userId: input.userId,
     requiredCapabilities: ['write_repo'],
   });
 
@@ -152,25 +136,7 @@ export async function createSchemaRepairReviewRequest(input: {
       steps: Array.isArray(plan.steps) ? (plan.steps as string[]) : [],
     },
   });
-  const latestSuccessfulRun = await db.query.schemaRepairAtlasRuns.findFirst({
-    where: eq(schemaRepairAtlasRuns.planId, plan.id),
-    orderBy: [desc(schemaRepairAtlasRuns.createdAt)],
-  });
-
-  const generatedArtifacts =
-    latestSuccessfulRun?.status === 'succeeded' &&
-    latestSuccessfulRun.artifactFiles &&
-    typeof latestSuccessfulRun.artifactFiles === 'object'
-      ? {
-          files: latestSuccessfulRun.artifactFiles as Record<string, string>,
-          generatedFiles: Array.isArray(latestSuccessfulRun.generatedFiles)
-            ? (latestSuccessfulRun.generatedFiles as string[])
-            : Object.keys(latestSuccessfulRun.artifactFiles as Record<string, string>),
-        }
-      : {
-          files: {},
-          generatedFiles: [],
-        };
+  const generatedArtifacts = await loadLatestSchemaRepairGeneratedArtifacts(plan.id);
 
   if (
     !canCreateReviewWithoutDraft(plan.kind) &&

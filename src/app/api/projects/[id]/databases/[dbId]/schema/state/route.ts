@@ -1,11 +1,10 @@
-import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
+import { requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
-import { db } from '@/lib/db';
-import { databases } from '@/lib/db/schema';
-import { getEnvironmentSchemaState } from '@/lib/schema-management/inspect';
-import { getEnvironmentSchemaStateLabel } from '@/lib/schema-management/presentation';
+import {
+  getStoredSchemaStateForDatabase,
+  isSchemaManagementActionError,
+} from '@/lib/schema-management/control-service';
 
 export async function GET(
   _request: Request,
@@ -14,31 +13,21 @@ export async function GET(
   try {
     const { id: projectId, dbId } = await params;
     const session = await requireSession();
-    await getProjectAccessOrThrow(projectId, session.user.id);
-
-    const database = await db.query.databases.findFirst({
-      where: and(eq(databases.id, dbId), eq(databases.projectId, projectId)),
-      columns: {
-        id: true,
-      },
+    const state = await getStoredSchemaStateForDatabase({
+      projectId,
+      databaseId: dbId,
+      userId: session.user.id,
     });
-
-    if (!database) {
-      return NextResponse.json({ error: '数据库不存在' }, { status: 404 });
-    }
-
-    const state = await getEnvironmentSchemaState(projectId, dbId);
     return NextResponse.json({
-      state: state
-        ? {
-            ...state,
-            statusLabel: getEnvironmentSchemaStateLabel(state.status),
-          }
-        : null,
+      state,
     });
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
+    }
+
+    if (isSchemaManagementActionError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
     const message = error instanceof Error ? error.message : 'Unknown error';

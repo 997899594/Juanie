@@ -17,6 +17,7 @@ import {
 } from '@/lib/realtime/releases';
 import { cancelSupersededDeployments } from '@/lib/releases/deployment-coordination';
 import { syncReleaseGitTrackingSafely } from '@/lib/releases/environment-tracking';
+import { resolveMigrationPhaseNextAction } from '@/lib/releases/phase-progress';
 import { persistReleaseRecapById } from '@/lib/releases/recap-service';
 import {
   getObservedDeploymentTerminalStatus,
@@ -43,25 +44,22 @@ const supersedableRunStatuses: MigrationRunStatus[] = [
 ];
 const releaseOrchestrationLogger = logger.child({ component: 'release-orchestration' });
 
-export class ReleaseApprovalRequiredError extends Error {
-  constructor(
-    readonly runId: string,
-    readonly phase: 'preDeploy' | 'postDeploy'
-  ) {
-    super(`Migration run ${runId} is awaiting approval`);
-    this.name = 'ReleaseApprovalRequiredError';
-  }
-}
-
-export class ReleaseExternalCompletionRequiredError extends Error {
-  constructor(
-    readonly runId: string,
-    readonly phase: 'preDeploy' | 'postDeploy'
-  ) {
-    super(`Migration run ${runId} is awaiting external completion`);
-    this.name = 'ReleaseExternalCompletionRequiredError';
-  }
-}
+export type StartReleaseMigrationPhaseResult =
+  | {
+      kind: 'completed';
+    }
+  | {
+      kind: 'queued';
+      runId: string;
+    }
+  | {
+      kind: 'awaiting_approval';
+      runId: string;
+    }
+  | {
+      kind: 'awaiting_external_completion';
+      runId: string;
+    };
 
 export async function loadReleaseForOrchestration(releaseId: string) {
   return db.query.releases.findFirst({
@@ -157,58 +155,53 @@ async function cancelSupersededPendingReleases(target: OrchestratedRelease) {
   }
 }
 
-export async function waitForMigrationRun(runId: string): Promise<MigrationRunStatus> {
-  for (let attempts = 0; attempts < 300; attempts++) {
-    const run = await db.query.migrationRuns.findFirst({
-      where: eq(migrationRuns.id, runId),
-    });
+async function driveReleaseMigrationPhaseForward(
+  release: OrchestratedRelease,
+  phase: 'preDeploy' | 'postDeploy',
+  runs: Array<{
+    id: string;
+    status: MigrationRunStatus;
+    createdAt: Date;
+  }>
+): Promise<StartReleaseMigrationPhaseResult> {
+  const action = resolveMigrationPhaseNextAction(runs);
 
-    if (!run) {
-      throw new Error(`Migration run ${runId} not found`);
-    }
-
-    if (
-      run.status === 'success' ||
-      run.status === 'failed' ||
-      run.status === 'awaiting_approval' ||
-      run.status === 'awaiting_external_completion' ||
-      run.status === 'canceled' ||
-      run.status === 'skipped'
-    ) {
-      return run.status;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  switch (action.kind) {
+    case 'running':
+      return {
+        kind: 'queued',
+        runId:
+          runs.find((run) => run.status === 'planning' || run.status === 'running')?.id ??
+          runs[0]?.id ??
+          release.id,
+      };
+    case 'start_run':
+      await addMigrationJob(action.runId, { allowApprovalBypass: false });
+      return {
+        kind: 'queued',
+        runId: action.runId,
+      };
+    case 'awaiting_approval':
+      await updateReleaseStatus(release.id, 'awaiting_approval');
+      await cancelSupersededPendingReleases(release);
+      return action;
+    case 'awaiting_external_completion':
+      await updateReleaseStatus(release.id, 'awaiting_external_completion');
+      await cancelSupersededPendingReleases(release);
+      return action;
+    case 'completed':
+      return action;
+    case 'blocked':
+      throw new Error(
+        `Migration run ${action.runId} for ${phase} is in terminal status ${action.status}`
+      );
   }
-
-  throw new Error(`Timed out waiting for migration run ${runId}`);
 }
 
-async function waitForDeployment(deploymentId: string): Promise<ObservedDeploymentTerminalStatus> {
-  for (let attempts = 0; attempts < 300; attempts++) {
-    const deployment = await db.query.deployments.findFirst({
-      where: eq(deployments.id, deploymentId),
-    });
-
-    if (!deployment) {
-      throw new Error(`Deployment ${deploymentId} not found`);
-    }
-
-    const observed = getObservedDeploymentTerminalStatus(deployment.status);
-    if (observed) {
-      return observed;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  throw new Error(`Timed out waiting for deployment ${deploymentId}`);
-}
-
-export async function runReleaseMigrationPhase(
+export async function startReleaseMigrationPhase(
   release: OrchestratedRelease,
   phase: 'preDeploy' | 'postDeploy'
-) {
+): Promise<StartReleaseMigrationPhaseResult> {
   const createdRuns = await resolveAndCreateMigrationRuns(
     release.projectId,
     release.environmentId,
@@ -224,31 +217,10 @@ export async function runReleaseMigrationPhase(
     }
   );
 
-  for (const run of createdRuns) {
-    if (run.status === 'queued') {
-      await addMigrationJob(run.id, { allowApprovalBypass: false });
-    }
-
-    const result = await waitForMigrationRun(run.id);
-    if (result === 'awaiting_approval') {
-      await updateReleaseStatus(release.id, 'awaiting_approval');
-      await cancelSupersededPendingReleases(release);
-      throw new ReleaseApprovalRequiredError(run.id, phase);
-    }
-
-    if (result === 'awaiting_external_completion') {
-      await updateReleaseStatus(release.id, 'awaiting_external_completion');
-      await cancelSupersededPendingReleases(release);
-      throw new ReleaseExternalCompletionRequiredError(run.id, phase);
-    }
-
-    if (result !== 'success') {
-      throw new Error(`Migration run ${run.id} ended with status ${result}`);
-    }
-  }
+  return driveReleaseMigrationPhaseForward(release, phase, createdRuns);
 }
 
-export async function continueReleaseFromDeploymentStage(
+export async function startReleaseDeploymentStage(
   releaseId: string,
   loadedRelease?: OrchestratedRelease
 ) {
@@ -263,7 +235,9 @@ export async function continueReleaseFromDeploymentStage(
     throw new Error('Release has no artifacts to deploy');
   }
 
-  await updateReleaseStatus(release.id, 'deploying');
+  if (release.status !== 'deploying') {
+    await updateReleaseStatus(release.id, 'deploying');
+  }
 
   const existingDeployments = await db.query.deployments.findMany({
     where: eq(deployments.releaseId, release.id),
@@ -310,55 +284,45 @@ export async function continueReleaseFromDeploymentStage(
     releaseDeployments.push(deployment);
   }
 
-  const deploymentResults = [];
+  return {
+    success: true,
+    awaitingRollout: false,
+    deploymentIds: releaseDeployments.map((deployment) => deployment.id),
+  };
+}
 
-  for (const deployment of releaseDeployments) {
-    const result =
-      getObservedDeploymentTerminalStatus(deployment.status) ??
-      (await waitForDeployment(deployment.id));
-    const latestDeployment = await db.query.deployments.findFirst({
-      where: eq(deployments.id, deployment.id),
-      columns: {
-        errorMessage: true,
-      },
-    });
-    deploymentResults.push({
-      id: deployment.id,
-      status: result,
-      errorMessage: latestDeployment?.errorMessage ?? null,
-    });
+async function completeSuccessfulRelease(releaseId: string) {
+  await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[2]);
+  await syncReleaseGitTrackingSafely(releaseId);
+  await persistReleaseRecapSafely(releaseId);
+}
+
+export async function continueReleaseAfterDeployments(releaseId: string) {
+  const release = await loadReleaseForOrchestration(releaseId);
+
+  if (!release) {
+    throw new Error(`Release ${releaseId} not found`);
   }
 
-  const resolution = resolveReleaseDeploymentResolution(deploymentResults);
+  await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[0]);
+  await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[1]);
 
-  if (resolution.kind === 'failed') {
-    await updateReleaseStatus(
-      release.id,
-      resolution.failureStatus ?? 'failed',
-      resolution.message ?? 'Deployment phase failed'
-    );
-    await persistReleaseRecapSafely(release.id);
-    throw new Error(resolution.message ?? 'Deployment phase failed');
+  const phaseResult = await startReleaseMigrationPhase(release, 'postDeploy');
+  if (phaseResult.kind === 'completed') {
+    await completeSuccessfulRelease(releaseId);
+    return {
+      success: true,
+      completed: true,
+    };
   }
 
-  if (resolution.kind === 'canceled') {
-    await updateReleaseStatus(
-      release.id,
-      resolution.failureStatus ?? 'canceled',
-      resolution.message ?? 'Deployment phase canceled'
-    );
-    await persistReleaseRecapSafely(release.id);
-    return { success: false, awaitingRollout: false, canceled: true };
-  }
+  await persistReleaseRecapSafely(releaseId);
 
-  if (resolution.kind === 'awaiting_rollout') {
-    await updateReleaseStatus(release.id, 'awaiting_rollout');
-    await persistReleaseRecapSafely(release.id);
-    return { success: true, awaitingRollout: true };
-  }
-
-  await completeReleaseAfterDeployments(release.id);
-  return { success: true, awaitingRollout: false };
+  return {
+    success: true,
+    completed: false,
+    phaseResult,
+  };
 }
 
 export async function failReleaseForCurrentPhase(releaseId: string, errorMessage: string) {
@@ -369,22 +333,6 @@ export async function failReleaseForCurrentPhase(releaseId: string, errorMessage
 
   await updateReleaseStatus(releaseId, resolveReleaseFailureStatus(current?.status), errorMessage);
 
-  await persistReleaseRecapSafely(releaseId);
-}
-
-export async function completeReleaseAfterDeployments(releaseId: string) {
-  const release = await loadReleaseForOrchestration(releaseId);
-
-  if (!release) {
-    throw new Error(`Release ${releaseId} not found`);
-  }
-
-  for (const status of postDeploymentReleaseStatuses.slice(0, 2)) {
-    await updateReleaseStatus(releaseId, status);
-  }
-  await runReleaseMigrationPhase(release, 'postDeploy');
-  await updateReleaseStatus(releaseId, postDeploymentReleaseStatuses[2]);
-  await syncReleaseGitTrackingSafely(releaseId);
   await persistReleaseRecapSafely(releaseId);
 }
 
@@ -446,39 +394,139 @@ export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
     return { resumed: false, reason: 'release_missing' as const };
   }
 
-  if (
-    run.specification.phase === 'preDeploy' &&
-    (run.release.status === 'awaiting_approval' ||
-      run.release.status === 'awaiting_external_completion' ||
-      run.release.status === 'migration_pre_running')
-  ) {
-    const latestRuns = await loadLatestReleaseMigrationRuns(run.releaseId, 'preDeploy');
-    if (latestRuns.length === 0 || latestRuns.some((candidate) => candidate.status !== 'success')) {
-      return { resumed: false, reason: 'predeploy_not_ready' as const };
-    }
+  const phase = run.specification.phase;
+  if (phase === 'manual') {
+    return { resumed: false, reason: 'manual_phase_not_supported' as const };
+  }
 
-    await continueReleaseFromDeploymentStage(run.releaseId);
+  if (
+    run.release.status !== 'awaiting_approval' &&
+    run.release.status !== 'awaiting_external_completion' &&
+    run.release.status !== 'migration_pre_running' &&
+    run.release.status !== 'migration_post_running'
+  ) {
+    return { resumed: false, reason: 'release_state_not_match' as const };
+  }
+
+  const release = await loadReleaseForOrchestration(run.releaseId);
+  if (!release) {
+    return { resumed: false, reason: 'release_missing' as const };
+  }
+
+  const latestRuns = await loadLatestReleaseMigrationRuns(run.releaseId, phase);
+  const phaseResult = await driveReleaseMigrationPhaseForward(release, phase, latestRuns);
+
+  if (phaseResult.kind === 'queued') {
+    return {
+      resumed: true,
+      reason: phase === 'preDeploy' ? 'predeploy_progressed' : 'postdeploy_progressed',
+    };
+  }
+
+  if (
+    phaseResult.kind === 'awaiting_approval' ||
+    phaseResult.kind === 'awaiting_external_completion'
+  ) {
+    await persistReleaseRecapSafely(run.releaseId);
+    return {
+      resumed: true,
+      reason: phase === 'preDeploy' ? 'predeploy_waiting' : 'postdeploy_waiting',
+    };
+  }
+
+  if (phase === 'preDeploy') {
+    await startReleaseDeploymentStage(run.releaseId, release);
     return { resumed: true, reason: 'predeploy_resumed' as const };
   }
 
-  if (
-    run.specification.phase === 'postDeploy' &&
-    (run.release.status === 'awaiting_approval' ||
-      run.release.status === 'awaiting_external_completion' ||
-      run.release.status === 'migration_post_running')
-  ) {
-    const latestRuns = await loadLatestReleaseMigrationRuns(run.releaseId, 'postDeploy');
-    if (latestRuns.length === 0 || latestRuns.some((candidate) => candidate.status !== 'success')) {
-      return { resumed: false, reason: 'postdeploy_not_ready' as const };
-    }
+  await completeSuccessfulRelease(run.releaseId);
+  return { resumed: true, reason: 'postdeploy_healed' as const };
+}
 
-    await updateReleaseStatus(run.releaseId, 'succeeded');
-    await syncReleaseGitTrackingSafely(run.releaseId);
-    await persistReleaseRecapSafely(run.releaseId);
-    return { resumed: true, reason: 'postdeploy_healed' as const };
+export async function resumeReleaseAfterDeploymentProgress(deploymentId: string) {
+  const deployment = await db.query.deployments.findFirst({
+    where: eq(deployments.id, deploymentId),
+    columns: {
+      id: true,
+      releaseId: true,
+    },
+  });
+
+  if (!deployment?.releaseId) {
+    return { resumed: false, reason: 'deployment_not_linked' as const };
   }
 
-  return { resumed: false, reason: 'release_state_not_match' as const };
+  const release = await db.query.releases.findFirst({
+    where: eq(releases.id, deployment.releaseId),
+    columns: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!release || release.status !== 'deploying') {
+    return { resumed: false, reason: 'release_not_deploying' as const };
+  }
+
+  const releaseDeployments = await db.query.deployments.findMany({
+    where: eq(deployments.releaseId, deployment.releaseId),
+    columns: {
+      id: true,
+      status: true,
+      errorMessage: true,
+    },
+  });
+
+  if (releaseDeployments.length === 0) {
+    return { resumed: false, reason: 'deployments_missing' as const };
+  }
+
+  const observedDeployments = releaseDeployments.map((item) => ({
+    id: item.id,
+    status: getObservedDeploymentTerminalStatus(item.status),
+    errorMessage: item.errorMessage ?? null,
+  }));
+
+  if (observedDeployments.some((item) => item.status === null)) {
+    return { resumed: false, reason: 'deployments_in_progress' as const };
+  }
+
+  const resolution = resolveReleaseDeploymentResolution(
+    observedDeployments as Array<{
+      id: string;
+      status: ObservedDeploymentTerminalStatus;
+      errorMessage?: string | null;
+    }>
+  );
+
+  if (resolution.kind === 'failed') {
+    await updateReleaseStatus(
+      deployment.releaseId,
+      resolution.failureStatus ?? 'failed',
+      resolution.message ?? 'Deployment phase failed'
+    );
+    await persistReleaseRecapSafely(deployment.releaseId);
+    return { resumed: true, reason: 'deployment_failed' as const };
+  }
+
+  if (resolution.kind === 'canceled') {
+    await updateReleaseStatus(
+      deployment.releaseId,
+      resolution.failureStatus ?? 'canceled',
+      resolution.message ?? 'Deployment phase canceled'
+    );
+    await persistReleaseRecapSafely(deployment.releaseId);
+    return { resumed: true, reason: 'deployment_canceled' as const };
+  }
+
+  if (resolution.kind === 'awaiting_rollout') {
+    await updateReleaseStatus(deployment.releaseId, 'awaiting_rollout');
+    await persistReleaseRecapSafely(deployment.releaseId);
+    return { resumed: true, reason: 'awaiting_rollout' as const };
+  }
+
+  await continueReleaseAfterDeployments(deployment.releaseId);
+  return { resumed: true, reason: 'deployments_ready' as const };
 }
 
 export async function completeReleaseAfterRolloutIfReady(releaseId: string) {
@@ -508,6 +556,6 @@ export async function completeReleaseAfterRolloutIfReady(releaseId: string) {
     return false;
   }
 
-  await completeReleaseAfterDeployments(releaseId);
+  await continueReleaseAfterDeployments(releaseId);
   return true;
 }

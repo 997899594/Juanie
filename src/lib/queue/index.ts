@@ -146,6 +146,7 @@ export async function addDeploymentJob(
     { deploymentId, projectId, environmentId },
     {
       attempts: 1,
+      jobId: `deployment-${deploymentId}`,
     }
   );
 }
@@ -156,6 +157,7 @@ export async function addReleaseJob(releaseId: string) {
     { releaseId },
     {
       attempts: 1,
+      jobId: `release-${releaseId}`,
     }
   );
 }
@@ -169,6 +171,7 @@ export async function addMigrationJob(runId: string, options?: { allowApprovalBy
     },
     {
       attempts: 1,
+      jobId: `migration-${runId}`,
     }
   );
 }

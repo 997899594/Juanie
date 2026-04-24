@@ -7,13 +7,11 @@ import { releases } from '@/lib/db/schema';
 import { getDatabasesForEnvironment } from '@/lib/environments/inheritance';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import {
-  continueReleaseFromDeploymentStage,
   failReleaseForCurrentPhase,
   loadReleaseForOrchestration,
   persistReleaseRecapSafely,
-  ReleaseApprovalRequiredError,
-  ReleaseExternalCompletionRequiredError,
-  runReleaseMigrationPhase,
+  startReleaseDeploymentStage,
+  startReleaseMigrationPhase,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
 import { syncProjectDatabaseRuntimeContractsFromRepo } from '@/lib/services/runtime-contract';
@@ -51,31 +49,43 @@ export async function processRelease(job: Job<ReleaseJobData>) {
 
     await updateReleaseStatus(release.id, 'planning');
     await updateReleaseStatus(release.id, 'migration_pre_running');
-    await runReleaseMigrationPhase(release, 'preDeploy');
-    return await continueReleaseFromDeploymentStage(release.id, release);
-  } catch (error) {
-    if (error instanceof ReleaseApprovalRequiredError) {
+    const phaseResult = await startReleaseMigrationPhase(release, 'preDeploy');
+
+    if (phaseResult.kind === 'completed') {
+      return await startReleaseDeploymentStage(release.id, release);
+    }
+
+    if (phaseResult.kind === 'queued') {
+      return {
+        success: true,
+        terminal: false,
+        phase: 'preDeploy',
+        queuedRunId: phaseResult.runId,
+      };
+    }
+
+    if (phaseResult.kind === 'awaiting_approval') {
       await persistReleaseRecapSafely(release.id);
       return {
         success: false,
         terminal: true,
         approvalRequired: true,
-        runId: error.runId,
-        phase: error.phase,
+        runId: phaseResult.runId,
+        phase: 'preDeploy',
       };
     }
 
-    if (error instanceof ReleaseExternalCompletionRequiredError) {
+    if (phaseResult.kind === 'awaiting_external_completion') {
       await persistReleaseRecapSafely(release.id);
       return {
         success: false,
         terminal: true,
         externalCompletionRequired: true,
-        runId: error.runId,
-        phase: error.phase,
+        runId: phaseResult.runId,
+        phase: 'preDeploy',
       };
     }
-
+  } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const current = await db.query.releases.findFirst({
       where: eq(releases.id, release.id),

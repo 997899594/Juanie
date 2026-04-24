@@ -1,12 +1,13 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { projects, schemaRepairPlans } from '@/lib/db/schema';
-import {
-  gateway,
-  getTeamIntegrationSession,
-} from '@/lib/integrations/service/integration-control-plane';
+import { schemaRepairPlans } from '@/lib/db/schema';
+import { gateway } from '@/lib/integrations/service/integration-control-plane';
 import { publishSchemaRepairRealtimeSnapshot } from '@/lib/realtime/schema-repairs';
 import { inspectEnvironmentSchemaState } from '@/lib/schema-management/inspect';
+import {
+  loadSchemaRepairPlanExecutionContext,
+  requireSchemaRepairRepositorySession,
+} from '@/lib/schema-management/repair-context';
 import {
   isSchemaRepairResolvedStatus,
   markSchemaRepairPlanApplied,
@@ -48,32 +49,18 @@ export async function syncSchemaRepairReviewState(input: {
   planId: string;
   userId?: string | null;
 }) {
-  const project = await db.query.projects.findFirst({
-    where: eq(projects.id, input.projectId),
-    with: {
-      repository: true,
-    },
+  const { project, plan } = await loadSchemaRepairPlanExecutionContext({
+    projectId: input.projectId,
+    planId: input.planId,
   });
-
-  if (!project?.repository) {
-    throw new Error('项目缺少仓库绑定');
-  }
-
-  const plan = await db.query.schemaRepairPlans.findFirst({
-    where: eq(schemaRepairPlans.id, input.planId),
-  });
-
-  if (!plan || plan.projectId !== input.projectId) {
-    throw new Error('修复计划不存在');
-  }
 
   if (!plan.reviewNumber || !plan.reviewUrl) {
     throw new Error('当前修复计划还没有评审单');
   }
 
-  const session = await getTeamIntegrationSession({
+  const session = await requireSchemaRepairRepositorySession({
     teamId: project.teamId,
-    actingUserId: input.userId ?? null,
+    userId: input.userId ?? null,
     requiredCapabilities: ['read_repo'],
   });
 

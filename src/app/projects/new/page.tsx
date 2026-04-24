@@ -5,7 +5,7 @@ import { CreateProjectForm } from '@/components/projects/create-project-form';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { auth } from '@/lib/auth';
-import { getCreateProjectPageData } from '@/lib/projects/create-service';
+import { getCreateProjectPageData } from '@/lib/projects/create-page-service';
 
 export default async function NewProjectPage() {
   const session = await auth();

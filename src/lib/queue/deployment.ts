@@ -6,6 +6,7 @@ import { isK8sAvailable } from '@/lib/k8s';
 import { updateDeploymentRealtimeState } from '@/lib/realtime/deployments';
 import { resolveRedisConnectionOptions } from '@/lib/redis/config';
 import { SupersededDeploymentError } from '@/lib/releases/deployment-coordination';
+import { resumeReleaseAfterDeploymentProgress } from '@/lib/releases/orchestration';
 import { buildCandidateDeploymentName, buildStableDeploymentName } from '@/lib/releases/traffic';
 import { cleanupCandidateResources } from '@/lib/releases/workloads';
 import { executeDeploymentWorkload, logDeployment } from './deployment-executor';
@@ -66,6 +67,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
     await executeDeploymentWorkload(deployment.id, async (value) => {
       await job.updateProgress(value);
     });
+    await resumeReleaseAfterDeploymentProgress(deployment.id);
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -76,6 +78,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
         status: 'canceled',
         errorMessage: message,
       });
+      await resumeReleaseAfterDeploymentProgress(deployment.id);
       return { success: false, terminal: true, canceled: true };
     }
 
@@ -85,6 +88,7 @@ export async function processDeployment(job: Job<DeploymentJobData>) {
       status,
       errorMessage: message,
     });
+    await resumeReleaseAfterDeploymentProgress(deployment.id);
 
     await cleanupFailedCandidateResources(deployment.id).catch(async (cleanupError) => {
       const cleanupMessage =

@@ -1,11 +1,10 @@
-import { and, desc, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { getProjectAccessOrThrow, requireSession } from '@/lib/api/access';
+import { requireSession } from '@/lib/api/access';
 import { isAccessError, toAccessErrorResponse } from '@/lib/api/errors';
-import { db } from '@/lib/db';
-import { databases, schemaRepairPlans } from '@/lib/db/schema';
-import { canManageEnvironment, getEnvironmentGuardReason } from '@/lib/policies/delivery';
-import { createSchemaRepairReviewRequest } from '@/lib/schema-management/review-request';
+import {
+  createSchemaRepairReviewRequestForDatabase,
+  isSchemaManagementActionError,
+} from '@/lib/schema-management/control-service';
 
 export async function POST(
   _request: Request,
@@ -14,45 +13,9 @@ export async function POST(
   try {
     const { id: projectId, dbId } = await params;
     const session = await requireSession();
-    const { member } = await getProjectAccessOrThrow(projectId, session.user.id);
-
-    const database = await db.query.databases.findFirst({
-      where: and(eq(databases.id, dbId), eq(databases.projectId, projectId)),
-      with: {
-        environment: true,
-      },
-    });
-
-    if (!database) {
-      return NextResponse.json({ error: '数据库不存在' }, { status: 404 });
-    }
-
-    if (!database.environment) {
-      return NextResponse.json({ error: '数据库缺少环境绑定' }, { status: 400 });
-    }
-
-    if (!canManageEnvironment(member.role, database.environment)) {
-      return NextResponse.json(
-        { error: getEnvironmentGuardReason(database.environment) },
-        { status: 403 }
-      );
-    }
-
-    const latestPlan = await db.query.schemaRepairPlans.findFirst({
-      where: and(
-        eq(schemaRepairPlans.projectId, projectId),
-        eq(schemaRepairPlans.databaseId, dbId)
-      ),
-      orderBy: [desc(schemaRepairPlans.createdAt)],
-    });
-
-    if (!latestPlan) {
-      return NextResponse.json({ error: '请先检测并生成修复建议' }, { status: 400 });
-    }
-
-    const result = await createSchemaRepairReviewRequest({
+    const result = await createSchemaRepairReviewRequestForDatabase({
       projectId,
-      planId: latestPlan.id,
+      databaseId: dbId,
       userId: session.user.id,
     });
 
@@ -60,6 +23,10 @@ export async function POST(
   } catch (error) {
     if (isAccessError(error)) {
       return toAccessErrorResponse(error);
+    }
+
+    if (isSchemaManagementActionError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
     const message = error instanceof Error ? error.message : 'Unknown error';
