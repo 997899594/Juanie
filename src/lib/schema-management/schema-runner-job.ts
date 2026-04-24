@@ -1,7 +1,8 @@
 import type { V1Job } from '@kubernetes/client-node';
 import { createJob, deleteJob, getJob, getPodLogs, getPods, isK8sAvailable } from '@/lib/k8s';
 
-export type SchemaRunnerMode = 'schema-repair' | 'inspect';
+export type SchemaRunnerMode = 'schema-repair' | 'inspect' | 'migration';
+export type SchemaRunnerJobStatus = 'missing' | 'running' | 'succeeded' | 'failed';
 
 interface SchemaRunnerJobInput {
   namespace: string;
@@ -19,6 +20,10 @@ interface SchemaRunnerJobInput {
 function buildSchemaRunnerCommand(mode: SchemaRunnerMode): string[] {
   if (mode === 'inspect') {
     return ['./schema-runner', 'inspect'];
+  }
+
+  if (mode === 'migration') {
+    return ['./schema-runner', 'migration'];
   }
 
   return ['./schema-runner'];
@@ -135,6 +140,15 @@ function getJobConditionMessage(job: V1Job, type: 'Complete' | 'Failed'): string
   return condition?.message ?? condition?.reason ?? null;
 }
 
+function isK8sNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as { code?: number; statusCode?: number };
+  return (candidate.code ?? candidate.statusCode) === 404;
+}
+
 async function readSchemaRunnerJobFailure(
   namespace: string,
   jobName: string,
@@ -171,6 +185,49 @@ async function readSchemaRunnerJobFailure(
   }
 
   return podReason ? `${fallback}\n${podReason}` : fallback;
+}
+
+export async function getSchemaRunnerJobStatus(input: {
+  namespace?: string;
+  jobName: string;
+}): Promise<{
+  status: SchemaRunnerJobStatus;
+  message: string | null;
+}> {
+  const namespace = input.namespace ?? process.env.JUANIE_NAMESPACE ?? 'juanie';
+
+  try {
+    const job = await getJob(namespace, input.jobName);
+
+    if (getJobConditionMessage(job, 'Complete')) {
+      return {
+        status: 'succeeded',
+        message: getJobConditionMessage(job, 'Complete'),
+      };
+    }
+
+    const failedMessage = getJobConditionMessage(job, 'Failed');
+    if (failedMessage) {
+      return {
+        status: 'failed',
+        message: await readSchemaRunnerJobFailure(namespace, input.jobName, failedMessage),
+      };
+    }
+
+    return {
+      status: 'running',
+      message: null,
+    };
+  } catch (error) {
+    if (isK8sNotFoundError(error)) {
+      return {
+        status: 'missing',
+        message: null,
+      };
+    }
+
+    throw error;
+  }
 }
 
 export async function runSchemaRunnerJobAndWait(input: {
@@ -215,15 +272,17 @@ export async function runSchemaRunnerJobAndWait(input: {
     const deadline = Date.now() + timeoutMs;
 
     while (Date.now() < deadline) {
-      const job = await getJob(namespace, input.jobName);
+      const status = await getSchemaRunnerJobStatus({
+        namespace,
+        jobName: input.jobName,
+      });
 
-      if (getJobConditionMessage(job, 'Complete')) {
+      if (status.status === 'succeeded') {
         return;
       }
 
-      const failedMessage = getJobConditionMessage(job, 'Failed');
-      if (failedMessage) {
-        throw new Error(await readSchemaRunnerJobFailure(namespace, input.jobName, failedMessage));
+      if (status.status === 'failed') {
+        throw new Error(status.message ?? `Schema runner job ${input.jobName} 执行失败`);
       }
 
       await sleep(pollIntervalMs);

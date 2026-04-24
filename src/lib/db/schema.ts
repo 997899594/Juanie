@@ -120,7 +120,7 @@ export const migrationRunStatuses = [
 ] as const;
 export type MigrationRunStatus = (typeof migrationRunStatuses)[number];
 
-export const migrationRunnerTypes = ['worker'] as const;
+export const migrationRunnerTypes = ['worker', 'schema_runner', 'external'] as const;
 export type MigrationRunnerType = (typeof migrationRunnerTypes)[number];
 
 export const migrationLockStrategies = ['platform', 'db_advisory'] as const;
@@ -877,6 +877,7 @@ export const migrationRuns = pgTable(
 
     status: migrationRunStatusEnum('status').notNull().default('queued'),
     runnerType: migrationRunnerTypeEnum('runnerType').notNull().default('worker'),
+    jobName: varchar('jobName', { length: 255 }),
     lockKey: varchar('lockKey', { length: 255 }).notNull(),
 
     startedAt: timestamp('startedAt'),

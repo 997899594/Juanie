@@ -1,4 +1,5 @@
 import { applyControlPlaneMigrations } from '@/lib/db/control-plane-atlas';
+import { executeMigrationRunInExecutionService } from '@/lib/migrations/execution-service';
 import { shutdownSchemaRepairRealtimePublisher } from '@/lib/realtime/schema-repairs';
 import { executeSchemaRepairAtlasRun } from '@/lib/schema-management/atlas-run';
 import { inspectEnvironmentSchemaStateLocally } from '@/lib/schema-management/inspect';
@@ -37,6 +38,27 @@ async function runSchemaInspectMode(): Promise<void> {
   });
 }
 
+function parseBooleanEnv(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+async function runMigrationMode(): Promise<void> {
+  const runId = process.env.MIGRATION_RUN_ID;
+
+  if (!runId) {
+    throw new Error('MIGRATION_RUN_ID is required');
+  }
+
+  await executeMigrationRunInExecutionService({
+    runId,
+    allowApprovalBypass: parseBooleanEnv(process.env.MIGRATION_ALLOW_APPROVAL_BYPASS),
+  });
+}
+
 export async function runSchemaRunnerCli(args = process.argv): Promise<void> {
   const mode = args[2];
 
@@ -48,6 +70,11 @@ export async function runSchemaRunnerCli(args = process.argv): Promise<void> {
 
     if (mode === 'inspect') {
       await runSchemaInspectMode();
+      return;
+    }
+
+    if (mode === 'migration') {
+      await runMigrationMode();
       return;
     }
 

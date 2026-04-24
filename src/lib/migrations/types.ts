@@ -2,6 +2,7 @@ import type {
   databases,
   deployments,
   environments,
+  MigrationRunnerType,
   migrationRunItems,
   migrationRuns,
   migrationSpecifications,
@@ -55,7 +56,7 @@ export interface MigrationExecutionPlan {
   environmentPolicy: EnvironmentPolicySnapshot;
   migrationPolicy: MigrationPolicyDecision;
   releasePolicy: ReleasePolicySnapshot;
-  runnerType: 'worker' | 'external';
+  runnerType: MigrationRunnerType;
   database: {
     id: string;
     name: string;

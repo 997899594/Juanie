@@ -64,7 +64,7 @@ export async function createMigrationRun(
       sourceCommitSha: input.sourceCommitSha ?? null,
       sourceCommitMessage: input.sourceCommitMessage ?? null,
       status: input.initialStatus ?? 'queued',
-      runnerType: 'worker',
+      runnerType: spec.specification.executionMode === 'external' ? 'external' : 'schema_runner',
       lockKey,
     })
     .returning();
@@ -211,8 +211,7 @@ export async function buildMigrationExecutionPlan(
   });
   const warnings: string[] = [...migrationPolicy.warnings];
   const migrationPath = resolveMigrationPath(spec.specification, spec.database.type);
-  const runnerType: 'worker' | 'external' =
-    spec.specification.executionMode === 'external' ? 'external' : 'worker';
+  const runnerType = spec.specification.executionMode === 'external' ? 'external' : 'schema_runner';
   let canRun = spec.database.status === 'running';
   let blockingReason: string | null =
     spec.database.status === 'running'

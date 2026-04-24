@@ -1,4 +1,4 @@
-h1:eemWHy0pFhf57Vta+qRKNsiTq67aHRkEHiWWKGlTpWY=
+h1:U44xboQ3gqNQf/c9F/xc2N/KeFgc6aabQazY7yXH3SQ=
 20260414193000_control_plane_baseline.sql h1:Ntik26xgO1CoOU8s1lYeJ8bfHW/vbqb0Wlo3n1xjU08=
 20260415035534_add_integration_identity_server_url.sql h1:0/VIVniLSTgeFEYxpPljuHOBvNjMmqYhiHvdVPUxS4Q=
 20260415081041_environment_routing_phase1.sql h1:cLOjJfEKXM6rCuE7FayG7HxPRMBSFiu5B13KKcYDx9E=
@@ -14,3 +14,4 @@ h1:eemWHy0pFhf57Vta+qRKNsiTq67aHRkEHiWWKGlTpWY=
 20260422194000_ai_plugin_run_token_usage.sql h1:pMW/s8+xLUZnbiXaEeng/9wSDz6rB4+FAzdLeapF+6I=
 20260422195500_ai_tasks.sql h1:vnhW3aXEd9m2BNvSnVUvLWorKSY01dmIHCKnRg2HsZ8=
 20260423143000_project_status_message.sql h1:6ZM/YGvp2tqfWdjT/KQk3Z/MGvyhBfaItF69dTxhaiQ=
+20260424093000_migration_schema_runner_jobs.sql h1:uWlfSKd4HqiKdXjt8c7EX/gDom9iR1FCR3iKzoq0U7M=
