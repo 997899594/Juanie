@@ -1,4 +1,5 @@
 import { applyControlPlaneMigrations } from '@/lib/db/control-plane-atlas';
+import { shutdownSchemaRepairRealtimePublisher } from '@/lib/realtime/schema-repairs';
 import { executeSchemaRepairAtlasRun } from '@/lib/schema-management/atlas-run';
 import { inspectEnvironmentSchemaStateLocally } from '@/lib/schema-management/inspect';
 
@@ -36,23 +37,29 @@ async function runSchemaInspectMode(): Promise<void> {
   });
 }
 
-async function main(): Promise<void> {
-  const mode = process.argv[2];
+export async function runSchemaRunnerCli(args = process.argv): Promise<void> {
+  const mode = args[2];
 
-  if (mode === 'control-plane-apply') {
-    await applyControlPlaneMigrations();
-    return;
+  try {
+    if (mode === 'control-plane-apply') {
+      await applyControlPlaneMigrations();
+      return;
+    }
+
+    if (mode === 'inspect') {
+      await runSchemaInspectMode();
+      return;
+    }
+
+    await runSchemaRepairMode();
+  } finally {
+    await shutdownSchemaRepairRealtimePublisher();
   }
-
-  if (mode === 'inspect') {
-    await runSchemaInspectMode();
-    return;
-  }
-
-  await runSchemaRepairMode();
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
-  process.exit(1);
-});
+if (import.meta.main) {
+  runSchemaRunnerCli().catch((error) => {
+    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+    process.exit(1);
+  });
+}

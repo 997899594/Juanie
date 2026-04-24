@@ -4,7 +4,7 @@ import {
   summarizeAtlasSchemaDiffOutput,
 } from '@/lib/migrations/atlas';
 import {
-  buildPostgresScratchSearchPath,
+  buildPostgresScratchDatabaseUrl,
   getAtlasDevUrlEnvNames,
   getDefaultAtlasDevUrl,
   resolveAtlasDevUrlOverrideFromEnv,
@@ -40,8 +40,15 @@ describe('atlas migration helpers', () => {
     expect(getAtlasDevUrlEnvNames('mysql')).toEqual(['ATLAS_DEV_URL_MYSQL', 'ATLAS_DEV_URL']);
   });
 
-  it('keeps public in the postgres scratch search_path so extensions remain visible', () => {
-    expect(buildPostgresScratchSearchPath('atlas_dev_probe')).toBe('atlas_dev_probe,public');
+  it('uses an isolated scratch database instead of schema-scoped search_path', () => {
+    expect(
+      buildPostgresScratchDatabaseUrl(
+        'postgresql://postgres:postgres@postgres.juanie.svc.cluster.local:5432/juanie?sslmode=disable&search_path=public',
+        'atlas_dev_probe'
+      )
+    ).toBe(
+      'postgresql://postgres:postgres@postgres.juanie.svc.cluster.local:5432/atlas_dev_probe?sslmode=disable'
+    );
   });
 
   it('excludes platform ledger tables from schema diff', () => {

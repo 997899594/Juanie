@@ -47,6 +47,10 @@ function buildScratchIdentifier(prefix: string): string {
   return `${prefix}_${suffix}`;
 }
 
+function escapePostgresIdentifier(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
 function normalizeConfiguredPostgresDevUrl(rawUrl: string): string {
   return normalizeAtlasDatabaseUrl(normalizeDatabaseUrl(rawUrl));
 }
@@ -55,40 +59,83 @@ function normalizeConfiguredMySqlDevUrl(rawUrl: string): string {
   return normalizeAtlasDatabaseUrl(rawUrl.trim());
 }
 
-export function buildPostgresScratchSearchPath(schemaName: string): string {
-  return `${schemaName},public`;
+export function buildPostgresScratchDatabaseUrl(baseUrl: string, databaseName: string): string {
+  const url = new URL(normalizeConfiguredPostgresDevUrl(baseUrl));
+  url.pathname = `/${encodeURIComponent(databaseName)}`;
+  url.searchParams.delete('search_path');
+  return url.toString();
 }
 
-async function createPostgresScratchSchema(baseUrl: string): Promise<AtlasDevDatabaseSession> {
+async function createPostgresScratchDatabase(baseUrl: string): Promise<AtlasDevDatabaseSession> {
   const normalizedBaseUrl = normalizeConfiguredPostgresDevUrl(baseUrl);
-  const schemaName = buildScratchIdentifier('atlas_dev');
+  const scratchDatabase = buildScratchIdentifier('atlas_dev');
   const adminClient = new PgClient({ connectionString: normalizedBaseUrl });
 
   await adminClient.connect();
 
   try {
-    await adminClient.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+    const extensionRows = await adminClient.query<{
+      extensionName: string;
+      schemaName: string;
+    }>(
+      `SELECT e.extname AS "extensionName", n.nspname AS "schemaName"
+       FROM pg_extension e
+       INNER JOIN pg_namespace n ON n.oid = e.extnamespace
+       WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+       ORDER BY e.extname ASC`
+    );
+
+    await adminClient.query(`CREATE DATABASE ${escapePostgresIdentifier(scratchDatabase)}`);
+
+    const scratchUrl = buildPostgresScratchDatabaseUrl(normalizedBaseUrl, scratchDatabase);
+    const scratchClient = new PgClient({ connectionString: scratchUrl });
+
+    await scratchClient.connect();
+
+    try {
+      for (const extension of extensionRows.rows) {
+        await scratchClient.query(
+          `CREATE SCHEMA IF NOT EXISTS ${escapePostgresIdentifier(extension.schemaName)}`
+        );
+        await scratchClient.query(
+          `CREATE EXTENSION IF NOT EXISTS ${escapePostgresIdentifier(extension.extensionName)} SCHEMA ${escapePostgresIdentifier(extension.schemaName)}`
+        );
+      }
+    } finally {
+      await scratchClient.end().catch(() => undefined);
+    }
+
+    return {
+      url: scratchUrl,
+      cleanup: async () => {
+        const cleanupClient = new PgClient({ connectionString: normalizedBaseUrl });
+
+        await cleanupClient.connect();
+
+        try {
+          await cleanupClient.query(
+            `SELECT pg_terminate_backend(pid)
+             FROM pg_stat_activity
+             WHERE datname = $1
+               AND pid <> pg_backend_pid()`,
+            [scratchDatabase]
+          );
+          await cleanupClient.query(
+            `DROP DATABASE IF EXISTS ${escapePostgresIdentifier(scratchDatabase)}`
+          );
+        } finally {
+          await cleanupClient.end().catch(() => undefined);
+        }
+      },
+    };
+  } catch (error) {
+    await adminClient
+      .query(`DROP DATABASE IF EXISTS ${escapePostgresIdentifier(scratchDatabase)}`)
+      .catch(() => undefined);
+    throw error;
   } finally {
     await adminClient.end().catch(() => undefined);
   }
-
-  const url = new URL(normalizedBaseUrl);
-  url.searchParams.set('search_path', buildPostgresScratchSearchPath(schemaName));
-
-  return {
-    url: url.toString(),
-    cleanup: async () => {
-      const cleanupClient = new PgClient({ connectionString: normalizedBaseUrl });
-
-      await cleanupClient.connect();
-
-      try {
-        await cleanupClient.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
-      } finally {
-        await cleanupClient.end().catch(() => undefined);
-      }
-    },
-  };
 }
 
 async function createMySqlScratchDatabase(baseUrl: string): Promise<AtlasDevDatabaseSession> {
@@ -155,7 +202,7 @@ async function createConfiguredAtlasDevSession(
       );
     }
 
-    return createPostgresScratchSchema(configuredUrl);
+    return createPostgresScratchDatabase(configuredUrl);
   }
 
   if (protocol !== 'mysql:') {
@@ -177,7 +224,7 @@ export async function prepareAtlasDevDatabaseSession(
 
   if (databaseType === 'postgresql') {
     try {
-      return await createPostgresScratchSchema(getNormalizedDatabaseUrlFromEnv());
+      return await createPostgresScratchDatabase(getNormalizedDatabaseUrlFromEnv());
     } catch (error) {
       if (!hasExecutable('docker')) {
         const message = error instanceof Error ? error.message : String(error);

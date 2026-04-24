@@ -33,6 +33,15 @@ function getPublisher(): Redis | null {
   return publisher;
 }
 
+export async function shutdownSchemaRepairRealtimePublisher(): Promise<void> {
+  if (!publisher) {
+    return;
+  }
+
+  publisher.disconnect();
+  publisher = null;
+}
+
 function buildDatabaseWhere(projectId: string, environmentId?: string | null) {
   return environmentId
     ? and(eq(databases.projectId, projectId), eq(databases.environmentId, environmentId))
