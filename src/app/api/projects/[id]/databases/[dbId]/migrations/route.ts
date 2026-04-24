@@ -21,7 +21,7 @@ import type { MigrationResolutionInfo, ResolvedMigrationSpec } from '@/lib/migra
 import { addMigrationJob } from '@/lib/queue';
 import {
   persistReleaseRecapSafely,
-  resumeReleaseAfterSuccessfulMigration,
+  resumeReleaseAfterMigrationProgress,
   updateReleaseStatus,
 } from '@/lib/releases/orchestration';
 import { getReleaseRunningStatusForMigrationPhase } from '@/lib/releases/state-machine';
@@ -305,7 +305,7 @@ export async function POST(
         .where(eq(migrationRuns.id, run.id));
 
       if (run.releaseId) {
-        await resumeReleaseAfterSuccessfulMigration(run.id);
+        await resumeReleaseAfterMigrationProgress(run.id);
       }
 
       return NextResponse.json(

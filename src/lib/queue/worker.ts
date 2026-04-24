@@ -2,7 +2,7 @@ import { initK8sClient } from '@/lib/k8s';
 import { logger } from '@/lib/logger';
 import { createAITaskWorker } from './ai-task';
 import { createDeploymentWorker } from './deployment';
-import { createMigrationWorker } from './migration';
+import { createMigrationWorker, reconcileUnexpectedMigrationJobFailure } from './migration';
 import { createProjectDeleteWorker } from './project-delete';
 import { createProjectInitWorker } from './project-init';
 import { createReleaseWorker } from './release';
@@ -63,6 +63,18 @@ migrationWorker.on('completed', (job) => {
 
 migrationWorker.on('failed', (job, err) => {
   workerLogger.error('Migration job failed', err, { jobId: job?.id, queue: 'migration' });
+  const runId = job?.data?.runId;
+  if (!runId) {
+    return;
+  }
+
+  void reconcileUnexpectedMigrationJobFailure(runId, err).catch((reconcileError) => {
+    workerLogger.error('Failed to reconcile migration job failure', reconcileError, {
+      jobId: job?.id,
+      queue: 'migration',
+      runId,
+    });
+  });
 });
 
 schemaRepairAtlasWorker.on('completed', (job) => {

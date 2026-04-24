@@ -71,4 +71,21 @@ describe('release phase progress', () => {
       ])
     ).toEqual({ kind: 'completed' });
   });
+
+  it('treats failed runs as blocked once no active or queued work remains', () => {
+    expect(
+      resolveMigrationPhaseNextAction([
+        {
+          id: 'run-1',
+          status: 'success',
+          createdAt: baseTime,
+        },
+        {
+          id: 'run-2',
+          status: 'failed',
+          createdAt: new Date(baseTime.getTime() + 1000),
+        },
+      ])
+    ).toEqual({ kind: 'blocked', runId: 'run-2', status: 'failed' });
+  });
 });

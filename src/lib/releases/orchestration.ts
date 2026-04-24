@@ -61,6 +61,15 @@ export type StartReleaseMigrationPhaseResult =
       runId: string;
     };
 
+type ReleaseMigrationPhaseProgressResult =
+  | StartReleaseMigrationPhaseResult
+  | {
+      kind: 'blocked';
+      runId: string;
+      status: MigrationRunStatus;
+      errorMessage: string | null;
+    };
+
 export async function loadReleaseForOrchestration(releaseId: string) {
   return db.query.releases.findFirst({
     where: eq(releases.id, releaseId),
@@ -162,8 +171,9 @@ async function driveReleaseMigrationPhaseForward(
     id: string;
     status: MigrationRunStatus;
     createdAt: Date;
+    errorMessage?: string | null;
   }>
-): Promise<StartReleaseMigrationPhaseResult> {
+): Promise<ReleaseMigrationPhaseProgressResult> {
   const action = resolveMigrationPhaseNextAction(runs);
 
   switch (action.kind) {
@@ -192,9 +202,14 @@ async function driveReleaseMigrationPhaseForward(
     case 'completed':
       return action;
     case 'blocked':
-      throw new Error(
-        `Migration run ${action.runId} for ${phase} is in terminal status ${action.status}`
-      );
+      return {
+        kind: 'blocked',
+        runId: action.runId,
+        status: action.status,
+        errorMessage:
+          runs.find((run) => run.id === action.runId)?.errorMessage ??
+          `Migration run ${action.runId} for ${phase} is in terminal status ${action.status}`,
+      };
   }
 }
 
@@ -217,7 +232,16 @@ export async function startReleaseMigrationPhase(
     }
   );
 
-  return driveReleaseMigrationPhaseForward(release, phase, createdRuns);
+  const phaseResult = await driveReleaseMigrationPhaseForward(release, phase, createdRuns);
+
+  if (phaseResult.kind === 'blocked') {
+    throw new Error(
+      phaseResult.errorMessage ??
+        `Migration run ${phaseResult.runId} for ${phase} is in terminal status ${phaseResult.status}`
+    );
+  }
+
+  return phaseResult;
 }
 
 export async function startReleaseDeploymentStage(
@@ -368,7 +392,7 @@ async function loadLatestReleaseMigrationRuns(
   return Array.from(latestRunsByTarget.values());
 }
 
-export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
+export async function resumeReleaseAfterMigrationProgress(runId: string) {
   const run = await db.query.migrationRuns.findFirst({
     where: eq(migrationRuns.id, runId),
     with: {
@@ -386,7 +410,7 @@ export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
     },
   });
 
-  if (!run?.releaseId || run.status !== 'success') {
+  if (!run?.releaseId) {
     return { resumed: false, reason: 'run_not_resumable' as const };
   }
 
@@ -415,6 +439,18 @@ export async function resumeReleaseAfterSuccessfulMigration(runId: string) {
 
   const latestRuns = await loadLatestReleaseMigrationRuns(run.releaseId, phase);
   const phaseResult = await driveReleaseMigrationPhaseForward(release, phase, latestRuns);
+
+  if (phaseResult.kind === 'blocked') {
+    await failReleaseForCurrentPhase(
+      run.releaseId,
+      phaseResult.errorMessage ||
+        `Migration run ${phaseResult.runId} for ${phase} is in terminal status ${phaseResult.status}`
+    );
+    return {
+      resumed: true,
+      reason: phase === 'preDeploy' ? 'predeploy_blocked' : 'postdeploy_blocked',
+    };
+  }
 
   if (phaseResult.kind === 'queued') {
     return {
