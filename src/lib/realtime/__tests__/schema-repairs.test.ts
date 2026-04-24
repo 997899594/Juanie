@@ -12,46 +12,34 @@ mock.module('@/lib/redis/config', () => ({
   isRedisConfigured: () => true,
 }));
 
-mock.module('@/lib/db', () => ({
-  db: {
-    query: {
-      databases: {
-        findFirst: async () => ({
-          id: 'db_123',
-          projectId: 'proj_123',
-          environmentId: 'env_123',
-          schemaState: {
-            status: 'blocked',
-            summary: 'schema blocked',
-            expectedVersion: '202604240001',
-            actualVersion: '202604230001',
-            lastInspectedAt: new Date('2026-04-24T04:00:00.000Z'),
-          },
-        }),
-      },
-      schemaRepairPlans: {
-        findFirst: async () => null,
-      },
-      schemaRepairAtlasRuns: {
-        findFirst: async () => null,
-      },
-    },
-  },
-}));
-
 describe('schema repair realtime events', () => {
   it('disconnects and resets the shared publisher for one-shot runtimes', async () => {
-    const { publishSchemaRepairRealtimeSnapshot, shutdownSchemaRepairRealtimePublisher } =
+    const { publishSchemaRepairRealtimeEvent, shutdownSchemaRepairRealtimePublisher } =
       await import('@/lib/realtime/schema-repairs');
 
-    await publishSchemaRepairRealtimeSnapshot({
+    const repair = {
       projectId: 'proj_123',
-      databaseId: 'db_123',
+      environmentId: 'env_123',
+      id: 'db_123',
+      latestAtlasRun: null,
+      latestRepairPlan: null,
+      schemaState: {
+        actualVersion: '202604230001',
+        expectedVersion: '202604240001',
+        lastInspectedAt: new Date('2026-04-24T04:00:00.000Z'),
+        status: 'blocked' as const,
+        summary: 'schema blocked',
+      },
+    };
+
+    await publishSchemaRepairRealtimeEvent({
+      projectId: 'proj_123',
+      repair,
     });
     await shutdownSchemaRepairRealtimePublisher();
-    await publishSchemaRepairRealtimeSnapshot({
+    await publishSchemaRepairRealtimeEvent({
       projectId: 'proj_123',
-      databaseId: 'db_123',
+      repair,
     });
     await shutdownSchemaRepairRealtimePublisher();
 

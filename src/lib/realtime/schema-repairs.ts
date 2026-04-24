@@ -276,10 +276,25 @@ export async function publishSchemaRepairRealtimeSnapshot(input: {
   projectId: string;
   databaseId: string;
 }): Promise<void> {
-  const client = getPublisher();
   const repair = await loadSchemaRepairRealtimeRecord(input);
 
-  if (!client || !repair) {
+  if (!repair) {
+    return;
+  }
+
+  await publishSchemaRepairRealtimeEvent({
+    projectId: input.projectId,
+    repair,
+  });
+}
+
+export async function publishSchemaRepairRealtimeEvent(input: {
+  projectId: string;
+  repair: SchemaRepairRealtimeRecord;
+}): Promise<void> {
+  const client = getPublisher();
+
+  if (!client) {
     return;
   }
 
@@ -288,7 +303,7 @@ export async function publishSchemaRepairRealtimeSnapshot(input: {
     JSON.stringify({
       kind: 'schema_repair_updated',
       projectId: input.projectId,
-      repair,
+      repair: input.repair,
       timestamp: Date.now(),
     } satisfies SchemaRepairRealtimeEvent)
   );
