@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { copilotRequestSchema, generateReleaseCopilotStream } from '@/lib/ai/copilot/service';
+import { createCopilotEventStream } from '@/lib/ai/copilot/transport';
 import { createAuditLog } from '@/lib/audit';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -75,24 +76,39 @@ export async function POST(
       projectId: release.projectId,
       environmentId: release.environmentId,
       messageCount: parsed.data.messages.length,
+      conversationId: reply.conversationId,
       provider: reply.provider,
       model: reply.model,
       skillId: reply.skillId,
       promptKey: reply.promptKey,
       promptVersion: reply.promptVersion,
+      toolCalls: reply.toolCalls,
+      usage: reply.usage,
     },
   }).catch(() => undefined);
 
-  return new Response(reply.stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-AI-Provider': reply.provider,
-      'X-AI-Model': reply.model,
-      'X-Copilot-Skill-Id': reply.skillId,
-      'X-Copilot-Prompt-Key': reply.promptKey,
-      'X-Copilot-Prompt-Version': reply.promptVersion,
-      'X-Copilot-Suggestions': encodeURIComponent(JSON.stringify(reply.suggestions)),
-    },
-  });
+  return new Response(
+    createCopilotEventStream({
+      metadata: {
+        conversationId: reply.conversationId,
+        generatedAt: reply.generatedAt,
+        provider: reply.provider,
+        model: reply.model,
+        suggestions: reply.suggestions,
+        skillId: reply.skillId,
+        promptKey: reply.promptKey,
+        promptVersion: reply.promptVersion,
+        toolCalls: reply.toolCalls,
+        usage: reply.usage,
+      },
+      textStream: reply.stream,
+    }),
+    {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Connection: 'keep-alive',
+      },
+    }
+  );
 }

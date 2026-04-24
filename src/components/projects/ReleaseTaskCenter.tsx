@@ -20,6 +20,8 @@ interface ReleaseTaskItem {
   detail?: string | null;
   createdAtLabel?: string | null;
   completedAtLabel?: string | null;
+  provider?: string | null;
+  model?: string | null;
   migrationRunId?: string | null;
   migrationRunStatus?: string | null;
   approvalToken?: string | null;
@@ -229,6 +231,9 @@ export function ReleaseTaskCenter(input: {
                 detail: selectedTask.detail,
                 createdAtLabel: selectedTask.createdAtLabel,
                 completedAtLabel: selectedTask.completedAtLabel,
+                provider: selectedTask.provider,
+                model: selectedTask.model,
+                scopeLabel: 'release-task',
               }
             : null
         }

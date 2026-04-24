@@ -14,6 +14,8 @@ export interface GenericAITaskRecord {
   inputSummary: string;
   resultSummary: string | null;
   errorMessage: string | null;
+  provider: string | null;
+  model: string | null;
   status: 'queued' | 'running' | 'succeeded' | 'failed';
   createdAt: Date;
   completedAt: Date | null;

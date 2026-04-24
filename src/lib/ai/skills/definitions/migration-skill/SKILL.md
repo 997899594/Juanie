@@ -3,6 +3,10 @@ id: migration-skill
 title: Migration Skill
 description: Review migration status, schema state, and the safest next action.
 scope: environment
+executionMode: structured
+surfaces:
+  - inline-card
+  - task-center
 pluginIds:
   - migration-review
 toolIds:

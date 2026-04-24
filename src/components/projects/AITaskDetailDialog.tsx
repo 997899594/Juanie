@@ -1,7 +1,9 @@
 'use client';
 
 import { Sparkles } from 'lucide-react';
+import { openGlobalAIPanelWithReplay } from '@/components/layout/global-ai-panel';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -16,10 +18,13 @@ export interface AITaskDetailDialogTask {
   title: string;
   statusLabel: string;
   summary: string;
+  scopeLabel?: string | null;
   inputSummary?: string | null;
   detail?: string | null;
   createdAtLabel?: string | null;
   completedAtLabel?: string | null;
+  provider?: string | null;
+  model?: string | null;
 }
 
 export function AITaskDetailDialog(input: {
@@ -27,10 +32,12 @@ export function AITaskDetailDialog(input: {
   onOpenChange: (open: boolean) => void;
   task: AITaskDetailDialogTask | null;
 }) {
+  const task = input.task;
+
   return (
     <Dialog open={input.open} onOpenChange={input.onOpenChange}>
       <DialogContent size="form" className="gap-0 p-0">
-        {input.task ? (
+        {task ? (
           <div className="overflow-hidden rounded-[34px] bg-[rgba(251,250,247,0.985)]">
             <DialogHeader className="px-8 py-7">
               <div className="flex items-start gap-4">
@@ -43,37 +50,37 @@ export function AITaskDetailDialog(input: {
                       variant="warning"
                       className="rounded-full border-0 px-3 py-1 shadow-none"
                     >
-                      {input.task.statusLabel}
+                      {task.statusLabel}
                     </Badge>
-                    {input.task.createdAtLabel ? (
+                    {task.createdAtLabel ? (
                       <span className="text-xs text-[rgba(15,23,42,0.38)]">
-                        {input.task.createdAtLabel}
+                        {task.createdAtLabel}
                       </span>
                     ) : null}
-                    {input.task.completedAtLabel ? (
+                    {task.completedAtLabel ? (
                       <span className="text-xs text-[rgba(15,23,42,0.38)]">
-                        {input.task.completedAtLabel}
+                        {task.completedAtLabel}
                       </span>
                     ) : null}
                   </div>
                   <DialogTitle className="text-[1.35rem] tracking-[-0.03em]">
-                    {input.task.title}
+                    {task.title}
                   </DialogTitle>
                   <DialogDescription className="mt-2 text-sm leading-6 text-[rgba(15,23,42,0.52)]">
-                    {input.task.summary}
+                    {task.summary}
                   </DialogDescription>
                 </div>
               </div>
             </DialogHeader>
 
             <div className="space-y-6 px-8 py-7 pt-0">
-              {input.task.inputSummary ? (
+              {task.inputSummary ? (
                 <section className="space-y-3">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
                     输入
                   </div>
                   <div className="rounded-[20px] bg-[rgba(15,23,42,0.03)] px-5 py-4 text-sm leading-7 text-foreground">
-                    {input.task.inputSummary}
+                    {task.inputSummary}
                   </div>
                 </section>
               ) : null}
@@ -81,11 +88,55 @@ export function AITaskDetailDialog(input: {
               <Separator className="bg-[rgba(15,23,42,0.06)]" />
 
               <section className="space-y-3">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
-                  结果
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgba(15,23,42,0.42)]">
+                    结果
+                  </div>
+                  {task.detail ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-8 rounded-full bg-[rgba(15,23,42,0.04)] px-3 text-[rgba(15,23,42,0.64)] shadow-none hover:bg-[rgba(15,23,42,0.07)]"
+                      onClick={() => {
+                        openGlobalAIPanelWithReplay({
+                          messages: [
+                            ...(task.inputSummary
+                              ? [
+                                  {
+                                    role: 'user' as const,
+                                    content: task.inputSummary,
+                                  },
+                                ]
+                              : []),
+                            {
+                              role: 'assistant' as const,
+                              content: task.detail ?? task.summary,
+                            },
+                          ],
+                          metadata: task.provider
+                            ? {
+                                conversationId: `task-${task.createdAtLabel ?? Date.now()}`,
+                                generatedAt: new Date().toISOString(),
+                                provider: task.provider,
+                                model: task.model ?? '',
+                                suggestions: [],
+                                skillId: task.scopeLabel ?? 'ai-task',
+                                promptKey: 'task-replay',
+                                promptVersion: 'v1',
+                                toolCalls: [],
+                                usage: null,
+                              }
+                            : null,
+                        });
+                        input.onOpenChange(false);
+                      }}
+                    >
+                      继续追问
+                    </Button>
+                  ) : null}
                 </div>
                 <div className="rounded-[20px] bg-[rgba(255,255,255,0.72)] px-5 py-4 shadow-[0_12px_30px_-28px_rgba(15,23,42,0.2)]">
-                  <StreamdownMessage content={input.task.detail ?? input.task.summary} />
+                  <StreamdownMessage content={task.detail ?? task.summary} />
                 </div>
               </section>
             </div>

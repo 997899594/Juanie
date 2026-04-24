@@ -1,8 +1,11 @@
+import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { type CopilotScopeKind, getCopilotDefinition } from '@/lib/ai/copilot/registry';
+import type { CopilotSessionMetadata } from '@/lib/ai/copilot/types';
 import { generateChatText, generateChatTextStream } from '@/lib/ai/core/generate-chat-text';
 import type { AIModelPolicy } from '@/lib/ai/core/model-policy';
 import { getPromptDefinition } from '@/lib/ai/prompts/registry';
+import { withAIToolTrace } from '@/lib/ai/runtime/tool-trace';
 import { executeJuanieTool } from '@/lib/ai/tools/runtime';
 
 const copilotMessageSchema = z.object({
@@ -16,25 +19,12 @@ export const copilotRequestSchema = z.object({
   messages: z.array(copilotMessageSchema).min(1).max(12),
 });
 
-export interface CopilotReply {
+export interface CopilotReply extends CopilotSessionMetadata {
   message: string;
-  suggestions: string[];
-  provider: string | null;
-  model: string | null;
-  generatedAt: string;
-  skillId: string;
-  promptKey: string;
-  promptVersion: string;
 }
 
-export interface CopilotStreamReply {
+export interface CopilotStreamReply extends CopilotSessionMetadata {
   stream: ReadableStream<string>;
-  provider: string;
-  model: string;
-  suggestions: string[];
-  skillId: string;
-  promptKey: string;
-  promptVersion: string;
 }
 
 function formatConversation(messages: CopilotMessage[]): string {
@@ -72,15 +62,24 @@ async function buildEnvironmentCopilotEvidence(input: {
   const [environment, migration, envvar] = await Promise.all([
     executeJuanieTool({
       toolId: 'read-environment-context',
-      context: sharedContext,
+      context: {
+        ...sharedContext,
+        reason: '读取环境总览、访问地址、最新版本和治理状态',
+      },
     }),
     executeJuanieTool({
       toolId: 'read-environment-migrations',
-      context: sharedContext,
+      context: {
+        ...sharedContext,
+        reason: '读取迁移状态、审批阻塞和失败信号',
+      },
     }),
     executeJuanieTool({
       toolId: 'read-environment-variables',
-      context: sharedContext,
+      context: {
+        ...sharedContext,
+        reason: '读取变量继承、缺失和风险摘要',
+      },
     }),
   ]);
 
@@ -107,11 +106,17 @@ async function buildReleaseCopilotEvidence(input: {
   const [release, incident] = await Promise.all([
     executeJuanieTool({
       toolId: 'read-release-context',
-      context: sharedContext,
+      context: {
+        ...sharedContext,
+        reason: '读取发布版本、产物和当前交付状态',
+      },
     }),
     executeJuanieTool({
       toolId: 'read-incident-context',
-      context: sharedContext,
+      context: {
+        ...sharedContext,
+        reason: '读取异常信号、失败上下文和风险线索',
+      },
     }),
   ]);
 
@@ -184,46 +189,54 @@ async function generateCopilotReply(input: {
 }): Promise<CopilotReply> {
   const definition = getCopilotDefinition(input.kind);
   const promptDefinition = getPromptDefinition(definition.promptKey);
+  const conversationId = nanoid();
+  const generatedAt = new Date().toISOString();
   const latestQuestion = input.messages
     .filter((message) => message.role === 'user')
     .at(-1)?.content;
 
-  const prompt =
-    input.kind === 'environment'
-      ? buildEnvironmentCopilotPrompt({
-          ...(await buildEnvironmentCopilotEvidence({
-            teamId: input.teamId,
-            projectId: input.projectId,
-            environmentId: input.environmentId ?? '',
-            actorUserId: input.actorUserId,
-          })),
-          messages: input.messages,
-        })
-      : buildReleaseCopilotPrompt({
-          ...(await buildReleaseCopilotEvidence({
-            teamId: input.teamId,
-            projectId: input.projectId,
-            releaseId: input.releaseId ?? '',
-            actorUserId: input.actorUserId,
-          })),
-          messages: input.messages,
-        });
+  const traced = await withAIToolTrace(async () => {
+    const prompt =
+      input.kind === 'environment'
+        ? buildEnvironmentCopilotPrompt({
+            ...(await buildEnvironmentCopilotEvidence({
+              teamId: input.teamId,
+              projectId: input.projectId,
+              environmentId: input.environmentId ?? '',
+              actorUserId: input.actorUserId,
+            })),
+            messages: input.messages,
+          })
+        : buildReleaseCopilotPrompt({
+            ...(await buildReleaseCopilotEvidence({
+              teamId: input.teamId,
+              projectId: input.projectId,
+              releaseId: input.releaseId ?? '',
+              actorUserId: input.actorUserId,
+            })),
+            messages: input.messages,
+          });
 
-  const result = await generateChatText({
-    policy: input.policy,
-    system: appendSystemPrompt(promptDefinition.system, input.systemAppendix),
-    prompt,
+    return generateChatText({
+      policy: input.policy,
+      system: appendSystemPrompt(promptDefinition.system, input.systemAppendix),
+      prompt,
+    });
   });
+  const result = traced.result;
 
   return {
+    conversationId,
     message: cleanAssistantText(result.text),
     suggestions: definition.getSuggestions(latestQuestion),
     provider: result.provider,
     model: result.model,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     skillId: definition.skillId,
     promptKey: promptDefinition.key,
     promptVersion: promptDefinition.version,
+    toolCalls: traced.calls,
+    usage: result.usage,
   };
 }
 
@@ -240,43 +253,52 @@ async function generateCopilotStream(input: {
 }): Promise<CopilotStreamReply> {
   const definition = getCopilotDefinition(input.kind);
   const promptDefinition = getPromptDefinition(definition.promptKey);
+  const conversationId = nanoid();
+  const generatedAt = new Date().toISOString();
   const latestQuestion = input.messages
     .filter((message) => message.role === 'user')
     .at(-1)?.content;
 
-  const prompt =
-    input.kind === 'environment'
-      ? buildEnvironmentCopilotPrompt({
-          ...(await buildEnvironmentCopilotEvidence({
-            teamId: input.teamId,
-            projectId: input.projectId,
-            environmentId: input.environmentId ?? '',
-            actorUserId: input.actorUserId,
-          })),
-          messages: input.messages,
-        })
-      : buildReleaseCopilotPrompt({
-          ...(await buildReleaseCopilotEvidence({
-            teamId: input.teamId,
-            projectId: input.projectId,
-            releaseId: input.releaseId ?? '',
-            actorUserId: input.actorUserId,
-          })),
-          messages: input.messages,
-        });
+  const traced = await withAIToolTrace(async () => {
+    const prompt =
+      input.kind === 'environment'
+        ? buildEnvironmentCopilotPrompt({
+            ...(await buildEnvironmentCopilotEvidence({
+              teamId: input.teamId,
+              projectId: input.projectId,
+              environmentId: input.environmentId ?? '',
+              actorUserId: input.actorUserId,
+            })),
+            messages: input.messages,
+          })
+        : buildReleaseCopilotPrompt({
+            ...(await buildReleaseCopilotEvidence({
+              teamId: input.teamId,
+              projectId: input.projectId,
+              releaseId: input.releaseId ?? '',
+              actorUserId: input.actorUserId,
+            })),
+            messages: input.messages,
+          });
 
-  const result = generateChatTextStream({
-    policy: input.policy,
-    system: appendSystemPrompt(promptDefinition.system, input.systemAppendix),
-    prompt,
+    return generateChatTextStream({
+      policy: input.policy,
+      system: appendSystemPrompt(promptDefinition.system, input.systemAppendix),
+      prompt,
+    });
   });
+  const result = traced.result;
 
   return {
+    conversationId,
+    generatedAt,
     ...result,
     suggestions: definition.getSuggestions(latestQuestion),
     skillId: definition.skillId,
     promptKey: promptDefinition.key,
     promptVersion: promptDefinition.version,
+    toolCalls: traced.calls,
+    usage: null,
   };
 }
 

@@ -3,6 +3,10 @@ id: incident-skill
 title: Incident Skill
 description: Diagnose a degraded or failed release with incident evidence and next actions.
 scope: release
+executionMode: structured
+surfaces:
+  - inline-card
+  - task-center
 pluginIds:
   - incident-intelligence
 toolIds:

@@ -8,6 +8,14 @@ describe('ai skill runtime', () => {
     const skill = getJuanieSkillById('environment-skill');
 
     expect(skill?.promptKey).toBe('environment-summary');
+    expect(skill?.executionMode).toBe('structured');
+    expect(skill?.surfaces).toContain('inline-card');
+    expect(skill?.references?.some((path) => path.endsWith('references/domain-spine.md'))).toBe(
+      true
+    );
+    expect(skill?.examples?.some((path) => path.endsWith('examples/default-user-ask.md'))).toBe(
+      true
+    );
     expect(
       skill?.assetPath?.endsWith('src/lib/ai/skills/definitions/environment-skill/SKILL.md')
     ).toBe(true);

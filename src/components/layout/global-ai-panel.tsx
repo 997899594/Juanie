@@ -7,17 +7,15 @@ import { StreamdownMessage } from '@/components/projects/StreamdownMessage';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { useCopilotConversation } from '@/hooks/useCopilotConversation';
 import { getCommandBarConfig } from '@/lib/ai/command-bar';
+import { getCopilotDefinition } from '@/lib/ai/copilot/registry';
+import type { CopilotReplayPayload, CopilotSessionMetadata } from '@/lib/ai/copilot/types';
+import { getJuanieToolById } from '@/lib/ai/tools/registry';
 import { cn } from '@/lib/utils';
 
 interface TaskReplyPayload {
   summary: string;
-}
-
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
 }
 
 const openEventName = 'juanie:open-global-ai-panel';
@@ -36,21 +34,85 @@ function buildMessageId(): string {
 const defaultChatError = '稍后重试';
 const defaultTaskError = '提交失败';
 
+function formatTokenUsage(totalTokens: number | null): string | null {
+  if (!totalTokens || totalTokens <= 0) {
+    return null;
+  }
+
+  if (totalTokens >= 1000) {
+    return `${(totalTokens / 1000).toFixed(1)}k tokens`;
+  }
+
+  return `${totalTokens} tokens`;
+}
+
+function formatToolScopeLabel(scope: string): string {
+  if (scope === 'environment') {
+    return '环境';
+  }
+
+  if (scope === 'release') {
+    return '发布';
+  }
+
+  return '项目';
+}
+
+function formatRiskLevelLabel(riskLevel: string): string {
+  if (riskLevel === 'read') {
+    return '只读';
+  }
+
+  if (riskLevel === 'write') {
+    return '写入';
+  }
+
+  if (riskLevel === 'dangerous') {
+    return '高风险';
+  }
+
+  return riskLevel;
+}
+
+function formatSkillLabel(skillId: string | null | undefined): string {
+  if (skillId === getCopilotDefinition('environment').skillId) {
+    return getCopilotDefinition('environment').title;
+  }
+
+  if (skillId === getCopilotDefinition('release').skillId) {
+    return getCopilotDefinition('release').title;
+  }
+
+  return '当前上下文';
+}
+
 export function openGlobalAIPanel(): void {
   window.dispatchEvent(new Event(openEventName));
+}
+
+export function openGlobalAIPanelWithReplay(input: {
+  messages: CopilotReplayPayload['messages'];
+  metadata?: CopilotReplayPayload['metadata'];
+}): void {
+  window.dispatchEvent(
+    new CustomEvent(openEventName, {
+      detail: input,
+    })
+  );
 }
 
 export function GlobalAIPanel() {
   const pathname = usePathname();
   const router = useRouter();
   const config = useMemo(() => getCommandBarConfig(pathname), [pathname]);
+  const conversation = useCopilotConversation(config.kind === 'chat' ? config.endpoint : null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [taskLoading, setTaskLoading] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [traceExpanded, setTraceExpanded] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -62,7 +124,21 @@ export function GlobalAIPanel() {
       }
     };
 
-    const onOpen = () => {
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<CopilotReplayPayload>).detail;
+
+      if (detail?.messages?.length) {
+        conversation.setMessages(
+          detail.messages.map((message) => ({
+            id: buildMessageId(),
+            role: message.role,
+            content: message.content,
+            createdAt: new Date().toISOString(),
+          }))
+        );
+        conversation.setMetadata(detail.metadata ?? null);
+      }
+
       setOpen(true);
     };
 
@@ -72,7 +148,7 @@ export function GlobalAIPanel() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener(openEventName, onOpen);
     };
-  }, []);
+  }, [conversation]);
 
   useEffect(() => {
     viewportRef.current?.scrollTo({
@@ -84,11 +160,11 @@ export function GlobalAIPanel() {
   useEffect(() => {
     if (!open) {
       setDraft('');
-      setMessages([]);
       setErrorMessage(null);
       setLoading(false);
       setTaskLoading(false);
       setStreamingMessageId(null);
+      setTraceExpanded(false);
     }
   }, [open]);
 
@@ -106,6 +182,15 @@ export function GlobalAIPanel() {
   const trimmedDraft = draft.trim();
   const isChatMode = config.kind === 'chat';
   const canSubmit = trimmedDraft.length > 0 && isChatMode && !loading && !taskLoading;
+  const suggestions = conversation.metadata?.suggestions ?? config.suggestions;
+  const currentToolCalls = conversation.metadata?.toolCalls ?? [];
+  const currentUsageLabel = formatTokenUsage(conversation.metadata?.usage?.totalTokens ?? null);
+  const currentTraceLabel =
+    currentToolCalls.length > 0 ? `${currentToolCalls.length} 次读取` : null;
+  const currentTraceSummary =
+    currentToolCalls.length > 0
+      ? `已读取 ${currentToolCalls.length} 项${formatSkillLabel(conversation.metadata?.skillId)}上下文`
+      : null;
 
   const send = async (question: string) => {
     const content = question.trim();
@@ -114,25 +199,28 @@ export function GlobalAIPanel() {
     }
     const endpoint = config.endpoint;
 
-    const userMessage: ChatMessage = {
+    const userMessage = {
       id: buildMessageId(),
       role: 'user',
       content,
-    };
+      createdAt: new Date().toISOString(),
+    } satisfies { id: string; role: 'user'; content: string; createdAt: string };
     const assistantMessageId = buildMessageId();
-    const nextMessages = [...messages, userMessage];
+    const nextMessages = [...conversation.messages, userMessage];
 
-    setMessages(nextMessages);
+    conversation.archiveCurrent();
+    conversation.setMessages(nextMessages);
     setDraft('');
     setLoading(true);
     setErrorMessage(null);
     setStreamingMessageId(assistantMessageId);
-    setMessages((current) => [
+    conversation.setMessages((current) => [
       ...current,
       {
         id: assistantMessageId,
         role: 'assistant',
         content: '',
+        createdAt: new Date().toISOString(),
       },
     ]);
 
@@ -166,6 +254,51 @@ export function GlobalAIPanel() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let streamedContent = '';
+      let buffered = '';
+
+      const applyAssistantText = (text: string) => {
+        conversation.setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantMessageId ? { ...message, content: text } : message
+          )
+        );
+      };
+
+      const processEvent = (rawEvent: string) => {
+        const lines = rawEvent.replace(/\r/g, '').split('\n');
+        const eventName = lines
+          .find((line) => line.startsWith('event:'))
+          ?.slice('event:'.length)
+          .trim();
+        const dataLine = lines
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice('data:'.length).trim())
+          .join('\n');
+
+        if (!eventName || !dataLine) {
+          return;
+        }
+
+        const payload = JSON.parse(dataLine) as
+          | CopilotSessionMetadata
+          | { text: string }
+          | { message: string };
+
+        if (eventName === 'meta') {
+          conversation.setMetadata(payload as CopilotSessionMetadata);
+          return;
+        }
+
+        if (eventName === 'delta' && 'text' in payload) {
+          streamedContent += payload.text;
+          applyAssistantText(streamedContent);
+          return;
+        }
+
+        if (eventName === 'error' && 'message' in payload) {
+          throw new Error(payload.message);
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -173,22 +306,27 @@ export function GlobalAIPanel() {
           break;
         }
 
-        streamedContent += decoder.decode(value, { stream: true });
-        setMessages((current) =>
-          current.map((message) =>
-            message.id === assistantMessageId ? { ...message, content: streamedContent } : message
-          )
-        );
+        buffered += decoder.decode(value, { stream: true });
+
+        while (buffered.includes('\n\n')) {
+          const delimiterIndex = buffered.indexOf('\n\n');
+          const rawEvent = buffered.slice(0, delimiterIndex);
+          buffered = buffered.slice(delimiterIndex + 2);
+
+          if (rawEvent.trim()) {
+            processEvent(rawEvent);
+          }
+        }
       }
 
-      streamedContent += decoder.decode();
-      setMessages((current) =>
-        current.map((message) =>
-          message.id === assistantMessageId ? { ...message, content: streamedContent } : message
-        )
-      );
+      buffered += decoder.decode();
+      if (buffered.trim()) {
+        processEvent(buffered.trim());
+      }
     } catch (error) {
-      setMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+      conversation.setMessages((current) =>
+        current.filter((message) => message.id !== assistantMessageId)
+      );
       setErrorMessage(error instanceof Error ? error.message : defaultChatError);
     } finally {
       setLoading(false);
@@ -231,12 +369,13 @@ export function GlobalAIPanel() {
       }
 
       setDraft('');
-      setMessages((current) => [
+      conversation.setMessages((current) => [
         ...current,
         {
           id: buildMessageId(),
           role: 'assistant',
           content: `已加入任务\n\n${(data as TaskReplyPayload).summary}`,
+          createdAt: new Date().toISOString(),
         },
       ]);
       window.dispatchEvent(new Event('juanie:refresh-ai-task-center'));
@@ -278,9 +417,9 @@ export function GlobalAIPanel() {
             {isChatMode ? (
               <>
                 <div ref={viewportRef} className="flex-1 space-y-5 overflow-y-auto px-5 pb-4">
-                  {messages.length === 0 && config.suggestions.length > 0 ? (
+                  {conversation.messages.length === 0 && suggestions.length > 0 ? (
                     <div className="pb-1">
-                      {config.suggestions.slice(0, 1).map((suggestion) => (
+                      {suggestions.slice(0, 1).map((suggestion) => (
                         <button
                           key={suggestion}
                           type="button"
@@ -294,7 +433,105 @@ export function GlobalAIPanel() {
                     </div>
                   ) : null}
 
-                  {messages.map((message) => (
+                  {conversation.metadata ? (
+                    <div className="flex flex-wrap items-center gap-2 px-1 text-[11px] text-[rgba(15,23,42,0.4)]">
+                      <span>{formatSkillLabel(conversation.metadata.skillId)}</span>
+                      {currentTraceLabel ? (
+                        <>
+                          <span>·</span>
+                          <span>{currentTraceLabel}</span>
+                        </>
+                      ) : null}
+                      {currentUsageLabel ? (
+                        <>
+                          <span>·</span>
+                          <span>{currentUsageLabel}</span>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {!conversation.messages.length && conversation.history.length > 0 ? (
+                    <div className="space-y-2.5 px-1">
+                      <div className="text-[11px] uppercase tracking-[0.16em] text-[rgba(15,23,42,0.34)]">
+                        最近会话
+                      </div>
+                      <div className="grid gap-2">
+                        {conversation.history.slice(0, 3).map((session) => (
+                          <button
+                            key={session.conversationId}
+                            type="button"
+                            className="rounded-[18px] bg-[rgba(15,23,42,0.04)] px-3.5 py-3 text-left transition hover:bg-[rgba(15,23,42,0.075)]"
+                            onClick={() => conversation.replay(session)}
+                            disabled={loading || taskLoading}
+                          >
+                            <div className="flex items-center justify-between gap-3 text-[11px] text-[rgba(15,23,42,0.42)]">
+                              <span>{formatSkillLabel(session.metadata?.skillId)}</span>
+                              <span>
+                                {new Date(session.generatedAt).toLocaleTimeString('zh-CN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </div>
+                            <div className="mt-1 line-clamp-2 text-[13px] leading-6 text-[rgba(15,23,42,0.72)]">
+                              {session.messages.findLast((message) => message.role === 'user')
+                                ?.content ?? '继续当前会话'}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {currentToolCalls.length > 0 ? (
+                    <div className="space-y-2.5 px-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-[rgba(15,23,42,0.34)]">
+                          本次读取
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-full px-2 py-1 text-[11px] text-[rgba(15,23,42,0.42)] transition hover:bg-[rgba(15,23,42,0.04)] hover:text-[rgba(15,23,42,0.72)]"
+                          onClick={() => setTraceExpanded((current) => !current)}
+                        >
+                          {traceExpanded ? '收起' : '展开'}
+                        </button>
+                      </div>
+                      <div className="rounded-[18px] bg-[rgba(15,23,42,0.04)] px-3.5 py-3">
+                        <div className="text-[13px] leading-6 text-[rgba(15,23,42,0.66)]">
+                          {currentTraceSummary}
+                        </div>
+                      </div>
+                      {traceExpanded ? (
+                        <div className="grid gap-2">
+                          {currentToolCalls.map((toolCall) => {
+                            const tool = getJuanieToolById(toolCall.toolId);
+
+                            return (
+                              <div
+                                key={`${toolCall.toolId}-${toolCall.scope}-${toolCall.riskLevel}`}
+                                className="rounded-[18px] bg-[rgba(15,23,42,0.04)] px-3.5 py-3"
+                              >
+                                <div className="flex items-center justify-between gap-3 text-[11px] text-[rgba(15,23,42,0.42)]">
+                                  <span>{formatToolScopeLabel(toolCall.scope)}</span>
+                                  <span>{formatRiskLevelLabel(toolCall.riskLevel)}</span>
+                                </div>
+                                <div className="mt-1 text-[13px] font-medium leading-6 text-[rgba(15,23,42,0.78)]">
+                                  {tool?.title ?? toolCall.toolId}
+                                </div>
+                                <div className="mt-1 text-[12px] leading-6 text-[rgba(15,23,42,0.54)]">
+                                  {toolCall.reason ?? tool?.description ?? '读取当前对象相关上下文'}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {conversation.messages.map((message) => (
                     <div
                       key={message.id}
                       className={cn(
@@ -322,7 +559,8 @@ export function GlobalAIPanel() {
                     </div>
                   ))}
 
-                  {loading && !messages.some((message) => message.id === streamingMessageId) ? (
+                  {loading &&
+                  !conversation.messages.some((message) => message.id === streamingMessageId) ? (
                     <div className="flex justify-start">
                       <div className="px-1 py-2 text-[rgba(15,23,42,0.42)]">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -373,6 +611,16 @@ export function GlobalAIPanel() {
                         >
                           任务
                         </button>
+                        {conversation.messages.length > 0 ? (
+                          <button
+                            type="button"
+                            className="rounded-full px-2 py-1 text-[11px] tracking-[0.16em] text-[rgba(15,23,42,0.42)] transition hover:bg-[rgba(15,23,42,0.04)] hover:text-[rgba(15,23,42,0.72)]"
+                            disabled={loading || taskLoading}
+                            onClick={() => conversation.reset()}
+                          >
+                            清空
+                          </button>
+                        ) : null}
                         <span>Enter</span>
                       </div>
 

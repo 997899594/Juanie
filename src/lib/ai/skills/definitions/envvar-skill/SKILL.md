@@ -3,6 +3,10 @@ id: envvar-skill
 title: Env Var Skill
 description: Summarize environment variable coverage, inheritance, and risk.
 scope: environment
+executionMode: structured
+surfaces:
+  - inline-card
+  - task-center
 pluginIds:
   - envvar-risk
 toolIds:

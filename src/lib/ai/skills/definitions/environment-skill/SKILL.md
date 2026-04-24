@@ -3,6 +3,10 @@ id: environment-skill
 title: Environment Skill
 description: Summarize environment health, access URLs, variables, databases, and next actions.
 scope: environment
+executionMode: structured
+surfaces:
+  - inline-card
+  - copilot-panel
 pluginIds:
   - environment-summary
 toolIds:
@@ -11,6 +15,10 @@ toolIds:
   - read-environment-schema
 contextProviderIds:
   - environment-context
+references:
+  - references/domain-spine.md
+examples:
+  - examples/default-user-ask.md
 promptKey: environment-summary
 outputSchema: environment-summary-v1
 ---

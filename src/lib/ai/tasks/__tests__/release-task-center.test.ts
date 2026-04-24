@@ -56,4 +56,27 @@ describe('release task center', () => {
       tasks: [],
     });
   });
+
+  it('preserves AI task metadata for replay entry points', () => {
+    const snapshot = buildReleaseTaskCenterSnapshot([
+      {
+        id: 'ai',
+        kind: 'ai_analysis',
+        title: 'AI release analysis',
+        summary: 'result',
+        statusLabel: '已完成',
+        actionLabel: null,
+        inputSummary: '这次发布现在安全吗？',
+        detail: '迁移风险低，但还需要确认外部步骤。',
+        provider: 'openai',
+        model: 'gpt-5',
+      },
+    ]);
+
+    expect(snapshot.tasks[0]?.id).toBe('ai');
+    expect(snapshot.tasks[0]?.provider).toBe('openai');
+    expect(snapshot.tasks[0]?.model).toBe('gpt-5');
+    expect(snapshot.tasks[0]?.inputSummary).toBe('这次发布现在安全吗？');
+    expect(snapshot.tasks[0]?.detail).toBe('迁移风险低，但还需要确认外部步骤。');
+  });
 });

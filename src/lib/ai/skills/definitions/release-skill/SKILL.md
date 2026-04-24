@@ -3,6 +3,11 @@ id: release-skill
 title: Release Skill
 description: Analyze a release, its gating conditions, rollout path, and rollback plan.
 scope: release
+executionMode: structured
+surfaces:
+  - inline-card
+  - copilot-panel
+  - task-center
 pluginIds:
   - release-intelligence
 toolIds:

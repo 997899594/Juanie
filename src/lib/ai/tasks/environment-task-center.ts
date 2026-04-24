@@ -44,6 +44,8 @@ export interface EnvironmentTaskItem {
   detail?: string | null;
   createdAtLabel?: string | null;
   completedAtLabel?: string | null;
+  provider?: string | null;
+  model?: string | null;
   migrationRunId?: string | null;
   migrationRunStatus?: string | null;
   approvalToken?: string | null;
@@ -238,6 +240,8 @@ export async function getEnvironmentTaskCenterData(input: {
       detail: task.resultSummary ?? task.errorMessage,
       createdAtLabel: formatPlatformTimeContext(task.createdAt),
       completedAtLabel: formatPlatformTimeContext(task.completedAt),
+      provider: task.provider,
+      model: task.model,
     });
   }
 

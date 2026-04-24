@@ -34,6 +34,8 @@ export interface ReleaseTaskItem {
   detail?: string | null;
   createdAtLabel?: string | null;
   completedAtLabel?: string | null;
+  provider?: string | null;
+  model?: string | null;
   migrationRunId?: string | null;
   migrationRunStatus?: string | null;
   approvalToken?: string | null;
@@ -209,6 +211,8 @@ export async function getReleaseTaskCenterData(input: {
       detail: task.resultSummary ?? task.errorMessage,
       createdAtLabel: formatPlatformTimeContext(task.createdAt),
       completedAtLabel: formatPlatformTimeContext(task.completedAt),
+      provider: task.provider,
+      model: task.model,
     });
   }
 

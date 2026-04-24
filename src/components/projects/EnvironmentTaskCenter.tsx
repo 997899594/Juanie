@@ -27,6 +27,8 @@ interface EnvironmentTaskItem {
   detail?: string | null;
   createdAtLabel?: string | null;
   completedAtLabel?: string | null;
+  provider?: string | null;
+  model?: string | null;
   migrationRunId?: string | null;
   migrationRunStatus?: string | null;
   approvalToken?: string | null;
@@ -251,6 +253,9 @@ export function EnvironmentTaskCenter(input: {
                 detail: selectedTask.detail,
                 createdAtLabel: selectedTask.createdAtLabel,
                 completedAtLabel: selectedTask.completedAtLabel,
+                provider: selectedTask.provider,
+                model: selectedTask.model,
+                scopeLabel: 'environment-task',
               }
             : null
         }
