@@ -30,7 +30,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
 import { updateEnvironmentStrategy } from '@/lib/environments/client-actions';
 import type { ProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
-import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { cn } from '@/lib/utils';
 
 interface ProjectSettingsClientProps {
@@ -45,6 +44,7 @@ interface ProjectSettingsClientProps {
       repositoryWebUrl: string | null;
       productionBranch: string;
       status: string;
+      statusLabel: string;
       statusMessage: string | null;
       teamName: string;
       teamSlug: string;
@@ -106,13 +106,13 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
   const isDeleting = project.status === 'deleting';
   const statusDescription = isDeleting
     ? (project.statusMessage ?? '项目正在删除中，环境资源清理完成后会自动从列表移除。')
-    : project.status === 'failed' && project.statusMessage
+    : (project.status === 'failed' || project.status === 'initializing') && project.statusMessage
       ? project.statusMessage
       : undefined;
   const overviewStats = [
     { label: '团队', value: project.teamName },
     { label: '角色', value: project.governance.roleLabel },
-    { label: '状态', value: formatRuntimeStatusLabel(project.status) },
+    { label: '状态', value: project.statusLabel },
   ];
 
   const canEdit = ['owner', 'admin'].includes(project.yourRole) && !isDeleting;
@@ -129,6 +129,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
       setProject((current) => ({
         ...current,
         status: event.project.status ?? current.status,
+        statusLabel: event.project.statusLabel ?? current.statusLabel,
         statusMessage: event.project.statusMessage ?? current.statusMessage,
       }));
     },
@@ -277,9 +278,7 @@ export function ProjectSettingsClient({ projectId, initialData }: ProjectSetting
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     状态
                   </div>
-                  <div className="mt-2 text-sm font-medium">
-                    {formatRuntimeStatusLabel(project.status)}
-                  </div>
+                  <div className="mt-2 text-sm font-medium">{project.statusLabel}</div>
                 </div>
               </div>
 

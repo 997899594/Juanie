@@ -1,5 +1,6 @@
 import type { PlatformSignalChipLike } from '@/components/ui/platform-signals';
 import type { InitStepStatus } from '@/lib/db/schema';
+import type { ProjectRuntimeStatusSnapshot } from '@/lib/projects/runtime-status';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
 
 export interface ProjectInitStepLike {
@@ -403,14 +404,44 @@ function buildProjectInitRecoveryAction(
   }
 }
 
-export function buildProjectInitOverview(steps: ProjectInitStepLike[]): ProjectInitOverview {
-  const status = resolveProjectInitStatus(steps);
+export function buildProjectInitOverview(
+  steps: ProjectInitStepLike[],
+  options?: {
+    projectId?: string;
+    runtimeStatus?: ProjectRuntimeStatusSnapshot | null;
+  }
+): ProjectInitOverview {
+  const initStatus = resolveProjectInitStatus(steps);
+  const runtimeStatus = options?.runtimeStatus ?? null;
+  const status =
+    initStatus === 'active' && runtimeStatus?.bootstrapSourceBuildStatus === 'failed'
+      ? 'failed'
+      : initStatus === 'active' && runtimeStatus?.bootstrapSourceBuildStatus === 'building'
+        ? 'initializing'
+        : initStatus;
   const failedStep = steps.find((step) => step.status === 'failed');
   const runningStep = steps.find((step) => step.status === 'running');
   const completedSteps = steps.filter((step) => step.status === 'completed').length;
   const overallProgress = calculateProjectInitProgress(steps);
-  const issue = buildProjectInitIssue(failedStep);
-  const recoveryAction = buildProjectInitRecoveryAction(failedStep);
+  const bootstrapFailureIssue =
+    initStatus === 'active' && runtimeStatus?.bootstrapSourceBuildStatus === 'failed'
+      ? {
+          code: 'init_failed' as const,
+          label: runtimeStatus.statusLabel,
+          summary: runtimeStatus.summary ?? '首发构建没有成功进入发布链路',
+          nextActionLabel: runtimeStatus.nextActionLabel,
+        }
+      : null;
+  const issue = buildProjectInitIssue(failedStep) ?? bootstrapFailureIssue;
+  const recoveryAction = failedStep
+    ? buildProjectInitRecoveryAction(failedStep)
+    : bootstrapFailureIssue && options?.projectId
+      ? {
+          kind: 'link' as const,
+          label: '进入项目排查',
+          href: `/projects/${options.projectId}`,
+        }
+      : null;
   const platformSignals = buildPlatformSignalSnapshot({
     issue: issue
       ? {
@@ -424,33 +455,61 @@ export function buildProjectInitOverview(steps: ProjectInitStepLike[]): ProjectI
 
   const primarySummary =
     platformSignals.primarySummary ??
-    (status === 'active'
-      ? '项目初始化已完成，平台正在切换到项目主页。'
-      : status === 'failed'
-        ? failedStep?.error ||
-          `${PROJECT_INIT_STEP_LABELS[failedStep?.step || ''] || '初始化步骤'}执行失败`
-        : runningStep
-          ? `${PROJECT_INIT_STEP_LABELS[runningStep.step] || runningStep.step}正在执行`
-          : '平台正在准备项目基础设施和发布配置');
+    (runtimeStatus?.bootstrapSourceBuildStatus === 'building'
+      ? (runtimeStatus.summary ?? '基础设施已准备完成，正在等待首发构建进入发布链路')
+      : status === 'active'
+        ? '项目初始化已完成，平台正在切换到项目主页。'
+        : status === 'failed'
+          ? failedStep?.error ||
+            runtimeStatus?.summary ||
+            `${PROJECT_INIT_STEP_LABELS[failedStep?.step || ''] || '初始化步骤'}执行失败`
+          : runningStep
+            ? `${PROJECT_INIT_STEP_LABELS[runningStep.step] || runningStep.step}正在执行`
+            : '平台正在准备项目基础设施和发布配置');
 
   const nextActionLabel =
     platformSignals.nextActionLabel ??
-    (status === 'active'
-      ? '进入项目'
-      : status === 'failed'
-        ? '处理失败步骤后重试'
-        : runningStep
-          ? `等待 ${PROJECT_INIT_STEP_LABELS[runningStep.step] || runningStep.step}`
-          : '等待下一步启动');
+    (runtimeStatus?.bootstrapSourceBuildStatus === 'building'
+      ? (runtimeStatus.nextActionLabel ?? '等待首发构建完成')
+      : status === 'active'
+        ? '进入项目'
+        : status === 'failed'
+          ? (runtimeStatus?.nextActionLabel ?? '处理失败步骤后重试')
+          : runningStep
+            ? `等待 ${PROJECT_INIT_STEP_LABELS[runningStep.step] || runningStep.step}`
+            : '等待下一步启动');
 
-  const chips =
+  const baseChips =
     platformSignals.chips.length > 0
       ? platformSignals.chips
       : buildProjectInitSignals({ status, steps });
+  const chips =
+    initStatus === 'active' && runtimeStatus?.bootstrapSourceBuildStatus
+      ? [
+          ...baseChips,
+          {
+            key: `bootstrap:${runtimeStatus.bootstrapSourceBuildStatus}`,
+            label: runtimeStatus.statusLabel,
+            tone:
+              runtimeStatus.bootstrapSourceBuildStatus === 'failed'
+                ? ('danger' as const)
+                : ('neutral' as const),
+          },
+        ].filter(
+          (chip, index, all) => all.findIndex((existing) => existing.key === chip.key) === index
+        )
+      : baseChips;
 
   return {
     status,
-    statusLabel: status === 'active' ? '已就绪' : status === 'failed' ? '失败' : '初始化中',
+    statusLabel:
+      initStatus === 'active' && runtimeStatus?.bootstrapSourceBuildStatus
+        ? runtimeStatus.statusLabel
+        : status === 'active'
+          ? '已就绪'
+          : status === 'failed'
+            ? '失败'
+            : '初始化中',
     statusTone: status === 'active' ? 'success' : status === 'failed' ? 'error' : 'info',
     overallProgress,
     completedSteps,

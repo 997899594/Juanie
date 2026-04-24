@@ -10,6 +10,10 @@ import type {
   ProjectServiceLike,
 } from '@/lib/projects/project-view-shared';
 import { buildProjectEnvironmentPresentation } from '@/lib/projects/project-view-shared';
+import {
+  type ProjectRuntimeStatusSnapshot,
+  resolveProjectRuntimeStatus,
+} from '@/lib/projects/runtime-status';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
 import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { buildPlatformSignalSnapshot } from '@/lib/signals/platform';
@@ -65,10 +69,13 @@ export function decorateProjectRecentReleases<TRelease extends ProjectReleaseLik
 
 export function buildProjectOverviewDetails(
   teamName: string | null | undefined,
-  project: ProjectOverviewProjectLike
+  project: ProjectOverviewProjectLike,
+  runtimeStatus: ProjectRuntimeStatusSnapshot = resolveProjectRuntimeStatus({
+    status: project.status,
+  })
 ): ProjectOverviewDetails {
   return {
-    headerDescription: `${teamName ?? '团队'} · ${formatRuntimeStatusLabel(project.status)}`,
+    headerDescription: `${teamName ?? '团队'} · ${runtimeStatus.statusLabel}`,
     repository: project.repository
       ? {
           fullName: project.repository.fullName,
@@ -77,7 +84,9 @@ export function buildProjectOverviewDetails(
       : null,
     productionBranch: project.productionBranch ?? null,
     description: project.description ?? null,
-    statusLabel: formatRuntimeStatusLabel(project.status),
+    statusLabel: runtimeStatus.statusLabel,
+    statusSummary: runtimeStatus.summary,
+    nextActionLabel: runtimeStatus.nextActionLabel,
     createdDateLabel: formatPlatformDate(project.createdAt) ?? '—',
   };
 }

@@ -84,7 +84,7 @@ export function buildHomePageData<
   );
   const projectCards = decorateHomeProjects(input.userProjects, { rolesByTeamId });
   const attentionItems = decorateHomeAttentionRuns(attentionRuns);
-  const activeProjectCount = input.userProjects.filter(
+  const activeProjectCount = projectCards.filter(
     (project) => project.status === 'active' || project.status === 'running'
   ).length;
 

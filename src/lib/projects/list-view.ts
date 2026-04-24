@@ -1,5 +1,5 @@
+import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
-import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { formatPlatformDateTimeShort } from '@/lib/time/format';
 
 interface ProjectListEnvironmentLike {
@@ -7,6 +7,8 @@ interface ProjectListEnvironmentLike {
   name: string;
   isProduction?: boolean | null;
   isPreview?: boolean | null;
+  deliveryMode?: 'direct' | 'promote_only' | null;
+  previewBuildStatus?: string | null;
 }
 
 export interface ProjectListItemLike {
@@ -58,12 +60,16 @@ export function decorateProjectListCards<TProject extends ProjectListItemLike>(
       role: project.role,
       environments: project.environments,
     });
+    const runtimeStatus = resolveProjectRuntimeStatus({
+      status: project.status,
+      environments: project.environments,
+    });
 
     return {
       id: project.id,
       name: project.name,
-      status: project.status ?? null,
-      statusLabel: formatRuntimeStatusLabel(project.status),
+      status: runtimeStatus.status,
+      statusLabel: runtimeStatus.statusLabel,
       teamName: project.teamName,
       repositoryLabel: project.repositoryFullName ?? null,
       createdAtLabel: formatCreatedAtLabel(project.createdAt),

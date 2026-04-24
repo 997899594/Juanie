@@ -26,3 +26,4 @@ export {
   type ProjectAttentionItemDecorations,
   type ProjectDatabaseCardDecorations,
 } from '@/lib/projects/project-view-shared';
+export { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';

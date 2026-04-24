@@ -1,7 +1,7 @@
 import { Cron } from 'croner';
-import { and, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { environmentSchemaStates } from '@/lib/db/schema';
+import { environmentSchemaStates, environments } from '@/lib/db/schema';
 import { setEnvironmentSourceBuildState } from '@/lib/environments/source-build-state';
 import {
   gateway,
@@ -32,11 +32,13 @@ interface AutoRetryEnvironmentLike {
   previewBuildStatus: string | null;
   previewBuildSourceRef: string | null;
   previewBuildSourceCommitSha: string | null;
+  previewBuildStartedAt: Date | null;
 }
 
 interface AutoRetryProjectLike {
   id: string;
   teamId: string;
+  status: string | null;
   repository: {
     providerId: string;
     fullName: string;
@@ -45,6 +47,8 @@ interface AutoRetryProjectLike {
 
 interface AutoRetrySchemaStateLike {
   databaseId: string;
+  databaseName: string;
+  databaseType: string | null;
   status:
     | 'aligned'
     | 'pending_migrations'
@@ -55,6 +59,14 @@ interface AutoRetrySchemaStateLike {
   summary: string | null;
   hasLedger: boolean;
   hasUserTables: boolean;
+  lastInspectedAt: Date | null;
+}
+
+interface AutoRetryEnvironmentContext {
+  projectId: string;
+  environment: AutoRetryEnvironmentLike;
+  project: AutoRetryProjectLike;
+  schemaStates: AutoRetrySchemaStateLike[];
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
@@ -89,7 +101,7 @@ export function isRetryableBlockedSchemaState(input: {
 function toBlockingState(state: AutoRetrySchemaStateLike) {
   return {
     databaseId: state.databaseId,
-    databaseName: state.databaseId,
+    databaseName: state.databaseName,
     status: state.status,
     statusLabel: state.status,
     summary: state.summary,
@@ -115,7 +127,24 @@ export function canAutoRetryFailedSourceBuildAfterSchemaHealing(input: {
     return false;
   }
 
-  return !input.schemaStates.some((state) => isReleaseSchemaStateBlocking(toBlockingState(state)));
+  if (input.schemaStates.some((state) => isReleaseSchemaStateBlocking(toBlockingState(state)))) {
+    return false;
+  }
+
+  if (input.schemaStates.length === 0) {
+    return true;
+  }
+
+  if (!input.environment.previewBuildStartedAt) {
+    return false;
+  }
+
+  const buildStartedAt = input.environment.previewBuildStartedAt;
+
+  return input.schemaStates.some(
+    (state) =>
+      state.lastInspectedAt !== null && state.lastInspectedAt.getTime() >= buildStartedAt.getTime()
+  );
 }
 
 async function retryFailedEnvironmentSourceBuild(input: {
@@ -173,43 +202,21 @@ async function retryFailedEnvironmentSourceBuild(input: {
   }
 }
 
-export async function healStaleBlockedSchemaStates(options?: {
-  now?: Date;
-  staleMinutes?: number;
-  batchSize?: number;
-}): Promise<void> {
-  const now = options?.now ?? new Date();
-  const staleMinutes = options?.staleMinutes ?? DEFAULT_SCHEMA_STATE_HEALING_STALE_MINUTES;
-  const batchSize = options?.batchSize ?? DEFAULT_SCHEMA_STATE_HEALING_BATCH_SIZE;
-  const cutoff = new Date(now.getTime() - staleMinutes * 60_000);
-
-  const blockedStates = await db.query.environmentSchemaStates.findMany({
-    where: and(
-      eq(environmentSchemaStates.status, 'blocked'),
-      or(
-        isNull(environmentSchemaStates.lastInspectedAt),
-        lt(environmentSchemaStates.lastInspectedAt, cutoff)
-      )
-    ),
-    orderBy: (table, { asc }) => [asc(table.lastInspectedAt), asc(table.updatedAt)],
-    limit: batchSize * 4,
+async function loadAutoRetryEnvironmentContext(
+  environmentId: string
+): Promise<AutoRetryEnvironmentContext | null> {
+  const environment = await db.query.environments.findFirst({
+    where: eq(environments.id, environmentId),
+    columns: {
+      id: true,
+      projectId: true,
+      name: true,
+      previewBuildStatus: true,
+      previewBuildSourceRef: true,
+      previewBuildSourceCommitSha: true,
+      previewBuildStartedAt: true,
+    },
     with: {
-      database: {
-        columns: {
-          id: true,
-          name: true,
-          type: true,
-        },
-      },
-      environment: {
-        columns: {
-          id: true,
-          name: true,
-          previewBuildStatus: true,
-          previewBuildSourceRef: true,
-          previewBuildSourceCommitSha: true,
-        },
-      },
       project: {
         columns: {
           id: true,
@@ -228,67 +235,220 @@ export async function healStaleBlockedSchemaStates(options?: {
     },
   });
 
-  const candidates = blockedStates
-    .filter(
-      (state) =>
-        state.project.status === 'active' &&
-        isRetryableBlockedSchemaState({
-          status: state.status,
-          databaseType: state.database?.type ?? '',
-          lastInspectedAt: state.lastInspectedAt,
-          staleMinutes,
-          now,
-        })
-    )
-    .slice(0, batchSize);
+  if (!environment) {
+    return null;
+  }
 
-  for (const candidate of candidates) {
-    if (!candidate.database || !candidate.environment) {
+  const schemaStates = await db.query.environmentSchemaStates.findMany({
+    where: eq(environmentSchemaStates.environmentId, environmentId),
+    orderBy: [asc(environmentSchemaStates.updatedAt)],
+    columns: {
+      databaseId: true,
+      status: true,
+      summary: true,
+      hasLedger: true,
+      hasUserTables: true,
+      lastInspectedAt: true,
+    },
+    with: {
+      database: {
+        columns: {
+          id: true,
+          name: true,
+          type: true,
+        },
+      },
+    },
+  });
+
+  return {
+    projectId: environment.projectId,
+    environment: {
+      id: environment.id,
+      name: environment.name,
+      previewBuildStatus: environment.previewBuildStatus,
+      previewBuildSourceRef: environment.previewBuildSourceRef,
+      previewBuildSourceCommitSha: environment.previewBuildSourceCommitSha,
+      previewBuildStartedAt: environment.previewBuildStartedAt,
+    },
+    project: {
+      id: environment.project.id,
+      teamId: environment.project.teamId,
+      status: environment.project.status,
+      repository: environment.project.repository
+        ? {
+            providerId: environment.project.repository.providerId,
+            fullName: environment.project.repository.fullName,
+          }
+        : null,
+    },
+    schemaStates: schemaStates.map((state) => ({
+      databaseId: state.databaseId,
+      databaseName: state.database?.name ?? state.databaseId,
+      databaseType: state.database?.type ?? null,
+      status: state.status,
+      summary: state.summary,
+      hasLedger: state.hasLedger,
+      hasUserTables: state.hasUserTables,
+      lastInspectedAt: state.lastInspectedAt,
+    })),
+  };
+}
+
+async function loadSchemaHealingCandidateEnvironmentIds(options: {
+  now: Date;
+  staleMinutes: number;
+  batchSize: number;
+}): Promise<string[]> {
+  const cutoff = new Date(options.now.getTime() - options.staleMinutes * 60_000);
+  const ids = new Set<string>();
+
+  const blockedStates = await db.query.environmentSchemaStates.findMany({
+    where: and(
+      eq(environmentSchemaStates.status, 'blocked'),
+      or(
+        isNull(environmentSchemaStates.lastInspectedAt),
+        lt(environmentSchemaStates.lastInspectedAt, cutoff)
+      )
+    ),
+    orderBy: (table, { asc: orderAsc }) => [
+      orderAsc(table.lastInspectedAt),
+      orderAsc(table.updatedAt),
+    ],
+    limit: options.batchSize * 4,
+    with: {
+      database: {
+        columns: {
+          type: true,
+        },
+      },
+      project: {
+        columns: {
+          status: true,
+        },
+      },
+    },
+  });
+
+  for (const state of blockedStates) {
+    if (
+      state.project.status === 'active' &&
+      state.environmentId &&
+      isRetryableBlockedSchemaState({
+        status: state.status,
+        databaseType: state.database?.type ?? '',
+        lastInspectedAt: state.lastInspectedAt,
+        staleMinutes: options.staleMinutes,
+        now: options.now,
+      })
+    ) {
+      ids.add(state.environmentId);
+    }
+  }
+
+  const failedSourceBuilds = await db.query.environments.findMany({
+    where: and(
+      eq(environments.previewBuildStatus, 'failed'),
+      isNotNull(environments.previewBuildSourceRef),
+      isNotNull(environments.previewBuildSourceCommitSha),
+      isNotNull(environments.previewBuildStartedAt)
+    ),
+    orderBy: (table, { asc: orderAsc }) => [
+      orderAsc(table.previewBuildStartedAt),
+      orderAsc(table.updatedAt),
+    ],
+    limit: options.batchSize * 4,
+    columns: {
+      id: true,
+    },
+    with: {
+      project: {
+        columns: {
+          status: true,
+        },
+      },
+    },
+  });
+
+  for (const environment of failedSourceBuilds) {
+    if (environment.project.status === 'active') {
+      ids.add(environment.id);
+    }
+  }
+
+  return [...ids].slice(0, options.batchSize);
+}
+
+export async function healStaleBlockedSchemaStates(options?: {
+  now?: Date;
+  staleMinutes?: number;
+  batchSize?: number;
+}): Promise<void> {
+  const now = options?.now ?? new Date();
+  const staleMinutes = options?.staleMinutes ?? DEFAULT_SCHEMA_STATE_HEALING_STALE_MINUTES;
+  const batchSize = options?.batchSize ?? DEFAULT_SCHEMA_STATE_HEALING_BATCH_SIZE;
+  const candidateEnvironmentIds = await loadSchemaHealingCandidateEnvironmentIds({
+    now,
+    staleMinutes,
+    batchSize,
+  });
+
+  for (const environmentId of candidateEnvironmentIds) {
+    const context = await loadAutoRetryEnvironmentContext(environmentId);
+    if (!context || context.project.status !== 'active') {
       continue;
     }
 
     try {
-      const healedState = await inspectEnvironmentSchemaState({
-        projectId: candidate.projectId,
-        databaseId: candidate.databaseId,
-      });
+      for (const state of context.schemaStates) {
+        if (
+          !isRetryableBlockedSchemaState({
+            status: state.status,
+            databaseType: state.databaseType ?? '',
+            lastInspectedAt: state.lastInspectedAt,
+            staleMinutes,
+            now,
+          })
+        ) {
+          continue;
+        }
 
-      if (healedState.status === 'blocked') {
-        schemaStateHealingLogger.info('Schema state remains blocked after healing attempt', {
-          projectId: candidate.projectId,
-          environmentId: candidate.environmentId,
-          databaseId: candidate.databaseId,
-          databaseName: candidate.database.name,
+        const healedState = await inspectEnvironmentSchemaState({
+          projectId: context.projectId,
+          databaseId: state.databaseId,
+        });
+
+        if (healedState.status === 'blocked') {
+          schemaStateHealingLogger.info('Schema state remains blocked after healing attempt', {
+            projectId: context.projectId,
+            environmentId: context.environment.id,
+            databaseId: state.databaseId,
+            databaseName: state.databaseName,
+            summary: healedState.summary,
+          });
+          continue;
+        }
+
+        schemaStateHealingLogger.info('Healed stale blocked schema state', {
+          projectId: context.projectId,
+          environmentId: context.environment.id,
+          databaseId: state.databaseId,
+          databaseName: state.databaseName,
+          nextStatus: healedState.status,
           summary: healedState.summary,
         });
+      }
+
+      const refreshedContext = await loadAutoRetryEnvironmentContext(environmentId);
+      if (!refreshedContext || refreshedContext.project.status !== 'active') {
         continue;
       }
 
-      schemaStateHealingLogger.info('Healed stale blocked schema state', {
-        projectId: candidate.projectId,
-        environmentId: candidate.environmentId,
-        databaseId: candidate.databaseId,
-        databaseName: candidate.database.name,
-        nextStatus: healedState.status,
-        summary: healedState.summary,
-      });
-
-      const environmentStates = await db.query.environmentSchemaStates.findMany({
-        where: eq(environmentSchemaStates.environmentId, candidate.environmentId),
-        columns: {
-          databaseId: true,
-          status: true,
-          summary: true,
-          hasLedger: true,
-          hasUserTables: true,
-        },
-      });
-
       if (
         !canAutoRetryFailedSourceBuildAfterSchemaHealing({
-          environment: candidate.environment,
-          project: candidate.project,
-          schemaStates: environmentStates,
+          environment: refreshedContext.environment,
+          project: refreshedContext.project,
+          schemaStates: refreshedContext.schemaStates,
         })
       ) {
         continue;
@@ -296,22 +456,20 @@ export async function healStaleBlockedSchemaStates(options?: {
 
       try {
         await retryFailedEnvironmentSourceBuild({
-          project: candidate.project,
-          environment: candidate.environment,
+          project: refreshedContext.project,
+          environment: refreshedContext.environment,
         });
       } catch (error) {
         schemaStateHealingLogger.warn('Failed to retry source build after schema healing', {
-          projectId: candidate.project.id,
-          environmentId: candidate.environment.id,
-          databaseId: candidate.databaseId,
+          projectId: refreshedContext.project.id,
+          environmentId: refreshedContext.environment.id,
           errorMessage: error instanceof Error ? error.message : String(error),
         });
       }
     } catch (error) {
       schemaStateHealingLogger.warn('Failed to heal blocked schema state', {
-        projectId: candidate.projectId,
-        environmentId: candidate.environmentId,
-        databaseId: candidate.databaseId,
+        projectId: context.projectId,
+        environmentId: context.environment.id,
         errorMessage: error instanceof Error ? error.message : String(error),
       });
     }

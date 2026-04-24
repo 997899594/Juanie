@@ -7,10 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
 import type { ProjectListCard, ProjectListStat } from '@/lib/projects/list-view';
-import {
-  formatRuntimeStatusLabel,
-  getRuntimeStatusDotClass,
-} from '@/lib/runtime/status-presentation';
+import { getRuntimeStatusDotClass } from '@/lib/runtime/status-presentation';
 
 interface ProjectsPageClientProps {
   initialProjectCards: ProjectListCard[];
@@ -39,7 +36,7 @@ export function ProjectsPageClient({ initialProjectCards, initialStats }: Projec
             ? {
                 ...project,
                 status: event.project.status,
-                statusLabel: formatRuntimeStatusLabel(event.project.status),
+                statusLabel: event.project.statusLabel,
               }
             : project
         )

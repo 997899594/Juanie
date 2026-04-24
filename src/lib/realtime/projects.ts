@@ -3,6 +3,7 @@ import type Redis from 'ioredis';
 import { db } from '@/lib/db';
 import { projects } from '@/lib/db/schema';
 import { logger } from '@/lib/logger';
+import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { createRedisClient, isRedisConfigured } from '@/lib/redis/config';
 
 const PROJECT_CHANNEL_PREFIX = 'realtime:projects:project:';
@@ -12,6 +13,7 @@ export interface ProjectRealtimeRecord {
   id: string;
   name: string;
   status: string | null;
+  statusLabel: string;
   statusMessage: string | null;
   updatedAt: string;
 }
@@ -64,17 +66,34 @@ export async function loadProjectRealtimeRecord(
       statusMessage: true,
       updatedAt: true,
     },
+    with: {
+      environments: {
+        columns: {
+          id: true,
+          name: true,
+          isPreview: true,
+          deliveryMode: true,
+          previewBuildStatus: true,
+        },
+      },
+    },
   });
 
   if (!project) {
     return null;
   }
 
+  const runtimeStatus = resolveProjectRuntimeStatus({
+    status: project.status,
+    environments: project.environments,
+  });
+
   return {
     id: project.id,
     name: project.name,
-    status: project.status ?? null,
-    statusMessage: project.statusMessage ?? null,
+    status: runtimeStatus.status,
+    statusLabel: runtimeStatus.statusLabel,
+    statusMessage: project.statusMessage ?? runtimeStatus.summary ?? null,
     updatedAt: project.updatedAt.toISOString(),
   };
 }

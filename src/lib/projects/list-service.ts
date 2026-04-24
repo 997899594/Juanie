@@ -39,6 +39,8 @@ export async function getProjectsListPageData(userId: string) {
             name: true,
             isProduction: true,
             isPreview: true,
+            deliveryMode: true,
+            previewBuildStatus: true,
             projectId: true,
           },
         })

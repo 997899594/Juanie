@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useProjectsRealtime } from '@/hooks/useProjectsRealtime';
-import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import type { getTeamOverviewPageData } from '@/lib/teams/service';
 
 interface TeamOverviewClientProps {
@@ -45,7 +44,7 @@ export function TeamOverviewClient({ teamId, initialData }: TeamOverviewClientPr
             ? {
                 ...project,
                 status: event.project.status,
-                statusLabel: formatRuntimeStatusLabel(event.project.status),
+                statusLabel: event.project.statusLabel,
               }
             : project
         ),

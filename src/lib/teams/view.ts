@@ -1,6 +1,6 @@
 import type { IntegrationAuthMode, TeamRole } from '@/lib/db/schema';
+import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
-import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import {
   buildTeamGovernanceSnapshot,
   buildTeamMemberActionSnapshot,
@@ -22,8 +22,10 @@ interface TeamProjectLike {
   environments: Array<{
     id: string;
     name: string;
+    deliveryMode?: 'direct' | 'promote_only' | null;
     isProduction?: boolean | null;
     isPreview?: boolean | null;
+    previewBuildStatus?: string | null;
   }>;
 }
 
@@ -282,16 +284,23 @@ export function buildTeamOverviewView(input: {
       { label: '成员', value: input.memberCount.toString() },
     ],
     governance: buildTeamGovernanceSnapshot(input.role),
-    projects: input.projects.map((project) => ({
-      id: project.id,
-      name: project.name,
-      status: project.status ?? null,
-      statusLabel: formatRuntimeStatusLabel(project.status),
-      governance: buildProjectGovernanceSnapshot({
-        role: input.role,
+    projects: input.projects.map((project) => {
+      const runtimeStatus = resolveProjectRuntimeStatus({
+        status: project.status,
         environments: project.environments,
-      }),
-    })),
+      });
+
+      return {
+        id: project.id,
+        name: project.name,
+        status: runtimeStatus.status,
+        statusLabel: runtimeStatus.statusLabel,
+        governance: buildProjectGovernanceSnapshot({
+          role: input.role,
+          environments: project.environments,
+        }),
+      };
+    }),
     memberSummary: input.memberCount > 0 ? `${input.memberCount} 名成员` : '还没有成员',
   };
 }

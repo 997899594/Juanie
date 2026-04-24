@@ -204,6 +204,8 @@ export interface ProjectOverviewDetails {
   productionBranch: string | null;
   description: string | null;
   statusLabel: string;
+  statusSummary: string | null;
+  nextActionLabel: string | null;
   createdDateLabel: string;
 }
 

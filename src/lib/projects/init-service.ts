@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { projectInitSteps, projects, teamMembers } from '@/lib/db/schema';
 import { buildProjectInitOverview } from '@/lib/projects/init-view';
+import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 
 type ProjectInitMode = 'import' | 'create';
 
@@ -27,12 +28,40 @@ function mapProjectInitStep(step: typeof projectInitSteps.$inferSelect) {
 }
 
 export async function getProjectInitOverviewSnapshot(projectId: string) {
-  const steps = await db.query.projectInitSteps.findMany({
-    where: eq(projectInitSteps.projectId, projectId),
-    orderBy: (step, { asc }) => [asc(step.createdAt)],
-  });
+  const [steps, project] = await Promise.all([
+    db.query.projectInitSteps.findMany({
+      where: eq(projectInitSteps.projectId, projectId),
+      orderBy: (step, { asc }) => [asc(step.createdAt)],
+    }),
+    db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+      columns: {
+        id: true,
+        status: true,
+      },
+      with: {
+        environments: {
+          columns: {
+            id: true,
+            name: true,
+            isPreview: true,
+            deliveryMode: true,
+            previewBuildStatus: true,
+          },
+        },
+      },
+    }),
+  ]);
 
-  return buildProjectInitOverview(steps.map(mapProjectInitStep));
+  return buildProjectInitOverview(steps.map(mapProjectInitStep), {
+    projectId,
+    runtimeStatus: project
+      ? resolveProjectRuntimeStatus({
+          status: project.status,
+          environments: project.environments,
+        })
+      : null,
+  });
 }
 
 function resolveProjectInitMode(
@@ -74,6 +103,17 @@ export async function getProjectInitRetryContext(
 } | null> {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
+    with: {
+      environments: {
+        columns: {
+          id: true,
+          name: true,
+          isPreview: true,
+          deliveryMode: true,
+          previewBuildStatus: true,
+        },
+      },
+    },
   });
 
   if (!project) {
@@ -99,7 +139,13 @@ export async function getProjectInitRetryContext(
   }
 
   const metadata = resolveProjectInitMode(project.configJson, steps);
-  const overview = buildProjectInitOverview(steps.map(mapProjectInitStep));
+  const overview = buildProjectInitOverview(steps.map(mapProjectInitStep), {
+    projectId: project.id,
+    runtimeStatus: resolveProjectRuntimeStatus({
+      status: project.status,
+      environments: project.environments,
+    }),
+  });
 
   return {
     projectId: project.id,
@@ -123,6 +169,17 @@ export async function getProjectInitPageData(
 ): Promise<ProjectInitPageData | null> {
   const project = await db.query.projects.findFirst({
     where: eq(projects.id, projectId),
+    with: {
+      environments: {
+        columns: {
+          id: true,
+          name: true,
+          isPreview: true,
+          deliveryMode: true,
+          previewBuildStatus: true,
+        },
+      },
+    },
   });
 
   if (!project) {
@@ -141,7 +198,10 @@ export async function getProjectInitPageData(
     project: {
       id: project.id,
       name: project.name,
-      status: project.status,
+      status: resolveProjectRuntimeStatus({
+        status: project.status,
+        environments: project.environments,
+      }).status,
     },
     overview: await getProjectInitOverviewSnapshot(projectId),
   };

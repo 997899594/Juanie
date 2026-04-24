@@ -14,6 +14,7 @@ import {
   buildPreviewSourceMetadata,
   type PreviewSourceMetadata,
 } from '@/lib/environments/source-metadata';
+import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 import {
   buildIssueSnapshot,
@@ -25,7 +26,6 @@ import {
 } from '@/lib/releases/intelligence';
 import { buildReleaseDetailPath } from '@/lib/releases/paths';
 import { getReleaseDisplayTitle } from '@/lib/releases/presentation';
-import { formatRuntimeStatusLabel } from '@/lib/runtime/status-presentation';
 import { buildPlatformSignalSnapshot, type PlatformSignalSnapshot } from '@/lib/signals/platform';
 import { formatPlatformRelativeTime } from '@/lib/time/format';
 
@@ -71,6 +71,8 @@ export interface HomeProjectLike {
     EnvironmentKindLike & {
       id: string;
       name: string;
+      deliveryMode?: 'direct' | 'promote_only' | null;
+      previewBuildStatus?: string | null;
     }
   >;
 }
@@ -165,28 +167,27 @@ export function decorateHomeProjects<TProject extends HomeProjectLike>(
     rolesByTeamId?: Map<string, 'owner' | 'admin' | 'member'>;
   } = {}
 ): Array<TProject & HomeProjectDecorations> {
-  return projects.map((project) => ({
-    ...(() => {
-      const role = input.rolesByTeamId?.get(project.teamId);
-      if (!role) {
-        return {
-          roleLabel: null,
-        };
-      }
+  return projects.map((project) => {
+    const runtimeStatus = resolveProjectRuntimeStatus({
+      status: project.status,
+      environments: project.environments,
+    });
+    const role = input.rolesByTeamId?.get(project.teamId);
+    const roleLabel = role
+      ? buildProjectGovernanceSnapshot({
+          role,
+          environments: project.environments ?? [],
+        }).roleLabel
+      : null;
 
-      const governance = buildProjectGovernanceSnapshot({
-        role,
-        environments: project.environments ?? [],
-      });
-
-      return {
-        roleLabel: governance.roleLabel,
-      };
-    })(),
-    ...project,
-    statusLabel: formatRuntimeStatusLabel(project.status),
-    repositoryLabel: project.repository?.fullName || '未绑定仓库',
-  }));
+    return {
+      ...project,
+      status: runtimeStatus.status,
+      statusLabel: runtimeStatus.statusLabel,
+      repositoryLabel: project.repository?.fullName || '未绑定仓库',
+      roleLabel,
+    };
+  });
 }
 
 export function decorateHomeAttentionRuns<TRun extends HomeAttentionRunLike>(

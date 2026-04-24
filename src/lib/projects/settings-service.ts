@@ -7,6 +7,7 @@ import {
   isPreviewEnvironment,
   isProductionEnvironment,
 } from '@/lib/environments/model';
+import { resolveProjectRuntimeStatus } from '@/lib/projects/runtime-status';
 import { buildProjectGovernanceSnapshot } from '@/lib/projects/settings-view';
 
 export async function getProjectSettingsPageData(projectId: string, userId: string) {
@@ -41,6 +42,10 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
     role: teamMember.role,
     environments: environmentList,
   });
+  const runtimeStatus = resolveProjectRuntimeStatus({
+    status: project.status,
+    environments: environmentList,
+  });
 
   return {
     project: {
@@ -51,8 +56,9 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
       repositoryFullName: project.repository?.fullName ?? null,
       repositoryWebUrl: project.repository?.webUrl ?? null,
       productionBranch: project.productionBranch ?? 'main',
-      status: project.status ?? 'initializing',
-      statusMessage: project.statusMessage ?? null,
+      status: runtimeStatus.status ?? 'initializing',
+      statusLabel: runtimeStatus.statusLabel,
+      statusMessage: project.statusMessage ?? runtimeStatus.summary ?? null,
       teamName: team?.name ?? '团队',
       teamSlug: team?.slug ?? '',
       yourRole: teamMember.role,
@@ -69,11 +75,11 @@ export async function getProjectSettingsPageData(projectId: string, userId: stri
       })),
     },
     overview: {
-      headerDescription: `${team?.name ?? '团队'} · ${project.status ?? 'active'}`,
+      headerDescription: `${team?.name ?? '团队'} · ${runtimeStatus.statusLabel}`,
       stats: [
         { label: '团队', value: team?.name ?? '—' },
         { label: '角色', value: governance.roleLabel },
-        { label: '状态', value: project.status ?? '—' },
+        { label: '状态', value: runtimeStatus.statusLabel },
       ],
     },
   };

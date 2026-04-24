@@ -57,6 +57,9 @@ export function ProjectOverviewDashboard({ projectId, pageData }: ProjectOvervie
           <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">项目</div>
           <div className="mt-3 space-y-3">
             <div className="text-sm text-foreground">{collaboration.teamName ?? '团队项目'}</div>
+            {overview.statusSummary ? (
+              <div className="text-sm text-muted-foreground">{overview.statusSummary}</div>
+            ) : null}
             {overview.repository ? (
               <a
                 href={overview.repository.webUrl ?? undefined}

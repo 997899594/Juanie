@@ -36,6 +36,7 @@ import {
   type ProjectOverviewProjectLike,
   type ProjectReleaseLike,
   type ProjectServiceLike,
+  resolveProjectRuntimeStatus,
 } from '@/lib/projects/view';
 
 interface ProjectCollaborationMemberInput {
@@ -128,9 +129,14 @@ export function buildProjectOverviewPageData<
     }
   }
 
+  const runtimeStatus = resolveProjectRuntimeStatus({
+    status: input.project.status,
+    environments: input.projectEnvironments,
+  });
+
   return {
     project: input.project,
-    overview: buildProjectOverviewDetails(input.team?.name, input.project),
+    overview: buildProjectOverviewDetails(input.team?.name, input.project, runtimeStatus),
     collaboration: {
       teamName: input.team?.name ?? null,
       memberCount: input.teamMemberCount,

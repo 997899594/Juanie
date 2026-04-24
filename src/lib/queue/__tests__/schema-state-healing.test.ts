@@ -41,6 +41,7 @@ describe('schema state healing', () => {
     const project = {
       id: 'project_1',
       teamId: 'team_1',
+      status: 'active',
       repository: {
         providerId: 'provider_1',
         fullName: '997899594/nexusnote',
@@ -52,6 +53,7 @@ describe('schema state healing', () => {
       previewBuildStatus: 'failed',
       previewBuildSourceRef: 'refs/heads/main',
       previewBuildSourceCommitSha: 'abc123',
+      previewBuildStartedAt: new Date('2026-04-24T03:12:47.000Z'),
     };
 
     expect(
@@ -61,10 +63,13 @@ describe('schema state healing', () => {
         schemaStates: [
           {
             databaseId: 'db_1',
+            databaseName: 'primary',
+            databaseType: 'postgresql',
             status: 'pending_migrations',
             summary: '可通过正常发布补齐',
             hasLedger: true,
             hasUserTables: true,
+            lastInspectedAt: new Date('2026-04-24T05:08:13.000Z'),
           },
         ],
       })
@@ -77,10 +82,13 @@ describe('schema state healing', () => {
         schemaStates: [
           {
             databaseId: 'db_1',
+            databaseName: 'primary',
+            databaseType: 'postgresql',
             status: 'blocked',
             summary: '仍然失败',
             hasLedger: false,
             hasUserTables: false,
+            lastInspectedAt: new Date('2026-04-24T05:08:13.000Z'),
           },
         ],
       })
@@ -96,10 +104,32 @@ describe('schema state healing', () => {
         schemaStates: [
           {
             databaseId: 'db_1',
+            databaseName: 'primary',
+            databaseType: 'postgresql',
             status: 'aligned',
             summary: '一致',
             hasLedger: true,
             hasUserTables: true,
+            lastInspectedAt: new Date('2026-04-24T05:08:13.000Z'),
+          },
+        ],
+      })
+    ).toBe(false);
+
+    expect(
+      canAutoRetryFailedSourceBuildAfterSchemaHealing({
+        environment,
+        project,
+        schemaStates: [
+          {
+            databaseId: 'db_1',
+            databaseName: 'primary',
+            databaseType: 'postgresql',
+            status: 'pending_migrations',
+            summary: 'schema 已恢复',
+            hasLedger: true,
+            hasUserTables: true,
+            lastInspectedAt: new Date('2026-04-24T03:00:00.000Z'),
           },
         ],
       })
