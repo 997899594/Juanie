@@ -29,6 +29,9 @@ let cachedSkills: JuanieSkillDefinition[] | null = null;
 
 function discoverSkillAssetPaths(): string[] {
   const absoluteRoot = resolve(process.cwd(), skillsDefinitionRoot);
+  if (!existsSync(absoluteRoot)) {
+    return [];
+  }
 
   return readdirSync(absoluteRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())

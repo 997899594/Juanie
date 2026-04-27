@@ -29,6 +29,7 @@ export interface AtlasDatabaseTarget {
   databaseName: string | null;
   username: string | null;
   password: string | null;
+  capabilities?: readonly string[] | null;
 }
 
 export function isAtlasDatabaseTarget(database: { type: string }): database is AtlasDatabaseTarget {
@@ -146,7 +147,9 @@ async function runAtlasSchemaDiff(input: {
     throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema diff');
   }
 
-  const devDatabase = await prepareAtlasDevDatabaseSession(input.database.type);
+  const devDatabase = await prepareAtlasDevDatabaseSession(input.database.type, {
+    capabilities: input.database.capabilities,
+  });
 
   try {
     const args = [
@@ -274,7 +277,9 @@ export async function planApplyDesiredSchema(input: {
     throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema apply');
   }
 
-  const devDatabase = await prepareAtlasDevDatabaseSession(input.database.type);
+  const devDatabase = await prepareAtlasDevDatabaseSession(input.database.type, {
+    capabilities: input.database.capabilities,
+  });
 
   try {
     const args = [
@@ -317,7 +322,9 @@ export async function applyDesiredSchemaToDatabase(input: {
     throw new Error('数据库缺少可用的连接信息，无法执行 Atlas schema apply');
   }
 
-  const devDatabase = await prepareAtlasDevDatabaseSession(input.database.type);
+  const devDatabase = await prepareAtlasDevDatabaseSession(input.database.type, {
+    capabilities: input.database.capabilities,
+  });
 
   try {
     await runAtlasCommand(

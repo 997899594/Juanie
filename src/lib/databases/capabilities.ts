@@ -16,7 +16,7 @@ const postgresCapabilitySpecs: Record<
 > = {
   vector: {
     extension: 'vector',
-    probeSql: "SELECT '[1,2,3]'::vector",
+    probeSql: "SELECT '[1,2,3]'::public.vector",
   },
   pg_trgm: {
     extension: 'pg_trgm',

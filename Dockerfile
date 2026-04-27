@@ -81,10 +81,7 @@ ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
 # 复制 Next.js standalone
-COPY --from=builder /app/.next/standalone/server.js ./server.js
-COPY --from=builder /app/.next/standalone/package.json ./package.json
-COPY --from=builder /app/.next/standalone/node_modules ./node_modules
-COPY --from=builder /app/.next/standalone/.next ./.next
+COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 

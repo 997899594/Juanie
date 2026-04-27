@@ -2,6 +2,10 @@ import crypto from 'node:crypto';
 import mysql from 'mysql2/promise';
 import { Client as PgClient } from 'pg';
 import { hasExecutable, normalizeAtlasDatabaseUrl } from '@/lib/atlas/cli';
+import {
+  type DatabaseCapability,
+  getPostgresCapabilityExtensions,
+} from '@/lib/databases/capabilities';
 import { getNormalizedDatabaseUrlFromEnv, normalizeDatabaseUrl } from '@/lib/db/connection-url';
 
 export type AtlasDevDatabaseType = 'postgresql' | 'mysql';
@@ -16,8 +20,18 @@ const ATLAS_DEV_URL_ENV_NAMES: Record<AtlasDevDatabaseType, string[]> = {
   mysql: ['ATLAS_DEV_URL_MYSQL', 'ATLAS_DEV_URL'],
 };
 
-export function getDefaultAtlasDevUrl(databaseType: AtlasDevDatabaseType): string {
-  return databaseType === 'postgresql' ? 'docker://postgres/16/dev' : 'docker://mysql/8/dev';
+export function getDefaultAtlasDevUrl(
+  databaseType: AtlasDevDatabaseType,
+  capabilities?: readonly string[] | null
+): string {
+  if (databaseType === 'postgresql') {
+    const extensions = getPostgresCapabilityExtensions(capabilities);
+    return extensions.includes('vector')
+      ? 'docker://pgvector/pgvector:pg16/dev'
+      : 'docker://postgres/16/dev';
+  }
+
+  return 'docker://mysql/8/dev';
 }
 
 export function getAtlasDevUrlEnvNames(databaseType: AtlasDevDatabaseType): string[] {
@@ -66,7 +80,10 @@ export function buildPostgresScratchDatabaseUrl(baseUrl: string, databaseName: s
   return url.toString();
 }
 
-async function createPostgresScratchDatabase(baseUrl: string): Promise<AtlasDevDatabaseSession> {
+async function createPostgresScratchDatabase(
+  baseUrl: string,
+  requestedExtensions: readonly string[] = []
+): Promise<AtlasDevDatabaseSession> {
   const normalizedBaseUrl = normalizeConfiguredPostgresDevUrl(baseUrl);
   const scratchDatabase = buildScratchIdentifier('atlas_dev');
   const adminClient = new PgClient({ connectionString: normalizedBaseUrl });
@@ -85,6 +102,16 @@ async function createPostgresScratchDatabase(baseUrl: string): Promise<AtlasDevD
        ORDER BY e.extname ASC`
     );
 
+    const extensionSchemaByName = new Map(
+      extensionRows.rows.map((extension) => [extension.extensionName, extension.schemaName])
+    );
+
+    for (const extensionName of requestedExtensions) {
+      if (!extensionSchemaByName.has(extensionName)) {
+        extensionSchemaByName.set(extensionName, 'public');
+      }
+    }
+
     await adminClient.query(`CREATE DATABASE ${escapePostgresIdentifier(scratchDatabase)}`);
 
     const scratchUrl = buildPostgresScratchDatabaseUrl(normalizedBaseUrl, scratchDatabase);
@@ -93,12 +120,12 @@ async function createPostgresScratchDatabase(baseUrl: string): Promise<AtlasDevD
     await scratchClient.connect();
 
     try {
-      for (const extension of extensionRows.rows) {
+      for (const [extensionName, schemaName] of extensionSchemaByName) {
         await scratchClient.query(
-          `CREATE SCHEMA IF NOT EXISTS ${escapePostgresIdentifier(extension.schemaName)}`
+          `CREATE SCHEMA IF NOT EXISTS ${escapePostgresIdentifier(schemaName)}`
         );
         await scratchClient.query(
-          `CREATE EXTENSION IF NOT EXISTS ${escapePostgresIdentifier(extension.extensionName)} SCHEMA ${escapePostgresIdentifier(extension.schemaName)}`
+          `CREATE EXTENSION IF NOT EXISTS ${escapePostgresIdentifier(extensionName)} SCHEMA ${escapePostgresIdentifier(schemaName)}`
         );
       }
     } finally {
@@ -172,7 +199,8 @@ async function createMySqlScratchDatabase(baseUrl: string): Promise<AtlasDevData
 
 async function createConfiguredAtlasDevSession(
   databaseType: AtlasDevDatabaseType,
-  configuredUrl: string
+  configuredUrl: string,
+  requestedExtensions: readonly string[] = []
 ): Promise<AtlasDevDatabaseSession> {
   if (isDockerAtlasDevUrl(configuredUrl)) {
     if (!hasExecutable('docker')) {
@@ -202,7 +230,7 @@ async function createConfiguredAtlasDevSession(
       );
     }
 
-    return createPostgresScratchDatabase(configuredUrl);
+    return createPostgresScratchDatabase(configuredUrl, requestedExtensions);
   }
 
   if (protocol !== 'mysql:') {
@@ -215,16 +243,24 @@ async function createConfiguredAtlasDevSession(
 }
 
 export async function prepareAtlasDevDatabaseSession(
-  databaseType: AtlasDevDatabaseType
+  databaseType: AtlasDevDatabaseType,
+  options: {
+    capabilities?: readonly DatabaseCapability[] | readonly string[] | null;
+  } = {}
 ): Promise<AtlasDevDatabaseSession> {
+  const requestedExtensions =
+    databaseType === 'postgresql' ? getPostgresCapabilityExtensions(options.capabilities) : [];
   const configuredUrl = resolveAtlasDevUrlOverrideFromEnv(databaseType);
   if (configuredUrl) {
-    return createConfiguredAtlasDevSession(databaseType, configuredUrl);
+    return createConfiguredAtlasDevSession(databaseType, configuredUrl, requestedExtensions);
   }
 
   if (databaseType === 'postgresql') {
     try {
-      return await createPostgresScratchDatabase(getNormalizedDatabaseUrlFromEnv());
+      return await createPostgresScratchDatabase(
+        getNormalizedDatabaseUrlFromEnv(),
+        requestedExtensions
+      );
     } catch (error) {
       if (!hasExecutable('docker')) {
         const message = error instanceof Error ? error.message : String(error);
@@ -237,7 +273,7 @@ export async function prepareAtlasDevDatabaseSession(
 
   if (hasExecutable('docker')) {
     return {
-      url: getDefaultAtlasDevUrl(databaseType),
+      url: getDefaultAtlasDevUrl(databaseType, options.capabilities),
       cleanup: async () => {},
     };
   }

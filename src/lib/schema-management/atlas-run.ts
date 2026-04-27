@@ -436,7 +436,9 @@ export async function executeSchemaRepairAtlasRun(input: {
         throw new Error(`Atlas 修复暂不支持 ${spec.database.type} 数据库`);
       }
 
-      const devDatabase = await prepareAtlasDevDatabaseSession(spec.database.type);
+      const devDatabase = await prepareAtlasDevDatabaseSession(spec.database.type, {
+        capabilities: spec.database.capabilities,
+      });
 
       try {
         const env = {
