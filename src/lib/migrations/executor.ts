@@ -4,6 +4,10 @@ import { BSON, MongoClient, ObjectId } from 'mongodb';
 import mysql from 'mysql2/promise';
 import { Client as PgClient } from 'pg';
 import { AtlasCommandError, runAtlasCommand } from '@/lib/atlas/cli';
+import {
+  inferDatabaseCapabilitiesFromText,
+  normalizeDatabaseCapabilities,
+} from '@/lib/databases/capabilities';
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
 import {
@@ -354,6 +358,13 @@ async function markDesiredSchemaExecution(input: {
     });
 }
 
+function resolveExecutionDatabaseCapabilities(
+  currentCapabilities: readonly string[] | null | undefined,
+  ...sources: string[]
+): string[] {
+  return inferDatabaseCapabilitiesFromText(sources.filter(Boolean).join('\n'), currentCapabilities);
+}
+
 export async function executeDrizzleMigrationsForSpec(
   spec: ResolvedMigrationSpec,
   revision: string,
@@ -371,13 +382,32 @@ export async function executeDrizzleMigrationsForSpec(
 
   const artifact = await exportDesiredSchemaForSpec(spec, revision);
   try {
+    const resolvedCapabilities = resolveExecutionDatabaseCapabilities(
+      spec.database.capabilities,
+      artifact.schemaSql
+    );
+    const executionDatabase = {
+      ...spec.database,
+      capabilities: resolvedCapabilities,
+    };
+
     await log(
       `🧭 ${spec.database.name}: 使用 ${artifact.sourceConfigPath ?? '自动发现配置'} 导出 desired schema`,
       'info'
     );
 
+    if (
+      normalizeDatabaseCapabilities(resolvedCapabilities).join(',') !==
+      normalizeDatabaseCapabilities(spec.database.capabilities).join(',')
+    ) {
+      await log(
+        `🧩 ${spec.database.name}: 从 desired schema 推断数据库能力 ${resolvedCapabilities.join(', ')}`,
+        'info'
+      );
+    }
+
     const plan = await planApplyDesiredSchema({
-      database: spec.database,
+      database: executionDatabase,
       desiredSchemaUrl: artifact.schemaFileUrl,
     });
 
@@ -389,7 +419,7 @@ export async function executeDrizzleMigrationsForSpec(
     await log(`🔄 ${spec.database.name}: 检测到 desired schema 变更，准备通过 Atlas 应用`, 'info');
 
     await applyDesiredSchemaToDatabase({
-      database: spec.database,
+      database: executionDatabase,
       desiredSchemaUrl: artifact.schemaFileUrl,
       onOutputLine: (line, stream) => {
         void log(line, stream === 'stderr' ? 'warn' : 'info');
@@ -489,13 +519,31 @@ export async function executeAtlasMigrationsForSpec(
   });
 
   try {
+    const resolvedCapabilities = resolveExecutionDatabaseCapabilities(
+      spec.database.capabilities,
+      workspace.files.map((file) => file.content).join('\n')
+    );
+    const executionDatabase = {
+      ...spec.database,
+      capabilities: resolvedCapabilities,
+    };
     const declaredVersions = getAtlasDeclaredVersions(workspace.files);
     if (declaredVersions.length === 0) {
       await log(`✅ ${spec.database.name}: 无可执行的 Atlas 迁移文件`, 'info');
       return 0;
     }
 
-    const beforeVersions = await getAppliedAtlasVersions(spec.database);
+    if (
+      normalizeDatabaseCapabilities(resolvedCapabilities).join(',') !==
+      normalizeDatabaseCapabilities(spec.database.capabilities).join(',')
+    ) {
+      await log(
+        `🧩 ${spec.database.name}: 从 migration files 推断数据库能力 ${resolvedCapabilities.join(', ')}`,
+        'info'
+      );
+    }
+
+    const beforeVersions = await getAppliedAtlasVersions(executionDatabase);
     await log(
       `🔄 ${spec.database.name}: 准备执行 Atlas 迁移 (${declaredVersions.length} 个声明版本)`,
       'info'
@@ -522,7 +570,7 @@ export async function executeAtlasMigrationsForSpec(
       throw error;
     }
 
-    const afterVersions = await getAppliedAtlasVersions(spec.database);
+    const afterVersions = await getAppliedAtlasVersions(executionDatabase);
     const beforeSet = new Set(beforeVersions);
     const appliedVersions = afterVersions.filter((version) => !beforeSet.has(version));
 
