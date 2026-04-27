@@ -149,127 +149,87 @@ async function resolveDrizzleConfigPath(input: {
   );
 }
 
-interface DetectedPackageManager {
-  name: 'bun' | 'pnpm' | 'yarn' | 'npm';
-  hasLockfile: boolean;
-}
-
-async function detectPackageManager(repoDir: string): Promise<DetectedPackageManager> {
-  if (
+async function hasBunLockfile(repoDir: string): Promise<boolean> {
+  return (
     (await pathExists(path.join(repoDir, 'bun.lockb'))) ||
     (await pathExists(path.join(repoDir, 'bun.lock')))
-  ) {
-    return { name: 'bun', hasLockfile: true };
-  }
+  );
+}
 
-  if (await pathExists(path.join(repoDir, 'pnpm-lock.yaml'))) {
-    return { name: 'pnpm', hasLockfile: true };
-  }
-
-  if (await pathExists(path.join(repoDir, 'yarn.lock'))) {
-    return { name: 'yarn', hasLockfile: true };
+function resolveBunCommand(args: string[]): { command: string; args: string[] } {
+  if (!hasExecutable('bun')) {
+    throw new Error('当前运行环境缺少 bun，无法执行 Drizzle desired schema');
   }
 
   return {
-    name: 'npm',
-    hasLockfile: await pathExists(path.join(repoDir, 'package-lock.json')),
+    command: 'bun',
+    args,
   };
 }
 
-function resolveCommandWithFallback(
-  primary: { command: string; args: string[] },
-  fallback?: { command: string; args: string[] }
-): { command: string; args: string[] } {
-  if (hasExecutable(primary.command)) {
-    return primary;
-  }
-
-  if (fallback && hasExecutable(fallback.command)) {
-    return fallback;
-  }
-
-  const attempted = [primary.command, fallback?.command].filter(Boolean).join(' / ');
-  throw new Error(`当前运行环境缺少必需命令：${attempted}`);
-}
-
-function resolvePackageManagerCommands(packageManager: DetectedPackageManager): {
+async function resolveBunCommands(repoDir: string): Promise<{
   install: { command: string; args: string[] };
   execDrizzleKit: (configPath: string) => { command: string; args: string[] };
-} {
-  switch (packageManager.name) {
-    case 'bun':
-      return {
-        install: resolveCommandWithFallback({
-          command: 'bun',
-          args: ['install', '--frozen-lockfile'],
-        }),
-        execDrizzleKit: (configPath) =>
-          resolveCommandWithFallback({
-            command: 'bun',
-            args: ['x', 'drizzle-kit', 'export', '--config', configPath],
-          }),
-      };
-    case 'pnpm':
-      return {
-        install: resolveCommandWithFallback(
-          {
-            command: 'pnpm',
-            args: ['install', '--frozen-lockfile'],
-          },
-          {
-            command: 'corepack',
-            args: ['pnpm', 'install', '--frozen-lockfile'],
-          }
-        ),
-        execDrizzleKit: (configPath) =>
-          resolveCommandWithFallback(
-            {
-              command: 'pnpm',
-              args: ['exec', 'drizzle-kit', 'export', '--config', configPath],
-            },
-            {
-              command: 'corepack',
-              args: ['pnpm', 'exec', 'drizzle-kit', 'export', '--config', configPath],
-            }
-          ),
-      };
-    case 'yarn':
-      return {
-        install: resolveCommandWithFallback(
-          {
-            command: 'yarn',
-            args: ['install', '--immutable'],
-          },
-          {
-            command: 'corepack',
-            args: ['yarn', 'install', '--immutable'],
-          }
-        ),
-        execDrizzleKit: (configPath) =>
-          resolveCommandWithFallback(
-            {
-              command: 'yarn',
-              args: ['exec', 'drizzle-kit', 'export', '--config', configPath],
-            },
-            {
-              command: 'corepack',
-              args: ['yarn', 'exec', 'drizzle-kit', 'export', '--config', configPath],
-            }
-          ),
-      };
-    default:
-      return {
-        install: resolveCommandWithFallback({
-          command: 'npm',
-          args: packageManager.hasLockfile ? ['ci'] : ['install'],
-        }),
-        execDrizzleKit: (configPath) =>
-          resolveCommandWithFallback({
-            command: 'npx',
-            args: ['drizzle-kit', 'export', '--config', configPath],
-          }),
-      };
+  pushDrizzleKit: (configPath: string, databaseUrl: string) => { command: string; args: string[] };
+}> {
+  return {
+    install: resolveBunCommand(
+      (await hasBunLockfile(repoDir)) ? ['install', '--frozen-lockfile'] : ['install']
+    ),
+    execDrizzleKit: (configPath) =>
+      resolveBunCommand(['x', 'drizzle-kit', 'export', '--config', configPath]),
+    pushDrizzleKit: (configPath, databaseUrl) =>
+      resolveBunCommand([
+        'x',
+        'drizzle-kit',
+        'push',
+        '--config',
+        configPath,
+        '--url',
+        databaseUrl,
+        '--force',
+        '--verbose',
+      ]),
+  };
+}
+
+function emitCommandOutputLines(
+  output: string,
+  level: 'info' | 'warn',
+  onOutputLine?: (line: string, level: 'info' | 'warn') => void
+): void {
+  if (!onOutputLine) {
+    return;
   }
+
+  for (const line of output.replace(/\r\n/g, '\n').split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.length > 0) {
+      onOutputLine(trimmed, level);
+    }
+  }
+}
+
+function buildCombinedCommandOutput(stdout: string, stderr: string): string {
+  return [stdout.trim(), stderr.trim()].filter((part) => part.length > 0).join('\n');
+}
+
+function didDrizzlePushApplyChanges(output: string): boolean {
+  const normalized = output.toLowerCase();
+
+  if (normalized.length === 0) {
+    return true;
+  }
+
+  const noChangeMarkers = [
+    'no schema changes',
+    'nothing to migrate',
+    'already in sync',
+    'schema is up to date',
+    'database is up to date',
+  ];
+
+  return !noChangeMarkers.some((marker) => normalized.includes(marker));
 }
 
 function buildSchemaExportEnv(connectionString?: string | null): NodeJS.ProcessEnv {
@@ -295,8 +255,7 @@ async function exportDrizzleDesiredSchema(input: {
     repoDir: input.workspace.repoDir,
     configuredPath: input.sourceConfigPath,
   });
-  const packageManager = await detectPackageManager(input.workspace.repoDir);
-  const commands = resolvePackageManagerCommands(packageManager);
+  const commands = await resolveBunCommands(input.workspace.repoDir);
   const env = buildSchemaExportEnv(input.connectionString);
 
   await runCommand(commands.install.command, commands.install.args, {
@@ -326,6 +285,60 @@ async function exportDrizzleDesiredSchema(input: {
     schemaFileUrl: pathToFileURL(schemaFilePath).toString(),
     sourceConfigPath,
   };
+}
+
+export async function pushDrizzleDesiredSchemaArtifact(input: {
+  artifact: DesiredSchemaArtifact;
+  databaseUrl: string;
+  onOutputLine?: (line: string, level: 'info' | 'warn') => void;
+}): Promise<{ applied: boolean; output: string }> {
+  if (input.artifact.source !== 'drizzle') {
+    throw new Error(`当前仅支持使用 Drizzle 执行 desired schema，收到 ${input.artifact.source}`);
+  }
+
+  if (!input.artifact.sourceConfigPath) {
+    throw new Error('Drizzle desired schema 缺少可执行的配置文件路径');
+  }
+
+  const commands = await resolveBunCommands(input.artifact.workspaceDir);
+  const env = buildSchemaExportEnv(input.databaseUrl);
+  const pushCommand = commands.pushDrizzleKit(input.artifact.sourceConfigPath, input.databaseUrl);
+
+  try {
+    const { stdout, stderr } = await runCommand(pushCommand.command, pushCommand.args, {
+      cwd: input.artifact.workspaceDir,
+      env,
+    });
+    emitCommandOutputLines(stdout, 'info', input.onOutputLine);
+    emitCommandOutputLines(stderr, 'warn', input.onOutputLine);
+
+    const output = buildCombinedCommandOutput(stdout, stderr);
+    return {
+      applied: didDrizzlePushApplyChanges(output),
+      output,
+    };
+  } catch (error) {
+    const stdout =
+      typeof error === 'object' &&
+      error !== null &&
+      'stdout' in error &&
+      typeof error.stdout === 'string'
+        ? error.stdout
+        : '';
+    const stderr =
+      typeof error === 'object' &&
+      error !== null &&
+      'stderr' in error &&
+      typeof error.stderr === 'string'
+        ? error.stderr
+        : '';
+
+    emitCommandOutputLines(stdout, 'info', input.onOutputLine);
+    emitCommandOutputLines(stderr, 'warn', input.onOutputLine);
+
+    const output = buildCombinedCommandOutput(stdout, stderr);
+    throw new Error(output || (error instanceof Error ? error.message : String(error)));
+  }
 }
 
 export async function exportDesiredSchemaFromRepository(

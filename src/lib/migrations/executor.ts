@@ -11,15 +11,16 @@ import {
 import { db } from '@/lib/db';
 import { databaseMigrations } from '@/lib/db/schema';
 import {
-  applyDesiredSchemaToDatabase,
   getAppliedAtlasVersions,
   getAtlasDeclaredVersions,
   isAtlasDatabaseTarget,
-  planApplyDesiredSchema,
   prepareAtlasMigrationWorkspace,
   resolveAtlasDatabaseUrl,
 } from '@/lib/migrations/atlas';
-import { exportDesiredSchemaForSpec } from '@/lib/migrations/desired-schema';
+import {
+  exportDesiredSchemaForSpec,
+  pushDrizzleDesiredSchemaArtifact,
+} from '@/lib/migrations/desired-schema';
 import { resolveMigrationPath } from '@/lib/migrations/path';
 import type { ResolvedMigrationSpec } from '@/lib/migrations/types';
 
@@ -382,56 +383,35 @@ export async function executeDrizzleMigrationsForSpec(
 
   const artifact = await exportDesiredSchemaForSpec(spec, revision);
   try {
-    const resolvedCapabilities = resolveExecutionDatabaseCapabilities(
-      spec.database.capabilities,
-      artifact.schemaSql
-    );
-    const executionDatabase = {
-      ...spec.database,
-      capabilities: resolvedCapabilities,
-    };
-
     await log(
       `🧭 ${spec.database.name}: 使用 ${artifact.sourceConfigPath ?? '自动发现配置'} 导出 desired schema`,
       'info'
     );
 
-    if (
-      normalizeDatabaseCapabilities(resolvedCapabilities).join(',') !==
-      normalizeDatabaseCapabilities(spec.database.capabilities).join(',')
-    ) {
-      await log(
-        `🧩 ${spec.database.name}: 从 desired schema 推断数据库能力 ${resolvedCapabilities.join(', ')}`,
-        'info'
-      );
+    const databaseUrl = resolveAtlasDatabaseUrl(spec.database);
+    if (!databaseUrl) {
+      throw new Error('数据库缺少可用的连接信息，无法执行 Drizzle schema push');
     }
 
-    const plan = await planApplyDesiredSchema({
-      database: executionDatabase,
-      desiredSchemaUrl: artifact.schemaFileUrl,
+    const result = await pushDrizzleDesiredSchemaArtifact({
+      artifact,
+      databaseUrl,
+      onOutputLine: (line, level) => {
+        void log(line, level);
+      },
     });
 
-    if (!plan.hasChanges) {
+    if (!result.applied) {
       await log(`✅ ${spec.database.name}: 数据库已与 desired schema 对齐`, 'info');
       return 0;
     }
-
-    await log(`🔄 ${spec.database.name}: 检测到 desired schema 变更，准备通过 Atlas 应用`, 'info');
-
-    await applyDesiredSchemaToDatabase({
-      database: executionDatabase,
-      desiredSchemaUrl: artifact.schemaFileUrl,
-      onOutputLine: (line, stream) => {
-        void log(line, stream === 'stderr' ? 'warn' : 'info');
-      },
-    });
 
     await markDesiredSchemaExecution({
       spec,
       revision: artifact.revision,
       schemaSql: artifact.schemaSql,
       output:
-        plan.planSql ||
+        result.output ||
         `Applied desired schema from ${artifact.sourceConfigPath ?? 'auto-discovery'}`,
     });
 
