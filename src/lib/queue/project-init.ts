@@ -1006,6 +1006,44 @@ export function buildServiceMigrationLines(
   return [];
 }
 
+function getLogicalDatabaseKey(database: typeof databases.$inferSelect): string {
+  return [
+    database.serviceId ?? 'project',
+    database.name,
+    database.type,
+    database.scope ?? 'project',
+    database.role ?? 'primary',
+  ].join(':');
+}
+
+export function buildLogicalDatabaseList(
+  databaseList: Array<typeof databases.$inferSelect>
+): Array<typeof databases.$inferSelect> {
+  const logicalDatabases = new Map<string, typeof databases.$inferSelect>();
+
+  for (const database of databaseList) {
+    const key = getLogicalDatabaseKey(database);
+    const existing = logicalDatabases.get(key);
+
+    if (!existing) {
+      logicalDatabases.set(key, database);
+      continue;
+    }
+
+    const capabilities = normalizeDatabaseCapabilities([
+      ...normalizeDatabaseCapabilities(existing.capabilities),
+      ...normalizeDatabaseCapabilities(database.capabilities),
+    ]);
+
+    logicalDatabases.set(key, {
+      ...existing,
+      capabilities,
+    });
+  }
+
+  return [...logicalDatabases.values()];
+}
+
 export function renderJuanieConfig(
   project: typeof projects.$inferSelect & {
     repository: typeof repositories.$inferSelect | null;
@@ -1014,6 +1052,7 @@ export function renderJuanieConfig(
   automation: RepoAutomationContextLike
 ): string {
   const targetBranch = getProjectProductionBranch(project);
+  const logicalDatabases = buildLogicalDatabaseList(context.databases);
   const lines: string[] = ['# juanie.yaml', `name: ${project.slug}`, '', 'services:'];
 
   for (const service of context.services) {
@@ -1066,7 +1105,7 @@ export function renderJuanieConfig(
     const migrationLines = buildServiceMigrationLines(
       service,
       context.services,
-      context.databases,
+      logicalDatabases,
       automation
     );
     if (migrationLines.length > 0) {
@@ -1074,10 +1113,10 @@ export function renderJuanieConfig(
     }
   }
 
-  if (context.databases.length > 0) {
+  if (logicalDatabases.length > 0) {
     lines.push('', 'databases:');
 
-    for (const database of context.databases) {
+    for (const database of logicalDatabases) {
       const capabilities = inferDatabaseCapabilities(automation, database);
       lines.push(
         `  - name: ${database.name}`,

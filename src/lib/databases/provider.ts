@@ -101,6 +101,19 @@ function toClusterFqdn(host: string): string {
   return `${host}.${namespace}.svc.cluster.local`.toLowerCase();
 }
 
+function getEnvironmentResourceSegment(
+  environment: {
+    name: string;
+    isProduction: boolean | null;
+  } | null
+): string | null {
+  if (!environment) {
+    return null;
+  }
+
+  return environment.isProduction ? 'prod' : environment.name;
+}
+
 async function getDatabaseEnvironmentContext(input: {
   database: DatabaseRecord;
   project: ProjectRecord;
@@ -128,19 +141,21 @@ async function getDatabaseEnvironmentContext(input: {
       })
     : null;
 
+  const resolvedEnvironment = environment ?? null;
   const namespace =
-    environment?.namespace ??
-    (environment
-      ? buildEnvironmentNamespace(input.project.slug, environment)
+    resolvedEnvironment?.namespace ??
+    (resolvedEnvironment
+      ? buildEnvironmentNamespace(input.project.slug, resolvedEnvironment)
       : buildProjectNamespaceBase(input.project.slug));
+  const environmentSegment = getEnvironmentResourceSegment(resolvedEnvironment);
   const resourceName = buildProjectScopedK8sName(
     input.project.slug,
-    environment?.isPreview ? environment.name : environment?.isProduction ? 'prod' : null,
+    environmentSegment,
     input.database.name
   );
 
   return {
-    environment: environment ?? null,
+    environment: resolvedEnvironment,
     namespace,
     resourceName,
   };
@@ -155,16 +170,12 @@ function buildManagedPostgresIdentifier(input: {
     isProduction: boolean | null;
   } | null;
 }): string {
-  const environmentSegment = input.environment?.isPreview
-    ? sanitizePgName(input.environment.name)
-    : input.environment?.isProduction
-      ? 'prod'
-      : null;
+  const environmentSegment = getEnvironmentResourceSegment(input.environment);
 
   return [
     'juanie',
     sanitizePgName(input.project.slug),
-    environmentSegment,
+    environmentSegment ? sanitizePgName(environmentSegment) : null,
     sanitizePgName(input.database.name),
   ]
     .filter(Boolean)

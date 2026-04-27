@@ -491,23 +491,33 @@ async function createProjectAggregate(input: {
       createdServices.set(serviceConfig.name, service.id);
     }
 
+    const runtimeEnvironments = createdEnvironments.filter(
+      (environment) =>
+        !isPreviewEnvironment(environment) && environment.databaseStrategy === 'direct'
+    );
+
     for (const dbConfig of databaseConfigs) {
       const provisionType = resolveDatabaseProvisionType(dbConfig.type, dbConfig.provisionType);
-      await tx.insert(databases).values({
-        projectId: createdProject.id,
-        environmentId: primaryEnvironment.id,
-        serviceId: dbConfig.service ? (createdServices.get(dbConfig.service) ?? null) : null,
-        name: dbConfig.name,
-        type: dbConfig.type,
-        plan: dbConfig.plan || 'starter',
-        provisionType,
-        runtime: inferDatabaseRuntime(dbConfig.type, provisionType),
-        scope: dbConfig.scope || (dbConfig.service ? 'service' : 'project'),
-        role: dbConfig.role || 'primary',
-        capabilities: normalizeDatabaseCapabilities(dbConfig.capabilities),
-        connectionString: provisionType === 'external' ? (dbConfig.externalUrl ?? null) : null,
-        status: 'pending',
-      });
+      const targetEnvironments =
+        runtimeEnvironments.length > 0 ? runtimeEnvironments : [primaryEnvironment];
+
+      await tx.insert(databases).values(
+        targetEnvironments.map((environment) => ({
+          projectId: createdProject.id,
+          environmentId: environment.id,
+          serviceId: dbConfig.service ? (createdServices.get(dbConfig.service) ?? null) : null,
+          name: dbConfig.name,
+          type: dbConfig.type,
+          plan: dbConfig.plan || 'starter',
+          provisionType,
+          runtime: inferDatabaseRuntime(dbConfig.type, provisionType),
+          scope: dbConfig.scope || (dbConfig.service ? 'service' : 'project'),
+          role: dbConfig.role || 'primary',
+          capabilities: normalizeDatabaseCapabilities(dbConfig.capabilities),
+          connectionString: provisionType === 'external' ? (dbConfig.externalUrl ?? null) : null,
+          status: 'pending',
+        }))
+      );
     }
 
     await tx.insert(domains).values(
