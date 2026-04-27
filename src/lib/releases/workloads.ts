@@ -215,16 +215,15 @@ export async function cleanupRedundantCandidateResources(namespace: string): Pro
     const stableName = candidateName.slice(0, -'-candidate'.length);
     const stableDeployment = deploymentByName.get(stableName);
     const candidateDeployment = deploymentByName.get(candidateName);
-    const stableServiceExists = serviceNames.has(stableName);
 
-    if (!stableDeployment && !stableServiceExists) {
+    if (!stableDeployment || !candidateDeployment) {
       continue;
     }
 
-    const stableImage = stableDeployment ? getDeploymentImageName(stableDeployment) : null;
-    const candidateImage = candidateDeployment ? getDeploymentImageName(candidateDeployment) : null;
+    const stableImage = getDeploymentImageName(stableDeployment);
+    const candidateImage = getDeploymentImageName(candidateDeployment);
 
-    if (stableImage && candidateImage && stableImage !== candidateImage) {
+    if (!stableImage || !candidateImage || stableImage !== candidateImage) {
       continue;
     }
 
