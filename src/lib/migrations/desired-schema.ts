@@ -170,7 +170,7 @@ function resolveBunCommand(args: string[]): { command: string; args: string[] } 
 async function resolveBunCommands(repoDir: string): Promise<{
   install: { command: string; args: string[] };
   execDrizzleKit: (configPath: string) => { command: string; args: string[] };
-  pushDrizzleKit: (configPath: string, databaseUrl: string) => { command: string; args: string[] };
+  pushDrizzleKit: (configPath: string) => { command: string; args: string[] };
 }> {
   return {
     install: resolveBunCommand(
@@ -178,15 +178,13 @@ async function resolveBunCommands(repoDir: string): Promise<{
     ),
     execDrizzleKit: (configPath) =>
       resolveBunCommand(['x', 'drizzle-kit', 'export', '--config', configPath]),
-    pushDrizzleKit: (configPath, databaseUrl) =>
+    pushDrizzleKit: (configPath) =>
       resolveBunCommand([
         'x',
         'drizzle-kit',
         'push',
         '--config',
         configPath,
-        '--url',
-        databaseUrl,
         '--force',
         '--verbose',
       ]),
@@ -302,7 +300,7 @@ export async function pushDrizzleDesiredSchemaArtifact(input: {
 
   const commands = await resolveBunCommands(input.artifact.workspaceDir);
   const env = buildSchemaExportEnv(input.databaseUrl);
-  const pushCommand = commands.pushDrizzleKit(input.artifact.sourceConfigPath, input.databaseUrl);
+  const pushCommand = commands.pushDrizzleKit(input.artifact.sourceConfigPath);
 
   try {
     const { stdout, stderr } = await runCommand(pushCommand.command, pushCommand.args, {
