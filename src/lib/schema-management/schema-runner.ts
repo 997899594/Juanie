@@ -1,5 +1,7 @@
+import { closeDb } from '@/lib/db';
 import { applyControlPlaneMigrations } from '@/lib/db/control-plane-atlas';
 import { executeMigrationRunInExecutionService } from '@/lib/migrations/execution-service';
+import { closeQueues } from '@/lib/queue';
 import { shutdownSchemaRepairRealtimePublisher } from '@/lib/realtime/schema-repairs';
 import { executeSchemaRepairAtlasRun } from '@/lib/schema-management/atlas-run';
 import { inspectEnvironmentSchemaStateLocally } from '@/lib/schema-management/inspect';
@@ -80,6 +82,8 @@ export async function runSchemaRunnerCli(args = process.argv): Promise<void> {
 
     await runSchemaRepairMode();
   } finally {
+    await closeQueues();
+    await closeDb();
     await shutdownSchemaRepairRealtimePublisher();
   }
 }
