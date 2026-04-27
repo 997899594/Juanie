@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { DatabaseConfig, ServiceConfig } from '@/lib/config/parser';
+import { encrypt } from '@/lib/crypto';
 import { normalizeDatabaseCapabilities } from '@/lib/databases/capabilities';
 import { inferDatabaseRuntime } from '@/lib/databases/model';
 import {
@@ -14,6 +15,7 @@ import {
   deliveryRules,
   domains,
   environments,
+  environmentVariables,
   projectInitSteps,
   projects,
   promotionFlows,
@@ -61,6 +63,13 @@ export interface CreateProjectInput {
   previewDatabaseStrategy?: 'inherit' | 'isolated_clone';
   runtimeProfile?: CreateRuntimeProfile;
   environmentTemplate?: CreateEnvironmentTemplate;
+  initialVariables?: CreateProjectInitialVariable[];
+}
+
+export interface CreateProjectInitialVariable {
+  key: string;
+  value: string;
+  isSecret?: boolean;
 }
 
 type CreateProjectErrorCode =
@@ -151,6 +160,83 @@ function assertDatabaseSelections(input: CreateProjectInput): void {
   }
 }
 
+function normalizeInitialVariables(
+  variables: CreateProjectInitialVariable[] | undefined
+): CreateProjectInitialVariable[] {
+  const normalized = (variables ?? [])
+    .map((variable) => ({
+      key: variable.key.trim(),
+      value: variable.value,
+      isSecret: variable.isSecret ?? true,
+    }))
+    .filter((variable) => variable.key.length > 0 || variable.value.length > 0);
+
+  const seen = new Set<string>();
+  for (const variable of normalized) {
+    if (!/^[A-Z0-9_]+$/i.test(variable.key)) {
+      throw new CreateProjectError(
+        'project_create_failed',
+        400,
+        `环境变量 ${variable.key || '(空)'} 名称只能包含字母、数字和下划线`
+      );
+    }
+
+    if (!variable.value) {
+      throw new CreateProjectError(
+        'project_create_failed',
+        400,
+        `环境变量 ${variable.key} 的值不能为空`
+      );
+    }
+
+    const scopeKey = variable.key.toUpperCase();
+    if (seen.has(scopeKey)) {
+      throw new CreateProjectError('project_create_failed', 400, `环境变量 ${variable.key} 重复`);
+    }
+    seen.add(scopeKey);
+  }
+
+  return normalized;
+}
+
+async function buildInitialVariableRows(
+  projectId: string,
+  variables: CreateProjectInitialVariable[]
+) {
+  return Promise.all(
+    variables.map(async (variable) => {
+      if (variable.isSecret) {
+        const encrypted = await encrypt(variable.value);
+        return {
+          projectId,
+          environmentId: null,
+          serviceId: null,
+          key: variable.key,
+          value: null,
+          isSecret: true,
+          injectionType: 'runtime',
+          encryptedValue: encrypted.encryptedValue,
+          iv: encrypted.iv,
+          authTag: encrypted.authTag,
+        };
+      }
+
+      return {
+        projectId,
+        environmentId: null,
+        serviceId: null,
+        key: variable.key,
+        value: variable.value,
+        isSecret: false,
+        injectionType: 'runtime',
+        encryptedValue: null,
+        iv: null,
+        authTag: null,
+      };
+    })
+  );
+}
+
 async function assertTeamCanCreateProject(teamId: string, userId: string): Promise<void> {
   const teamMember = await db.query.teamMembers.findFirst({
     where: (member, { and, eq }) => and(eq(member.teamId, teamId), eq(member.userId, userId)),
@@ -215,6 +301,7 @@ async function createProjectAggregate(input: {
       domain,
       environmentTemplate,
       isPrivate,
+      initialVariables,
       mode,
       name,
       previewDatabaseStrategy,
@@ -239,6 +326,7 @@ async function createProjectAggregate(input: {
     previewDatabaseStrategy: previewDatabaseStrategy ?? 'inherit',
   });
   const initStepsData = buildProjectInitStepSeeds(mode);
+  const normalizedInitialVariables = normalizeInitialVariables(initialVariables);
 
   return db.transaction(async (tx) => {
     const managedHostnameBase = await allocateManagedHostnameBaseWithDb({
@@ -279,6 +367,12 @@ async function createProjectAggregate(input: {
 
     if (!createdProject) {
       throw new Error('Failed to create project');
+    }
+
+    if (normalizedInitialVariables.length > 0) {
+      await tx
+        .insert(environmentVariables)
+        .values(await buildInitialVariableRows(createdProject.id, normalizedInitialVariables));
     }
 
     const createdEnvironments = await tx

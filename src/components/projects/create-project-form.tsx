@@ -174,7 +174,14 @@ interface CreateProjectFormProps {
 }
 
 type CreateMode = 'import' | 'create';
-type Step = 'mode' | 'repository' | 'config' | 'review';
+type Step = 'mode' | 'repository' | 'config' | 'variables' | 'review';
+
+interface InitialVariableWithId {
+  _id: string;
+  key: string;
+  value: string;
+  isSecret: boolean;
+}
 
 interface FormData {
   mode: CreateMode;
@@ -197,6 +204,7 @@ interface FormData {
   previewDatabaseStrategy: 'inherit' | 'isolated_clone';
   runtimeProfile: CreateRuntimeProfile;
   environmentTemplate: CreateEnvironmentTemplate;
+  initialVariables: InitialVariableWithId[];
   monorepoType: string;
   hasDockerBake: boolean;
   bakeTargets: string[];
@@ -206,6 +214,7 @@ const STEPS: { id: Step; title: string }[] = [
   { id: 'mode', title: '模式' },
   { id: 'repository', title: '仓库' },
   { id: 'config', title: '配置' },
+  { id: 'variables', title: '变量' },
   { id: 'review', title: '确认' },
 ];
 
@@ -301,6 +310,59 @@ function createDatabaseDraft(type: DatabaseWithId['type']): DatabaseWithId {
     provisionType: getDefaultDatabaseProvisionType(type),
     capabilities: [],
   };
+}
+
+function createInitialVariableDraft(): InitialVariableWithId {
+  return {
+    _id: nanoid(),
+    key: '',
+    value: '',
+    isSecret: true,
+  };
+}
+
+function normalizeVariableKey(key: string): string {
+  return key.trim();
+}
+
+function getInitialVariableError(
+  variable: InitialVariableWithId,
+  variables: InitialVariableWithId[]
+): string | null {
+  const key = normalizeVariableKey(variable.key);
+  if (!key && !variable.value) {
+    return null;
+  }
+
+  if (!key) {
+    return '变量名不能为空';
+  }
+
+  if (!/^[A-Z0-9_]+$/i.test(key)) {
+    return '变量名只能包含字母、数字和下划线';
+  }
+
+  if (!variable.value) {
+    return '变量值不能为空';
+  }
+
+  const duplicates = variables.filter(
+    (item) => normalizeVariableKey(item.key).toUpperCase() === key.toUpperCase()
+  );
+  if (duplicates.length > 1) {
+    return '变量名重复';
+  }
+
+  return null;
+}
+
+function isInitialVariableReady(
+  variable: InitialVariableWithId,
+  variables: InitialVariableWithId[]
+): boolean {
+  return (
+    !getInitialVariableError(variable, variables) && Boolean(normalizeVariableKey(variable.key))
+  );
 }
 
 function getChoiceCardClass(selected: boolean): string {
@@ -484,6 +546,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
     previewDatabaseStrategy: 'inherit',
     runtimeProfile: 'standard',
     environmentTemplate: 'staging_production_preview',
+    initialVariables: [],
     monorepoType: 'none',
     hasDockerBake: false,
     bakeTargets: [],
@@ -499,6 +562,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   >([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [configAdvancedOpen, setConfigAdvancedOpen] = useState(false);
+  const [reviewVariablesOpen, setReviewVariablesOpen] = useState(false);
   const [reviewServicesOpen, setReviewServicesOpen] = useState(false);
   const [reviewDatabasesOpen, setReviewDatabasesOpen] = useState(false);
 
@@ -508,6 +572,12 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
   const isFirstStep = currentStepIndex === 0;
   const isLastStep = currentStepIndex === STEPS.length - 1;
   const activeServices = formData.services.filter((service) => !service.disabled);
+  const readyInitialVariables = formData.initialVariables.filter((variable) =>
+    isInitialVariableReady(variable, formData.initialVariables)
+  );
+  const initialVariableErrors = formData.initialVariables
+    .map((variable) => getInitialVariableError(variable, formData.initialVariables))
+    .filter((error): error is string => Boolean(error));
   const deploymentStrategyLabel =
     getEnvironmentDeploymentStrategyLabel(formData.productionDeploymentStrategy) ??
     formData.productionDeploymentStrategy;
@@ -756,6 +826,11 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
         previewDatabaseStrategy: formData.previewDatabaseStrategy,
         runtimeProfile: formData.runtimeProfile,
         environmentTemplate: formData.environmentTemplate,
+        initialVariables: readyInitialVariables.map((variable) => ({
+          key: normalizeVariableKey(variable.key),
+          value: variable.value,
+          isSecret: variable.isSecret,
+        })),
       });
 
       if (result.ok) {
@@ -798,6 +873,8 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
             (!formData.useCustomDomain || formData.domain.trim()) &&
             formData.services.length > 0
         );
+      case 'variables':
+        return initialVariableErrors.length === 0;
       case 'review': {
         const externalDatabasesValid = formData.databases
           .filter((database) => database.provisionType === 'external')
@@ -1260,6 +1337,144 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
           </div>
         )}
 
+        {currentStep === 'variables' && (
+          <div className="space-y-6">
+            <SectionHeading
+              title="启动变量"
+              description="这里填写首发必须存在的业务变量。它们会作为项目级变量保存，staging、production 和 preview 默认继承；后续可在环境详情覆盖。"
+            />
+
+            <div className={reviewShellClassName}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    Project-level env
+                  </div>
+                  <div className="text-sm font-medium text-foreground">
+                    {readyInitialVariables.length > 0
+                      ? `${readyInitialVariables.length} 个变量会注入初始环境`
+                      : '暂不预置变量'}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    数据库连接串会由平台自动注入，这里只填业务 API Key、Token、OAuth Secret 等。
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="default"
+                  className="rounded-full"
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      initialVariables: [...prev.initialVariables, createInitialVariableDraft()],
+                    }))
+                  }
+                >
+                  <Plus className="h-4 w-4" />
+                  添加变量
+                </Button>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {formData.initialVariables.length === 0 ? (
+                  <div className="rounded-[18px] bg-[rgba(15,23,42,0.03)] px-4 py-6">
+                    <EmptyState
+                      icon={<Shield className="h-5 w-5 opacity-40" />}
+                      title="没有启动变量"
+                      description="如果应用启动依赖第三方密钥，建议现在补齐，避免首发卡在运行态校验。"
+                      className="min-h-36 rounded-none"
+                    />
+                  </div>
+                ) : (
+                  formData.initialVariables.map((variable) => {
+                    const error = getInitialVariableError(variable, formData.initialVariables);
+                    const updateVariable = (updates: Partial<InitialVariableWithId>) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        initialVariables: prev.initialVariables.map((item) =>
+                          item._id === variable._id ? { ...item, ...updates } : item
+                        ),
+                      }));
+                    };
+
+                    return (
+                      <div key={variable._id} className={reviewSubtleClassName}>
+                        <div className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto_auto] md:items-start">
+                          <div className="space-y-2">
+                            <Label>变量名</Label>
+                            <Input
+                              value={variable.key}
+                              onChange={(event) =>
+                                updateVariable({ key: event.target.value.toUpperCase() })
+                              }
+                              placeholder="AI_302_API_KEY"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>变量值</Label>
+                            <Input
+                              value={variable.value}
+                              onChange={(event) => updateVariable({ value: event.target.value })}
+                              placeholder={variable.isSecret ? '创建后不会回显' : 'value'}
+                              type={variable.isSecret ? 'password' : 'text'}
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>密文</Label>
+                            <div className="ui-control flex h-10 items-center gap-2 px-3">
+                              <Switch
+                                checked={variable.isSecret}
+                                onCheckedChange={(checked) => updateVariable({ isSecret: checked })}
+                              />
+                              <span className="text-xs text-muted-foreground">
+                                {variable.isSecret ? 'Secret' : 'Config'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-end md:h-[66px]">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  initialVariables: prev.initialVariables.filter(
+                                    (item) => item._id !== variable._id
+                                  ),
+                                }))
+                              }
+                            >
+                              <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {error ? (
+                          <div className="mt-3 text-xs text-destructive">{error}</div>
+                        ) : (
+                          <div className="mt-3 text-xs text-muted-foreground">
+                            将作为项目级变量保存，所有初始环境自动继承。
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {initialVariableErrors.length > 0 ? (
+                <div className="mt-4 rounded-[16px] bg-destructive/8 px-4 py-3 text-sm text-destructive">
+                  先修正变量配置后再继续。
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
+
         {currentStep === 'review' && (
           <div className="space-y-6">
             <SectionHeading title="最后确认" />
@@ -1292,7 +1507,7 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   </Badge>
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="mt-4 grid gap-3 md:grid-cols-5">
                 <div className={reviewSubtleClassName}>
                   <div className="text-xs text-muted-foreground">环境链路</div>
                   <div className="mt-1 text-sm font-medium">{environmentTemplateLabel}</div>
@@ -1309,11 +1524,42 @@ export function CreateProjectForm({ teamScopes, templates }: CreateProjectFormPr
                   <div className="text-xs text-muted-foreground">数据库</div>
                   <div className="mt-1 text-sm font-medium">{formData.databases.length} 个</div>
                 </div>
+                <div className={reviewSubtleClassName}>
+                  <div className="text-xs text-muted-foreground">启动变量</div>
+                  <div className="mt-1 text-sm font-medium">{readyInitialVariables.length} 个</div>
+                </div>
               </div>
               <div className="mt-3 text-sm text-muted-foreground">
                 访问域名：{formData.useCustomDomain ? formData.domain : '平台默认域名'}
               </div>
             </div>
+
+            <DisclosurePanel
+              title="启动变量"
+              meta={`${readyInitialVariables.length} 个项目级变量`}
+              open={reviewVariablesOpen}
+              onToggle={() => setReviewVariablesOpen((current) => !current)}
+            >
+              {readyInitialVariables.length === 0 ? (
+                <div className="overflow-hidden rounded-[18px] bg-[rgba(15,23,42,0.03)]">
+                  <EmptyState title="没有预置启动变量" className="min-h-32 rounded-none" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {readyInitialVariables.map((variable) => (
+                    <div
+                      key={variable._id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] bg-[rgba(15,23,42,0.03)] px-4 py-3"
+                    >
+                      <div className="font-mono text-sm font-medium">
+                        {normalizeVariableKey(variable.key)}
+                      </div>
+                      <Badge variant="secondary">{variable.isSecret ? 'Secret' : 'Config'}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DisclosurePanel>
 
             <DisclosurePanel
               title="服务设置"

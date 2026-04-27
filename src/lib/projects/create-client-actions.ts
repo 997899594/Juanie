@@ -23,6 +23,11 @@ interface CreateProjectPayload {
   previewDatabaseStrategy?: 'inherit' | 'isolated_clone';
   runtimeProfile?: 'standard' | 'resilient' | 'performance';
   environmentTemplate?: CreateEnvironmentTemplate;
+  initialVariables?: Array<{
+    key: string;
+    value: string;
+    isSecret?: boolean;
+  }>;
 }
 
 export async function submitCreateProject(payload: CreateProjectPayload): Promise<

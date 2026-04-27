@@ -2034,6 +2034,16 @@ async function setupNamespace(
       },
     });
 
+    await syncEnvVarsToK8s(project.id, environment.id).catch((error) =>
+      projectInitLogger.warn('Failed to sync initial project variables to Kubernetes', {
+        projectId: project.id,
+        step: 'setup_namespace',
+        environmentId: environment.id,
+        namespace,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      })
+    );
+
     await onProgress?.(
       Math.round(((index + 1) / envList.length) * 100),
       `已登记 ${environment.name} 环境命名空间 ${namespace}`
